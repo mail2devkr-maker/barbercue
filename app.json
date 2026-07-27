@@ -14,7 +14,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dcw.barbercue"
+      "bundleIdentifier": "com.dcw.barbercue",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.dcw.barbercue",
