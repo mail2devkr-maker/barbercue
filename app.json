@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "BarberCue",
+    "slug": "barbercue",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#1C1A17"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dcw.barbercue"
+    },
+    "android": {
+      "package": "com.dcw.barbercue",
+      "adaptiveIcon": {
+        "backgroundColor": "#1C1A17"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "01998c87-126d-40e8-aac3-205891b74b08"
+      }
+    },
+    "owner": "dcw-team"
+  }
+}
