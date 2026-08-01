@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Role } from "@barbercue/shared";
+import BackendStatus from "./BackendStatus";
 
 export const metadata: Metadata = {
   title: "BarberCue — Find a barbershop near you",
@@ -21,6 +22,7 @@ export default function HomePage() {
         role ({Role.CUSTOMER}, {Role.SALON_STAFF}, {Role.SALON_OWNER}, {Role.PLATFORM_ADMIN}). See{" "}
         <code>ARCHITECTURE.md</code> and <code>PROJECT_STRUCTURE.md</code> at the repo root.
       </p>
+      <BackendStatus />
     </main>
   );
 }
