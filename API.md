@@ -32,12 +32,14 @@ Status: **V1 decisions finalized.** Backend: NestJS, REST + one WebSocket namesp
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/cities` | |
+| GET | `/cities` | only cities with at least one `ACTIVE` salon |
+| GET | `/cities/:citySlug` | added during Phase 3A implementation — single city lookup, backs city-page metadata/breadcrumbs |
 | GET | `/cities/:citySlug/localities` | |
-| GET | `/salons?city=&locality=&service=&q=` | search/list, paginated |
-| GET | `/salons/:citySlug/:salonSlug` | services, prices, hours, photos, rating summary |
-| GET | `/salons/:salonId/queue-status` | lightweight, cacheable few seconds — public live-wait widget |
-| GET | `/salons/:salonId/reviews` | paginated |
+| GET | `/cities/:citySlug/localities/:localitySlug` | |
+| GET | `/salons?city=&locality=&service=&q=` | search/list, cursor-paginated |
+| GET | `/salons/:citySlug/:salonSlug` | services, prices, hours, photos, rating summary, embeds the 10 most recent reviews (see note below) |
+| GET | `/salons/:salonId/queue-status` | **deferred past Phase 3A** — lightweight, cacheable few seconds — public live-wait widget; needs live-queue work from a later phase |
+| GET | `/salons/:salonId/reviews` | **deferred past Phase 3A** — standalone paginated reviews; Phase 3A's salon profile response embeds the 10 most recent reviews directly instead, which is enough for the page UI and JSON-LD `aggregateRating` |
 
 ## Booking (customer, authenticated)
 

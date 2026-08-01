@@ -42,10 +42,14 @@ apps/web/
     (public)/                 # no auth — SEO-critical, SSR/ISR
       page.tsx                # homepage
       [citySlug]/page.tsx
+      [citySlug]/areas/[localitySlug]/page.tsx   # locality page; see "Resolved" note below on why this isn't nested under the salon URL
       [citySlug]/[salonSlug]/page.tsx
       search/page.tsx
       sitemap.ts
       robots.ts
+    lib/
+      discovery-api.ts        # server-safe fetch client for (public) pages — no "use client", no auth/cookies, wraps fetch with { next: { revalidate } }
+    components/discovery/     # SalonCard, ServiceList, OperatingHoursTable, PhotoGallery, ReviewList, Breadcrumbs, JsonLd
     (customer)/                # authenticated customer, not SEO-critical
       account/bookings/page.tsx
       book/[salonSlug]/page.tsx
@@ -68,11 +72,11 @@ If a `dashboard.barbercue.app` subdomain is wanted later for a cleaner mental mo
 
 ### SEO details
 
-- URL scheme: `/{citySlug}` (city hub), `/{citySlug}/{salonSlug}` (salon profile) — flat two-level path, consistent with how customers actually search ("barbershop near [area/city]"), with locality surfaced as a filter/breadcrumb rather than a third path segment, so URLs stay stable if a salon's registered locality changes.
+- URL scheme: `/{citySlug}` (city hub), `/{citySlug}/{salonSlug}` (salon profile) — flat two-level path, consistent with how customers actually search ("barbershop near [area/city]"), with locality surfaced as a filter/breadcrumb rather than a third path segment, so URLs stay stable if a salon's registered locality changes. A standalone locality page also exists at `/{citySlug}/areas/{localitySlug}` (Phase 3A) for locality-level SEO landing pages — routed under `/areas/` specifically so it can never collide with a salon slug in the same city.
 - `generateMetadata` per page: title, description, canonical URL, Open Graph tags including a salon photo.
-- JSON-LD: `HairSalon` (schema.org, a `LocalBusiness` subtype) on salon pages — address, `geo`, `openingHoursSpecification` from `OperatingHours`, `aggregateRating` from `Review` data, `priceRange` from `Service`. `BreadcrumbList` on every public page.
+- JSON-LD: `HairSalon` (schema.org, a `LocalBusiness` subtype) on salon pages — address, `geo`, `openingHoursSpecification` from `OperatingHours`, `aggregateRating` from `Review` data (omitted entirely when there are zero reviews), `priceRange` from `Service`. `BreadcrumbList` on every public page.
 - `sitemap.ts` generates entries for all active cities/localities/salons dynamically from the backend (not a static file) — regenerated on each build/ISR cycle.
-- `robots.ts` disallows `/account`, `/dashboard`, `/api` proxy routes; allows everything under `(public)`.
+- `robots.ts` disallows `/account`, `/dashboard`, `/search?` (query-string search variants only — the bare `/search` page stays crawlable via its own canonical); allows everything else under `(public)`.
 - Images: `next/image` against a CDN-backed object storage bucket for salon photos; the backend only ever returns URLs, never serves image bytes itself.
 - Public pages fetch only cacheable, non-personalized data server-side; the live wait-time widget and booking CTA are client components that fetch from `/salons/:id/queue-status` independently, so a stale ISR cache never shows a stale "3 min wait" — only the static shell (name, services, hours, photos, reviews) is cached.
 

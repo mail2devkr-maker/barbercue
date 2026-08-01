@@ -49,6 +49,12 @@ export const ChairStatus = {
 } as const;
 export type ChairStatus = (typeof ChairStatus)[keyof typeof ChairStatus];
 
+export const PhotoType = {
+  COVER: 'COVER',
+  GALLERY: 'GALLERY',
+} as const;
+export type PhotoType = (typeof PhotoType)[keyof typeof PhotoType];
+
 export const PrepaymentRequirement = {
   NONE: 'NONE',
   OPTIONAL: 'OPTIONAL',

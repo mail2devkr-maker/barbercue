@@ -1,15 +1,100 @@
-// City discovery hub — placeholder. Real implementation (salon listing, SEO metadata, JSON-LD)
-// belongs to the website/SEO phase per PROJECT_STRUCTURE.md; this establishes the URL shape now.
-export default async function CityPage({
-  params,
-}: {
-  params: Promise<{ citySlug: string }>;
-}) {
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { DISCOVERY_PATHS } from "@barbercue/shared";
+import type { CityDto, LocalityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
+import { fetchDiscoveryOrNull } from "../../../lib/discovery-api";
+import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../lib/seo";
+import { SalonCard } from "../../../components/discovery/SalonCard";
+import { Breadcrumbs, breadcrumbJsonLd } from "../../../components/discovery/Breadcrumbs";
+import { JsonLd } from "../../../components/discovery/JsonLd";
+
+interface CityPageParams {
+  citySlug: string;
+}
+
+async function loadCity(citySlug: string) {
+  return fetchDiscoveryOrNull<CityDto>(`${DISCOVERY_PATHS.cities}/${citySlug}`, DISCOVERY_REVALIDATE_SECONDS);
+}
+
+export async function generateMetadata({ params }: { params: Promise<CityPageParams> }): Promise<Metadata> {
   const { citySlug } = await params;
+  const city = await loadCity(citySlug);
+  if (!city) return {};
+
+  const title = `Barbershops in ${city.name}`;
+  const description = `Find and book nearby barbershops in ${city.name}, ${city.state}. See wait times, services, and prices before you go.`;
+  const url = absoluteUrl(`/${city.slug}`);
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, type: "website" },
+  };
+}
+
+export default async function CityPage({ params }: { params: Promise<CityPageParams> }) {
+  const { citySlug } = await params;
+  const city = await loadCity(citySlug);
+  if (!city) notFound();
+
+  const [localities, salons] = await Promise.all([
+    fetchDiscoveryOrNull<LocalityDto[]>(
+      `${DISCOVERY_PATHS.cities}/${citySlug}/localities`,
+      DISCOVERY_REVALIDATE_SECONDS,
+    ),
+    fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
+      `${DISCOVERY_PATHS.salons}?city=${citySlug}`,
+      DISCOVERY_REVALIDATE_SECONDS,
+    ),
+  ]);
+
+  const breadcrumbItems = [
+    { label: "Home", href: "/" },
+    { label: city.name, href: `/${city.slug}` },
+  ];
+
   return (
-    <main style={{ padding: "3rem 1.5rem" }}>
-      <h1>Barbershops in {citySlug}</h1>
-      <p>City discovery page — placeholder, not yet implemented.</p>
+    <main style={{ padding: "2rem 1.5rem", maxWidth: 800, margin: "0 auto" }}>
+      <JsonLd data={breadcrumbJsonLd(breadcrumbItems, SITE_URL)} />
+      <Breadcrumbs items={breadcrumbItems} />
+      <h1>Barbershops in {city.name}</h1>
+      <p style={{ color: "#6B6357" }}>
+        {city.state}, {city.country}
+      </p>
+
+      {localities && localities.length > 0 && (
+        <section style={{ marginTop: 24 }}>
+          <h2 style={{ fontSize: "1.1rem" }}>Areas</h2>
+          <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {localities.map((l) => (
+              <Link
+                key={l.slug}
+                href={`/${city.slug}/areas/${l.slug}`}
+                style={{
+                  fontSize: "0.85rem",
+                  padding: "6px 12px",
+                  border: "1px solid #E7E0D3",
+                  borderRadius: 20,
+                  color: "#1C1A17",
+                }}
+              >
+                {l.name}
+              </Link>
+            ))}
+          </nav>
+        </section>
+      )}
+
+      <section style={{ marginTop: 24 }}>
+        <h2 style={{ fontSize: "1.1rem" }}>Salons</h2>
+        {salons && salons.items.length > 0 ? (
+          salons.items.map((s) => <SalonCard key={s.id} salon={s} />)
+        ) : (
+          <p style={{ color: "#6B6357" }}>No salons listed in {city.name} yet.</p>
+        )}
+      </section>
     </main>
   );
 }

@@ -17,6 +17,18 @@ export const joinQueueSchema = z.object({
 });
 export type JoinQueueInput = z.infer<typeof joinQueueSchema>;
 
+// GET /salons query params — validated the same way on backend (ZodValidationPipe on @Query())
+// and client (search form) so both agree on shape before a request is ever made.
+export const salonSearchQuerySchema = z.object({
+  city: z.string().optional(),
+  locality: z.string().optional(),
+  service: z.string().optional(),
+  q: z.string().optional(),
+  cursor: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
+
 export const otpRequestSchema = z.object({
   phone: z
     .string()

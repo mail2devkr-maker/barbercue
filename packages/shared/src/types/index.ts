@@ -2,6 +2,7 @@ import type {
   BookingSource,
   BookingStatus,
   ChargeType,
+  PhotoType,
   PrepaymentRequirement,
   QueueEntrySource,
   QueueEntryStatus,
@@ -60,6 +61,71 @@ export interface ServiceDto {
   price: number;
   category: string;
   isActive: boolean;
+}
+
+// ---------- Discovery / SEO (Phase 3A) ----------
+
+export interface CityDto {
+  id: string;
+  name: string;
+  slug: string;
+  state: string;
+  country: string;
+}
+
+export interface LocalityDto {
+  id: string;
+  name: string;
+  slug: string;
+  citySlug: string;
+}
+
+export interface OperatingHoursDto {
+  dayOfWeek: number; // 0 = Sunday .. 6 = Saturday (JS Date.getDay() convention)
+  openTime: string; // "HH:mm"
+  closeTime: string; // "HH:mm"
+  isClosed: boolean;
+}
+
+export interface PhotoDto {
+  id: string;
+  url: string;
+  altText: string | null;
+  type: PhotoType;
+}
+
+// No customer display-name field exists on User (schema gap, out of scope to fix here) — reviews
+// render without a name; clients should show something like "Verified customer" instead.
+export interface ReviewSummaryDto {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string; // ISO 8601
+}
+
+// Listing/search-result card shape — extends the existing SalonSummary rather than duplicating
+// its fields, adding only what a card needs beyond identity/location.
+export interface SalonListItemDto extends SalonSummary {
+  coverPhotoUrl: string | null;
+  ratingAverage: number | null; // null when the salon has zero reviews yet
+  ratingCount: number;
+  priceMin: number | null; // computed from active services, null if none
+  priceMax: number | null;
+}
+
+// Full profile page shape — everything a listing card has, plus the detail-page content.
+export interface SalonProfileDto extends SalonListItemDto {
+  description: string | null;
+  phone: string | null;
+  services: ServiceDto[];
+  operatingHours: OperatingHoursDto[];
+  photos: PhotoDto[];
+  reviews: ReviewSummaryDto[]; // most recent, capped server-side (see API.md)
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  nextCursor: string | null;
 }
 
 export interface BookingDto {

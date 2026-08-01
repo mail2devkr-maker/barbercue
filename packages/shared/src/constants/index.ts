@@ -25,3 +25,11 @@ export const AUTH_PATHS = {
 // Name of the httpOnly cookie the backend sets/reads for web refresh-token delivery. Shared so
 // the web app's fetch wrapper knows to send credentials, without needing to know the token value.
 export const REFRESH_TOKEN_COOKIE_NAME = 'barbercue_refresh_token';
+
+// Base segments for the public discovery API (CitiesController/SalonsController) — dynamic
+// segments (:citySlug, :salonSlug, etc.) are interpolated at the call site, same pattern as
+// HEALTH_PATH usage.
+export const DISCOVERY_PATHS = {
+  cities: 'cities',
+  salons: 'salons',
+} as const;
