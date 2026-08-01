@@ -55,12 +55,14 @@ apps/web/
       dashboard/salons/[salonId]/chairs/page.tsx
       dashboard/salons/[salonId]/settings/page.tsx      # payment policy, cancellation policy config
       dashboard/admin/...                               # PLATFORM_ADMIN only — same route group, stricter guard, not a separate app
-    middleware.ts              # role-level gate: CUSTOMER→(customer), SALON_STAFF/SALON_OWNER→(dashboard)/salons/*, PLATFORM_ADMIN→(dashboard)/admin/*
+    proxy.ts                   # role-level gate: CUSTOMER→(customer), SALON_STAFF/SALON_OWNER→(dashboard)/salons/*, PLATFORM_ADMIN→(dashboard)/admin/*
 ```
+
+*(Implementation note: Next.js 16 renamed the `middleware.ts` file convention to `proxy.ts` — same purpose and API, file renamed accordingly. Not an architectural change.)*
 
 Confirmed: the owner dashboard, staff dashboard, and platform admin dashboard are three authorization tiers of the **same** `(dashboard)` route group, not three codebases — a `PLATFORM_ADMIN`-only guard wraps `dashboard/admin/*`, a salon-membership guard (checked against `SalonStaff`) wraps `dashboard/salons/[salonId]/*`. This is what "route-level authorization and separation" means concretely here.
 
-If a `dashboard.barbercue.app` subdomain is wanted later for a cleaner mental model for salon staff, it's a `middleware.ts` hostname rewrite to the same `(dashboard)` route group — not a code restructure.
+If a `dashboard.barbercue.app` subdomain is wanted later for a cleaner mental model for salon staff, it's a `proxy.ts` hostname rewrite to the same `(dashboard)` route group — not a code restructure.
 
 **V1 dashboard is a responsive web app** — built to work well on phone, tablet, and desktop, since staff/owners will often use it on a phone at the front desk. This is not a decision against ever building a native staff app: see [ARCHITECTURE.md §2](ARCHITECTURE.md#2-application-boundaries) — a future `apps/staff-mobile` would be an additive Expo app consuming the same backend, not a redesign.
 

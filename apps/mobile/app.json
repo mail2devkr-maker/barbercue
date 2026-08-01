@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "BarberCue",
+    "slug": "devdutta-kumar-pandey",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#1C1A17"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dcw.barbercue",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.dcw.barbercue",
+      "adaptiveIcon": {
+        "backgroundColor": "#1C1A17",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "01998c87-126d-40e8-aac3-205891b74b08"
+      }
+    },
+    "owner": "dcw-team"
+  }
+}

@@ -1,3 +1,9 @@
+> **Archived prototype.** This folder is the original single-screen-set Expo prototype, preserved
+> as-is for reference and recoverability. Active development has moved to the `apps/`
+> monorepo at the repo root — see the root `README.md` and `ARCHITECTURE.md`. This folder is
+> self-contained (its own `package.json`/`package-lock.json`) and can still be run standalone by
+> `cd`-ing into it and following the steps below; it is not part of the new build.
+
 # BarberCue — barbershop queue & booking app
 
 A starter app that lets customers see which nearby barbershops are free, short-wait, or fully

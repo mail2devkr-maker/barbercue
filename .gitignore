@@ -1,6 +1,35 @@
+# Dependencies
 node_modules/
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Expo
 .expo/
 .expo-shared/
-dist/
+
+# Env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Logs
 *.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Prisma
+apps/backend/generated/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+
+# Local backup archive — not part of source control
 BarberCue-Original-Source.zip.zip

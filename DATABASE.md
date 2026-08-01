@@ -68,6 +68,7 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 **QueueEntry** (the operational token — created at different times depending on source, see [STATE_MACHINES.md](STATE_MACHINES.md#queue-entry-creation-timing))
 - id, salonId → Salon, bookingId → Booking (nullable — walk-ins), customerId → User (nullable — anonymous walk-in logged by staff)
 - **source** (`WALK_IN`/`APPOINTMENT`) — explicit field, not inferred from `bookingId` presence, so queue analytics/filters don't depend on a join
+- **serviceId → Service (nullable)** — *Phase 1 implementation addition, not in the original field list above.* API.md's walk-in join endpoint accepts an optional `serviceId` with nowhere else to hold it before a `ServiceSession` exists; an appointment-sourced entry can still resolve its service via the linked `Booking` instead. Filling this gap, not contradicting the original design.
 - tokenNumber (int, scoped per salon per day), status (`WAITING`/`CALLED`/`IN_SERVICE`/`COMPLETED`/`NO_SHOW`/`CANCELLED`)
 - assignedStaffId → SalonStaff (nullable until called), assignedChairId → Chair (nullable until called)
 - joinedAt (= check-in time for appointments, join time for walk-ins), calledAt, serviceStartedAt, serviceCompletedAt, estimatedWaitMinutes (cached)

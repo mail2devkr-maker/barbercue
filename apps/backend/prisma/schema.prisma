@@ -1,0 +1,700 @@
+// BarberCue — Prisma schema, Phase 1 foundation.
+// Mirrors DATABASE.md model-for-model. Field/model names use Prisma (camelCase) convention and
+// map to snake_case tables/columns via @@map/@map, per DATABASE.md's stated convention.
+//
+// KNOWN ESCAPE HATCH (documented, not a gap): the two partial unique indexes that enforce
+// multi-chair/multi-barber concurrency —
+//   CREATE UNIQUE INDEX service_session_staff_active_uq ON service_sessions(staff_id) WHERE status = 'ACTIVE';
+//   CREATE UNIQUE INDEX service_session_chair_active_uq ON service_sessions(chair_id) WHERE status = 'ACTIVE';
+// — cannot be expressed in the Prisma schema DSL (no WHERE-clause unique index support as of the
+// current stable Prisma release). They are added directly to the generated SQL migration file
+// (see prisma/migrations/) exactly as documented in DATABASE.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  CUSTOMER
+  SALON_STAFF
+  SALON_OWNER
+  PLATFORM_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum OtpPurpose {
+  LOGIN
+  SIGNUP
+}
+
+enum SalonStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum SalonStaffRole {
+  OWNER
+  MANAGER
+  BARBER
+}
+
+enum StaffMemberStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ChairStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum PhotoType {
+  COVER
+  GALLERY
+}
+
+enum PrepaymentRequirement {
+  NONE
+  OPTIONAL
+  PARTIAL
+  FULL
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+  EXPIRED
+}
+
+enum BookingSource {
+  APP
+  WEB
+  WALK_IN
+}
+
+enum QueueEntrySource {
+  WALK_IN
+  APPOINTMENT
+}
+
+enum QueueEntryStatus {
+  WAITING
+  CALLED
+  IN_SERVICE
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum ServiceSessionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum ChargeType {
+  FLAT
+  PERCENTAGE
+}
+
+enum PaymentType {
+  BOOKING_PAYMENT
+  CANCELLATION_CHARGE
+}
+
+enum PaymentProvider {
+  RAZORPAY
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  SUCCESS
+  FAILED
+  EXPIRED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum RefundStatus {
+  INITIATED
+  SUCCEEDED
+  FAILED
+}
+
+enum LedgerReason {
+  CANCELLATION_CHARGE
+  NO_SHOW_CHARGE
+}
+
+enum LedgerStatus {
+  OUTSTANDING
+  SETTLED
+  WAIVED
+}
+
+enum SubscriptionStatus {
+  PILOT
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  EXPIRED
+}
+
+enum NotificationChannel {
+  SMS
+  PUSH
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// ---------- Identity & access ----------
+
+model User {
+  id               String    @id @default(uuid())
+  phone            String?   @unique
+  email            String?   @unique
+  passwordHash     String?
+  phoneVerifiedAt  DateTime?
+  emailVerifiedAt  DateTime?
+  status           UserStatus @default(ACTIVE)
+  twoFactorEnabled Boolean   @default(false)
+  totpSecret       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  roles            UserRole[]
+  refreshTokens    RefreshToken[]
+  ownedSalons      Salon[]      @relation("SalonOwner")
+  staffMemberships SalonStaff[]
+  bookings         Booking[]    @relation("BookingCustomer")
+  cancelledBookings Booking[]   @relation("BookingCancelledBy")
+  queueEntries     QueueEntry[]
+  reviews          Review[]
+  notifications    Notification[]
+  ledgerEntries    CustomerLedgerEntry[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+model UserRole {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  role      Role
+  salonId   String?
+  salon     Salon?    @relation(fields: [salonId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, role, salonId])
+  @@map("user_roles")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  tokenHash  String
+  deviceInfo String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model OtpRequest {
+  id         String     @id @default(uuid())
+  phone      String
+  codeHash   String
+  purpose    OtpPurpose
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([phone, createdAt])
+  @@map("otp_requests")
+}
+
+// ---------- Discovery / SEO ----------
+
+model City {
+  id         String     @id @default(uuid())
+  name       String
+  slug       String     @unique
+  state      String
+  country    String
+  localities Locality[]
+  salons     Salon[]
+
+  @@map("cities")
+}
+
+model Locality {
+  id     String  @id @default(uuid())
+  cityId String
+  city   City    @relation(fields: [cityId], references: [id])
+  name   String
+  slug   String
+  salons Salon[]
+
+  @@unique([cityId, slug])
+  @@map("localities")
+}
+
+model Salon {
+  id          String   @id @default(uuid())
+  ownerUserId String
+  owner       User     @relation("SalonOwner", fields: [ownerUserId], references: [id])
+  name        String
+  slug        String
+  cityId      String
+  city        City     @relation(fields: [cityId], references: [id])
+  localityId  String?
+  locality    Locality? @relation(fields: [localityId], references: [id])
+  addressLine String
+  lat         Float
+  lng         Float
+  phone       String?
+  description String?
+  status      SalonStatus @default(PENDING)
+
+  // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
+  planId                 String?
+  plan                   Plan?    @relation(fields: [planId], references: [id])
+  subscriptionStatus     SubscriptionStatus @default(PILOT)
+  trialEndsAt            DateTime?
+  subscriptionExpiresAt  DateTime?
+  gracePeriodEndsAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userRoles             UserRole[]
+  staff                 SalonStaff[]
+  chairs                Chair[]
+  services              Service[]
+  bookings              Booking[]
+  queueEntries          QueueEntry[]
+  cancellationPolicies  CancellationPolicy[]
+  paymentPolicy         SalonPaymentPolicy?
+  operatingHours        OperatingHours[]
+  photos                Photo[]
+  reviews               Review[]
+  ledgerEntries         CustomerLedgerEntry[]
+  staffChairAssignments StaffChairAssignment[]
+
+  @@unique([cityId, slug])
+  @@map("salons")
+}
+
+model SalonPaymentPolicy {
+  id                    String @id @default(uuid())
+  salonId               String @unique
+  salon                 Salon  @relation(fields: [salonId], references: [id])
+  prepaymentRequirement PrepaymentRequirement @default(NONE)
+  prepaymentPercentage  Int?
+
+  @@map("salon_payment_policies")
+}
+
+model CancellationPolicy {
+  id                              String      @id @default(uuid())
+  salonId                         String?     @unique
+  salon                           Salon?      @relation(fields: [salonId], references: [id])
+  freeCancellationWindowMinutes   Int
+  lateCancellationChargeType      ChargeType
+  lateCancellationChargeValue     Decimal     @db.Decimal(10, 2)
+  noShowChargeType                ChargeType
+  noShowChargeValue               Decimal     @db.Decimal(10, 2)
+  appointmentArrivalGraceMinutes  Int
+  queueCallResponseGraceMinutes   Int
+  createdAt                       DateTime    @default(now())
+  updatedAt                       DateTime    @updatedAt
+
+  @@map("cancellation_policies")
+}
+
+model OperatingHours {
+  id        String  @id @default(uuid())
+  salonId   String
+  salon     Salon   @relation(fields: [salonId], references: [id])
+  dayOfWeek Int
+  openTime  String
+  closeTime String
+  isClosed  Boolean @default(false)
+
+  @@unique([salonId, dayOfWeek])
+  @@map("operating_hours")
+}
+
+model Photo {
+  id        String    @id @default(uuid())
+  salonId   String
+  salon     Salon     @relation(fields: [salonId], references: [id])
+  url       String
+  altText   String?
+  type      PhotoType
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@map("photos")
+}
+
+// ---------- Staff / chairs (approved concepts, unchanged) ----------
+
+model SalonStaff {
+  id          String            @id @default(uuid())
+  salonId     String
+  salon       Salon             @relation(fields: [salonId], references: [id])
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  displayName String
+  roleInSalon SalonStaffRole
+  status      StaffMemberStatus @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  chairAssignments     StaffChairAssignment[]
+  serviceSessions      ServiceSession[]
+  services             StaffService[]
+  queueEntriesAssigned QueueEntry[] @relation("AssignedStaff")
+
+  @@map("salon_staff")
+}
+
+model Chair {
+  id        String      @id @default(uuid())
+  salonId   String
+  salon     Salon       @relation(fields: [salonId], references: [id])
+  label     String
+  status    ChairStatus @default(ACTIVE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  assignments          StaffChairAssignment[]
+  serviceSessions      ServiceSession[]
+  queueEntriesAssigned QueueEntry[] @relation("AssignedChair")
+
+  @@map("chairs")
+}
+
+model StaffChairAssignment {
+  id            String    @id @default(uuid())
+  salonId       String
+  salon         Salon     @relation(fields: [salonId], references: [id])
+  staffId       String
+  staff         SalonStaff @relation(fields: [staffId], references: [id])
+  chairId       String
+  chair         Chair     @relation(fields: [chairId], references: [id])
+  shiftDate     DateTime  @db.Date
+  assignedFrom  DateTime
+  assignedUntil DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@map("staff_chair_assignments")
+}
+
+model Service {
+  id              String   @id @default(uuid())
+  salonId         String
+  salon           Salon    @relation(fields: [salonId], references: [id])
+  name            String
+  description     String?
+  durationMinutes Int
+  price           Decimal  @db.Decimal(10, 2)
+  category        String?
+  isActive        Boolean  @default(true)
+  // Future-proofing only (DATABASE.md): caps a service below the staff/chair-derived capacity for
+  // a service that needs a scarce fixed resource. Unset for every V1 service.
+  maxConcurrent   Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  staffQualifications StaffService[]
+  bookings            Booking[]
+  queueEntries        QueueEntry[]
+  serviceSessions     ServiceSession[]
+
+  @@map("services")
+}
+
+model StaffService {
+  staffId   String
+  staff     SalonStaff @relation(fields: [staffId], references: [id])
+  serviceId String
+  service   Service    @relation(fields: [serviceId], references: [id])
+
+  @@id([staffId, serviceId])
+  @@map("staff_services")
+}
+
+// ---------- Booking & queue ----------
+
+model Booking {
+  id                        String        @id @default(uuid())
+  salonId                   String
+  salon                     Salon         @relation(fields: [salonId], references: [id])
+  customerId                String
+  customer                  User          @relation("BookingCustomer", fields: [customerId], references: [id])
+  serviceId                 String
+  service                   Service       @relation(fields: [serviceId], references: [id])
+  slotStart                 DateTime
+  slotEnd                   DateTime
+  status                    BookingStatus @default(CONFIRMED)
+  source                    BookingSource
+  idempotencyKey            String        @unique
+  // Snapshot of SalonPaymentPolicy x Service.price at creation time — see DATABASE.md.
+  prepaymentRequiredAmount  Decimal?      @db.Decimal(10, 2)
+  cancelledAt               DateTime?
+  cancelledById             String?
+  cancelledBy               User?         @relation("BookingCancelledBy", fields: [cancelledById], references: [id])
+  cancellationChargeAmount  Decimal?      @db.Decimal(10, 2)
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+
+  queueEntries  QueueEntry[]
+  payments      Payment[]
+  reviews       Review[]
+  ledgerEntries CustomerLedgerEntry[]
+
+  @@index([salonId, slotStart, slotEnd])
+  @@map("bookings")
+}
+
+model QueueEntry {
+  id        String            @id @default(uuid())
+  salonId   String
+  salon     Salon             @relation(fields: [salonId], references: [id])
+  bookingId String?
+  booking   Booking?          @relation(fields: [bookingId], references: [id])
+  customerId String?
+  customer  User?             @relation(fields: [customerId], references: [id])
+  // Not listed explicitly in DATABASE.md's original field list — added because API.md's walk-in
+  // join endpoint accepts an optional serviceId with no other field to hold it before a
+  // ServiceSession exists. Documented back into DATABASE.md as a Phase 1 addition, not a
+  // contradiction of it. Nullable: an appointment-sourced entry can resolve its service via the
+  // linked Booking instead.
+  serviceId String?
+  service   Service?          @relation(fields: [serviceId], references: [id])
+  source    QueueEntrySource
+  tokenNumber Int
+  status    QueueEntryStatus  @default(WAITING)
+
+  assignedStaffId String?
+  assignedStaff   SalonStaff? @relation("AssignedStaff", fields: [assignedStaffId], references: [id])
+  assignedChairId String?
+  assignedChair   Chair?      @relation("AssignedChair", fields: [assignedChairId], references: [id])
+
+  joinedAt            DateTime  @default(now())
+  calledAt            DateTime?
+  serviceStartedAt    DateTime?
+  serviceCompletedAt  DateTime?
+  estimatedWaitMinutes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  serviceSessions ServiceSession[]
+
+  @@map("queue_entries")
+}
+
+// The concurrency-critical model. See the two partial unique indexes noted at the top of this
+// file and enforced in the SQL migration — Prisma schema DSL cannot express them declaratively.
+model ServiceSession {
+  id           String                @id @default(uuid())
+  queueEntryId String
+  queueEntry   QueueEntry            @relation(fields: [queueEntryId], references: [id])
+  staffId      String
+  staff        SalonStaff            @relation(fields: [staffId], references: [id])
+  chairId      String
+  chair        Chair                 @relation(fields: [chairId], references: [id])
+  serviceId    String
+  service      Service               @relation(fields: [serviceId], references: [id])
+  status       ServiceSessionStatus  @default(ACTIVE)
+  startedAt    DateTime              @default(now())
+  endedAt      DateTime?
+  createdAt    DateTime              @default(now())
+
+  @@map("service_sessions")
+}
+
+// ---------- Payments ----------
+
+model Payment {
+  id                String          @id @default(uuid())
+  bookingId         String?
+  booking           Booking?        @relation(fields: [bookingId], references: [id])
+  type              PaymentType
+  amount            Decimal         @db.Decimal(10, 2)
+  currency          String          @default("INR")
+  provider          PaymentProvider @default(RAZORPAY)
+  providerOrderId   String?
+  providerPaymentId String?         @unique
+  idempotencyKey    String          @unique
+  status            PaymentStatus   @default(CREATED)
+  webhookVerifiedAt DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  refunds           Refund[]
+  ledgerSettlements CustomerLedgerEntry[]
+
+  @@map("payments")
+}
+
+model Refund {
+  id               String       @id @default(uuid())
+  paymentId        String
+  payment          Payment      @relation(fields: [paymentId], references: [id])
+  amount           Decimal      @db.Decimal(10, 2)
+  reason           String?
+  providerRefundId String?
+  status           RefundStatus @default(INITIATED)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@map("refunds")
+}
+
+model CustomerLedgerEntry {
+  id                 String       @id @default(uuid())
+  customerId         String
+  customer           User         @relation(fields: [customerId], references: [id])
+  salonId            String
+  salon              Salon        @relation(fields: [salonId], references: [id])
+  bookingId          String?
+  booking            Booking?     @relation(fields: [bookingId], references: [id])
+  amount             Decimal      @db.Decimal(10, 2)
+  reason             LedgerReason
+  status             LedgerStatus @default(OUTSTANDING)
+  settledByPaymentId String?
+  settledByPayment   Payment?     @relation(fields: [settledByPaymentId], references: [id])
+  createdAt          DateTime     @default(now())
+  settledAt          DateTime?
+
+  @@map("customer_ledger_entries")
+}
+
+// Generic idempotency guard for mutating endpoints (bookings, queue join, payment init,
+// cancellation) and deterministic system-triggered transitions (e.g. the no-show sweep job).
+model IdempotencyKey {
+  key              String   @id
+  endpoint         String
+  requestHash      String
+  responseSnapshot Json?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+
+  @@map("idempotency_keys")
+}
+
+// ---------- Reviews ----------
+
+model Review {
+  id             String   @id @default(uuid())
+  salonId        String
+  salon          Salon    @relation(fields: [salonId], references: [id])
+  customerId     String
+  customer       User     @relation(fields: [customerId], references: [id])
+  bookingId      String   @unique
+  booking        Booking  @relation(fields: [bookingId], references: [id])
+  rating         Int
+  comment        String?
+  ownerResponse  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("reviews")
+}
+
+// ---------- Notifications ----------
+
+model Notification {
+  id        String              @id @default(uuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id])
+  channel   NotificationChannel
+  type      String
+  payload   Json?
+  status    NotificationStatus  @default(PENDING)
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  @@map("notifications")
+}
+
+// ---------- Audit ----------
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  actor       User?    @relation(fields: [actorUserId], references: [id])
+  action      String
+  entityType  String
+  entityId    String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// ---------- Subscription (inactive in V1 — see ARCHITECTURE.md §16) ----------
+
+model Plan {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  priceMonthly Decimal  @default(0) @db.Decimal(10, 2)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  salons       Salon[]
+  entitlements PlanEntitlement[]
+
+  @@map("plans")
+}
+
+model Entitlement {
+  id          String @id @default(uuid())
+  key         String @unique
+  description String?
+
+  plans PlanEntitlement[]
+
+  @@map("entitlements")
+}
+
+model PlanEntitlement {
+  planId         String
+  plan           Plan        @relation(fields: [planId], references: [id])
+  entitlementKey String
+  entitlement    Entitlement @relation(fields: [entitlementKey], references: [key])
+  value          String
+
+  @@id([planId, entitlementKey])
+  @@map("plan_entitlements")
+}
