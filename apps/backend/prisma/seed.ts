@@ -11,9 +11,15 @@
  * the entire demo-data section is skipped so re-running this script is always safe and never
  * creates duplicate salons/bookings/reviews.
  *
- * Deliberately NOT seeded (out of this task's scope, not an oversight): SalonPaymentPolicy and
- * CancellationPolicy rows. Both are optional-with-fallback per DATABASE.md (no policy row means
- * NONE / platform-default behavior), so the demo salon works correctly without them.
+ * Deliberately NOT seeded (out of this task's scope, not an oversight): a salon-specific
+ * SalonPaymentPolicy or CancellationPolicy row for the demo salon. Both are optional-with-fallback
+ * per DATABASE.md (no salon-specific row means NONE / platform-default behavior), so the demo
+ * salon works correctly without them.
+ *
+ * Phase 3B fix: the platform-default CancellationPolicy row (salonId: null) itself IS seeded below
+ * (seedPlatformDefaultCancellationPolicy) — DATABASE.md specifies this row must exist with exact
+ * V1 default values, but it was never actually inserted until now. Booking cancellation has
+ * nothing to fall back to without it.
  */
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
@@ -21,6 +27,7 @@ import {
   BookingSource,
   BookingStatus,
   ChairStatus,
+  ChargeType,
   QueueEntrySource,
   QueueEntryStatus,
   Role,
@@ -442,6 +449,34 @@ async function seedVisitsAndReviews(ctx: DemoContext): Promise<void> {
   });
 }
 
+/**
+ * DATABASE.md §CancellationPolicy: "V1 platform default (seeded row, salonId null)" with these
+ * exact values. `salonId` is nullable-unique (Postgres allows multiple NULLs under a unique
+ * constraint), so this can't be a Prisma `upsert` keyed on `salonId` — find-then-create instead,
+ * and only ever do this once.
+ */
+async function seedPlatformDefaultCancellationPolicy(): Promise<void> {
+  const existing = await prisma.cancellationPolicy.findFirst({ where: { salonId: null } });
+  if (existing) {
+    log('\n[cancellation policy] platform default row already exists — nothing to do.');
+    return;
+  }
+
+  await prisma.cancellationPolicy.create({
+    data: {
+      salonId: null,
+      freeCancellationWindowMinutes: 60,
+      lateCancellationChargeType: ChargeType.PERCENTAGE,
+      lateCancellationChargeValue: '50',
+      noShowChargeType: ChargeType.PERCENTAGE,
+      noShowChargeValue: '100',
+      appointmentArrivalGraceMinutes: 10,
+      queueCallResponseGraceMinutes: 3,
+    },
+  });
+  log('\n[cancellation policy] seeded the platform default row (60 min free window, 50% late, 100% no-show).');
+}
+
 async function verify(): Promise<void> {
   const [
     admins,
@@ -489,6 +524,7 @@ async function verify(): Promise<void> {
 
 async function main() {
   const { email: adminEmail } = await seedAdmin();
+  await seedPlatformDefaultCancellationPolicy();
   const ctx = await seedDemoSalon();
   if (ctx) {
     await seedVisitsAndReviews(ctx);

@@ -25,9 +25,11 @@ Under `OPTIONAL`, a customer may still voluntarily create a `Payment` against an
 
 Race-condition prevention: covered in [DATABASE.md §Booking capacity model](DATABASE.md#booking-capacity-model-resolved--service-level-not-salon-wide) — the capacity check and the `Booking` insert are one transaction.
 
+**Phase 3B implementation status**: `[*] → CONFIRMED` / `[*] → PENDING_PAYMENT` and `CONFIRMED → CANCELLED` are built and live (`POST /bookings`, `POST /bookings/:id/cancel`, see [API.md](API.md)). The `PENDING_PAYMENT` branch is implemented for correctness per the policy function above but not reachable with current data — no salon has a `PARTIAL`/`FULL` `SalonPaymentPolicy` configured yet (payment-policy management is dashboard work). `PENDING_PAYMENT → CONFIRMED`/`EXPIRED` (the Payments webhook/hold-timeout) and `CONFIRMED → NO_SHOW`/`COMPLETED` are not built — Payments and queue check-in are separate, later phases.
+
 ## Queue entry creation timing (resolved)
 
-- **Appointments**: `Booking` creation does **not** create a `QueueEntry`. A `QueueEntry` (`source = APPOINTMENT`) is created when the customer checks in on arrival, via a dedicated check-in action (`POST /bookings/:id/check-in`, see [API.md](API.md)). Checking in before `CONFIRMED` (i.e. while still `PENDING_PAYMENT`) is rejected.
+- **Appointments**: `Booking` creation does **not** create a `QueueEntry`. A `QueueEntry` (`source = APPOINTMENT`) is created when the customer checks in on arrival, via a dedicated check-in action (`POST /bookings/:id/check-in`, see [API.md](API.md)). Checking in before `CONFIRMED` (i.e. while still `PENDING_PAYMENT`) is rejected. **Not yet built** — queue check-in is explicitly out of scope through Phase 3B, which implements booking creation/list/detail/cancel only.
 - **Walk-ins**: `QueueEntry` (`source = WALK_IN`, `bookingId = null`) is created immediately on `POST /salons/:salonId/queue/join`.
 - Both sources converge into the same `QueueEntry`/`ServiceSession` machinery below — the queue engine does not branch on `source` past creation, except that `source` is retained for analytics and for the appointment no-show check (which acts on `Booking`, not `QueueEntry`, since an appointment can go `NO_SHOW` without ever having a `QueueEntry` at all).
 
@@ -82,8 +84,10 @@ flowchart TD
 
 No-show follows the same fork at the moment a no-show is detected (system-triggered, see below), using `noShowChargeType`/`noShowChargeValue` instead of the late-cancellation values.
 
+**Phase 3B implements branches B/C/F only** (`POST /bookings/:id/cancel`) — no-show detection (the system-triggered fork) and branch D/E (an eligible `Payment` exists → refund) are not reachable with current data, since no salon has a payment policy configured and the Payments module isn't built yet; implementing the refund branch now would be dead, untestable code, so it's deferred rather than half-built.
+
 **BarberCue never attempts to auto-collect from a customer with no prior payment or stored authorization.** When there's nothing to charge against, the outcome is a `CustomerLedgerEntry(OUTSTANDING)`, not a payment attempt. It is:
-- exposed to the customer (`GET /customers/me/ledger`, shown in the mobile/web account view),
+- exposed to the customer today via direct API/DB inspection only — the dedicated `GET /customers/me/ledger` read endpoint mentioned below is still unbuilt (out of scope for Phase 3B; verified via Prisma directly in that phase's e2e tests instead),
 - available to salon/platform policy as a gate on new bookings (`POST /bookings` checks for `OUTSTANDING` entries and blocks or warns, per a configurable policy flag — default in V1: **block new bookings at the same salon** until settled; cross-salon blocking is a platform-level policy choice, off by default),
 - settle-able manually today (staff marks it paid at the counter, or a future feature lets the customer pay it off online) and, in the future, via an authorized-payment/UPI-mandate mechanism.
 
@@ -92,8 +96,8 @@ No-show follows the same fork at the moment a no-show is detected (system-trigge
 ## Idempotent, auditable transitions
 
 Every state transition — customer-initiated or system-triggered — is:
-- **Idempotent**: driven by an `Idempotency-Key` (customer/staff actions) or a deterministic system key like `noshow:{queueEntryId}:{date}` (the scheduled no-show sweep). A retried job run or a double-tapped button cannot double-transition or double-charge.
-- **Auditable**: every transition that has money or customer-facing consequences (cancellation, no-show, ledger creation/settlement) writes an `AuditLog` row, with `actorUserId = null` for system-triggered ones.
+- **Idempotent**: driven by an `Idempotency-Key` (customer/staff actions) or a deterministic system key like `noshow:{queueEntryId}:{date}` (the scheduled no-show sweep). A retried job run or a double-tapped button cannot double-transition or double-charge. **Implemented in Phase 3B** (`IdempotencyInterceptor` + the `IdempotencyKey` table defined since Phase 1) for `POST /bookings` and `POST /bookings/:id/cancel` — the first endpoints to actually need it. The no-show sweep's deterministic key remains unimplemented (no-show detection isn't built yet).
+- **Auditable**: every transition that has money or customer-facing consequences (cancellation, no-show, ledger creation/settlement) writes an `AuditLog` row, with `actorUserId = null` for system-triggered ones. Cancellation's `AuditLog` write is implemented in Phase 3B.
 
 ## Salon subscription (inert in V1)
 

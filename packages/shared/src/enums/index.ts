@@ -42,6 +42,12 @@ export const SalonStaffRole = {
 } as const;
 export type SalonStaffRole = (typeof SalonStaffRole)[keyof typeof SalonStaffRole];
 
+export const StaffMemberStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+} as const;
+export type StaffMemberStatus = (typeof StaffMemberStatus)[keyof typeof StaffMemberStatus];
+
 export const ChairStatus = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
@@ -177,6 +183,25 @@ export type NotificationStatus = (typeof NotificationStatus)[keyof typeof Notifi
 // Stable machine-readable error codes for authentication — API.md's convention: clients branch on
 // `error.code`, never on `error.message`. Shared so backend and every client agree on the exact
 // strings.
+// Stable machine-readable error codes for the booking flow — same convention as AuthErrorCode.
+export const BookingErrorCode = {
+  SALON_NOT_FOUND: 'SALON_NOT_FOUND',
+  SERVICE_NOT_FOUND: 'SERVICE_NOT_FOUND',
+  STAFF_NOT_FOUND: 'STAFF_NOT_FOUND',
+  STAFF_NOT_QUALIFIED: 'STAFF_NOT_QUALIFIED',
+  BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
+  SLOT_IN_PAST: 'SLOT_IN_PAST',
+  OUTSIDE_OPERATING_HOURS: 'OUTSIDE_OPERATING_HOURS',
+  SLOT_FULL: 'SLOT_FULL',
+  OUTSTANDING_BALANCE: 'OUTSTANDING_BALANCE',
+  BOOKING_NOT_CANCELLABLE: 'BOOKING_NOT_CANCELLABLE',
+  CANCELLATION_POLICY_MISSING: 'CANCELLATION_POLICY_MISSING',
+  IDEMPOTENCY_KEY_REQUIRED: 'IDEMPOTENCY_KEY_REQUIRED',
+  IDEMPOTENCY_KEY_REUSED: 'IDEMPOTENCY_KEY_REUSED',
+  REQUEST_IN_PROGRESS: 'REQUEST_IN_PROGRESS',
+} as const;
+export type BookingErrorCode = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
+
 export const AuthErrorCode = {
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',

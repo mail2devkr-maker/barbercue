@@ -9,8 +9,24 @@ export const createBookingSchema = z.object({
   salonId: z.string().uuid(),
   serviceId: z.string().uuid(),
   slotStart: z.string().datetime(),
+  // Soft preference only ("Any Staff" = omitted) — see DATABASE.md's Booking section.
+  preferredStaffId: z.string().uuid().optional(),
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+
+// GET /salons/:salonId/availability query params.
+export const availabilityQuerySchema = z.object({
+  serviceId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format'),
+  staffId: z.string().uuid().optional(),
+});
+export type AvailabilityQueryInput = z.infer<typeof availabilityQuerySchema>;
+
+// GET /salons/:salonId/staff query params.
+export const staffListQuerySchema = z.object({
+  serviceId: z.string().uuid(),
+});
+export type StaffListQueryInput = z.infer<typeof staffListQuerySchema>;
 
 export const joinQueueSchema = z.object({
   serviceId: z.string().uuid().optional(),

@@ -58,13 +58,22 @@ export class AuthController {
       // this needs `sameSite: 'none', secure: true` instead — a deployment-time config, not an
       // architecture change.
       secure: process.env.NODE_ENV === 'production',
-      path: '/api/v1/auth',
+      // Path is deliberately "/", not "/api/v1/auth": cookies are scoped by (domain, path), never
+      // by port, so this same cookie jar is shared between the backend (localhost:3000) and
+      // apps/web's proxy.ts (localhost:3001) in dev. proxy.ts's coarse "is there a session at
+      // all" gate on /account/* and /dashboard/* reads this cookie on requests to the WEB app
+      // (e.g. GET localhost:3001/account/bookings) — a path that never starts with
+      // "/api/v1/auth", so a narrower path silently hid the cookie from that check and made
+      // proxy.ts redirect every fresh/hard navigation to those routes to /login even when fully
+      // authenticated (found while verifying Phase 3B's /account/bookings page). Only
+      // /auth/refresh and /auth/logout ever read this cookie server-side regardless of path.
+      path: '/',
       maxAge: REFRESH_COOKIE_MAX_AGE_MS,
     });
   }
 
   private clearRefreshCookie(response: Response): void {
-    response.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: '/api/v1/auth' });
+    response.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: '/' });
   }
 
   /** Refresh token can arrive via body (mobile) or httpOnly cookie (web) — body takes precedence. */

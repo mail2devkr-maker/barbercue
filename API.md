@@ -43,14 +43,31 @@ Status: **V1 decisions finalized.** Backend: NestJS, REST + one WebSocket namesp
 
 ## Booking (customer, authenticated)
 
+Implemented in Phase 3B. The three `GET /salons/:salonId/booking/...` routes below live under an
+extra literal `booking` path segment — **not** the bare `/salons/:salonId/...` shape originally
+sketched here. `SalonsController`'s public discovery route (`GET /salons/:citySlug/:salonSlug`) is
+also a two-dynamic-segment pattern under the same `/salons` prefix; a request like
+`/salons/{uuid}/staff` would structurally match both patterns, and which one wins would depend on
+fragile controller-registration order. The extra segment makes the two shapes non-overlapping
+regardless of order — same fix philosophy as the `/areas/` locality route in Phase 3A.
+
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/salons/:salonId/availability?serviceId=&date=` | applies the service-level capacity algorithm in [DATABASE.md](DATABASE.md#booking-capacity-model-resolved--service-level-not-salon-wide) |
-| POST | `/bookings` | Idempotency-Key required. `{ salonId, serviceId, slotStart }`. Response status is `CONFIRMED` or `PENDING_PAYMENT` depending on the salon's `SalonPaymentPolicy` — client branches on the returned status, never assumes one or the other. Rejected with `OUTSTANDING_BALANCE` if the customer has a blocking `CustomerLedgerEntry` at that salon. |
-| GET | `/bookings/mine` | paginated |
-| GET | `/bookings/:id` | |
-| POST | `/bookings/:id/check-in` | Idempotency-Key required. Only valid when `Booking.status = CONFIRMED`. Creates a `QueueEntry(source=APPOINTMENT)` — this is the only path that turns an appointment into a live queue token; booking creation never does this implicitly. |
-| POST | `/bookings/:id/cancel` | Idempotency-Key required. Runs the cancellation flow in [STATE_MACHINES.md](STATE_MACHINES.md#cancellation-flow-resolved); response includes whether a refund, a retained charge, or a new `CustomerLedgerEntry` resulted. |
+| GET | `/salons/:salonId/booking/staff?serviceId=` | qualified-staff list for the "choose a barber" step (`ACTIVE` staff, StaffService rule below); "Any Staff" is a client-side option, never returned here |
+| GET | `/salons/:salonId/booking/availability?serviceId=&date=&staffId=` | applies the service-level capacity algorithm in [DATABASE.md](DATABASE.md#booking-capacity-model-resolved--service-level-not-salon-wide). `staffId` is optional and, per the soft-staff-preference decision below, only validates that staff's qualification/active status — it never changes which slots come back |
+| GET | `/salons/:salonId/booking/cancellation-policy` | the effective policy (salon-specific row, else the platform-default row) — lets clients render an accurate cancellation-charge preview via `packages/shared`'s `computeCancellationCharge` before the customer ever creates a booking |
+| POST | `/bookings` | Idempotency-Key required. `{ salonId, serviceId, slotStart, preferredStaffId? }`. `preferredStaffId` is a soft preference only (see `DATABASE.md`'s Booking section) — it never affects capacity. Response status is `CONFIRMED` or `PENDING_PAYMENT` depending on the salon's `SalonPaymentPolicy` — client branches on the returned status, never assumes one or the other. Rejected with `OUTSTANDING_BALANCE` if the customer has a blocking `CustomerLedgerEntry` at that salon. |
+| GET | `/bookings/mine` | cursor-paginated |
+| GET | `/bookings/:id` | 404s (not 403) if the booking doesn't belong to the caller |
+| POST | `/bookings/:id/check-in` | **deferred past Phase 3B** — queue check-in is explicitly out of scope; see STATE_MACHINES.md for the intended behavior once built |
+| POST | `/bookings/:id/cancel` | Idempotency-Key required, no body. Runs the cancellation flow in [STATE_MACHINES.md](STATE_MACHINES.md#cancellation-flow-resolved); response includes `chargeAmount` and `ledgerEntryCreated`. Only the reachable branch is implemented in Phase 3B — no `Payment` can exist yet (Payments module not built), so a charge always becomes a `CustomerLedgerEntry(OUTSTANDING)`, never a refund. |
+
+**Idempotency-Key enforcement**: `POST /bookings` and `POST /bookings/:id/cancel` are the first
+endpoints to actually implement the `IdempotencyKey` table (defined since Phase 1, unused until
+now) — see `apps/backend/src/common/interceptors/idempotency.interceptor.ts`. A retried
+request with the same key+body replays the cached response verbatim; the same key with a
+different body is rejected (`IDEMPOTENCY_KEY_REUSED`); a concurrent duplicate still in flight is
+rejected (`REQUEST_IN_PROGRESS`).
 
 ## Queue (customer view)
 

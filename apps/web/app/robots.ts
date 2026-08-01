@@ -12,7 +12,7 @@ export default function robots(): MetadataRoute.Robots {
       // stays crawlable/indexable via its own canonical (see app/(public)/search/page.tsx) —
       // disallowing "/search" outright would have blocked Googlebot from ever seeing that page
       // at all, including its canonical/noindex signals.
-      disallow: ["/account", "/dashboard", "/search?"],
+      disallow: ["/account", "/dashboard", "/book", "/search?"],
     },
     sitemap: `${baseUrl}/sitemap.xml`,
   };

@@ -172,42 +172,42 @@ enum NotificationStatus {
 // ---------- Identity & access ----------
 
 model User {
-  id               String    @id @default(uuid())
-  phone            String?   @unique
-  email            String?   @unique
+  id               String     @id @default(uuid())
+  phone            String?    @unique
+  email            String?    @unique
   passwordHash     String?
   phoneVerifiedAt  DateTime?
   emailVerifiedAt  DateTime?
   status           UserStatus @default(ACTIVE)
-  twoFactorEnabled Boolean   @default(false)
+  twoFactorEnabled Boolean    @default(false)
   totpSecret       String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  roles            UserRole[]
-  refreshTokens    RefreshToken[]
+  roles               UserRole[]
+  refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
-  ownedSalons      Salon[]      @relation("SalonOwner")
-  staffMemberships SalonStaff[]
-  bookings         Booking[]    @relation("BookingCustomer")
-  cancelledBookings Booking[]   @relation("BookingCancelledBy")
-  queueEntries     QueueEntry[]
-  reviews          Review[]
-  notifications    Notification[]
-  ledgerEntries    CustomerLedgerEntry[]
-  auditLogs        AuditLog[]
+  ownedSalons         Salon[]               @relation("SalonOwner")
+  staffMemberships    SalonStaff[]
+  bookings            Booking[]             @relation("BookingCustomer")
+  cancelledBookings   Booking[]             @relation("BookingCancelledBy")
+  queueEntries        QueueEntry[]
+  reviews             Review[]
+  notifications       Notification[]
+  ledgerEntries       CustomerLedgerEntry[]
+  auditLogs           AuditLog[]
 
   @@map("users")
 }
 
 model UserRole {
-  id        String    @id @default(uuid())
+  id        String   @id @default(uuid())
   userId    String
-  user      User      @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
   role      Role
   salonId   String?
-  salon     Salon?    @relation(fields: [salonId], references: [id])
-  createdAt DateTime  @default(now())
+  salon     Salon?   @relation(fields: [salonId], references: [id])
+  createdAt DateTime @default(now())
 
   @@unique([userId, role, salonId])
   @@map("user_roles")
@@ -284,15 +284,15 @@ model Locality {
 }
 
 model Salon {
-  id          String   @id @default(uuid())
+  id          String      @id @default(uuid())
   ownerUserId String
-  owner       User     @relation("SalonOwner", fields: [ownerUserId], references: [id])
+  owner       User        @relation("SalonOwner", fields: [ownerUserId], references: [id])
   name        String
   slug        String
   cityId      String
-  city        City     @relation(fields: [cityId], references: [id])
+  city        City        @relation(fields: [cityId], references: [id])
   localityId  String?
-  locality    Locality? @relation(fields: [localityId], references: [id])
+  locality    Locality?   @relation(fields: [localityId], references: [id])
   addressLine String
   lat         Float
   lng         Float
@@ -301,12 +301,12 @@ model Salon {
   status      SalonStatus @default(PENDING)
 
   // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
-  planId                 String?
-  plan                   Plan?    @relation(fields: [planId], references: [id])
-  subscriptionStatus     SubscriptionStatus @default(PILOT)
-  trialEndsAt            DateTime?
-  subscriptionExpiresAt  DateTime?
-  gracePeriodEndsAt      DateTime?
+  planId                String?
+  plan                  Plan?              @relation(fields: [planId], references: [id])
+  subscriptionStatus    SubscriptionStatus @default(PILOT)
+  trialEndsAt           DateTime?
+  subscriptionExpiresAt DateTime?
+  gracePeriodEndsAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -330,9 +330,9 @@ model Salon {
 }
 
 model SalonPaymentPolicy {
-  id                    String @id @default(uuid())
-  salonId               String @unique
-  salon                 Salon  @relation(fields: [salonId], references: [id])
+  id                    String                @id @default(uuid())
+  salonId               String                @unique
+  salon                 Salon                 @relation(fields: [salonId], references: [id])
   prepaymentRequirement PrepaymentRequirement @default(NONE)
   prepaymentPercentage  Int?
 
@@ -340,18 +340,18 @@ model SalonPaymentPolicy {
 }
 
 model CancellationPolicy {
-  id                              String      @id @default(uuid())
-  salonId                         String?     @unique
-  salon                           Salon?      @relation(fields: [salonId], references: [id])
-  freeCancellationWindowMinutes   Int
-  lateCancellationChargeType      ChargeType
-  lateCancellationChargeValue     Decimal     @db.Decimal(10, 2)
-  noShowChargeType                ChargeType
-  noShowChargeValue               Decimal     @db.Decimal(10, 2)
-  appointmentArrivalGraceMinutes  Int
-  queueCallResponseGraceMinutes   Int
-  createdAt                       DateTime    @default(now())
-  updatedAt                       DateTime    @updatedAt
+  id                             String     @id @default(uuid())
+  salonId                        String?    @unique
+  salon                          Salon?     @relation(fields: [salonId], references: [id])
+  freeCancellationWindowMinutes  Int
+  lateCancellationChargeType     ChargeType
+  lateCancellationChargeValue    Decimal    @db.Decimal(10, 2)
+  noShowChargeType               ChargeType
+  noShowChargeValue              Decimal    @db.Decimal(10, 2)
+  appointmentArrivalGraceMinutes Int
+  queueCallResponseGraceMinutes  Int
+  createdAt                      DateTime   @default(now())
+  updatedAt                      DateTime   @updatedAt
 
   @@map("cancellation_policies")
 }
@@ -399,7 +399,8 @@ model SalonStaff {
   chairAssignments     StaffChairAssignment[]
   serviceSessions      ServiceSession[]
   services             StaffService[]
-  queueEntriesAssigned QueueEntry[] @relation("AssignedStaff")
+  queueEntriesAssigned QueueEntry[]           @relation("AssignedStaff")
+  preferredByBookings  Booking[]              @relation("BookingPreferredStaff")
 
   @@map("salon_staff")
 }
@@ -415,23 +416,23 @@ model Chair {
 
   assignments          StaffChairAssignment[]
   serviceSessions      ServiceSession[]
-  queueEntriesAssigned QueueEntry[] @relation("AssignedChair")
+  queueEntriesAssigned QueueEntry[]           @relation("AssignedChair")
 
   @@map("chairs")
 }
 
 model StaffChairAssignment {
-  id            String    @id @default(uuid())
+  id            String     @id @default(uuid())
   salonId       String
-  salon         Salon     @relation(fields: [salonId], references: [id])
+  salon         Salon      @relation(fields: [salonId], references: [id])
   staffId       String
   staff         SalonStaff @relation(fields: [staffId], references: [id])
   chairId       String
-  chair         Chair     @relation(fields: [chairId], references: [id])
-  shiftDate     DateTime  @db.Date
+  chair         Chair      @relation(fields: [chairId], references: [id])
+  shiftDate     DateTime   @db.Date
   assignedFrom  DateTime
   assignedUntil DateTime?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime   @default(now())
 
   @@map("staff_chair_assignments")
 }
@@ -473,26 +474,32 @@ model StaffService {
 // ---------- Booking & queue ----------
 
 model Booking {
-  id                        String        @id @default(uuid())
-  salonId                   String
-  salon                     Salon         @relation(fields: [salonId], references: [id])
-  customerId                String
-  customer                  User          @relation("BookingCustomer", fields: [customerId], references: [id])
-  serviceId                 String
-  service                   Service       @relation(fields: [serviceId], references: [id])
-  slotStart                 DateTime
-  slotEnd                   DateTime
-  status                    BookingStatus @default(CONFIRMED)
-  source                    BookingSource
-  idempotencyKey            String        @unique
+  id                       String        @id @default(uuid())
+  salonId                  String
+  salon                    Salon         @relation(fields: [salonId], references: [id])
+  customerId               String
+  customer                 User          @relation("BookingCustomer", fields: [customerId], references: [id])
+  serviceId                String
+  service                  Service       @relation(fields: [serviceId], references: [id])
+  slotStart                DateTime
+  slotEnd                  DateTime
+  status                   BookingStatus @default(CONFIRMED)
+  source                   BookingSource
+  idempotencyKey           String        @unique
   // Snapshot of SalonPaymentPolicy x Service.price at creation time — see DATABASE.md.
-  prepaymentRequiredAmount  Decimal?      @db.Decimal(10, 2)
-  cancelledAt               DateTime?
-  cancelledById             String?
-  cancelledBy               User?         @relation("BookingCancelledBy", fields: [cancelledById], references: [id])
-  cancellationChargeAmount  Decimal?      @db.Decimal(10, 2)
-  createdAt                 DateTime      @default(now())
-  updatedAt                 DateTime      @updatedAt
+  prepaymentRequiredAmount Decimal?      @db.Decimal(10, 2)
+  // Phase 3B addition: a soft customer preference only, never a capacity constraint — the booking
+  // capacity model above stays pool-based (min qualified staff, active chairs), unchanged. Real
+  // staff/chair assignment still only happens at queue check-in/dashboard-assign time. Null means
+  // "Any Staff". See DATABASE.md's Booking section for the full rationale.
+  preferredStaffId         String?
+  preferredStaff           SalonStaff?   @relation("BookingPreferredStaff", fields: [preferredStaffId], references: [id])
+  cancelledAt              DateTime?
+  cancelledById            String?
+  cancelledBy              User?         @relation("BookingCancelledBy", fields: [cancelledById], references: [id])
+  cancellationChargeAmount Decimal?      @db.Decimal(10, 2)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   queueEntries  QueueEntry[]
   payments      Payment[]
@@ -504,33 +511,33 @@ model Booking {
 }
 
 model QueueEntry {
-  id        String            @id @default(uuid())
-  salonId   String
-  salon     Salon             @relation(fields: [salonId], references: [id])
-  bookingId String?
-  booking   Booking?          @relation(fields: [bookingId], references: [id])
-  customerId String?
-  customer  User?             @relation(fields: [customerId], references: [id])
+  id          String           @id @default(uuid())
+  salonId     String
+  salon       Salon            @relation(fields: [salonId], references: [id])
+  bookingId   String?
+  booking     Booking?         @relation(fields: [bookingId], references: [id])
+  customerId  String?
+  customer    User?            @relation(fields: [customerId], references: [id])
   // Not listed explicitly in DATABASE.md's original field list — added because API.md's walk-in
   // join endpoint accepts an optional serviceId with no other field to hold it before a
   // ServiceSession exists. Documented back into DATABASE.md as a Phase 1 addition, not a
   // contradiction of it. Nullable: an appointment-sourced entry can resolve its service via the
   // linked Booking instead.
-  serviceId String?
-  service   Service?          @relation(fields: [serviceId], references: [id])
-  source    QueueEntrySource
+  serviceId   String?
+  service     Service?         @relation(fields: [serviceId], references: [id])
+  source      QueueEntrySource
   tokenNumber Int
-  status    QueueEntryStatus  @default(WAITING)
+  status      QueueEntryStatus @default(WAITING)
 
   assignedStaffId String?
   assignedStaff   SalonStaff? @relation("AssignedStaff", fields: [assignedStaffId], references: [id])
   assignedChairId String?
   assignedChair   Chair?      @relation("AssignedChair", fields: [assignedChairId], references: [id])
 
-  joinedAt            DateTime  @default(now())
-  calledAt            DateTime?
-  serviceStartedAt    DateTime?
-  serviceCompletedAt  DateTime?
+  joinedAt             DateTime  @default(now())
+  calledAt             DateTime?
+  serviceStartedAt     DateTime?
+  serviceCompletedAt   DateTime?
   estimatedWaitMinutes Int?
 
   createdAt DateTime @default(now())
@@ -544,19 +551,19 @@ model QueueEntry {
 // The concurrency-critical model. See the two partial unique indexes noted at the top of this
 // file and enforced in the SQL migration — Prisma schema DSL cannot express them declaratively.
 model ServiceSession {
-  id           String                @id @default(uuid())
+  id           String               @id @default(uuid())
   queueEntryId String
-  queueEntry   QueueEntry            @relation(fields: [queueEntryId], references: [id])
+  queueEntry   QueueEntry           @relation(fields: [queueEntryId], references: [id])
   staffId      String
-  staff        SalonStaff            @relation(fields: [staffId], references: [id])
+  staff        SalonStaff           @relation(fields: [staffId], references: [id])
   chairId      String
-  chair        Chair                 @relation(fields: [chairId], references: [id])
+  chair        Chair                @relation(fields: [chairId], references: [id])
   serviceId    String
-  service      Service               @relation(fields: [serviceId], references: [id])
-  status       ServiceSessionStatus  @default(ACTIVE)
-  startedAt    DateTime              @default(now())
+  service      Service              @relation(fields: [serviceId], references: [id])
+  status       ServiceSessionStatus @default(ACTIVE)
+  startedAt    DateTime             @default(now())
   endedAt      DateTime?
-  createdAt    DateTime              @default(now())
+  createdAt    DateTime             @default(now())
 
   @@map("service_sessions")
 }
@@ -634,18 +641,18 @@ model IdempotencyKey {
 // ---------- Reviews ----------
 
 model Review {
-  id             String   @id @default(uuid())
-  salonId        String
-  salon          Salon    @relation(fields: [salonId], references: [id])
-  customerId     String
-  customer       User     @relation(fields: [customerId], references: [id])
-  bookingId      String   @unique
-  booking        Booking  @relation(fields: [bookingId], references: [id])
-  rating         Int
-  comment        String?
-  ownerResponse  String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(uuid())
+  salonId       String
+  salon         Salon    @relation(fields: [salonId], references: [id])
+  customerId    String
+  customer      User     @relation(fields: [customerId], references: [id])
+  bookingId     String   @unique
+  booking       Booking  @relation(fields: [bookingId], references: [id])
+  rating        Int
+  comment       String?
+  ownerResponse String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@map("reviews")
 }
@@ -697,8 +704,8 @@ model Plan {
 }
 
 model Entitlement {
-  id          String @id @default(uuid())
-  key         String @unique
+  id          String  @id @default(uuid())
+  key         String  @unique
   description String?
 
   plans PlanEntitlement[]

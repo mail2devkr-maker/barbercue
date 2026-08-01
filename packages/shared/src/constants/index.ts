@@ -33,3 +33,19 @@ export const DISCOVERY_PATHS = {
   cities: 'cities',
   salons: 'salons',
 } as const;
+
+// Sub-paths for booking-related reads that hang off a salon (DISCOVERY_PATHS.salons/:salonId/...)
+// — kept separate from DISCOVERY_PATHS since these are authenticated/booking-flow endpoints, not
+// public SEO discovery, even though they share the same `salons` URL segment.
+export const SALON_BOOKING_INFO_PATHS = {
+  staff: 'staff',
+  availability: 'availability',
+  cancellationPolicy: 'cancellation-policy',
+} as const;
+
+// BookingsController's `@Controller('bookings')` prefix.
+export const BOOKING_PATHS = {
+  bookings: 'bookings',
+  mine: 'mine',
+  cancel: 'cancel',
+} as const;

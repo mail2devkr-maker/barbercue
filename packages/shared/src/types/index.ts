@@ -137,8 +137,43 @@ export interface BookingDto {
   slotEnd: string;
   status: BookingStatus;
   source: BookingSource;
+  // Phase 3B: soft preference only, null = "Any Staff" — see DATABASE.md's Booking section. Never
+  // affects availability/capacity.
+  preferredStaffId: string | null;
   prepaymentRequiredAmount: number | null;
   cancellationChargeAmount: number | null;
+}
+
+// ---------- Booking flow (Phase 3B) ----------
+
+// GET /salons/:salonId/staff?serviceId= — "Any Staff" is a client-side option, never returned here.
+export interface StaffOptionDto {
+  id: string;
+  displayName: string;
+}
+
+export interface AvailabilitySlotDto {
+  slotStart: string; // ISO 8601
+  slotEnd: string;
+  available: boolean;
+}
+
+// Adds display fields a UI needs (booking confirmation, list, detail) without extra round-trips —
+// same pattern as SalonListItemDto extending SalonSummary in Phase 3A.
+export interface BookingDetailDto extends BookingDto {
+  salonName: string;
+  salonSlug: string;
+  citySlug: string;
+  serviceName: string;
+  serviceDurationMinutes: number;
+  servicePrice: number;
+  preferredStaffName: string | null;
+}
+
+export interface CancelBookingResponseDto {
+  booking: BookingDetailDto;
+  chargeAmount: number;
+  ledgerEntryCreated: boolean;
 }
 
 export interface QueueEntryDto {

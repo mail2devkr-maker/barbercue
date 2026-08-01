@@ -40,6 +40,7 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 - noShowChargeType (`FLAT`/`PERCENTAGE`), noShowChargeValue
 - appointmentArrivalGraceMinutes, queueCallResponseGraceMinutes
 - V1 platform default (seeded row, salonId null): `freeCancellationWindowMinutes = 60`, late cancel = `PERCENTAGE 50`, no-show = `PERCENTAGE 100`, `appointmentArrivalGraceMinutes = 10`, `queueCallResponseGraceMinutes = 3`. These are ordinary configuration data, not hard-coded logic — every value above is read from this table, never inlined in code, so a salon overriding any of them requires zero code change.
+- **Phase 3B fix**: this platform-default row was documented here from Phase 1 but never actually inserted — `prisma/seed.ts` skipped it with a comment deferring it, leaving nothing for cancellation to fall back to. `seed.ts` now idempotently upserts this exact row (`seedPlatformDefaultCancellationPolicy`), found while implementing booking cancellation.
 
 **OperatingHours** — id, salonId → Salon, dayOfWeek (0–6), openTime, closeTime, isClosed; unique(salonId, dayOfWeek)
 
@@ -59,11 +60,12 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 
 ## Booking & queue
 
-**Booking** (time/capacity reservation — never bound to a specific chair or staff member)
+**Booking** (time/capacity reservation — never bound to a specific chair or staff member for capacity purposes)
 - id, salonId → Salon, customerId → User, serviceId → Service, slotStart, slotEnd
 - status (`PENDING_PAYMENT`/`CONFIRMED`/`CANCELLED`/`COMPLETED`/`NO_SHOW`/`EXPIRED`)
 - source (`APP`/`WEB`/`WALK_IN`), idempotencyKey (unique)
 - **prepaymentRequiredAmount** (nullable, snapshot of `SalonPaymentPolicy` × `Service.price` at creation time — later policy edits never retroactively change what an existing booking owes)
+- **preferredStaffId → SalonStaff (nullable)** — *Phase 3B addition.* A soft customer preference captured during booking ("choose a barber," with "Any Staff" = null), shown to the salon later, but explicitly **not** a capacity input — the pool-based algorithm below is completely unchanged by it. Real staff/chair assignment still only happens at queue check-in/dashboard-assign time. This preserves the "never bound to a specific staff member" capacity model above while still letting the customer express a preference; validated for qualification/active status at booking time but never blocks or filters slot availability.
 - cancelledAt, cancelledBy → User (nullable), cancellationChargeAmount (nullable)
 - **Whether a new `Booking` starts `PENDING_PAYMENT` or `CONFIRMED` is a pure function of `SalonPaymentPolicy.prepaymentRequirement`** — see [STATE_MACHINES.md](STATE_MACHINES.md#booking).
 
@@ -132,7 +134,9 @@ For a requested `(serviceId, slotStart, slotEnd)`:
 4. **Consumed capacity** for the slot = count of existing `Booking` rows for that salon with overlapping `[slotStart, slotEnd)` and status in (`CONFIRMED`, `PENDING_PAYMENT`) whose service draws from the same staff/chair pool (i.e., same qualified-staff intersection — in V1, simplify to "any service at this salon," since chairs are shared across all services; revisit only if a salon later has dedicated equipment per service, which is what `Service.maxConcurrent` exists for).
 5. Slot is bookable iff `consumedCapacity < slotCapacity`.
 
-Both `PENDING_PAYMENT` and `CONFIRMED` bookings count as consumed — a customer mid-payment for the last slot correctly blocks a second customer from also reserving it. Step 4's capacity check and the `Booking` insert happen in one transaction (`SELECT ... FOR UPDATE` on the overlapping-booking set) so two simultaneous requests for the last slot can't both succeed.
+Both `PENDING_PAYMENT` and `CONFIRMED` bookings count as consumed — a customer mid-payment for the last slot correctly blocks a second customer from also reserving it. Step 4's capacity check and the `Booking` insert happen in one transaction so two simultaneous requests for the last slot can't both succeed.
+
+**Phase 3B implementation refinement**: the literal mechanism is a per-salon Postgres advisory transaction lock (`pg_advisory_xact_lock(hashtext(salonId))`), not `SELECT ... FOR UPDATE` on the overlapping-booking set as originally worded here. `FOR UPDATE` only locks *existing* rows, so it doesn't serialize two *first-ever* concurrent bookings for an empty slot (there's nothing yet to lock) — the advisory lock closes that gap completely while preserving the documented intent unchanged. Verified directly: an e2e test creates 3 concurrent bookings against a capacity-3 slot (3 qualified staff × 4 chairs) and confirms a 4th is rejected with `SLOT_FULL`. Also note: Neon's serverless Postgres can incur a multi-second cold-start on the first query after inactivity, which can exceed Prisma's default 5s interactive-transaction window — this transaction is opened with an explicit 15s timeout to absorb that, not because the transaction's own work is slow.
 
 ## Relationship summary (ER, textual)
 

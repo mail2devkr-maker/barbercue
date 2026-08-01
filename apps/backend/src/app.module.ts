@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -8,7 +8,9 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { SalonsModule } from './salons/salons.module';
+import { BookingsModule } from './bookings/bookings.module';
 
 @Module({
   imports: [
@@ -18,8 +20,9 @@ import { SalonsModule } from './salons/salons.module';
     HealthModule,
     AuthModule,
     SalonsModule,
-    // Feature modules (staff, chairs, bookings, queue, payments, reviews, admin) are added in
-    // later phases per PROJECT_STRUCTURE.md.
+    BookingsModule,
+    // Feature modules (staff, chairs, queue, payments, reviews, admin) are added in later phases
+    // per PROJECT_STRUCTURE.md.
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
@@ -28,6 +31,8 @@ import { SalonsModule } from './salons/salons.module';
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     // Runs after JwtAuthGuard; enforces @Roles() where present.
     { provide: APP_GUARD, useClass: RolesGuard },
+    // No-ops on any route not marked @Idempotent() — see IdempotencyInterceptor's own docs.
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
   ],
 })
 export class AppModule {}

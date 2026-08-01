@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CityDto, LocalityDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
@@ -136,6 +137,21 @@ export default async function SalonPage({ params }: { params: Promise<SalonPageP
         </p>
       )}
       {salon.description && <p>{salon.description}</p>}
+
+      <Link
+        href={`/book/${salon.slug}?city=${citySlug}`}
+        style={{
+          display: "inline-block",
+          marginTop: 8,
+          padding: "10px 20px",
+          background: "#B0413E",
+          color: "#fff",
+          borderRadius: 8,
+          textDecoration: "none",
+        }}
+      >
+        Book an appointment
+      </Link>
 
       <section style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: "1.1rem" }}>Photos</h2>
