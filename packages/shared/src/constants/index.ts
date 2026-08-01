@@ -48,4 +48,32 @@ export const BOOKING_PATHS = {
   bookings: 'bookings',
   mine: 'mine',
   cancel: 'cancel',
+  checkIn: 'check-in',
+} as const;
+
+// Sub-paths under `salons/:salonId/queue` (SalonQueueController) — a 3-segment shape deliberately,
+// not a bare `salons/:salonId/queue-status`, to avoid the same discovery-route collision class
+// fixed in Phase 3B (see SalonsController's `:citySlug/:salonSlug`).
+export const SALON_QUEUE_PATHS = {
+  status: 'status',
+  join: 'join',
+} as const;
+
+// QueueEntriesController's `@Controller('queue-entries')` prefix (customer view).
+export const QUEUE_ENTRIES_PATH = 'queue-entries';
+
+// DashboardQueueController's `@Controller('dashboard')` prefix — staff/owner queue operations.
+export const DASHBOARD_PATHS = {
+  dashboard: 'dashboard',
+  salons: 'salons',
+  queue: 'queue',
+  queueEntries: 'queue-entries',
+  serviceSessions: 'service-sessions',
+  staff: 'staff',
+  call: 'call',
+  assign: 'assign',
+  noShow: 'no-show',
+  cancel: 'cancel',
+  complete: 'complete',
+  status: 'status',
 } as const;

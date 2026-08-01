@@ -202,6 +202,26 @@ export const BookingErrorCode = {
 } as const;
 export type BookingErrorCode = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
 
+// Stable machine-readable error codes for the queue/check-in engine — same convention as
+// BookingErrorCode/AuthErrorCode. Reuses BookingErrorCode.{STAFF_NOT_FOUND,STAFF_NOT_QUALIFIED,
+// BOOKING_NOT_FOUND} rather than duplicating them.
+export const QueueErrorCode = {
+  CHAIR_NOT_FOUND: 'CHAIR_NOT_FOUND',
+  CHAIR_INACTIVE: 'CHAIR_INACTIVE',
+  CHAIR_ALREADY_OCCUPIED: 'CHAIR_ALREADY_OCCUPIED',
+  STAFF_ALREADY_OCCUPIED: 'STAFF_ALREADY_OCCUPIED',
+  SALON_ACCESS_DENIED: 'SALON_ACCESS_DENIED',
+  QUEUE_ENTRY_NOT_FOUND: 'QUEUE_ENTRY_NOT_FOUND',
+  SERVICE_SESSION_NOT_FOUND: 'SERVICE_SESSION_NOT_FOUND',
+  INVALID_QUEUE_TRANSITION: 'INVALID_QUEUE_TRANSITION',
+  ALREADY_CHECKED_IN: 'ALREADY_CHECKED_IN',
+  ALREADY_IN_QUEUE: 'ALREADY_IN_QUEUE',
+  CHECK_IN_TOO_EARLY: 'CHECK_IN_TOO_EARLY',
+  NOT_YOUR_STAFF_PROFILE: 'NOT_YOUR_STAFF_PROFILE',
+  SERVICE_REQUIRED: 'SERVICE_REQUIRED',
+} as const;
+export type QueueErrorCode = (typeof QueueErrorCode)[keyof typeof QueueErrorCode];
+
 export const AuthErrorCode = {
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',

@@ -20,6 +20,7 @@ import { StaffStep } from "./StaffStep";
 import { DateStep } from "./DateStep";
 import { SlotStep } from "./SlotStep";
 import { CancelBookingDialog } from "./CancelBookingDialog";
+import { CheckInPanel, canCheckIn } from "../queue/CheckInPanel";
 
 export function BookingFlow({
   salonId,
@@ -186,6 +187,7 @@ export function BookingFlow({
         <Link href="/account/bookings" style={{ marginLeft: 8 }}>
           View my bookings
         </Link>
+        {canCheckIn(booking) && <CheckInPanel booking={booking} />}
         {showCancelDialog && (
           <CancelBookingDialog
             booking={booking}

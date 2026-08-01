@@ -15,6 +15,14 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 export function persistRefreshToken(token: string): Promise<void> {
   return setItem(REFRESH_TOKEN_KEY, token);
 }
@@ -88,9 +96,21 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     }
   }
 
-  const body: unknown = await res.json().catch(() => ({}));
+  // A controller returning null sends a genuinely empty body (not the literal text "null") —
+  // res.json() throws on that, and blindly falling back to `{}` would turn every such response
+  // into a truthy empty object, breaking any caller checking the result for null (e.g. "do I have
+  // an active queue entry?"). Parse the raw text instead so an empty body correctly becomes null.
+  const text = await res.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = null;
+    }
+  }
   if (!res.ok) {
-    throw new ApiError(res.status, body as ApiErrorBody);
+    throw new ApiError(res.status, (body ?? {}) as ApiErrorBody);
   }
   return body as T;
 }

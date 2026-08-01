@@ -45,6 +45,32 @@ the per-salon advisory-lock transaction).
 (Phase 3B, implemented)**: the first real use of the `IdempotencyKey` table (defined since Phase
 1). Registered globally as an `APP_INTERCEPTOR`; no-ops on any route not marked `@Idempotent()`.
 
+**`queue/` (Phase 3C, implemented)** — the check-in/walk-in/queue engine, requiring zero schema
+changes (see DATABASE.md). `queue.module.ts` registers four controllers — `salon-queue.controller.ts`
+(`GET salons/:salonId/queue/status` public, `POST salons/:salonId/queue/join` customer), `queue-entries.controller.ts`
+(`GET queue-entries/mine/active`), `booking-check-in.controller.ts` (`POST bookings/:id/check-in` —
+a standalone controller, not a method on `bookings.controller.ts`, specifically to avoid a
+circular module dependency: `BookingsModule` exports `AvailabilityService` for `QueueModule` to
+reuse, so `QueueModule` importing `BookingsModule` must stay one-directional), and
+`dashboard-queue.controller.ts` (call/assign/complete/no-show/cancel/staff-status, salon-scoped
+staff/owner). Two services: `queue.service.ts` (the engine — token numbering via the same
+per-salon `pg_advisory_xact_lock` pattern as booking creation, ETA recomputation, the
+conditional-`UPDATE` concurrency pattern for plain transitions, the claim-then-insert transaction
+for `assign`) and `staff-status.service.ts` (owner-any-staff vs staff-self-only authorization for
+the clock-in/out toggle).
+
+**`common/salon-access/salon-access.service.ts` (Phase 3C, implemented, `@Global()`)** — "may this
+user operate the dashboard for salon X," checked against `UserRole` membership, **not**
+`SalonStaff` (an owner has authority over a salon but no roster row — only barbers/managers
+assignable to serve customers get a `SalonStaff` row). Shared by the queue dashboard's REST
+endpoints and the realtime gateway's `join:salon` handler so the two never drift.
+
+**`realtime/` (Phase 3C, implemented)** — `realtime.gateway.ts`, the `/realtime` WebSocket
+namespace (`@nestjs/websockets` + `@nestjs/platform-socket.io` + `socket.io`, added as new
+dependencies). JWT verified at handshake, re-checking live user status like `JwtStrategy` rather
+than trusting the token's claims for the connection's lifetime. See API.md's WebSocket section for
+the room/event contract actually implemented.
+
 ## apps/web
 
 Single Next.js (App Router) app serving both surfaces via route groups, so there is exactly one place business-adjacent UI logic lives for the browser, per "do not duplicate business logic":
@@ -64,13 +90,17 @@ apps/web/
       discovery-api.ts        # server-safe fetch client for (public) pages — no "use client", no auth/cookies, wraps fetch with { next: { revalidate } }
     components/discovery/     # SalonCard, ServiceList, OperatingHoursTable, PhotoGallery, ReviewList, Breadcrumbs, JsonLd
     (customer)/                # authenticated customer, not SEO-critical
-      account/bookings/page.tsx              # cursor-paginated list + inline cancel (Phase 3B)
+      account/bookings/page.tsx              # cursor-paginated list + inline cancel + check-in (Phase 3B, check-in added Phase 3C)
       book/layout.tsx                        # RequireRole(CUSTOMER) gate for the whole book/* subtree (Phase 3B)
       book/[salonSlug]/page.tsx              # reads ?city= (Salon.slug is only unique per city) — booking wizard (Phase 3B)
+      queue/layout.tsx                       # RequireRole(CUSTOMER) gate for the whole queue/* subtree (Phase 3C)
+      queue/[salonSlug]/page.tsx             # reads ?city=, mirrors book/[salonSlug] — walk-in join flow (Phase 3C)
     components/booking/                      # BookingFlow, ServiceStep, StaffStep, DateStep, SlotStep, CancelBookingDialog (Phase 3B)
+    components/queue/                        # QueueStatusPanel, WalkInJoinFlow, CheckInPanel, DashboardQueueView (Phase 3C)
     lib/idempotency.ts                       # newIdempotencyKey() via crypto.randomUUID() (Phase 3B)
+    lib/realtime.ts                          # socket.io-client wrapper (new dependency), lazy-connected shared socket (Phase 3C)
     (dashboard)/                # salon staff/owner/admin, auth-gated
-      dashboard/salons/[salonId]/queue/page.tsx
+      dashboard/salons/[salonId]/queue/page.tsx         # live queue dashboard: call/assign/complete/no-show/cancel + staff clock-in/out (Phase 3C, was a placeholder before)
       dashboard/salons/[salonId]/staff/page.tsx
       dashboard/salons/[salonId]/chairs/page.tsx
       dashboard/salons/[salonId]/settings/page.tsx      # payment policy, cancellation policy config
@@ -80,7 +110,9 @@ apps/web/
 
 *(Implementation note: Next.js 16 renamed the `middleware.ts` file convention to `proxy.ts` — same purpose and API, file renamed accordingly. Not an architectural change.)*
 
-Confirmed: the owner dashboard, staff dashboard, and platform admin dashboard are three authorization tiers of the **same** `(dashboard)` route group, not three codebases — a `PLATFORM_ADMIN`-only guard wraps `dashboard/admin/*`, a salon-membership guard (checked against `SalonStaff`) wraps `dashboard/salons/[salonId]/*`. This is what "route-level authorization and separation" means concretely here.
+Confirmed: the owner dashboard, staff dashboard, and platform admin dashboard are three authorization tiers of the **same** `(dashboard)` route group, not three codebases — a `PLATFORM_ADMIN`-only guard wraps `dashboard/admin/*`, a salon-membership guard wraps `dashboard/salons/[salonId]/*`. This is what "route-level authorization and separation" means concretely here.
+
+**Phase 3C correction**: the frontend's `dashboard/salons/*` guard is role-only (`RequireRole([SALON_STAFF, SALON_OWNER])`, a UX convenience, not the security boundary). The real per-salon membership check happens backend-side, and for the Phase 3C queue endpoints it's checked against `UserRole`, **not** `SalonStaff` as this sentence previously implied — an owner has salon authority via a `UserRole` row but no `SalonStaff` roster row at all. See `SalonAccessService` above.
 
 If a `dashboard.barbercue.app` subdomain is wanted later for a cleaner mental model for salon staff, it's a `proxy.ts` hostname rewrite to the same `(dashboard)` route group — not a code restructure.
 
@@ -94,7 +126,7 @@ If a `dashboard.barbercue.app` subdomain is wanted later for a cleaner mental mo
 - `sitemap.ts` generates entries for all active cities/localities/salons dynamically from the backend (not a static file) — regenerated on each build/ISR cycle.
 - `robots.ts` disallows `/account`, `/dashboard`, `/book` (all authenticated, never indexable), `/search?` (query-string search variants only — the bare `/search` page stays crawlable via its own canonical); allows everything else under `(public)`.
 - Images: `next/image` against a CDN-backed object storage bucket for salon photos; the backend only ever returns URLs, never serves image bytes itself.
-- Public pages fetch only cacheable, non-personalized data server-side; the live wait-time widget (still unbuilt — depends on the queue phase) will be a client component fetching `/salons/:id/queue-status` independently, so a stale ISR cache never shows a stale "3 min wait" — only the static shell (name, services, hours, photos, reviews) is cached. The salon profile page's "Book an appointment" link (Phase 3B) is a plain server-rendered `<Link>` to `/book/{slug}?city={citySlug}` — not a queue-status-dependent client component, since it's a static call-to-action, not live data.
+- Public pages fetch only cacheable, non-personalized data server-side. `GET /salons/:salonId/queue/status` (public, no PII) exists as of Phase 3C, but an inline live-wait-time widget embedded directly in the public salon page was not part of Phase 3C's scope (not requested) — only a "Join queue now" call-to-action link was added there. Both the "Book an appointment" (Phase 3B) and "Join queue now" (Phase 3C) links are plain server-rendered `<Link>`s to `/book/{slug}?city={citySlug}` / `/queue/{slug}?city={citySlug}` — static calls-to-action, not live-data-dependent client components — so a stale ISR cache never shows stale live data, since none is embedded on this page. A future live-wait widget would be a client component fetching the status endpoint independently, same reasoning as originally noted here.
 
 ## apps/mobile
 
@@ -117,11 +149,15 @@ apps/mobile/
     RootNavigator.tsx     # native-stack, mounted only once authenticated
   screens/
     PhoneOtpLoginScreen.tsx, AccountScreen.tsx        # existing (Phase 2), AccountScreen now the hub with "Find a salon"/"My bookings" entry points
-    SalonSearchScreen.tsx, SalonProfileScreen.tsx     # public discovery endpoints, no auth
+    SalonSearchScreen.tsx, SalonProfileScreen.tsx     # public discovery endpoints, no auth; SalonProfileScreen adds a "Join queue now" button (Phase 3C)
     StaffSelectScreen.tsx, DateSelectScreen.tsx, SlotSelectScreen.tsx, ConfirmBookingScreen.tsx
-    MyBookingsScreen.tsx, BookingDetailScreen.tsx     # cursor-paginated list, inline cancel-confirmation panel
+    MyBookingsScreen.tsx, BookingDetailScreen.tsx     # cursor-paginated list, inline cancel-confirmation panel; BookingDetailScreen adds a "Check in" button + live status (Phase 3C)
+    WalkInJoinScreen.tsx  # walk-in queue join flow, mirrors apps/web's WalkInJoinFlow (Phase 3C)
+  components/
+    QueueStatusPanel.tsx  # live token status, reused after both walk-in join and check-in (Phase 3C)
   lib/
     idempotency.ts        # newIdempotencyKey() via expo-crypto's randomUUID()
+    realtime.ts            # socket.io-client wrapper (transports: ['websocket'] — skips Engine.IO's HTTP long-polling fallback) (Phase 3C)
 ```
 
 **Found and fixed while verifying via `expo start --web`** (this project's standard mobile
@@ -140,7 +176,7 @@ packages/shared/
     types/        # Booking, QueueEntry, Salon, ... DTO shapes (hand-written or derived from OpenAPI later)
     schemas/       # zod validation schemas, one per DTO, used by both backend (request validation) and clients (form validation)
     enums/         # BookingStatus, QueueEntryStatus, PaymentStatus, Role, ...
-    calc/          # pure functions: cancellationCharge(policy, booking, now), estimatedWait(...)
+    calc/          # pure functions: computeCancellationCharge(...), computeSlotCapacity(...), estimateWaitMinutes(...) (Phase 3C)
 ```
 
 No I/O in this package — no fetch client, no React, no NestJS decorators — so it can be imported unmodified by a Next.js server component, a Next.js client component, an Expo app, and NestJS itself.

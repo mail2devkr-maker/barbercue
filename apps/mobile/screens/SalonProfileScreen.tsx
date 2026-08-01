@@ -57,6 +57,15 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         </Text>
       )}
 
+      <Pressable
+        style={styles.queueButton}
+        onPress={() =>
+          navigation.navigate('WalkInJoin', { salonId: salon.id, salonName: salon.name, services: salon.services })
+        }
+      >
+        <Text style={styles.queueButtonText}>Join queue now</Text>
+      </Pressable>
+
       <Text style={styles.sectionTitle}>Services</Text>
       <FlatList
         data={salon.services}
@@ -98,4 +107,14 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#2A2723', borderRadius: 12, padding: 16, marginBottom: 12 },
   cardTitle: { color: '#EDE6DA', fontSize: 16, fontWeight: '600' },
   cardSubtitle: { color: '#B8AFA0', fontSize: 13, marginTop: 4 },
+  queueButton: {
+    backgroundColor: '#2A2723',
+    borderWidth: 1,
+    borderColor: '#B0413E',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  queueButtonText: { color: '#B0413E', fontSize: 15, fontWeight: '600' },
 });

@@ -1,4 +1,4 @@
-import type { OperatingHoursDto } from '@barbercue/shared';
+import type { OperatingHoursDto, ServiceDto } from '@barbercue/shared';
 
 // Params are carried forward step-to-step rather than re-fetched, since the customer already
 // loaded them on the salon profile screen — same data-flow shape as apps/web's BookingFlow.
@@ -49,4 +49,5 @@ export type RootStackParamList = {
   };
   MyBookings: undefined;
   BookingDetail: { bookingId: string };
+  WalkInJoin: { salonId: string; salonName: string; services: ServiceDto[] };
 };

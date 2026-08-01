@@ -81,9 +81,22 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     }
   }
 
-  const body: unknown = await res.json().catch(() => ({}));
+  // Nest sends a genuinely empty body (not the literal text "null") for a controller returning
+  // null — `res.json()` throws on that, and the old `.catch(() => ({}))` fallback silently turned
+  // every such response into a truthy `{}`, which broke any caller checking the result for
+  // null (e.g. "do I have an active queue entry?"). Parse the raw text instead so an empty body
+  // correctly becomes `null`, not an empty object.
+  const text = await res.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = null;
+    }
+  }
   if (!res.ok) {
-    throw new ApiError(res.status, body as ApiErrorBody);
+    throw new ApiError(res.status, (body ?? {}) as ApiErrorBody);
   }
   return body as T;
 }

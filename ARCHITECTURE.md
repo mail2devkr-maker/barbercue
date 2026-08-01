@@ -65,7 +65,9 @@ Full detail in [DATABASE.md](DATABASE.md). `User` (identity, phone-OTP for custo
 
 ## 5. Authorization / RBAC
 
-Roles: `CUSTOMER`, `SALON_STAFF`, `SALON_OWNER`, `PLATFORM_ADMIN`. JWT carries `userId` + coarse `roles[]` only, never salon associations (which can go stale). Every salon-scoped mutation is checked against `SalonStaff` at request time via a guard. Admin routes use a separate, non-overlapping guard. This is unchanged from the prior round — reconfirmed, not revisited.
+Roles: `CUSTOMER`, `SALON_STAFF`, `SALON_OWNER`, `PLATFORM_ADMIN`. JWT carries `userId` + coarse `roles[]` only, never salon associations (which can go stale). Admin routes use a separate, non-overlapping guard.
+
+**Phase 3C correction**: salon-scoped mutations are checked against **`UserRole`** at request time (`SalonAccessService.assertAccess`), not `SalonStaff` as this section previously said — a `SALON_OWNER` has authority over a salon via a `UserRole` row but no `SalonStaff` roster row at all (only barbers/managers assignable to actually serve customers get one). `SalonStaff`-based checks remain correct for staff-*qualification* questions (e.g. "is this person qualified to perform this service," `AvailabilityService.assertStaffQualified`), which is a distinct question from "does this user have authority over this salon."
 
 ## 6–9. Booking, queue, payment, cancellation (all resolved this round)
 
@@ -80,7 +82,7 @@ Roles: `CUSTOMER`, `SALON_STAFF`, `SALON_OWNER`, `PLATFORM_ADMIN`. JWT carries `
 
 ## 11. Realtime architecture
 
-Unchanged: Socket.IO gateway inside `apps/backend`, per-salon and per-customer rooms, events as refetch-notifications rather than trusted state. This is also the substrate the future native staff app would reuse without change.
+**Implemented in Phase 3C** (previously planned, not built): Socket.IO gateway (`RealtimeGateway`, `/realtime` namespace) inside `apps/backend`, per-salon (`salon:{salonId}`) and per-customer (`customer:{userId}`) rooms, events as ids-only refetch-notifications rather than trusted state (`queue.updated`, `queue.entry.called`, `staff.status.changed` — `booking.confirmed`/`payment.settled`/`ledger.updated` remain future, unimplemented). JWT verified at handshake, re-checking live user status rather than trusting the token's claims for the connection's lifetime. Both `apps/web` and `apps/mobile` connect via a thin `socket.io-client` wrapper (`lib/realtime.ts`). This is also the substrate the future native staff app would reuse without change.
 
 ## 12. Website / SEO architecture (confirmed)
 

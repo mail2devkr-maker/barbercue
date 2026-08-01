@@ -83,6 +83,15 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 - `CREATE UNIQUE INDEX service_session_staff_active_uq ON service_session(staffId) WHERE status = 'ACTIVE'`
 - `CREATE UNIQUE INDEX service_session_chair_active_uq ON service_session(chairId) WHERE status = 'ACTIVE'`
 
+**Phase 3C note**: the queue/check-in engine (walk-in join, appointment check-in, call, assign,
+complete, no-show, cancel, staff clock-in/out) required **zero schema changes** — every model and
+field above (including the two partial unique indexes, exercised for the first time here) was
+already fully designed in Phase 1. `QueueEntry.estimatedWaitMinutes` is recomputed for every
+`WAITING` entry at a salon after every mutation (`recomputeEtas` in `queue.service.ts`), using
+`packages/shared`'s `estimateWaitMinutes(serverCount, peopleAhead, avgServiceDurationMinutes,
+activeSessionsRemainingMinutes)` — `serverCount` reuses the same `computeSlotCapacity` (qualified
+staff × active chairs) as the booking capacity model above, scoped to the entry's own service.
+
 ## Payments
 
 **Payment**

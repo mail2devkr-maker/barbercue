@@ -7,6 +7,7 @@ import type {
   QueueEntrySource,
   QueueEntryStatus,
   Role,
+  StaffMemberStatus,
 } from '../enums';
 
 // DTO shapes only — no I/O, no ORM types leak here. These mirror DATABASE.md/API.md and are the
@@ -186,6 +187,54 @@ export interface QueueEntryDto {
   assignedStaffId: string | null;
   assignedChairId: string | null;
   estimatedWaitMinutes: number | null;
+}
+
+// ---------- Queue & check-in (Phase 3C) ----------
+
+// Adds display fields a UI needs (customer queue-status view, staff dashboard) without extra
+// round-trips — same "extend the base DTO" pattern as BookingDetailDto extending BookingDto.
+export interface QueueEntryDetailDto extends QueueEntryDto {
+  serviceId: string | null;
+  serviceName: string | null;
+  position: number | null; // 1-based rank among WAITING entries at this salon, null once past WAITING
+  customerPhone: string | null;
+  assignedStaffName: string | null;
+  assignedChairLabel: string | null;
+  activeServiceSessionId: string | null; // target id for POST .../service-sessions/:id/complete
+  joinedAt: string; // ISO 8601
+  calledAt: string | null;
+}
+
+// GET /dashboard/salons/:salonId/booking/staff mirror for the live queue's chair dropdown.
+export interface ChairOptionDto {
+  id: string;
+  label: string;
+}
+
+// GET /dashboard/salons/:salonId/queue — embeds the roster/chairs read-only so the assign UI works
+// without needing the (out-of-scope in Phase 3C) staff/chair CRUD endpoints. staffRoster includes
+// BOTH ACTIVE and INACTIVE staff (with their current status) so the dashboard's clock-in/out
+// toggle can also bring an off-duty staff member back on — an ACTIVE-only list would make an
+// inactive staff member invisible here and unable to clock themselves back in. The assign action
+// itself still separately re-validates ACTIVE + qualified via AvailabilityService.
+export interface DashboardQueueDto {
+  entries: QueueEntryDetailDto[];
+  staffRoster: StaffStatusDto[];
+  chairs: ChairOptionDto[];
+}
+
+// GET /salons/:salonId/queue/status — public, lightweight, no PII.
+export interface QueueStatusDto {
+  salonId: string;
+  waitingCount: number;
+  estimatedWaitMinutes: number | null;
+}
+
+// PATCH /dashboard/staff/:id/status response.
+export interface StaffStatusDto {
+  id: string;
+  displayName: string;
+  status: StaffMemberStatus;
 }
 
 export interface SalonPaymentPolicyDto {

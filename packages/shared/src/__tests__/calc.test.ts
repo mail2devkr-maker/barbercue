@@ -1,5 +1,5 @@
 import { ChargeType } from '../enums';
-import { computeCancellationCharge, computeSlotCapacity, isSlotBookable } from '../calc';
+import { computeCancellationCharge, computeSlotCapacity, estimateWaitMinutes, isSlotBookable } from '../calc';
 
 describe('computeCancellationCharge', () => {
   const policy = {
@@ -49,5 +49,28 @@ describe('isSlotBookable', () => {
 
   it('allows when consumed capacity is below slot capacity', () => {
     expect(isSlotBookable(2, 1)).toBe(true);
+  });
+});
+
+describe('estimateWaitMinutes', () => {
+  it('returns null when there is no capacity at all', () => {
+    expect(estimateWaitMinutes(0, 5, 30, 0)).toBeNull();
+  });
+
+  it('is 0 plus the active-session offset when nobody is ahead', () => {
+    expect(estimateWaitMinutes(2, 0, 30, 10)).toBe(10);
+  });
+
+  it('distributes people ahead across the server count in whole batches', () => {
+    // 5 people ahead, 2 servers -> 2 full batches (10 people would be 5 batches; 5/2 floors to 2)
+    expect(estimateWaitMinutes(2, 5, 30, 0)).toBe(60);
+  });
+
+  it('adds the active-sessions-remaining offset on top of the batch estimate', () => {
+    expect(estimateWaitMinutes(2, 5, 30, 12)).toBe(72);
+  });
+
+  it('a single server serializes everyone ahead in sequence', () => {
+    expect(estimateWaitMinutes(1, 3, 20, 0)).toBe(60);
   });
 });

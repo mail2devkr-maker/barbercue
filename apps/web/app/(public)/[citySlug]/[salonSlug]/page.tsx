@@ -138,20 +138,37 @@ export default async function SalonPage({ params }: { params: Promise<SalonPageP
       )}
       {salon.description && <p>{salon.description}</p>}
 
-      <Link
-        href={`/book/${salon.slug}?city=${citySlug}`}
-        style={{
-          display: "inline-block",
-          marginTop: 8,
-          padding: "10px 20px",
-          background: "#B0413E",
-          color: "#fff",
-          borderRadius: 8,
-          textDecoration: "none",
-        }}
-      >
-        Book an appointment
-      </Link>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <Link
+          href={`/book/${salon.slug}?city=${citySlug}`}
+          style={{
+            display: "inline-block",
+            marginTop: 8,
+            padding: "10px 20px",
+            background: "#B0413E",
+            color: "#fff",
+            borderRadius: 8,
+            textDecoration: "none",
+          }}
+        >
+          Book an appointment
+        </Link>
+        <Link
+          href={`/queue/${salon.slug}?city=${citySlug}`}
+          style={{
+            display: "inline-block",
+            marginTop: 8,
+            padding: "10px 20px",
+            background: "#fff",
+            color: "#B0413E",
+            border: "1px solid #B0413E",
+            borderRadius: 8,
+            textDecoration: "none",
+          }}
+        >
+          Join queue now
+        </Link>
+      </div>
 
       <section style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: "1.1rem" }}>Photos</h2>

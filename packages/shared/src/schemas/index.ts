@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ChargeType, PrepaymentRequirement } from '../enums';
+import { ChargeType, PrepaymentRequirement, StaffMemberStatus } from '../enums';
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
 // The backend is always the authority — these schemas exist so both sides reject bad input the
@@ -32,6 +32,22 @@ export const joinQueueSchema = z.object({
   serviceId: z.string().uuid().optional(),
 });
 export type JoinQueueInput = z.infer<typeof joinQueueSchema>;
+
+// POST /dashboard/queue-entries/:id/assign — serviceId is only required when the queue entry
+// itself has none (e.g. a walk-in that never picked one); validated in the service layer, not
+// here, since that depends on the target entry's existing state.
+export const assignQueueEntrySchema = z.object({
+  staffId: z.string().uuid(),
+  chairId: z.string().uuid(),
+  serviceId: z.string().uuid().optional(),
+});
+export type AssignQueueEntryInput = z.infer<typeof assignQueueEntrySchema>;
+
+// PATCH /dashboard/staff/:id/status
+export const staffStatusSchema = z.object({
+  status: z.nativeEnum(StaffMemberStatus),
+});
+export type StaffStatusInput = z.infer<typeof staffStatusSchema>;
 
 // GET /salons query params — validated the same way on backend (ZodValidationPipe on @Query())
 // and client (search form) so both agree on shape before a request is ever made.

@@ -25,12 +25,15 @@ Under `OPTIONAL`, a customer may still voluntarily create a `Payment` against an
 
 Race-condition prevention: covered in [DATABASE.md §Booking capacity model](DATABASE.md#booking-capacity-model-resolved--service-level-not-salon-wide) — the capacity check and the `Booking` insert are one transaction.
 
-**Phase 3B implementation status**: `[*] → CONFIRMED` / `[*] → PENDING_PAYMENT` and `CONFIRMED → CANCELLED` are built and live (`POST /bookings`, `POST /bookings/:id/cancel`, see [API.md](API.md)). The `PENDING_PAYMENT` branch is implemented for correctness per the policy function above but not reachable with current data — no salon has a `PARTIAL`/`FULL` `SalonPaymentPolicy` configured yet (payment-policy management is dashboard work). `PENDING_PAYMENT → CONFIRMED`/`EXPIRED` (the Payments webhook/hold-timeout) and `CONFIRMED → NO_SHOW`/`COMPLETED` are not built — Payments and queue check-in are separate, later phases.
+**Phase 3B implementation status**: `[*] → CONFIRMED` / `[*] → PENDING_PAYMENT` and `CONFIRMED → CANCELLED` are built and live (`POST /bookings`, `POST /bookings/:id/cancel`, see [API.md](API.md)). The `PENDING_PAYMENT` branch is implemented for correctness per the policy function above but not reachable with current data — no salon has a `PARTIAL`/`FULL` `SalonPaymentPolicy` configured yet (payment-policy management is dashboard work). `PENDING_PAYMENT → CONFIRMED`/`EXPIRED` (the Payments webhook/hold-timeout) are not built — Payments is a separate, later phase.
+
+**Phase 3C implementation status**: `CONFIRMED → COMPLETED` is now built — `queue.service.ts`'s `completeSession` sets a linked `Booking` to `COMPLETED` when its check-in-derived `QueueEntry`'s `ServiceSession` finishes (the only place a `Booking` ever reaches `COMPLETED`). `CONFIRMED → NO_SHOW` is still not built: only a *manual* no-show trigger exists, and only for `QueueEntry` (`POST /dashboard/queue-entries/:id/no-show`, only valid on a `CALLED` entry) — there is no automatic sweep job, and no direct `Booking → NO_SHOW` transition for a confirmed appointment that's never checked in at all.
 
 ## Queue entry creation timing (resolved)
 
-- **Appointments**: `Booking` creation does **not** create a `QueueEntry`. A `QueueEntry` (`source = APPOINTMENT`) is created when the customer checks in on arrival, via a dedicated check-in action (`POST /bookings/:id/check-in`, see [API.md](API.md)). Checking in before `CONFIRMED` (i.e. while still `PENDING_PAYMENT`) is rejected. **Not yet built** — queue check-in is explicitly out of scope through Phase 3B, which implements booking creation/list/detail/cancel only.
-- **Walk-ins**: `QueueEntry` (`source = WALK_IN`, `bookingId = null`) is created immediately on `POST /salons/:salonId/queue/join`.
+- **Appointments**: `Booking` creation does **not** create a `QueueEntry`. A `QueueEntry` (`source = APPOINTMENT`) is created when the customer checks in on arrival, via a dedicated check-in action (`POST /bookings/:id/check-in`, see [API.md](API.md)). Checking in before `CONFIRMED` (i.e. while still `PENDING_PAYMENT`) is rejected. **Built in Phase 3C.** Also enforced: check-in only opens 15 minutes before `slotStart` (`400 CHECK_IN_TOO_EARLY`, no upper bound since the automatic no-show sweep isn't built), and a booking can only ever be checked in once (`409 ALREADY_CHECKED_IN` on repeat, keyed off the booking having any `QueueEntry` at all regardless of that entry's current status).
+- **Walk-ins**: `QueueEntry` (`source = WALK_IN`, `bookingId = null`) is created immediately on `POST /salons/:salonId/queue/join`. **Built in Phase 3C.**
+- A customer can only ever hold one active `QueueEntry` (`WAITING`/`CALLED`/`IN_SERVICE`) at a time, across both sources and across salons — `409 ALREADY_IN_QUEUE` on a second join/check-in attempt.
 - Both sources converge into the same `QueueEntry`/`ServiceSession` machinery below — the queue engine does not branch on `source` past creation, except that `source` is retained for analytics and for the appointment no-show check (which acts on `Booking`, not `QueueEntry`, since an appointment can go `NO_SHOW` without ever having a `QueueEntry` at all).
 
 ## Queue entry
@@ -51,6 +54,19 @@ stateDiagram-v2
 
 `estimatedWaitMinutes` is recomputed whenever any `QueueEntry` in the salon changes state or any `SalonStaff` status changes — a derived, cached value, never authoritative for ordering (order is `joinedAt`, i.e. check-in/join time, not the ETA number).
 
+**Phase 3C implementation status**: every transition in the diagram above is built —
+`[*] → WAITING` (join/check-in), `WAITING → CALLED` (`POST .../call`), `WAITING/CALLED →
+CANCELLED` (`POST .../cancel`, staff-initiated only in V1), `CALLED → IN_SERVICE` (`POST
+.../assign`), `CALLED → NO_SHOW` (`POST .../no-show`, **manual trigger only** — no automatic sweep
+on `queueCallResponseGraceMinutes` timeout), `IN_SERVICE → COMPLETED` (`POST
+.../service-sessions/:id/complete`), `IN_SERVICE → CANCELLED` (staff cancel of an in-service
+entry, which cascades to cancel its `ServiceSession` too). All plain status transitions
+(`call`/`no-show`/`cancel`) use a conditional atomic `UPDATE ... WHERE id AND status` rather than a
+separate row lock — a lost race (another staff member already acted) surfaces as `409
+INVALID_QUEUE_TRANSITION`. Queue-engine transitions are **not** `AuditLog`-audited in Phase 3C,
+unlike booking cancellation — none of them carry a direct money/charge consequence the way a
+booking cancellation charge does.
+
 ## ServiceSession (the concurrency-critical one — unchanged, reconfirmed)
 
 ```mermaid
@@ -63,6 +79,15 @@ stateDiagram-v2
 ```
 
 Enforcement is the two partial unique indexes in [DATABASE.md](DATABASE.md#booking--queue) — a barber or chair can never have two `ACTIVE` sessions. A conflicting concurrent assignment returns `409 CHAIR_ALREADY_OCCUPIED` / `409 STAFF_ALREADY_OCCUPIED`; this is an expected, routine response (multiple staff can be operating the dashboard at once), not an error condition to alarm on.
+
+**Built and verified in Phase 3C** against live Neon: `assign()` claims the `QueueEntry` first
+(conditional `UPDATE ... WHERE status IN (WAITING, CALLED)`), then attempts the `ServiceSession`
+insert in the *same* transaction — a `P2002` there rolls back the claim too, so a losing request
+correctly reverts the entry to its prior status for a retry with a different staff/chair. The
+exact `err.meta.target` shape Prisma reports for a `P2002` against these hand-written partial
+indexes (not a native `@@unique`) was confirmed empirically via the e2e suite: an array containing
+the literal index name (`service_session_staff_active_uq` / `service_session_chair_active_uq`),
+matched via a case-insensitive substring check for `"staff"`/`"chair"`.
 
 ## Payment
 
@@ -96,7 +121,7 @@ No-show follows the same fork at the moment a no-show is detected (system-trigge
 ## Idempotent, auditable transitions
 
 Every state transition — customer-initiated or system-triggered — is:
-- **Idempotent**: driven by an `Idempotency-Key` (customer/staff actions) or a deterministic system key like `noshow:{queueEntryId}:{date}` (the scheduled no-show sweep). A retried job run or a double-tapped button cannot double-transition or double-charge. **Implemented in Phase 3B** (`IdempotencyInterceptor` + the `IdempotencyKey` table defined since Phase 1) for `POST /bookings` and `POST /bookings/:id/cancel` — the first endpoints to actually need it. The no-show sweep's deterministic key remains unimplemented (no-show detection isn't built yet).
+- **Idempotent**: driven by an `Idempotency-Key` (customer/staff actions) or a deterministic system key like `noshow:{queueEntryId}:{date}` (the scheduled no-show sweep). A retried job run or a double-tapped button cannot double-transition or double-charge. **Implemented in Phase 3B** (`IdempotencyInterceptor` + the `IdempotencyKey` table defined since Phase 1) for `POST /bookings` and `POST /bookings/:id/cancel`. **Extended in Phase 3C** to the three queue endpoints that create new records and could otherwise double-create on a retried request: `POST /salons/:salonId/queue/join`, `POST /bookings/:id/check-in`, `POST /dashboard/queue-entries/:id/assign`. The remaining queue actions (`call`/`no-show`/`cancel`/`complete`/staff-status) are plain status transitions guarded by the conditional-`UPDATE` pattern above instead — a retried request against an already-transitioned entry just gets `409 INVALID_QUEUE_TRANSITION`, which is itself idempotent-safe without needing a key. The no-show sweep's deterministic key remains unimplemented (no automatic sweep job is built).
 - **Auditable**: every transition that has money or customer-facing consequences (cancellation, no-show, ledger creation/settlement) writes an `AuditLog` row, with `actorUserId = null` for system-triggered ones. Cancellation's `AuditLog` write is implemented in Phase 3B.
 
 ## Salon subscription (inert in V1)

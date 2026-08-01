@@ -11,18 +11,24 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
 import { SalonsModule } from './salons/salons.module';
 import { BookingsModule } from './bookings/bookings.module';
+import { SalonAccessModule } from './common/salon-access/salon-access.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { QueueModule } from './queue/queue.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
     PrismaModule,
+    SalonAccessModule,
     HealthModule,
     AuthModule,
     SalonsModule,
     BookingsModule,
-    // Feature modules (staff, chairs, queue, payments, reviews, admin) are added in later phases
-    // per PROJECT_STRUCTURE.md.
+    RealtimeModule,
+    QueueModule,
+    // Feature modules (staff/chair roster CRUD, payments, reviews, admin) are added in later
+    // phases per PROJECT_STRUCTURE.md.
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

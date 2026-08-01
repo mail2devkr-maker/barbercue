@@ -22,7 +22,9 @@ const IST_OFFSET_MINUTES = 330;
 const SLOT_GRANULARITY_MINUTES = 15;
 const MAX_BOOKING_DAYS_AHEAD = 30;
 
-type Db = PrismaService | Prisma.TransactionClient;
+// Exported so queue.service.ts (Phase 3C) can pass its own transaction client into the reused
+// qualifiedStaffWhere/getSlotCapacity helpers below.
+export type Db = PrismaService | Prisma.TransactionClient;
 
 function istWallTimeToUtc(dateStr: string, timeStr: string): Date {
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -84,8 +86,11 @@ export class AvailabilityService {
   /**
    * DATABASE.md's StaffService rule: "If a salon has zero StaffService rows for a given service,
    * every ACTIVE staff member is treated as qualified for it."
+   *
+   * Not private: Phase 3C's queue.service.ts reuses this exact rule for live queue-assignment
+   * qualification, so it isn't duplicated between booking-time and assignment-time checks.
    */
-  private async qualifiedStaffWhere(
+  async qualifiedStaffWhere(
     db: Db,
     salonId: string,
     serviceId: string,
@@ -269,4 +274,9 @@ export class AvailabilityService {
   }
 }
 
-export { istWallTimeToUtc, istDateToDayOfWeek, MAX_BOOKING_DAYS_AHEAD };
+export {
+  istWallTimeToUtc,
+  istDateToDayOfWeek,
+  utcToIstDateStr,
+  MAX_BOOKING_DAYS_AHEAD,
+};

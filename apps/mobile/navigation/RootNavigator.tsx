@@ -8,6 +8,7 @@ import SlotSelectScreen from '../screens/SlotSelectScreen';
 import ConfirmBookingScreen from '../screens/ConfirmBookingScreen';
 import MyBookingsScreen from '../screens/MyBookingsScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
+import WalkInJoinScreen from '../screens/WalkInJoinScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -33,6 +34,7 @@ export default function RootNavigator() {
       <Stack.Screen name="ConfirmBooking" component={ConfirmBookingScreen} options={{ title: 'Confirm' }} />
       <Stack.Screen name="MyBookings" component={MyBookingsScreen} options={{ title: 'My bookings' }} />
       <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking' }} />
+      <Stack.Screen name="WalkInJoin" component={WalkInJoinScreen} options={{ title: 'Queue' }} />
     </Stack.Navigator>
   );
 }

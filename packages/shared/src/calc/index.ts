@@ -62,3 +62,21 @@ export function computeSlotCapacity(qualifiedStaffCount: number, activeChairCoun
 export function isSlotBookable(slotCapacity: number, consumedCapacity: number): boolean {
   return consumedCapacity < slotCapacity;
 }
+
+/**
+ * Phase 3C — STATE_MACHINES.md describes `QueueEntry.estimatedWaitMinutes` only as "a derived,
+ * cached value, never authoritative for ordering," without specifying an exact algorithm. This is
+ * the resolved one: `serverCount` reuses `computeSlotCapacity` (qualified-ACTIVE-staff × ACTIVE
+ * chairs, scoped to the entry's own service — same StaffService rule as booking). `null` when
+ * there's no capacity at all to estimate against, rather than a misleading number.
+ */
+export function estimateWaitMinutes(
+  serverCount: number,
+  peopleAhead: number,
+  avgServiceDurationMinutes: number,
+  activeSessionsRemainingMinutes: number,
+): number | null {
+  if (serverCount <= 0) return null;
+  const batchesAhead = Math.floor(peopleAhead / serverCount);
+  return Math.round(batchesAhead * avgServiceDurationMinutes + activeSessionsRemainingMinutes);
+}

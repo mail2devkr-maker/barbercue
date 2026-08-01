@@ -5,6 +5,7 @@ import { BOOKING_PATHS } from "@barbercue/shared";
 import type { BookingDetailDto, CancelBookingResponseDto, PaginatedResult } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { CancelBookingDialog } from "../../../../components/booking/CancelBookingDialog";
+import { CheckInPanel, canCheckIn } from "../../../../components/queue/CheckInPanel";
 
 const CANCELLABLE_STATUSES = new Set(["CONFIRMED", "PENDING_PAYMENT"]);
 
@@ -113,6 +114,7 @@ export default function MyBookingsPage() {
                 Cancel
               </button>
             )}
+            {canCheckIn(booking) && <CheckInPanel booking={booking} />}
           </div>
         ))}
       </div>

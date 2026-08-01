@@ -7,14 +7,29 @@ import {
   SALON_BOOKING_INFO_PATHS,
   computeCancellationCharge,
 } from '@barbercue/shared';
-import type { BookingDetailDto, CancelBookingResponseDto, CancellationPolicyDto } from '@barbercue/shared';
+import type {
+  BookingDetailDto,
+  CancelBookingResponseDto,
+  CancellationPolicyDto,
+  QueueEntryDetailDto,
+} from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BookingDetail'>;
 
 const CANCELLABLE_STATUSES = new Set(['CONFIRMED', 'PENDING_PAYMENT']);
+// Mirrors the backend's EARLY_CHECKIN_WINDOW_MINUTES (queue.service.ts) — a UI convenience only;
+// the backend remains authoritative and re-validates on the actual check-in request.
+const EARLY_CHECKIN_WINDOW_MINUTES = 15;
+
+function canCheckIn(booking: BookingDetailDto): boolean {
+  if (booking.status !== 'CONFIRMED') return false;
+  const minutesUntilSlot = (new Date(booking.slotStart).getTime() - Date.now()) / 60_000;
+  return minutesUntilSlot <= EARLY_CHECKIN_WINDOW_MINUTES;
+}
 
 export default function BookingDetailScreen({ route }: Props) {
   const { bookingId } = route.params;
@@ -31,6 +46,12 @@ export default function BookingDetailScreen({ route }: Props) {
   const [preview, setPreview] = useState<number | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+
+  // Once checked in, a booking can never be checked in again (the backend keys ALREADY_CHECKED_IN
+  // off the booking, not the entry's current status) — so this never reverts to the button, even
+  // after the resulting QueueEntry reaches a terminal state.
+  const [queueEntry, setQueueEntry] = useState<QueueEntryDetailDto | null>(null);
+  const [checkingIn, setCheckingIn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +103,23 @@ export default function BookingDetailScreen({ route }: Props) {
       setError(err instanceof ApiError ? err.message : 'Could not cancel this booking.');
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleCheckIn() {
+    if (!booking) return;
+    setCheckingIn(true);
+    setError(null);
+    try {
+      const created = await apiFetch<QueueEntryDetailDto>(
+        `${BOOKING_PATHS.bookings}/${booking.id}/${BOOKING_PATHS.checkIn}`,
+        { method: 'POST', headers: { 'Idempotency-Key': newIdempotencyKey() } },
+      );
+      setQueueEntry(created);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not check in. Please try again.');
+    } finally {
+      setCheckingIn(false);
     }
   }
 
@@ -150,6 +188,16 @@ export default function BookingDetailScreen({ route }: Props) {
             </Pressable>
           </View>
         </View>
+      )}
+
+      {queueEntry ? (
+        <QueueStatusPanel entry={queueEntry} onEntryChange={setQueueEntry} />
+      ) : (
+        canCheckIn(booking) && (
+          <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => void handleCheckIn()} disabled={checkingIn}>
+            {checkingIn ? <ActivityIndicator color="#EDE6DA" /> : <Text style={styles.buttonText}>Check in</Text>}
+          </Pressable>
+        )
       )}
     </View>
   );
