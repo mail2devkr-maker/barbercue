@@ -186,6 +186,7 @@ model User {
 
   roles            UserRole[]
   refreshTokens    RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   ownedSalons      Salon[]      @relation("SalonOwner")
   staffMemberships SalonStaff[]
   bookings         Booking[]    @relation("BookingCustomer")
@@ -237,6 +238,23 @@ model OtpRequest {
 
   @@index([phone, createdAt])
   @@map("otp_requests")
+}
+
+// Phase 2 addition — not in the original DATABASE.md field list. Needed to implement the
+// approved "Forgot Password" flow for staff/owner/admin (customers never have a password, so
+// never use this). Same pattern as RefreshToken/OtpRequest: only a hash of the token is stored,
+// never the raw value, so a DB read alone can't be used to reset someone's password.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@map("password_reset_tokens")
 }
 
 // ---------- Discovery / SEO ----------

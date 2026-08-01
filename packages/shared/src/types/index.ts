@@ -17,6 +17,30 @@ export interface AuthenticatedUser {
   roles: Role[];
 }
 
+// GET /auth/me response — deliberately does not include salon associations (ARCHITECTURE.md §4:
+// the JWT itself never carries them, and neither does this convenience endpoint's shape).
+export interface MeResponse extends AuthenticatedUser {
+  phone: string | null;
+  email: string | null;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  // Present in the response body for mobile (stored via secure storage); web instead relies on
+  // the httpOnly refresh cookie the same response sets, per ARCHITECTURE.md §4 — but the field is
+  // always present in the JSON shape so one client type serves both.
+  refreshToken: string;
+  expiresIn: number; // seconds
+}
+
+export interface AuthSession {
+  id: string;
+  deviceInfo: string | null;
+  createdAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
 export interface SalonSummary {
   id: string;
   name: string;

@@ -15,12 +15,18 @@ Status: **V1 decisions finalized.** Backend: NestJS, REST + one WebSocket namesp
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/auth/otp/request` | `{ phone }` — customer-only entry point, rate-limited |
-| POST | `/auth/otp/verify` | `{ phone, code }` → tokens; creates `User`+`UserRole(CUSTOMER)` on first verify. Customers are never asked for a password, at signup or ever. |
+| POST | `/auth/otp/verify` | `{ phone, code }` → `{ user, tokens }`; creates `User`+`UserRole(CUSTOMER)` on first verify. Customers are never asked for a password, at signup or ever. |
 | POST | `/auth/staff/login` | `{ email, password }` — staff/owner. Response includes `twoFactorRequired: boolean` (false in V1 for staff/owner, reserved field so a future TOTP step slots in without a contract change) |
 | POST | `/auth/staff/2fa/verify` | **reserved, not active in V1** — `{ email, totpCode }`, completes login when 2FA is enabled for that account |
-| POST | `/auth/admin/login` | `{ email, password, totpCode }` — admin, 2FA mandatory in V1 |
-| POST | `/auth/refresh` | rotates refresh token |
-| POST | `/auth/logout` | revokes current refresh token |
+| POST | `/auth/admin/login` | `{ email, password, totpCode }` — admin, 2FA mandatory in V1. `totpCode` omitted → `401 TOTP_REQUIRED`; no TOTP secret provisioned → `403 TOTP_SETUP_REQUIRED` |
+| POST | `/auth/refresh` | rotates refresh token; reads it from the request body (mobile) or the httpOnly cookie (web), body taking precedence |
+| POST | `/auth/logout` | revokes the presented refresh token only (single device/session) |
+| POST | `/auth/logout-all` | protected — revokes every refresh token for the caller (all devices/sessions) |
+| GET | `/auth/sessions` | protected — lists the caller's active (non-revoked, unexpired) sessions: `{ id, deviceInfo, createdAt, expiresAt, current }[]`. Implements CUSTOMER's "Session Management" requirement (works for any authenticated role, not customer-only). |
+| DELETE | `/auth/sessions/:id` | protected — revokes one specific session by id (must belong to the caller); the "sign out this device" action |
+| POST | `/auth/forgot-password` | `{ email }` — staff/owner/admin only (customers have no password). Always responds identically regardless of whether the email exists, to avoid account enumeration. Outside `NODE_ENV=production`, the response includes `devResetUrl` since no real email provider is connected yet (see PAYMENTS.md-style external-dependency pattern in [ARCHITECTURE.md](ARCHITECTURE.md) — the `EmailSender` abstraction is real, only the transport is a dev stand-in). |
+| POST | `/auth/reset-password` | `{ token, newPassword }` — consumes a one-time reset token (15 min TTL) and revokes all of that user's existing sessions |
+| GET | `/auth/me` | protected — returns `{ id, roles, phone, email }` for the caller |
 
 ## Discovery (public, unauthenticated, SEO-facing)
 

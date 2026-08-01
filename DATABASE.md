@@ -17,6 +17,8 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 
 **OtpRequest** — id, phone, codeHash, purpose (`LOGIN`/`SIGNUP`), attempts, expiresAt, verifiedAt (nullable)
 
+**PasswordResetToken** — *Phase 2 addition, not in the original list below.* id, userId → User, tokenHash (unique — only a hash is ever stored, same pattern as `RefreshToken`/`OtpRequest`), expiresAt, usedAt (nullable), createdAt. Backs the approved staff/owner/admin "Forgot Password" flow (customers never have a password, so never use this).
+
 ## Discovery / SEO
 
 **City** — id, name, slug (unique), state, country

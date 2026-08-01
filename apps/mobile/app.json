@@ -32,6 +32,9 @@
         "projectId": "01998c87-126d-40e8-aac3-205891b74b08"
       }
     },
-    "owner": "dcw-team"
+    "owner": "dcw-team",
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

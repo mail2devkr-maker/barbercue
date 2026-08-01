@@ -55,6 +55,14 @@ Full detail in [DATABASE.md](DATABASE.md). `User` (identity, phone-OTP for custo
 - Tokens: short-lived JWT access (15 min) + rotating refresh token (httpOnly cookie on web, secure storage on mobile), tracked in `RefreshToken` for revocation.
 - OTP delivery is behind a swappable `OtpSender` interface; vendor selection (MSG91/Twilio/etc.) remains an implementation detail to pick when auth is actually built, not an architectural fork.
 
+**Phase 2 implementation notes** (concrete choices this doc left open, now resolved by the code):
+- Refresh tokens are **opaque random strings** (64 bytes, `crypto.randomBytes`), never JWTs — only a SHA-256 hash is stored in `RefreshToken.tokenHash`, matching the "never store the raw secret" pattern already used for `OtpRequest`/`PasswordResetToken`. Rotation is enforced: every `/auth/refresh` call revokes the presented token and issues a new one.
+- Web delivery: httpOnly cookie (`barbercue_refresh_token`, `SameSite=Lax`, `Secure` in production) scoped to `/api/v1/auth`. Mobile delivery: returned in the JSON response body and stored via `expo-secure-store`. The refresh endpoint accepts either (body takes precedence), so one endpoint serves both clients.
+- TOTP: real RFC 6238 generation/verification via `otplib` (not a stub) with a ±30s clock-drift tolerance. `User.totpSecret` is encrypted at rest with AES-256-GCM (key from `TOTP_ENCRYPTION_KEY`), decrypted only at verification time.
+- Session management (customer requirement, but implemented role-agnostically): `GET /auth/sessions` / `DELETE /auth/sessions/:id` / `POST /auth/logout-all`, all backed by the same `RefreshToken` rows used for auth — a "session" *is* an unrevoked, unexpired refresh token.
+- Forgot/reset password (staff/owner/admin only) uses the same `EmailSender` DI-token pattern as `OtpSender` — a `ConsoleEmailSender` logs the reset link since no email provider is connected yet. Resetting a password revokes every existing session for that user.
+- Admin accounts are seeded via `apps/backend/prisma/seed.ts`, which provisions the TOTP secret and prints the `otpauth://` URI once for authenticator-app enrollment — there is still no self-serve admin signup endpoint anywhere in the API.
+
 ## 5. Authorization / RBAC
 
 Roles: `CUSTOMER`, `SALON_STAFF`, `SALON_OWNER`, `PLATFORM_ADMIN`. JWT carries `userId` + coarse `roles[]` only, never salon associations (which can go stale). Every salon-scoped mutation is checked against `SalonStaff` at request time via a guard. Admin routes use a separate, non-overlapping guard. This is unchanged from the prior round — reconfirmed, not revisited.

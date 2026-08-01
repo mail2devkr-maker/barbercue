@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Role } from "@barbercue/shared";
 import BackendStatus from "./BackendStatus";
 
@@ -23,6 +24,12 @@ export default function HomePage() {
         <code>ARCHITECTURE.md</code> and <code>PROJECT_STRUCTURE.md</code> at the repo root.
       </p>
       <BackendStatus />
+      <nav style={{ marginTop: 24, display: "flex", gap: 16, fontSize: "0.875rem" }}>
+        <Link href="/login">Customer login</Link>
+        <Link href="/owner/login">Owner login</Link>
+        <Link href="/staff/login">Staff login</Link>
+        <Link href="/admin/login">Admin login</Link>
+      </nav>
     </main>
   );
 }
