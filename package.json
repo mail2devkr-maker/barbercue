@@ -11,7 +11,7 @@
     "dev:backend": "npm run start:dev --workspace=@barbercue/backend",
     "dev:web": "npm run dev --workspace=@barbercue/web",
     "dev:mobile": "npm run start --workspace=@barbercue/mobile",
-    "build": "npm run build --workspace=@barbercue/shared && npm run build --workspace=@barbercue/backend && npm run build --workspace=@barbercue/web",
+"build": "npm run build --workspace=@barbercue/shared && npm run prisma:generate --workspace=@barbercue/backend && npm run build --workspace=@barbercue/backend && npm run build --workspace=@barbercue/web",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
