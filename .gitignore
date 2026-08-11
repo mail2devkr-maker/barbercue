@@ -33,3 +33,4 @@ Thumbs.db
 
 # Local backup archive — not part of source control
 BarberCue-Original-Source.zip.zip
+.claude/
