@@ -6,9 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "backgroundColor": "#1C1A17"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dcw.barbercue",
@@ -38,3 +35,4 @@
     ]
   }
 }
+
