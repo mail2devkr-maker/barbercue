@@ -11,6 +11,7 @@ export const HEALTH_PATH = 'health';
 export const AUTH_PATHS = {
   otpRequest: 'otp/request',
   otpVerify: 'otp/verify',
+  google: 'google',
   staffLogin: 'staff/login',
   adminLogin: 'admin/login',
   refresh: 'refresh',
@@ -26,12 +27,21 @@ export const AUTH_PATHS = {
 // the web app's fetch wrapper knows to send credentials, without needing to know the token value.
 export const REFRESH_TOKEN_COOKIE_NAME = 'barbercue_refresh_token';
 
+// Client-side "Resend OTP" cooldown, in seconds — a UI throttle only, purely to stop a user from
+// mashing the button; it is deliberately shorter than OtpService's server-side per-phone rate
+// limit (3 requests / 10 minutes, see otp.service.ts), which remains the real security boundary
+// and is never touched by this constant. Shared so apps/web and apps/mobile can't drift apart.
+export const OTP_RESEND_COOLDOWN_SECONDS = 45;
+
 // Base segments for the public discovery API (CitiesController/SalonsController) — dynamic
 // segments (:citySlug, :salonSlug, etc.) are interpolated at the call site, same pattern as
 // HEALTH_PATH usage.
 export const DISCOVERY_PATHS = {
   cities: 'cities',
   salons: 'salons',
+  // Owner-scoped reads under salons/mine[/...] — literal 'mine' segment, registered before the
+  // :citySlug/:salonSlug wildcard route in SalonsController so it can never be shadowed by it.
+  mine: 'mine',
 } as const;
 
 // Sub-paths for booking-related reads that hang off a salon (DISCOVERY_PATHS.salons/:salonId/...)
@@ -62,6 +72,44 @@ export const SALON_QUEUE_PATHS = {
 // QueueEntriesController's `@Controller('queue-entries')` prefix (customer view).
 export const QUEUE_ENTRIES_PATH = 'queue-entries';
 
+// StyleAdvisorController's `@Controller('style-advisor')` prefix.
+export const STYLE_ADVISOR_PATHS = {
+  styleAdvisor: 'style-advisor',
+  generate: 'generate',
+} as const;
+
+// A small, fixed style catalog (major-upgrade phase) — not salon-configurable data, so a shared
+// constant rather than a DB table (see AI Style Advisor's Phase E notes). Used by the landing
+// page's "Popular styles" section and the AI Style Advisor's generation request/results, so both
+// always agree on the same names. General barbershop styles only — nothing brand-specific.
+export const HAIRSTYLE_CATALOG = [
+  { id: 'crew-cut', name: 'Crew Cut' },
+  { id: 'fade', name: 'Fade' },
+  { id: 'pompadour', name: 'Pompadour' },
+  { id: 'buzz-cut', name: 'Buzz Cut' },
+  { id: 'textured-quiff', name: 'Textured Quiff' },
+  { id: 'undercut', name: 'Undercut' },
+  { id: 'slick-back', name: 'Slick Back' },
+  { id: 'crop', name: 'Crop' },
+] as const;
+
+// PremiumController's `@Controller('premium')` prefix (Premium plans + AI credits phase).
+export const PREMIUM_PATHS = {
+  premium: 'premium',
+  plans: 'plans',
+  me: 'me',
+  credits: 'credits',
+  // Dev/test-only activation — PremiumController rejects this outside a non-production
+  // environment; never reachable in production regardless of who calls it.
+  devActivate: 'dev/activate',
+} as const;
+
+// Single authoritative list of Premium plan ids — used to validate PremiumDevActivateInput and
+// anywhere else client/server code needs to enumerate the fixed 3-plan catalog without a round
+// trip. Actual price/credit values live in CustomerPremiumPlan (DB) via PremiumPlansService,
+// never duplicated here.
+export const PREMIUM_PLAN_IDS = ['basic', 'pro', 'max'] as const;
+
 // DashboardQueueController's `@Controller('dashboard')` prefix — staff/owner queue operations.
 export const DASHBOARD_PATHS = {
   dashboard: 'dashboard',
@@ -76,4 +124,14 @@ export const DASHBOARD_PATHS = {
   cancel: 'cancel',
   complete: 'complete',
   status: 'status',
+  // Phase 9: authenticated "get my shop's QR/public queue URL" — mounted under the existing
+  // dashboard/salons/:salonId/... shape alongside PublicQueueController's other routes.
+  queueQr: 'queue-qr',
+} as const;
+
+// PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).
+// `:token` is Salon.publicQueueToken, never the internal Salon.id.
+export const PUBLIC_QUEUE_PATHS = {
+  publicQueue: 'public-queue',
+  join: 'join',
 } as const;

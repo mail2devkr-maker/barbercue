@@ -26,10 +26,14 @@ export function BookingFlow({
   salonId,
   services,
   operatingHours,
+  selectedStyleName,
 }: {
   salonId: string;
   services: ServiceDto[];
   operatingHours: OperatingHoursDto[];
+  // AI Style Advisor hand-off (major-upgrade phase) — set only when this flow was reached via
+  // "Try This Look"; threaded straight into the booking-creation body when present.
+  selectedStyleName?: string;
 }) {
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | undefined>(undefined);
@@ -141,6 +145,7 @@ export function BookingFlow({
           serviceId: selectedServiceId,
           slotStart: selectedSlot.slotStart,
           ...(selectedStaffId ? { preferredStaffId: selectedStaffId } : {}),
+          ...(selectedStyleName ? { selectedStyleName } : {}),
         }),
       });
       setConfirmedBooking(booking);
@@ -162,6 +167,9 @@ export function BookingFlow({
           <strong>{booking.serviceName}</strong> at {booking.salonName}
         </p>
         <p style={{ color: "#6B6357" }}>{new Date(booking.slotStart).toLocaleString()}</p>
+        {booking.selectedStyleName && (
+          <p style={{ color: "#6B6357" }}>Style: {booking.selectedStyleName}</p>
+        )}
         <p>
           Status: <strong>{booking.status}</strong>
           {booking.status === "PENDING_PAYMENT" && booking.prepaymentRequiredAmount !== null && (
@@ -231,6 +239,9 @@ export function BookingFlow({
             {new Date(selectedSlot.slotStart).toLocaleString()}
             {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
           </p>
+          {selectedStyleName && (
+            <p style={{ color: "#6B6357" }}>Style: {selectedStyleName}</p>
+          )}
           {submitError && <p style={{ color: "#E24B4A" }}>{submitError}</p>}
           <button
             type="button"

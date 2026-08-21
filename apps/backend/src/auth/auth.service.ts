@@ -2,6 +2,7 @@ import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import {
   AuthErrorCode,
+  AuthProvider,
   Role,
   UserStatus,
   type AuthSession,
@@ -15,6 +16,7 @@ import { TokenService } from './services/token.service';
 import { OtpService } from './services/otp.service';
 import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
+import { GoogleAuthService } from './services/google-auth.service';
 import { EMAIL_SENDER, type EmailSender } from './services/email-sender';
 
 const PASSWORD_RESET_TTL_MINUTES = 15;
@@ -32,6 +34,7 @@ export class AuthService {
     private readonly otpService: OtpService,
     private readonly totpService: TotpService,
     private readonly cryptoService: CryptoService,
+    private readonly googleAuthService: GoogleAuthService,
     @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
   ) {}
 
@@ -70,6 +73,98 @@ export class AuthService {
 
     this.assertActive(user.status);
     const roles = user.roles.map((r) => r.role);
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      roles,
+      deviceInfo,
+    );
+    return {
+      user: this.toMeResponse(user.id, roles, user.phone, user.email),
+      tokens,
+    };
+  }
+
+  // ---------- Customer: Google Sign-In ----------
+
+  /**
+   * Sign-in-or-create for Google, in three steps, in this exact priority order:
+   *   1. An AuthIdentity already links this exact Google account (`sub`) — log in as its user.
+   *   2. No link yet, but the (Google-verified, never client-asserted) email matches an existing
+   *      User — link this Google account to that user rather than creating a duplicate. This is
+   *      intentionally role-agnostic: if that user happens to already be staff/owner/admin (same
+   *      real person, different login path), Google sign-in never touches or removes their
+   *      existing roles — it only guarantees they *also* have CUSTOMER access, since that's what
+   *      "sign in with Google as a customer" means. Staff/owner/admin authentication itself is
+   *      untouched by this method entirely.
+   *   3. Neither matched — create a brand-new CUSTOMER user + its AuthIdentity, atomically.
+   */
+  async googleLogin(
+    idToken: string,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const identity = await this.googleAuthService.verifyIdToken(idToken);
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const existingIdentity = await tx.authIdentity.findUnique({
+        where: {
+          provider_providerSub: {
+            provider: AuthProvider.GOOGLE,
+            providerSub: identity.sub,
+          },
+        },
+        include: { user: { include: { roles: true } } },
+      });
+      if (existingIdentity) return existingIdentity.user;
+
+      if (identity.email) {
+        const existingUser = await tx.user.findUnique({
+          where: { email: identity.email },
+          include: { roles: true },
+        });
+        if (existingUser) {
+          await tx.authIdentity.create({
+            data: {
+              userId: existingUser.id,
+              provider: AuthProvider.GOOGLE,
+              providerSub: identity.sub,
+              email: identity.email,
+            },
+          });
+          return existingUser;
+        }
+      }
+
+      return tx.user.create({
+        data: {
+          email: identity.email,
+          emailVerifiedAt: identity.email ? new Date() : null,
+          status: UserStatus.ACTIVE,
+          roles: { create: { role: Role.CUSTOMER } },
+          authIdentities: {
+            create: {
+              provider: AuthProvider.GOOGLE,
+              providerSub: identity.sub,
+              email: identity.email,
+            },
+          },
+        },
+        include: { roles: true },
+      });
+    });
+
+    this.assertActive(user.status);
+
+    // Ensure CUSTOMER access exists even for a linked staff/owner/admin account (see the method
+    // doc above) — a no-op for the common case (brand-new user or an existing customer), and
+    // never removes or alters any role the user already has.
+    let roles = user.roles.map((r) => r.role);
+    if (!roles.includes(Role.CUSTOMER)) {
+      await this.prisma.userRole.create({
+        data: { userId: user.id, role: Role.CUSTOMER },
+      });
+      roles = [...roles, Role.CUSTOMER];
+    }
+
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
       roles,

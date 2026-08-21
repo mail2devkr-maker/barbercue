@@ -16,6 +16,7 @@ Status: **V1 decisions finalized.** Backend: NestJS, REST + one WebSocket namesp
 |---|---|---|
 | POST | `/auth/otp/request` | `{ phone }` — customer-only entry point, rate-limited |
 | POST | `/auth/otp/verify` | `{ phone, code }` → `{ user, tokens }`; creates `User`+`UserRole(CUSTOMER)` on first verify. Customers are never asked for a password, at signup or ever. |
+| POST | `/auth/google` | *major-upgrade phase.* `{ idToken }` → `{ user, tokens }` — same response shape as every other login route. Backend verifies the token against Google itself (`google-auth-library`), never trusts a client-supplied email unless Google's own `email_verified` claim is true. Looks up by `(GOOGLE, sub)` first, then by verified email (links, never duplicates), then creates a new `CUSTOMER` as a last resort. `401 GOOGLE_TOKEN_INVALID` on any verification failure. |
 | POST | `/auth/staff/login` | `{ email, password }` — staff/owner. Response includes `twoFactorRequired: boolean` (false in V1 for staff/owner, reserved field so a future TOTP step slots in without a contract change) |
 | POST | `/auth/staff/2fa/verify` | **reserved, not active in V1** — `{ email, totpCode }`, completes login when 2FA is enabled for that account |
 | POST | `/auth/admin/login` | `{ email, password, totpCode }` — admin, 2FA mandatory in V1. `totpCode` omitted → `401 TOTP_REQUIRED`; no TOTP secret provisioned → `403 TOTP_SETUP_REQUIRED` |
@@ -40,6 +41,20 @@ Status: **V1 decisions finalized.** Backend: NestJS, REST + one WebSocket namesp
 | GET | `/salons/:citySlug/:salonSlug` | services, prices, hours, photos, rating summary, embeds the 10 most recent reviews (see note below) |
 | GET | `/salons/:salonId/queue/status` | Implemented in Phase 3C (path corrected from the originally-sketched `queue-status` to a 3-segment shape — see Queue section below for why). Public, no auth, no PII: `{ salonId, waitingCount, estimatedWaitMinutes }`. |
 | GET | `/salons/:salonId/reviews` | **deferred past Phase 3A** — standalone paginated reviews; Phase 3A's salon profile response embeds the 10 most recent reviews directly instead, which is enough for the page UI and JSON-LD `aggregateRating` |
+
+## Shop registration (authenticated) — major-upgrade phase
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/salons` | `@Roles(CUSTOMER, SALON_OWNER)`, Idempotency-Key required. `{ name, phone?, email?, addressLine, lat, lng, citySlug, localitySlug? }` → `{ id, publicId, slug, name, status }`. Creates the salon `PENDING` and grants the caller `SALON_OWNER` for it in the same transaction, additive to their existing roles. `404 CITY_NOT_FOUND` / `404 LOCALITY_NOT_FOUND` if either slug doesn't resolve to an existing row — no free-text city/state creation. |
+| GET | `/salons/mine` | `@Roles(SALON_OWNER)` — every salon the caller owns: `{ id, publicId, slug, name, status }[]`. Registered ahead of the public `:citySlug/:salonSlug` route so `mine` is never shadowed by it. |
+| GET | `/salons/mine/:salonId` | `@Roles(SALON_OWNER, SALON_STAFF)` — single-salon detail for the settings page, reusing the same `SalonAccessService` membership check the queue dashboard already relies on. `404 SALON_NOT_FOUND` if the id doesn't exist (after access is confirmed). |
+
+## AI Style Advisor (authenticated) — major-upgrade phase
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/style-advisor/generate` | `@Roles(CUSTOMER)`, throttled to 3 requests/10min (the most abuse-prone/costly endpoint in the app once a paid provider is wired). Multipart `image` field (JPEG/PNG/WebP, ≤5MB), memory-only — never written to disk. → `{ results: { styleId, styleName, previewUrl, matchPercent }[] }`. Every call today returns `503 AI_PROVIDER_NOT_CONFIGURED` — no real `AiImageProvider` is wired (see [ARCHITECTURE.md](ARCHITECTURE.md#19-ai-style-advisor-major-upgrade-phase)), disclosed to the caller, never a fabricated result. |
 
 ## Booking (customer, authenticated)
 

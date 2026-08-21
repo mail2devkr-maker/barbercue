@@ -14,6 +14,9 @@ export default function SearchClient() {
 
   const [q, setQ] = useState(searchParams.get("q") ?? "");
   const [city, setCity] = useState(searchParams.get("city") ?? "");
+  // AI Style Advisor hand-off (major-upgrade phase) — present only when arriving via "Try This
+  // Look"; forwarded into each result's link, never sent to the backend search itself.
+  const style = searchParams.get("style") ?? undefined;
   const [results, setResults] = useState<SalonListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +65,11 @@ export default function SearchClient() {
   return (
     <main style={{ padding: "2rem 1.5rem", maxWidth: 800, margin: "0 auto" }}>
       <h1>Find a barbershop</h1>
+      {style && (
+        <p style={{ color: "#6B6357", fontSize: 14, marginBottom: 16 }}>
+          Booking for the <strong>{style}</strong> look — pick a shop below to continue.
+        </p>
+      )}
       <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         <input
           type="text"
@@ -86,7 +94,7 @@ export default function SearchClient() {
       {error && <p style={{ color: "#E24B4A" }}>{error}</p>}
       {!loading && !error && results.length === 0 && <p style={{ color: "#6B6357" }}>No salons found.</p>}
       {results.map((s) => (
-        <SalonCard key={s.id} salon={s} />
+        <SalonCard key={s.id} salon={s} styleName={style} />
       ))}
     </main>
   );

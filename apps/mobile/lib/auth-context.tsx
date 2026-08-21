@@ -1,5 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { AUTH_PATHS, type AuthTokens, type MeResponse, type OtpVerifyInput } from '@barbercue/shared';
+import {
+  AUTH_PATHS,
+  type AuthTokens,
+  type GoogleLoginInput,
+  type MeResponse,
+  type OtpVerifyInput,
+} from '@barbercue/shared';
 import {
   apiFetch,
   clearPersistedRefreshToken,
@@ -14,6 +20,7 @@ interface AuthContextValue {
   user: MeResponse | null;
   status: AuthStatus;
   verifyCustomerOtp: (input: OtpVerifyInput) => Promise<MeResponse>;
+  googleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
 }
 
@@ -49,17 +56,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchMe]);
 
-  const verifyCustomerOtp = useCallback(async (input: OtpVerifyInput): Promise<MeResponse> => {
-    const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.otpVerify), {
-      method: 'POST',
-      body: JSON.stringify(input),
-    });
+  const applyAuthResult = useCallback(async (result: { user: MeResponse; tokens: AuthTokens }) => {
     setAccessToken(result.tokens.accessToken);
     await persistRefreshToken(result.tokens.refreshToken);
     setUser(result.user);
     setStatus('authenticated');
     return result.user;
   }, []);
+
+  const verifyCustomerOtp = useCallback(
+    async (input: OtpVerifyInput): Promise<MeResponse> => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.otpVerify), {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return applyAuthResult(result);
+    },
+    [applyAuthResult],
+  );
+
+  const googleLogin = useCallback(
+    async (input: GoogleLoginInput): Promise<MeResponse> => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.google), {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return applyAuthResult(result);
+    },
+    [applyAuthResult],
+  );
 
   const logout = useCallback(async () => {
     const refreshToken = await getPersistedRefreshToken();
@@ -74,8 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, status, verifyCustomerOtp, logout }),
-    [user, status, verifyCustomerOtp, logout],
+    () => ({ user, status, verifyCustomerOtp, googleLogin, logout }),
+    [user, status, verifyCustomerOtp, googleLogin, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

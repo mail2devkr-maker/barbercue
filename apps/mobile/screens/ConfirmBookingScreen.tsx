@@ -10,8 +10,17 @@ import type { RootStackParamList } from '../navigation/types';
 type Props = NativeStackScreenProps<RootStackParamList, 'ConfirmBooking'>;
 
 export default function ConfirmBookingScreen({ route, navigation }: Props) {
-  const { salonId, salonName, serviceId, serviceName, preferredStaffId, preferredStaffName, slotStart, slotEnd } =
-    route.params;
+  const {
+    salonId,
+    salonName,
+    serviceId,
+    serviceName,
+    preferredStaffId,
+    preferredStaffName,
+    slotStart,
+    slotEnd,
+    selectedStyleName,
+  } = route.params;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
@@ -28,6 +37,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           serviceId,
           slotStart,
           ...(preferredStaffId ? { preferredStaffId } : {}),
+          ...(selectedStyleName ? { selectedStyleName } : {}),
         }),
       });
       setBooking(result);
@@ -46,6 +56,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           {booking.serviceName} at {booking.salonName}
         </Text>
         <Text style={styles.subtitle}>{new Date(booking.slotStart).toLocaleString()}</Text>
+        {booking.selectedStyleName && <Text style={styles.subtitle}>Style: {booking.selectedStyleName}</Text>}
         <Text style={styles.status}>Status: {booking.status}</Text>
         <Pressable
           style={styles.button}
@@ -70,6 +81,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
         })}
       </Text>
       {preferredStaffName && <Text style={styles.subtitle}>Preferred barber: {preferredStaffName}</Text>}
+      {selectedStyleName && <Text style={styles.subtitle}>Style: {selectedStyleName}</Text>}
       {error && <Text style={styles.error}>{error}</Text>}
       {/* The summary above (service/salon/time) already functions as the confirmation step —
           matching apps/web's BookingFlow, which also has no separate "are you sure" dialog.

@@ -54,7 +54,10 @@ export class ApiError extends Error {
 
 function rawFetch(path: string, options: RequestInit): Promise<Response> {
   const headers = new Headers(options.headers);
-  if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
+  // FormData (multipart uploads, e.g. the AI Style Advisor) must NOT get a manual Content-Type —
+  // React Native's fetch sets one itself with the correct multipart boundary.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  if (!isFormData && !headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   // No cookies on native — the refresh token travels explicitly in the request body instead
   // (see AuthController: body takes precedence over cookie, and mobile never sets a cookie).

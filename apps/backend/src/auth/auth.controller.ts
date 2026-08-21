@@ -18,6 +18,7 @@ import {
   REFRESH_TOKEN_COOKIE_NAME,
   adminLoginSchema,
   forgotPasswordSchema,
+  googleLoginSchema,
   logoutRequestSchema,
   otpRequestSchema,
   otpVerifySchema,
@@ -27,6 +28,7 @@ import {
   type AdminLoginInput,
   type AuthenticatedUser,
   type ForgotPasswordInput,
+  type GoogleLoginInput,
   type LogoutRequestInput,
   type OtpRequestInput,
   type OtpVerifyInput,
@@ -107,6 +109,23 @@ export class AuthController {
     const result = await this.authService.verifyCustomerOtp(
       body.phone,
       body.code,
+      req.headers['user-agent'],
+    );
+    this.setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.google)
+  @UsePipes(new ZodValidationPipe(googleLoginSchema))
+  async googleLogin(
+    @Body() body: GoogleLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.googleLogin(
+      body.idToken,
       req.headers['user-agent'],
     );
     this.setRefreshCookie(res, result.tokens.refreshToken);

@@ -98,10 +98,22 @@ function buildHairSalonJsonLd(salon: SalonProfileDto) {
   };
 }
 
-export default async function SalonPage({ params }: { params: Promise<SalonPageParams> }) {
+export default async function SalonPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<SalonPageParams>;
+  searchParams: Promise<{ style?: string }>;
+}) {
   const { citySlug, salonSlug } = await params;
+  const { style } = await searchParams;
   const salon = await loadSalon(citySlug, salonSlug);
   if (!salon) notFound();
+
+  // AI Style Advisor hand-off (major-upgrade phase): "Try This Look" carries the chosen style
+  // name through search -> this profile page -> the booking form via this one query param, so the
+  // final POST /bookings body can include it (Booking.selectedStyleName).
+  const bookHref = `/book/${salon.slug}?city=${citySlug}${style ? `&style=${encodeURIComponent(style)}` : ""}`;
 
   const [city, locality] = await Promise.all([
     fetchDiscoveryOrNull<CityDto>(`${DISCOVERY_PATHS.cities}/${citySlug}`, DISCOVERY_REVALIDATE_SECONDS),
@@ -140,7 +152,7 @@ export default async function SalonPage({ params }: { params: Promise<SalonPageP
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Link
-          href={`/book/${salon.slug}?city=${citySlug}`}
+          href={bookHref}
           style={{
             display: "inline-block",
             marginTop: 8,

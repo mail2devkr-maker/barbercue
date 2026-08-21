@@ -19,6 +19,9 @@ export default function AccountScreen({ navigation }: Props) {
       <Pressable style={styles.primaryButton} onPress={() => navigation.navigate('MyBookings')}>
         <Text style={styles.buttonText}>My bookings</Text>
       </Pressable>
+      <Pressable style={styles.primaryButton} onPress={() => navigation.navigate('StyleAdvisor')}>
+        <Text style={styles.buttonText}>AI Style Advisor</Text>
+      </Pressable>
 
       <Pressable style={styles.button} onPress={() => void logout()}>
         <Text style={styles.buttonText}>Log out</Text>

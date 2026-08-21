@@ -17,10 +17,10 @@ export default async function BookPage({
   searchParams,
 }: {
   params: Promise<BookPageParams>;
-  searchParams: Promise<{ city?: string }>;
+  searchParams: Promise<{ city?: string; style?: string }>;
 }) {
   const { salonSlug } = await params;
-  const { city } = await searchParams;
+  const { city, style } = await searchParams;
   // Salon.slug is only unique per city (DATABASE.md: @@unique([cityId, slug])), so the salon
   // profile page's "Book an appointment" link always passes ?city= alongside the slug.
   if (!city) notFound();
@@ -34,7 +34,12 @@ export default async function BookPage({
     <main style={{ padding: "2rem 1.5rem", maxWidth: 800, margin: "0 auto" }}>
       <h1>Book at {salon.name}</h1>
       <p style={{ color: "#6B6357" }}>{salon.addressLine}</p>
-      <BookingFlow salonId={salon.id} services={salon.services} operatingHours={salon.operatingHours} />
+      <BookingFlow
+        salonId={salon.id}
+        services={salon.services}
+        operatingHours={salon.operatingHours}
+        selectedStyleName={style}
+      />
     </main>
   );
 }

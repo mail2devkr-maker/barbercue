@@ -38,7 +38,11 @@ export class ApiError extends Error {
 
 function rawFetch(path: string, options: RequestInit): Promise<Response> {
   const headers = new Headers(options.headers);
-  if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
+  // FormData (multipart uploads, e.g. the AI Style Advisor) must NOT get a manual Content-Type —
+  // the browser sets one itself with the correct multipart boundary; a JSON content-type here
+  // would make the backend fail to parse the body at all.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (!isFormData && !headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   // credentials: "include" is required for the browser to send the httpOnly refresh cookie —
   // web and backend are different origins (ports) in dev.

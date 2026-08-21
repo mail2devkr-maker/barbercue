@@ -1,18 +1,26 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import {
   SalonStatus,
   type PaginatedResult,
+  type RegisterSalonInput,
+  type RegisterSalonResultDto,
   type SalonListItemDto,
   type SalonProfileDto,
   type SalonSearchQueryInput,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
+import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { CitiesService } from './cities.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const RECENT_REVIEWS_LIMIT = 10;
+// A brand-new shop's slug never collides in practice (name + city is a very sparse space at this
+// scale), but the DB-level @@unique([cityId, slug]) constraint is the real guarantee — this cap
+// just bounds how many times we retry a P2002 before giving up with a clear error instead of an
+// infinite loop.
+const MAX_SLUG_ATTEMPTS = 5;
 
 // Include shape shared by both the list query and the mapping helper, so the two never drift.
 const listInclude = {
@@ -30,6 +38,7 @@ export class SalonsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly citiesService: CitiesService,
+    private readonly salonAccess: SalonAccessService,
   ) {}
 
   async search(
@@ -103,6 +112,7 @@ export class SalonsService {
 
     return {
       id: salon.id,
+      publicId: salon.publicId,
       name: salon.name,
       slug: salon.slug,
       citySlug: salon.city.slug,
@@ -150,6 +160,151 @@ export class SalonsService {
     };
   }
 
+  /**
+   * Self-serve shop registration (major-upgrade phase). Any authenticated user — including a
+   * customer who just signed up seconds ago via Google — may register a shop; a SALON_OWNER
+   * UserRole is granted for the new salon in the same transaction, on top of (never replacing)
+   * whatever roles they already have. Requires an existing City (by slug) rather than accepting
+   * free-text state/country, so a typo can't silently create a duplicate/junk City row — city
+   * curation stays CitiesService's existing, separate concern.
+   */
+  async registerSalon(
+    ownerUserId: string,
+    input: RegisterSalonInput,
+  ): Promise<RegisterSalonResultDto> {
+    const city = await this.citiesService.findCityBySlugOrThrow(input.citySlug);
+
+    let localityId: string | null = null;
+    if (input.localitySlug) {
+      const locality = await this.prisma.locality.findUnique({
+        where: { cityId_slug: { cityId: city.id, slug: input.localitySlug } },
+      });
+      if (!locality) {
+        throw new AppException(
+          'LOCALITY_NOT_FOUND',
+          'Locality not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      localityId = locality.id;
+    }
+
+    const baseSlug = slugify(input.name);
+    let lastError: Prisma.PrismaClientKnownRequestError | undefined;
+    for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
+      const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+      try {
+        const salon = await this.prisma.$transaction(async (tx) => {
+          // publicId is never set here — it's a DB column DEFAULT (see the
+          // add_salon_public_id migration's sequence), so every real INSERT gets one
+          // automatically, with uniqueness guaranteed by Postgres, not app code.
+          const created = await tx.salon.create({
+            data: {
+              ownerUserId,
+              name: input.name,
+              slug,
+              cityId: city.id,
+              localityId,
+              addressLine: input.addressLine,
+              lat: input.lat,
+              lng: input.lng,
+              phone: input.phone ?? null,
+              email: input.email ?? null,
+              status: SalonStatus.PENDING,
+            },
+          });
+          await tx.userRole.upsert({
+            where: {
+              userId_role_salonId: {
+                userId: ownerUserId,
+                role: 'SALON_OWNER',
+                salonId: created.id,
+              },
+            },
+            update: {},
+            create: {
+              userId: ownerUserId,
+              role: 'SALON_OWNER',
+              salonId: created.id,
+            },
+          });
+          return created;
+        });
+
+        return {
+          id: salon.id,
+          publicId: salon.publicId,
+          slug: salon.slug,
+          name: salon.name,
+          status: salon.status,
+        };
+      } catch (err) {
+        // Only retry on the specific (cityId, slug) collision — anything else is a real failure.
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw (
+      lastError ??
+      new AppException(
+        'SALON_SLUG_UNAVAILABLE',
+        'Could not register this shop. Please try again.',
+        HttpStatus.CONFLICT,
+      )
+    );
+  }
+
+  /** GET salons/mine — every salon this user owns, for the dashboard's salon-picker landing page. */
+  async listOwned(ownerUserId: string): Promise<RegisterSalonResultDto[]> {
+    const salons = await this.prisma.salon.findMany({
+      where: { ownerUserId },
+      orderBy: { name: 'asc' },
+    });
+    return salons.map((s) => ({
+      id: s.id,
+      publicId: s.publicId,
+      slug: s.slug,
+      name: s.name,
+      status: s.status,
+    }));
+  }
+
+  /**
+   * GET salons/mine/:salonId — minimal owner/staff-scoped detail (publicId + identity), for the
+   * settings page. Reuses SalonAccessService (the same membership check the queue dashboard
+   * already relies on) rather than a bespoke ownerUserId check, so access rules can't drift
+   * between "can view this salon's settings" and "can operate this salon's queue".
+   */
+  async getOwnedSalon(
+    userId: string,
+    salonId: string,
+  ): Promise<RegisterSalonResultDto> {
+    await this.salonAccess.assertAccess(userId, salonId);
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+    });
+    if (!salon) {
+      throw new AppException(
+        'SALON_NOT_FOUND',
+        'Salon not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return {
+      id: salon.id,
+      publicId: salon.publicId,
+      slug: salon.slug,
+      name: salon.name,
+      status: salon.status,
+    };
+  }
+
   private async toListItem(
     salon: SalonWithListRelations,
   ): Promise<SalonListItemDto> {
@@ -157,6 +312,7 @@ export class SalonsService {
       await this.aggregate(salon.id);
     return {
       id: salon.id,
+      publicId: salon.publicId,
       name: salon.name,
       slug: salon.slug,
       citySlug: salon.city.slug,
@@ -200,4 +356,15 @@ export class SalonsService {
       priceMax: priceAgg._max.price ? Number(priceAgg._max.price) : null,
     };
   }
+}
+
+/** Lowercase, ASCII-hyphenated slug from a shop name — "Fresh Cuts & Co." -> "fresh-cuts-co". */
+function slugify(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'shop'
+  );
 }

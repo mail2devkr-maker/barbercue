@@ -188,6 +188,10 @@ No I/O in this package — no fetch client, no React, no NestJS decorators — s
 - Shared TS config (`tsconfig.base.json`) extended by each app.
 - Shared ESLint/Prettier config in a `packages/config` (or folded into `packages/shared`) so formatting/lint rules aren't redefined three times.
 
+## Major-upgrade phase additions
+
+New backend module: `apps/backend/src/style-advisor/` (`style-advisor.controller.ts`, `style-advisor.service.ts`, `ai-image-provider.ts`, `unconfigured-ai-image-provider.ts`). New auth service: `apps/backend/src/auth/services/google-auth.service.ts`. New web routes: `apps/web/app/(dashboard)/dashboard/register-shop/page.tsx`, `apps/web/app/(customer)/style-advisor/page.tsx`, new components under `apps/web/components/landing/` and `apps/web/components/style-advisor/`. New mobile screen: `apps/mobile/screens/StyleAdvisorScreen.tsx`. `apps/web/app/(public)/page.tsx` is a full rewrite, not an incremental edit — see [ARCHITECTURE.md §18](ARCHITECTURE.md#18-landing-page-major-upgrade-phase).
+
 ## Resolved (previously open)
 
 - Package manager: npm workspaces confirmed, pnpm deferred indefinitely absent a concrete problem.

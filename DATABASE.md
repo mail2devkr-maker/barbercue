@@ -19,6 +19,8 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 
 **PasswordResetToken** — *Phase 2 addition, not in the original list below.* id, userId → User, tokenHash (unique — only a hash is ever stored, same pattern as `RefreshToken`/`OtpRequest`), expiresAt, usedAt (nullable), createdAt. Backs the approved staff/owner/admin "Forgot Password" flow (customers never have a password, so never use this).
 
+**AuthIdentity** — *major-upgrade phase addition.* id, userId → User, provider (`GOOGLE`/`WHATSAPP` — the latter reserved, unimplemented), providerSub (Google's stable `sub` claim, never the email), email (nullable snapshot at link time, display/support only — never the identity key), createdAt. unique(provider, providerSub). A `User` can hold multiple rows here (Google + phone OTP simultaneously) — this is what makes auth provider-based rather than parallel unlinkable systems.
+
 ## Discovery / SEO
 
 **City** — id, name, slug (unique), state, country
@@ -27,7 +29,9 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 
 **Salon**
 - id, ownerUserId → User, name, slug, cityId → City, localityId → Locality (nullable), addressLine, lat, lng, phone, description
-- status (`PENDING`/`ACTIVE`/`SUSPENDED`)
+- **publicId** (`BC-SHOP-000001` format, unique, major-upgrade phase) — permanent, human-shareable identifier, distinct from `id`; assigned once at creation by a Postgres sequence-backed column default (see `add_salon_public_id` migration), never written by application code afterward, so uniqueness/monotonicity are DB-guaranteed, not app-level.
+- **email** (nullable, major-upgrade phase) — business contact email, distinct from the owner's own login email on `User`.
+- status (`PENDING`/`ACTIVE`/`SUSPENDED`) — self-serve registration (`POST /salons`, major-upgrade phase) always creates `PENDING`; this default already existed but was previously only reachable via seed data.
 - Subscription fields (inert in V1): planId → Plan (nullable), subscriptionStatus (`PILOT`/`TRIALING`/`ACTIVE`/`PAST_DUE`/`EXPIRED`), trialEndsAt, subscriptionExpiresAt, gracePeriodEndsAt
 - unique(cityId, slug)
 
@@ -67,6 +71,7 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 - **prepaymentRequiredAmount** (nullable, snapshot of `SalonPaymentPolicy` × `Service.price` at creation time — later policy edits never retroactively change what an existing booking owes)
 - **preferredStaffId → SalonStaff (nullable)** — *Phase 3B addition.* A soft customer preference captured during booking ("choose a barber," with "Any Staff" = null), shown to the salon later, but explicitly **not** a capacity input — the pool-based algorithm below is completely unchanged by it. Real staff/chair assignment still only happens at queue check-in/dashboard-assign time. This preserves the "never bound to a specific staff member" capacity model above while still letting the customer express a preference; validated for qualification/active status at booking time but never blocks or filters slot availability.
 - cancelledAt, cancelledBy → User (nullable), cancellationChargeAmount (nullable)
+- **selectedStyleName** (nullable string, major-upgrade phase) — set only when the booking arrived via the AI Style Advisor's "Try This Look" hand-off; free text, not a foreign key, since `HAIRSTYLE_CATALOG` is a fixed `packages/shared` constant rather than salon-configurable DB data.
 - **Whether a new `Booking` starts `PENDING_PAYMENT` or `CONFIRMED` is a pure function of `SalonPaymentPolicy.prepaymentRequirement`** — see [STATE_MACHINES.md](STATE_MACHINES.md#booking).
 
 **QueueEntry** (the operational token — created at different times depending on source, see [STATE_MACHINES.md](STATE_MACHINES.md#queue-entry-creation-timing))

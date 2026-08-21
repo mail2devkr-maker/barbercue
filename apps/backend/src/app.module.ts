@@ -14,6 +14,9 @@ import { BookingsModule } from './bookings/bookings.module';
 import { SalonAccessModule } from './common/salon-access/salon-access.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { QueueModule } from './queue/queue.module';
+import { StyleAdvisorModule } from './style-advisor/style-advisor.module';
+import { PremiumModule } from './premium/premium.module';
+import { PublicQueueModule } from './public-queue/public-queue.module';
 
 @Module({
   imports: [
@@ -27,6 +30,9 @@ import { QueueModule } from './queue/queue.module';
     BookingsModule,
     RealtimeModule,
     QueueModule,
+    PremiumModule,
+    StyleAdvisorModule,
+    PublicQueueModule,
     // Feature modules (staff/chair roster CRUD, payments, reviews, admin) are added in later
     // phases per PROJECT_STRUCTURE.md.
   ],

@@ -5,6 +5,7 @@ import {
   AUTH_PATHS,
   type AdminLoginInput,
   type AuthTokens,
+  type GoogleLoginInput,
   type MeResponse,
   type OtpVerifyInput,
   type StaffLoginInput,
@@ -17,10 +18,16 @@ interface AuthContextValue {
   user: MeResponse | null;
   status: AuthStatus;
   verifyCustomerOtp: (input: OtpVerifyInput) => Promise<MeResponse>;
+  googleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
   adminLogin: (input: AdminLoginInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  // Rotates the refresh token to mint a fresh access token, then reloads /auth/me — unlike
+  // refreshMe() alone, this picks up ROLE changes that happened server-side after the current
+  // access token was issued (e.g. just-completed shop registration granting SALON_OWNER), since
+  // TokenService.rotateRefreshToken re-reads roles from the DB on every rotation.
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -79,6 +86,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [handleAuthResult],
   );
 
+  const googleLogin = useCallback(
+    async (input: GoogleLoginInput) => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.google), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return handleAuthResult(result);
+    },
+    [handleAuthResult],
+  );
+
   const staffLogin = useCallback(
     async (input: StaffLoginInput) => {
       const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.staffLogin), {
@@ -101,6 +119,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [handleAuthResult],
   );
 
+  const refreshSession = useCallback(async () => {
+    const tokens = await apiFetch<AuthTokens>(authPath(AUTH_PATHS.refresh), {
+      method: "POST",
+      body: "{}",
+    });
+    setAccessToken(tokens.accessToken);
+    await refreshMe();
+  }, [refreshMe]);
+
   const logout = useCallback(async () => {
     try {
       await apiFetch(authPath(AUTH_PATHS.logout), { method: "POST", body: "{}" });
@@ -112,8 +139,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, status, verifyCustomerOtp, staffLogin, adminLogin, logout, refreshMe }),
-    [user, status, verifyCustomerOtp, staffLogin, adminLogin, logout, refreshMe],
+    () => ({
+      user,
+      status,
+      verifyCustomerOtp,
+      googleLogin,
+      staffLogin,
+      adminLogin,
+      logout,
+      refreshMe,
+      refreshSession,
+    }),
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, adminLogin, logout, refreshMe, refreshSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

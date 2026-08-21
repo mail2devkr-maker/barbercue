@@ -17,5 +17,8 @@ import { StaffStatusService } from './staff-status.service';
     DashboardQueueController,
   ],
   providers: [QueueService, StaffStatusService],
+  // Phase 9: PublicQueueModule reuses this exact QueueService (joinWalkIn) for the QR flow rather
+  // than duplicating queue logic — no other change to this module.
+  exports: [QueueService],
 })
 export class QueueModule {}

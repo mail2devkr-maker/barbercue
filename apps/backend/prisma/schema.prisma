@@ -38,6 +38,16 @@ enum OtpPurpose {
   SIGNUP
 }
 
+// Major-upgrade phase: customer auth becomes provider-based. GOOGLE is live; WHATSAPP is reserved
+// (see ARCHITECTURE.md) — genuinely free production WhatsApp OTP requires Meta Business
+// verification + a paid-per-message account, neither of which exists yet, so no WhatsAppOtpSender
+// is wired up. The enum value exists now so a future AuthIdentity row never needs a schema change,
+// only a new OtpSender-style implementation.
+enum AuthProvider {
+  GOOGLE
+  WHATSAPP
+}
+
 enum SalonStatus {
   PENDING
   ACTIVE
@@ -185,6 +195,7 @@ model User {
   updatedAt        DateTime   @updatedAt
 
   roles               UserRole[]
+  authIdentities      AuthIdentity[]
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   ownedSalons         Salon[]               @relation("SalonOwner")
@@ -196,6 +207,7 @@ model User {
   notifications       Notification[]
   ledgerEntries       CustomerLedgerEntry[]
   auditLogs           AuditLog[]
+  premiumSubscriptions CustomerSubscription[]
 
   @@map("users")
 }
@@ -211,6 +223,29 @@ model UserRole {
 
   @@unique([userId, role, salonId])
   @@map("user_roles")
+}
+
+// One row per (provider, external account) a User has linked — additive to, never a replacement
+// for, phone/password auth on User itself. A customer can hold a phone-OTP identity AND a Google
+// identity on the same User row; sign-in through either lands on the same account.
+model AuthIdentity {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  provider    AuthProvider
+  // The provider's own stable subject identifier (Google's `sub` claim) — never the email, which
+  // can change or be reused. This is the actual identity key for lookups.
+  providerSub String
+  // Snapshot of the verified email at link time, for display/support only — never used to look up
+  // or match an identity; account linking keys off (provider, providerSub) plus a one-time,
+  // explicit "does an existing User already have this verified email" check at link time (see
+  // AuthService.googleLogin), not off this column on subsequent logins.
+  email       String?
+  createdAt   DateTime     @default(now())
+
+  @@unique([provider, providerSub])
+  @@index([userId])
+  @@map("auth_identities")
 }
 
 model RefreshToken {
@@ -285,6 +320,25 @@ model Locality {
 
 model Salon {
   id          String      @id @default(uuid())
+  // Permanent, human-shareable identifier — "BC-SHOP-000001" — distinct from `id` (the internal
+  // UUID primary key, never shown to users). Assigned once at creation by a Postgres sequence (see
+  // the add_salon_public_id migration's hand-written SQL default), so uniqueness/monotonicity are
+  // guaranteed by the database, not application code — no read-max-then-increment race. Nothing in
+  // SalonsService ever writes this column after creation, so it's immutable in practice.
+  // dbgenerated() here is a type-only marker (Prisma never emits migration SQL for it) telling
+  // Prisma Client the column has a DB-level default — the real default is the raw SQL in the
+  // add_salon_public_id migration; this just makes `publicId` optional in create() calls instead
+  // of forcing every caller to invent a value.
+  publicId    String      @unique @default(dbgenerated("('BC-SHOP-' || lpad(nextval('salon_public_id_seq'::regclass)::text, 6, '0'))"))
+  // Phase 9: the shop's permanent QR/public-queue-join identifier — deliberately NOT `publicId`
+  // above (that's a sequential, enumerable counter; guessable, unsuitable for a link anyone can
+  // join a queue through) and NOT `id` (the internal PK, never exposed publicly). Nullable +
+  // lazily generated server-side (PublicQueueTokenService, via Node's crypto.randomBytes — same
+  // convention as auth.service.ts's password-reset token) rather than a DB sequence default,
+  // since a cryptographically random value isn't a Postgres built-in without the pgcrypto
+  // extension. Nullable-unique is safe: Postgres allows multiple NULLs under a unique index (same
+  // pattern as CancellationPolicy.salonId).
+  publicQueueToken String? @unique
   ownerUserId String
   owner       User        @relation("SalonOwner", fields: [ownerUserId], references: [id])
   name        String
@@ -297,6 +351,10 @@ model Salon {
   lat         Float
   lng         Float
   phone       String?
+  // Business contact email, distinct from the owner User's own login email — same "optional
+  // business-facing contact field" pattern as `phone` above. Added for shop registration
+  // (Phase C); not required, since not every shop has a dedicated reception inbox.
+  email       String?
   description String?
   status      SalonStatus @default(PENDING)
 
@@ -494,6 +552,11 @@ model Booking {
   // "Any Staff". See DATABASE.md's Booking section for the full rationale.
   preferredStaffId         String?
   preferredStaff           SalonStaff?   @relation("BookingPreferredStaff", fields: [preferredStaffId], references: [id])
+  // AI Style Advisor phase: the style label the customer picked before booking (e.g. "Textured
+  // Crop"), carried through so staff can see it on the dashboard queue view. A free-text snapshot
+  // of a small fixed list in packages/shared, not a foreign key — no salon-configurable "style
+  // catalog" table exists or is needed for a short, app-wide list of style names.
+  selectedStyleName        String?
   cancelledAt              DateTime?
   cancelledById            String?
   cancelledBy              User?         @relation("BookingCancelledBy", fields: [cancelledById], references: [id])
@@ -722,4 +785,90 @@ model PlanEntitlement {
 
   @@id([planId, entitlementKey])
   @@map("plan_entitlements")
+}
+
+// ---------- Customer Premium plans & AI credits (Premium phase) ----------
+// Deliberately NOT the same concept as Plan/Entitlement/PlanEntitlement above, which is salon
+// (B2B) subscription billing — inert in V1, unrelated to this. This is a customer-facing (B2C)
+// annual plan that grants AI Style Advisor credits. Kept as fully separate models rather than
+// extended/renamed from the salon Plan table to avoid conflating two different billing contexts
+// (a salon's platform tier vs. a customer's AI-credit allowance) under one schema concept.
+
+enum CustomerSubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+// Every balance-affecting event on a CustomerSubscription's AI credits, for auditability (never
+// contains customer photos, image bytes, or API keys — see AiCreditService).
+enum AiCreditTransactionType {
+  ALLOCATION
+  RESERVATION
+  CONSUMPTION
+  RELEASE
+  MANUAL_ADJUSTMENT
+}
+
+// `id` is a stable, human-readable string ("basic" | "pro" | "max"), not a uuid — same convention
+// as packages/shared's HAIRSTYLE_CATALOG: a small, fixed, code-referenced catalog, not open-ended
+// data. Single authoritative source for price/credits — PremiumPlansService reads this table
+// rather than any value being hard-coded elsewhere.
+model CustomerPremiumPlan {
+  id               String   @id
+  name             String
+  priceInr         Decimal  @db.Decimal(10, 2)
+  aiCreditsPerYear Int
+  isPopular        Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  subscriptions CustomerSubscription[]
+
+  @@map("customer_premium_plans")
+}
+
+// One row per purchased/activated annual period. Credits are scoped to the period they were
+// granted in (aiCreditsAllocated is a snapshot taken at activation, immune to later plan-price/
+// credit edits) — deliberately no rollover/carry-forward logic into a future period, per the
+// explicit "keep this simple and auditable" instruction for this phase.
+model CustomerSubscription {
+  id          String                     @id @default(uuid())
+  userId      String
+  user        User                       @relation(fields: [userId], references: [id])
+  planId      String
+  plan        CustomerPremiumPlan        @relation(fields: [planId], references: [id])
+  status      CustomerSubscriptionStatus @default(ACTIVE)
+  periodStart DateTime                   @default(now())
+  periodEnd   DateTime
+
+  aiCreditsAllocated Int
+  // Reserved = credits held for an in-flight generation request (not yet succeeded or failed).
+  // Consumed = permanently spent on a successful generation. Available = allocated - reserved -
+  // consumed; see AiCreditService.hasAvailableCredit. Both are maintained by AiCreditService only,
+  // inside a per-subscription-locked transaction (see bookings.service.ts's advisory-lock
+  // pattern) — never written to directly by any controller.
+  aiCreditsReserved Int @default(0)
+  aiCreditsConsumed Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  creditTransactions AiCreditTransaction[]
+
+  @@index([userId, status])
+  @@map("customer_subscriptions")
+}
+
+model AiCreditTransaction {
+  id             String                  @id @default(uuid())
+  subscriptionId String
+  subscription   CustomerSubscription    @relation(fields: [subscriptionId], references: [id])
+  type           AiCreditTransactionType
+  amount         Int
+  note           String?
+  createdAt      DateTime                @default(now())
+
+  @@index([subscriptionId, createdAt])
+  @@map("ai_credit_transactions")
 }

@@ -1,0 +1,58 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 2px;
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Same transactional red already used across booking/search/queue/registration — the primary
+   variant here intentionally matches, not a new accent. */
+.primary {
+  background: var(--bc-accent);
+  color: var(--bc-accent-contrast);
+}
+
+/* Matches the landing page's own primary CTA color (near-black), used here for the secondary
+   weight of action within the customer app shell. */
+.secondary {
+  background: var(--bc-ink);
+  color: #ffffff;
+}
+
+.outline {
+  background: #ffffff;
+  color: var(--bc-ink);
+  border-color: var(--bc-border);
+}
+
+.fullWidth {
+  width: 100%;
+}

@@ -4,8 +4,12 @@ import type { OperatingHoursDto, ServiceDto } from '@barbercue/shared';
 // loaded them on the salon profile screen — same data-flow shape as apps/web's BookingFlow.
 export type RootStackParamList = {
   Account: undefined;
-  SalonSearch: undefined;
-  SalonProfile: { citySlug: string; salonSlug: string };
+  StyleAdvisor: undefined;
+  // selectedStyleName is present only when arriving via the AI Style Advisor's "Try This Look" —
+  // threaded through every step below the same way preferredStaffId already is, and included in
+  // ConfirmBookingScreen's POST /bookings body when set.
+  SalonSearch: { selectedStyleName?: string } | undefined;
+  SalonProfile: { citySlug: string; salonSlug: string; selectedStyleName?: string };
   StaffSelect: {
     salonId: string;
     salonName: string;
@@ -14,6 +18,7 @@ export type RootStackParamList = {
     servicePrice: number;
     serviceDurationMinutes: number;
     operatingHours: OperatingHoursDto[];
+    selectedStyleName?: string;
   };
   DateSelect: {
     salonId: string;
@@ -25,6 +30,7 @@ export type RootStackParamList = {
     operatingHours: OperatingHoursDto[];
     preferredStaffId: string | null;
     preferredStaffName: string | null;
+    selectedStyleName?: string;
   };
   SlotSelect: {
     salonId: string;
@@ -35,6 +41,7 @@ export type RootStackParamList = {
     preferredStaffId: string | null;
     preferredStaffName: string | null;
     date: string;
+    selectedStyleName?: string;
   };
   ConfirmBooking: {
     salonId: string;
@@ -46,6 +53,7 @@ export type RootStackParamList = {
     preferredStaffName: string | null;
     slotStart: string;
     slotEnd: string;
+    selectedStyleName?: string;
   };
   MyBookings: undefined;
   BookingDetail: { bookingId: string };

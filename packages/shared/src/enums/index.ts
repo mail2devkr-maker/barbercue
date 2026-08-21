@@ -28,6 +28,17 @@ export const OtpPurpose = {
 } as const;
 export type OtpPurpose = (typeof OtpPurpose)[keyof typeof OtpPurpose];
 
+// Customer auth is provider-based (AuthIdentity, one row per linked account). GOOGLE is live;
+// WHATSAPP is reserved for a future OtpSender-style implementation — genuinely free production
+// WhatsApp OTP requires Meta Business verification + a paid-per-message account, neither of which
+// exists yet (see ARCHITECTURE.md). Phone OTP itself stays on User.phone directly, unchanged —
+// only *additional* linked identities go through AuthIdentity.
+export const AuthProvider = {
+  GOOGLE: 'GOOGLE',
+  WHATSAPP: 'WHATSAPP',
+} as const;
+export type AuthProvider = (typeof AuthProvider)[keyof typeof AuthProvider];
+
 export const SalonStatus = {
   PENDING: 'PENDING',
   ACTIVE: 'ACTIVE',
@@ -157,6 +168,30 @@ export const LedgerStatus = {
 } as const;
 export type LedgerStatus = (typeof LedgerStatus)[keyof typeof LedgerStatus];
 
+// Customer-facing Premium subscription (Basic/Pro/Max, AI credits) — distinct from the existing
+// SubscriptionStatus enum above, which is salon (B2B) billing, inert in V1. Deliberately no
+// TRIALING/PAST_DUE/PILOT here: a customer's Premium subscription is only ever ACTIVE, EXPIRED
+// (lazily computed — periodEnd has passed), or CANCELLED (superseded by a newer activation).
+export const CustomerSubscriptionStatus = {
+  ACTIVE: 'ACTIVE',
+  EXPIRED: 'EXPIRED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type CustomerSubscriptionStatus =
+  (typeof CustomerSubscriptionStatus)[keyof typeof CustomerSubscriptionStatus];
+
+// Every balance-affecting event on a CustomerSubscription's AI credits — see AiCreditTransaction
+// in schema.prisma and AiCreditService, the only writer of this table.
+export const AiCreditTransactionType = {
+  ALLOCATION: 'ALLOCATION',
+  RESERVATION: 'RESERVATION',
+  CONSUMPTION: 'CONSUMPTION',
+  RELEASE: 'RELEASE',
+  MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT',
+} as const;
+export type AiCreditTransactionType =
+  (typeof AiCreditTransactionType)[keyof typeof AiCreditTransactionType];
+
 export const SubscriptionStatus = {
   PILOT: 'PILOT',
   TRIALING: 'TRIALING',
@@ -229,6 +264,13 @@ export const AuthErrorCode = {
   OTP_EXPIRED: 'OTP_EXPIRED',
   OTP_MAX_ATTEMPTS: 'OTP_MAX_ATTEMPTS',
   OTP_RATE_LIMITED: 'OTP_RATE_LIMITED',
+  // The generated/hashed/stored OTP is fine — only SMS delivery via the configured OtpSender
+  // (e.g. TwoFactorOtpSender in production) failed. Distinct from OTP_INVALID/OTP_EXPIRED, which
+  // are about what the user typed, not whether the code ever reached them.
+  OTP_DELIVERY_FAILED: 'OTP_DELIVERY_FAILED',
+  // Google ID token failed verification (expired, malformed, wrong audience, or the provider's
+  // own email_verified claim was false) — never distinguishes *which* check failed to the client.
+  GOOGLE_TOKEN_INVALID: 'GOOGLE_TOKEN_INVALID',
   TOTP_REQUIRED: 'TOTP_REQUIRED',
   TOTP_INVALID: 'TOTP_INVALID',
   TOTP_SETUP_REQUIRED: 'TOTP_SETUP_REQUIRED',
@@ -240,3 +282,35 @@ export const AuthErrorCode = {
   FORBIDDEN_ROLE: 'FORBIDDEN_ROLE',
 } as const;
 export type AuthErrorCode = (typeof AuthErrorCode)[keyof typeof AuthErrorCode];
+
+// Stable machine-readable error codes for the AI Style Advisor (major-upgrade phase) — same
+// convention as AuthErrorCode/BookingErrorCode.
+export const StyleAdvisorErrorCode = {
+  // No AiImageProvider is configured (GEMINI_API_KEY unset) — see UnconfiguredAiImageProvider.
+  // Never a fake result.
+  AI_PROVIDER_NOT_CONFIGURED: 'AI_PROVIDER_NOT_CONFIGURED',
+  IMAGE_REQUIRED: 'IMAGE_REQUIRED',
+  INVALID_IMAGE: 'INVALID_IMAGE',
+  // A real provider is configured but the generation call itself failed (provider auth error,
+  // malformed/empty response, network/timeout) — distinct from "not configured at all".
+  AI_GENERATION_FAILED: 'AI_GENERATION_FAILED',
+  // The provider's own rate limit was hit — distinct from a generic failure since it's expected
+  // to be transient (try again shortly), not a persistent error.
+  AI_RATE_LIMITED: 'AI_RATE_LIMITED',
+  // Premium phase: caller has no active CustomerSubscription at all. Distinct from
+  // AI_CREDITS_EXHAUSTED (has Premium, but zero credits left) so the client can show the right
+  // upsell ("go Premium" vs. "you're out of credits this period").
+  PREMIUM_REQUIRED: 'PREMIUM_REQUIRED',
+  AI_CREDITS_EXHAUSTED: 'AI_CREDITS_EXHAUSTED',
+} as const;
+export type StyleAdvisorErrorCode = (typeof StyleAdvisorErrorCode)[keyof typeof StyleAdvisorErrorCode];
+
+// Stable machine-readable error codes for the Premium plans/subscription module — same convention
+// as StyleAdvisorErrorCode.
+export const PremiumErrorCode = {
+  PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
+  // The dev-only test-activation endpoint was called outside a non-production environment — see
+  // PremiumController's dev-activate route, which is unreachable in production by design.
+  DEV_ACTIVATION_DISABLED: 'DEV_ACTIVATION_DISABLED',
+} as const;
+export type PremiumErrorCode = (typeof PremiumErrorCode)[keyof typeof PremiumErrorCode];

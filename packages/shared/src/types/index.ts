@@ -7,6 +7,7 @@ import type {
   QueueEntrySource,
   QueueEntryStatus,
   Role,
+  SalonStatus,
   StaffMemberStatus,
 } from '../enums';
 
@@ -45,6 +46,9 @@ export interface AuthSession {
 
 export interface SalonSummary {
   id: string;
+  // Permanent, human-shareable identifier ("BC-SHOP-000001") — distinct from `id` (the internal
+  // UUID, an implementation detail never meant for display). See Salon.publicId in schema.prisma.
+  publicId: string;
   name: string;
   slug: string;
   citySlug: string;
@@ -124,6 +128,18 @@ export interface SalonProfileDto extends SalonListItemDto {
   reviews: ReviewSummaryDto[]; // most recent, capped server-side (see API.md)
 }
 
+// POST /salons response — deliberately minimal (not a full SalonProfileDto): a brand-new shop has
+// no services/photos/reviews/operating-hours yet, so returning those empty arrays would just be
+// noise. `status` is always "PENDING" at creation (Salon.status's existing default), surfaced so
+// the owner dashboard can show a moderation-pending state without a second round-trip.
+export interface RegisterSalonResultDto {
+  id: string;
+  publicId: string;
+  slug: string;
+  name: string;
+  status: SalonStatus;
+}
+
 export interface PaginatedResult<T> {
   items: T[];
   nextCursor: string | null;
@@ -143,6 +159,25 @@ export interface BookingDto {
   preferredStaffId: string | null;
   prepaymentRequiredAmount: number | null;
   cancellationChargeAmount: number | null;
+  // AI Style Advisor hand-off (major-upgrade phase) — the style name the customer picked via
+  // "Try This Look" before booking, null for every ordinary booking. Free text at this layer
+  // (not a foreign key) since HAIRSTYLE_CATALOG is a shared constant, not a DB table.
+  selectedStyleName: string | null;
+}
+
+// ---------- AI Style Advisor (Phase E) ----------
+
+// POST style-advisor/generate response item. `matchPercent` backs the UI's "AI Style Match NN%"
+// wording — deliberately never "best match" or a guarantee (see the landing page's own copy).
+export interface HairstylePreviewDto {
+  styleId: string;
+  styleName: string;
+  previewUrl: string;
+  matchPercent: number;
+}
+
+export interface StyleAdvisorResultDto {
+  results: HairstylePreviewDto[];
 }
 
 // ---------- Booking flow (Phase 3B) ----------
@@ -262,6 +297,68 @@ export interface CustomerLedgerEntryDto {
   amount: number;
   reason: string;
   status: string;
+}
+
+// ---------- Premium plans & AI credits (Premium phase) ----------
+
+// GET premium/plans response item. price is a plain number (rupees, not paise) — matches every
+// other money field in this file (ServiceDto.price etc.), all sourced from Prisma Decimal columns
+// converted at the service layer.
+export interface CustomerPremiumPlanDto {
+  id: string;
+  name: string;
+  priceInr: number;
+  aiCreditsPerYear: number;
+  isPopular: boolean;
+}
+
+// GET premium/me response — the caller's current Premium status. All fields null/false when the
+// customer has no active subscription (never omitted, so clients don't need an extra existence
+// check).
+export interface PremiumEntitlementDto {
+  isPremium: boolean;
+  planId: string | null;
+  planName: string | null;
+  periodEnd: string | null; // ISO 8601
+}
+
+// GET premium/credits response — available is always allocated - reserved - consumed, computed
+// server-side; clients never derive or trust their own copy of this number.
+export interface AiCreditBalanceDto {
+  allocated: number;
+  reserved: number;
+  consumed: number;
+  available: number;
+}
+
+// ---------- Shop QR / public queue entry (Phase 9) ----------
+
+// GET public-queue/:token — service option shown on the public join page. Deliberately minimal:
+// id is required for the join call itself (server re-validates it against the token's salon
+// regardless), name/durationMinutes are display-only.
+export interface PublicQueueServiceOptionDto {
+  id: string;
+  name: string;
+  durationMinutes: number;
+}
+
+// GET public-queue/:token response. Never includes Salon.id, ownerUserId, or anything not needed
+// to render the public join page. queueAvailable distinguishes "token resolves but this shop
+// isn't currently accepting queue joins" (status !== ACTIVE) from an unknown/invalid token, which
+// the controller instead returns as a 404 — the frontend shows a different message for each.
+export interface PublicQueueInfoDto {
+  salonName: string;
+  queueAvailable: boolean;
+  services: PublicQueueServiceOptionDto[];
+  waitingCount: number;
+  estimatedWaitMinutes: number | null;
+}
+
+// GET dashboard/salons/:salonId/queue-qr response — authenticated, owner/staff-only. The frontend
+// renders the QR client-side from publicQueueUrl; nothing here is itself an image.
+export interface PublicQueueQrDto {
+  publicQueueToken: string;
+  publicQueueUrl: string;
 }
 
 export interface HealthCheckResponse {

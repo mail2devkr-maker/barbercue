@@ -8,8 +8,10 @@ import { TokenService } from './services/token.service';
 import { OtpService } from './services/otp.service';
 import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
+import { GoogleAuthService } from './services/google-auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { OTP_SENDER, ConsoleOtpSender } from './services/otp-sender';
+import { TwoFactorOtpSender } from './services/two-factor-otp-sender';
 import { EMAIL_SENDER, ConsoleEmailSender } from './services/email-sender';
 
 @Module({
@@ -29,10 +31,24 @@ import { EMAIL_SENDER, ConsoleEmailSender } from './services/email-sender';
     OtpService,
     TotpService,
     CryptoService,
+    GoogleAuthService,
     JwtStrategy,
-    // DI-token seams (ARCHITECTURE.md §4): swap these two providers for real SMS/email vendor
-    // adapters later without touching AuthService/OtpService/AuthController at all.
-    { provide: OTP_SENDER, useClass: ConsoleOtpSender },
+    // Both concrete senders are always registered so Nest's DI container can construct either
+    // one; the factory below is the single, obvious place that decides which one is actually
+    // wired to OTP_SENDER. Same process.env.NODE_ENV === 'production' check already used
+    // elsewhere in this module (auth.controller.ts's cookie `secure` flag), not a new
+    // configuration mechanism.
+    ConsoleOtpSender,
+    TwoFactorOtpSender,
+    {
+      provide: OTP_SENDER,
+      useFactory: (
+        consoleSender: ConsoleOtpSender,
+        twoFactorSender: TwoFactorOtpSender,
+      ) =>
+        process.env.NODE_ENV === 'production' ? twoFactorSender : consoleSender,
+      inject: [ConsoleOtpSender, TwoFactorOtpSender],
+    },
     { provide: EMAIL_SENDER, useClass: ConsoleEmailSender },
   ],
   exports: [TokenService],

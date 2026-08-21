@@ -1,6 +1,22 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* BarberCue shared design tokens (major customer-experience-polish phase) — same values already
+     used in components/landing/landing.module.css and components/auth/customer-auth.module.css,
+     centralized here so new customer-facing components can reference one source instead of each
+     redefining the same hex values. Existing components that already hardcode these values were
+     left untouched (out of scope: "existing behavior must remain unchanged"). */
+  --bc-ink: #1c1a17;
+  --bc-muted: #6b6357;
+  --bc-border: #e7e0d3;
+  --bc-surface: #fffdf9;
+  --bc-success: #2e7d32;
+  --bc-warn: #b36b00;
+  /* Transactional accent — already the de facto primary-action color across booking, search,
+     queue, and shop registration (12+ files); reused here rather than introducing a second one. */
+  --bc-accent: #b0413e;
+  --bc-accent-contrast: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ChargeType, PrepaymentRequirement, StaffMemberStatus } from '../enums';
+import { PREMIUM_PLAN_IDS } from '../constants';
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
 // The backend is always the authority — these schemas exist so both sides reject bad input the
@@ -11,6 +12,9 @@ export const createBookingSchema = z.object({
   slotStart: z.string().datetime(),
   // Soft preference only ("Any Staff" = omitted) — see DATABASE.md's Booking section.
   preferredStaffId: z.string().uuid().optional(),
+  // AI Style Advisor hand-off (major-upgrade phase) — set when booking arrives via "Try This
+  // Look" -> "Book This Style"; omitted for every ordinary booking.
+  selectedStyleName: z.string().min(1).max(100).optional(),
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
@@ -49,6 +53,21 @@ export const staffStatusSchema = z.object({
 });
 export type StaffStatusInput = z.infer<typeof staffStatusSchema>;
 
+// POST /salons — shop registration (major-upgrade phase). Reuses an existing City (by slug)
+// rather than accepting free-text state/country here, which would let a typo silently create a
+// duplicate/junk City row — city curation stays a separate, existing concern (CitiesService).
+export const registerSalonSchema = z.object({
+  name: z.string().min(1).max(200),
+  phone: z.string().optional(),
+  email: z.string().email().optional(),
+  addressLine: z.string().min(1).max(300),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  citySlug: z.string().min(1),
+  localitySlug: z.string().optional(),
+});
+export type RegisterSalonInput = z.infer<typeof registerSalonSchema>;
+
 // GET /salons query params — validated the same way on backend (ZodValidationPipe on @Query())
 // and client (search form) so both agree on shape before a request is ever made.
 export const salonSearchQuerySchema = z.object({
@@ -73,6 +92,14 @@ export const otpVerifySchema = z.object({
   code: z.string().length(6),
 });
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
+
+// POST /auth/google — the client only ever sends the ID token it got directly from Google's own
+// sign-in SDK (Google Identity Services on web, expo-auth-session on mobile); the backend is what
+// verifies it against Google, never the other way around.
+export const googleLoginSchema = z.object({
+  idToken: z.string().min(1),
+});
+export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
 
 // Shared password rule: staff/owner/admin accounts only (customers never have a password).
 const passwordSchema = z
@@ -141,3 +168,11 @@ export const cancellationPolicySchema = z.object({
   queueCallResponseGraceMinutes: z.number().int().min(0),
 });
 export type CancellationPolicyInput = z.infer<typeof cancellationPolicySchema>;
+
+// POST premium/dev/activate — dev/test-only Premium activation for the calling user. The backend
+// route itself is unreachable outside a non-production environment (see PremiumController); this
+// schema only validates shape, not who's allowed to call it.
+export const devActivatePremiumSchema = z.object({
+  planId: z.enum(PREMIUM_PLAN_IDS),
+});
+export type DevActivatePremiumInput = z.infer<typeof devActivatePremiumSchema>;

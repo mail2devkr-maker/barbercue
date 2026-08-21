@@ -1,0 +1,203 @@
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.welcome {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  color: var(--bc-ink);
+  margin: 0 0 4px;
+}
+
+.welcomeSub {
+  color: var(--bc-muted);
+  font-size: 0.95rem;
+  margin: 0 0 32px;
+}
+
+.section {
+  margin-bottom: 40px;
+}
+
+.sectionTitle {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bc-warn);
+  margin: 0 0 14px;
+}
+
+/* ---------- Next chair / empty state ---------- */
+
+.nextChairCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nextChairEyebrow {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--bc-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.nextChairWhen {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--bc-ink);
+  margin: 4px 0 10px;
+}
+
+.nextChairSalon {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--bc-ink);
+}
+
+.nextChairMeta {
+  color: var(--bc-muted);
+  font-size: 0.88rem;
+  margin: 2px 0;
+}
+
+.nextChairStatus {
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin: 10px 0 4px;
+}
+
+.nextChairActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.emptyIcon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 18px;
+  color: var(--bc-border);
+}
+
+.emptyTitle {
+  font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+  font-weight: 700;
+  color: var(--bc-ink);
+  margin: 0 0 8px;
+}
+
+.emptyText {
+  color: var(--bc-muted);
+  font-size: 0.92rem;
+  max-width: 380px;
+  margin: 0 auto 24px;
+  line-height: 1.5;
+}
+
+.emptyActions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ---------- Quick actions ---------- */
+
+.quickActions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.quickActionCard {
+  display: block;
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid var(--bc-border);
+  background: #ffffff;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.quickActionCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--bc-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quickActionCard:hover {
+    transform: none;
+  }
+}
+
+.quickActionCard:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 2px;
+}
+
+.quickActionTitle {
+  font-weight: 700;
+  color: var(--bc-ink);
+  font-size: 1rem;
+  margin: 0 0 4px;
+}
+
+.quickActionText {
+  color: var(--bc-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+/* ---------- Bookings list ---------- */
+
+.bookingRow {
+  border: 1px solid var(--bc-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+}
+
+.bookingRowHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.bookingRowSalon {
+  color: var(--bc-muted);
+  font-size: 0.88rem;
+  margin: 3px 0;
+}
+
+.bookingRowMeta {
+  color: var(--bc-muted);
+  font-size: 0.82rem;
+  margin: 3px 0;
+}
+
+.statusBadge {
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.emptyListNote {
+  color: var(--bc-muted);
+  font-size: 0.88rem;
+}
+
+.errorText {
+  color: #b0413e;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}

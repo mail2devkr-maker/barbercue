@@ -7,6 +7,7 @@ import { TokenService } from './services/token.service';
 import { OtpService } from './services/otp.service';
 import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
+import { GoogleAuthService } from './services/google-auth.service';
 import { EMAIL_SENDER } from './services/email-sender';
 import { AppException } from '../common/exceptions/app.exception';
 
@@ -17,6 +18,13 @@ describe('AuthService', () => {
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+    };
+    authIdentity: {
+      findUnique: jest.Mock;
+      create: jest.Mock;
+    };
+    userRole: {
+      create: jest.Mock;
     };
     passwordResetToken: {
       create: jest.Mock;
@@ -35,6 +43,7 @@ describe('AuthService', () => {
   let otpService: { requestOtp: jest.Mock; verifyOtp: jest.Mock };
   let totpService: { verifyToken: jest.Mock };
   let cryptoService: { decrypt: jest.Mock };
+  let googleAuthService: { verifyIdToken: jest.Mock };
   let emailSender: { sendPasswordReset: jest.Mock };
 
   const fakeTokens = {
@@ -46,12 +55,21 @@ describe('AuthService', () => {
   beforeEach(async () => {
     prisma = {
       user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      authIdentity: { findUnique: jest.fn(), create: jest.fn() },
+      userRole: { create: jest.fn() },
       passwordResetToken: {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
       },
-      $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
+      // Supports both call shapes AuthService actually uses: the array form
+      // (resetPassword's batch of writes) and the interactive-callback form (googleLogin's
+      // find-or-create) — same dual-mode mock pattern as the rest of this backend's test suite.
+      $transaction: jest.fn((arg: unknown) =>
+        typeof arg === 'function'
+          ? (arg as (tx: unknown) => Promise<unknown>)(prisma)
+          : Promise.all(arg as unknown[]),
+      ),
     };
     passwordService = { hash: jest.fn(), compare: jest.fn() };
     tokenService = {
@@ -63,6 +81,7 @@ describe('AuthService', () => {
     otpService = { requestOtp: jest.fn(), verifyOtp: jest.fn() };
     totpService = { verifyToken: jest.fn() };
     cryptoService = { decrypt: jest.fn() };
+    googleAuthService = { verifyIdToken: jest.fn() };
     emailSender = { sendPasswordReset: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
@@ -74,6 +93,7 @@ describe('AuthService', () => {
         { provide: OtpService, useValue: otpService },
         { provide: TotpService, useValue: totpService },
         { provide: CryptoService, useValue: cryptoService },
+        { provide: GoogleAuthService, useValue: googleAuthService },
         { provide: EMAIL_SENDER, useValue: emailSender },
       ],
     }).compile();
@@ -141,6 +161,148 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({
         code: AuthErrorCode.ACCOUNT_SUSPENDED,
       });
+    });
+  });
+
+  describe('googleLogin', () => {
+    const verifiedIdentity = {
+      sub: 'google-sub-123',
+      email: 'alex@example.com',
+      name: 'Alex',
+    };
+
+    it('creates a new CUSTOMER user + AuthIdentity when neither the sub nor the email matches anything existing', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        id: 'u1',
+        phone: null,
+        email: 'alex@example.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+
+      const result = await service.googleLogin('id-token');
+
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            email: 'alex@example.com',
+            roles: { create: { role: Role.CUSTOMER } },
+            authIdentities: {
+              create: {
+                provider: 'GOOGLE',
+                providerSub: 'google-sub-123',
+                email: 'alex@example.com',
+              },
+            },
+          }),
+        }),
+      );
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(result.tokens).toBe(fakeTokens);
+      // No redundant extra role grant — the just-created user already has CUSTOMER.
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+    });
+
+    it('logs in as the existing linked user on a repeat Google login — never creates a duplicate', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'ai1',
+        user: {
+          id: 'u1',
+          phone: null,
+          email: 'alex@example.com',
+          status: UserStatus.ACTIVE,
+          roles: [{ role: Role.CUSTOMER }],
+        },
+      });
+
+      const result = await service.googleLogin('id-token');
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.authIdentity.create).not.toHaveBeenCalled();
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+    });
+
+    it('links a new Google identity to an existing user matched by verified email, without creating a duplicate customer', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'existing-customer',
+        phone: '+919876543210',
+        email: 'alex@example.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+
+      const result = await service.googleLogin('id-token');
+
+      expect(prisma.authIdentity.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'existing-customer',
+          provider: 'GOOGLE',
+          providerSub: 'google-sub-123',
+          email: 'alex@example.com',
+        },
+      });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+    });
+
+    it('links to an existing staff account by verified email and grants CUSTOMER too, without touching the staff role', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'existing-staff',
+        phone: null,
+        email: 'alex@example.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.SALON_STAFF }],
+      });
+
+      const result = await service.googleLogin('id-token');
+
+      expect(prisma.authIdentity.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ userId: 'existing-staff' }) }),
+      );
+      expect(prisma.userRole.create).toHaveBeenCalledWith({
+        data: { userId: 'existing-staff', role: Role.CUSTOMER },
+      });
+      expect(result.user.roles).toEqual(
+        expect.arrayContaining([Role.SALON_STAFF, Role.CUSTOMER]),
+      );
+    });
+
+    it('propagates an invalid Google token without touching the database or issuing tokens', async () => {
+      googleAuthService.verifyIdToken.mockRejectedValue(
+        new AppException(AuthErrorCode.GOOGLE_TOKEN_INVALID, 'bad token', 401),
+      );
+      await expect(service.googleLogin('bad-token')).rejects.toMatchObject({
+        code: AuthErrorCode.GOOGLE_TOKEN_INVALID,
+      });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('rejects a suspended account matched via Google, even with a fully valid token', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'ai1',
+        user: {
+          id: 'u1',
+          email: 'alex@example.com',
+          status: UserStatus.SUSPENDED,
+          roles: [{ role: Role.CUSTOMER }],
+        },
+      });
+      await expect(service.googleLogin('id-token')).rejects.toMatchObject({
+        code: AuthErrorCode.ACCOUNT_SUSPENDED,
+      });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
     });
   });
 

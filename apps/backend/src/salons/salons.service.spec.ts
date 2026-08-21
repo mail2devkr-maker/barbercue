@@ -1,7 +1,16 @@
 import { Test } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import { SalonsService } from './salons.service';
 import { CitiesService } from './cities.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SalonAccessService } from '../common/salon-access/salon-access.service';
+
+function uniqueConstraintError() {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+    code: 'P2002',
+    clientVersion: '5.22.0',
+  });
+}
 
 function makeSalon(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -32,17 +41,25 @@ describe('SalonsService', () => {
     salon: {
       findMany: jest.Mock<Promise<unknown[]>, [SalonFindManyArgs]>;
       findFirst: jest.Mock;
+      findUnique: jest.Mock;
+      create: jest.Mock;
     };
     review: { aggregate: jest.Mock };
     service: { aggregate: jest.Mock };
+    locality: { findUnique: jest.Mock };
+    userRole: { upsert: jest.Mock };
+    $transaction: jest.Mock;
   };
   let citiesService: { findCityBySlugOrThrow: jest.Mock };
+  let salonAccess: { assertAccess: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
       salon: {
         findMany: jest.fn<Promise<unknown[]>, [SalonFindManyArgs]>(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
       },
       review: {
         aggregate: jest
@@ -54,14 +71,19 @@ describe('SalonsService', () => {
           .fn()
           .mockResolvedValue({ _min: { price: null }, _max: { price: null } }),
       },
+      locality: { findUnique: jest.fn() },
+      userRole: { upsert: jest.fn() },
+      $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
     };
     citiesService = { findCityBySlugOrThrow: jest.fn() };
+    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         SalonsService,
         { provide: PrismaService, useValue: prisma },
         { provide: CitiesService, useValue: citiesService },
+        { provide: SalonAccessService, useValue: salonAccess },
       ],
     }).compile();
     service = moduleRef.get(SalonsService);
@@ -232,6 +254,148 @@ describe('SalonsService', () => {
       );
       const profile = await service.getProfile('bengaluru', 'barbercue-demo');
       expect(profile.services[0].category).toBe('');
+    });
+  });
+
+  describe('registerSalon', () => {
+    const input = {
+      name: 'Fresh Cuts & Co.',
+      addressLine: '12 MG Road',
+      lat: 12.97,
+      lng: 77.59,
+      citySlug: 'bengaluru',
+    };
+
+    beforeEach(() => {
+      citiesService.findCityBySlugOrThrow.mockResolvedValue({
+        id: 'c1',
+        slug: 'bengaluru',
+      });
+    });
+
+    it('creates the salon with a slugified name and grants the caller SALON_OWNER for it', async () => {
+      prisma.salon.create.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+
+      const result = await service.registerSalon('owner-1', input);
+
+      expect(prisma.salon.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          ownerUserId: 'owner-1',
+          slug: 'fresh-cuts-co',
+          cityId: 'c1',
+          localityId: null,
+          status: 'PENDING',
+        }),
+      });
+      expect(prisma.userRole.upsert).toHaveBeenCalledWith({
+        where: {
+          userId_role_salonId: {
+            userId: 'owner-1',
+            role: 'SALON_OWNER',
+            salonId: 's1',
+          },
+        },
+        update: {},
+        create: { userId: 'owner-1', role: 'SALON_OWNER', salonId: 's1' },
+      });
+      expect(result).toEqual({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+    });
+
+    it('throws LOCALITY_NOT_FOUND when localitySlug is given but does not exist in the city', async () => {
+      prisma.locality.findUnique.mockResolvedValue(null);
+      await expect(
+        service.registerSalon('owner-1', { ...input, localitySlug: 'no-such-place' }),
+      ).rejects.toMatchObject({ code: 'LOCALITY_NOT_FOUND' });
+      expect(prisma.salon.create).not.toHaveBeenCalled();
+    });
+
+    it('retries with a suffixed slug on a slug collision and succeeds', async () => {
+      prisma.salon.create
+        .mockRejectedValueOnce(uniqueConstraintError())
+        .mockResolvedValueOnce({
+          id: 's2',
+          publicId: 'BC-SHOP-000002',
+          slug: 'fresh-cuts-co-2',
+          name: 'Fresh Cuts & Co.',
+          status: 'PENDING',
+        });
+
+      const result = await service.registerSalon('owner-1', input);
+
+      expect(prisma.salon.create).toHaveBeenCalledTimes(2);
+      expect(prisma.salon.create).toHaveBeenNthCalledWith(2, {
+        data: expect.objectContaining({ slug: 'fresh-cuts-co-2' }),
+      });
+      expect(result.slug).toBe('fresh-cuts-co-2');
+    });
+
+    it('gives up after MAX_SLUG_ATTEMPTS collisions with a clear error', async () => {
+      prisma.salon.create.mockRejectedValue(uniqueConstraintError());
+      await expect(service.registerSalon('owner-1', input)).rejects.toThrow();
+      expect(prisma.salon.create).toHaveBeenCalledTimes(5);
+    });
+
+    it('propagates a non-collision error immediately without retrying', async () => {
+      const dbError = new Error('connection lost');
+      prisma.salon.create.mockRejectedValueOnce(dbError);
+      await expect(service.registerSalon('owner-1', input)).rejects.toBe(dbError);
+      expect(prisma.salon.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('listOwned', () => {
+    it('scopes to salons owned by the given user', async () => {
+      prisma.salon.findMany.mockResolvedValue([
+        { id: 's1', publicId: 'BC-SHOP-000001', slug: 'a', name: 'A', status: 'PENDING' },
+      ]);
+      const result = await service.listOwned('owner-1');
+      expect(prisma.salon.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { ownerUserId: 'owner-1' } }),
+      );
+      expect(result).toEqual([
+        { id: 's1', publicId: 'BC-SHOP-000001', slug: 'a', name: 'A', status: 'PENDING' },
+      ]);
+    });
+  });
+
+  describe('getOwnedSalon', () => {
+    it('checks salon access before returning the salon', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'a',
+        name: 'A',
+        status: 'PENDING',
+      });
+      const result = await service.getOwnedSalon('user-1', 's1');
+      expect(salonAccess.assertAccess).toHaveBeenCalledWith('user-1', 's1');
+      expect(result.publicId).toBe('BC-SHOP-000001');
+    });
+
+    it('throws SALON_NOT_FOUND when access is granted but the salon no longer exists', async () => {
+      prisma.salon.findUnique.mockResolvedValue(null);
+      await expect(service.getOwnedSalon('user-1', 's1')).rejects.toMatchObject({
+        code: 'SALON_NOT_FOUND',
+      });
+    });
+
+    it('propagates the access-denied error without reaching the DB lookup', async () => {
+      const denied = new Error('denied');
+      salonAccess.assertAccess.mockRejectedValueOnce(denied);
+      await expect(service.getOwnedSalon('user-1', 's1')).rejects.toBe(denied);
+      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
     });
   });
 });

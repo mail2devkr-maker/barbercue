@@ -10,7 +10,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SalonProfile'>;
 
 // Public discovery endpoint — same GET /salons/:citySlug/:salonSlug apps/web uses.
 export default function SalonProfileScreen({ route, navigation }: Props) {
-  const { citySlug, salonSlug } = route.params;
+  const { citySlug, salonSlug, selectedStyleName } = route.params;
   const [salon, setSalon] = useState<SalonProfileDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +82,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
                 servicePrice: item.price,
                 serviceDurationMinutes: item.durationMinutes,
                 operatingHours: salon.operatingHours,
+                selectedStyleName,
               })
             }
           >

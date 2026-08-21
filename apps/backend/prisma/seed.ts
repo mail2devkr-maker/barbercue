@@ -450,6 +450,33 @@ async function seedVisitsAndReviews(ctx: DemoContext): Promise<void> {
 }
 
 /**
+ * The single authoritative source for Premium plan price/credit values (PremiumPlansService
+ * reads this table, never a hard-coded constant). Upsert-by-id so re-running the seed script
+ * updates prices/credits in place rather than erroring or duplicating rows if these values
+ * change later.
+ */
+async function seedPremiumPlans(): Promise<void> {
+  const plans = [
+    { id: 'basic', name: 'Basic', priceInr: '99.00', aiCreditsPerYear: 12, isPopular: false },
+    { id: 'pro', name: 'Pro', priceInr: '299.00', aiCreditsPerYear: 48, isPopular: true },
+    { id: 'max', name: 'Max', priceInr: '499.00', aiCreditsPerYear: 84, isPopular: false },
+  ];
+  for (const plan of plans) {
+    await prisma.customerPremiumPlan.upsert({
+      where: { id: plan.id },
+      update: {
+        name: plan.name,
+        priceInr: plan.priceInr,
+        aiCreditsPerYear: plan.aiCreditsPerYear,
+        isPopular: plan.isPopular,
+      },
+      create: plan,
+    });
+  }
+  log('\n[premium plans] basic/pro/max upserted.');
+}
+
+/**
  * DATABASE.md §CancellationPolicy: "V1 platform default (seeded row, salonId null)" with these
  * exact values. `salonId` is nullable-unique (Postgres allows multiple NULLs under a unique
  * constraint), so this can't be a Prisma `upsert` keyed on `salonId` — find-then-create instead,
@@ -524,6 +551,7 @@ async function verify(): Promise<void> {
 
 async function main() {
   const { email: adminEmail } = await seedAdmin();
+  await seedPremiumPlans();
   await seedPlatformDefaultCancellationPolicy();
   const ctx = await seedDemoSalon();
   if (ctx) {

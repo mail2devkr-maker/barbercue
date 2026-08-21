@@ -176,6 +176,7 @@ export class BookingsService {
           idempotencyKey,
           preferredStaffId: input.preferredStaffId ?? null,
           prepaymentRequiredAmount,
+          selectedStyleName: input.selectedStyleName ?? null,
         },
       });
       return created.id;
@@ -343,6 +344,7 @@ export class BookingsService {
         booking.cancellationChargeAmount !== null
           ? Number(booking.cancellationChargeAmount)
           : null,
+      selectedStyleName: booking.selectedStyleName,
       salonName: booking.salon.name,
       salonSlug: booking.salon.slug,
       citySlug: booking.salon.city.slug,

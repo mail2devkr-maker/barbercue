@@ -1,0 +1,397 @@
+.page {
+  --ink: #1c1a17;
+  --muted: #6b6357;
+  --border: #e7e0d3;
+  --surface: #fffdf9;
+  --accent: #1c1a17;
+  --accent-contrast: #ffffff;
+  --success: #2e7d32;
+  --warn: #b36b00;
+  color: var(--ink);
+}
+
+.section {
+  padding: 64px 24px;
+}
+
+.sectionAlt {
+  padding: 64px 24px;
+  background: var(--surface);
+}
+
+.inner {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.eyebrow {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warn);
+  margin: 0 0 8px;
+}
+
+.sectionTitle {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  margin: 0 0 12px;
+}
+
+.sectionLead {
+  color: var(--muted);
+  max-width: 640px;
+  margin: 0 0 32px;
+  line-height: 1.55;
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  padding: 56px 24px 40px;
+  background: linear-gradient(180deg, var(--surface) 0%, #ffffff 100%);
+}
+
+.heroInner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 48px;
+  align-items: center;
+}
+
+@media (max-width: 860px) {
+  .heroInner {
+    grid-template-columns: 1fr;
+  }
+}
+
+.heroHeadline {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1.08;
+  margin: 0 0 18px;
+  letter-spacing: -0.01em;
+}
+
+.heroSub {
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  max-width: 540px;
+  margin: 0 0 28px;
+}
+
+.ctaRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ctaPrimary,
+.ctaSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.ctaPrimary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.ctaSecondary {
+  border: 1px solid var(--border);
+  color: var(--ink);
+}
+
+.ctaPrimary:hover,
+.ctaSecondary:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctaPrimary:hover,
+  .ctaSecondary:hover {
+    transform: none;
+  }
+}
+
+/* ---------- Hero slideshow ---------- */
+
+.slideshow {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  aspect-ratio: 4 / 3;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.5s ease;
+}
+
+.slideActive {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide {
+    transition: none;
+  }
+}
+
+.slideIcon {
+  width: 64px;
+  height: 64px;
+  color: var(--ink);
+}
+
+.slideTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.slideText {
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 320px;
+  margin: 0;
+}
+
+.slideControls {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.slideDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: var(--border);
+  padding: 0;
+  cursor: pointer;
+}
+
+.slideDotActive {
+  background: var(--ink);
+}
+
+.slideArrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #ffffffcc;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.slideArrowPrev {
+  left: 12px;
+}
+
+.slideArrowNext {
+  right: 12px;
+}
+
+/* ---------- Steps / grid ---------- */
+
+.stepGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+}
+
+.stepCard {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px;
+}
+
+.stepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.stepTitle {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.stepText {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* ---------- City chips ---------- */
+
+.chipRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: #fff;
+}
+
+/* ---------- Style catalog chips ---------- */
+
+.styleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.styleChip {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: #fff;
+}
+
+/* ---------- Benefits ---------- */
+
+.benefitGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.benefitItem {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.benefitMark {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.benefitText {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/* ---------- Featured shops ---------- */
+
+.shopGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+/* ---------- Final CTA ---------- */
+
+.finalCta {
+  text-align: center;
+  padding: 64px 24px;
+  background: var(--ink);
+  color: #fff;
+}
+
+.finalCtaInner {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.finalCta .ctaPrimary {
+  background: #fff;
+  color: var(--ink);
+}
+
+.finalCta .ctaSecondary {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.finalCta .ctaRow {
+  justify-content: center;
+}
+
+/* ---------- Footer ---------- */
+
+.footer {
+  padding: 40px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.footerInner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.footerLinks {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.footerNote {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 20px;
+}

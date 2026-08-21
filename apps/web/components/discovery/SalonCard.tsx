@@ -1,9 +1,15 @@
 import Link from "next/link";
 import type { SalonListItemDto } from "@barbercue/shared";
 
-export function SalonCard({ salon }: { salon: SalonListItemDto }) {
+// styleName is optional and only ever set by the search page when the visitor arrived via the AI
+// Style Advisor's "Try This Look" hand-off — forwarded into the link so the chosen style survives
+// through to the salon profile page's "Book an appointment" CTA, and from there into the booking
+// form. Every other caller (landing page's Featured Shops, plain search) omits it and behaves
+// exactly as before.
+export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; styleName?: string }) {
+  const href = `/${salon.citySlug}/${salon.slug}${styleName ? `?style=${encodeURIComponent(styleName)}` : ""}`;
   return (
-    <Link href={`/${salon.citySlug}/${salon.slug}`} style={{ textDecoration: "none", color: "inherit" }}>
+    <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>
       <div
         style={{
           background: "#FFFFFF",

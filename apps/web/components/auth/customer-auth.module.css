@@ -1,0 +1,64 @@
+/* Customer login page only — reuses the same color tokens already defined in
+   apps/web/components/landing/landing.module.css (no new palette introduced). */
+
+.page {
+  --ink: #1c1a17;
+  --muted: #6b6357;
+  --border: #e7e0d3;
+  --surface: #fffdf9;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  padding: 1.5rem;
+}
+
+.card {
+  width: 100%;
+  max-width: 460px;
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 2.5rem 2rem;
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 2rem 1.5rem;
+  }
+}
+
+.wordmark {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  margin: 0 0 20px;
+}
+
+.headline {
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.supporting {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 28px;
+}
+
+/* Contained accessibility improvement: this codebase has no explicit focus-visible styling
+   anywhere yet (relies on browser defaults) — scoped to just this card's inputs/buttons rather
+   than a global change. */
+.card input:focus-visible,
+.card button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 6px;
+}

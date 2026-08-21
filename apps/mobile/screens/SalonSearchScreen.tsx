@@ -9,7 +9,8 @@ import type { RootStackParamList } from '../navigation/types';
 type Props = NativeStackScreenProps<RootStackParamList, 'SalonSearch'>;
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
-export default function SalonSearchScreen({ navigation }: Props) {
+export default function SalonSearchScreen({ navigation, route }: Props) {
+  const selectedStyleName = route.params?.selectedStyleName;
   const [q, setQ] = useState('');
   const [results, setResults] = useState<SalonListItemDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,6 +38,11 @@ export default function SalonSearchScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Find a salon</Text>
+      {selectedStyleName && (
+        <Text style={styles.subtitle}>
+          Booking for the <Text style={{ fontWeight: '700' }}>{selectedStyleName}</Text> look — pick a shop to continue.
+        </Text>
+      )}
       <TextInput
         style={styles.input}
         placeholder="Search by name..."
@@ -62,7 +68,9 @@ export default function SalonSearchScreen({ navigation }: Props) {
         renderItem={({ item }) => (
           <Pressable
             style={styles.card}
-            onPress={() => navigation.navigate('SalonProfile', { citySlug: item.citySlug, salonSlug: item.slug })}
+            onPress={() =>
+              navigation.navigate('SalonProfile', { citySlug: item.citySlug, salonSlug: item.slug, selectedStyleName })
+            }
           >
             <Text style={styles.cardTitle}>{item.name}</Text>
             <Text style={styles.cardSubtitle}>{item.addressLine}</Text>
@@ -81,6 +89,7 @@ export default function SalonSearchScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1C1A17', padding: 24 },
   title: { fontSize: 24, fontWeight: '700', color: '#EDE6DA', marginBottom: 16 },
+  subtitle: { fontSize: 14, color: '#B8AFA0', marginTop: -8, marginBottom: 16 },
   input: {
     backgroundColor: '#2A2723',
     color: '#EDE6DA',

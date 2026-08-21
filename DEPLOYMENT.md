@@ -12,6 +12,8 @@ Three: `development` (local), `staging`, `production`. Each has its own Postgres
 DATABASE_URL
 JWT_ACCESS_SECRET / JWT_REFRESH_SECRET
 OTP_PROVIDER_API_KEY
+GOOGLE_WEB_CLIENT_ID / GOOGLE_ANDROID_CLIENT_ID   # OAuth client IDs, not secrets — see apps/backend/.env.example
+GEMINI_API_KEY                  # AI Style Advisor image generation; unset = feature disabled, not broken
 PAYMENT_PROVIDER_KEY_ID / PAYMENT_PROVIDER_KEY_SECRET / PAYMENT_WEBHOOK_SECRET
 OBJECT_STORAGE_BUCKET / OBJECT_STORAGE_KEY
 NEXT_PUBLIC_API_BASE_URL        # apps/web → apps/backend
@@ -44,6 +46,20 @@ GitHub Actions:
 ## Migrations
 
 Prisma Migrate, one migration history, applied in order across environments. No destructive migration (dropping a column/table) ships in the same release as the code that stops using it — always a two-step deprecate-then-remove, since staging and production can briefly run different backend versions during a rolling deploy.
+
+**Exact deploy-time commands** (run against the target environment's own `DATABASE_URL`, as a required step before starting the new backend version — never applied by hand against production per the CI/CD section above):
+
+```
+npx prisma migrate deploy   # applies any migration not yet recorded as applied on this database — never resets, never drops data
+npx prisma generate         # regenerates the Prisma Client the backend process actually imports
+```
+
+`prisma migrate deploy` is non-interactive and additive-only by design: it applies pending migrations in filename order and never prompts for or performs a reset, unlike `prisma migrate dev` (a local-development-only command that can offer to reset on drift — never run this against a database with real data). A first-time deploy to a genuinely empty database replays the full migration history from scratch; every migration currently in `prisma/migrations/` has been verified (Phase 8A) to replay cleanly in that scenario.
+
+**Current safety posture, explicit for anyone deploying this for the first time:**
+- Gemini (`GEMINI_API_KEY` + `AI_IMAGE_PROVIDER=gemini`) stays disabled unless BOTH are set intentionally in that environment's own secrets — an unset or partially-set pair always falls back to the safe `UnconfiguredAiImageProvider`, never a crash, never a fake result.
+- Real payment processing is not implemented in any environment yet (`PAYMENT_PROVIDER_KEY_ID`/`_SECRET` are placeholders only) — the Premium plans page honestly shows "online payment is coming soon" regardless of environment.
+- `POST premium/dev/activate` (grants Premium to the calling user with no payment, for local testing) is hard-blocked whenever `NODE_ENV=production` — set that variable in every real deployment target, not just as a default assumption.
 
 ## Realtime & WebSocket infra
 

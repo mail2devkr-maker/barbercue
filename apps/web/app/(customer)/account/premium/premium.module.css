@@ -1,0 +1,128 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.pageTitle {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  color: var(--bc-ink);
+  margin: 0 0 8px;
+}
+
+.pageSubtitle {
+  color: var(--bc-muted);
+  font-size: 0.95rem;
+  margin: 0 0 28px;
+  max-width: 560px;
+}
+
+.statusCard {
+  margin-bottom: 28px;
+  padding: 20px;
+}
+
+.statusPlan {
+  color: var(--bc-ink);
+  font-size: 1rem;
+  margin: 0 0 6px;
+}
+
+.statusMeta {
+  color: var(--bc-muted);
+  font-size: 0.88rem;
+  margin: 2px 0;
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.planCard {
+  position: relative;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.popularBadge {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  background: var(--bc-accent);
+  color: var(--bc-accent-contrast);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.planName {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--bc-ink);
+  margin: 0 0 8px;
+}
+
+.planPrice {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--bc-ink);
+  margin: 0 0 16px;
+}
+
+.planPeriod {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--bc-muted);
+}
+
+.planFeatures {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  flex: 1;
+}
+
+.planFeatures li {
+  color: var(--bc-muted);
+  font-size: 0.88rem;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--bc-border);
+}
+
+.planFeatures li:last-child {
+  border-bottom: none;
+}
+
+.planAction {
+  margin-top: auto;
+}
+
+.currentPlanNote {
+  display: inline-block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--bc-success);
+}
+
+.comingSoonNote {
+  display: inline-block;
+  font-size: 0.82rem;
+  color: var(--bc-muted);
+  font-style: italic;
+}
+
+.noteText {
+  color: var(--bc-muted);
+  font-size: 0.9rem;
+}
+
+.errorText {
+  color: var(--bc-accent, #b0413e);
+  font-size: 0.9rem;
+}

@@ -2,6 +2,7 @@
 
 import { Role } from "@barbercue/shared";
 import { RequireRole } from "../../../components/auth/RequireRole";
+import { CustomerShell } from "../../../components/layout/CustomerShell";
 
 // The entire booking flow — availability, staff list, and creation — is authenticated per
 // API.md's "Booking (customer, authenticated)" grouping, so the whole book/* subtree is gated
@@ -9,7 +10,7 @@ import { RequireRole } from "../../../components/auth/RequireRole";
 export default function BookLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireRole roles={[Role.CUSTOMER]} redirectTo="/login">
-      {children}
+      <CustomerShell>{children}</CustomerShell>
     </RequireRole>
   );
 }

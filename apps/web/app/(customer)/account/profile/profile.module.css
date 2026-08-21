@@ -1,0 +1,128 @@
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.pageTitle {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  color: var(--bc-ink);
+  margin: 0 0 32px;
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.sectionTitle {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bc-warn);
+  margin: 0 0 14px;
+}
+
+.fieldRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--bc-border);
+}
+
+.fieldRow:last-child {
+  border-bottom: none;
+}
+
+.fieldLabel {
+  color: var(--bc-muted);
+  font-size: 0.88rem;
+}
+
+.fieldValue {
+  color: var(--bc-ink);
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-align: right;
+}
+
+.sessionRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--bc-border);
+}
+
+.sessionRow:last-child {
+  border-bottom: none;
+}
+
+.sessionDevice {
+  font-size: 0.88rem;
+  color: var(--bc-ink);
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessionMeta {
+  font-size: 0.78rem;
+  color: var(--bc-muted);
+  margin-top: 2px;
+}
+
+.currentBadge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--bc-success);
+  border: 1px solid var(--bc-success);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 8px;
+}
+
+.revokeButton {
+  border: 1px solid var(--bc-border);
+  background: transparent;
+  color: var(--bc-muted);
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.revokeButton:hover:not(:disabled) {
+  color: var(--bc-accent, #b0413e);
+  border-color: var(--bc-accent, #b0413e);
+}
+
+.revokeButton:focus-visible,
+.actionButton:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 2px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.errorText {
+  color: #b0413e;
+  font-size: 0.88rem;
+  margin-top: 8px;
+}
+
+.noteText {
+  color: var(--bc-muted);
+  font-size: 0.85rem;
+}
