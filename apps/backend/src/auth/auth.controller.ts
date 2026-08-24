@@ -47,6 +47,10 @@ const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, matches 
 // AppModule's ThrottlerModule config) — brute-force/OTP-spam surface, not ordinary traffic.
 const AUTH_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
+// Production runs web and backend on separate registrable domains, making every browser->API
+// call cross-site; see setRefreshCookie for why that forces SameSite=None + Secure together.
+const CROSS_SITE_COOKIES = process.env.NODE_ENV === 'production';
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -54,12 +58,17 @@ export class AuthController {
   private setRefreshCookie(response: Response, refreshToken: string): void {
     response.cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
       httpOnly: true,
-      sameSite: 'lax',
-      // "site" (for SameSite purposes) ignores port, so this works across localhost:3000/3001 in
-      // dev. In production, if web and backend ever live on different registrable domains,
-      // this needs `sameSite: 'none', secure: true` instead — a deployment-time config, not an
-      // architecture change.
-      secure: process.env.NODE_ENV === 'production',
+      // "site" (for SameSite purposes) ignores port, so `lax` works across localhost:3000/3001 in
+      // dev — both are the same site (`localhost`). In production web and backend are separate
+      // registrable domains: Railway gives each service its own `*.up.railway.app` host, and
+      // `up.railway.app` is itself on the Public Suffix List, so the two hosts are cross-site.
+      // A `lax` cookie is never sent on a cross-site XHR, which silently breaks /auth/refresh
+      // (the session dies on the next reload). `none` is therefore required in production, and
+      // is only legal alongside `secure` — hence both flags derive from the same condition
+      // rather than being set independently. This is the deployment-time config the previous
+      // comment here anticipated, not an architecture change.
+      sameSite: CROSS_SITE_COOKIES ? 'none' : 'lax',
+      secure: CROSS_SITE_COOKIES,
       // Path is deliberately "/", not "/api/v1/auth": cookies are scoped by (domain, path), never
       // by port, so this same cookie jar is shared between the backend (localhost:3000) and
       // apps/web's proxy.ts (localhost:3001) in dev. proxy.ts's coarse "is there a session at
@@ -75,7 +84,15 @@ export class AuthController {
   }
 
   private clearRefreshCookie(response: Response): void {
-    response.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { path: '/' });
+    // Attributes must mirror setRefreshCookie's: a browser only removes a cookie when the
+    // clearing Set-Cookie matches the stored one, so logout would silently leave a
+    // SameSite=None/Secure cookie in place if these were omitted.
+    response.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
+      httpOnly: true,
+      sameSite: CROSS_SITE_COOKIES ? 'none' : 'lax',
+      secure: CROSS_SITE_COOKIES,
+      path: '/',
+    });
   }
 
   /** Refresh token can arrive via body (mobile) or httpOnly cookie (web) — body takes precedence. */
