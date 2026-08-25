@@ -221,6 +221,40 @@ export const updateSalonServiceSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateSalonServiceInput = z.infer<typeof updateSalonServiceSchema>;
 
+// "HH:mm", 24-hour. Matches exactly what OperatingHours.openTime/closeTime already store and what
+// AvailabilityService's istWallTimeToUtc parses — this is a validator for the existing format,
+// not a new one.
+export const TIME_OF_DAY_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const operatingHoursEntrySchema = z
+  .object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    openTime: z.string().regex(TIME_OF_DAY_REGEX, 'Use a time like 09:00'),
+    closeTime: z.string().regex(TIME_OF_DAY_REGEX, 'Use a time like 21:00'),
+    isClosed: z.boolean(),
+  })
+  // Only meaningful on an open day; a closed day's times are ignored by AvailabilityService.
+  // Overnight hours (close before open) are deliberately rejected rather than silently accepted:
+  // the availability engine resolves open/close within a single IST calendar day, so a
+  // 20:00–02:00 shift would produce an empty or negative window, not a late-night salon.
+  .refine((v) => v.isClosed || v.closeTime > v.openTime, {
+    message: 'Closing time must be after opening time',
+    path: ['closeTime'],
+  });
+
+// PUT dashboard/salons/:salonId/operating-hours — the whole week, replaced in one call. A weekly
+// schedule is edited as a unit, so this avoids the partially-saved week that per-day PATCHes
+// would allow (e.g. Monday saved, Tuesday failed) and keeps the client to one round-trip.
+export const setOperatingHoursSchema = z
+  .object({
+    days: z.array(operatingHoursEntrySchema).length(7),
+  })
+  .refine((v) => new Set(v.days.map((d) => d.dayOfWeek)).size === 7, {
+    message: 'Provide exactly one entry for each day of the week',
+    path: ['days'],
+  });
+export type SetOperatingHoursInput = z.infer<typeof setOperatingHoursSchema>;
+
 export const createSalonChairSchema = z.object({
   label: z.string().min(1).max(60),
 });

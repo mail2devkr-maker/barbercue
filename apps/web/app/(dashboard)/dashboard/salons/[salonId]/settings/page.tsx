@@ -124,6 +124,7 @@ export default function DashboardSettingsPage({
           without these the only route to services/chairs/staff is back out to the shop list. */}
       <nav style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 14, margin: "8px 0 4px" }}>
         <Link href={`/dashboard/salons/${salonId}/services`}>Services</Link>
+        <Link href={`/dashboard/salons/${salonId}/hours`}>Opening hours</Link>
         <Link href={`/dashboard/salons/${salonId}/chairs`}>Chairs</Link>
         <Link href={`/dashboard/salons/${salonId}/staff`}>Barbers</Link>
         <Link href={`/dashboard/salons/${salonId}/queue`}>Live queue</Link>

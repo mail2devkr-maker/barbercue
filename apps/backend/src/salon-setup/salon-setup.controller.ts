@@ -1,10 +1,20 @@
-import { Body, Controller, Get, Param, Patch, Post, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  UsePipes,
+} from '@nestjs/common';
 import {
   DASHBOARD_PATHS,
   Role,
   createSalonChairSchema,
   createSalonServiceSchema,
   createSalonStaffSchema,
+  setOperatingHoursSchema,
   updateSalonChairSchema,
   updateSalonServiceSchema,
   updateSalonStaffSchema,
@@ -13,6 +23,7 @@ import {
   type CreateSalonChairInput,
   type CreateSalonServiceInput,
   type CreateSalonStaffInput,
+  type SetOperatingHoursInput,
   type UpdateSalonChairInput,
   type UpdateSalonServiceInput,
   type UpdateSalonStaffInput,
@@ -25,6 +36,7 @@ import { SalonServicesService } from './salon-services.service';
 import { SalonChairsService } from './salon-chairs.service';
 import { SalonStaffService } from './salon-staff.service';
 import { SalonActivationService } from './salon-activation.service';
+import { SalonOperatingHoursService } from './salon-operating-hours.service';
 
 const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId`;
 
@@ -49,6 +61,7 @@ export class SalonSetupController {
     private readonly chairs: SalonChairsService,
     private readonly staff: SalonStaffService,
     private readonly activation: SalonActivationService,
+    private readonly operatingHours: SalonOperatingHoursService,
   ) {}
 
   // ---------- Shop activation ----------
@@ -61,6 +74,28 @@ export class SalonSetupController {
     @Body() body: UpdateSalonStatusInput,
   ) {
     return this.activation.updateStatus(user.id, salonId, body);
+  }
+
+  // ---------- Operating hours ----------
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.operatingHours}`)
+  listOperatingHours(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.operatingHours.list(user.id, salonId);
+  }
+
+  // PUT, not PATCH: the body is the complete week and replaces whatever is stored, so the verb
+  // matches the semantics (idempotent whole-resource replacement).
+  @Put(`${SALON_SCOPE}/${DASHBOARD_PATHS.operatingHours}`)
+  setOperatingHours(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(setOperatingHoursSchema))
+    body: SetOperatingHoursInput,
+  ) {
+    return this.operatingHours.set(user.id, salonId, body);
   }
 
   // ---------- Services ----------

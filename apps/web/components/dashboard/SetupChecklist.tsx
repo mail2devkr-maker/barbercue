@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChairStatus, DASHBOARD_PATHS, SalonStatus, StaffMemberStatus } from "@barbercue/shared";
 import type {
+  OperatingHoursDto,
   SalonChairDto,
   SalonServiceDto,
   SalonSetupReadinessDto,
@@ -23,10 +24,10 @@ interface ChecklistStep {
  * First-run setup progress for one shop, shown on the settings page — which is exactly where
  * RegisterSalonForm drops a brand-new owner after registration, so it is the first thing they see.
  *
- * Counts come from the three Phase 11 list endpoints the owner already has access to; there is no
+ * Counts come from the four owner list endpoints this user already has access to; there is no
  * dedicated "setup progress" endpoint and adding one would mean a backend route whose only job is
- * to re-count rows three pages away can already count. Three GETs for one salon on one page is a
- * fair trade for not inventing an endpoint (and not an N+1 — this renders for a single salon).
+ * to re-count rows the setup pages already count. Four parallel GETs for one salon on one page is
+ * a fair trade for not inventing an endpoint (and not an N+1 — this renders for a single salon).
  *
  * Steps 2-4 mirror the backend's real activation gate (SalonActivationService.assertReadyToOpen),
  * which refuses to move a PENDING salon to ACTIVE without an active service, chair and staff
@@ -53,6 +54,7 @@ export function SetupChecklist({
   const [services, setServices] = useState<SalonServiceDto[] | null>(null);
   const [chairs, setChairs] = useState<SalonChairDto[] | null>(null);
   const [staff, setStaff] = useState<SalonStaffDto[] | null>(null);
+  const [hours, setHours] = useState<OperatingHoursDto[] | null>(null);
   // A failed count must not render as "not done" — that would nag an owner who has already
   // finished the step. On error the whole checklist hides instead.
   const [failed, setFailed] = useState(false);
@@ -63,12 +65,14 @@ export function SetupChecklist({
       apiFetch<SalonServiceDto[]>(`${base}/${DASHBOARD_PATHS.services}`),
       apiFetch<SalonChairDto[]>(`${base}/${DASHBOARD_PATHS.chairs}`),
       apiFetch<SalonStaffDto[]>(`${base}/${DASHBOARD_PATHS.staff}`),
+      apiFetch<OperatingHoursDto[]>(`${base}/${DASHBOARD_PATHS.operatingHours}`),
     ])
-      .then(([s, c, st]) => {
+      .then(([s, c, st, h]) => {
         if (cancelled) return;
         setServices(s);
         setChairs(c);
         setStaff(st);
+        setHours(h);
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -78,7 +82,7 @@ export function SetupChecklist({
     };
   }, [base]);
 
-  const loading = services === null || chairs === null || staff === null;
+  const loading = services === null || chairs === null || staff === null || hours === null;
 
   // `isActive`, not merely present: this must agree exactly with the backend's activation gate,
   // which counts only active services. A checklist that ticks a step the server then rejects is
@@ -86,6 +90,10 @@ export function SetupChecklist({
   const hasService = (services ?? []).some((s) => s.isActive);
   const hasChair = (chairs ?? []).some((c) => c.status === ChairStatus.ACTIVE);
   const hasBarber = (staff ?? []).some((s) => s.status === StaffMemberStatus.ACTIVE);
+  // Advisory only — deliberately NOT part of `readyToOpen` or the backend activation gate. A shop
+  // with no open days is still a perfectly valid walk-in/queue-only shop; it simply cannot take
+  // online bookings, which the step text says plainly.
+  const hasOpenDay = (hours ?? []).some((h) => !h.isClosed);
   // Opening is the last step by design: a shop that becomes publicly discoverable with no
   // services, no chairs or no barbers is a dead end for the customer who finds it — they can
   // reach the page but there is nothing to book and nobody to seat them.
@@ -112,6 +120,12 @@ export function SetupChecklist({
       done: hasService,
       href: `/dashboard/salons/${salonId}/services`,
       why: "Customers pick a service when they book or join the queue — without one there's nothing to choose.",
+    },
+    {
+      label: "Set your opening hours",
+      done: hasOpenDay,
+      href: `/dashboard/salons/${salonId}/hours`,
+      why: "Customers can only book appointments during your opening hours. Until you set them, your shop can take walk-ins through the queue but nobody can book ahead.",
     },
     {
       label: "Add your chairs",

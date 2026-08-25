@@ -74,6 +74,7 @@ export default function SalonsDashboardHomePage() {
                 <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 14, flexWrap: "wrap" }}>
                   <Link href={`/dashboard/salons/${s.id}/settings`}>Set up &amp; open</Link>
                   <Link href={`/dashboard/salons/${s.id}/services`}>Services</Link>
+                  <Link href={`/dashboard/salons/${s.id}/hours`}>Hours</Link>
                   <Link href={`/dashboard/salons/${s.id}/chairs`}>Chairs</Link>
                   <Link href={`/dashboard/salons/${s.id}/staff`}>Barbers</Link>
                   <Link href={`/dashboard/salons/${s.id}/queue`}>Live queue</Link>

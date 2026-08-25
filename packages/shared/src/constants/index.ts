@@ -129,6 +129,10 @@ export const DASHBOARD_PATHS = {
   cancel: 'cancel',
   complete: 'complete',
   status: 'status',
+  // Owner-set weekly opening times. AvailabilityService treats a day with no OperatingHours row
+  // as closed and returns zero bookable slots, so until an owner sets these their shop can take
+  // walk-ins through the queue but can never be booked.
+  operatingHours: 'operating-hours',
   // Phase 9: authenticated "get my shop's QR/public queue URL" — mounted under the existing
   // dashboard/salons/:salonId/... shape alongside PublicQueueController's other routes.
   queueQr: 'queue-qr',
