@@ -146,6 +146,24 @@ export interface RegisterSalonResultDto {
   status: SalonStatus;
 }
 
+/**
+ * A salon the caller may operate, from GET salons/workplaces. Resolved from UserRole membership —
+ * the same rule SalonAccessService.assertAccess enforces — so "what I can see listed" and "what I
+ * can actually open" can never drift apart.
+ *
+ * `isOwner` is presentation only: it tells the dashboard whether to offer setup links or just the
+ * live queue. It grants nothing on its own — every owner-only endpoint still checks
+ * @Roles(SALON_OWNER) plus assertAccess server-side.
+ */
+export interface SalonWorkplaceDto {
+  id: string;
+  publicId: string;
+  slug: string;
+  name: string;
+  status: SalonStatus;
+  isOwner: boolean;
+}
+
 export interface PaginatedResult<T> {
   items: T[];
   nextCursor: string | null;

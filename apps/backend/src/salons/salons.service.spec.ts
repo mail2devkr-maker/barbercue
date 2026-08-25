@@ -47,7 +47,7 @@ describe('SalonsService', () => {
     review: { aggregate: jest.Mock };
     service: { aggregate: jest.Mock };
     locality: { findUnique: jest.Mock };
-    userRole: { upsert: jest.Mock };
+    userRole: { upsert: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let citiesService: { findCityBySlugOrThrow: jest.Mock };
@@ -72,7 +72,7 @@ describe('SalonsService', () => {
           .mockResolvedValue({ _min: { price: null }, _max: { price: null } }),
       },
       locality: { findUnique: jest.fn() },
-      userRole: { upsert: jest.fn() },
+      userRole: { upsert: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
     };
     citiesService = { findCityBySlugOrThrow: jest.fn() };
@@ -444,4 +444,94 @@ describe('SalonsService', () => {
       expect(prisma.salon.findUnique).not.toHaveBeenCalled();
     });
   });
+
+  // A barber holds no ownership, so listOwned returns nothing for them — this is the only route
+  // by which they can discover the salon they work at.
+  describe('listWorkplaces', () => {
+    const salonRow = (over: Record<string, unknown> = {}) => ({
+      id: 's1',
+      publicId: 'BC-SHOP-000001',
+      slug: 'demo',
+      name: 'Demo Salon',
+      status: 'ACTIVE',
+      ...over,
+    });
+
+    it('resolves membership from UserRole, the same rule assertAccess uses', async () => {
+      prisma.userRole.findMany.mockResolvedValue([]);
+
+      await service.listWorkplaces('user-1');
+
+      expect(prisma.userRole.findMany).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-1',
+          salonId: { not: null },
+          role: { in: ['SALON_STAFF', 'SALON_OWNER'] },
+        },
+        include: { salon: true },
+      });
+    });
+
+    it('lists a salon a barber only works at, marked isOwner false', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { role: 'SALON_STAFF', salon: salonRow() },
+      ]);
+
+      const result = await service.listWorkplaces('barber-1');
+
+      expect(result).toEqual([
+        {
+          id: 's1',
+          publicId: 'BC-SHOP-000001',
+          slug: 'demo',
+          name: 'Demo Salon',
+          status: 'ACTIVE',
+          isOwner: false,
+        },
+      ]);
+    });
+
+    it('marks an owned salon isOwner true', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { role: 'SALON_OWNER', salon: salonRow() },
+      ]);
+      const result = await service.listWorkplaces('owner-1');
+      expect(result[0].isOwner).toBe(true);
+    });
+
+    // An owner who also cuts hair holds both roles for one salon.
+    it('de-duplicates a salon held under both roles and keeps isOwner true', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { role: 'SALON_STAFF', salon: salonRow() },
+        { role: 'SALON_OWNER', salon: salonRow() },
+      ]);
+
+      const result = await service.listWorkplaces('owner-barber');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].isOwner).toBe(true);
+    });
+
+    it('returns an empty list for a user with no salon memberships', async () => {
+      prisma.userRole.findMany.mockResolvedValue([]);
+      await expect(service.listWorkplaces('customer-1')).resolves.toEqual([]);
+    });
+
+    it('skips a membership row whose salon relation is missing', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { role: 'SALON_STAFF', salon: null },
+      ]);
+      await expect(service.listWorkplaces('user-1')).resolves.toEqual([]);
+    });
+
+    it('sorts by salon name', async () => {
+      prisma.userRole.findMany.mockResolvedValue([
+        { role: 'SALON_STAFF', salon: salonRow({ id: 'b', name: 'Zen Cuts' }) },
+        { role: 'SALON_STAFF', salon: salonRow({ id: 'a', name: 'Ace Salon' }) },
+      ]);
+      const result = await service.listWorkplaces('barber-1');
+      expect(result.map((r) => r.name)).toEqual(['Ace Salon', 'Zen Cuts']);
+    });
+  });
+
 });

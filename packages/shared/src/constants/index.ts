@@ -47,6 +47,10 @@ export const DISCOVERY_PATHS = {
   // Owner-scoped reads under salons/mine[/...] — literal 'mine' segment, registered before the
   // :citySlug/:salonSlug wildcard route in SalonsController so it can never be shadowed by it.
   mine: 'mine',
+  // salons/workplaces — every salon the caller may operate, for owners AND staff. Distinct from
+  // `mine`, which is owner-only and keyed on Salon.ownerUserId: a barber owns nothing, so that
+  // route returns an empty list and leaves them with no way to reach the salon they work at.
+  workplaces: 'workplaces',
 } as const;
 
 // Sub-paths for booking-related reads that hang off a salon (DISCOVERY_PATHS.salons/:salonId/...)

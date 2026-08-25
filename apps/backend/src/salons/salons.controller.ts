@@ -58,6 +58,16 @@ export class SalonsController {
     return this.salonsService.listOwned(user.id);
   }
 
+  // Also a literal single segment, so it must precede :citySlug/:salonSlug for the same reason
+  // `mine` does. Open to staff as well as owners: this is the only route by which a barber can
+  // discover the salon they work at — listMine above is keyed on ownership and returns nothing
+  // for them. Read-only identity; it grants no operational permission of its own.
+  @Roles(Role.SALON_OWNER, Role.SALON_STAFF)
+  @Get(DISCOVERY_PATHS.workplaces)
+  listWorkplaces(@CurrentUser() user: AuthenticatedUser) {
+    return this.salonsService.listWorkplaces(user.id);
+  }
+
   @Roles(Role.SALON_OWNER, Role.SALON_STAFF)
   @Get(`${DISCOVERY_PATHS.mine}/:salonId`)
   getMine(

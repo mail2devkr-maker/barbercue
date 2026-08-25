@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  Role,
   SalonStatus,
   type PaginatedResult,
   type RegisterSalonInput,
@@ -8,6 +9,7 @@ import {
   type SalonListItemDto,
   type SalonProfileDto,
   type SalonSearchQueryInput,
+  type SalonWorkplaceDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
@@ -277,6 +279,52 @@ export class SalonsService {
       name: s.name,
       status: s.status,
     }));
+  }
+
+  /**
+   * GET salons/workplaces — every salon this user may operate, for owners AND staff.
+   *
+   * listOwned above keys on Salon.ownerUserId, so a barber (who owns nothing) gets an empty list
+   * and no route to the salon they actually work at. This resolves membership from UserRole —
+   * byte-for-byte the same condition SalonAccessService.assertAccess enforces — so the list can
+   * never show a salon the caller would then be refused, or hide one they can reach.
+   *
+   * `isOwner` is derived for presentation only. It decides whether the dashboard offers setup
+   * links or just the live queue; it confers nothing, since every owner-only route independently
+   * checks @Roles(SALON_OWNER) and assertAccess.
+   */
+  async listWorkplaces(userId: string): Promise<SalonWorkplaceDto[]> {
+    const memberships = await this.prisma.userRole.findMany({
+      where: {
+        userId,
+        salonId: { not: null },
+        role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] },
+      },
+      include: { salon: true },
+    });
+
+    // One user can hold both SALON_OWNER and SALON_STAFF for the same salon (an owner who also
+    // cuts hair), which would otherwise list it twice.
+    const bySalon = new Map<string, SalonWorkplaceDto>();
+    for (const m of memberships) {
+      if (!m.salon) continue;
+      const existing = bySalon.get(m.salon.id);
+      const isOwner = m.role === Role.SALON_OWNER;
+      if (existing) {
+        if (isOwner) existing.isOwner = true;
+        continue;
+      }
+      bySalon.set(m.salon.id, {
+        id: m.salon.id,
+        publicId: m.salon.publicId,
+        slug: m.salon.slug,
+        name: m.salon.name,
+        status: m.salon.status,
+        isOwner,
+      });
+    }
+
+    return [...bySalon.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /**
