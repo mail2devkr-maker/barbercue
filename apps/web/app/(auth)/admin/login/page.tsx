@@ -6,6 +6,7 @@ import { AuthErrorCode, adminLoginSchema } from "@barbercue/shared";
 import { ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
 import { AuthCard, authButtonStyle, authErrorStyle, authInputStyle } from "../../../../components/auth/AuthCard";
+import { safeNextPath } from "../../../../lib/safe-next-path";
 
 function AdminLoginForm() {
   const { adminLogin } = useAuth();
@@ -30,7 +31,7 @@ function AdminLoginForm() {
     setSubmitting(true);
     try {
       await adminLogin(parsed.data);
-      router.replace(searchParams.get("next") ?? "/dashboard/admin");
+      router.replace(safeNextPath(searchParams.get("next")) ?? "/dashboard/admin");
     } catch (err) {
       if (err instanceof ApiError && err.code === AuthErrorCode.TOTP_REQUIRED) {
         setNeedsTotp(true);

@@ -17,6 +17,7 @@ import {
   authInputStyle,
 } from "../../../components/auth/AuthCard";
 import { CustomerAuthCard } from "../../../components/auth/CustomerAuthCard";
+import { safeNextPath } from "../../../lib/safe-next-path";
 
 type Step = "phone" | "otp";
 
@@ -115,7 +116,7 @@ function CustomerLoginForm() {
     setSubmitting(true);
     try {
       await googleLogin({ idToken });
-      router.replace(searchParams.get("next") ?? "/account/bookings");
+      router.replace(safeNextPath(searchParams.get("next")) ?? "/account/bookings");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not sign in with Google. Please try again.");
     } finally {
@@ -209,7 +210,7 @@ function CustomerLoginForm() {
     setSubmitting(true);
     try {
       await verifyCustomerOtp(parsed.data);
-      router.replace(searchParams.get("next") ?? "/account/bookings");
+      router.replace(safeNextPath(searchParams.get("next")) ?? "/account/bookings");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not verify OTP. Please try again.");
     } finally {

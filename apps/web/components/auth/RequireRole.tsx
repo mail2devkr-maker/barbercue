@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { Role } from "@barbercue/shared";
 import { useAuth } from "../../lib/auth-context";
+import { withNextParam } from "../../lib/safe-next-path";
 
 /**
  * Client-side route guard. This is UX only, not the security boundary — the backend's
@@ -23,12 +24,25 @@ export function RequireRole({
 }) {
   const { user, status } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const authorized = status === "authenticated" && (!roles || (user && roles.some((r) => user.roles.includes(r))));
 
   useEffect(() => {
     if (status === "loading") return;
-    if (!authorized) router.replace(redirectTo);
-  }, [status, authorized, redirectTo, router]);
+    if (authorized) return;
+    // Carry the page the visitor was actually trying to reach through to the login screen, which
+    // already honours ?next=. Without this a logged-out visitor who taps "Register your shop" is
+    // sent to /login and then dumped on the default customer landing page, with no route back —
+    // in production `proxy.ts` short-circuits (web and API are on different hosts), so this
+    // component is the only thing that can preserve the destination.
+    //
+    // The query string is read from `window` rather than useSearchParams(): that hook opts every
+    // page wrapping this guard out of static prerendering ("useSearchParams() should be wrapped
+    // in a suspense boundary"), which fails the production build. This runs in an effect, so it
+    // is always client-side and `window` is always defined.
+    const search = typeof window === "undefined" ? "" : window.location.search;
+    router.replace(withNextParam(redirectTo, `${pathname}${search}`));
+  }, [status, authorized, redirectTo, router, pathname]);
 
   if (status === "loading") return <p style={{ padding: "2rem" }}>Loading…</p>;
   if (!authorized) return null;

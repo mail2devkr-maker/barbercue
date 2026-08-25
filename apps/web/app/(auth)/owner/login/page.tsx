@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
 import { AuthCard } from "../../../../components/auth/AuthCard";
 import { EmailPasswordLoginForm } from "../../../../components/auth/EmailPasswordLoginForm";
+import { safeNextPath } from "../../../../lib/safe-next-path";
 
 function OwnerLoginForm() {
   const { staffLogin } = useAuth();
@@ -17,7 +18,7 @@ function OwnerLoginForm() {
         forgotPasswordHref="/forgot-password"
         onSubmit={async (input) => {
           await staffLogin(input);
-          router.replace(searchParams.get("next") ?? "/dashboard/salons");
+          router.replace(safeNextPath(searchParams.get("next")) ?? "/dashboard/salons");
         }}
       />
     </AuthCard>
