@@ -29,6 +29,20 @@ export interface MeResponse extends AuthenticatedUser {
   email: string | null;
 }
 
+/**
+ * GET auth/methods — which sign-in methods this deployment can complete, so a client never
+ * presents a form that is guaranteed to fail. Phone OTP depends on an SMS provider that may not
+ * be configured; when it isn't, OtpSender throws OTP_DELIVERY_FAILED and the customer sees a 502
+ * after typing their number. Exposing the capability lets the UI say so up front instead.
+ *
+ * Deliberately booleans only — this endpoint is public and must never reveal which key is set,
+ * let alone its value.
+ */
+export interface AuthMethodsDto {
+  google: boolean;
+  phoneOtp: boolean;
+}
+
 export interface AuthTokens {
   accessToken: string;
   // Present in the response body for mobile (stored via secure storage); web instead relies on

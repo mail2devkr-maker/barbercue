@@ -16,6 +16,7 @@ import type { Request, Response } from 'express';
 import {
   AUTH_PATHS,
   REFRESH_TOKEN_COOKIE_NAME,
+  type AuthMethodsDto,
   adminLoginSchema,
   forgotPasswordSchema,
   googleLoginSchema,
@@ -104,6 +105,28 @@ export class AuthController {
       bodyToken ||
       (request.cookies?.[REFRESH_TOKEN_COOKIE_NAME] as string | undefined)
     );
+  }
+
+  /**
+   * Which sign-in methods this deployment can actually complete. Public and unauthenticated by
+   * design — it is the first thing a login screen needs, and it returns only booleans, never the
+   * presence-checked values themselves.
+   *
+   * Phone OTP is reported available when a real SMS provider is configured, or outside production
+   * where ConsoleOtpSender logs the code instead of sending it (the same NODE_ENV condition
+   * AuthModule's OTP_SENDER factory uses to pick the sender — kept in step with it deliberately).
+   */
+  @Public()
+  @Get(AUTH_PATHS.methods)
+  authMethods(): AuthMethodsDto {
+    return {
+      google: Boolean(
+        process.env.GOOGLE_WEB_CLIENT_ID ?? process.env.GOOGLE_ANDROID_CLIENT_ID,
+      ),
+      phoneOtp:
+        process.env.NODE_ENV !== 'production' ||
+        Boolean(process.env.OTP_PROVIDER_API_KEY),
+    };
   }
 
   @Public()

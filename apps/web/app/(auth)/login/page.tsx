@@ -5,6 +5,7 @@ import Script from "next/script";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AUTH_PATHS,
+  type AuthMethodsDto,
   OTP_RESEND_COOLDOWN_SECONDS,
   otpRequestSchema,
   otpVerifySchema,
@@ -92,6 +93,9 @@ function CustomerLoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Whether this deployment can actually complete a phone OTP. Null while unknown — the form is
+  // hidden until we know, so a customer is never shown an input that is guaranteed to 502.
+  const [phoneOtpAvailable, setPhoneOtpAvailable] = useState<boolean | null>(null);
   const [resending, setResending] = useState(false);
   // Seconds remaining before "Resend OTP" is enabled again; 0 = enabled. Starts counting the
   // moment a code is sent (initial send or a resend) — a client-side throttle only, layered on
@@ -218,6 +222,22 @@ function CustomerLoginForm() {
     }
   }
 
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<AuthMethodsDto>(`auth/${AUTH_PATHS.methods}`)
+      .then((m) => {
+        if (!cancelled) setPhoneOtpAvailable(m.phoneOtp);
+      })
+      // If the capability probe itself fails, fall back to showing the form: a working sign-in
+      // method must not disappear because one extra request was unlucky.
+      .catch(() => {
+        if (!cancelled) setPhoneOtpAvailable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <>
       <Script
@@ -231,24 +251,39 @@ function CustomerLoginForm() {
         {step === "phone" ? (
           <>
             <div ref={googleButtonRef} style={{ display: "flex", justifyContent: "center", minHeight: 44 }} />
-            <div style={dividerStyle}>
-              <span style={{ flex: 1, borderTop: "1px solid #E7E0D3" }} />
-              OR
-              <span style={{ flex: 1, borderTop: "1px solid #E7E0D3" }} />
-            </div>
-            <p style={contextLineStyle}>New here? Signing in creates your account automatically.</p>
-            <form onSubmit={requestOtp}>
-              <input
-                type="tel"
-                placeholder="+919876543210"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                style={authInputStyle}
-              />
-              <button type="submit" style={authButtonStyle} disabled={submitting}>
-                {submitting ? "Sending..." : "Send OTP"}
-              </button>
-            </form>
+            {phoneOtpAvailable === false ? (
+              <p style={contextLineStyle}>
+                Phone sign-in is temporarily unavailable. Please continue with Google above —
+                it&apos;s the same account either way.
+              </p>
+            ) : (
+              <>
+                <div style={dividerStyle}>
+                  <span style={{ flex: 1, borderTop: "1px solid #E7E0D3" }} />
+                  OR
+                  <span style={{ flex: 1, borderTop: "1px solid #E7E0D3" }} />
+                </div>
+                <p style={contextLineStyle}>New here? Signing in creates your account automatically.</p>
+                {phoneOtpAvailable === null ? (
+                  <p style={contextLineStyle}>Checking sign-in options…</p>
+                ) : (
+                  <form onSubmit={requestOtp}>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="+919876543210"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      style={authInputStyle}
+                    />
+                    <button type="submit" style={authButtonStyle} disabled={submitting}>
+                      {submitting ? "Sending..." : "Send OTP"}
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
           </>
         ) : (
           <form onSubmit={verifyOtp}>

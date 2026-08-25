@@ -21,6 +21,9 @@ export const AUTH_PATHS = {
   forgotPassword: 'forgot-password',
   resetPassword: 'reset-password',
   me: 'me',
+  // auth/methods — which sign-in methods this deployment can actually complete right now.
+  // Booleans only; never echoes any configuration value.
+  methods: 'methods',
 } as const;
 
 // Name of the httpOnly cookie the backend sets/reads for web refresh-token delivery. Shared so
