@@ -2,32 +2,33 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CityDto, LocalityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
-import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
-import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../lib/seo";
-import { SalonCard } from "../../../../../components/discovery/SalonCard";
-import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../components/discovery/Breadcrumbs";
-import { JsonLd } from "../../../../../components/discovery/JsonLd";
+import { fetchDiscoveryOrNull } from "../../../../../../lib/discovery-api";
+import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../../lib/seo";
+import { SalonCard } from "../../../../../../components/discovery/SalonCard";
+import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../../components/discovery/Breadcrumbs";
+import { JsonLd } from "../../../../../../components/discovery/JsonLd";
 
 interface LocalityPageParams {
+  countryCode: string;
   citySlug: string;
   localitySlug: string;
 }
 
-async function loadLocality(citySlug: string, localitySlug: string) {
+async function loadLocality(countryCode: string, citySlug: string, localitySlug: string) {
   return fetchDiscoveryOrNull<LocalityDto>(
-    `${DISCOVERY_PATHS.cities}/${citySlug}/localities/${localitySlug}`,
+    `${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}/localities/${localitySlug}`,
     DISCOVERY_REVALIDATE_SECONDS,
   );
 }
 
 export async function generateMetadata({ params }: { params: Promise<LocalityPageParams> }): Promise<Metadata> {
-  const { citySlug, localitySlug } = await params;
-  const locality = await loadLocality(citySlug, localitySlug);
+  const { countryCode, citySlug, localitySlug } = await params;
+  const locality = await loadLocality(countryCode, citySlug, localitySlug);
   if (!locality) return {};
 
   const title = `Barbershops in ${locality.name}`;
   const description = `Find and book nearby barbershops in ${locality.name}. See wait times, services, and prices before you go.`;
-  const url = absoluteUrl(`/${citySlug}/areas/${localitySlug}`);
+  const url = absoluteUrl(`/${countryCode.toLowerCase()}/${citySlug}/areas/${localitySlug}`);
 
   return {
     title,
@@ -38,22 +39,27 @@ export async function generateMetadata({ params }: { params: Promise<LocalityPag
 }
 
 export default async function LocalityPage({ params }: { params: Promise<LocalityPageParams> }) {
-  const { citySlug, localitySlug } = await params;
-  const locality = await loadLocality(citySlug, localitySlug);
+  const { countryCode, citySlug, localitySlug } = await params;
+  const locality = await loadLocality(countryCode, citySlug, localitySlug);
   if (!locality) notFound();
 
+  const cityPath = `/${countryCode.toLowerCase()}/${citySlug}`;
+
   const [city, salons] = await Promise.all([
-    fetchDiscoveryOrNull<CityDto>(`${DISCOVERY_PATHS.cities}/${citySlug}`, DISCOVERY_REVALIDATE_SECONDS),
+    fetchDiscoveryOrNull<CityDto>(
+      `${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}`,
+      DISCOVERY_REVALIDATE_SECONDS,
+    ),
     fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
-      `${DISCOVERY_PATHS.salons}?city=${citySlug}&locality=${localitySlug}`,
+      `${DISCOVERY_PATHS.salons}?city=${citySlug}&locality=${localitySlug}&countryCode=${countryCode}`,
       DISCOVERY_REVALIDATE_SECONDS,
     ),
   ]);
 
   const breadcrumbItems = [
     { label: "Home", href: "/" },
-    { label: city?.name ?? citySlug, href: `/${citySlug}` },
-    { label: locality.name, href: `/${citySlug}/areas/${locality.slug}` },
+    { label: city?.name ?? citySlug, href: cityPath },
+    { label: locality.name, href: `${cityPath}/areas/${locality.slug}` },
   ];
 
   return (

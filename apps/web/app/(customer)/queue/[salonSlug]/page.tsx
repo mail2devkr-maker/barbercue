@@ -17,14 +17,18 @@ export default async function QueuePage({
   searchParams,
 }: {
   params: Promise<QueuePageParams>;
-  searchParams: Promise<{ city?: string }>;
+  searchParams: Promise<{ city?: string; country?: string }>;
 }) {
   const { salonSlug } = await params;
-  const { city } = await searchParams;
-  // Salon.slug is only unique per city, same reason book/[salonSlug]/page.tsx requires ?city=.
-  if (!city) notFound();
+  const { city, country } = await searchParams;
+  // Salon.slug is unique only per city, and City.slug only per country (B9) — same reason
+  // book/[salonSlug]/page.tsx requires both.
+  if (!city || !country) notFound();
 
-  const salon = await fetchDiscoveryOrNull<SalonProfileDto>(`${DISCOVERY_PATHS.salons}/${city}/${salonSlug}`, 0);
+  const salon = await fetchDiscoveryOrNull<SalonProfileDto>(
+    `${DISCOVERY_PATHS.salons}/${country}/${city}/${salonSlug}`,
+    0,
+  );
   if (!salon) notFound();
 
   return (

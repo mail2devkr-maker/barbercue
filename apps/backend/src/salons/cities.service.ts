@@ -48,8 +48,14 @@ export class CitiesService {
     }));
   }
 
-  async getCity(citySlug: string): Promise<CityDto> {
-    const city = await this.findCityBySlugOrThrow(citySlug);
+  /**
+   * GET cities/:countryCode/:citySlug — the country-scoped public lookup (B9). Every discovery
+   * route below resolves through findCityByCountryAndSlugOrThrow, an exact findUnique on the
+   * (countryCode, slug) composite key, so "London GB" and "London CA" can never be confused with
+   * each other regardless of lookup order.
+   */
+  async getCity(countryCode: string, citySlug: string): Promise<CityDto> {
+    const city = await this.findCityByCountryAndSlugOrThrow(countryCode, citySlug);
     return {
       id: city.id,
       name: city.name,
@@ -61,8 +67,8 @@ export class CitiesService {
     };
   }
 
-  async listLocalities(citySlug: string): Promise<LocalityDto[]> {
-    const city = await this.findCityBySlugOrThrow(citySlug);
+  async listLocalities(countryCode: string, citySlug: string): Promise<LocalityDto[]> {
+    const city = await this.findCityByCountryAndSlugOrThrow(countryCode, citySlug);
     const localities = await this.prisma.locality.findMany({
       where: {
         cityId: city.id,
@@ -79,10 +85,11 @@ export class CitiesService {
   }
 
   async getLocality(
+    countryCode: string,
     citySlug: string,
     localitySlug: string,
   ): Promise<LocalityDto> {
-    const city = await this.findCityBySlugOrThrow(citySlug);
+    const city = await this.findCityByCountryAndSlugOrThrow(countryCode, citySlug);
     const locality = await this.prisma.locality.findUnique({
       where: { cityId_slug: { cityId: city.id, slug: localitySlug } },
     });
@@ -101,17 +108,43 @@ export class CitiesService {
     };
   }
 
+  /**
+   * Country-scoped, unambiguous city lookup (B9's "final" replacement for the interim
+   * findFirst({ slug }) this method used to be). Uses the exact (countryCode, slug) composite
+   * unique index added in the country-code migration, so this is a real findUnique, not a guess
+   * at which same-named city across countries the caller meant.
+   *
+   * `countryCode` is uppercased before the lookup so public URLs can use a friendlier lowercase
+   * segment (/in/bengaluru/...) while City.countryCode is stored uppercase (ISO-3166-1 alpha-2).
+   */
+  async findCityByCountryAndSlugOrThrow(countryCode: string, citySlug: string) {
+    const city = await this.prisma.city.findUnique({
+      where: {
+        countryCode_slug: { countryCode: countryCode.toUpperCase(), slug: citySlug },
+      },
+    });
+    if (!city) {
+      throw new AppException(
+        'CITY_NOT_FOUND',
+        'City not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return city;
+  }
+
+  /**
+   * Slug-only lookup, kept ONLY for SalonsService.registerSalon's own use — it independently
+   * verifies the caller's chosen country against the resolved city (CITY_COUNTRY_MISMATCH) and
+   * that behaviour is deployed and tested; switching registration to the country-scoped lookup
+   * above would change that error into a bare CITY_NOT_FOUND and was deliberately left alone
+   * here rather than folded into the B9 URL-restructure change.
+   *
+   * Ambiguous the moment two countries share a city slug (returns whichever row Postgres reaches
+   * first) — every read that actually serves a public URL uses findCityByCountryAndSlugOrThrow
+   * instead, which is why this one is not.
+   */
   async findCityBySlugOrThrow(citySlug: string) {
-    // INTERIM (Batch 2, B2). City slug uniqueness is now scoped by country
-    // (@@unique([countryCode, slug])), so `slug` alone is no longer a unique field and Prisma
-    // will not accept it in findUnique. findFirst is correct while the platform operates in a
-    // single country, but it is NOT the final architecture: once a second country has a city
-    // with the same slug (London GB vs London CA) this becomes ambiguous and silently returns
-    // whichever row Postgres reaches first.
-    //
-    // FINAL: B9's country-scoped routes (/{countryCode}/{citySlug}/...) carry a countryCode into
-    // every lookup, at which point this must become
-    // findUnique({ where: { countryCode_slug: { countryCode, slug } } }).
     const city = await this.prisma.city.findFirst({
       where: { slug: citySlug },
     });

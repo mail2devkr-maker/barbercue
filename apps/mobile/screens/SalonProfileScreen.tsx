@@ -8,16 +8,16 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SalonProfile'>;
 
-// Public discovery endpoint — same GET /salons/:citySlug/:salonSlug apps/web uses.
+// Public discovery endpoint — same GET /salons/:countryCode/:citySlug/:salonSlug apps/web uses (B9).
 export default function SalonProfileScreen({ route, navigation }: Props) {
-  const { citySlug, salonSlug, selectedStyleName } = route.params;
+  const { countryCode, citySlug, salonSlug, selectedStyleName } = route.params;
   const [salon, setSalon] = useState<SalonProfileDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<SalonProfileDto>(`${DISCOVERY_PATHS.salons}/${citySlug}/${salonSlug}`)
+    apiFetch<SalonProfileDto>(`${DISCOVERY_PATHS.salons}/${countryCode}/${citySlug}/${salonSlug}`)
       .then((result) => {
         if (!cancelled) setSalon(result);
       })
@@ -30,7 +30,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [citySlug, salonSlug]);
+  }, [countryCode, citySlug, salonSlug]);
 
   if (loading) {
     return (

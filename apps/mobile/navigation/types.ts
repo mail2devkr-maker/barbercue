@@ -9,7 +9,12 @@ export type RootStackParamList = {
   // threaded through every step below the same way preferredStaffId already is, and included in
   // ConfirmBookingScreen's POST /bookings body when set.
   SalonSearch: { selectedStyleName?: string } | undefined;
-  SalonProfile: { citySlug: string; salonSlug: string; selectedStyleName?: string };
+  SalonProfile: {
+    countryCode: string;
+    citySlug: string;
+    salonSlug: string;
+    selectedStyleName?: string;
+  };
   StaffSelect: {
     salonId: string;
     salonName: string;

@@ -127,9 +127,11 @@ export function RegisterSalonForm() {
   }, []);
 
   useEffect(() => {
-    if (!form.citySlug) return;
+    if (!form.citySlug || !form.countryCode) return;
     let cancelled = false;
-    apiFetch<LocalityDto[]>(`${DISCOVERY_PATHS.cities}/${form.citySlug}/localities`)
+    apiFetch<LocalityDto[]>(
+      `${DISCOVERY_PATHS.cities}/${form.countryCode}/${form.citySlug}/localities`,
+    )
       .then((list) => {
         if (!cancelled) setLocalities(list);
       })
@@ -139,7 +141,7 @@ export function RegisterSalonForm() {
     return () => {
       cancelled = true;
     };
-  }, [form.citySlug]);
+  }, [form.countryCode, form.citySlug]);
   // Derived, not stored: avoids a synchronous setState-in-effect for the "city cleared" case —
   // the select below renders [] the instant citySlug is empty, no extra render needed.
   const localityOptions = form.citySlug ? localities : [];

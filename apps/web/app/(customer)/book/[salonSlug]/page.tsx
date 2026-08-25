@@ -17,17 +17,20 @@ export default async function BookPage({
   searchParams,
 }: {
   params: Promise<BookPageParams>;
-  searchParams: Promise<{ city?: string; style?: string }>;
+  searchParams: Promise<{ city?: string; country?: string; style?: string }>;
 }) {
   const { salonSlug } = await params;
-  const { city, style } = await searchParams;
-  // Salon.slug is only unique per city (DATABASE.md: @@unique([cityId, slug])), so the salon
-  // profile page's "Book an appointment" link always passes ?city= alongside the slug.
-  if (!city) notFound();
+  const { city, country, style } = await searchParams;
+  // Salon.slug is unique only per city, and City.slug is unique only per country (B9), so the
+  // salon profile page's "Book an appointment" link always passes both alongside the slug.
+  if (!city || !country) notFound();
 
   // revalidate: 0 (no caching) — unlike the public salon profile page's 5-minute ISR window, a
   // customer one click from booking needs live services/operating-hours data, not a stale cache.
-  const salon = await fetchDiscoveryOrNull<SalonProfileDto>(`${DISCOVERY_PATHS.salons}/${city}/${salonSlug}`, 0);
+  const salon = await fetchDiscoveryOrNull<SalonProfileDto>(
+    `${DISCOVERY_PATHS.salons}/${country}/${city}/${salonSlug}`,
+    0,
+  );
   if (!salon) notFound();
 
   return (

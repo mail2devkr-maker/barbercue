@@ -14,34 +14,45 @@ export class CitiesController {
     return this.citiesService.listCities();
   }
 
-  // MUST stay above @Get(':citySlug') — Nest matches in declaration order, and a param route
-  // declared first would swallow the literal 'all' segment. Public like the rest of this
-  // controller: a list of city names is not sensitive, and the shop-registration form that
-  // consumes it should not need an authenticated round-trip to populate a dropdown.
+  // Single literal segment vs. the two-segment :countryCode/:citySlug routes below — different
+  // arity means Express/Nest can never confuse the two regardless of declaration order (unlike
+  // the old single-segment :citySlug shape this replaced, `all` no longer needs to be declared
+  // "above" anything to avoid being swallowed).
   @Public()
   @Get(DISCOVERY_PATHS.allCities)
   listAllCities() {
     return this.citiesService.listAllCities();
   }
 
+  // B9: country-scoped city URLs (/{countryCode}/{citySlug}/...). countryCode is case-insensitive
+  // at this boundary — CitiesService.findCityByCountryAndSlugOrThrow uppercases it before the
+  // lookup — so public URLs can use the friendlier lowercase convention (/in/bengaluru) while
+  // City.countryCode stays stored as the ISO-3166-1 alpha-2 uppercase form.
   @Public()
-  @Get(':citySlug')
-  getCity(@Param('citySlug') citySlug: string) {
-    return this.citiesService.getCity(citySlug);
+  @Get(':countryCode/:citySlug')
+  getCity(
+    @Param('countryCode') countryCode: string,
+    @Param('citySlug') citySlug: string,
+  ) {
+    return this.citiesService.getCity(countryCode, citySlug);
   }
 
   @Public()
-  @Get(':citySlug/localities')
-  listLocalities(@Param('citySlug') citySlug: string) {
-    return this.citiesService.listLocalities(citySlug);
+  @Get(':countryCode/:citySlug/localities')
+  listLocalities(
+    @Param('countryCode') countryCode: string,
+    @Param('citySlug') citySlug: string,
+  ) {
+    return this.citiesService.listLocalities(countryCode, citySlug);
   }
 
   @Public()
-  @Get(':citySlug/localities/:localitySlug')
+  @Get(':countryCode/:citySlug/localities/:localitySlug')
   getLocality(
+    @Param('countryCode') countryCode: string,
     @Param('citySlug') citySlug: string,
     @Param('localitySlug') localitySlug: string,
   ) {
-    return this.citiesService.getLocality(citySlug, localitySlug);
+    return this.citiesService.getLocality(countryCode, citySlug, localitySlug);
   }
 }

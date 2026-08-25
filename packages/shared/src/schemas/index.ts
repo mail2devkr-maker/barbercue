@@ -116,6 +116,10 @@ export type RegisterSalonInput = z.infer<typeof registerSalonSchema>;
 // and client (search form) so both agree on shape before a request is ever made.
 export const salonSearchQuerySchema = z.object({
   city: z.string().optional(),
+  // ISO-3166-1 alpha-2, scopes `city` to an exact (countryCode, slug) match — see B9. Optional:
+  // not every caller has a country in hand (free-text/service search), so omitting it falls back
+  // to matching `city` by slug alone, exactly as before this field existed.
+  countryCode: z.string().length(2).optional(),
   locality: z.string().optional(),
   service: z.string().optional(),
   q: z.string().optional(),

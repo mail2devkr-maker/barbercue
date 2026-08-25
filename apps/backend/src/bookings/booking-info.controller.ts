@@ -13,13 +13,13 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 
 /**
  * Mounted at `salons/:salonId/booking/...` — deliberately NOT a bare `salons/:salonId/staff`
- * shape. SalonsController's public discovery route (`GET salons/:citySlug/:salonSlug`) is also a
- * two-dynamic-segment pattern under the same `salons` prefix; a request like
- * `/salons/{uuid}/staff` would structurally match both, and which one wins would depend on
- * fragile module/controller registration order. The extra literal `booking` segment makes the two
- * shapes structurally non-overlapping regardless of registration order — same fix philosophy as
- * Phase 3A's `/areas/` locality route (resolve via a distinct path shape, not by luck of
- * ordering). API.md's Booking section is annotated accordingly.
+ * shape. SalonsController's public discovery route (`GET salons/:countryCode/:citySlug/:salonSlug`,
+ * three dynamic segments as of B9) sits under the same `salons` prefix; a request like
+ * `/salons/{uuid}/staff` would otherwise risk ambiguity with a same-arity discovery route, and
+ * which one wins would depend on fragile module/controller registration order. The extra literal
+ * `booking` segment makes the two shapes structurally non-overlapping regardless of registration
+ * order — same fix philosophy as Phase 3A's `/areas/` locality route (resolve via a distinct path
+ * shape, not by luck of ordering). API.md's Booking section is annotated accordingly.
  */
 @Controller('salons/:salonId/booking')
 export class BookingInfoController {

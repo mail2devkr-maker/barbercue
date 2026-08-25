@@ -69,7 +69,12 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           <Pressable
             style={styles.card}
             onPress={() =>
-              navigation.navigate('SalonProfile', { citySlug: item.citySlug, salonSlug: item.slug, selectedStyleName })
+              navigation.navigate('SalonProfile', {
+                countryCode: item.countryCode,
+                citySlug: item.citySlug,
+                salonSlug: item.slug,
+                selectedStyleName,
+              })
             }
           >
             <Text style={styles.cardTitle}>{item.name}</Text>

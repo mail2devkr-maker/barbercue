@@ -51,7 +51,10 @@ describe('SalonsService', () => {
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
   };
-  let citiesService: { findCityBySlugOrThrow: jest.Mock };
+  let citiesService: {
+    findCityBySlugOrThrow: jest.Mock;
+    findCityByCountryAndSlugOrThrow: jest.Mock;
+  };
   let salonAccess: { assertAccess: jest.Mock };
 
   beforeEach(async () => {
@@ -76,7 +79,10 @@ describe('SalonsService', () => {
       userRole: { upsert: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
     };
-    citiesService = { findCityBySlugOrThrow: jest.fn() };
+    citiesService = {
+      findCityBySlugOrThrow: jest.fn(),
+      findCityByCountryAndSlugOrThrow: jest.fn(),
+    };
     salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
@@ -105,6 +111,23 @@ describe('SalonsService', () => {
       const { where } = prisma.salon.findMany.mock.calls[0][0];
       expect(where.city).toEqual({ slug: 'bengaluru' });
       expect(where.locality).toEqual({ slug: 'indiranagar' });
+    });
+
+    // City.slug is unique only per country, so an unscoped filter could match a same-named city
+    // in a different country. City/locality pages and the sitemap pass countryCode; free-text
+    // search does not, and must keep matching by slug alone exactly as before this field existed.
+    it('scopes the city filter to an exact country when countryCode is supplied', async () => {
+      prisma.salon.findMany.mockResolvedValue([]);
+      await service.search({ city: 'bengaluru', countryCode: 'in' });
+      const { where } = prisma.salon.findMany.mock.calls[0][0];
+      expect(where.city).toEqual({ slug: 'bengaluru', countryCode: 'IN' });
+    });
+
+    it('falls back to matching city by slug alone when no countryCode is given', async () => {
+      prisma.salon.findMany.mockResolvedValue([]);
+      await service.search({ city: 'bengaluru' });
+      const { where } = prisma.salon.findMany.mock.calls[0][0];
+      expect(where.city).toEqual({ slug: 'bengaluru' });
     });
 
     it('returns no nextCursor when results fit within the limit', async () => {
@@ -140,19 +163,19 @@ describe('SalonsService', () => {
 
   describe('getProfile', () => {
     it('throws SALON_NOT_FOUND when no ACTIVE salon matches the slug in that city', async () => {
-      citiesService.findCityBySlugOrThrow.mockResolvedValue({
+      citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
         id: 'c1',
         slug: 'bengaluru',
         countryCode: 'IN',
       });
       prisma.salon.findFirst.mockResolvedValue(null);
       await expect(
-        service.getProfile('bengaluru', 'nonexistent'),
+        service.getProfile('IN', 'bengaluru', 'nonexistent'),
       ).rejects.toMatchObject({ code: 'SALON_NOT_FOUND' });
     });
 
     it('maps the full profile shape including services, hours, photos, and reviews', async () => {
-      citiesService.findCityBySlugOrThrow.mockResolvedValue({
+      citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
         id: 'c1',
         slug: 'bengaluru',
         countryCode: 'IN',
@@ -203,7 +226,7 @@ describe('SalonsService', () => {
         _count: { rating: 1 },
       });
 
-      const profile = await service.getProfile('bengaluru', 'barbercue-demo');
+      const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
 
       expect(profile.services).toEqual([
         {
@@ -234,7 +257,7 @@ describe('SalonsService', () => {
     });
 
     it('defaults a null service category to an empty string (schema allows null, DTO does not)', async () => {
-      citiesService.findCityBySlugOrThrow.mockResolvedValue({
+      citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
         id: 'c1',
         slug: 'bengaluru',
         countryCode: 'IN',
@@ -256,7 +279,7 @@ describe('SalonsService', () => {
           reviews: [],
         }),
       );
-      const profile = await service.getProfile('bengaluru', 'barbercue-demo');
+      const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
       expect(profile.services[0].category).toBe('');
     });
   });

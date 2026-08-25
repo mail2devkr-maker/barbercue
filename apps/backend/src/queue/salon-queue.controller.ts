@@ -16,8 +16,8 @@ import { QueueService } from './queue.service';
 /**
  * Mounted at `salons/:salonId/queue` — a 3-segment shape deliberately, not a bare
  * `salons/:salonId/queue-status`, to avoid the same discovery-route collision class fixed in
- * Phase 3B (SalonsController's `GET salons/:citySlug/:salonSlug` is also a two-dynamic-segment
- * pattern under the same `salons` prefix).
+ * Phase 3B (SalonsController's `GET salons/:countryCode/:citySlug/:salonSlug`, three dynamic
+ * segments as of B9, sits under the same `salons` prefix).
  */
 @Controller('salons/:salonId/queue')
 export class SalonQueueController {

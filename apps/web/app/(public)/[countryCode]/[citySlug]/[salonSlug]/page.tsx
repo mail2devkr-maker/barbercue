@@ -3,36 +3,44 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DISCOVERY_PATHS, formatMoney } from "@barbercue/shared";
 import type { CityDto, LocalityDto, SalonProfileDto } from "@barbercue/shared";
-import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
-import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../lib/seo";
-import { ServiceList } from "../../../../components/discovery/ServiceList";
-import { OperatingHoursTable } from "../../../../components/discovery/OperatingHoursTable";
-import { PhotoGallery } from "../../../../components/discovery/PhotoGallery";
-import { ReviewList } from "../../../../components/discovery/ReviewList";
-import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/discovery/Breadcrumbs";
-import { JsonLd } from "../../../../components/discovery/JsonLd";
+import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
+import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../lib/seo";
+import { ServiceList } from "../../../../../components/discovery/ServiceList";
+import { OperatingHoursTable } from "../../../../../components/discovery/OperatingHoursTable";
+import { PhotoGallery } from "../../../../../components/discovery/PhotoGallery";
+import { ReviewList } from "../../../../../components/discovery/ReviewList";
+import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../components/discovery/Breadcrumbs";
+import { JsonLd } from "../../../../../components/discovery/JsonLd";
 
 interface SalonPageParams {
+  // ISO-3166-1 alpha-2, lowercase in the URL — the backend uppercases it before the (countryCode,
+  // slug) city lookup, so either case resolves identically.
+  countryCode: string;
   citySlug: string;
   salonSlug: string;
 }
 
-async function loadSalon(citySlug: string, salonSlug: string) {
+async function loadSalon(countryCode: string, citySlug: string, salonSlug: string) {
   return fetchDiscoveryOrNull<SalonProfileDto>(
-    `${DISCOVERY_PATHS.salons}/${citySlug}/${salonSlug}`,
+    `${DISCOVERY_PATHS.salons}/${countryCode}/${citySlug}/${salonSlug}`,
     DISCOVERY_REVALIDATE_SECONDS,
   );
 }
 
+/** `/{countryCode}/{citySlug}/{salonSlug}` — B9's canonical public salon URL. */
+function salonPath(salon: SalonProfileDto): string {
+  return `/${salon.countryCode.toLowerCase()}/${salon.citySlug}/${salon.slug}`;
+}
+
 export async function generateMetadata({ params }: { params: Promise<SalonPageParams> }): Promise<Metadata> {
-  const { citySlug, salonSlug } = await params;
-  const salon = await loadSalon(citySlug, salonSlug);
+  const { countryCode, citySlug, salonSlug } = await params;
+  const salon = await loadSalon(countryCode, citySlug, salonSlug);
   if (!salon) return {};
 
   const title = salon.name;
   const description =
     salon.description ?? `${salon.name} — services, prices, hours, and reviews. Book your chair online.`;
-  const url = absoluteUrl(`/${salon.citySlug}/${salon.slug}`);
+  const url = absoluteUrl(salonPath(salon));
 
   return {
     title,
@@ -56,7 +64,7 @@ function buildHairSalonJsonLd(salon: SalonProfileDto) {
     "@context": "https://schema.org",
     "@type": "HairSalon",
     name: salon.name,
-    url: absoluteUrl(`/${salon.citySlug}/${salon.slug}`),
+    url: absoluteUrl(salonPath(salon)),
     telephone: salon.phone ?? undefined,
     address: {
       "@type": "PostalAddress",
@@ -121,21 +129,31 @@ export default async function SalonPage({
   params: Promise<SalonPageParams>;
   searchParams: Promise<{ style?: string }>;
 }) {
-  const { citySlug, salonSlug } = await params;
+  const { countryCode, citySlug, salonSlug } = await params;
   const { style } = await searchParams;
-  const salon = await loadSalon(citySlug, salonSlug);
+  const salon = await loadSalon(countryCode, citySlug, salonSlug);
   if (!salon) notFound();
+
+  // Query params carried into the (unindexed, ?robots: noindex?) booking/queue flows so those
+  // pages can re-resolve the exact same salon: Salon.slug is unique only within one city, and
+  // City.slug is unique only within one country, so both are needed to disambiguate.
+  const cityQuery = `city=${citySlug}&country=${salon.countryCode}`;
 
   // AI Style Advisor hand-off (major-upgrade phase): "Try This Look" carries the chosen style
   // name through search -> this profile page -> the booking form via this one query param, so the
   // final POST /bookings body can include it (Booking.selectedStyleName).
-  const bookHref = `/book/${salon.slug}?city=${citySlug}${style ? `&style=${encodeURIComponent(style)}` : ""}`;
+  const bookHref = `/book/${salon.slug}?${cityQuery}${style ? `&style=${encodeURIComponent(style)}` : ""}`;
+
+  const cityPath = `/${salon.countryCode.toLowerCase()}/${citySlug}`;
 
   const [city, locality] = await Promise.all([
-    fetchDiscoveryOrNull<CityDto>(`${DISCOVERY_PATHS.cities}/${citySlug}`, DISCOVERY_REVALIDATE_SECONDS),
+    fetchDiscoveryOrNull<CityDto>(
+      `${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}`,
+      DISCOVERY_REVALIDATE_SECONDS,
+    ),
     salon.localitySlug
       ? fetchDiscoveryOrNull<LocalityDto>(
-          `${DISCOVERY_PATHS.cities}/${citySlug}/localities/${salon.localitySlug}`,
+          `${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}/localities/${salon.localitySlug}`,
           DISCOVERY_REVALIDATE_SECONDS,
         )
       : Promise.resolve(null),
@@ -143,11 +161,11 @@ export default async function SalonPage({
 
   const breadcrumbItems = [
     { label: "Home", href: "/" },
-    { label: city?.name ?? citySlug, href: `/${citySlug}` },
+    { label: city?.name ?? citySlug, href: cityPath },
     ...(salon.localitySlug
-      ? [{ label: locality?.name ?? salon.localitySlug, href: `/${citySlug}/areas/${salon.localitySlug}` }]
+      ? [{ label: locality?.name ?? salon.localitySlug, href: `${cityPath}/areas/${salon.localitySlug}` }]
       : []),
-    { label: salon.name, href: `/${citySlug}/${salon.slug}` },
+    { label: salon.name, href: salonPath(salon) },
   ];
 
   return (
@@ -182,7 +200,7 @@ export default async function SalonPage({
           Book an appointment
         </Link>
         <Link
-          href={`/queue/${salon.slug}?city=${citySlug}`}
+          href={`/queue/${salon.slug}?${cityQuery}`}
           style={{
             display: "inline-block",
             marginTop: 8,

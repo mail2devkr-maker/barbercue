@@ -1,4 +1,4 @@
-import { CustomerShell } from "../../../components/layout/CustomerShell";
+import { CustomerShell } from "../../../../components/layout/CustomerShell";
 
 // Covers the city page, the locality page (app/(public)/[citySlug]/areas/[localitySlug]), and the
 // salon profile page (app/(public)/[citySlug]/[salonSlug]) — all three are descendants of this

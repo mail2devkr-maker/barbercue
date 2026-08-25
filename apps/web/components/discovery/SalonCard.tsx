@@ -8,7 +8,7 @@ import { formatMoney } from "@barbercue/shared";
 // form. Every other caller (landing page's Featured Shops, plain search) omits it and behaves
 // exactly as before.
 export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; styleName?: string }) {
-  const href = `/${salon.citySlug}/${salon.slug}${styleName ? `?style=${encodeURIComponent(styleName)}` : ""}`;
+  const href = `/${salon.countryCode.toLowerCase()}/${salon.citySlug}/${salon.slug}${styleName ? `?style=${encodeURIComponent(styleName)}` : ""}`;
   return (
     <Link href={href} style={{ textDecoration: "none", color: "inherit" }}>
       <div

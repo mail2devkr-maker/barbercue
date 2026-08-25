@@ -3,28 +3,34 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CityDto, LocalityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
-import { fetchDiscoveryOrNull } from "../../../lib/discovery-api";
-import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../lib/seo";
-import { SalonCard } from "../../../components/discovery/SalonCard";
-import { Breadcrumbs, breadcrumbJsonLd } from "../../../components/discovery/Breadcrumbs";
-import { JsonLd } from "../../../components/discovery/JsonLd";
+import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
+import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../lib/seo";
+import { SalonCard } from "../../../../components/discovery/SalonCard";
+import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/discovery/Breadcrumbs";
+import { JsonLd } from "../../../../components/discovery/JsonLd";
 
 interface CityPageParams {
+  // ISO-3166-1 alpha-2, lowercase in the URL by convention (e.g. "in") — the backend uppercases
+  // it before the (countryCode, slug) lookup, so either case resolves identically.
+  countryCode: string;
   citySlug: string;
 }
 
-async function loadCity(citySlug: string) {
-  return fetchDiscoveryOrNull<CityDto>(`${DISCOVERY_PATHS.cities}/${citySlug}`, DISCOVERY_REVALIDATE_SECONDS);
+async function loadCity(countryCode: string, citySlug: string) {
+  return fetchDiscoveryOrNull<CityDto>(
+    `${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}`,
+    DISCOVERY_REVALIDATE_SECONDS,
+  );
 }
 
 export async function generateMetadata({ params }: { params: Promise<CityPageParams> }): Promise<Metadata> {
-  const { citySlug } = await params;
-  const city = await loadCity(citySlug);
+  const { countryCode, citySlug } = await params;
+  const city = await loadCity(countryCode, citySlug);
   if (!city) return {};
 
   const title = `Barbershops in ${city.name}`;
   const description = `Find and book nearby barbershops in ${city.name}, ${city.state}. See wait times, services, and prices before you go.`;
-  const url = absoluteUrl(`/${city.slug}`);
+  const url = absoluteUrl(`/${city.countryCode.toLowerCase()}/${city.slug}`);
 
   return {
     title,
@@ -35,24 +41,26 @@ export async function generateMetadata({ params }: { params: Promise<CityPagePar
 }
 
 export default async function CityPage({ params }: { params: Promise<CityPageParams> }) {
-  const { citySlug } = await params;
-  const city = await loadCity(citySlug);
+  const { countryCode, citySlug } = await params;
+  const city = await loadCity(countryCode, citySlug);
   if (!city) notFound();
+
+  const cityPath = `/${city.countryCode.toLowerCase()}/${city.slug}`;
 
   const [localities, salons] = await Promise.all([
     fetchDiscoveryOrNull<LocalityDto[]>(
-      `${DISCOVERY_PATHS.cities}/${citySlug}/localities`,
+      `${DISCOVERY_PATHS.cities}/${countryCode}/${citySlug}/localities`,
       DISCOVERY_REVALIDATE_SECONDS,
     ),
     fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
-      `${DISCOVERY_PATHS.salons}?city=${citySlug}`,
+      `${DISCOVERY_PATHS.salons}?city=${citySlug}&countryCode=${city.countryCode}`,
       DISCOVERY_REVALIDATE_SECONDS,
     ),
   ]);
 
   const breadcrumbItems = [
     { label: "Home", href: "/" },
-    { label: city.name, href: `/${city.slug}` },
+    { label: city.name, href: cityPath },
   ];
 
   return (
@@ -71,7 +79,7 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
             {localities.map((l) => (
               <Link
                 key={l.slug}
-                href={`/${city.slug}/areas/${l.slug}`}
+                href={`${cityPath}/areas/${l.slug}`}
                 style={{
                   fontSize: "0.85rem",
                   padding: "6px 12px",

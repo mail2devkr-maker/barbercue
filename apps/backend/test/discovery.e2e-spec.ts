@@ -40,9 +40,9 @@ describe('Discovery (e2e, live database)', () => {
     ).toBe(true);
   });
 
-  it('GET /cities/bengaluru returns the single city detail', async () => {
+  it('GET /cities/in/bengaluru returns the single city detail (country-scoped, B9)', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/cities/bengaluru')
+      .get('/api/v1/cities/in/bengaluru')
       .expect(200);
     expect(res.body).toMatchObject({
       slug: 'bengaluru',
@@ -53,26 +53,26 @@ describe('Discovery (e2e, live database)', () => {
     });
   });
 
-  it('GET /cities/bengaluru/localities includes the seeded Indiranagar locality', async () => {
+  it('GET /cities/in/bengaluru/localities includes the seeded Indiranagar locality', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/cities/bengaluru/localities')
+      .get('/api/v1/cities/in/bengaluru/localities')
       .expect(200);
     const body = res.body as { slug: string }[];
     expect(body.some((l) => l.slug === 'indiranagar')).toBe(true);
   });
 
-  it('GET /cities/:citySlug/localities/:localitySlug 404s for an unknown locality', async () => {
+  it('GET /cities/:countryCode/:citySlug/localities/:localitySlug 404s for an unknown locality', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/cities/bengaluru/localities/does-not-exist')
+      .get('/api/v1/cities/in/bengaluru/localities/does-not-exist')
       .expect(404);
     expect((res.body as { error: { code: string } }).error.code).toBe(
       'LOCALITY_NOT_FOUND',
     );
   });
 
-  it('GET /cities/:citySlug 404s for an unknown city', async () => {
+  it('GET /cities/:countryCode/:citySlug 404s for an unknown city', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/cities/nowhere/localities')
+      .get('/api/v1/cities/in/nowhere/localities')
       .expect(404);
     expect((res.body as { error: { code: string } }).error.code).toBe(
       'CITY_NOT_FOUND',
@@ -96,6 +96,13 @@ describe('Discovery (e2e, live database)', () => {
     expect(salon?.ratingAverage).toBeCloseTo(14 / 3, 5); // ratings 5, 4, 5
   });
 
+  it('GET /cities/:countryCode/:citySlug accepts an uppercase country segment identically', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/cities/IN/bengaluru')
+      .expect(200);
+    expect(res.body).toMatchObject({ slug: 'bengaluru', countryCode: 'IN' });
+  });
+
   it('GET /salons rejects limit > 50 with a validation error, not a 500', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/salons?limit=999')
@@ -105,9 +112,9 @@ describe('Discovery (e2e, live database)', () => {
     );
   });
 
-  it('GET /salons/:citySlug/:salonSlug returns the full seeded profile', async () => {
+  it('GET /salons/:countryCode/:citySlug/:salonSlug returns the full seeded profile (B9)', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/salons/bengaluru/barbercue-demo')
+      .get('/api/v1/salons/in/bengaluru/barbercue-demo')
       .expect(200);
     const body = res.body as {
       name: string;
@@ -125,18 +132,18 @@ describe('Discovery (e2e, live database)', () => {
     expect(body.priceMax).toBe(600); // Hair Spa
   });
 
-  it('GET /salons/:citySlug/:salonSlug 404s for a nonexistent salon', async () => {
+  it('GET /salons/:countryCode/:citySlug/:salonSlug 404s for a nonexistent salon', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/salons/bengaluru/does-not-exist')
+      .get('/api/v1/salons/in/bengaluru/does-not-exist')
       .expect(404);
     expect((res.body as { error: { code: string } }).error.code).toBe(
       'SALON_NOT_FOUND',
     );
   });
 
-  it('GET /salons/:citySlug/:salonSlug 404s when the salon exists but in a different city', async () => {
+  it('GET /salons/:countryCode/:citySlug/:salonSlug 404s when the city does not exist for that country', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/salons/nowhere/barbercue-demo')
+      .get('/api/v1/salons/in/nowhere/barbercue-demo')
       .expect(404);
     expect((res.body as { error: { code: string } }).error.code).toBe(
       'CITY_NOT_FOUND',

@@ -50,7 +50,15 @@ export class SalonsService {
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
 
     const where: Prisma.SalonWhereInput = { status: SalonStatus.ACTIVE };
-    if (query.city) where.city = { slug: query.city };
+    // City.slug is unique only per country (@@unique([countryCode, slug])), so a bare slug filter
+    // can match a same-named city in a different country. countryCode is optional here because
+    // not every caller has one in hand (free-text search, the landing page's featured shops) —
+    // when it's supplied (city/locality pages, sitemap) the filter is exact rather than ambiguous.
+    if (query.city) {
+      where.city = query.countryCode
+        ? { slug: query.city, countryCode: query.countryCode.toUpperCase() }
+        : { slug: query.city };
+    }
     if (query.locality) where.locality = { slug: query.locality };
     if (query.service) {
       where.services = {
@@ -86,10 +94,14 @@ export class SalonsService {
   }
 
   async getProfile(
+    countryCode: string,
     citySlug: string,
     salonSlug: string,
   ): Promise<SalonProfileDto> {
-    const city = await this.citiesService.findCityBySlugOrThrow(citySlug);
+    const city = await this.citiesService.findCityByCountryAndSlugOrThrow(
+      countryCode,
+      citySlug,
+    );
 
     const salon = await this.prisma.salon.findFirst({
       where: { slug: salonSlug, cityId: city.id, status: SalonStatus.ACTIVE },

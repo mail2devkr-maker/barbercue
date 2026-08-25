@@ -30,21 +30,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   for (const city of cities) {
-    entries.push({ url: `${SITE_URL}/${city.slug}`, lastModified: now, changeFrequency: "daily", priority: 0.8 });
+    // B9: country-scoped public URLs. countryCode is lowercased for the URL by convention; the
+    // backend uppercases it before the (countryCode, slug) lookup either way.
+    const countrySegment = city.countryCode.toLowerCase();
+    const cityPath = `${countrySegment}/${city.slug}`;
+    entries.push({ url: `${SITE_URL}/${cityPath}`, lastModified: now, changeFrequency: "daily", priority: 0.8 });
 
     const [localities, salons] = await Promise.all([
-      fetchDiscovery<LocalityDto[]>(`${DISCOVERY_PATHS.cities}/${city.slug}/localities`, revalidate).catch(
-        () => [] as LocalityDto[],
-      ),
+      fetchDiscovery<LocalityDto[]>(
+        `${DISCOVERY_PATHS.cities}/${countrySegment}/${city.slug}/localities`,
+        revalidate,
+      ).catch(() => [] as LocalityDto[]),
       fetchDiscovery<PaginatedResult<SalonListItemDto>>(
-        `${DISCOVERY_PATHS.salons}?city=${city.slug}&limit=50`,
+        `${DISCOVERY_PATHS.salons}?city=${city.slug}&countryCode=${city.countryCode}&limit=50`,
         revalidate,
       ).catch(() => ({ items: [] as SalonListItemDto[], nextCursor: null })),
     ]);
 
     for (const locality of localities) {
       entries.push({
-        url: `${SITE_URL}/${city.slug}/areas/${locality.slug}`,
+        url: `${SITE_URL}/${cityPath}/areas/${locality.slug}`,
         lastModified: now,
         changeFrequency: "weekly",
         priority: 0.6,
@@ -53,7 +58,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     for (const salon of salons.items) {
       entries.push({
-        url: `${SITE_URL}/${salon.citySlug}/${salon.slug}`,
+        url: `${SITE_URL}/${salon.countryCode.toLowerCase()}/${salon.citySlug}/${salon.slug}`,
         lastModified: now,
         changeFrequency: "weekly",
         priority: 0.9,

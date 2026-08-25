@@ -48,20 +48,19 @@ export class SalonsController {
     return this.salonsService.registerSalon(user.id, body);
   }
 
-  // Registered ahead of the :citySlug/:salonSlug wildcard below — both are 1-2 segment GETs on
-  // the same controller, and Nest/Express matches routes in declaration order, so `mine` must be
-  // seen first or a request like GET /salons/mine/<id> would instead be parsed as
-  // citySlug="mine", salonSlug="<id>" and 404 as a public salon lookup instead of reaching here.
+  // `mine` is a single literal segment vs. the three-segment :countryCode/:citySlug/:salonSlug
+  // route below (B9) — different arity, so Nest/Express can never confuse GET /salons/mine/<id>
+  // with a public salon lookup regardless of declaration order.
   @Roles(Role.SALON_OWNER)
   @Get(DISCOVERY_PATHS.mine)
   listMine(@CurrentUser() user: AuthenticatedUser) {
     return this.salonsService.listOwned(user.id);
   }
 
-  // Also a literal single segment, so it must precede :citySlug/:salonSlug for the same reason
-  // `mine` does. Open to staff as well as owners: this is the only route by which a barber can
-  // discover the salon they work at — listMine above is keyed on ownership and returns nothing
-  // for them. Read-only identity; it grants no operational permission of its own.
+  // Also a single literal segment, same arity argument as `mine` above. Open to staff as well as
+  // owners: this is the only route by which a barber can discover the salon they work at —
+  // listMine above is keyed on ownership and returns nothing for them. Read-only identity; it
+  // grants no operational permission of its own.
   @Roles(Role.SALON_OWNER, Role.SALON_STAFF)
   @Get(DISCOVERY_PATHS.workplaces)
   listWorkplaces(@CurrentUser() user: AuthenticatedUser) {
@@ -77,12 +76,17 @@ export class SalonsController {
     return this.salonsService.getOwnedSalon(user.id, salonId);
   }
 
+  // B9: country-scoped public salon URL (/{countryCode}/{citySlug}/{salonSlug}). Resolves through
+  // CitiesService.findCityByCountryAndSlugOrThrow, an exact (countryCode, slug) lookup, so a
+  // salon in "Springfield, US" can never be confused with one in "Springfield, GB" even if both
+  // exist. countryCode is case-insensitive here (see CitiesController).
   @Public()
-  @Get(':citySlug/:salonSlug')
+  @Get(':countryCode/:citySlug/:salonSlug')
   getProfile(
+    @Param('countryCode') countryCode: string,
     @Param('citySlug') citySlug: string,
     @Param('salonSlug') salonSlug: string,
   ) {
-    return this.salonsService.getProfile(citySlug, salonSlug);
+    return this.salonsService.getProfile(countryCode, citySlug, salonSlug);
   }
 }
