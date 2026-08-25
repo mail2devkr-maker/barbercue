@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
-import { AUTH_PATHS, OTP_RESEND_COOLDOWN_SECONDS, otpRequestSchema, otpVerifySchema } from '@barbercue/shared';
+import {
+  AUTH_PATHS,
+  OTP_RESEND_COOLDOWN_SECONDS,
+  otpRequestSchema,
+  otpVerifySchema,
+  type AuthMethodsDto,
+} from '@barbercue/shared';
 import { ApiError, apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 
@@ -81,6 +87,11 @@ export default function PhoneOtpLoginScreen() {
   // top of (never replacing) OtpService's server-side per-phone rate limit. Mirrors apps/web's
   // login page so the two clients behave identically.
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Whether this deployment can actually complete a phone OTP. Null while unknown, so the form is
+  // hidden until we know rather than briefly offering something guaranteed to fail. Mirrors
+  // apps/web's login page exactly — the two clients must not disagree about what sign-in is
+  // available.
+  const [phoneOtpAvailable, setPhoneOtpAvailable] = useState<boolean | null>(null);
 
   // Ticks the cooldown down once a second while on the OTP step. Cleared on unmount/step change
   // (including app backgrounding/killing, since this is component state, not persisted) so no
@@ -92,6 +103,25 @@ export default function PhoneOtpLoginScreen() {
     }, 1000);
     return () => clearInterval(timer);
   }, [step, resendCooldown]);
+
+  // OTP delivery depends on an SMS provider that may not be configured; when it isn't,
+  // auth/otp/request answers 502 OTP_DELIVERY_FAILED after the customer has already typed their
+  // number. Asking the backend up front lets us offer Google instead of a dead end.
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<AuthMethodsDto>(`auth/${AUTH_PATHS.methods}`)
+      .then((m) => {
+        if (!cancelled) setPhoneOtpAvailable(m.phoneOtp);
+      })
+      // If the probe itself fails, show the form as before: a working sign-in method must not
+      // disappear because one extra request was unlucky.
+      .catch(() => {
+        if (!cancelled) setPhoneOtpAvailable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function sendOtp(targetPhone: string): Promise<void> {
     await apiFetch(`auth/${AUTH_PATHS.otpRequest}`, { method: 'POST', body: JSON.stringify({ phone: targetPhone }) });
@@ -159,7 +189,9 @@ export default function PhoneOtpLoginScreen() {
       <Text style={styles.title}>BarberCue</Text>
       <Text style={styles.subtitle}>
         {step === 'phone'
-          ? 'Continue with Google, or use a one-time code. New here? This creates your account automatically.'
+          ? phoneOtpAvailable === false
+            ? 'Continue with Google. New here? This creates your account automatically.'
+            : 'Continue with Google, or use a one-time code. New here? This creates your account automatically.'
           : `Enter the code sent to ${phone}.`}
       </Text>
 
@@ -169,17 +201,28 @@ export default function PhoneOtpLoginScreen() {
       {step === 'phone' ? (
         <>
           {GOOGLE_CONFIGURED && <GoogleSignInButton />}
-          <TextInput
-            style={styles.input}
-            placeholder="+919876543210"
-            placeholderTextColor="#B8AFA0"
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
-          />
-          <Pressable style={styles.button} onPress={() => void requestOtp()} disabled={submitting}>
-            {submitting ? <ActivityIndicator color="#EDE6DA" /> : <Text style={styles.buttonText}>Send OTP</Text>}
-          </Pressable>
+          {phoneOtpAvailable === false ? (
+            <Text style={styles.subtitle}>
+              Phone sign-in is temporarily unavailable. Please continue with Google above — it&apos;s
+              the same account either way.
+            </Text>
+          ) : phoneOtpAvailable === null ? (
+            <ActivityIndicator color="#B8AFA0" />
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="+919876543210"
+                placeholderTextColor="#B8AFA0"
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+              />
+              <Pressable style={styles.button} onPress={() => void requestOtp()} disabled={submitting}>
+                {submitting ? <ActivityIndicator color="#EDE6DA" /> : <Text style={styles.buttonText}>Send OTP</Text>}
+              </Pressable>
+            </>
+          )}
         </>
       ) : (
         <>
