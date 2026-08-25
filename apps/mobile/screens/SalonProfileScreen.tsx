@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { DISCOVERY_PATHS } from '@barbercue/shared';
+import { DISCOVERY_PATHS, formatMoney } from '@barbercue/shared';
 import type { SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import type { RootStackParamList } from '../navigation/types';
@@ -88,7 +88,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardTitle}>₹{item.price}</Text>
+              <Text style={styles.cardTitle}>{formatMoney(item.price, salon?.currency ?? null, salon?.countryCode)}</Text>
             </View>
             <Text style={styles.cardSubtitle}>{item.durationMinutes} min</Text>
           </Pressable>

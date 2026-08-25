@@ -70,7 +70,13 @@ export interface SalonSummary {
   citySlug: string;
   localitySlug?: string;
   addressLine: string;
-  // Indian 6-digit PIN code. Null for salons registered before the field existed.
+  // ISO-3166-1 alpha-2 of the salon's city — drives postal labels, phone hints and number
+  // grouping on the client without a second lookup.
+  countryCode: string;
+  // ISO-4217. Null where the country has no authoritative mapping wired yet; clients must render
+  // a bare amount rather than assuming a symbol (see formatMoney).
+  currency: string | null;
+  // Postal/ZIP code as entered. Format is country-specific — see postalCodeRuleFor.
   postalCode: string | null;
   // Null when the owner registered without granting GPS permission (or from a desktop). Consumed
   // only by the schema.org `geo` block on the public salon page, which omits itself when absent.
@@ -240,6 +246,8 @@ export interface AvailabilitySlotDto {
 // Adds display fields a UI needs (booking confirmation, list, detail) without extra round-trips —
 // same pattern as SalonListItemDto extending SalonSummary in Phase 3A.
 export interface BookingDetailDto extends BookingDto {
+  // ISO-4217 of the salon this booking belongs to; null when unknown.
+  currency: string | null;
   salonName: string;
   salonSlug: string;
   citySlug: string;
@@ -415,6 +423,8 @@ export interface SalonServiceDto {
   price: number;
   category: string | null;
   isActive: boolean;
+  // ISO-4217 of the owning salon; null when unknown. Prices are major units.
+  currency: string | null;
 }
 
 // Owner-facing chair. ChairOptionDto (above) stays the queue dashboard's lighter read model;

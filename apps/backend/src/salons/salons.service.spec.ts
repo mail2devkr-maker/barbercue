@@ -20,7 +20,8 @@ function makeSalon(overrides: Partial<Record<string, unknown>> = {}) {
     addressLine: '100 Indiranagar 12th Main',
     lat: 12.9716,
     lng: 77.6412,
-    city: { slug: 'bengaluru' },
+    city: { slug: 'bengaluru', countryCode: 'IN' },
+    currency: 'INR',
     locality: { slug: 'indiranagar' },
     photos: [],
     ...overrides,
@@ -142,6 +143,7 @@ describe('SalonsService', () => {
       citiesService.findCityBySlugOrThrow.mockResolvedValue({
         id: 'c1',
         slug: 'bengaluru',
+        countryCode: 'IN',
       });
       prisma.salon.findFirst.mockResolvedValue(null);
       await expect(
@@ -153,6 +155,7 @@ describe('SalonsService', () => {
       citiesService.findCityBySlugOrThrow.mockResolvedValue({
         id: 'c1',
         slug: 'bengaluru',
+        countryCode: 'IN',
       });
       prisma.salon.findFirst.mockResolvedValue(
         makeSalon({
@@ -234,6 +237,7 @@ describe('SalonsService', () => {
       citiesService.findCityBySlugOrThrow.mockResolvedValue({
         id: 'c1',
         slug: 'bengaluru',
+        countryCode: 'IN',
       });
       prisma.salon.findFirst.mockResolvedValue(
         makeSalon({
@@ -261,6 +265,7 @@ describe('SalonsService', () => {
     const input = {
       name: 'Fresh Cuts & Co.',
       addressLine: '12 MG Road',
+      countryCode: 'IN',
       postalCode: '560001',
       lat: 12.97,
       lng: 77.59,
@@ -271,6 +276,7 @@ describe('SalonsService', () => {
       citiesService.findCityBySlugOrThrow.mockResolvedValue({
         id: 'c1',
         slug: 'bengaluru',
+        countryCode: 'IN',
       });
     });
 
@@ -357,6 +363,57 @@ describe('SalonsService', () => {
         }),
       });
       expect(result.id).toBe('s1');
+    });
+
+    // The client sends countryCode so postal validation can run before any DB lookup. If that
+    // were trusted blindly, a caller could pair a lenient country's postal rule with a city in a
+    // strict one and slip an invalid postal code past validation.
+    it('rejects a countryCode that does not match the resolved city', async () => {
+      citiesService.findCityBySlugOrThrow.mockResolvedValue({
+        id: 'c1',
+        slug: 'bengaluru',
+        countryCode: 'IN',
+      });
+
+      await expect(
+        service.registerSalon('owner-1', { ...input, countryCode: 'GB' }),
+      ).rejects.toMatchObject({ code: 'CITY_COUNTRY_MISMATCH' });
+      expect(prisma.salon.create).not.toHaveBeenCalled();
+    });
+
+    it('stores the currency derived from the city country', async () => {
+      prisma.salon.create.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+
+      await service.registerSalon('owner-1', input);
+
+      expect(prisma.salon.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ currency: 'INR' }),
+      });
+    });
+
+    // Nothing can derive an IANA zone at registration yet — GPS is optional and no lookup is
+    // wired — so a guessed timezone would be worse than none.
+    it('does not invent a timezone at registration', async () => {
+      prisma.salon.create.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+
+      await service.registerSalon('owner-1', input);
+
+      const [args] = prisma.salon.create.mock.calls[0] as [
+        { data: Record<string, unknown> },
+      ];
+      expect(args.data.timezone).toBeUndefined();
     });
 
     it('throws LOCALITY_NOT_FOUND when localitySlug is given but does not exist in the city', async () => {

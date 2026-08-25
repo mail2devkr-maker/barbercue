@@ -3,3 +3,4 @@ export * from './types';
 export * from './schemas';
 export * from './calc';
 export * from './constants';
+export * from './locale';

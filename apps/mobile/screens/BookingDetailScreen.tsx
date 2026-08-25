@@ -6,6 +6,7 @@ import {
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
   computeCancellationCharge,
+  formatMoney,
 } from '@barbercue/shared';
 import type {
   BookingDetailDto,
@@ -149,7 +150,7 @@ export default function BookingDetailScreen({ route }: Props) {
         <Text style={styles.subtitle}>Preferred barber: {booking.preferredStaffName}</Text>
       )}
       {booking.cancellationChargeAmount !== null && booking.cancellationChargeAmount > 0 && (
-        <Text style={styles.subtitle}>Cancellation charge: ₹{booking.cancellationChargeAmount}</Text>
+        <Text style={styles.subtitle}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
       )}
       {error && <Text style={styles.error}>{error}</Text>}
 
@@ -165,7 +166,7 @@ export default function BookingDetailScreen({ route }: Props) {
           {previewLoading && <ActivityIndicator color="#EDE6DA" style={{ marginTop: 8 }} />}
           {!previewLoading && preview !== null && preview > 0 && (
             <Text style={styles.subtitle}>
-              Cancelling now will charge ₹{preview} (outside the free cancellation window).
+              Cancelling now will charge {formatMoney(preview, booking.currency)} (outside the free cancellation window).
             </Text>
           )}
           {!previewLoading && preview === 0 && (

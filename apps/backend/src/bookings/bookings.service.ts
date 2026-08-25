@@ -33,7 +33,12 @@ const TRANSACTION_OPTIONS = { timeout: 15_000 };
 // never drifts across call sites — same pattern as salons.service.ts's listInclude.
 const bookingDetailInclude = {
   salon: {
-    select: { name: true, slug: true, city: { select: { slug: true } } },
+    select: {
+      name: true,
+      slug: true,
+      currency: true,
+      city: { select: { slug: true } },
+    },
   },
   service: { select: { name: true, durationMinutes: true, price: true } },
   preferredStaff: { select: { displayName: true } },
@@ -345,6 +350,8 @@ export class BookingsService {
           ? Number(booking.cancellationChargeAmount)
           : null,
       selectedStyleName: booking.selectedStyleName,
+      // Salon-scoped: a booking's amounts are denominated in its salon's currency.
+      currency: booking.salon.currency,
       salonName: booking.salon.name,
       salonSlug: booking.salon.slug,
       citySlug: booking.salon.city.slug,

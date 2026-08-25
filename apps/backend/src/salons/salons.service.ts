@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import {
   Role,
   SalonStatus,
+  currencyForCountry,
   type PaginatedResult,
   type RegisterSalonInput,
   type RegisterSalonResultDto,
@@ -120,6 +121,8 @@ export class SalonsService {
       citySlug: salon.city.slug,
       localitySlug: salon.locality?.slug,
       addressLine: salon.addressLine,
+      countryCode: salon.city.countryCode,
+      currency: salon.currency,
       postalCode: salon.postalCode,
       lat: salon.lat,
       lng: salon.lng,
@@ -177,6 +180,17 @@ export class SalonsService {
   ): Promise<RegisterSalonResultDto> {
     const city = await this.citiesService.findCityBySlugOrThrow(input.citySlug);
 
+    // The client sends countryCode so postal validation can run before any lookup. Re-check it
+    // against the city we actually resolved: without this, a caller could pair a country with a
+    // lenient postal rule against a city in a country with a strict one and bypass the rule.
+    if (city.countryCode !== input.countryCode) {
+      throw new AppException(
+        'CITY_COUNTRY_MISMATCH',
+        'That city does not belong to the selected country.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     let localityId: string | null = null;
     if (input.localitySlug) {
       const locality = await this.prisma.locality.findUnique({
@@ -209,7 +223,13 @@ export class SalonsService {
               cityId: city.id,
               localityId,
               addressLine: input.addressLine,
-              postalCode: input.postalCode,
+              postalCode: input.postalCode ?? null,
+              // Derived from the country, and only where that mapping is authoritative — an
+              // unlisted country leaves this null rather than guessing a currency, and the UI
+              // then renders a bare amount instead of a wrong symbol. `timezone` is deliberately
+              // NOT set here: nothing can determine an IANA zone yet (GPS is optional, no lookup
+              // is wired), so inventing one would be worse than leaving it null.
+              currency: currencyForCountry(city.countryCode),
               // Absent when the owner declined GPS — stored as NULL, not 0/0 (a real place in
               // the Gulf of Guinea), so "unknown" stays distinguishable from "there".
               lat: input.lat ?? null,
@@ -370,6 +390,8 @@ export class SalonsService {
       citySlug: salon.city.slug,
       localitySlug: salon.locality?.slug,
       addressLine: salon.addressLine,
+      countryCode: salon.city.countryCode,
+      currency: salon.currency,
       postalCode: salon.postalCode,
       lat: salon.lat,
       lng: salon.lng,

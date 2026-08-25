@@ -6,11 +6,16 @@ function decimal(value: string) {
 
 describe('SalonServicesService', () => {
   let service: SalonServicesService;
-  let prisma: { service: { findMany: jest.Mock; findFirst: jest.Mock; create: jest.Mock; update: jest.Mock } };
+  let prisma: {
+    salon: { findUnique: jest.Mock };
+    service: { findMany: jest.Mock; findFirst: jest.Mock; create: jest.Mock; update: jest.Mock };
+  };
   let salonAccess: { assertAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
+      // toDto now reads the owning salon's currency so prices can be formatted per-country.
+      salon: { findUnique: jest.fn().mockResolvedValue({ currency: 'INR' }) },
       service: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
@@ -65,7 +70,7 @@ describe('SalonServicesService', () => {
         data: expect.objectContaining({ salonId: 'salon-1', name: 'Haircut', price: '300', durationMinutes: 30, isActive: true }),
       });
       expect(result).toEqual({
-        id: 'svc-1', name: 'Haircut', durationMinutes: 30, price: 300, category: 'Hair', isActive: true,
+        id: 'svc-1', name: 'Haircut', durationMinutes: 30, price: 300, category: 'Hair', isActive: true, currency: 'INR',
       });
       expect(typeof result.price).toBe('number');
     });

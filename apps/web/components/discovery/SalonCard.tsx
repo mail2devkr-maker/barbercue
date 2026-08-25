@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { SalonListItemDto } from "@barbercue/shared";
+import { formatMoney } from "@barbercue/shared";
 
 // styleName is optional and only ever set by the search page when the visitor arrived via the AI
 // Style Advisor's "Try This Look" hand-off — forwarded into the link so the chosen style survives
@@ -29,8 +30,10 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
           )}
           {salon.priceMin !== null && (
             <span>
-              ₹{salon.priceMin}
-              {salon.priceMax !== salon.priceMin ? `–₹${salon.priceMax}` : ""}
+              {formatMoney(salon.priceMin, salon.currency, salon.countryCode)}
+              {salon.priceMax !== null && salon.priceMax !== salon.priceMin
+                ? `–${formatMoney(salon.priceMax, salon.currency, salon.countryCode)}`
+                : ""}
             </span>
           )}
         </div>

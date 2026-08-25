@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { DASHBOARD_PATHS } from "@barbercue/shared";
+import { DASHBOARD_PATHS, formatMoney } from "@barbercue/shared";
 import type { SalonServiceDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 
@@ -24,7 +24,7 @@ const EMPTY_DRAFT: Draft = { name: "", price: "", durationMinutes: "30" };
 function validate(draft: Draft): string | null {
   if (!draft.name.trim()) return "Give the service a name, like “Haircut”.";
   const price = Number(draft.price);
-  if (!Number.isFinite(price) || price < 0) return "Enter the price in rupees, like 300.";
+  if (!Number.isFinite(price) || price < 0) return "Enter a price, like 300.";
   if (price > MAX_PRICE) return "That price looks too high — please check it.";
   const minutes = Number(draft.durationMinutes);
   if (!Number.isInteger(minutes) || minutes < MIN_MINUTES || minutes > MAX_MINUTES) {
@@ -50,6 +50,12 @@ export default function DashboardServicesPage({
   // id of the service currently being edited inline, plus its working copy.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(EMPTY_DRAFT);
+
+  // Shown next to the price label. Derived from the salon's own currency, so an owner outside
+  // India is never told to enter rupees; omitted entirely when the currency is unknown rather
+  // than guessing one.
+  const salonCurrency = services?.find((s) => s.currency)?.currency ?? null;
+  const currencyLabel = salonCurrency ? ` (${salonCurrency})` : "";
 
   useEffect(() => {
     let cancelled = false;
@@ -165,7 +171,7 @@ export default function DashboardServicesPage({
           />
         </div>
         <div style={{ flex: "1 1 110px" }}>
-          <label style={labelStyle} htmlFor="svc-price">Price (₹)</label>
+          <label style={labelStyle} htmlFor="svc-price">Price{currencyLabel}</label>
           <input
             id="svc-price"
             type="number"
@@ -220,7 +226,7 @@ export default function DashboardServicesPage({
                     />
                   </div>
                   <div style={{ flex: "1 1 100px" }}>
-                    <label style={labelStyle} htmlFor={`edit-price-${s.id}`}>Price (₹)</label>
+                    <label style={labelStyle} htmlFor={`edit-price-${s.id}`}>Price{currencyLabel}</label>
                     <input
                       id={`edit-price-${s.id}`}
                       type="number"
@@ -261,7 +267,7 @@ export default function DashboardServicesPage({
                 <div style={{ minWidth: 0 }}>
                   <strong style={{ opacity: s.isActive ? 1 : 0.55 }}>{s.name}</strong>
                   <div style={{ fontSize: 13, color: "#6B6357" }}>
-                    ₹{s.price} · {s.durationMinutes} min{!s.isActive && " · turned off"}
+                    {formatMoney(s.price, s.currency)} · {s.durationMinutes} min{!s.isActive && " · turned off"}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

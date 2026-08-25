@@ -12,6 +12,7 @@ import {
   type OperatingHoursDto,
   type ServiceDto,
   type StaffOptionDto,
+  formatMoney,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
@@ -27,10 +28,15 @@ export function BookingFlow({
   services,
   operatingHours,
   selectedStyleName,
+  currency,
+  countryCode,
 }: {
   salonId: string;
   services: ServiceDto[];
   operatingHours: OperatingHoursDto[];
+  // From the salon this flow belongs to — every amount shown here is in its currency.
+  currency: string | null;
+  countryCode?: string | null;
   // AI Style Advisor hand-off (major-upgrade phase) — set only when this flow was reached via
   // "Try This Look"; threaded straight into the booking-creation body when present.
   selectedStyleName?: string;
@@ -173,13 +179,13 @@ export function BookingFlow({
         <p>
           Status: <strong>{booking.status}</strong>
           {booking.status === "PENDING_PAYMENT" && booking.prepaymentRequiredAmount !== null && (
-            <> — prepayment of ₹{booking.prepaymentRequiredAmount} required</>
+            <> — prepayment of {formatMoney(booking.prepaymentRequiredAmount, currency, countryCode)} required</>
           )}
         </p>
         {cancelResult && (
           <p>
             {cancelResult.chargeAmount > 0
-              ? `A cancellation charge of ₹${cancelResult.chargeAmount} has been added to your account.`
+              ? `A cancellation charge of ${formatMoney(cancelResult.chargeAmount, currency, countryCode)} has been added to your account.`
               : "No cancellation charge was applied."}
           </p>
         )}
@@ -212,7 +218,13 @@ export function BookingFlow({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24, marginTop: 24 }}>
-      <ServiceStep services={services} selectedServiceId={selectedServiceId} onSelect={handleSelectService} />
+      <ServiceStep
+        services={services}
+        selectedServiceId={selectedServiceId}
+        onSelect={handleSelectService}
+        currency={currency}
+        countryCode={countryCode}
+      />
 
       {selectedServiceId && (
         <StaffStep

@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DISCOVERY_PATHS, INDIAN_PIN_CODE_REGEX, registerSalonSchema } from "@barbercue/shared";
+import {
+  DISCOVERY_PATHS,
+  isValidPostalCode,
+  phonePlaceholderForCountry,
+  postalCodeRuleFor,
+  registerSalonSchema,
+} from "@barbercue/shared";
 import type { CityDto, LocalityDto, RegisterSalonResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
@@ -43,6 +49,7 @@ const secondaryButtonStyle: React.CSSProperties = {
 };
 
 interface FormState {
+  countryCode: string;
   name: string;
   phone: string;
   email: string;
@@ -53,6 +60,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
+  countryCode: "",
   name: "",
   phone: "",
   email: "",
@@ -136,8 +144,27 @@ export function RegisterSalonForm() {
   // the select below renders [] the instant citySlug is empty, no extra render needed.
   const localityOptions = form.citySlug ? localities : [];
 
+  // Countries come from the cities that actually exist, never from a hardcoded list: offering a
+  // country with no city behind it would be a dead end, and inventing City rows to populate a
+  // menu would be fabricated data.
+  const countries = Array.from(
+    new Map(cities.map((c) => [c.countryCode, c.country])).entries(),
+  )
+    .map(([code, name]) => ({ code, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const cityOptions = form.countryCode
+    ? cities.filter((c) => c.countryCode === form.countryCode)
+    : [];
+  const postalRule = postalCodeRuleFor(form.countryCode);
+
   function update<K extends keyof FormState>(key: K, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value, ...(key === "citySlug" ? { localitySlug: "" } : {}) }));
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+      // Changing country invalidates the city, which invalidates the locality.
+      ...(key === "countryCode" ? { citySlug: "", localitySlug: "" } : {}),
+      ...(key === "citySlug" ? { localitySlug: "" } : {}),
+    }));
   }
 
   // Only ever called from the button's onClick, never on mount. Browsers raise the permission
@@ -174,9 +201,17 @@ export function RegisterSalonForm() {
     e.preventDefault();
     setError(null);
 
-    // Checked ahead of the schema parse so a wrong PIN reads as advice, not as a regex failure.
-    if (!INDIAN_PIN_CODE_REGEX.test(form.postalCode.trim())) {
-      setError("Please enter your 6-digit PIN code, for example 560001.");
+    if (!form.countryCode) {
+      setError("Please choose the country your shop is in.");
+      return;
+    }
+    // Checked ahead of the schema parse so a bad postal code reads as advice, not a regex failure.
+    if (!isValidPostalCode(form.countryCode, form.postalCode)) {
+      setError(
+        postalRule.example
+          ? `Please enter a valid ${postalRule.label}, for example ${postalRule.example}.`
+          : `Please enter a valid ${postalRule.label}.`,
+      );
       return;
     }
 
@@ -185,7 +220,8 @@ export function RegisterSalonForm() {
       phone: form.phone.trim() || undefined,
       email: form.email.trim() || undefined,
       addressLine: form.addressLine.trim(),
-      postalCode: form.postalCode.trim(),
+      countryCode: form.countryCode,
+      postalCode: form.postalCode.trim() || undefined,
       citySlug: form.citySlug,
       localitySlug: form.localitySlug || undefined,
       ...(location.kind === "detected" ? { lat: location.lat, lng: location.lng } : {}),
@@ -222,6 +258,25 @@ export function RegisterSalonForm() {
       )}
 
       <div style={fieldWrapStyle}>
+        <label style={labelStyle} htmlFor="shop-country">Country</label>
+        <select
+          id="shop-country"
+          style={inputStyle}
+          value={form.countryCode}
+          onChange={(e) => update("countryCode", e.target.value)}
+          required
+        >
+          <option value="">Select a country…</option>
+          {countries.map((c) => (
+            <option key={c.code} value={c.code}>{c.name}</option>
+          ))}
+        </select>
+        {countries.length === 0 && (
+          <p style={hintStyle}>Loading countries…</p>
+        )}
+      </div>
+
+      <div style={fieldWrapStyle}>
         <label style={labelStyle} htmlFor="shop-name">Shop name</label>
         <input
           id="shop-name"
@@ -240,6 +295,7 @@ export function RegisterSalonForm() {
           type="tel"
           inputMode="tel"
           autoComplete="tel"
+          placeholder={phonePlaceholderForCountry(form.countryCode)}
           style={inputStyle}
           value={form.phone}
           onChange={(e) => update("phone", e.target.value)}
@@ -273,34 +329,46 @@ export function RegisterSalonForm() {
       </div>
 
       <div style={fieldWrapStyle}>
-        <label style={labelStyle} htmlFor="shop-pin">PIN Code</label>
+        <label style={labelStyle} htmlFor="shop-pin">{postalRule.label}</label>
         <input
           id="shop-pin"
           // type="text" + inputMode="numeric", not type="number": a PIN code is an identifier,
           // and a number input brings spinner arrows, accepts "1e5", and silently strips a
           // leading zero the owner typed.
           type="text"
-          inputMode="numeric"
+          // Numeric keypad only where the country's codes are digits-only (India). Elsewhere
+          // postal codes contain letters, so forcing a numeric keypad would block valid input.
+          inputMode={postalRule.regex.source.includes('[A-Za-z]') ? "text" : "numeric"}
           autoComplete="postal-code"
-          pattern="[1-9][0-9]{5}"
-          maxLength={6}
-          required
-          placeholder="560001"
+          maxLength={12}
+          required={postalRule.required}
+          placeholder={postalRule.example}
           style={{ ...inputStyle, maxWidth: 180, letterSpacing: "0.06em" }}
           value={form.postalCode}
-          // Strip non-digits as they're typed so a pasted "560 001" becomes valid instead of
-          // being rejected at submit.
-          onChange={(e) => update("postalCode", e.target.value.replace(/\D/g, "").slice(0, 6))}
+          onChange={(e) => update("postalCode", e.target.value.slice(0, 12))}
         />
-        <p style={hintStyle}>The 6-digit PIN code of your shop&apos;s area.</p>
+        <p style={hintStyle}>
+          {postalRule.required
+            ? `The ${postalRule.label.toLowerCase()} of your shop's area.`
+            : `The ${postalRule.label.toLowerCase()} of your shop's area, if your country uses one.`}
+        </p>
       </div>
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", ...fieldWrapStyle }}>
         <div style={{ flex: "1 1 180px" }}>
           <label style={labelStyle} htmlFor="shop-city">City</label>
-          <select id="shop-city" style={inputStyle} value={form.citySlug} onChange={(e) => update("citySlug", e.target.value)} required>
-            <option value="">Select a city…</option>
-            {cities.map((c) => (
+          <select
+            id="shop-city"
+            style={inputStyle}
+            value={form.citySlug}
+            onChange={(e) => update("citySlug", e.target.value)}
+            disabled={!form.countryCode}
+            required
+          >
+            <option value="">
+              {form.countryCode ? "Select a city…" : "Choose a country first"}
+            </option>
+            {cityOptions.map((c) => (
               <option key={c.slug} value={c.slug}>{c.name}</option>
             ))}
           </select>

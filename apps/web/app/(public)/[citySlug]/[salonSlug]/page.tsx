@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { DISCOVERY_PATHS } from "@barbercue/shared";
+import { DISCOVERY_PATHS, formatMoney } from "@barbercue/shared";
 import type { CityDto, LocalityDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../lib/seo";
@@ -63,7 +63,9 @@ function buildHairSalonJsonLd(salon: SalonProfileDto) {
       streetAddress: salon.addressLine,
       addressLocality: salon.localitySlug ?? salon.citySlug,
       postalCode: salon.postalCode ?? undefined,
-      addressCountry: "IN",
+      // From the salon's own city, never a hardcoded country: emitting "IN" for a business
+      // outside India is false structured data that search engines act on.
+      addressCountry: salon.countryCode,
     },
     // Omitted entirely when the owner registered without GPS — same rule as aggregateRating
     // above. A GeoCoordinates with null lat/lng is invalid structured data, and emitting one
@@ -93,7 +95,12 @@ function buildHairSalonJsonLd(salon: SalonProfileDto) {
         closes: h.closeTime,
       })),
     ...(salon.priceMin !== null && salon.priceMax !== null
-      ? { priceRange: salon.priceMin === salon.priceMax ? `₹${salon.priceMin}` : `₹${salon.priceMin}–₹${salon.priceMax}` }
+      ? {
+          priceRange:
+            salon.priceMin === salon.priceMax
+              ? formatMoney(salon.priceMin, salon.currency, salon.countryCode)
+              : `${formatMoney(salon.priceMin, salon.currency, salon.countryCode)}–${formatMoney(salon.priceMax, salon.currency, salon.countryCode)}`,
+        }
       : {}),
     ...(salon.ratingCount > 0
       ? {
@@ -198,7 +205,11 @@ export default async function SalonPage({
 
       <section style={{ marginTop: 24 }}>
         <h2 style={{ fontSize: "1.1rem" }}>Services</h2>
-        <ServiceList services={salon.services} />
+        <ServiceList
+          services={salon.services}
+          currency={salon.currency}
+          countryCode={salon.countryCode}
+        />
       </section>
 
       <section style={{ marginTop: 24 }}>

@@ -33,7 +33,8 @@ export class SalonServicesService {
       where: { salonId },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
     });
-    return services.map((s) => this.toDto(s));
+    const currency = await this.currencyFor(salonId);
+    return services.map((s) => this.toDto(s, currency));
   }
 
   async create(
@@ -54,7 +55,7 @@ export class SalonServicesService {
         isActive: true,
       },
     });
-    return this.toDto(created);
+    return this.toDto(created, await this.currencyFor(salonId));
   }
 
   async update(
@@ -89,17 +90,29 @@ export class SalonServicesService {
         ...(input.isActive !== undefined && { isActive: input.isActive }),
       },
     });
-    return this.toDto(updated);
+    return this.toDto(updated, await this.currencyFor(salonId));
   }
 
-  private toDto(service: {
-    id: string;
-    name: string;
-    durationMinutes: number;
-    price: unknown;
-    category: string | null;
-    isActive: boolean;
-  }): SalonServiceDto {
+  /** The owning salon's ISO-4217 currency, or null where none is recorded yet. */
+  private async currencyFor(salonId: string): Promise<string | null> {
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { currency: true },
+    });
+    return salon?.currency ?? null;
+  }
+
+  private toDto(
+    service: {
+      id: string;
+      name: string;
+      durationMinutes: number;
+      price: unknown;
+      category: string | null;
+      isActive: boolean;
+    },
+    currency: string | null,
+  ): SalonServiceDto {
     return {
       id: service.id,
       name: service.name,
@@ -107,6 +120,7 @@ export class SalonServicesService {
       price: Number(service.price),
       category: service.category,
       isActive: service.isActive,
+      currency,
     };
   }
 }

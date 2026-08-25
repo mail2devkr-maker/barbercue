@@ -8,6 +8,7 @@ import {
   StaffMemberStatus,
 } from '../enums';
 import { PREMIUM_PLAN_IDS } from '../constants';
+import { isValidPostalCode, postalCodeRuleFor } from '../locale';
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
 // The backend is always the authority — these schemas exist so both sides reject bad input the
@@ -73,9 +74,15 @@ export const registerSalonSchema = z
     phone: z.string().optional(),
     email: z.string().email().optional(),
     addressLine: z.string().min(1).max(300),
-    postalCode: z
-      .string()
-      .regex(INDIAN_PIN_CODE_REGEX, 'Enter a valid 6-digit PIN code'),
+    // ISO-3166-1 alpha-2 of the selected city's country. Sent by the client so postal validation
+    // below can pick the right rule before any database lookup; SalonsService independently
+    // verifies it matches the resolved City, so a mismatched value cannot be used to bypass a
+    // country's postal rule.
+    countryCode: z.string().length(2),
+    // Country-aware. India keeps exactly the rule it had (6 digits, no leading zero); every other
+    // country falls back to a permissive pattern rather than a guessed one, and countries with no
+    // postal system may leave it blank. See postalCodeRuleFor in ../locale.
+    postalCode: z.string().max(12).optional(),
     // Optional since Phase 11: coordinates are captured from the device's GPS by the registration
     // form's "Use my current location" button, never typed. An owner who denies that permission —
     // or registers from a desktop with no GPS — still gets a working shop; the address + city +
@@ -91,6 +98,17 @@ export const registerSalonSchema = z
   .refine((v) => (v.lat === undefined) === (v.lng === undefined), {
     message: 'Latitude and longitude must be provided together',
     path: ['lat'],
+  })
+  .superRefine((v, ctx) => {
+    if (isValidPostalCode(v.countryCode, v.postalCode)) return;
+    const rule = postalCodeRuleFor(v.countryCode);
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['postalCode'],
+      message: rule.example
+        ? `Enter a valid ${rule.label} (for example ${rule.example})`
+        : `Enter a valid ${rule.label}`,
+    });
   });
 export type RegisterSalonInput = z.infer<typeof registerSalonSchema>;
 

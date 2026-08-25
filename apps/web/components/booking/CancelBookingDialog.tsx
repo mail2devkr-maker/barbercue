@@ -6,6 +6,7 @@ import {
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
   computeCancellationCharge,
+  formatMoney,
   type BookingDetailDto,
   type CancelBookingResponseDto,
   type CancellationPolicyDto,
@@ -95,7 +96,7 @@ export function CancelBookingDialog({
         {loading && <p style={{ color: "#6B6357" }}>Checking the cancellation policy…</p>}
         {!loading && preview !== null && preview > 0 && (
           <p>
-            Cancelling now will charge <strong>₹{preview}</strong> (outside the free cancellation window).
+            Cancelling now will charge <strong>{formatMoney(preview, booking.currency)}</strong> (outside the free cancellation window).
           </p>
         )}
         {!loading && preview === 0 && <p>No charge — you&apos;re within the free cancellation window.</p>}

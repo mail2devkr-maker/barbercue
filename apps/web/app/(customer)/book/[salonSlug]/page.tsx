@@ -38,6 +38,8 @@ export default async function BookPage({
         salonId={salon.id}
         services={salon.services}
         operatingHours={salon.operatingHours}
+        currency={salon.currency}
+        countryCode={salon.countryCode}
         selectedStyleName={style}
       />
     </main>

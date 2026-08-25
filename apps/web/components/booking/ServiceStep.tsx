@@ -1,15 +1,21 @@
 "use client";
 
 import type { ServiceDto } from "@barbercue/shared";
+import { formatMoney } from "@barbercue/shared";
 
 export function ServiceStep({
   services,
   selectedServiceId,
   onSelect,
+  currency,
+  countryCode,
 }: {
   services: ServiceDto[];
   selectedServiceId: string | null;
   onSelect: (serviceId: string) => void;
+  // Threaded from the owning salon — a service price is denominated in its salon's currency.
+  currency: string | null;
+  countryCode?: string | null;
 }) {
   return (
     <section>
@@ -31,7 +37,7 @@ export function ServiceStep({
           >
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <strong>{service.name}</strong>
-              <span>₹{service.price}</span>
+              <span>{formatMoney(service.price, currency, countryCode)}</span>
             </div>
             <div style={{ color: "#6B6357", fontSize: "0.85rem" }}>{service.durationMinutes} min</div>
           </button>
