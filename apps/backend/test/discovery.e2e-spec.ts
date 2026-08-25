@@ -47,6 +47,7 @@ describe('Discovery (e2e, live database)', () => {
     expect(res.body).toMatchObject({
       slug: 'bengaluru',
       name: 'Bengaluru',
+      countryCode: 'IN',
       state: 'Karnataka',
       country: 'India',
     });

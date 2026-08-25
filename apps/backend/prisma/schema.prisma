@@ -295,14 +295,28 @@ model PasswordResetToken {
 // ---------- Discovery / SEO ----------
 
 model City {
-  id         String     @id @default(uuid())
-  name       String
-  slug       String     @unique
-  state      String
-  country    String
-  localities Locality[]
-  salons     Salon[]
+  id   String @id @default(uuid())
+  name String
+  // No longer globally unique: two countries legitimately share a city name (London GB vs
+  // London CA, Birmingham GB vs Birmingham US), so uniqueness is scoped by country below.
+  slug String
+  // ISO-3166-1 alpha-2. The field logic keys on — `country` below stays as free-text display
+  // data. Required: a city with no country cannot be validated, priced, or routed.
+  countryCode String
+  // ISO-3166-2 subdivision where known. Nullable — many countries have no useful subdivision,
+  // and inventing one would be fabricated data.
+  regionCode  String?
+  state       String
+  country     String
+  localities  Locality[]
+  salons      Salon[]
 
+  @@unique([countryCode, slug])
+  @@index([countryCode])
+  // Serves the interim CitiesService.findFirst({ slug }) lookup. The composite above cannot:
+  // `slug` is not its leading column. Remove once B9's country-scoped routes make every city
+  // lookup carry a countryCode.
+  @@index([slug])
   @@map("cities")
 }
 
@@ -348,6 +362,15 @@ model Salon {
   localityId  String?
   locality    Locality?   @relation(fields: [localityId], references: [id])
   addressLine String
+  // IANA timezone (e.g. "Asia/Kolkata", "Europe/London"). Nullable for now: nothing can yet
+  // derive a zone at registration — GPS is optional and no lookup service is wired — so
+  // requiring it would break registerSalon. AvailabilityService still uses a fixed IST offset
+  // and does NOT read this column yet; that switch is a separate, reviewed change.
+  timezone    String?
+  // ISO-4217 (e.g. "INR", "GBP"). Nullable for the same reason: no source populates it yet.
+  // Money columns are already Decimal and currency-agnostic; this records which currency they
+  // are denominated in.
+  currency    String?
   // Indian 6-digit PIN code. Stored as text, never a number: PIN codes are identifiers, not
   // quantities, and several legitimately need a meaning-bearing shape a numeric type would
   // mangle. Nullable because every salon registered before this column existed has none, and

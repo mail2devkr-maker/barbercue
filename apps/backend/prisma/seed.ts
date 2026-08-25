@@ -128,11 +128,21 @@ interface DemoContext {
 }
 
 async function seedDemoSalon(): Promise<DemoContext | null> {
-  const city = await prisma.city.upsert({
-    where: { slug: CITY_SLUG },
-    update: {},
-    create: { name: 'Bengaluru', slug: CITY_SLUG, state: 'Karnataka', country: 'India' },
-  });
+  // find-then-create rather than upsert-by-slug: city slugs are unique per country now
+  // (@@unique([countryCode, slug])), so `slug` alone is no longer a valid unique selector.
+  const city =
+    (await prisma.city.findFirst({
+      where: { countryCode: 'IN', slug: CITY_SLUG },
+    })) ??
+    (await prisma.city.create({
+      data: {
+        name: 'Bengaluru',
+        slug: CITY_SLUG,
+        countryCode: 'IN',
+        state: 'Karnataka',
+        country: 'India',
+      },
+    }));
 
   const locality = await prisma.locality.upsert({
     where: { cityId_slug: { cityId: city.id, slug: 'indiranagar' } },
@@ -164,6 +174,8 @@ async function seedDemoSalon(): Promise<DemoContext | null> {
       cityId: city.id,
       localityId: locality.id,
       addressLine: '100 Indiranagar 12th Main, Bengaluru',
+      timezone: 'Asia/Kolkata',
+      currency: 'INR',
       lat: 12.9716,
       lng: 77.6412,
       phone: '+918041234567',

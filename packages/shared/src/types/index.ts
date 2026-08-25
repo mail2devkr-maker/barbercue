@@ -94,6 +94,11 @@ export interface CityDto {
   id: string;
   name: string;
   slug: string;
+  // ISO-3166-1 alpha-2. The field client logic should key on — `country` below is free-text
+  // display data and must not be used for validation, currency or routing decisions.
+  countryCode: string;
+  // ISO-3166-2 subdivision where known; null where a country has none worth recording.
+  regionCode: string | null;
   state: string;
   country: string;
 }

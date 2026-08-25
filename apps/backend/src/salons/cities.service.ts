@@ -18,6 +18,8 @@ export class CitiesService {
       id: c.id,
       name: c.name,
       slug: c.slug,
+      countryCode: c.countryCode,
+      regionCode: c.regionCode,
       state: c.state,
       country: c.country,
     }));
@@ -39,6 +41,8 @@ export class CitiesService {
       id: c.id,
       name: c.name,
       slug: c.slug,
+      countryCode: c.countryCode,
+      regionCode: c.regionCode,
       state: c.state,
       country: c.country,
     }));
@@ -50,6 +54,8 @@ export class CitiesService {
       id: city.id,
       name: city.name,
       slug: city.slug,
+      countryCode: city.countryCode,
+      regionCode: city.regionCode,
       state: city.state,
       country: city.country,
     };
@@ -96,7 +102,17 @@ export class CitiesService {
   }
 
   async findCityBySlugOrThrow(citySlug: string) {
-    const city = await this.prisma.city.findUnique({
+    // INTERIM (Batch 2, B2). City slug uniqueness is now scoped by country
+    // (@@unique([countryCode, slug])), so `slug` alone is no longer a unique field and Prisma
+    // will not accept it in findUnique. findFirst is correct while the platform operates in a
+    // single country, but it is NOT the final architecture: once a second country has a city
+    // with the same slug (London GB vs London CA) this becomes ambiguous and silently returns
+    // whichever row Postgres reaches first.
+    //
+    // FINAL: B9's country-scoped routes (/{countryCode}/{citySlug}/...) carry a countryCode into
+    // every lookup, at which point this must become
+    // findUnique({ where: { countryCode_slug: { countryCode, slug } } }).
+    const city = await this.prisma.city.findFirst({
       where: { slug: citySlug },
     });
     if (!city) {
