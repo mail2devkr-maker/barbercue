@@ -32,10 +32,13 @@ export function AuthCard({ title, subtitle, children }: { title: string; subtitl
 
 export const authInputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "0.65rem 0.75rem",
+  padding: "0.7rem 0.75rem",
   borderRadius: 8,
   border: "1px solid #E7E0D3",
-  fontSize: "0.95rem",
+  // Exactly 1rem, not 0.95: below 16px, iOS Safari zooms the whole page in when the field is
+  // focused and never zooms back out. Every auth screen is a phone-first screen — a barber
+  // redeeming their invitation on /reset-password most of all.
+  fontSize: "1rem",
   marginBottom: 12,
 };
 

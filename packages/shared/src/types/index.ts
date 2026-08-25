@@ -1,12 +1,14 @@
 import type {
   BookingSource,
   BookingStatus,
+  ChairStatus,
   ChargeType,
   PhotoType,
   PrepaymentRequirement,
   QueueEntrySource,
   QueueEntryStatus,
   Role,
+  SalonStaffRole,
   SalonStatus,
   StaffMemberStatus,
 } from '../enums';
@@ -54,8 +56,12 @@ export interface SalonSummary {
   citySlug: string;
   localitySlug?: string;
   addressLine: string;
-  lat: number;
-  lng: number;
+  // Indian 6-digit PIN code. Null for salons registered before the field existed.
+  postalCode: string | null;
+  // Null when the owner registered without granting GPS permission (or from a desktop). Consumed
+  // only by the schema.org `geo` block on the public salon page, which omits itself when absent.
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface ServiceDto {
@@ -359,6 +365,67 @@ export interface PublicQueueInfoDto {
 export interface PublicQueueQrDto {
   publicQueueToken: string;
   publicQueueUrl: string;
+}
+
+// ---------- Salon owner setup: services / chairs / staff (Phase 11) ----------
+
+// Owner-facing view of a Service. Distinct from the public ServiceDto above, which is only ever
+// returned for ACTIVE salons and never exposes inactive rows — an owner must see and manage both.
+export interface SalonServiceDto {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  price: number;
+  category: string | null;
+  isActive: boolean;
+}
+
+// Owner-facing chair. ChairOptionDto (above) stays the queue dashboard's lighter read model;
+// this adds the status an owner needs to manage.
+export interface SalonChairDto {
+  id: string;
+  label: string;
+  status: ChairStatus;
+}
+
+// Owner-facing roster entry. `email` comes from the linked User account (SalonStaff itself has no
+// email column) and is what the barber signs in with at /staff/login. `hasPassword` is false
+// until the barber completes their invitation, so the UI can show "invite pending".
+export interface SalonStaffDto {
+  id: string;
+  displayName: string;
+  email: string | null;
+  roleInSalon: SalonStaffRole;
+  status: StaffMemberStatus;
+  hasPassword: boolean;
+}
+
+// POST .../staff response. `inviteUrl` is populated ONLY outside production (same dev-convenience
+// rule as AuthService.forgotPassword's devResetUrl) — in production the link is delivered by
+// EmailSender and never returned over the API.
+export interface StaffInviteResultDto {
+  staff: SalonStaffDto;
+  inviteUrl?: string;
+}
+
+// PATCH dashboard/salons/:salonId/status response — the owner-visible activation state.
+export interface SalonStatusResultDto {
+  id: string;
+  status: SalonStatus;
+}
+
+/**
+ * What a PENDING salon still needs before it can be opened. Carried as the `details` payload of a
+ * SALON_SETUP_INCOMPLETE error so the client can render a per-item checklist ("✓ Service added /
+ * ✗ Add at least one barber") instead of one undifferentiated sentence.
+ *
+ * Each flag counts only rows that are actually usable — an ACTIVE chair, an ACTIVE staff member,
+ * an `isActive` service — because a deactivated one contributes nothing to serving a customer.
+ */
+export interface SalonSetupReadinessDto {
+  hasActiveService: boolean;
+  hasActiveChair: boolean;
+  hasActiveStaff: boolean;
 }
 
 export interface HealthCheckResponse {

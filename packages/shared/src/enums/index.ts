@@ -307,6 +307,22 @@ export type StyleAdvisorErrorCode = (typeof StyleAdvisorErrorCode)[keyof typeof 
 
 // Stable machine-readable error codes for the Premium plans/subscription module — same convention
 // as StyleAdvisorErrorCode.
+// Stable machine-readable error codes for owner-side salon setup (Phase 11) — services, chairs,
+// staff roster, and salon activation. Reuses QueueErrorCode.SALON_ACCESS_DENIED (the existing
+// SalonAccessService failure) and BookingErrorCode.{SALON_NOT_FOUND,SERVICE_NOT_FOUND,
+// STAFF_NOT_FOUND,CHAIR_NOT_FOUND} rather than duplicating them.
+export const SalonSetupErrorCode = {
+  // Another SalonStaff row at this salon is already linked to that email's User account.
+  STAFF_ALREADY_EXISTS: 'STAFF_ALREADY_EXISTS',
+  // The email belongs to a User that is suspended — linking would create an unusable barber.
+  STAFF_ACCOUNT_UNAVAILABLE: 'STAFF_ACCOUNT_UNAVAILABLE',
+  // Owner tried to open a PENDING salon that can't serve anyone yet. The error's `details` carry
+  // a SalonSetupReadinessDto so the UI can tick off what's done and name what's missing, rather
+  // than repeating a generic sentence.
+  SALON_SETUP_INCOMPLETE: 'SALON_SETUP_INCOMPLETE',
+} as const;
+export type SalonSetupErrorCode = (typeof SalonSetupErrorCode)[keyof typeof SalonSetupErrorCode];
+
 export const PremiumErrorCode = {
   PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
   // The dev-only test-activation endpoint was called outside a non-production environment — see

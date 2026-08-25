@@ -261,6 +261,7 @@ describe('SalonsService', () => {
     const input = {
       name: 'Fresh Cuts & Co.',
       addressLine: '12 MG Road',
+      postalCode: '560001',
       lat: 12.97,
       lng: 77.59,
       citySlug: 'bengaluru',
@@ -311,6 +312,51 @@ describe('SalonsService', () => {
         name: 'Fresh Cuts & Co.',
         status: 'PENDING',
       });
+    });
+
+    it('persists the PIN code and the captured coordinates', async () => {
+      prisma.salon.create.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+
+      await service.registerSalon('owner-1', input);
+
+      expect(prisma.salon.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          postalCode: '560001',
+          lat: 12.97,
+          lng: 77.59,
+        }),
+      });
+    });
+
+    // An owner who denies GPS permission (or registers from a desktop) must still get a shop —
+    // address + city + PIN identify it. Coordinates must land as NULL, never as 0/0, which is a
+    // real location in the Gulf of Guinea and would put the shop on a map thousands of km away.
+    it('registers a salon with no coordinates, storing null rather than 0/0', async () => {
+      prisma.salon.create.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+      const { lat: _lat, lng: _lng, ...withoutCoords } = input;
+
+      const result = await service.registerSalon('owner-1', withoutCoords);
+
+      expect(prisma.salon.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          postalCode: '560001',
+          lat: null,
+          lng: null,
+        }),
+      });
+      expect(result.id).toBe('s1');
     });
 
     it('throws LOCALITY_NOT_FOUND when localitySlug is given but does not exist in the city', async () => {

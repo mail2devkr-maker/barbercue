@@ -11,9 +11,13 @@ export default function RegisterShopPage() {
     <RequireRole redirectTo="/login">
       <main style={{ padding: "3rem 1.5rem", maxWidth: 600, margin: "0 auto" }}>
         <h1>Register your barber shop</h1>
+        {/* Phase 11 replaced admin moderation with owner self-activation, so this no longer says
+            "pending review" — nobody reviews it, and implying otherwise leaves owners waiting for
+            an approval that will never arrive. */}
         <p style={{ color: "#6B6357", marginBottom: 28 }}>
           You&apos;ll get a unique shop ID and a dashboard to manage bookings and your live queue.
-          Your shop starts in pending review before it&apos;s visible to customers.
+          Your shop starts closed. Add your services, chairs and barbers, then open it yourself
+          from your dashboard — there&apos;s no waiting for approval.
         </p>
         <RegisterSalonForm />
       </main>

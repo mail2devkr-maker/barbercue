@@ -17,6 +17,7 @@ import { QueueModule } from './queue/queue.module';
 import { StyleAdvisorModule } from './style-advisor/style-advisor.module';
 import { PremiumModule } from './premium/premium.module';
 import { PublicQueueModule } from './public-queue/public-queue.module';
+import { SalonSetupModule } from './salon-setup/salon-setup.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PublicQueueModule } from './public-queue/public-queue.module';
     PremiumModule,
     StyleAdvisorModule,
     PublicQueueModule,
+    SalonSetupModule,
     // Feature modules (staff/chair roster CRUD, payments, reviews, admin) are added in later
     // phases per PROJECT_STRUCTURE.md.
   ],

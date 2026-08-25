@@ -51,6 +51,9 @@ import { EMAIL_SENDER, ConsoleEmailSender } from './services/email-sender';
     },
     { provide: EMAIL_SENDER, useClass: ConsoleEmailSender },
   ],
-  exports: [TokenService],
+  // EMAIL_SENDER is exported (Phase 11) so SalonSetupModule can deliver barber invitations
+  // through the same transport the forgot-password flow already uses, rather than binding a
+  // second EmailSender of its own. No auth behavior changes — this is an export-list addition.
+  exports: [TokenService, EMAIL_SENDER],
 })
 export class AuthModule {}

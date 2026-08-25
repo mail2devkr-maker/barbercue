@@ -2,10 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { DISCOVERY_PATHS, Role } from "@barbercue/shared";
+import { DISCOVERY_PATHS, Role, SalonStatus } from "@barbercue/shared";
 import type { RegisterSalonResultDto } from "@barbercue/shared";
 import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
+
+// SalonStatus values are database enums ("PENDING"), not language an owner should be shown.
+const STATUS_LABEL: Record<SalonStatus, string> = {
+  [SalonStatus.PENDING]: "Not open yet",
+  [SalonStatus.ACTIVE]: "Open — customers can find you",
+  [SalonStatus.SUSPENDED]: "Paused",
+};
 
 // Landing page after a successful owner/staff login — lists the shops this user owns, each
 // linking into its own queue/staff/settings pages. Staff without SALON_OWNER see an empty list
@@ -55,11 +62,21 @@ export default function SalonsDashboardHomePage() {
                   <strong>{s.name}</strong>
                   <span style={{ fontSize: 13, color: "#6B6357" }}>{s.publicId}</span>
                 </div>
-                <div style={{ fontSize: 13, color: "#6B6357", marginTop: 2 }}>Status: {s.status}</div>
-                <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 14 }}>
+                <div style={{ fontSize: 13, color: "#6B6357", marginTop: 2 }}>
+                  {STATUS_LABEL[s.status]}
+                </div>
+                {s.status !== SalonStatus.ACTIVE && (
+                  <div style={{ fontSize: 13, color: "#B36B00", marginTop: 6 }}>
+                    Customers can&apos;t find this shop or join its queue yet. Open it from
+                    Settings when you&apos;re ready.
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 14, flexWrap: "wrap" }}>
+                  <Link href={`/dashboard/salons/${s.id}/settings`}>Set up &amp; open</Link>
+                  <Link href={`/dashboard/salons/${s.id}/services`}>Services</Link>
+                  <Link href={`/dashboard/salons/${s.id}/chairs`}>Chairs</Link>
+                  <Link href={`/dashboard/salons/${s.id}/staff`}>Barbers</Link>
                   <Link href={`/dashboard/salons/${s.id}/queue`}>Live queue</Link>
-                  <Link href={`/dashboard/salons/${s.id}/staff`}>Staff</Link>
-                  <Link href={`/dashboard/salons/${s.id}/settings`}>Settings</Link>
                 </div>
               </li>
             ))}

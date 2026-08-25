@@ -127,6 +127,13 @@ export const DASHBOARD_PATHS = {
   // Phase 9: authenticated "get my shop's QR/public queue URL" — mounted under the existing
   // dashboard/salons/:salonId/... shape alongside PublicQueueController's other routes.
   queueQr: 'queue-qr',
+  // Phase 11 (owner setup): salon-scoped roster/catalog management. `staff` above is reused —
+  // note DashboardQueueController's existing `dashboard/staff/:id/status` (clock in/out) is a
+  // DIFFERENT route from Phase 11's `dashboard/salons/:salonId/staff/:staffId`; the `salons/`
+  // prefix keeps them from colliding.
+  services: 'services',
+  chairs: 'chairs',
+  resendInvite: 'resend-invite',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

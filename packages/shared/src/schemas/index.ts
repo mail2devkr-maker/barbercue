@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { ChargeType, PrepaymentRequirement, StaffMemberStatus } from '../enums';
+import {
+  ChairStatus,
+  ChargeType,
+  PrepaymentRequirement,
+  SalonStatus,
+  StaffMemberStatus,
+} from '../enums';
 import { PREMIUM_PLAN_IDS } from '../constants';
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
@@ -56,16 +62,35 @@ export type StaffStatusInput = z.infer<typeof staffStatusSchema>;
 // POST /salons — shop registration (major-upgrade phase). Reuses an existing City (by slug)
 // rather than accepting free-text state/country here, which would let a typo silently create a
 // duplicate/junk City row — city curation stays a separate, existing concern (CitiesService).
-export const registerSalonSchema = z.object({
-  name: z.string().min(1).max(200),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
-  addressLine: z.string().min(1).max(300),
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
-  citySlug: z.string().min(1),
-  localitySlug: z.string().optional(),
-});
+// Indian PIN codes are exactly six digits and never start with 0 (the leading digit is the
+// postal region, 1-8). Anchored so "560001abc" and "56 00 01" are rejected rather than coerced.
+export const INDIAN_PIN_CODE_REGEX = /^[1-9][0-9]{5}$/;
+
+export const registerSalonSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    phone: z.string().optional(),
+    email: z.string().email().optional(),
+    addressLine: z.string().min(1).max(300),
+    postalCode: z
+      .string()
+      .regex(INDIAN_PIN_CODE_REGEX, 'Enter a valid 6-digit PIN code'),
+    // Optional since Phase 11: coordinates are captured from the device's GPS by the registration
+    // form's "Use my current location" button, never typed. An owner who denies that permission —
+    // or registers from a desktop with no GPS — still gets a working shop; the address + city +
+    // PIN code identify it. lat/lng's only consumer is the schema.org `geo` block on the public
+    // salon page, which omits itself when they are absent.
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+    citySlug: z.string().min(1),
+    localitySlug: z.string().optional(),
+  })
+  // A half-coordinate is meaningless — it would place the shop on the equator or the prime
+  // meridian. Either both arrive or neither does.
+  .refine((v) => (v.lat === undefined) === (v.lng === undefined), {
+    message: 'Latitude and longitude must be provided together',
+    path: ['lat'],
+  });
 export type RegisterSalonInput = z.infer<typeof registerSalonSchema>;
 
 // GET /salons query params — validated the same way on backend (ZodValidationPipe on @Query())
@@ -168,6 +193,74 @@ export const cancellationPolicySchema = z.object({
   queueCallResponseGraceMinutes: z.number().int().min(0),
 });
 export type CancellationPolicyInput = z.infer<typeof cancellationPolicySchema>;
+
+// ---------- Salon owner setup (Phase 11) ----------
+
+// POST dashboard/salons/:salonId/services. Price is rupees (matches Service.price's Decimal(10,2)
+// and every other money field in this package); duration is whole minutes because the whole
+// booking/slot engine works in minutes.
+export const createSalonServiceSchema = z.object({
+  name: z.string().min(1).max(120),
+  price: z.number().min(0).max(1_000_000),
+  durationMinutes: z.number().int().min(5).max(480),
+  category: z.string().min(1).max(60).optional(),
+});
+export type CreateSalonServiceInput = z.infer<typeof createSalonServiceSchema>;
+
+// PATCH .../services/:serviceId — every field optional (partial update). `isActive: false` is the
+// soft-delete: Service is foreign-keyed from Booking/QueueEntry/ServiceSession, so rows are
+// never hard-deleted.
+export const updateSalonServiceSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    price: z.number().min(0).max(1_000_000).optional(),
+    durationMinutes: z.number().int().min(5).max(480).optional(),
+    category: z.string().min(1).max(60).nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+export type UpdateSalonServiceInput = z.infer<typeof updateSalonServiceSchema>;
+
+export const createSalonChairSchema = z.object({
+  label: z.string().min(1).max(60),
+});
+export type CreateSalonChairInput = z.infer<typeof createSalonChairSchema>;
+
+// Chairs are deactivated (INACTIVE/MAINTENANCE), never deleted — Chair is foreign-keyed from
+// ServiceSession/QueueEntry. Only ACTIVE chairs count toward bookable capacity.
+export const updateSalonChairSchema = z
+  .object({
+    label: z.string().min(1).max(60).optional(),
+    status: z.nativeEnum(ChairStatus).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+export type UpdateSalonChairInput = z.infer<typeof updateSalonChairSchema>;
+
+// POST dashboard/salons/:salonId/staff — onboard a barber. Email is required because it is both
+// the invitation destination and the barber's future /staff/login identity. MVP is BARBER-only
+// (see ARCHITECTURE.md §22): MANAGER exists in the schema but carries no distinct permissions
+// yet, so offering it would imply an authorization difference that does not exist.
+export const createSalonStaffSchema = z.object({
+  displayName: z.string().min(1).max(120),
+  email: z.string().email(),
+});
+export type CreateSalonStaffInput = z.infer<typeof createSalonStaffSchema>;
+
+export const updateSalonStaffSchema = z
+  .object({
+    displayName: z.string().min(1).max(120).optional(),
+    status: z.nativeEnum(StaffMemberStatus).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+export type UpdateSalonStaffInput = z.infer<typeof updateSalonStaffSchema>;
+
+// PATCH dashboard/salons/:salonId/status — owner self-activation. Deliberately restricted to
+// ACTIVE/SUSPENDED: an owner may open or pause their own shop, but cannot move it back to
+// PENDING (a moderation state owned by the platform, not the shop).
+export const updateSalonStatusSchema = z.object({
+  status: z.enum([SalonStatus.ACTIVE, SalonStatus.SUSPENDED]),
+});
+export type UpdateSalonStatusInput = z.infer<typeof updateSalonStatusSchema>;
 
 // POST premium/dev/activate — dev/test-only Premium activation for the calling user. The backend
 // route itself is unreachable outside a non-production environment (see PremiumController); this

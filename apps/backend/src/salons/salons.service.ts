@@ -118,6 +118,7 @@ export class SalonsService {
       citySlug: salon.city.slug,
       localitySlug: salon.locality?.slug,
       addressLine: salon.addressLine,
+      postalCode: salon.postalCode,
       lat: salon.lat,
       lng: salon.lng,
       coverPhotoUrl:
@@ -206,8 +207,11 @@ export class SalonsService {
               cityId: city.id,
               localityId,
               addressLine: input.addressLine,
-              lat: input.lat,
-              lng: input.lng,
+              postalCode: input.postalCode,
+              // Absent when the owner declined GPS — stored as NULL, not 0/0 (a real place in
+              // the Gulf of Guinea), so "unknown" stays distinguishable from "there".
+              lat: input.lat ?? null,
+              lng: input.lng ?? null,
               phone: input.phone ?? null,
               email: input.email ?? null,
               status: SalonStatus.PENDING,
@@ -318,6 +322,7 @@ export class SalonsService {
       citySlug: salon.city.slug,
       localitySlug: salon.locality?.slug,
       addressLine: salon.addressLine,
+      postalCode: salon.postalCode,
       lat: salon.lat,
       lng: salon.lng,
       coverPhotoUrl: salon.photos[0]?.url ?? null,

@@ -348,8 +348,18 @@ model Salon {
   localityId  String?
   locality    Locality?   @relation(fields: [localityId], references: [id])
   addressLine String
-  lat         Float
-  lng         Float
+  // Indian 6-digit PIN code. Stored as text, never a number: PIN codes are identifiers, not
+  // quantities, and several legitimately need a meaning-bearing shape a numeric type would
+  // mangle. Nullable because every salon registered before this column existed has none, and
+  // backfilling one would mean inventing an address detail nobody supplied.
+  postalCode  String?
+  // Nullable since Phase 11: coordinates now come from the device's GPS via the registration
+  // form's "Use my current location" button, and an owner who denies that permission (or is on a
+  // desktop) must still be able to register. Their only consumer is the schema.org `geo` block on
+  // the public salon page — there is no distance search, map, or proximity sort in the product —
+  // so a salon without them is fully functional, just slightly less rich to search engines.
+  lat         Float?
+  lng         Float?
   phone       String?
   // Business contact email, distinct from the owner User's own login email — same "optional
   // business-facing contact field" pattern as `phone` above. Added for shop registration

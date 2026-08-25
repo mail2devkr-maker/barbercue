@@ -61,12 +61,21 @@ function buildHairSalonJsonLd(salon: SalonProfileDto) {
     address: {
       "@type": "PostalAddress",
       streetAddress: salon.addressLine,
+      addressLocality: salon.localitySlug ?? salon.citySlug,
+      postalCode: salon.postalCode ?? undefined,
+      addressCountry: "IN",
     },
-    geo: {
-      "@type": "GeoCoordinates",
-      latitude: salon.lat,
-      longitude: salon.lng,
-    },
+    // Omitted entirely when the owner registered without GPS — same rule as aggregateRating
+    // above. A GeoCoordinates with null lat/lng is invalid structured data, and emitting one
+    // is worse for search engines than emitting no geo block at all.
+    geo:
+      salon.lat !== null && salon.lng !== null
+        ? {
+            "@type": "GeoCoordinates",
+            latitude: salon.lat,
+            longitude: salon.lng,
+          }
+        : undefined,
     openingHoursSpecification: salon.operatingHours
       .filter((h) => !h.isClosed)
       .map((h) => ({
