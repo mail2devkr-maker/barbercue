@@ -149,6 +149,9 @@ export const DASHBOARD_PATHS = {
   // prefix keeps them from colliding.
   services: 'services',
   chairs: 'chairs',
+  // Salon photos. URL-based for now — no object storage is configured, so an owner links an
+  // image they already host rather than uploading a file.
+  photos: 'photos',
   resendInvite: 'resend-invite',
 } as const;
 

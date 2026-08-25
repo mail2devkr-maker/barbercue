@@ -6,6 +6,7 @@ import { SalonChairsService } from './salon-chairs.service';
 import { SalonStaffService } from './salon-staff.service';
 import { SalonActivationService } from './salon-activation.service';
 import { SalonOperatingHoursService } from './salon-operating-hours.service';
+import { SalonPhotosService } from './salon-photos.service';
 
 @Module({
   // AuthModule provides EMAIL_SENDER, which SalonStaffService reuses to deliver barber
@@ -19,6 +20,7 @@ import { SalonOperatingHoursService } from './salon-operating-hours.service';
     SalonStaffService,
     SalonActivationService,
     SalonOperatingHoursService,
+    SalonPhotosService,
   ],
 })
 export class SalonSetupModule {}

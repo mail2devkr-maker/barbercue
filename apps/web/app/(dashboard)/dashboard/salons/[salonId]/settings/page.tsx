@@ -125,6 +125,7 @@ export default function DashboardSettingsPage({
       <nav style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 14, margin: "8px 0 4px" }}>
         <Link href={`/dashboard/salons/${salonId}/services`}>Services</Link>
         <Link href={`/dashboard/salons/${salonId}/hours`}>Opening hours</Link>
+        <Link href={`/dashboard/salons/${salonId}/photos`}>Photos</Link>
         <Link href={`/dashboard/salons/${salonId}/chairs`}>Chairs</Link>
         <Link href={`/dashboard/salons/${salonId}/staff`}>Barbers</Link>
         <Link href={`/dashboard/salons/${salonId}/queue`}>Live queue</Link>

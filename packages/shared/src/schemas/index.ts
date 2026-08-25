@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ChairStatus,
   ChargeType,
+  PhotoType,
   PrepaymentRequirement,
   SalonStatus,
   StaffMemberStatus,
@@ -254,6 +255,36 @@ export const setOperatingHoursSchema = z
     path: ['days'],
   });
 export type SetOperatingHoursInput = z.infer<typeof setOperatingHoursSchema>;
+
+// Salon photo by URL. Binary upload is not wired (no object storage is configured), so an owner
+// points at an image they already host — their Google Business profile, Instagram, or a CDN.
+//
+// https only, deliberately: http would be blocked as mixed content on an https page, and
+// javascript:/data: URLs are rejected outright rather than trusted to be inert in an <img src>.
+// The backend never fetches this URL — only the visitor's browser does — so this is not an SSRF
+// surface; the check is about what we are willing to render and store.
+export const salonPhotoUrlSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+  .refine((v) => {
+    try {
+      const u = new URL(v);
+      return u.protocol === 'https:' && !u.username && !u.password;
+    } catch {
+      return false;
+    }
+  }, 'Enter a full https:// image link');
+
+export const createSalonPhotoSchema = z.object({
+  url: salonPhotoUrlSchema,
+  // Real alt text matters for accessibility and SEO; optional because a forced field invites
+  // owners to type junk just to get past it.
+  altText: z.string().trim().max(200).optional(),
+  type: z.nativeEnum(PhotoType),
+});
+export type CreateSalonPhotoInput = z.infer<typeof createSalonPhotoSchema>;
 
 export const createSalonChairSchema = z.object({
   label: z.string().min(1).max(60),

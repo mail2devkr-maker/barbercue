@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -13,6 +16,7 @@ import {
   Role,
   createSalonChairSchema,
   createSalonServiceSchema,
+  createSalonPhotoSchema,
   createSalonStaffSchema,
   setOperatingHoursSchema,
   updateSalonChairSchema,
@@ -22,6 +26,7 @@ import {
   type AuthenticatedUser,
   type CreateSalonChairInput,
   type CreateSalonServiceInput,
+  type CreateSalonPhotoInput,
   type CreateSalonStaffInput,
   type SetOperatingHoursInput,
   type UpdateSalonChairInput,
@@ -37,6 +42,7 @@ import { SalonChairsService } from './salon-chairs.service';
 import { SalonStaffService } from './salon-staff.service';
 import { SalonActivationService } from './salon-activation.service';
 import { SalonOperatingHoursService } from './salon-operating-hours.service';
+import { SalonPhotosService } from './salon-photos.service';
 
 const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId`;
 
@@ -62,6 +68,7 @@ export class SalonSetupController {
     private readonly staff: SalonStaffService,
     private readonly activation: SalonActivationService,
     private readonly operatingHours: SalonOperatingHoursService,
+    private readonly photos: SalonPhotosService,
   ) {}
 
   // ---------- Shop activation ----------
@@ -127,6 +134,36 @@ export class SalonSetupController {
     body: UpdateSalonServiceInput,
   ) {
     return this.services.update(user.id, salonId, serviceId, body);
+  }
+
+  // ---------- Photos ----------
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.photos}`)
+  listPhotos(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.photos.list(user.id, salonId);
+  }
+
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.photos}`)
+  createPhoto(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(createSalonPhotoSchema))
+    body: CreateSalonPhotoInput,
+  ) {
+    return this.photos.create(user.id, salonId, body);
+  }
+
+  @Delete(`${SALON_SCOPE}/${DASHBOARD_PATHS.photos}/:photoId`)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removePhoto(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('photoId') photoId: string,
+  ) {
+    return this.photos.remove(user.id, salonId, photoId);
   }
 
   // ---------- Chairs ----------
