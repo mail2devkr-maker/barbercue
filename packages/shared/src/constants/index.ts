@@ -38,6 +38,11 @@ export const OTP_RESEND_COOLDOWN_SECONDS = 45;
 // HEALTH_PATH usage.
 export const DISCOVERY_PATHS = {
   cities: 'cities',
+  // cities/all — every city the platform operates in, unfiltered. Distinct from `cities`, which
+  // deliberately lists only cities containing an ACTIVE salon (no dead-end SEO pages). Shop
+  // registration needs the unfiltered list: filtering it would mean the first shop in a new city
+  // could never be registered, because the city only becomes visible once such a shop is ACTIVE.
+  allCities: 'all',
   salons: 'salons',
   // Owner-scoped reads under salons/mine[/...] — literal 'mine' segment, registered before the
   // :citySlug/:salonSlug wildcard route in SalonsController so it can never be shadowed by it.

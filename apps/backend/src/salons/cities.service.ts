@@ -23,6 +23,27 @@ export class CitiesService {
     }));
   }
 
+  /**
+   * Every city, unfiltered — the list a shop owner picks from when registering.
+   *
+   * Deliberately NOT listCities() above: that one hides cities with no ACTIVE salon, which is
+   * right for public discovery but creates a deadlock for registration. The first shop in a city
+   * can only become ACTIVE after it is registered, and it can only be registered if its city is
+   * selectable — so a filtered list would make every new city permanently unreachable.
+   */
+  async listAllCities(): Promise<CityDto[]> {
+    const cities = await this.prisma.city.findMany({
+      orderBy: { name: 'asc' },
+    });
+    return cities.map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      state: c.state,
+      country: c.country,
+    }));
+  }
+
   async getCity(citySlug: string): Promise<CityDto> {
     const city = await this.findCityBySlugOrThrow(citySlug);
     return {

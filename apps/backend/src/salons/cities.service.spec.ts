@@ -21,6 +21,47 @@ describe('CitiesService', () => {
     service = moduleRef.get(CitiesService);
   });
 
+  // Registration's city list must NOT inherit listCities' ACTIVE-salon filter: a city only gets
+  // an ACTIVE salon after one is registered there, so filtering would make the first shop in any
+  // city impossible to register — the deadlock this method exists to break.
+  describe('listAllCities', () => {
+    it('queries every city with no ACTIVE-salon filter', async () => {
+      prisma.city.findMany.mockResolvedValue([]);
+
+      await service.listAllCities();
+
+      expect(prisma.city.findMany).toHaveBeenCalledWith({
+        orderBy: { name: 'asc' },
+      });
+      const [args] = prisma.city.findMany.mock.calls[0] as [
+        Record<string, unknown>,
+      ];
+      expect(args.where).toBeUndefined();
+    });
+
+    it('returns a city that has no salons at all', async () => {
+      prisma.city.findMany.mockResolvedValue([
+        {
+          id: 'c1',
+          name: 'Bengaluru',
+          slug: 'bengaluru',
+          state: 'Karnataka',
+          country: 'India',
+        },
+      ]);
+
+      await expect(service.listAllCities()).resolves.toEqual([
+        {
+          id: 'c1',
+          name: 'Bengaluru',
+          slug: 'bengaluru',
+          state: 'Karnataka',
+          country: 'India',
+        },
+      ]);
+    });
+  });
+
   describe('listCities', () => {
     it('only queries cities that have at least one ACTIVE salon', async () => {
       prisma.city.findMany.mockResolvedValue([

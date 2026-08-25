@@ -14,6 +14,16 @@ export class CitiesController {
     return this.citiesService.listCities();
   }
 
+  // MUST stay above @Get(':citySlug') — Nest matches in declaration order, and a param route
+  // declared first would swallow the literal 'all' segment. Public like the rest of this
+  // controller: a list of city names is not sensitive, and the shop-registration form that
+  // consumes it should not need an authenticated round-trip to populate a dropdown.
+  @Public()
+  @Get(DISCOVERY_PATHS.allCities)
+  listAllCities() {
+    return this.citiesService.listAllCities();
+  }
+
   @Public()
   @Get(':citySlug')
   getCity(@Param('citySlug') citySlug: string) {

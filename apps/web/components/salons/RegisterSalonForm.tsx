@@ -106,7 +106,9 @@ export function RegisterSalonForm() {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<CityDto[]>(DISCOVERY_PATHS.cities)
+    // cities/all, not cities: the plain endpoint lists only cities that already contain an ACTIVE
+    // salon, which would make the first shop in any city impossible to register.
+    apiFetch<CityDto[]>(`${DISCOVERY_PATHS.cities}/${DISCOVERY_PATHS.allCities}`)
       .then((list) => {
         if (!cancelled) setCities(list);
       })
