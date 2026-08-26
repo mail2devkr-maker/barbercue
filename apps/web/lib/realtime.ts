@@ -3,10 +3,25 @@
 import { io, type Socket } from "socket.io-client";
 import { getAccessToken } from "./api";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
 // The `/realtime` WS gateway lives at the backend's origin, not behind the REST `/api/v1` prefix
-// (Nest's global prefix only applies to HTTP controllers) — so strip the path, keep the origin.
-const REALTIME_ORIGIN = new URL(API_BASE_URL).origin;
+// (Nest's global prefix only applies to HTTP controllers). It also has to be an origin the
+// BROWSER can reach directly — Next's rewrites() proxy (see next.config.ts) only forwards plain
+// HTTP request/response traffic under /api/v1/*, not a WebSocket upgrade on a different path, so
+// this connection is deliberately NOT routed through it and stays a direct, real, public origin.
+// NEXT_PUBLIC_API_BASE_URL can't supply that any more in production — it's the relative "/api/v1"
+// lib/api.ts needs for same-origin cookies — so this reads a dedicated public var instead, falling
+// back to parsing NEXT_PUBLIC_API_BASE_URL only when it happens to be absolute (local dev, where
+// apps/web/.env.local still sets it to http://localhost:3000/api/v1 and this var is unset).
+function resolveRealtimeOrigin(): string {
+  const explicit = process.env.NEXT_PUBLIC_BACKEND_ORIGIN;
+  if (explicit) return explicit.replace(/\/+$/, "");
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1").origin;
+  } catch {
+    return "http://localhost:3000";
+  }
+}
+const REALTIME_ORIGIN = resolveRealtimeOrigin();
 
 let socket: Socket | null = null;
 

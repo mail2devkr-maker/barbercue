@@ -1,4 +1,15 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
+// Server-only (RSC data fetching, including Next's build-time static generation, which has no
+// request/browser context to resolve a relative URL against). NEXT_PUBLIC_API_BASE_URL is a
+// relative "/api/v1" in production on purpose (see lib/api.ts) so the BROWSER keeps API calls
+// same-origin for the httpOnly refresh cookie — but that value is meaningless here: a relative
+// URL passed to fetch() from Node (no window/location) fails outright, and during `next build`
+// there is no running server yet for it to resolve against regardless. BACKEND_INTERNAL_URL
+// (Railway's private service-to-service origin, e.g. http://barbercuebackend.railway.internal:8080)
+// is what this process can actually reach; NEXT_PUBLIC_API_BASE_URL is kept only as the local-dev
+// fallback, where it is still the absolute http://localhost:3000/api/v1 apps/web/.env.local sets.
+const API_BASE_URL = process.env.BACKEND_INTERNAL_URL
+  ? `${process.env.BACKEND_INTERNAL_URL.replace(/\/+$/, "")}/api/v1`
+  : (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1");
 
 export interface DiscoveryApiErrorBody {
   error: { code: string; message: string };
