@@ -3,50 +3,32 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  COUNTRY_PATHS,
   DISCOVERY_PATHS,
   isValidPostalCode,
   phonePlaceholderForCountry,
   postalCodeRuleFor,
   registerSalonSchema,
 } from "@barbercue/shared";
-import type { CityDto, LocalityDto, RegisterSalonResultDto } from "@barbercue/shared";
+import type {
+  CitySearchResultDto,
+  CountryDto,
+  LocalityDto,
+  RegionDto,
+  RegisterSalonResultDto,
+} from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { useAuth } from "../../lib/auth-context";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "12px",
-  border: "1px solid #D8D2C4",
-  borderRadius: 8,
-  // 16px minimum: anything smaller makes iOS Safari zoom the page on focus.
-  fontSize: 16,
-  boxSizing: "border-box",
-};
-const labelStyle: React.CSSProperties = { display: "block", marginBottom: 6, fontWeight: 600, fontSize: 14 };
-const fieldWrapStyle: React.CSSProperties = { marginBottom: 18 };
-const hintStyle: React.CSSProperties = { fontSize: 13, color: "#6B6357", marginTop: 6 };
-
-const primaryButtonStyle: React.CSSProperties = {
-  padding: "13px 20px",
-  minHeight: 46, // comfortable thumb target on a phone
-  borderRadius: 8,
-  border: "none",
-  background: "#1C1A17",
-  color: "#fff",
-  fontWeight: 600,
-  fontSize: 15,
-  cursor: "pointer",
-};
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  minHeight: 42,
-  borderRadius: 8,
-  border: "1px solid #D8D2C4",
-  background: "#fff",
-  fontSize: 14,
-  cursor: "pointer",
-};
+import { CitySearchField } from "./CitySearchField";
+import {
+  fieldWrapStyle,
+  hintStyle,
+  inputStyle,
+  labelStyle,
+  primaryButtonStyle,
+  secondaryButtonStyle,
+} from "./form-styles";
 
 interface FormState {
   countryCode: string;
@@ -55,7 +37,6 @@ interface FormState {
   email: string;
   addressLine: string;
   postalCode: string;
-  citySlug: string;
   localitySlug: string;
 }
 
@@ -66,7 +47,6 @@ const EMPTY: FormState = {
   email: "",
   addressLine: "",
   postalCode: "",
-  citySlug: "",
   localitySlug: "",
 };
 
@@ -105,20 +85,33 @@ function round5(n: number): number {
 export function RegisterSalonForm() {
   const router = useRouter();
   const { refreshSession } = useAuth();
-  const [cities, setCities] = useState<CityDto[]>([]);
+  const [countries, setCountries] = useState<CountryDto[]>([]);
+  // The country's database id, kept alongside form.countryCode (its ISO-3166-1 alpha-2). Both are
+  // needed and neither replaces the other: the id scopes the regions/city-search lookups, while
+  // the ISO code is what the POST salons contract and the postal/phone locale rules take.
+  const [countryId, setCountryId] = useState("");
+  const [regions, setRegions] = useState<RegionDto[]>([]);
+  const [regionsLoading, setRegionsLoading] = useState(false);
+  const [regionId, setRegionId] = useState("");
+  const [selectedCity, setSelectedCity] = useState<CitySearchResultDto | null>(null);
   const [localities, setLocalities] = useState<LocalityDto[]>([]);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [location, setLocation] = useState<LocationState>({ kind: "idle" });
 
+  // The single source of truth for the city, derived rather than stored: with only one writer
+  // (the picker's onSelect) the slug can never drift out of sync with the city shown on screen.
+  const citySlug = selectedCity?.slug ?? "";
+
   useEffect(() => {
     let cancelled = false;
-    // cities/all, not cities: the plain endpoint lists only cities that already contain an ACTIVE
-    // salon, which would make the first shop in any city impossible to register.
-    apiFetch<CityDto[]>(`${DISCOVERY_PATHS.cities}/${DISCOVERY_PATHS.allCities}`)
+    // ~250 rows, the whole list. Deliberately NOT derived from cities/all any more: that endpoint
+    // is a full-table read that now answers with ~99,800 cities / ~16 MB just to populate this
+    // one dropdown. It still exists and is unchanged — this form simply no longer calls it.
+    apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
       .then((list) => {
-        if (!cancelled) setCities(list);
+        if (!cancelled) setCountries(list);
       })
       .catch(() => undefined);
     return () => {
@@ -126,11 +119,43 @@ export function RegisterSalonForm() {
     };
   }, []);
 
+  // Whether a Region step exists is decided ONLY by whether this call returns rows — never by
+  // Country.hasSubdivisions (still at its schema default for every row) and never by inventing a
+  // stand-in "National" region for a country that genuinely has no subdivisions.
   useEffect(() => {
-    if (!form.citySlug || !form.countryCode) return;
+    // Clearing the country empties the region list in selectCountry, not here — this effect only
+    // ever loads.
+    if (!countryId) return;
+    let cancelled = false;
+    // The loading flag is raised inside this .then(), not as a direct synchronous statement in
+    // the effect body — same pattern as lib/auth-context.tsx's mount effect and the search page.
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) return undefined;
+        setRegionsLoading(true);
+        return apiFetch<RegionDto[]>(
+          `${COUNTRY_PATHS.countries}/${countryId}/${COUNTRY_PATHS.regions}`,
+        );
+      })
+      .then((list) => {
+        if (!cancelled && list) setRegions(list);
+      })
+      .catch(() => {
+        if (!cancelled) setRegions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRegionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [countryId]);
+
+  useEffect(() => {
+    if (!citySlug || !form.countryCode) return;
     let cancelled = false;
     apiFetch<LocalityDto[]>(
-      `${DISCOVERY_PATHS.cities}/${form.countryCode}/${form.citySlug}/localities`,
+      `${DISCOVERY_PATHS.cities}/${form.countryCode}/${citySlug}/localities`,
     )
       .then((list) => {
         if (!cancelled) setLocalities(list);
@@ -141,32 +166,42 @@ export function RegisterSalonForm() {
     return () => {
       cancelled = true;
     };
-  }, [form.countryCode, form.citySlug]);
+  }, [form.countryCode, citySlug]);
   // Derived, not stored: avoids a synchronous setState-in-effect for the "city cleared" case —
   // the select below renders [] the instant citySlug is empty, no extra render needed.
-  const localityOptions = form.citySlug ? localities : [];
+  const localityOptions = citySlug ? localities : [];
 
-  // Countries come from the cities that actually exist, never from a hardcoded list: offering a
-  // country with no city behind it would be a dead end, and inventing City rows to populate a
-  // menu would be fabricated data.
-  const countries = Array.from(
-    new Map(cities.map((c) => [c.countryCode, c.country])).entries(),
-  )
-    .map(([code, name]) => ({ code, name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const cityOptions = form.countryCode
-    ? cities.filter((c) => c.countryCode === form.countryCode)
-    : [];
   const postalRule = postalCodeRuleFor(form.countryCode);
 
   function update<K extends keyof FormState>(key: K, value: string) {
-    setForm((prev) => ({
-      ...prev,
-      [key]: value,
-      // Changing country invalidates the city, which invalidates the locality.
-      ...(key === "countryCode" ? { citySlug: "", localitySlug: "" } : {}),
-      ...(key === "citySlug" ? { localitySlug: "" } : {}),
-    }));
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // Country is the top of the location chain, so changing it invalidates everything below: the
+  // region list belongs to the old country, and the chosen city and its locality both belong to
+  // the old region.
+  function selectCountry(nextCountryId: string) {
+    const country = countries.find((c) => c.id === nextCountryId);
+    setCountryId(country ? country.id : "");
+    setRegions([]);
+    setRegionId("");
+    setSelectedCity(null);
+    setLocalities([]);
+    setForm((prev) => ({ ...prev, countryCode: country?.isoCode2 ?? "", localitySlug: "" }));
+  }
+
+  // Region narrows the city search, so a different region invalidates the city under it.
+  function selectRegion(nextRegionId: string) {
+    setRegionId(nextRegionId);
+    setSelectedCity(null);
+    setLocalities([]);
+    setForm((prev) => ({ ...prev, localitySlug: "" }));
+  }
+
+  function selectCity(city: CitySearchResultDto | null) {
+    setSelectedCity(city);
+    setLocalities([]);
+    setForm((prev) => ({ ...prev, localitySlug: "" }));
   }
 
   // Only ever called from the button's onClick, never on mount. Browsers raise the permission
@@ -207,6 +242,12 @@ export function RegisterSalonForm() {
       setError("Please choose the country your shop is in.");
       return;
     }
+    // The city picker is a combobox, not a <select required> — the browser can't enforce this
+    // one for us, so it gets the same plain-language check the country above gets.
+    if (!citySlug) {
+      setError("Please search for and select your shop's city.");
+      return;
+    }
     // Checked ahead of the schema parse so a bad postal code reads as advice, not a regex failure.
     if (!isValidPostalCode(form.countryCode, form.postalCode)) {
       setError(
@@ -224,7 +265,10 @@ export function RegisterSalonForm() {
       addressLine: form.addressLine.trim(),
       countryCode: form.countryCode,
       postalCode: form.postalCode.trim() || undefined,
-      citySlug: form.citySlug,
+      // Unchanged contract: the picker above only changes how the owner arrives at this slug,
+      // never what is sent. POST salons still receives {countryCode, citySlug, localitySlug} —
+      // never a countryId/regionId/cityId.
+      citySlug,
       localitySlug: form.localitySlug || undefined,
       ...(location.kind === "detected" ? { lat: location.lat, lng: location.lng } : {}),
     });
@@ -264,13 +308,15 @@ export function RegisterSalonForm() {
         <select
           id="shop-country"
           style={inputStyle}
-          value={form.countryCode}
-          onChange={(e) => update("countryCode", e.target.value)}
+          // Keyed on the country's id, not its ISO code: the id is what the regions and
+          // city-search lookups below take, and form.countryCode is set from the same choice.
+          value={countryId}
+          onChange={(e) => selectCountry(e.target.value)}
           required
         >
           <option value="">Select a country…</option>
           {countries.map((c) => (
-            <option key={c.code} value={c.code}>{c.name}</option>
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
         {countries.length === 0 && (
@@ -356,40 +402,60 @@ export function RegisterSalonForm() {
         </p>
       </div>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", ...fieldWrapStyle }}>
-        <div style={{ flex: "1 1 180px" }}>
-          <label style={labelStyle} htmlFor="shop-city">City</label>
+      {/* Region is rendered only when the selected country actually has subdivisions in the
+          database. A country that legitimately has none (a city-state, say) shows no Region step
+          at all rather than an empty or invented one. */}
+      {regionsLoading && countryId && (
+        <div style={fieldWrapStyle}>
+          <p style={{ ...hintStyle, marginTop: 0 }}>Loading regions…</p>
+        </div>
+      )}
+      {!regionsLoading && regions.length > 0 && (
+        <div style={fieldWrapStyle}>
+          <label style={labelStyle} htmlFor="shop-region">State / region (optional)</label>
           <select
-            id="shop-city"
+            id="shop-region"
             style={inputStyle}
-            value={form.citySlug}
-            onChange={(e) => update("citySlug", e.target.value)}
-            disabled={!form.countryCode}
-            required
+            value={regionId}
+            onChange={(e) => selectRegion(e.target.value)}
           >
-            <option value="">
-              {form.countryCode ? "Select a city…" : "Choose a country first"}
-            </option>
-            {cityOptions.map((c) => (
-              <option key={c.slug} value={c.slug}>{c.name}</option>
+            <option value="">All regions</option>
+            {regions.map((r) => (
+              <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
+          <p style={hintStyle}>Narrows the city search below — helpful when two cities share a name.</p>
         </div>
-        <div style={{ flex: "1 1 180px" }}>
-          <label style={labelStyle} htmlFor="shop-locality">Area / locality (optional)</label>
-          <select
-            id="shop-locality"
-            style={inputStyle}
-            value={form.localitySlug}
-            onChange={(e) => update("localitySlug", e.target.value)}
-            disabled={!form.citySlug}
-          >
-            <option value="">None</option>
-            {localityOptions.map((l) => (
-              <option key={l.slug} value={l.slug}>{l.name}</option>
-            ))}
-          </select>
-        </div>
+      )}
+
+      <div style={fieldWrapStyle}>
+        <span id="shop-city-label" style={labelStyle}>City</span>
+        <CitySearchField
+          // Remounting on a scope change is what clears the picker's query and results — a plain
+          // `key` instead of a reset effect reaching into the child's internals.
+          key={`${countryId}:${regionId}`}
+          countryId={countryId}
+          regionId={regionId}
+          selectedCity={selectedCity}
+          onSelect={selectCity}
+          labelledBy="shop-city-label"
+        />
+      </div>
+
+      <div style={fieldWrapStyle}>
+        <label style={labelStyle} htmlFor="shop-locality">Area / locality (optional)</label>
+        <select
+          id="shop-locality"
+          style={inputStyle}
+          value={form.localitySlug}
+          onChange={(e) => update("localitySlug", e.target.value)}
+          disabled={!citySlug}
+        >
+          <option value="">None</option>
+          {localityOptions.map((l) => (
+            <option key={l.slug} value={l.slug}>{l.name}</option>
+          ))}
+        </select>
       </div>
 
       <div style={{ ...fieldWrapStyle, border: "1px solid #E7E0D3", borderRadius: 10, padding: 14 }}>

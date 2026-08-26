@@ -121,7 +121,8 @@ export class AuthController {
   authMethods(): AuthMethodsDto {
     return {
       google: Boolean(
-        process.env.GOOGLE_WEB_CLIENT_ID ?? process.env.GOOGLE_ANDROID_CLIENT_ID,
+        process.env.GOOGLE_WEB_CLIENT_ID ??
+        process.env.GOOGLE_ANDROID_CLIENT_ID,
       ),
       phoneOtp:
         process.env.NODE_ENV !== 'production' ||

@@ -128,6 +128,19 @@ export const salonSearchQuerySchema = z.object({
 });
 export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
 
+// GET /cities/search query params (Phase 6A — Country -> Region -> City-search selection flow).
+// countryId is required: a global, unscoped city search across ~100K rows is never allowed.
+// `q` is intentionally left unbounded in length here (trimmed/short-circuited in the service, not
+// rejected here) so an empty/short query is a normal "still typing" UI state, not a validation
+// error.
+export const citySearchQuerySchema = z.object({
+  countryId: z.string().uuid(),
+  regionId: z.string().uuid().optional(),
+  q: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+export type CitySearchQueryInput = z.infer<typeof citySearchQuerySchema>;
+
 export const otpRequestSchema = z.object({
   phone: z
     .string()

@@ -1,6 +1,11 @@
-import { Controller, Get, Param } from '@nestjs/common';
-import { DISCOVERY_PATHS } from '@barbercue/shared';
+import { Controller, Get, Param, Query, UsePipes } from '@nestjs/common';
+import {
+  DISCOVERY_PATHS,
+  citySearchQuerySchema,
+  type CitySearchQueryInput,
+} from '@barbercue/shared';
 import { Public } from '../auth/decorators/public.decorator';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CitiesService } from './cities.service';
 
 // Public, unauthenticated, SEO-facing per API.md's Discovery section.
@@ -22,6 +27,15 @@ export class CitiesController {
   @Get(DISCOVERY_PATHS.allCities)
   listAllCities() {
     return this.citiesService.listAllCities();
+  }
+
+  // Single literal segment, same arity as `all` above — never confused with the two-segment
+  // :countryCode/:citySlug (B9) routes below regardless of declaration order.
+  @Public()
+  @Get(DISCOVERY_PATHS.citySearch)
+  @UsePipes(new ZodValidationPipe(citySearchQuerySchema))
+  searchCities(@Query() query: CitySearchQueryInput) {
+    return this.citiesService.searchCities(query);
   }
 
   // B9: country-scoped city URLs (/{countryCode}/{citySlug}/...). countryCode is case-insensitive

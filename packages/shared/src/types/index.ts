@@ -116,6 +116,38 @@ export interface LocalityDto {
   citySlug: string;
 }
 
+// ---------- Global location discovery (Phase 6A) ----------
+// Additive, separate from CityDto/LocalityDto above (untouched) — these back the new
+// Country -> Region -> City-search selection flow, not the existing B9 city/locality routes.
+
+export interface CountryDto {
+  id: string;
+  name: string;
+  isoCode2: string;
+  // Deliberately NOT used to decide whether to show a Region step (see ARCHITECTURE notes on
+  // Country.hasSubdivisions) — it stays at the schema default until a real product decision is
+  // made. Callers must derive that from whether GET /countries/:id/regions returns any rows.
+  hasSubdivisions: boolean;
+}
+
+export interface RegionDto {
+  id: string;
+  name: string;
+  // ISO-3166-2 where the source dataset provided one; null otherwise. Never fabricated.
+  code: string | null;
+}
+
+// Lean by design: population/coordinates/source-provenance fields exist on the underlying City
+// row but are never sent to the browser here — this DTO exists specifically to keep the search
+// endpoint's payload small at ~100K-city scale.
+export interface CitySearchResultDto {
+  id: string;
+  name: string;
+  slug: string;
+  countryCode: string;
+  region: { id: string; name: string; code: string | null } | null;
+}
+
 export interface OperatingHoursDto {
   dayOfWeek: number; // 0 = Sunday .. 6 = Saturday (JS Date.getDay() convention)
   openTime: string; // "HH:mm"

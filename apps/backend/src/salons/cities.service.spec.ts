@@ -18,12 +18,14 @@ describe('CitiesService', () => {
   let prisma: {
     city: { findMany: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock };
     locality: { findMany: jest.Mock; findUnique: jest.Mock };
+    $queryRaw: jest.Mock;
   };
 
   beforeEach(async () => {
     prisma = {
       city: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
       locality: { findMany: jest.fn(), findUnique: jest.fn() },
+      $queryRaw: jest.fn(),
     };
     const moduleRef = await Test.createTestingModule({
       providers: [CitiesService, { provide: PrismaService, useValue: prisma }],
@@ -164,6 +166,87 @@ describe('CitiesService', () => {
         service.getLocality('GB', 'bengaluru', 'indiranagar'),
       ).rejects.toMatchObject({ code: 'CITY_NOT_FOUND' });
       expect(prisma.locality.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // Phase 6A: the scalable city-search endpoint the ~99,797-row imported dataset requires.
+  describe('searchCities', () => {
+    const bengaluruRow = {
+      id: 'c1',
+      name: 'Bengaluru',
+      slug: 'bengaluru',
+      countryCode: 'IN',
+      regionId: 'r1',
+      regionName: 'Karnataka',
+      regionCode: 'IN-KA',
+    };
+
+    it('returns [] without querying the database when q is empty', async () => {
+      const result = await service.searchCities({ countryId: 'country-1', q: '' });
+      expect(result).toEqual([]);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('returns [] without querying the database when q is shorter than the minimum length', async () => {
+      const result = await service.searchCities({ countryId: 'country-1', q: 'b' });
+      expect(result).toEqual([]);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('returns [] without querying the database when q is only whitespace', async () => {
+      const result = await service.searchCities({ countryId: 'country-1', q: '   ' });
+      expect(result).toEqual([]);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('queries with the country filter and maps a lean result including its region', async () => {
+      prisma.$queryRaw.mockResolvedValue([bengaluruRow]);
+      const result = await service.searchCities({ countryId: 'country-1', q: 'ben' });
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      expect(sqlFragment.values).toContain('country-1');
+      expect(result).toEqual([
+        {
+          id: 'c1',
+          name: 'Bengaluru',
+          slug: 'bengaluru',
+          countryCode: 'IN',
+          region: { id: 'r1', name: 'Karnataka', code: 'IN-KA' },
+        },
+      ]);
+    });
+
+    it('includes the region filter in the query parameters when regionId is provided', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.searchCities({ countryId: 'country-1', regionId: 'region-1', q: 'mum' });
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      expect(sqlFragment.values).toContain('country-1');
+      expect(sqlFragment.values).toContain('region-1');
+    });
+
+    it('maps a city with no region to region: null', async () => {
+      prisma.$queryRaw.mockResolvedValue([
+        { ...bengaluruRow, regionId: null, regionName: null, regionCode: null },
+      ]);
+      const result = await service.searchCities({ countryId: 'country-1', q: 'ben' });
+      expect(result[0].region).toBeNull();
+    });
+
+    it('clamps a limit above the maximum to 50 rather than passing it through unbounded', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      // Simulates a caller bypassing the schema's own max(50) validation (e.g. a direct service
+      // call) -- the service itself must clamp defensively too.
+      await service.searchCities({ countryId: 'country-1', q: 'ben', limit: 5000 });
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      expect(sqlFragment.values).toContain(50);
+      expect(sqlFragment.values).not.toContain(5000);
+    });
+
+    it('defaults to the standard page size when no limit is given', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.searchCities({ countryId: 'country-1', q: 'ben' });
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      expect(sqlFragment.values).toContain(20);
     });
   });
 });

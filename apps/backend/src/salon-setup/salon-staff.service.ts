@@ -73,7 +73,9 @@ export class SalonStaffService {
     await this.salonAccess.assertAccess(userId, salonId);
 
     const email = input.email.trim().toLowerCase();
-    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
 
     if (existingUser && existingUser.status !== UserStatus.ACTIVE) {
       throw new AppException(
@@ -90,7 +92,7 @@ export class SalonStaffService {
       if (alreadyOnRoster) {
         throw new AppException(
           SalonSetupErrorCode.STAFF_ALREADY_EXISTS,
-          'That person is already on this salon\'s staff.',
+          "That person is already on this salon's staff.",
           HttpStatus.CONFLICT,
         );
       }

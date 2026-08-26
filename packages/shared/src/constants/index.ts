@@ -46,6 +46,10 @@ export const DISCOVERY_PATHS = {
   // registration needs the unfiltered list: filtering it would mean the first shop in a new city
   // could never be registered, because the city only becomes visible once such a shop is ACTIVE.
   allCities: 'all',
+  // cities/search — Phase 6A's scalable Country -> Region -> City-search flow. Single literal
+  // segment, same arity argument as `all` above: it can never be confused with the two-segment
+  // :countryCode/:citySlug (B9) routes regardless of declaration order.
+  citySearch: 'search',
   salons: 'salons',
   // Owner-scoped reads under salons/mine[/...] — literal 'mine' segment, registered before the
   // :citySlug/:salonSlug wildcard route in SalonsController so it can never be shadowed by it.
@@ -54,6 +58,14 @@ export const DISCOVERY_PATHS = {
   // `mine`, which is owner-only and keyed on Salon.ownerUserId: a barber owns nothing, so that
   // route returns an empty list and leaves them with no way to reach the salon they work at.
   workplaces: 'workplaces',
+} as const;
+
+// New top-level `countries` controller (Phase 6A) — separate resource from DISCOVERY_PATHS'
+// `cities`, additive to the existing discovery API surface.
+export const COUNTRY_PATHS = {
+  countries: 'countries',
+  // countries/:countryId/regions
+  regions: 'regions',
 } as const;
 
 // Sub-paths for booking-related reads that hang off a salon (DISCOVERY_PATHS.salons/:salonId/...)

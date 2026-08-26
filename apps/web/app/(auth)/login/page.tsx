@@ -36,6 +36,12 @@ declare global {
           initialize: (config: {
             client_id: string;
             callback: (response: GoogleCredentialResponse) => void;
+            // Routes the rendered button's sign-in through the browser's native FedCM API
+            // instead of GSI's default window.open() popup — see the login flow's popup-mode
+            // failure investigation. FedCM's account picker is browser-chrome UI, not a popup
+            // window, so it is structurally exempt from popup blockers. Falls back to the
+            // existing popup flow automatically in browsers without FedCM support.
+            use_fedcm_for_button?: boolean;
           }) => void;
           renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
         };
@@ -139,6 +145,7 @@ function CustomerLoginForm() {
     window.google.accounts.id.initialize({
       client_id: clientId,
       callback: (response) => void handleGoogleCredential(response.credential),
+      use_fedcm_for_button: true,
     });
     // Google's renderButton width is a fixed pixel number (max 400), not a percentage — measuring
     // the actual container width here is what makes the button fit the card responsively instead

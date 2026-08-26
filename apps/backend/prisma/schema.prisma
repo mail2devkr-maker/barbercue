@@ -294,6 +294,81 @@ model PasswordResetToken {
 
 // ---------- Discovery / SEO ----------
 
+// Global location master data (Phase 1 of the Country -> Region -> City -> Locality
+// architecture). Additive only: every field here is nullable and every existing City column/
+// constraint below is untouched. Country/Region are not populated yet — that is a separate,
+// explicitly-approved future import phase (see import-global-locations.ts, not yet created).
+model Country {
+  id              String   @id @default(uuid())
+  isoCode2        String   @unique
+  isoCode3        String?  @unique
+  name            String
+  nativeName      String?
+  phoneCode       String?
+  currencyCode    String?
+  continent       String?
+  subregion       String?
+  hasSubdivisions Boolean  @default(false)
+  slug            String   @unique
+  // Not yet consumed anywhere — a future enrichment candidate for packages/shared's
+  // hand-written postalCodeRuleFor, not a replacement for it in this phase.
+  postalCodeRegex String?
+  // Provenance for imported rows; deliberately NOT unique (see CityAlias/Region below — a
+  // source id is only stable within one dataset+version, never a cross-dataset key).
+  sourceDataset   String?
+  sourceId        Int?
+  sourceVersion   String?
+  wikiDataId      String?
+  regions         Region[]
+  cities          City[]
+}
+
+// state / province / emirate / oblast / prefecture / territory — one flexible concept, not a
+// hierarchy of subtypes. `code` is ISO-3166-2 where the source dataset provides one; never
+// invented for a region that doesn't have one.
+model Region {
+  id            String   @id @default(uuid())
+  countryId     String
+  country       Country  @relation(fields: [countryId], references: [id])
+  code          String?
+  name          String
+  nativeName    String?
+  // The source dataset's own subdivision type label (e.g. "state", "province", "emirate"),
+  // stored as-is rather than normalized into an enum BarberCue would have to keep in sync with
+  // every country's own administrative vocabulary.
+  kind          String?
+  slug          String
+  sourceDataset String?
+  sourceId      Int?
+  sourceVersion String?
+  wikiDataId    String?
+  cities        City[]
+
+  @@unique([countryId, slug])
+  @@index([countryId])
+}
+
+enum CityAliasKind {
+  NATIVE_NAME
+  TRANSLITERATION
+  HISTORICAL
+  COMMON_MISSPELLING
+}
+
+// Alternate names for a City (native-script, transliteration, historical, common misspelling)
+// so e.g. Mumbai / मुंबई / Bombay can all resolve to the same row without cramming multiple
+// names into City.name. Not populated in Phase 1 — see the Phase-1 design report.
+model CityAlias {
+  id     String        @id @default(uuid())
+  cityId String
+  city   City          @relation(fields: [cityId], references: [id])
+  name   String
+  kind   CityAliasKind
+
+  @@index([cityId])
+  @@index([name])
+}
+
 model City {
   id   String @id @default(uuid())
   name String
@@ -311,12 +386,35 @@ model City {
   localities  Locality[]
   salons      Salon[]
 
+  // ---- Global location master data (Phase 1, additive) ----
+  // Nullable and unpopulated until the separate, explicitly-approved global import phase.
+  // countryCode/regionCode/state/country above remain the only fields anything reads today.
+  countryId     String?
+  countryRef    Country? @relation(fields: [countryId], references: [id])
+  regionId      String?
+  regionRef     Region?  @relation(fields: [regionId], references: [id])
+  nativeName    String?
+  latitude      Float?
+  longitude     Float?
+  population    Int?
+  sourceDataset String?
+  sourceId      Int?
+  sourceVersion String?
+  wikiDataId    String?
+  aliases       CityAlias[]
+
   @@unique([countryCode, slug])
   @@index([countryCode])
   // Serves the interim CitiesService.findFirst({ slug }) lookup. The composite above cannot:
   // `slug` is not its leading column. Remove once B9's country-scoped routes make every city
   // lookup carry a countryCode.
   @@index([slug])
+  // Phase 1 addition, parallel to the constraint above during the deprecation period. Safe with
+  // countryId nullable: Postgres does not compare NULLs against each other for uniqueness, so
+  // every existing City row (countryId = NULL) is unaffected until backfilled.
+  @@unique([countryId, slug])
+  @@index([countryId])
+  @@index([regionId])
   @@map("cities")
 }
 

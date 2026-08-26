@@ -1,7 +1,30 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { SalonStatus, type CityDto, type LocalityDto } from '@barbercue/shared';
+import { Prisma } from '@prisma/client';
+import {
+  SalonStatus,
+  type CityDto,
+  type CitySearchQueryInput,
+  type CitySearchResultDto,
+  type LocalityDto,
+} from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
+
+const DEFAULT_SEARCH_LIMIT = 20;
+// City name/query strings shorter than this never reach the database — an empty or 1-character
+// `q` is a normal "still typing" state in a live-search UI, not something worth a ~100K-row
+// trigram scan for. See the Phase 5 investigation report's search design.
+const MIN_SEARCH_QUERY_LENGTH = 2;
+
+interface CitySearchRow {
+  id: string;
+  name: string;
+  slug: string;
+  countryCode: string;
+  regionId: string | null;
+  regionName: string | null;
+  regionCode: string | null;
+}
 
 @Injectable()
 export class CitiesService {
@@ -55,7 +78,10 @@ export class CitiesService {
    * each other regardless of lookup order.
    */
   async getCity(countryCode: string, citySlug: string): Promise<CityDto> {
-    const city = await this.findCityByCountryAndSlugOrThrow(countryCode, citySlug);
+    const city = await this.findCityByCountryAndSlugOrThrow(
+      countryCode,
+      citySlug,
+    );
     return {
       id: city.id,
       name: city.name,
@@ -67,8 +93,14 @@ export class CitiesService {
     };
   }
 
-  async listLocalities(countryCode: string, citySlug: string): Promise<LocalityDto[]> {
-    const city = await this.findCityByCountryAndSlugOrThrow(countryCode, citySlug);
+  async listLocalities(
+    countryCode: string,
+    citySlug: string,
+  ): Promise<LocalityDto[]> {
+    const city = await this.findCityByCountryAndSlugOrThrow(
+      countryCode,
+      citySlug,
+    );
     const localities = await this.prisma.locality.findMany({
       where: {
         cityId: city.id,
@@ -89,7 +121,10 @@ export class CitiesService {
     citySlug: string,
     localitySlug: string,
   ): Promise<LocalityDto> {
-    const city = await this.findCityByCountryAndSlugOrThrow(countryCode, citySlug);
+    const city = await this.findCityByCountryAndSlugOrThrow(
+      countryCode,
+      citySlug,
+    );
     const locality = await this.prisma.locality.findUnique({
       where: { cityId_slug: { cityId: city.id, slug: localitySlug } },
     });
@@ -120,7 +155,10 @@ export class CitiesService {
   async findCityByCountryAndSlugOrThrow(countryCode: string, citySlug: string) {
     const city = await this.prisma.city.findUnique({
       where: {
-        countryCode_slug: { countryCode: countryCode.toUpperCase(), slug: citySlug },
+        countryCode_slug: {
+          countryCode: countryCode.toUpperCase(),
+          slug: citySlug,
+        },
       },
     });
     if (!city) {
@@ -156,5 +194,85 @@ export class CitiesService {
       );
     }
     return city;
+  }
+
+  /**
+   * GET cities/search — the scalable replacement for "load every city into the browser" that
+   * ~99,797 imported rows make necessary (see the Phase 5 investigation report). Backed by the
+   * pg_trgm GIN index on City.name added in Phase 6A's migration.
+   *
+   * countryId is mandatory: an unscoped search across the whole table is never allowed, matching
+   * the same discipline as SalonsService.search's mandatory-context patterns. `q` shorter than
+   * MIN_SEARCH_QUERY_LENGTH (after trimming) returns [] without touching the database at all —
+   * an empty/1-character query is a normal "still typing" UI state, not a query worth running
+   * against a 100K-row table.
+   *
+   * Uses a parameterized raw query (Prisma.sql tagged template — every interpolated value becomes
+   * a bound query parameter, never string-concatenated SQL) because Prisma's query builder has no
+   * native way to express pg_trgm's similarity()/ILIKE-with-index ranking. ILIKE substring
+   * matching (not the trigram `%` similarity operator) is used for the WHERE filter itself so a
+   * short query like "ben" is *guaranteed* to find "Bengaluru" regardless of trigram similarity
+   * thresholds; the GIN trigram index still accelerates this ILIKE. Ranking prefers an exact
+   * prefix match first, then population (empirically necessary: plain trigram similarity() for a
+   * short query like "ben" scores small towns like "Benaulim"/"Beniganj" above "Bengaluru", since
+   * shorter names share proportionally more of their trigram set with the query -- verified live
+   * against the real dataset during Phase 6A), then trigram similarity, then alphabetical order.
+   */
+  async searchCities(
+    query: CitySearchQueryInput,
+  ): Promise<CitySearchResultDto[]> {
+    const rawQuery = (query.q ?? '').trim();
+    if (rawQuery.length < MIN_SEARCH_QUERY_LENGTH) return [];
+
+    // Escape ILIKE's own wildcard characters in user input so a literal '%' or '_' in a search
+    // string is matched literally, not treated as a pattern wildcard.
+    const escaped = rawQuery.replace(/[\\%_]/g, '\\$&');
+    const containsPattern = `%${escaped}%`;
+    const prefixPattern = `${escaped}%`;
+    const limit = Math.min(
+      Math.max(query.limit ?? DEFAULT_SEARCH_LIMIT, 1),
+      50,
+    );
+
+    // Prisma stores every String/id field as Postgres `text`, never a native `uuid` column
+    // (confirmed via \d cities) -- comparing against the zod-validated UUID string directly, no
+    // ::uuid cast (which would fail with "operator does not exist: text = uuid").
+    const conditions: Prisma.Sql[] = [
+      Prisma.sql`c."countryId" = ${query.countryId}`,
+      Prisma.sql`c.name ILIKE ${containsPattern} ESCAPE '\\'`,
+    ];
+    if (query.regionId) {
+      conditions.push(Prisma.sql`c."regionId" = ${query.regionId}`);
+    }
+
+    const rows = await this.prisma.$queryRaw<CitySearchRow[]>(Prisma.sql`
+      SELECT
+        c.id,
+        c.name,
+        c.slug,
+        c."countryCode"  AS "countryCode",
+        r.id             AS "regionId",
+        r.name           AS "regionName",
+        r.code           AS "regionCode"
+      FROM cities c
+      LEFT JOIN "Region" r ON r.id = c."regionId"
+      WHERE ${Prisma.join(conditions, ' AND ')}
+      ORDER BY
+        (c.name ILIKE ${prefixPattern} ESCAPE '\\') DESC,
+        c.population DESC NULLS LAST,
+        similarity(c.name, ${rawQuery}) DESC,
+        c.name ASC
+      LIMIT ${limit}
+    `);
+
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      countryCode: r.countryCode,
+      region: r.regionId
+        ? { id: r.regionId, name: r.regionName!, code: r.regionCode }
+        : null,
+    }));
   }
 }
