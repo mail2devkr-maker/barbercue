@@ -10,6 +10,8 @@ import {
   Post,
   Put,
   UsePipes,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   DASHBOARD_PATHS,
@@ -17,6 +19,8 @@ import {
   createSalonChairSchema,
   createSalonServiceSchema,
   createSalonPhotoSchema,
+  salonPhotoUploadMetaSchema,
+  SALON_PHOTO_UPLOAD,
   createSalonStaffSchema,
   setOperatingHoursSchema,
   updateSalonChairSchema,
@@ -27,6 +31,7 @@ import {
   type CreateSalonChairInput,
   type CreateSalonServiceInput,
   type CreateSalonPhotoInput,
+  type SalonPhotoUploadMetaInput,
   type CreateSalonStaffInput,
   type SetOperatingHoursInput,
   type UpdateSalonChairInput,
@@ -34,6 +39,8 @@ import {
   type UpdateSalonStaffInput,
   type UpdateSalonStatusInput,
 } from '@barbercue/shared';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -154,6 +161,34 @@ export class SalonSetupController {
     body: CreateSalonPhotoInput,
   ) {
     return this.photos.create(user.id, salonId, body);
+  }
+
+  // Multipart sibling of the JSON route above — the owner uploads from their device instead of
+  // linking. Separate route rather than an overload of the same one: a multipart body and a JSON
+  // body cannot share a validation pipe, and keeping them apart leaves the existing JSON contract
+  // byte-for-byte unchanged for any client already using it.
+  @Post(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.photos}/${DASHBOARD_PATHS.photoUpload}`,
+  )
+  @UseInterceptors(
+    FileInterceptor('image', {
+      // Memory, not disk: the buffer is sniffed and forwarded straight to object storage, so the
+      // API server never writes an uploaded file to its own filesystem. Same shape as the Style
+      // Advisor's upload interceptor.
+      storage: memoryStorage(),
+      limits: { fileSize: SALON_PHOTO_UPLOAD.maxBytes, files: 1 },
+    }),
+  )
+  uploadPhoto(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    // Multipart text fields arrive as strings; the schema is what turns `type` into a real
+    // PhotoType and rejects anything else, exactly as the JSON route's pipe does.
+    @Body(new ZodValidationPipe(salonPhotoUploadMetaSchema))
+    meta: SalonPhotoUploadMetaInput,
+  ) {
+    return this.photos.createFromUpload(user.id, salonId, file, meta);
   }
 
   @Delete(`${SALON_SCOPE}/${DASHBOARD_PATHS.photos}/:photoId`)

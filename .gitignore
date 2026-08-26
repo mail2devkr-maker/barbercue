@@ -27,6 +27,10 @@ coverage/
 # Prisma
 apps/backend/generated/
 
+# Local-disk photo storage (simulates the Railway Volume mount in dev) — generated content, not
+# source. See apps/backend/src/storage/local-disk-storage-driver.ts.
+apps/backend/.data/
+
 # OS/editor
 .DS_Store
 Thumbs.db

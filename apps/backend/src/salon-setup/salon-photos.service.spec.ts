@@ -14,11 +14,14 @@ describe('SalonPhotosService', () => {
     $transaction: jest.Mock;
   };
   let salonAccess: { assertAccess: jest.Mock };
+  let storage: { isConfigured: boolean; putPublicObject: jest.Mock; deleteObject: jest.Mock };
 
   beforeEach(() => {
     prisma = {
       photo: {
-        findMany: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue([
+          { url: 'https://cdn.test/existing.jpg' },
+        ]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue({
           id: 'p1',
@@ -32,7 +35,16 @@ describe('SalonPhotosService', () => {
       $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
     };
     salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
-    service = new SalonPhotosService(prisma as never, salonAccess as never);
+    storage = {
+      isConfigured: true,
+      putPublicObject: jest.fn().mockResolvedValue('https://cdn.test/uploaded.jpg'),
+      deleteObject: jest.fn().mockResolvedValue(undefined),
+    };
+    service = new SalonPhotosService(
+      prisma as never,
+      salonAccess as never,
+      storage as never,
+    );
   });
 
   const input = {
@@ -89,10 +101,24 @@ describe('SalonPhotosService', () => {
   });
 
   it('404s when the photo does not belong to this salon', async () => {
-    prisma.photo.deleteMany.mockResolvedValue({ count: 0 });
+    // remove() looks the photo up (scoped by salonId) before deleting it — a photo belonging to
+    // another salon simply isn't found, same as one that never existed.
+    prisma.photo.findMany.mockResolvedValue([]);
     await expect(
       service.remove('owner-1', 'salon-1', 'other-salons-photo'),
     ).rejects.toMatchObject({ code: 'PHOTO_NOT_FOUND' });
+    expect(prisma.photo.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('best-effort deletes the underlying storage object after removing the row', async () => {
+    await service.remove('owner-1', 'salon-1', 'p1');
+    expect(storage.deleteObject).toHaveBeenCalledWith('https://cdn.test/existing.jpg');
+  });
+
+  it('removal succeeds even when storage cleanup unexpectedly throws', async () => {
+    storage.deleteObject.mockRejectedValue(new Error('disk unavailable'));
+    await expect(service.remove('owner-1', 'salon-1', 'p1')).resolves.toBeUndefined();
+    expect(prisma.photo.deleteMany).toHaveBeenCalled();
   });
 
   // The URL is stored and later rendered into an <img src>, so what we accept matters.
@@ -119,6 +145,105 @@ describe('SalonPhotosService', () => {
       expect(parse(`https://cdn.test/${'a'.repeat(2100)}.jpg`).success).toBe(
         false,
       );
+    });
+  });
+
+  // ---------- Device upload (multipart) ----------
+
+  describe('createFromUpload', () => {
+    // Real magic bytes, not a declared MIME type — the whole point of the check under test.
+    const jpeg = () =>
+      ({
+        buffer: Buffer.concat([
+          Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+          Buffer.alloc(64),
+        ]),
+        size: 68,
+        mimetype: 'image/jpeg',
+        originalname: 'shop.jpg',
+      }) as never;
+
+    const meta = { type: 'COVER' as never };
+
+    it('stores the file and saves the returned URL as a normal photo row', async () => {
+      await service.createFromUpload('owner-1', 'salon-1', jpeg(), meta);
+      expect(storage.putPublicObject).toHaveBeenCalledTimes(1);
+      const [key, , contentType] = storage.putPublicObject.mock.calls[0];
+      // Keyed by salon, never by the client-supplied filename.
+      expect(key).toMatch(/^salons\/salon-1\/photos\/[0-9a-f-]{36}\.jpg$/);
+      expect(key).not.toContain('shop.jpg');
+      // Content-Type is the sniffed value.
+      expect(contentType).toBe('image/jpeg');
+      expect(prisma.photo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ url: 'https://cdn.test/uploaded.jpg' }),
+        }),
+      );
+    });
+
+    it('rejects a non-image whatever its declared type and filename claim', async () => {
+      const disguised = {
+        // "MZ" — a Windows executable, uploaded as image/jpeg named .jpg.
+        buffer: Buffer.concat([Buffer.from('MZ'), Buffer.alloc(64)]),
+        size: 66,
+        mimetype: 'image/jpeg',
+        originalname: 'innocent.jpg',
+      } as never;
+      await expect(
+        service.createFromUpload('owner-1', 'salon-1', disguised, meta),
+      ).rejects.toMatchObject({ code: 'PHOTO_UNSUPPORTED_TYPE' });
+      expect(storage.putPublicObject).not.toHaveBeenCalled();
+      expect(prisma.photo.create).not.toHaveBeenCalled();
+    });
+
+    it('requires a file', async () => {
+      await expect(
+        service.createFromUpload('owner-1', 'salon-1', undefined, meta),
+      ).rejects.toMatchObject({ code: 'PHOTO_FILE_REQUIRED' });
+      expect(storage.putPublicObject).not.toHaveBeenCalled();
+    });
+
+    it('rejects an oversized file before uploading it', async () => {
+      const huge = {
+        buffer: Buffer.concat([
+          Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+          Buffer.alloc(64),
+        ]),
+        size: 50 * 1024 * 1024,
+        mimetype: 'image/jpeg',
+        originalname: 'huge.jpg',
+      } as never;
+      await expect(
+        service.createFromUpload('owner-1', 'salon-1', huge, meta),
+      ).rejects.toMatchObject({ code: 'PHOTO_TOO_LARGE' });
+      expect(storage.putPublicObject).not.toHaveBeenCalled();
+    });
+
+    it('checks salon access before touching storage', async () => {
+      salonAccess.assertAccess.mockRejectedValue(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(
+        service.createFromUpload('intruder', 'someone-elses-salon', jpeg(), meta),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(storage.putPublicObject).not.toHaveBeenCalled();
+    });
+
+    // An upload that cannot be recorded must not leave a file nothing points at.
+    it('never uploads when the salon is already at the photo limit', async () => {
+      prisma.photo.count.mockResolvedValue(12);
+      await expect(
+        service.createFromUpload('owner-1', 'salon-1', jpeg(), meta),
+      ).rejects.toMatchObject({ code: 'PHOTO_LIMIT_REACHED' });
+      expect(storage.putPublicObject).not.toHaveBeenCalled();
+    });
+
+    it('demotes an existing cover when an uploaded photo becomes the cover', async () => {
+      await service.createFromUpload('owner-1', 'salon-1', jpeg(), meta);
+      expect(prisma.photo.updateMany).toHaveBeenCalledWith({
+        where: { salonId: 'salon-1', type: 'COVER' },
+        data: { type: 'GALLERY' },
+      });
     });
   });
 });

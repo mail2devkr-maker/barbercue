@@ -308,6 +308,16 @@ export const createSalonPhotoSchema = z.object({
 });
 export type CreateSalonPhotoInput = z.infer<typeof createSalonPhotoSchema>;
 
+// Multipart upload metadata (dashboard/salons/:salonId/photos/upload). Same altText/type fields
+// as createSalonPhotoSchema above, minus `url` — on this path the URL is produced by object
+// storage after the bytes land, never supplied by the client. Everything arrives as a string in
+// a multipart body, so `type` is validated against the enum rather than assumed.
+export const salonPhotoUploadMetaSchema = z.object({
+  altText: z.string().trim().max(200).optional(),
+  type: z.nativeEnum(PhotoType),
+});
+export type SalonPhotoUploadMetaInput = z.infer<typeof salonPhotoUploadMetaSchema>;
+
 export const createSalonChairSchema = z.object({
   label: z.string().min(1).max(60),
 });

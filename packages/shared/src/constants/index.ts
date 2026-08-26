@@ -123,6 +123,22 @@ export const PREMIUM_PATHS = {
 export const PREMIUM_PLAN_IDS = ['basic', 'pro', 'max'] as const;
 
 // DashboardQueueController's `@Controller('dashboard')` prefix — staff/owner queue operations.
+// Salon photo upload limits. Shared so the browser can reject a bad file before spending an
+// upload on it and the server can reject the same file again on arrival — the client copy is a
+// courtesy, the server copy is the boundary that actually counts.
+export const SALON_PHOTO_UPLOAD = {
+  // 5 MB, matching the Style Advisor's existing MAX_UPLOAD_BYTES — one upload ceiling across the
+  // product rather than a second, different number for owners to trip over.
+  maxBytes: 5 * 1024 * 1024,
+  // The three formats every current browser and phone camera can produce and every browser can
+  // render. Deliberately no HEIC: Safari uploads it happily but Chrome/Firefox cannot display it,
+  // so accepting it would store photos that some customers simply never see.
+  allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'] as const,
+  // For the file picker's `accept` attribute. Extensions are a UI hint only — the server decides
+  // by sniffing the file's magic bytes, never by trusting this or the browser's declared type.
+  accept: 'image/jpeg,image/png,image/webp',
+} as const;
+
 export const DASHBOARD_PATHS = {
   dashboard: 'dashboard',
   salons: 'salons',
@@ -143,6 +159,10 @@ export const DASHBOARD_PATHS = {
   // Phase 9: authenticated "get my shop's QR/public queue URL" — mounted under the existing
   // dashboard/salons/:salonId/... shape alongside PublicQueueController's other routes.
   queueQr: 'queue-qr',
+  // dashboard/salons/:salonId/photos/upload — multipart device upload. Additive sibling of the
+  // JSON `photos` POST, which still takes an already-hosted https link and is unchanged; both
+  // funnel into the same Photo row, so there is exactly one photo model, not two.
+  photoUpload: 'upload',
   // Phase 11 (owner setup): salon-scoped roster/catalog management. `staff` above is reused —
   // note DashboardQueueController's existing `dashboard/staff/:id/status` (clock in/out) is a
   // DIFFERENT route from Phase 11's `dashboard/salons/:salonId/staff/:staffId`; the `salons/`
