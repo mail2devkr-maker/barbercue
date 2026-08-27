@@ -64,7 +64,91 @@ import {
 import { parseInsertStatements } from '../src/global-locations/dr5hn-sql-parser';
 
 const prisma = new PrismaClient();
-const BATCH_SIZE = 500;
+// Smaller than the original 500: each batch is one Postgres transaction, so this bounds how much
+// work (and how long a single connection must stay open) is lost to one dropped connection, and
+// keeps each transaction well under Neon's observed multi-minute idle/long-lived-connection
+// timeout window (see the reliability notes below).
+const BATCH_SIZE = 100;
+
+// ---- Reliability: retry/reconnect for transient Neon connection drops ----
+//
+// The previous version of this script had no retry logic at all -- any dropped connection
+// (repeatedly observed in production as "Server has closed the connection", Neon closing a
+// long-lived session) threw out of whatever loop was running and killed the whole process via
+// main().catch() below. Because every run also rebuilt its full candidate list from scratch and
+// walked it from index 0, a failure late in a run meant re-walking tens of thousands of
+// already-inserted (upsert no-op) rows on the next attempt before reaching new territory --
+// wasted time, and another multi-minute window for the same class of failure to recur.
+//
+// Two independent fixes, both applied below:
+//   1. withRetry() -- bounded retry (never infinite) with exponential backoff, scoped to error
+//      patterns that are genuinely transient connection/network failures. A real data or
+//      constraint error (a bug, not a blip) is rethrown immediately, not retried into oblivion.
+//   2. Bulk "already present" lookups (one query each for Country/Region/City) run before their
+//      respective write loops, so a restart can skip straight to genuinely new rows instead of
+//      re-attempting rows the database can already prove are done. The database — not an
+//      in-memory counter or a file -- remains the sole source of truth for what's left to do.
+const MAX_RETRY_ATTEMPTS = 6;
+const RETRY_BASE_DELAY_MS = 2000;
+
+function isTransientDbError(err: unknown): boolean {
+  // PrismaClientInitializationError covers every "couldn't (re)establish a connection" failure
+  // -- by construction it can never be a data/constraint/integrity error (those surface as
+  // PrismaClientKnownRequestError with a P2xxx code instead), so once this run's very first
+  // query has already succeeded, any later instance of this error class is unambiguously a
+  // transient connectivity blip, not a real problem with this run's data. Checking the
+  // constructor name is what actually caught the gap below: production's real failure was
+  // "Can't reach database server at <host>:<port>", whose message contains neither "connection"
+  // nor any of the previous P1xxx-code substrings, and whose own `.errorCode` was observed
+  // `undefined` in practice -- text/code matching alone would have missed it, exactly as it did
+  // on the run that surfaced this gap.
+  if (err instanceof Error && err.constructor.name === 'PrismaClientInitializationError') {
+    return true;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    /server has closed the connection/i.test(msg) ||
+    /can'?t reach database server/i.test(msg) ||
+    /connection.*(reset|closed|terminated|refused)/i.test(msg) ||
+    /(ECONNRESET|ETIMEDOUT|EPIPE|ENOTFOUND)/.test(msg) ||
+    // Prisma error codes: P1001 can't reach DB server, P1008 operation timed out,
+    // P1017 server has closed the connection, P2024 timed out fetching a connection from pool.
+    /\bP1001\b|\bP1008\b|\bP1017\b|\bP2024\b/.test(msg)
+  );
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Runs `fn`, retrying up to MAX_RETRY_ATTEMPTS times with exponential backoff if the failure
+ * looks like a transient connection/network error. Reconnects the shared Prisma client between
+ * attempts (disconnect + connect on the same instance, Prisma's supported way to force a fresh
+ * connection pool without re-wiring every `prisma.` call site in this file). Any error that
+ * doesn't match the transient patterns -- a real constraint violation, a bug, a schema mismatch
+ * -- is thrown immediately on the first attempt: this is a hardening pass for connection
+ * flakiness, not a way to paper over genuine data or integrity errors.
+ */
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (err) {
+      attempt++;
+      if (!isTransientDbError(err) || attempt > MAX_RETRY_ATTEMPTS) throw err;
+      const delayMs = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      console.warn(
+        `  [retry] ${label} failed (attempt ${attempt}/${MAX_RETRY_ATTEMPTS}): ` +
+          `${err instanceof Error ? err.message : String(err)}. Reconnecting, retrying in ${delayMs}ms...`,
+      );
+      await prisma.$disconnect().catch(() => undefined);
+      await sleep(delayMs);
+      await prisma.$connect().catch(() => undefined);
+    }
+  }
+}
 
 // ---- CLI args ----
 const args = process.argv.slice(2);
@@ -201,10 +285,12 @@ async function main() {
   // same-named source rows like Armenia's two "Abovyan" entries getting misclassified as an
   // "ambiguous legacy match"). Only the 21 explicitly-approved legacy rows are ever reconciled;
   // everything else goes through the normal idempotent upsert path in step 8b.
-  const existingCitiesSnapshot = await prisma.city.findMany({
-    where: { OR: LEGACY_CITY_KEYS.map(({ countryCode, slug }) => ({ countryCode, slug })) },
-    select: { id: true, name: true, slug: true, countryCode: true, state: true },
-  });
+  const existingCitiesSnapshot = await withRetry('pre-write legacy city snapshot', () =>
+    prisma.city.findMany({
+      where: { OR: LEGACY_CITY_KEYS.map(({ countryCode, slug }) => ({ countryCode, slug })) },
+      select: { id: true, name: true, slug: true, countryCode: true, state: true },
+    }),
+  );
   if (existingCitiesSnapshot.length !== LEGACY_CITY_KEYS.length) {
     throw new Error(
       `SAFETY STOP: expected exactly ${LEGACY_CITY_KEYS.length} legacy cities (one per ` +
@@ -221,10 +307,12 @@ async function main() {
         `(${nonLegacyRow.countryCode}/${nonLegacyRow.slug}). Refusing to continue.`,
     );
   }
-  const salonCityIdsSnapshot = await prisma.salon.findMany({ select: { id: true, cityId: true } });
-  const localityCityIdsSnapshot = await prisma.locality.findMany({
-    select: { id: true, cityId: true },
-  });
+  const salonCityIdsSnapshot = await withRetry('pre-write salon snapshot', () =>
+    prisma.salon.findMany({ select: { id: true, cityId: true } }),
+  );
+  const localityCityIdsSnapshot = await withRetry('pre-write locality snapshot', () =>
+    prisma.locality.findMany({ select: { id: true, cityId: true } }),
+  );
   const preCityCount = existingCitiesSnapshot.length;
   const preSalonCount = salonCityIdsSnapshot.length;
   const preLocalityCount = localityCityIdsSnapshot.length;
@@ -382,12 +470,22 @@ async function main() {
   // ---- 8. REAL WRITES ----
   console.log(`\n=== Writing to database ===`);
 
+  // Bulk pre-fetch: one query for every already-present Country, rather than a findUnique per
+  // source row (250 round trips every single run, even when nothing is left to do -- Country is
+  // already fully imported as of this handoff). The database is the source of truth for what's
+  // left; this is purely so a run that's already complete confirms that in one query instead of
+  // 250, and a partial run resumes without re-querying rows it can already prove exist.
+  const existingCountries = await withRetry('fetch existing countries', () =>
+    prisma.country.findMany({ select: { id: true, isoCode2: true } }),
+  );
+  const countryByIso2 = new Map(existingCountries.map((c) => [c.isoCode2, c.id]));
+
   const countryIdMap = new Map<string, string>(); // dr5hn country.id -> BarberCue Country.id
   let countryInserted = 0, countryExisting = 0;
   for (const c of validCountries) {
-    const found = await prisma.country.findUnique({ where: { isoCode2: c.iso2! } });
-    if (found) {
-      countryIdMap.set(c.id, found.id);
+    const foundId = countryByIso2.get(c.iso2!);
+    if (foundId) {
+      countryIdMap.set(c.id, foundId);
       countryExisting++;
       continue;
     }
@@ -398,26 +496,40 @@ async function main() {
     // region picker in front of a shop owner). Left at the schema's own safe default until a
     // real consumer (a future /countries endpoint + frontend Region-step) exists and an explicit,
     // reviewed curation decision is made -- not decided unilaterally by this importer.
-    const created = await prisma.country.create({
-      data: {
-        isoCode2: c.iso2!,
-        isoCode3: c.iso3,
-        name: c.name!,
-        nativeName: c.native,
-        phoneCode: c.phonecode,
-        currencyCode: c.currency,
-        slug: slugify(normalizeForSlug(c.name!)),
-        postalCodeRegex: c.postal_code_regex,
-        sourceDataset: SOURCE_DATASET,
-        sourceId: toNumberOrNull(c.id),
-        sourceVersion: SOURCE_VERSION,
-        wikiDataId: c.wikiDataId,
-      },
-    });
+    const created = await withRetry(`create country ${c.iso2}`, () =>
+      prisma.country.create({
+        data: {
+          isoCode2: c.iso2!,
+          isoCode3: c.iso3,
+          name: c.name!,
+          nativeName: c.native,
+          phoneCode: c.phonecode,
+          currencyCode: c.currency,
+          slug: slugify(normalizeForSlug(c.name!)),
+          postalCodeRegex: c.postal_code_regex,
+          sourceDataset: SOURCE_DATASET,
+          sourceId: toNumberOrNull(c.id),
+          sourceVersion: SOURCE_VERSION,
+          wikiDataId: c.wikiDataId,
+        },
+      }),
+    );
     countryIdMap.set(c.id, created.id);
+    countryByIso2.set(created.isoCode2, created.id);
     countryInserted++;
   }
   console.log(`COUNTRIES inserted=${countryInserted} existing=${countryExisting}`);
+
+  // Same bulk pre-fetch idea as Country above: one query for every already-present Region,
+  // keyed by (countryId, slug) -- the exact identity the loop below looks rows up by -- instead
+  // of a findFirst per source row (5,308 round trips every run otherwise; Region is already
+  // fully imported as of this handoff).
+  const existingRegions = await withRetry('fetch existing regions', () =>
+    prisma.region.findMany({ select: { id: true, countryId: true, slug: true } }),
+  );
+  const regionByCountryAndSlug = new Map(
+    existingRegions.map((r) => [`${r.countryId}::${r.slug}`, r.id]),
+  );
 
   const regionIdMap = new Map<string, string>(); // dr5hn state.id -> BarberCue Region.id
   let regionInserted = 0, regionExisting = 0;
@@ -470,27 +582,30 @@ async function main() {
 
     for (const s of list) {
       const slug = slugFor.get(s.id)!;
-      const found = await prisma.region.findFirst({ where: { countryId: bcCountryId, slug } });
-      if (found) {
-        regionIdMap.set(s.id, found.id);
+      const foundId = regionByCountryAndSlug.get(`${bcCountryId}::${slug}`);
+      if (foundId) {
+        regionIdMap.set(s.id, foundId);
         regionExisting++;
         continue;
       }
-      const created = await prisma.region.create({
-        data: {
-          countryId: bcCountryId,
-          code: s.iso3166_2,
-          name: s.name,
-          nativeName: s.native,
-          kind: s.type,
-          slug,
-          sourceDataset: SOURCE_DATASET,
-          sourceId: toNumberOrNull(s.id),
-          sourceVersion: SOURCE_VERSION,
-          wikiDataId: s.wikiDataId,
-        },
-      });
+      const created = await withRetry(`create region ${s.name} (${slug})`, () =>
+        prisma.region.create({
+          data: {
+            countryId: bcCountryId,
+            code: s.iso3166_2,
+            name: s.name,
+            nativeName: s.native,
+            kind: s.type,
+            slug,
+            sourceDataset: SOURCE_DATASET,
+            sourceId: toNumberOrNull(s.id),
+            sourceVersion: SOURCE_VERSION,
+            wikiDataId: s.wikiDataId,
+          },
+        }),
+      );
       regionIdMap.set(s.id, created.id);
+      regionByCountryAndSlug.set(`${bcCountryId}::${slug}`, created.id);
       regionInserted++;
     }
   }
@@ -515,46 +630,85 @@ async function main() {
       sourceVersion: SOURCE_VERSION,
       wikiDataId: sourceCity.wikiDataId,
     };
-    await prisma.city.update({ where: { id: existing.id }, data });
+    await withRetry(`backfill existing city ${existing.name}`, () =>
+      prisma.city.update({ where: { id: existing.id }, data }),
+    );
     backfilled++;
   }
   console.log(`EXISTING CITIES backfilled=${backfilled}`);
 
   // ---- 8b. Insert new eligible cities, batched ----
-  let cityInserted = 0;
-  for (let i = 0; i < newCityInsertCandidates.length; i += BATCH_SIZE) {
-    const batch = newCityInsertCandidates.slice(i, i + BATCH_SIZE);
-    await prisma.$transaction(
-      batch.map((c) => {
-        const resolution = slugAssignmentByCountry.get(c.country_id)!.get(c.id)!;
-        const slug = resolution.kind === 'assigned' ? resolution.slug : slugify(normalizeForSlug(c.name));
-        const bcCountryId = countryIdMap.get(c.country_id)!;
-        const bcRegionId = c.state_id ? regionIdMap.get(c.state_id) ?? null : null;
-        return prisma.city.upsert({
-          where: { countryId_slug: { countryId: bcCountryId, slug } },
-          update: {},
-          create: {
-            name: c.name,
-            slug,
-            countryCode: c.country_code ?? '',
-            state: c.state_id ? stateById.get(c.state_id)?.name ?? '' : '',
-            country: countryById.get(c.country_id)?.name ?? '',
-            countryId: bcCountryId,
-            regionId: bcRegionId,
-            nativeName: c.native,
-            latitude: toNumberOrNull(c.latitude),
-            longitude: toNumberOrNull(c.longitude),
-            population: toNumberOrNull(c.population),
-            sourceDataset: SOURCE_DATASET,
-            sourceId: toNumberOrNull(c.id),
-            sourceVersion: SOURCE_VERSION,
-            wikiDataId: c.wikiDataId,
-          },
-        });
-      }),
+  //
+  // Resume optimization: bulk-fetch every (countryId, slug) this importer has already written
+  // for this exact source/version, and skip those candidates entirely before batching. Without
+  // this, a restart re-attempts the full candidate list (currently ~99,776 rows) from index 0 --
+  // every already-inserted row still costs a DB round trip inside a batch transaction even
+  // though upsert makes it a no-op, so a run that dies at row 51,500 previously meant the next
+  // attempt spent most of its time (and connection-open window) re-walking rows 1-51,500 before
+  // reaching anything new. The database is the source of truth for this, not the in-memory
+  // candidate list or any counter -- exactly why this queries sourceDataset+sourceVersion rather
+  // than trusting a checkpoint file that could drift from what's actually committed.
+  const alreadyInsertedCities = await withRetry('fetch already-inserted cities (resume check)', () =>
+    prisma.city.findMany({
+      where: { sourceDataset: SOURCE_DATASET, sourceVersion: SOURCE_VERSION },
+      select: { countryId: true, slug: true },
+    }),
+  );
+  const alreadyInsertedSet = new Set(
+    alreadyInsertedCities.map((c) => `${c.countryId}::${c.slug}`),
+  );
+  const candidatesRemaining = newCityInsertCandidates.filter((c) => {
+    const resolution = slugAssignmentByCountry.get(c.country_id)!.get(c.id)!;
+    const slug = resolution.kind === 'assigned' ? resolution.slug : slugify(normalizeForSlug(c.name));
+    const bcCountryId = countryIdMap.get(c.country_id)!;
+    return !alreadyInsertedSet.has(`${bcCountryId}::${slug}`);
+  });
+  console.log(
+    `Resume check: ${alreadyInsertedCities.length} cities already present for this source/version; ` +
+      `${candidatesRemaining.length}/${newCityInsertCandidates.length} candidates genuinely remain.`,
+  );
+
+  let cityInserted = newCityInsertCandidates.length - candidatesRemaining.length;
+  const importStartedAt = Date.now();
+  for (let i = 0; i < candidatesRemaining.length; i += BATCH_SIZE) {
+    const batch = candidatesRemaining.slice(i, i + BATCH_SIZE);
+    await withRetry(`city batch starting at candidate ${i}`, () =>
+      prisma.$transaction(
+        batch.map((c) => {
+          const resolution = slugAssignmentByCountry.get(c.country_id)!.get(c.id)!;
+          const slug = resolution.kind === 'assigned' ? resolution.slug : slugify(normalizeForSlug(c.name));
+          const bcCountryId = countryIdMap.get(c.country_id)!;
+          const bcRegionId = c.state_id ? regionIdMap.get(c.state_id) ?? null : null;
+          return prisma.city.upsert({
+            where: { countryId_slug: { countryId: bcCountryId, slug } },
+            update: {},
+            create: {
+              name: c.name,
+              slug,
+              countryCode: c.country_code ?? '',
+              state: c.state_id ? stateById.get(c.state_id)?.name ?? '' : '',
+              country: countryById.get(c.country_id)?.name ?? '',
+              countryId: bcCountryId,
+              regionId: bcRegionId,
+              nativeName: c.native,
+              latitude: toNumberOrNull(c.latitude),
+              longitude: toNumberOrNull(c.longitude),
+              population: toNumberOrNull(c.population),
+              sourceDataset: SOURCE_DATASET,
+              sourceId: toNumberOrNull(c.id),
+              sourceVersion: SOURCE_VERSION,
+              wikiDataId: c.wikiDataId,
+            },
+          });
+        }),
+      ),
     );
     cityInserted += batch.length;
-    console.log(`  ...cities processed: ${cityInserted}/${newCityInsertCandidates.length}`);
+    const elapsedSec = Math.round((Date.now() - importStartedAt) / 1000);
+    console.log(
+      `  ...cities processed: ${cityInserted}/${newCityInsertCandidates.length} ` +
+        `(+${elapsedSec}s since this run's writes started)`,
+    );
   }
   console.log(`CITIES inserted (idempotent upsert)=${cityInserted}`);
 
@@ -566,16 +720,20 @@ async function main() {
       aliasSkipped++;
       continue;
     }
-    const found = await prisma.cityAlias.findFirst({
-      where: { cityId: existing.id, name: sourceCity.native },
-    });
+    const found = await withRetry(`find alias for ${existing.name}`, () =>
+      prisma.cityAlias.findFirst({
+        where: { cityId: existing.id, name: sourceCity.native! },
+      }),
+    );
     if (found) {
       aliasExisting++;
       continue;
     }
-    await prisma.cityAlias.create({
-      data: { cityId: existing.id, name: sourceCity.native, kind: 'NATIVE_NAME' },
-    });
+    await withRetry(`create alias for ${existing.name}`, () =>
+      prisma.cityAlias.create({
+        data: { cityId: existing.id, name: sourceCity.native!, kind: 'NATIVE_NAME' },
+      }),
+    );
     aliasInserted++;
   }
   console.log(`ALIASES (existing-city backfill pass) inserted=${aliasInserted} existing=${aliasExisting} skipped=${aliasSkipped}`);
@@ -619,9 +777,13 @@ async function assertNothingProtectedChanged(args: {
     localityCityIdsSnapshot,
   } = args;
 
-  const postCityCount = await prisma.city.count({
-    where: { id: { in: existingCitiesSnapshot.map((c) => c.id) } },
-  });
+  // Retry-wrapped: a spurious connection blip landing here, after a long successful run, must
+  // never be misreported as a SAFETY VIOLATION -- these queries are re-verification reads, not
+  // part of what they're verifying, so they get the same transient-error tolerance as every
+  // write above.
+  const postCityCount = await withRetry('post-write city count', () =>
+    prisma.city.count({ where: { id: { in: existingCitiesSnapshot.map((c) => c.id) } } }),
+  );
   if (postCityCount !== preCityCount) {
     throw new Error(
       `SAFETY VIOLATION: expected ${preCityCount} of the original existing City rows to still ` +
@@ -630,7 +792,9 @@ async function assertNothingProtectedChanged(args: {
   }
 
   for (const snap of existingCitiesSnapshot) {
-    const now = await prisma.city.findUniqueOrThrow({ where: { id: snap.id } });
+    const now = await withRetry(`post-write re-check city ${snap.id}`, () =>
+      prisma.city.findUniqueOrThrow({ where: { id: snap.id } }),
+    );
     if (now.name !== snap.name || now.slug !== snap.slug || now.countryCode !== snap.countryCode) {
       throw new Error(
         `SAFETY VIOLATION: existing city ${snap.id} changed a protected field. ` +
@@ -639,11 +803,13 @@ async function assertNothingProtectedChanged(args: {
     }
   }
 
-  const postSalonCount = await prisma.salon.count();
+  const postSalonCount = await withRetry('post-write salon count', () => prisma.salon.count());
   if (postSalonCount !== preSalonCount) {
     throw new Error(`SAFETY VIOLATION: Salon count changed from ${preSalonCount} to ${postSalonCount}.`);
   }
-  const postSalons = await prisma.salon.findMany({ select: { id: true, cityId: true } });
+  const postSalons = await withRetry('post-write salon list', () =>
+    prisma.salon.findMany({ select: { id: true, cityId: true } }),
+  );
   for (const before of salonCityIdsSnapshot) {
     const after = postSalons.find((s) => s.id === before.id);
     if (!after || after.cityId !== before.cityId) {
@@ -651,13 +817,15 @@ async function assertNothingProtectedChanged(args: {
     }
   }
 
-  const postLocalityCount = await prisma.locality.count();
+  const postLocalityCount = await withRetry('post-write locality count', () => prisma.locality.count());
   if (postLocalityCount !== preLocalityCount) {
     throw new Error(
       `SAFETY VIOLATION: Locality count changed from ${preLocalityCount} to ${postLocalityCount}.`,
     );
   }
-  const postLocalities = await prisma.locality.findMany({ select: { id: true, cityId: true } });
+  const postLocalities = await withRetry('post-write locality list', () =>
+    prisma.locality.findMany({ select: { id: true, cityId: true } }),
+  );
   for (const before of localityCityIdsSnapshot) {
     const after = postLocalities.find((l) => l.id === before.id);
     if (!after || after.cityId !== before.cityId) {
