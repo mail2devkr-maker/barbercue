@@ -1,8 +1,9 @@
 # BarberCue — Master State
 
-Persistent source of truth across sessions. Last updated by Session 2 (handoff to Session 3) at
-approximately 93% context usage. Every claim below was verified during this session — read this
-file before doing anything else in a new session, and update it again before your own handoff.
+Persistent source of truth across sessions. Last updated at the end of the session that finished
+the premium visual refresh, fixed two backend route-shadowing bugs, and consolidated/pushed
+everything to `origin/master`. Every claim below was verified during this session — read this file
+before doing anything else in a new session, and update it again before your own handoff.
 
 ---
 
@@ -23,9 +24,9 @@ file before doing anything else in a new session, and update it again before you
   - `@barbercue/mobile` — service ID `ec65e522-7565-41e6-aee1-12b8e00686cf` (web build of the
     Expo app; not touched this session, still on an older commit — see §11).
 - **Auth**: phone-OTP (disabled in production — no SMS provider configured), Google Sign-In (GSI,
-  FedCM-based as of this session), staff/owner/admin email+password. Access tokens: short-lived
-  signed JWT, held in browser memory only. Refresh tokens: opaque random string, SHA-256 hashed in
-  DB (`refresh_tokens` table), httpOnly cookie, 30-day expiry, rotated on every use.
+  FedCM-based), staff/owner/admin email+password. Access tokens: short-lived signed JWT, held in
+  browser memory only. Refresh tokens: opaque random string, SHA-256 hashed in DB
+  (`refresh_tokens` table), httpOnly cookie, 30-day expiry, rotated on every use.
 - **Photo storage**: pluggable `StorageDriver` behind `ObjectStorageService`
   (`apps/backend/src/storage/`). Launch driver is `LocalDiskStorageDriver`, backed by a Railway
   persistent Volume (`@barbercue/backend-volume`, mounted at `/data/salon-photos`, 500MB). An
@@ -34,210 +35,211 @@ file before doing anything else in a new session, and update it again before you
   translations. Source: `dr5hn/countries-states-cities-database` v3.2-export.7. Import script
   (`apps/backend/prisma/import-global-locations.ts`) is additive/idempotent (`upsert`), matches and
   protects the original 21 "legacy" India cities by a hardcoded key list, never invented data.
+- **Route registration order matters** for any controller mounted under `salons/:salonId/...`:
+  `SalonsController`'s public discovery route (`GET salons/:countryCode/:citySlug/:salonSlug`) is
+  a fully-wildcard 3-segment pattern that Nest/Express will match for ANY 3-segment `salons/*`
+  request if its module is registered first. `BookingsModule` and `QueueModule` are therefore
+  imported before `SalonsModule` in `apps/backend/src/app.module.ts` — see §9 and §14. Any new
+  `salons/:salonId/<literal>/...` controller must follow the same rule.
 
 ---
 
 ## 2. Current phase / status
 
-Two parallel workstreams are mid-flight, both intentionally left incomplete for a clean handoff:
+1. **Global location data import into production Neon** — still running/retrying, not finished.
+   See §6. Untouched by this session per explicit instruction — read-only status checks only.
+2. **Premium visual refresh of `apps/web`** — **complete** across every surface identified in the
+   brief: foundation, landing, salon profile, search, customer shell, booking flow, queue
+   experience (customer + owner), owner/staff dashboard (shop list, settings, services, staff,
+   chairs, hours, photos, setup checklist, QR panel), shop registration, auth pages, and customer
+   account pages. See §5. All of it is committed and, as of this update, pushed to `origin/master`
+   — confirm with `git status` / `git log --oneline origin/master..HEAD` (should show 0 ahead).
+3. **Two backend routing bugs found and fixed** during visual-refresh verification — see §9.
 
-1. **Global location data import into production Neon** — running, not finished. See §6.
-2. **Premium visual refresh of `apps/web`** — foundation + 4 surfaces done, committed locally
-   (not pushed/deployed). See §3 and §5.
-
-Everything else (auth, booking, queue, photo upload, backend APIs) is stable and was NOT touched
-this session except where explicitly noted in §3.
+Everything else (core auth, booking/queue business logic, photo upload, realtime, backend APIs)
+was **not** rewritten — this was a visual/UX pass plus two small, isolated routing fixes.
 
 ---
 
-## 3. Completed work (this session, verified)
+## 3. Completed work (this and prior sessions, verified)
 
-### 3a. Railway deployment pipeline — fixed and deployed
-- Root cause of a failed Railway web build: a prior commit (`9765747`, made by the user directly,
-  not this session) changed `NEXT_PUBLIC_API_BASE_URL` to a relative `/api/v1` path so browser
-  requests stay same-origin (fixes the httpOnly refresh-cookie reliability across Railway's split
-  `*.up.railway.app` service domains). Two *other* call sites read that same variable and need an
-  **absolute** URL: `apps/web/lib/discovery-api.ts` (server-side/build-time fetch — this is what
-  actually broke the Next.js static build) and `apps/web/lib/realtime.ts` (the live-queue
-  WebSocket, which must stay a direct cross-origin connection, never proxied). Fixed in commit
-  `48c7ca6` by introducing `BACKEND_INTERNAL_URL` (server-only, private Railway DNS) for the first
-  and `NEXT_PUBLIC_BACKEND_ORIGIN` (public) for the second. **Deployed and verified live.**
-- Companion Railway config fix (already live): `BACKEND_INTERNAL_URL` on the web service was
-  originally set to `http://barbercuebackend:8080` (missing the `.railway.internal` suffix Railway
-  private networking requires) — corrected to
-  `http://barbercuebackend.railway.internal:8080`. This is what was causing every `/api/v1/*`
-  browser request to 500 even on a deployment that built successfully.
-- **Known stray config**: `BACKEND_INTERNAL_URL` also exists as an (unused, harmless) variable on
-  the **backend** service itself — an artifact of the Railway CLI silently targeting whatever
-  service is `railway service link`-ed rather than honoring `--service` reliably (see §10). Safe
-  to delete from the backend service whenever convenient; backend code never reads it.
-- Google Sign-In FedCM fix (`use_fedcm_for_button: true` in
-  `apps/web/app/(auth)/login/page.tsx`) — routes the button's sign-in through the browser's native
-  FedCM API instead of a `window.open()` popup, which was failing under this environment's
-  automated-browser popup policy and is a known general fragility point for GSI's popup mode.
-  Included in commit `8d79332`, **deployed**.
+### 3a. Railway deployment pipeline, global-location registration flow, photo upload
+Deployed and verified in earlier sessions — see git history (`8d79332`, `48c7ca6`, `90a2441`,
+`9765747`) if the detail is ever needed. Not re-touched this session except where noted below.
 
-### 3b. Global location registration flow — code deployed, data import in progress
-Commit `8d79332` (pushed, deployed, Railway `SUCCESS` on both backend and web) shipped:
-- Backend: `CountriesController`/`CountriesService` (new), `CitiesController` gains
-  `GET cities/search`, `apps/backend/src/global-locations/` (dr5hn source parser + classification
-  utilities, pure and unit-tested), the additive Prisma migration (`Country`/`Region`/`CityAlias`
-  tables + nullable `City` enrichment columns — **applied to production Neon**, confirmed via
-  direct query), a trigram-index migration for city-name search (**applied**), and the standalone
-  `import-global-locations.ts` / `seed-cities.ts` data scripts.
-- Frontend: `RegisterSalonForm.tsx` rewritten from `GET cities/all` (a ~16MB unfiltered dump) to
-  the new `Country → Region → City-search` flow (`CitySearchField.tsx`, debounced, race-safe).
-  `POST /salons` contract unchanged (`{countryCode, citySlug, localitySlug}`).
-- **This code is live in production right now**, but the `Country`/`Region`/`City` tables it reads
-  are only partially populated — see §6. Until the import finishes, the country dropdown on the
-  live registration page will show an incomplete list.
+### 3b. Two production-affecting routing bugs — found, fixed, isolated commits
+Both root-caused to the same mechanism: `SalonsModule` was imported before `BookingsModule`/
+`QueueModule` in `app.module.ts`, so `SalonsController`'s fully-wildcard 3-segment discovery route
+(`salons/:countryCode/:citySlug/:salonSlug`) intercepted every `salons/:salonId/<literal>/...`
+request before it reached the real controller (Nest/Express matches by registration order, not
+pattern specificity).
 
-### 3c. Photo upload (owner-side) — deployed, verified end-to-end in production
-Commit `90a2441`, live: `POST dashboard/salons/:id/photos/upload` (multipart, magic-byte type
-detection, 5MB cap), backed by the Railway-Volume `LocalDiskStorageDriver`. Verified with a real
-upload → volume file → DB row → public URL → browser render → delete, all against production.
+- **Booking routes** (`GET salons/:salonId/booking/{staff,availability,cancellation-policy}`) —
+  were 404ing. Fixed in `b8566ba` (`BookingsModule` moved before `SalonsModule`). Verified live:
+  full Service → Staff → Date → Slot → Confirm flow walked in the browser with real data.
+- **Queue routes** (`GET/POST salons/:salonId/queue/{status,join}`) — were 404ing (with a
+  `CITY_NOT_FOUND` body, since the discovery route was treating `queue` as a citySlug). Fixed in
+  `93a32c9` (`QueueModule` moved before `SalonsModule` too). Verified live: joined the queue as a
+  customer, watched it appear in the owner dashboard, called/cancelled it.
 
-### 3d. Premium visual refresh — committed locally, NOT pushed/deployed
-See §5 for exactly what's done and what remains. Commit `0911df0`, sitting on top of `8d79332` on
-the local `master` branch. **This commit has not been pushed** — deliberately, since the work is
-explicitly incomplete (see the instruction that produced this document). `git status` at end of
-session: local `HEAD` is 1 commit ahead of `origin/master`, 0 behind.
+Both fixes: typecheck clean, 390/390 backend tests passing, no regression to the discovery route
+itself. `apps/backend/src/app.module.ts`'s own comment documents the rule for future controllers.
+
+### 3c. Premium visual refresh — now complete, four commits
+- `b6ddec1` — booking flow (`BookingFlow`, `ServiceStep`, `StaffStep`, `DateStep`, `SlotStep`,
+  `CancelBookingDialog`, new `booking.module.css`, step-progress indicator).
+- `49afc36` — queue experience (`QueueStatusPanel` "ticket", `WalkInJoinFlow`,
+  `PublicQueueJoinFlow`, `CheckInPanel`, `DashboardQueueView`, new `queue.module.css`).
+- `bcfa0e1` — dashboard/owner pages (shop list, settings, services, staff, chairs, hours, photos,
+  setup checklist, QR panel, admin placeholder; new `dashboard.module.css`), shop registration
+  (`RegisterSalonForm`, `CitySearchField`, `form-styles.ts` — Country→Region→City-search flow and
+  the `POST /salons` contract are unchanged), auth (`AuthCard`, `CustomerAuthCard`,
+  `EmailPasswordLoginForm`, the customer login page's local styles), and a handful of remaining raw
+  hex colors in the account pages (which had already been substantially refreshed earlier — see
+  §16, this was previously mis-recorded in this file as "not started").
+- Foundation/landing/salon-profile/search/customer-shell were completed and verified in an earlier
+  session (`0911df0`).
+
+All four: web typecheck clean, web lint clean, production build succeeds (`next build`, all
+routes). See §8 for the full verification list.
 
 ---
 
 ## 4. In-progress work
 
-- **Global location data import** — see §6. Running in a background shell process, must not be
-  stopped per explicit standing instruction from the user across this entire session.
-- Nothing else is mid-edit. The working tree is clean except for the pre-existing untracked files
-  noted in §11.
+- **Global location data import** — see §6. A retry of this (started earlier in this session,
+  before the instruction to leave it untouched) completed *on its own* during this session's work
+  and failed again with the same known `Server has closed the connection` error, after re-walking
+  ~31,000 already-inserted rows (net city count unchanged — see §6). This session did not start,
+  stop, or otherwise act on the import; only read-only count checks were performed, exactly as
+  instructed.
+- Nothing else is mid-edit. The working tree is clean except for the two files ignored in §11.
 
 ---
 
-## 5. Pending work — premium visual refresh
+## 5. Premium visual refresh — final status
 
-**Done, verified (typecheck clean, lint clean, production build succeeds, no console errors, no
-mobile overflow at 375px, fonts confirmed loading, tested live against local dev with real data):**
-- Foundation: `next/font` (Fraunces display + Work Sans body), expanded `--bc-*` design tokens
-  (type/spacing/elevation/radius scales, a gold accent reserved for ratings/trust signals only)
-  in `apps/web/app/globals.css`, elevated `Button`/`Card` shared primitives.
-- Landing page (`apps/web/app/(public)/page.tsx` + `landing.module.css`).
-- Salon profile page (`apps/web/app/(public)/[countryCode]/[citySlug]/[salonSlug]/page.tsx`) —
-  added a hero cover-photo (previously absent entirely), elevated header/CTAs, Services/Hours/
-  Reviews now in `Card`s, fixed stale "Photos coming soon" → "No photos yet" copy.
-- Search results (`apps/web/app/(public)/search/SearchClient.tsx`) — results now a responsive
-  card grid; `SalonCard` rewritten to actually render `coverPhotoUrl` (was text-only before).
-- Customer header/footer wordmark (`customer-shell.module.css`) — affects every customer page.
+**Complete, verified (typecheck clean, lint clean, production build succeeds, no console errors
+introduced, no horizontal overflow at 375px, tested live against local dev with real data as both
+an owner and a customer account):**
+- Foundation: `next/font` (Fraunces display + Work Sans body), `--bc-*` design tokens
+  (type/spacing/elevation/radius scales, a gold accent for ratings/trust signals), elevated
+  `Button`/`Card` shared primitives.
+- Landing page, salon profile page, search results, customer header/footer shell.
+- Booking flow (all steps + cancel dialog + step-progress indicator).
+- Queue experience: customer ticket/join flows (authenticated walk-in join, QR scan-and-join,
+  post-booking check-in) and the owner/staff live-queue dashboard.
+- Owner/staff dashboard: shop list, settings hub + setup checklist + queue-QR panel, services,
+  staff, chairs, hours, photos, admin placeholder.
+- Shop registration (`RegisterSalonForm`, `CitySearchField`) — functional Country→Region→
+  City-search flow from an earlier phase, visual pass done this session.
+- Auth: customer login (phone-OTP + Google), owner/staff/admin login, forgot/reset password —
+  all via the shared `AuthCard`/`CustomerAuthCard`/`EmailPasswordLoginForm` components.
+- Customer account: profile (sessions list) and booking-history/home pages — these were already
+  substantially refreshed (Card/Button, dedicated CSS modules, empty states with icons) before this
+  session; only a few leftover raw hex colors and two native buttons were brought in line.
 
-**NOT started — do these next, in roughly this order of customer-facing impact:**
-- Booking flow (`apps/web/components/booking/*` — `BookingFlow.tsx`, `ServiceStep.tsx`,
-  `DateStep.tsx`, `SlotStep.tsx`, `StaffStep.tsx`, `CancelBookingDialog.tsx`).
-- Queue experience (`apps/web/components/queue/*` — customer-facing `PublicQueueJoinFlow.tsx`,
-  `WalkInJoinFlow.tsx`, `QueueStatusPanel.tsx`; owner-facing `DashboardQueueView.tsx`).
-- Dashboard/owner pages (`apps/web/app/(dashboard)/**` — salons list, settings, services, chairs,
-  staff, hours, photos management UI itself — note the *upload feature* is done, its visual
-  presentation is not).
-- Register-shop page (`RegisterSalonForm.tsx` already got the *functional* Phase 6B rewrite this
-  session — it has NOT had the premium visual pass; still uses ad-hoc inline styles).
-- Auth pages (`apps/web/app/(auth)/*` — login, owner/staff/admin login, forgot/reset password).
-- Account pages (`apps/web/app/(customer)/account/*`).
-- Anything else discovered during inspection — the instruction is explicit that this list is not
-  exhaustive.
+**Explicitly NOT touched (outside the stated "web app" scope, or not part of the named surfaces):**
+- `apps/mobile` (Expo app) — never in scope for this refresh.
+- `apps/web/app/(customer)/account/premium` and `.../style-advisor` — separate features, not named
+  in the refresh brief; `premium.module.css` already used tokens when checked, `style-advisor` was
+  not inspected at all this session.
+- The refresh-token rotation race condition (§7) — a functional bug, not visual; still not fixed.
 
-**Design direction to continue with** (unchanged from this session's brief): elevate the existing
-warm/editorial cream-charcoal-terracotta identity — do not replace it. Fresha and Booksy are UX/UI
-*pattern* references only (discovery, search, profile presentation, booking flow, trust signals,
-mobile UX) — never copy their branding, assets, copy, or distinctive layouts. Target feeling: "a
-premium modern barbershop brand powered by excellent technology," not a generic SaaS dashboard.
-Preserve all business logic, APIs, auth, and DB integration — visual/UX changes only, unless a
-functional change is genuinely required to support the improved UX.
+**Design direction used throughout** (unchanged across all sessions): elevate the existing
+warm/editorial cream-charcoal-terracotta identity — never replaced it. Fresha and Booksy were UX/UI
+*pattern* references only, never copied. Target feeling: "a premium modern barbershop brand powered
+by excellent technology," not a generic SaaS dashboard. No business logic, API calls, auth flow, or
+booking/queue behavior changed anywhere in the refresh — visual/UX only, plus the two isolated
+routing fixes in §3b/§9 (found *during* refresh verification, fixed in their own commits).
 
 ---
 
 ## 6. Database / import status
 
-**Read this section fresh at the start of the next session — it will be stale by then.**
+**Read this section fresh at the start of the next session — it will be stale by then.** Use this
+non-disruptive check (does not touch the running/failed process):
+```bash
+cd apps/backend
+railway service link "@barbercue/backend"   # then verify: railway variable list --json | grep RAILWAY_SERVICE_NAME
+railway run -- node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();(async()=>{console.log(JSON.stringify({Country:await p.country.count(),Region:await p.region.count(),City:await p.city.count(),Salon:await p.salon.count(),User:await p.user.count()}));await p.$disconnect()})()"
+```
 
 As of this handoff:
 ```
 Country: 250   (fully populated — DONE)
 Region:  5308  (fully populated — DONE)
-City:    51521 of ~99,797 target (21 legacy + 51,500 of 99,776 new rows)
-Salon:   2     (unchanged — the original demo salon + one real test registration from this
-                session's user, "Handsome Center"-equivalent in production; NOT touched by the
-                import, which never writes to Salon)
+City:    51521 of ~99,797 target (21 legacy + 51,500 of 99,776 new rows) — UNCHANGED since the
+                previous handoff, across multiple checks this session.
+Salon:   2     (unchanged, untouched by the import)
 User:    4     (unchanged)
 ```
 
-**The import is a background shell process, still running, NOT deployed code** — it's a one-off
-data migration script (`apps/backend/prisma/import-global-locations.ts`) run from a local machine
-against production's `DATABASE_URL` via `railway run`, because its source data
-(`apps/backend/prisma/data/dr5hn/*.sql`, ~108MB, gitignored) only exists locally.
+**History, for context**: this run has now failed at least **five** times with the identical
+`Server has closed the connection` error (Neon closing the long-lived connection partway through),
+most recently after re-walking ~31,000 rows without net progress (those rows were already inserted
+by earlier attempts, so re-upserting them was a no-op — not data loss, just no forward progress
+this attempt). The script is `upsert`-based and genuinely idempotent/safe to fully restart from row
+1 at any time — confirmed repeatedly via dry-run (`Matched 21/21 existing cities` every time) and
+direct DB inspection (no protected row ever changed; `Bengaluru`'s ID has been verified
+byte-identical throughout: `dfcf4697-1c36-40a1-8659-586513ae4650`).
 
-**History of this run, for context**: the import failed and was restarted from scratch **four
-times** before the currently-running attempt, each time with the error `Server has closed the
-connection` (Neon closing the long-lived connection partway through — happened at row 10,000, then
-51,500, then (on an unpooled-connection variant) 11,500, and the connection-string swap did not
-reliably help). The script is `upsert`-based and genuinely idempotent/safe to fully restart from
-row 1 at any time — confirmed via dry-run (`Matched 21/21 existing cities` every time) and by
-direct DB inspection after each failure (no protected row ever changed; `Bengaluru`'s ID has been
-verified byte-identical throughout: `dfcf4697-1c36-40a1-8659-586513ae4650`).
-
-**Do not stop or restart this import merely because it is slow** — this was an explicit, repeated
-instruction from the user this session. If it fails again, the safe, already-proven action is to
-simply re-run the exact same command:
+**Do not stop or restart this import merely because it is slow or has failed again** unless the
+user explicitly asks — this was an explicit, repeated instruction across multiple sessions now. If
+you do get explicit approval to retry, the safe, already-proven action is to simply re-run the
+exact same command:
 ```bash
 cd apps/backend
 railway run -- npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/import-global-locations.ts
 ```
-(Ensure `railway service link "@barbercue/backend"` first, or pass an explicit `--service`/
-`--environment`/`--project` — see §10 for a real CLI targeting caveat.) A safe, non-disruptive way
-to check progress without touching the running process:
-```bash
-cd apps/backend
-railway run -- node -e "const{PrismaClient}=require('@prisma/client');const p=new PrismaClient();(async()=>{console.log(JSON.stringify({City:await p.city.count()}));await p.$disconnect()})()"
-```
+(Link the service first — see the snippet above; `--service` is not reliable, see §10.)
 
-**Once the import completes**, verify: `City` count should land at 99,797 (21 legacy + 99,776 new
-— exact figure was confirmed via dry-run and does not change run to run), `Country` 250, `Region`
-5308, `Salon`/`User`/`Locality` unchanged, `Bengaluru`'s row ID unchanged, and the live `/countries`,
-`/countries/:id/regions`, `/cities/search` endpoints against production returning the full dataset
-(they already exist and are deployed — see §3b — only the underlying data is incomplete).
+**Once the import completes**, verify: `City` count should land at 99,797 (21 legacy + 99,776 new),
+`Country` 250, `Region` 5308, `Salon`/`User`/`Locality` unchanged, `Bengaluru`'s row ID unchanged,
+and the live `/countries`, `/countries/:id/regions`, `/cities/search` endpoints against production
+returning the full dataset (they're already deployed — only the underlying data is incomplete).
 
 ---
 
 ## 7. Authentication / OAuth status
 
-- **Google Sign-In**: working in production as of this session (FedCM fix, §3a). Not re-verified
-  end-to-end by a real human click-through after the *latest* deploy in this session — the fix was
-  validated locally before deploy and the deploy itself succeeded, but no one has clicked
-  "Continue with Google" against the live production URL since `8d79332` went out.
-- **Email/password (staff/owner/admin)**: confirmed working in production this session.
-- **Phone OTP**: disabled in production (`{"phoneOtp":false}` from live `/auth/methods`) — no SMS
-  provider configured. This is a known, pre-existing, unchanged state, not a regression.
-- **Known open issue, NOT fixed this session**: "Invalid refresh token." can appear on the
-  register-shop page immediately after a successful shop registration (the page's own
-  `refreshSession()` call, which fires right after `POST /salons` succeeds). Root cause was
-  narrowed to `TokenService.rotateRefreshToken()` having a genuine, reproduced, non-atomic
-  check-then-revoke race condition (`apps/backend/src/auth/services/token.service.ts` — a
-  `findFirst` followed by a separate `update`, not wrapped in a transaction or a conditional
-  atomic update). A minimum-safe fix was proposed and approved in principle
-  (make the revoke atomic via a conditional `updateMany`, and separately make the frontend's
-  `refreshSession()` failure non-fatal to an already-successful registration) but **was not
-  implemented** — the session moved to other P0 work before returning to it. See the conversation
-  history for the full investigation if needed; do not re-investigate from scratch.
+- **Google Sign-In**: FedCM fix deployed and previously verified locally. **Not re-verified against
+  the live production URL after this session's commits are deployed** — do a real (human, not
+  automated — FedCM/popup fragility in automated browsers) click-through once Railway finishes
+  redeploying (see §10 note on auto-deploy-on-push).
+- **Email/password (staff/owner/admin)**: working — used extensively this session against local
+  dev (owner login, staff barbers, etc.). Not specifically re-verified against production this
+  session, but no code in this path changed beyond visual styling.
+- **Phone OTP**: disabled in production (no SMS provider configured) — pre-existing, unchanged.
+  Used extensively against local dev this session (`ConsoleOtpSender` logs the code) to verify the
+  customer booking/queue/account flows.
+- **Known open issue, still NOT fixed**: "Invalid refresh token." can appear on the register-shop
+  page immediately after a successful shop registration. Root cause: `TokenService
+  .rotateRefreshToken()` has a non-atomic check-then-revoke race
+  (`apps/backend/src/auth/services/token.service.ts`). A minimum-safe fix was scoped and approved
+  in principle in an earlier session (atomic conditional `updateMany`, plus making the frontend's
+  `refreshSession()` failure non-fatal to an already-successful registration) but has never been
+  implemented. Do not re-diagnose from scratch — implement the already-approved fix when picked up.
 
 ---
 
 ## 8. Frontend status
 
-- `apps/web` builds clean (`npm run build --workspace=@barbercue/web`), typechecks clean, lints
-  clean, as of the current commit (`0911df0`, local-only).
-- No automated frontend test suite exists in this repo (confirmed by search this session) —
-  verification is typecheck + lint + build + manual/browser check only.
-- Visual refresh status: see §5.
-- `apps/mobile` was not touched this session and was not visually refreshed — out of scope for the
-  "premium visual refresh" instruction, which was scoped to the web app.
+- `apps/web`: `tsc --noEmit` clean, `eslint` clean, `next build` succeeds (all routes) — verified
+  multiple times this session, most recently at the final commit before push.
+- No automated frontend test suite exists in this repo — verification is typecheck + lint + build +
+  manual/browser check only.
+- Visual refresh: complete — see §5.
+- Live-browser verification this session covered, as both an owner account
+  (`owner@barbercue-demo.com` / `DemoPass123!`, from `prisma/seed.ts`) and a customer account
+  (phone OTP via `ConsoleOtpSender`, logged to the backend's console): landing, search, salon
+  profile, booking flow end-to-end, queue join/status/call/cancel end-to-end, dashboard shop
+  list/settings/services/staff/chairs/hours/photos, shop registration form, owner login, the QR
+  scan-and-join page (both authenticated and OTP branches), and account/profile + account/bookings.
+  No console errors introduced by this session's changes (the recurring 401/404/`ERR_CONNECTION_
+  REFUSED` entries seen throughout are the pre-existing auth-refresh cycle, stale pre-fix log
+  entries, and a WebSocket-upgrade-falls-back-to-polling artifact — not regressions).
+- `apps/mobile` was not touched — out of scope for this refresh (web-only, per the original brief).
 
 ---
 
@@ -245,182 +247,154 @@ railway run -- node -e "const{PrismaClient}=require('@prisma/client');const p=ne
 
 - `apps/backend` — 390/390 tests passing, typecheck clean, at the current commit. `nest build`
   could not be verified locally this session due to a recurring, pre-existing, documented Windows
-  file-lock issue (`EPERM ... query_engine-windows.dll.node`, caused by a live dev server holding
-  the Prisma engine file) — this is environmental, not a code defect; `tsc --noEmit` passing is
-  the real signal, and Railway's own container build (which is what actually matters for
-  deployment) has succeeded on every push this session.
-- No backend API code changes are pending/uncommitted — everything backend-side that was written
-  this session is already committed and deployed (`90a2441`, `48c7ca6`, `8d79332`).
-- New endpoints live in production: `GET /countries`, `GET /countries/:id/regions`,
-  `GET /cities/search`, `POST /dashboard/salons/:id/photos/upload`.
+  file-lock issue (`EPERM ... query_engine-windows.dll.node`) — environmental, not a code defect;
+  `tsc --noEmit` + the test suite are the real local signal, and Railway's own container build is
+  authoritative for deployment.
+- Two isolated backend fixes this session — see §3b: `b8566ba` (bookings routing) and `93a32c9`
+  (queue routing). Both are two-line `app.module.ts` import-order changes plus a doc-comment
+  correction each; no route paths, business logic, or schema touched.
+- No other backend API code changed this session.
 
 ---
 
 ## 10. Environment / configuration status (names only, no values)
 
-**Backend service** (`@barbercue/backend`) — variables present:
-`DATABASE_URL`, `JWT_ACCESS_SECRET`, `GOOGLE_WEB_CLIENT_ID`, `LOCAL_STORAGE_DIR`,
-`LOCAL_STORAGE_PUBLIC_BASE_URL`, `WEB_BASE_URL`, `NODE_ENV`, `BACKEND_INTERNAL_URL` (stray/unused,
-see §3a), plus Railway's own auto-injected `RAILWAY_*` variables. **Not present**:
-`GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ADMIN_SEED_EMAIL`/`ADMIN_SEED_PASSWORD` (no
-admin account is seeded in production), any `OBJECT_STORAGE_*` (R2 driver exists in code but is
-not configured/active).
+Unchanged from prior sessions — see git history for the full prior write-up if needed. No Railway
+variables were changed this session.
 
-**Web service** (`@barbercue/web`) — variables present: `NEXT_PUBLIC_API_BASE_URL` (relative,
-`/api/v1` — intentional, see §3a), `BACKEND_INTERNAL_URL` (private, server-only), 
-`NEXT_PUBLIC_BACKEND_ORIGIN` (public, for the WebSocket), `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, plus
-Railway's own `RAILWAY_*` variables.
+**Real caveat for whoever runs Railway CLI commands next**: `railway variable`/`railway run` **do
+not reliably honor `--service <id-or-name>`** — they silently operate on whichever service is
+currently `railway service link`-ed instead. Always explicitly `railway service link
+"@barbercue/<name>"` immediately before any `variable`/`run` command, and verify with `railway
+variable list --json | grep RAILWAY_SERVICE_NAME` afterward.
 
-**Real caveat for whoever runs Railway CLI commands next**: `railway variable`/`railway run`
-**do not reliably honor `--service <id-or-name>`** in this environment — they silently operate on
-whichever service is currently `railway service link`-ed instead, regardless of what `--service`
-says. This caused at least one real mistake this session (a variable fix landing on the wrong
-service, silently, with the CLI reporting success). **Always explicitly `railway service link
-"@barbercue/<name>"` immediately before any `variable`/`run` command, and verify with
-`railway variable list --json | grep RAILWAY_SERVICE_NAME` afterward** — do not trust `--service`
-alone. `railway logs`, `railway service list`, and `railway service status` did NOT show this
-problem (they correctly honored explicit IDs).
-
-Session was linked to `@barbercue/backend` at handoff time (the original default from before this
-session started).
+**Auto-deploy on push**: this repo has a Railway GitHub integration — pushing to `origin/master`
+(done at the end of this session, see §11) is expected to trigger backend and/or web deployments
+automatically. Do not manually trigger an additional deployment on top of that; check Railway's own
+deployment list for the result instead.
 
 ---
 
 ## 11. Git status
 
-- Branch: `master`. Working tree clean (only the pre-existing untracked files below).
-- Local `HEAD` is **some small number of commits ahead of `origin/master` (base: `8d79332`), 0
-  behind** — `0911df0` (the premium visual refresh) plus one or more docs-only commits
-  adding/correcting this file itself. **Do not trust a specific count or hash typed into this
-  document** — this file cannot reliably record its own final commit hash (editing it to add that
-  hash changes the hash again). Run this instead, right now, for ground truth:
+- Branch: `master`.
+- **As of the end of this session, `master` has been pushed to `origin/master` and the two should
+  match exactly (0 ahead, 0 behind).** Don't trust a hardcoded SHA in this document (it goes stale
+  the instant this file is edited and committed) — get ground truth with:
   ```bash
-  git log --oneline origin/master..HEAD
+  git status
+  git log --oneline -10
+  git rev-parse HEAD
+  git rev-parse origin/master
   ```
-- **None of those commits have been pushed.** `0911df0` is kept local because it is explicitly
-  incomplete work, per the instruction that produced this document. The docs commit(s) are left
-  unpushed alongside it simply to keep the push decision as one deliberate action for a future
-  session/human, rather than assumed here.
-- The one commit hash worth hardcoding — because it's the fixed base everything above builds on
-  and does NOT change as this file is edited — is `origin/master`'s tip, `8d79332`, which IS what's
-  currently deployed to Railway. Full pushed/deployed history below it, newest first:
+- Commits pushed this session, oldest first (on top of `2472aab`, the previous handoff-doc fix):
   ```
-  8d79332  feat(location): global Country -> Region -> City-search registration flow              [pushed, deployed]
-  48c7ca6  fix(web): resolve absolute URLs for server-side and WebSocket use                       [pushed, deployed]
-  9765747  fix(web): make Railway auth and uploads same-origin           [made by the user directly, not this session]
-  90a2441  feat(salon): let owners upload shop photos from their device                            [pushed, deployed]
+  b8566ba  fix(bookings): register BookingsModule before SalonsModule to fix route shadowing
+  93a32c9  fix(queue): register QueueModule before SalonsModule to fix route shadowing
+  b6ddec1  feat(web): premium visual refresh for the booking flow
+  49afc36  feat(web): premium visual refresh for the queue experience
+  bcfa0e1  feat(web): premium visual refresh for dashboard, register-shop, auth, and account
+  cb42ba1  chore: commit the location-architecture handoff doc, ignore import data/report
   ```
-- Untracked files present, intentionally never committed (all pre-existing from earlier work, not
-  created this session's visual-refresh work):
-  - `BARBERCUE_HANDOFF.md` — a prior session's handoff doc (superseded by this file; safe to
-    delete, or keep as historical record — your call).
-  - `apps/backend/import-global-locations-report.json` — generated manual-review report from the
-    import script (regenerated every run, gitignore candidate, ~470KB).
-  - `apps/backend/prisma/data/` — the ~108MB downloaded dr5hn source SQL files the import script
-    reads. **Required for the import to work.** Never commit this (already effectively excluded by
-    size/convention, though not yet added to `.gitignore` by name).
-- `apps/mobile` has a separate remote branch, `origin/fix/railway-same-origin-auth` — appeared via
-  `git fetch` this session, never merged or investigated. Unknown contents/purpose. Do not assume
-  it's related to the visual refresh or the import; check it fresh if it becomes relevant.
+  (plus this file's own update commit, on top — check `git log` for its real hash, same
+  self-reference caveat as always.)
+- Untracked/ignored files, explained:
+  - `apps/backend/prisma/data/` — the ~108MB dr5hn source SQL the import script reads. Added to
+    `.gitignore` this session. **Required for the import to work — never delete it.**
+  - `apps/backend/import-global-locations-report.json` — regenerated-every-run manual-review
+    report. Added to `.gitignore` this session.
+  - `BARBERCUE_HANDOFF.md` — previously untracked; **committed this session** (`cb42ba1`) since it
+    carries genuine, non-duplicated Global Location Architecture decisions not reproduced at this
+    depth elsewhere. No longer an untracked file.
+- `apps/mobile` has a separate remote branch, `origin/fix/railway-same-origin-auth` — unrelated to
+  this session's work, unmerged, unknown status. Check fresh if it becomes relevant.
 
 ---
 
 ## 12. Latest relevant commit/hash
 
-- **Local `HEAD` (not pushed to remote)**: the docs commit adding this file, on top of `0911df0`
-  (the visual refresh) — run `git log --oneline -1` for its exact hash (see §11 for why it isn't
-  hardcoded here).
-- **`origin/master` / currently deployed to Railway (backend + web)**: `8d79332312c22360d7094ba6c42e62f45dffc529`
-- **Deployed to Railway mobile service**: `c94dbe398dc1da4611446f2f7327e6bd8dd4c380` (older; mobile
-  only rebuilds on `apps/mobile/**` changes, none occurred this session)
+Run `git rev-parse HEAD` and `git rev-parse origin/master` for ground truth — both should be equal
+after this session's push (see §11). Do not trust a hardcoded SHA in this section.
 
 ---
 
 ## 13. Known issues
 
 1. **"Invalid refresh token." on register-shop, right after a successful registration** — root
-   cause identified (non-atomic refresh-token rotation race in `token.service.ts`), fix proposed
-   and approved, NOT implemented. See §7.
-2. **Global location import is incomplete in production** — see §6. Not a bug, just unfinished; the
-   country dropdown on the live site will show a partial list until it finishes.
+   cause identified, fix approved in principle, still NOT implemented. See §7.
+2. **Global location import is incomplete in production** — see §6. Not a bug, just unfinished;
+   has now failed 5 times with the same Neon connection-drop error. The country dropdown on the
+   live site will show a partial list until it finishes.
 3. **Stray `BACKEND_INTERNAL_URL` variable on the backend service** — harmless (unread by backend
-   code), safe cleanup item. See §3a/§10.
-4. **Google Sign-In not re-verified live after the latest deploy** — see §7. Should be a quick
-   manual check, not a re-investigation.
+   code), safe cleanup item, unchanged from prior sessions.
+4. **Google Sign-In not re-verified live after this session's deploy** — see §7. Quick manual
+   check needed, not a re-investigation.
 5. **`nest build` unverifiable locally on Windows** due to a recurring `EPERM` file lock — known,
    pre-existing, documented, not a code issue (see §9).
 6. **Unrelated remote branch** `origin/fix/railway-same-origin-auth` of unknown status — see §11.
-7. **Premium visual refresh is genuinely partial** — see §5's pending list. Do not present it as
-   done; several major surfaces (booking, queue, dashboard, register-shop's own visuals, auth
-   pages) have had zero visual work.
+7. ~~Premium visual refresh partial~~ — **resolved this session**, see §5.
+8. ~~Booking/queue routes 404ing~~ — **resolved this session**, see §3b/§9.
 
 ---
 
 ## 14. Important architectural decisions (do not silently revisit)
 
 - **Photo storage**: local-disk driver backed by a Railway Volume is the deliberate *launch*
-  choice over S3/R2 — ties storage to one instance/volume, accepted tradeoff for now. The
-  `StorageDriver` abstraction exists specifically so switching to R2 later needs zero Photo-model
-  or frontend change, only new env vars. Do not "simplify" this back to a single hardcoded driver.
+  choice over S3/R2. The `StorageDriver` abstraction exists specifically so switching to R2 later
+  needs zero Photo-model or frontend change, only new env vars. Do not "simplify" this back to a
+  single hardcoded driver.
 - **API calls are same-origin by design** (`NEXT_PUBLIC_API_BASE_URL` = relative `/api/v1` in
-  production) — this is intentional, for httpOnly refresh-cookie reliability across Railway's
-  split service domains, not an accident to "fix" back to an absolute URL. Any new code that needs
-  to reach the backend from a *server* context (Next.js Server Component, build-time, middleware)
-  must use `BACKEND_INTERNAL_URL`, never `NEXT_PUBLIC_API_BASE_URL` directly — see
-  `discovery-api.ts` for the established pattern. Any new code needing a *public, browser-facing*
-  backend origin (e.g. another WebSocket-style direct connection) should use
-  `NEXT_PUBLIC_BACKEND_ORIGIN`, following `realtime.ts`'s pattern.
+  production) — intentional, for httpOnly refresh-cookie reliability. Server-context code uses
+  `BACKEND_INTERNAL_URL` (see `discovery-api.ts`); public browser-facing direct connections use
+  `NEXT_PUBLIC_BACKEND_ORIGIN` (see `realtime.ts`).
 - **The 21 "legacy" India cities are permanently protected** by the hardcoded `LEGACY_CITY_KEYS`
-  list in `global-locations.util.ts`, matched by `(countryCode, slug)`, never by `sourceDataset`
-  or any other heuristic. `Bengaluru`'s specific ID
-  (`dfcf4697-1c36-40a1-8659-586513ae4650` in production) must never change — it's referenced by
-  real, live production data (the demo salon and at least one real user registration).
+  list in `global-locations.util.ts`, matched by `(countryCode, slug)`, never by `sourceDataset` or
+  any other heuristic. `Bengaluru`'s specific ID (`dfcf4697-1c36-40a1-8659-586513ae4650`) must
+  never change.
 - **The import script is intentionally never run automatically** — no CI hook, no deploy step, no
-  cron. It requires a human to explicitly invoke it, every time, per its own file header. Do not
-  wire it into any automated pipeline.
+  cron. Requires an explicit human invocation every time.
 - **Visual refresh preserves the warm/editorial identity** — cream/charcoal/terracotta is the
-  brand, Fraunces/Work Sans is the new typography, gold is a sparingly-used accent for trust
-  signals only. This was an explicit, deliberate direction choice this session (user picked
-  "elevate the existing look" over a dark-luxury or SaaS-minimal alternative that were also
-  offered) — do not switch direction without asking again.
+  brand, Fraunces/Work Sans is the typography, gold is a sparingly-used accent for trust signals
+  only. Do not switch direction without asking again.
+- **`app.module.ts` import order is load-bearing, not cosmetic** (new this session): any controller
+  mounted at `salons/:salonId/<literal>/...` must have its module imported before `SalonsModule`,
+  or `SalonsController`'s wildcard discovery route will silently intercept its requests (see §3b,
+  §9, and the comment in `app.module.ts` itself). `BookingsModule` and `QueueModule` are already
+  correctly ordered; any *new* such controller needs the same treatment.
 
 ---
 
 ## 15. Exact next steps
 
 1. **Read this file fully before doing anything else.**
-2. Check the import's live status (read-only, see §6's exact command) — do not disturb it if still
-   running; if it has since failed, simply re-run the same idempotent command again.
-3. Confirm the `0911df0` visual-refresh commit is still local-only and intentionally unpushed
-   (`git log --oneline -1`, `git status`) — do not assume it needs re-doing.
-4. Continue the visual refresh systematically down §5's pending list, in the given priority order
-   (booking flow → queue → dashboard/owner pages → register-shop's own visuals → auth pages →
-   account pages), using the same verification bar as this session: typecheck, lint, build, live
-   browser check (console errors, mobile overflow at 375px) after each surface.
-5. Do not push/deploy the visual refresh until it's either complete or the user explicitly asks for
-   an intermediate deploy — no instruction to deploy it exists yet.
-6. Once the import finishes, verify it per §6's checklist, then do a real (human, not automated —
-   see the FedCM/popup limitation documented earlier this session) click-through of Google Sign-In
-   and the full registration flow against production.
-7. When ready, address the known refresh-token race condition (§7/§13.1) — the fix was already
-   scoped and approved in principle; implement, test, and get approval to deploy.
+2. Check the import's live status (read-only, §6's exact command) — do not disturb it unless the
+   user explicitly approves a retry.
+3. Confirm this session's push landed (`git status`, `git log`) — don't assume, verify.
+4. Do a real human click-through of Google Sign-In and the full registration flow against
+   production once Railway's auto-deploy from this push finishes (see §10).
+5. When ready, implement the already-approved refresh-token race-condition fix (§7/§13.1).
+6. If further visual polish is wanted: `apps/mobile` was never in scope for this refresh and
+   remains fully untouched; `account/premium` and `account/style-advisor` were not inspected this
+   session and may or may not need work.
 
 ---
 
 ## 16. Do NOT redo
 
-- Do NOT re-investigate the Railway build-failure root cause — it's fixed, deployed, and verified
-  (§3a). Re-reading §3a/§13 is enough context if something related comes up.
+- Do NOT re-investigate the Railway build-failure root cause, the global-location registration
+  flow, or the photo-upload feature — all fixed/shipped in earlier sessions, unrelated to this
+  session's work.
 - Do NOT re-run the global-location import from a cold assumption that it hasn't started — check
-  §6's live count first. It may have completed since this document was written.
-- Do NOT re-diagnose the "Invalid refresh token" issue from scratch — the root cause and fix are
-  already known (§7/§13.1); just implement the already-approved fix.
-- Do NOT re-do the FedCM Google Sign-In investigation — it's diagnosed, fixed, and deployed. A
-  quick live click-through is enough, not a new investigation.
+  §6's live count first.
+- Do NOT re-diagnose the "Invalid refresh token" issue from scratch — root cause and fix are known
+  (§7/§13.1); just implement it.
+- Do NOT re-do the FedCM Google Sign-In investigation — diagnosed and fixed; a live click-through
+  after deploy is enough.
 - Do NOT re-litigate the visual design direction — "elevate the existing warm/editorial look" was
-  explicitly chosen over alternatives this session; proceed with it rather than asking again.
-- Do NOT assume the local dev database and production Neon are in the same state — they have
-  diverged in specific, documented ways this session (production has 2 salons vs whatever local
-  has; production's location import may be at a different point than local's, which is complete).
-- Do NOT delete or "clean up" `apps/backend/prisma/data/` — the import script needs it, and it's
-  a slow, manual process to re-obtain (not something to casually regenerate).
+  explicitly chosen and has now been fully executed across every named surface.
+- Do NOT re-diagnose the booking/queue routing 404s — root cause and fix are documented in §3b/§9/
+  the `app.module.ts` comment. If a *new* `salons/:salonId/...` controller 404s, it's almost
+  certainly the same registration-order issue — check `app.module.ts`'s import order first.
+- Do NOT delete or "clean up" `apps/backend/prisma/data/` — the import script needs it.
+- Do NOT assume `BARBERCUE_HANDOFF.md` is redundant/deletable — it's committed source control now,
+  carrying detail not reproduced in this file.
