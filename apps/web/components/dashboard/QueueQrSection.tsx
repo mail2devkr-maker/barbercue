@@ -15,7 +15,7 @@ import styles from "./dashboard.module.css";
  * QR. The QR itself is rendered entirely client-side from the plain publicQueueUrl string the
  * backend returns — no server-side image generation, no per-render cost.
  */
-export function QueueQrSection({ salonId }: { salonId: string }) {
+export function QueueQrSection({ salonId, salonName }: { salonId: string; salonName: string }) {
   const [qr, setQr] = useState<PublicQueueQrDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -48,14 +48,39 @@ export function QueueQrSection({ salonId }: { salonId: string }) {
     }
   }
 
+  function escapeXml(value: string): string {
+    return value.replace(/[&<>"']/g, (char) => {
+      const entity: Record<string, string> = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&apos;",
+      };
+      return entity[char] ?? char;
+    });
+  }
+
   function handleDownload() {
     const svg = svgWrapperRef.current?.querySelector("svg");
     if (!svg) return;
-    const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
+
+    const safeName = escapeXml(salonName);
+    const nameFontSize = Math.max(13, 20 - Math.floor(Math.max(0, salonName.length - 18) / 3));
+    const posterSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="260" height="330" viewBox="0 0 260 330">
+        <rect width="260" height="330" rx="20" fill="#ffffff" />
+        <text x="130" y="34" text-anchor="middle" font-family="Arial, sans-serif" font-size="${nameFontSize}" font-weight="700" fill="#1C1A17">${safeName}</text>
+        <text x="130" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#6B6257">Scan to join the queue</text>
+        <g transform="translate(30 72)">${svg.outerHTML}</g>
+        <text x="130" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#a8791f">BarberCue</text>
+      </svg>`;
+
+    const blob = new Blob([posterSvg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "barbercue-queue-qr.svg";
+    link.download = `${salonName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "barbercue"}-queue-qr.svg`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -79,8 +104,21 @@ export function QueueQrSection({ salonId }: { salonId: string }) {
         <p className={styles.loadingText}>Loading…</p>
       ) : (
         <>
-          <div ref={svgWrapperRef} className={styles.qrBox}>
+          <div
+            ref={svgWrapperRef}
+            className={styles.qrBox}
+            style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 8 }}
+          >
+            <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1C1A17", textAlign: "center" }}>
+              {salonName}
+            </p>
+            <p style={{ margin: 0, fontSize: 12, color: "#6B6257", textAlign: "center" }}>
+              Scan to join the queue
+            </p>
             <QRCodeSVG value={qr.publicQueueUrl} size={200} level="M" fgColor="#a8791f" bgColor="#ffffff" />
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#a8791f", textAlign: "center" }}>
+              BarberCue
+            </p>
           </div>
 
           <p className={styles.hint} style={{ marginBottom: 4 }}>Public queue URL</p>
