@@ -8,6 +8,7 @@ import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../..
 import { SalonCard } from "../../../../components/discovery/SalonCard";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../components/discovery/Breadcrumbs";
 import { JsonLd } from "../../../../components/discovery/JsonLd";
+import styles from "./city.module.css";
 
 interface CityPageParams {
   // ISO-3166-1 alpha-2, lowercase in the URL by convention (e.g. "in") — the backend uppercases
@@ -64,29 +65,35 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
   ];
 
   return (
-    <main style={{ padding: "2rem 1.5rem", maxWidth: 800, margin: "0 auto" }}>
+    <main className={styles.page}>
       <JsonLd data={breadcrumbJsonLd(breadcrumbItems, SITE_URL)} />
-      <Breadcrumbs items={breadcrumbItems} />
-      <h1>Barbershops in {city.name}</h1>
-      <p style={{ color: "#6B6357" }}>
-        {city.state}, {city.country}
-      </p>
+      <div className={styles.breadcrumbs}>
+        <Breadcrumbs items={breadcrumbItems} />
+      </div>
+
+      <header className={styles.hero}>
+        <div>
+          <p className={styles.eyebrow}>Explore local barbers</p>
+          <h1>Barbershops in {city.name}</h1>
+          <p className={styles.location}>{city.state}, {city.country}</p>
+        </div>
+        <div className={styles.heroAside}>
+          <strong>{salons?.items.length ?? 0}</strong>
+          <span>shops shown below</span>
+        </div>
+      </header>
 
       {localities && localities.length > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2 style={{ fontSize: "1.1rem" }}>Areas</h2>
-          <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <section className={styles.areas}>
+          <div className={styles.sectionHeading}>
+            <p className={styles.eyebrow}>Narrow your search</p>
+            <h2>Browse by area</h2>
+          </div>
+          <nav className={styles.areaLinks} aria-label={`Areas in ${city.name}`}>
             {localities.map((l) => (
               <Link
                 key={l.slug}
                 href={`${cityPath}/areas/${l.slug}`}
-                style={{
-                  fontSize: "0.85rem",
-                  padding: "6px 12px",
-                  border: "1px solid #E7E0D3",
-                  borderRadius: 20,
-                  color: "#1C1A17",
-                }}
               >
                 {l.name}
               </Link>
@@ -95,12 +102,25 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
         </section>
       )}
 
-      <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: "1.1rem" }}>Salons</h2>
+      <section className={styles.shops}>
+        <div className={styles.sectionHeading}>
+          <p className={styles.eyebrow}>Book or walk in</p>
+          <h2>Shops in {city.name}</h2>
+        </div>
         {salons && salons.items.length > 0 ? (
-          salons.items.map((s) => <SalonCard key={s.id} salon={s} />)
+          <div className={styles.grid}>
+            {salons.items.map((s) => <SalonCard key={s.id} salon={s} />)}
+          </div>
         ) : (
-          <p style={{ color: "#6B6357" }}>No salons listed in {city.name} yet.</p>
+          <div className={styles.empty}>
+            <span aria-hidden="true">⌖</span>
+            <h2>No shops are listed in {city.name} yet</h2>
+            <p>Try another nearby city or invite your local barbershop to BarberCue.</p>
+            <div>
+              <Link href="/search">Search another city</Link>
+              <Link href="/register/salon">List a barbershop</Link>
+            </div>
+          </div>
         )}
       </section>
     </main>

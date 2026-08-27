@@ -1,0 +1,140 @@
+.page {
+  display: grid;
+  min-height: 68vh;
+  place-items: center;
+  padding: 72px 20px;
+  color: var(--bc-ink);
+  background:
+    radial-gradient(circle at 80% 15%, rgba(168, 121, 31, 0.13), transparent 22rem),
+    var(--bc-surface);
+}
+
+.card {
+  display: grid;
+  width: min(620px, 100%);
+  justify-items: center;
+  padding: clamp(40px, 8vw, 72px) 28px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-lg);
+  box-shadow: var(--bc-shadow-lg);
+}
+
+.mark {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  color: #fff;
+  background: var(--bc-accent);
+  border-radius: 50%;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.card h1,
+.card h2 {
+  margin: 20px 0 10px;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+}
+
+.card p {
+  max-width: 450px;
+  margin: 0;
+  color: var(--bc-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+.actions a,
+.actions button {
+  min-height: 44px;
+  padding: 0 18px;
+  color: #fff;
+  background: var(--bc-ink);
+  border: 1px solid var(--bc-ink);
+  border-radius: var(--bc-radius-sm);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.actions a:last-child {
+  color: var(--bc-ink);
+  background: transparent;
+}
+
+.actions a:focus-visible,
+.actions button:focus-visible {
+  outline: 3px solid rgba(176, 65, 62, 0.28);
+  outline-offset: 3px;
+}
+
+.loading {
+  width: min(880px, 100%);
+}
+
+.loadingHeader,
+.loadingLine,
+.loadingBlock {
+  background: linear-gradient(90deg, #eee7dc 20%, #faf7f1 50%, #eee7dc 80%);
+  background-size: 220% 100%;
+  border-radius: 999px;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.loadingHeader {
+  width: min(520px, 70%);
+  height: 54px;
+}
+
+.loadingLine {
+  width: min(380px, 52%);
+  height: 16px;
+  margin-top: 18px;
+}
+
+.loadingGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 42px;
+}
+
+.loadingBlock {
+  height: 280px;
+  border-radius: var(--bc-radius-md);
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -220% 0;
+  }
+}
+
+@media (max-width: 650px) {
+  .loadingGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .loadingBlock:nth-child(n + 2) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingHeader,
+  .loadingLine,
+  .loadingBlock {
+    animation: none;
+  }
+}

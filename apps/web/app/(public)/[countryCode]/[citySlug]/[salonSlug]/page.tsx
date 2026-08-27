@@ -12,7 +12,7 @@ import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../components/discove
 import { JsonLd } from "../../../../../components/discovery/JsonLd";
 import { SalonImage } from "../../../../../components/ui/SalonImage";
 import { LinkButton } from "../../../../../components/ui/Button";
-import { Card } from "../../../../../components/ui/Card";
+import styles from "./profile.module.css";
 
 interface SalonPageParams {
   // ISO-3166-1 alpha-2, lowercase in the URL — the backend uppercases it before the (countryCode,
@@ -170,77 +170,105 @@ export default async function SalonPage({
     { label: salon.name, href: salonPath(salon) },
   ];
 
-  const sectionHeadingStyle: React.CSSProperties = {
-    fontFamily: "var(--font-display)",
-    fontWeight: 600,
-    fontSize: "1.3rem",
-    marginBottom: 16,
-  };
-
   return (
-    <main style={{ maxWidth: 800, margin: "0 auto", padding: "0 0 3rem" }}>
+    <main className={styles.page}>
       <JsonLd data={breadcrumbJsonLd(breadcrumbItems, SITE_URL)} />
       <JsonLd data={buildHairSalonJsonLd(salon)} />
 
-      <div style={{ padding: "1.25rem 1.5rem 0" }}>
+      <div className={styles.breadcrumbs}>
         <Breadcrumbs items={breadcrumbItems} />
       </div>
 
-      {/* The cover photo is the first thing a visitor sees on Fresha/Booksy-style profile
-          pages — SalonImage's own honest empty state covers a shop with none, so this never
-          shows a placeholder photo that isn't really theirs. */}
-      <div style={{ padding: "0 1.5rem", marginBottom: 20 }}>
-        <SalonImage url={salon.coverPhotoUrl} alt={`${salon.name}'s cover photo`} aspectRatio="16 / 9" rounded={20} priority />
-      </div>
+      <section className={styles.hero}>
+        <div className={styles.cover}>
+          <SalonImage
+            url={salon.coverPhotoUrl}
+            alt={`${salon.name} cover photo`}
+            aspectRatio="16 / 10"
+            rounded={0}
+            priority
+          />
+        </div>
 
-      <div style={{ padding: "0 1.5rem" }}>
-        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "2rem", letterSpacing: "-0.01em", marginBottom: 6 }}>
-          {salon.name}
-        </h1>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 14px", marginBottom: 10 }}>
-          {salon.ratingCount > 0 && (
-            <span style={{ color: "var(--bc-gold)", fontWeight: 600, fontSize: "0.95rem" }}>
-              ★ {salon.ratingAverage?.toFixed(1)}{" "}
-              <span style={{ color: "var(--bc-muted)", fontWeight: 400 }}>
-                ({salon.ratingCount} review{salon.ratingCount === 1 ? "" : "s"})
+        <div className={styles.identity}>
+          <p className={styles.eyebrow}>Barbershop in {city?.name ?? citySlug}</p>
+          <h1>{salon.name}</h1>
+          <div className={styles.ratingLine}>
+            {salon.ratingCount > 0 ? (
+              <span className={styles.rating}>
+                <span aria-hidden="true">★</span> {salon.ratingAverage?.toFixed(1)}
+                <small>
+                  {salon.ratingCount} review{salon.ratingCount === 1 ? "" : "s"}
+                </small>
               </span>
-            </span>
-          )}
-          <span style={{ color: "var(--bc-muted)" }}>{salon.addressLine}</span>
-          {salon.phone && <span style={{ color: "var(--bc-muted)" }}>{salon.phone}</span>}
+            ) : (
+              <span className={styles.newShop}>New on BarberCue</span>
+            )}
+          </div>
+          <address>{salon.addressLine}</address>
+          {salon.phone && <a className={styles.phone} href={`tel:${salon.phone}`}>{salon.phone}</a>}
+          {salon.description && <p className={styles.description}>{salon.description}</p>}
+
+          <div className={styles.actions}>
+            <LinkButton href={bookHref} variant="primary" className={styles.action}>
+              Book an appointment
+            </LinkButton>
+            <LinkButton
+              href={`/queue/${salon.slug}?${cityQuery}`}
+              variant="outline"
+              className={styles.action}
+            >
+              Join live queue
+            </LinkButton>
+          </div>
+          <p className={styles.assurance}>Availability and queue details are confirmed in the next step.</p>
         </div>
-        {salon.description && (
-          <p style={{ color: "var(--bc-ink)", lineHeight: 1.6, marginBottom: 20, maxWidth: 640 }}>{salon.description}</p>
-        )}
+      </section>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 32 }}>
-          <LinkButton href={bookHref} variant="primary">
-            Book an appointment
-          </LinkButton>
-          <LinkButton href={`/queue/${salon.slug}?${cityQuery}`} variant="outline">
-            Join queue now
-          </LinkButton>
+      <div className={styles.contentGrid}>
+        <div className={styles.mainColumn}>
+          <section className={styles.sectionCard}>
+            <div className={styles.sectionHeading}>
+              <p className={styles.eyebrow}>Inside the shop</p>
+              <h2>Photos</h2>
+            </div>
+            <PhotoGallery photos={salon.photos} salonName={salon.name} />
+          </section>
+
+          <section className={styles.sectionCard}>
+            <div className={styles.sectionHeading}>
+              <p className={styles.eyebrow}>Choose your cut</p>
+              <h2>Services & pricing</h2>
+            </div>
+            <ServiceList
+              services={salon.services}
+              currency={salon.currency}
+              countryCode={salon.countryCode}
+            />
+          </section>
+
+          <section className={styles.sectionCard}>
+            <div className={styles.sectionHeading}>
+              <p className={styles.eyebrow}>Customer experiences</p>
+              <h2>Reviews</h2>
+            </div>
+            <ReviewList reviews={salon.reviews} />
+          </section>
         </div>
 
-        <section style={{ marginBottom: 24 }}>
-          <h2 style={sectionHeadingStyle}>Photos</h2>
-          <PhotoGallery photos={salon.photos} salonName={salon.name} />
-        </section>
-
-        <Card style={{ marginBottom: 24 }}>
-          <h2 style={sectionHeadingStyle}>Services</h2>
-          <ServiceList services={salon.services} currency={salon.currency} countryCode={salon.countryCode} />
-        </Card>
-
-        <Card style={{ marginBottom: 24 }}>
-          <h2 style={sectionHeadingStyle}>Opening hours</h2>
-          <OperatingHoursTable hours={salon.operatingHours} />
-        </Card>
-
-        <Card>
-          <h2 style={sectionHeadingStyle}>Reviews</h2>
-          <ReviewList reviews={salon.reviews} />
-        </Card>
+        <aside className={styles.sideColumn}>
+          <section className={styles.hoursCard}>
+            <div className={styles.sectionHeading}>
+              <p className={styles.eyebrow}>Plan your visit</p>
+              <h2>Opening hours</h2>
+            </div>
+            <OperatingHoursTable hours={salon.operatingHours} />
+          </section>
+          <div className={styles.queueNote}>
+            <strong>Prefer a walk-in?</strong>
+            <p>Check the live queue path to see whether this shop is currently accepting joins.</p>
+          </div>
+        </aside>
       </div>
     </main>
   );

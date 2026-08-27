@@ -1,83 +1,168 @@
-.link {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-}
-
 .card {
-  background: #ffffff;
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  flex-direction: column;
+  background: #fff;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  overflow: hidden;
-  height: 100%;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  box-shadow: var(--bc-shadow-sm);
+  transition: box-shadow 180ms ease, transform 180ms ease;
 }
 
 .card:hover {
-  border-color: var(--bc-ink);
   box-shadow: var(--bc-shadow-lg);
   transform: translateY(-3px);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .card:hover {
-    transform: none;
-  }
-}
-
-.imageWrap {
-  /* SalonImage renders its own aspect-ratio box; rounded={0} on it plus overflow:hidden here is
-     what gives a single, clean corner radius instead of a rounded image nested in a rounded card. */
+.imageLink {
+  display: block;
+  overflow: hidden;
+  background: #eee7dc;
   border-bottom: 1px solid var(--bc-border);
 }
 
+.imageLink > * {
+  transition: transform 350ms ease;
+}
+
+.card:hover .imageLink > * {
+  transform: scale(1.018);
+}
+
 .body {
-  padding: var(--bc-space-4) var(--bc-space-4) var(--bc-space-5);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.titleRow > div {
+  min-width: 0;
+}
+
+.nameLink {
+  border-radius: 3px;
 }
 
 .name {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.1rem;
-  color: var(--bc-ink);
-  margin: 0 0 4px;
-  /* Long shop names shouldn't push the card's height around in a grid of otherwise-uniform cards. */
   overflow: hidden;
+  margin: 0;
+  color: var(--bc-ink);
+  font-size: 1.3rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .address {
-  margin: 0 0 12px;
-  font-size: 0.85rem;
-  color: var(--bc-muted);
   overflow: hidden;
+  margin: 5px 0 0;
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.rating {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  color: #6a4a0c;
+  background: var(--bc-gold-soft);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.rating span {
+  color: var(--bc-gold);
 }
 
 .metaRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  font-size: 0.88rem;
-}
-
-.rating {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  color: var(--bc-gold);
-  font-weight: 600;
-}
-
-.ratingCount {
+  gap: 14px;
+  min-height: 42px;
+  margin-top: 14px;
+  padding-top: 14px;
   color: var(--bc-muted);
-  font-weight: 400;
+  border-top: 1px solid #eee8de;
+  font-size: 0.82rem;
 }
 
-.price {
+.metaRow strong {
   color: var(--bc-ink);
-  font-weight: 600;
+  font-weight: 650;
+  text-align: right;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid var(--bc-ink);
+  border-radius: var(--bc-radius-sm);
+  font-size: var(--bc-text-sm);
+  font-weight: 700;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.primaryAction {
+  color: #fff;
+  background: var(--bc-ink);
+}
+
+.secondaryAction {
+  color: var(--bc-accent);
+  border-color: #d7a19b;
+}
+
+.primaryAction:hover {
+  background: var(--bc-accent);
+  border-color: var(--bc-accent);
+}
+
+.secondaryAction:hover {
+  color: #fff;
+  background: var(--bc-accent);
+  border-color: var(--bc-accent);
+}
+
+.imageLink:focus-visible,
+.nameLink:focus-visible,
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible {
+  outline: 3px solid rgba(176, 65, 62, 0.28);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .imageLink > * {
+    transition: none;
+  }
+
+  .card:hover,
+  .card:hover .imageLink > * {
+    transform: none;
+  }
 }

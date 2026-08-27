@@ -1,6 +1,6 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fffdf9;
+  --foreground: #1c1a17;
 
   /* BarberCue shared design tokens (major customer-experience-polish phase) — same values already
      used in components/landing/landing.module.css and components/auth/customer-auth.module.css,
@@ -64,15 +64,9 @@
   --bc-shadow-lg: 0 8px 24px rgba(28, 26, 23, 0.08), 0 2px 6px rgba(28, 26, 23, 0.05);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 html {
   height: 100%;
+  color-scheme: light;
 }
 
 html,
@@ -115,10 +109,4 @@ h3 {
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.01em;
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
 }

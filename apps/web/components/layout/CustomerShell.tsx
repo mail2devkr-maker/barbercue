@@ -10,7 +10,7 @@ export function CustomerShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={styles.shell}>
       <CustomerHeader />
-      <main className={styles.main}>{children}</main>
+      <div className={styles.main}>{children}</div>
       <CustomerFooter />
     </div>
   );

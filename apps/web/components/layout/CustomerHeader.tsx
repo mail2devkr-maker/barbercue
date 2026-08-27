@@ -7,6 +7,7 @@ import { useAuth } from "../../lib/auth-context";
 import styles from "./customer-shell.module.css";
 
 const NAV_LINKS = [
+  { href: "/", label: "Home" },
   { href: "/search", label: "Find a Barber" },
   { href: "/account/bookings", label: "My Bookings" },
   { href: "/style-advisor", label: "AI Style Advisor" },
@@ -55,7 +56,7 @@ export function CustomerHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.headerInner}>
-        <Link href={isAuthenticated ? "/account/bookings" : "/"} className={styles.wordmark}>
+        <Link href="/" className={styles.wordmark} aria-label="BarberCue home">
           BarberCue
         </Link>
 

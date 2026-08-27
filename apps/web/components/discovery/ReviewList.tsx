@@ -1,22 +1,27 @@
 import type { ReviewSummaryDto } from "@barbercue/shared";
+import styles from "./discovery-content.module.css";
 
 // No customer display-name field exists on User (schema gap, out of scope for this phase) — shown
 // as "Verified customer" instead of a name.
 export function ReviewList({ reviews }: { reviews: ReviewSummaryDto[] }) {
   if (reviews.length === 0) {
-    return <p style={{ color: "var(--bc-muted)" }}>No reviews yet.</p>;
+    return <div className={styles.empty}>No customer reviews yet.</div>;
   }
   return (
-    <div>
+    <div className={styles.reviews}>
       {reviews.map((r) => (
-        <div key={r.id} style={{ borderBottom: "1px solid var(--bc-border)", padding: "16px 0" }}>
-          <div style={{ fontWeight: 600, color: "var(--bc-gold)", letterSpacing: "0.02em" }}>
-            {"★".repeat(r.rating)}
-            {"☆".repeat(5 - r.rating)}{" "}
-            <span style={{ fontWeight: 500, fontSize: "0.8rem", color: "var(--bc-muted)" }}>Verified customer</span>
+        <article key={r.id} className={styles.review}>
+          <div className={styles.reviewMeta}>
+            <span className={styles.stars} aria-label={`${r.rating} out of 5 stars`}>
+              <span aria-hidden="true">
+                {"★".repeat(r.rating)}
+                {"☆".repeat(5 - r.rating)}
+              </span>
+            </span>
+            <span className={styles.verified}>Verified customer</span>
           </div>
-          {r.comment && <p style={{ margin: "6px 0 0", color: "var(--bc-ink)", lineHeight: 1.5 }}>{r.comment}</p>}
-        </div>
+          {r.comment && <p className={styles.comment}>{r.comment}</p>}
+        </article>
       ))}
     </div>
   );

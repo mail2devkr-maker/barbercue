@@ -20,6 +20,7 @@ import type {
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { useAuth } from "../../lib/auth-context";
+import { orderCountriesForDisplay } from "../../lib/country-order";
 import { Button } from "../ui/Button";
 import { CitySearchField } from "./CitySearchField";
 import { fieldWrapStyle, hintStyle, inputStyle, labelStyle } from "./form-styles";
@@ -105,7 +106,7 @@ export function RegisterSalonForm() {
     // one dropdown. It still exists and is unchanged — this form simply no longer calls it.
     apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
       .then((list) => {
-        if (!cancelled) setCountries(list);
+        if (!cancelled) setCountries(orderCountriesForDisplay(list));
       })
       .catch(() => undefined);
     return () => {

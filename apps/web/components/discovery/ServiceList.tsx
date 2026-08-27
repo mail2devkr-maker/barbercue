@@ -1,5 +1,6 @@
 import type { ServiceDto } from "@barbercue/shared";
 import { formatMoney } from "@barbercue/shared";
+import styles from "./discovery-content.module.css";
 
 export function ServiceList({
   services,
@@ -13,18 +14,18 @@ export function ServiceList({
   countryCode?: string | null;
 }) {
   if (services.length === 0) {
-    return <p style={{ color: "var(--bc-muted)" }}>No services listed yet.</p>;
+    return <div className={styles.empty}>This shop has not listed services yet.</div>;
   }
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <table className={styles.dataTable}>
       <tbody>
         {services.map((s) => (
-          <tr key={s.id} style={{ borderBottom: "1px solid var(--bc-border)" }}>
-            <td style={{ padding: "16px 0" }}>
-              <div style={{ fontWeight: 600, fontSize: "1.02rem", color: "var(--bc-ink)" }}>{s.name}</div>
-              <div style={{ fontSize: "0.85rem", color: "var(--bc-muted)", marginTop: 2 }}>{s.durationMinutes} min</div>
+          <tr key={s.id}>
+            <td>
+              <div className={styles.serviceName}>{s.name}</div>
+              <div className={styles.serviceDuration}>{s.durationMinutes} min</div>
             </td>
-            <td style={{ padding: "16px 0", textAlign: "right", fontWeight: 600, fontSize: "1.02rem", color: "var(--bc-ink)", whiteSpace: "nowrap" }}>
+            <td>
               {formatMoney(s.price, currency, countryCode)}
             </td>
           </tr>

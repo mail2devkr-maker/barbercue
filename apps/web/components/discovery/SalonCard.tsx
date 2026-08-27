@@ -4,43 +4,67 @@ import { formatMoney } from "@barbercue/shared";
 import { SalonImage } from "../ui/SalonImage";
 import styles from "./salon-card.module.css";
 
-// styleName is optional and only ever set by the search page when the visitor arrived via the AI
-// Style Advisor's "Try This Look" hand-off — forwarded into the link so the chosen style survives
-// through to the salon profile page's "Book an appointment" CTA, and from there into the booking
-// form. Every other caller (landing page's Featured Shops, plain search) omits it and behaves
-// exactly as before.
 export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; styleName?: string }) {
-  const href = `/${salon.countryCode.toLowerCase()}/${salon.citySlug}/${salon.slug}${styleName ? `?style=${encodeURIComponent(styleName)}` : ""}`;
+  const countryCode = salon.countryCode.toLowerCase();
+  const profileParams = styleName ? `?style=${encodeURIComponent(styleName)}` : "";
+  const actionParams = new URLSearchParams({
+    city: salon.citySlug,
+    country: salon.countryCode,
+  });
+  if (styleName) actionParams.set("style", styleName);
+
+  const profileHref = `/${countryCode}/${salon.citySlug}/${salon.slug}${profileParams}`;
+  const bookingHref = `/book/${salon.slug}?${actionParams.toString()}`;
+  const queueHref = `/queue/${salon.slug}?${actionParams.toString()}`;
+
   return (
-    <Link href={href} className={styles.link}>
-      <article className={styles.card}>
-        {/* A photo is what makes a listing feel like a real, chosen-by-a-human shop rather than a
-            database row — the single biggest gap versus Fresha/Booksy's card pattern. SalonImage
-            already renders an honest empty state when a shop has none. */}
-        <div className={styles.imageWrap}>
-          <SalonImage url={salon.coverPhotoUrl} alt={`${salon.name}'s shop front`} aspectRatio="4 / 3" rounded={0} />
-        </div>
-        <div className={styles.body}>
-          <h3 className={styles.name}>{salon.name}</h3>
-          <p className={styles.address}>{salon.addressLine}</p>
-          <div className={styles.metaRow}>
-            {salon.ratingAverage !== null && (
-              <span className={styles.rating}>
-                <span aria-hidden="true">★</span> {salon.ratingAverage.toFixed(1)}
-                <span className={styles.ratingCount}>({salon.ratingCount})</span>
-              </span>
-            )}
-            {salon.priceMin !== null && (
-              <span className={styles.price}>
-                {formatMoney(salon.priceMin, salon.currency, salon.countryCode)}
-                {salon.priceMax !== null && salon.priceMax !== salon.priceMin
-                  ? `–${formatMoney(salon.priceMax, salon.currency, salon.countryCode)}`
-                  : ""}
-              </span>
-            )}
+    <article className={styles.card}>
+      <Link href={profileHref} className={styles.imageLink} aria-label={`View ${salon.name}`}>
+        <SalonImage
+          url={salon.coverPhotoUrl}
+          alt={`${salon.name} barbershop`}
+          aspectRatio="4 / 3"
+          rounded={0}
+        />
+      </Link>
+
+      <div className={styles.body}>
+        <div className={styles.titleRow}>
+          <div>
+            <Link href={profileHref} className={styles.nameLink}>
+              <h3 className={styles.name}>{salon.name}</h3>
+            </Link>
+            <p className={styles.address}>{salon.addressLine}</p>
           </div>
+          {salon.ratingAverage !== null && (
+            <span className={styles.rating} aria-label={`${salon.ratingAverage.toFixed(1)} out of 5`}>
+              <span aria-hidden="true">★</span> {salon.ratingAverage.toFixed(1)}
+            </span>
+          )}
         </div>
-      </article>
-    </Link>
+
+        <div className={styles.metaRow}>
+          <span>
+            {salon.ratingAverage === null
+              ? "New on BarberCue"
+              : `${salon.ratingCount} ${salon.ratingCount === 1 ? "review" : "reviews"}`}
+          </span>
+          {salon.priceMin !== null && (
+            <strong>
+              From {formatMoney(salon.priceMin, salon.currency, salon.countryCode)}
+            </strong>
+          )}
+        </div>
+
+        <div className={styles.actions}>
+          <Link href={bookingHref} className={styles.primaryAction}>
+            Book
+          </Link>
+          <Link href={queueHref} className={styles.secondaryAction}>
+            Join queue
+          </Link>
+        </div>
+      </div>
+    </article>
   );
 }

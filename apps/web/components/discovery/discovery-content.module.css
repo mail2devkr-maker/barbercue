@@ -1,0 +1,133 @@
+.empty {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  padding: 28px;
+  color: var(--bc-muted);
+  text-align: center;
+  background: #fbf8f2;
+  border: 1px dashed #d8cebd;
+  border-radius: var(--bc-radius-md);
+}
+
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 190px;
+  gap: 10px;
+}
+
+.photoGrid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #eee8dd;
+  border-radius: var(--bc-radius-sm);
+}
+
+.photoGrid img:first-child:nth-last-child(n + 3) {
+  grid-row: span 2;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dataTable tr {
+  border-bottom: 1px solid var(--bc-border);
+}
+
+.dataTable tr:last-child {
+  border-bottom: 0;
+}
+
+.dataTable td {
+  padding: 16px 0;
+  vertical-align: top;
+}
+
+.dataTable td:last-child {
+  padding-left: 16px;
+  color: var(--bc-ink);
+  font-weight: 650;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.serviceName {
+  color: var(--bc-ink);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.serviceDuration {
+  margin-top: 3px;
+  color: var(--bc-muted);
+  font-size: 0.8rem;
+}
+
+.closed {
+  color: var(--bc-accent) !important;
+}
+
+.hoursDay {
+  color: var(--bc-ink);
+  font-weight: 550;
+}
+
+.reviews {
+  display: grid;
+}
+
+.review {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--bc-border);
+}
+
+.review:first-child {
+  padding-top: 0;
+}
+
+.review:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.reviewMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stars {
+  color: var(--bc-gold);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+.verified {
+  color: var(--bc-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.comment {
+  max-width: 650px;
+  margin: 10px 0 0;
+  color: #48433c;
+  line-height: 1.65;
+}
+
+@media (max-width: 600px) {
+  .photoGrid {
+    grid-auto-rows: 130px;
+  }
+
+  .dataTable td {
+    padding: 13px 0;
+  }
+}

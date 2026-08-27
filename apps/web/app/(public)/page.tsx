@@ -6,14 +6,12 @@ import { fetchDiscoveryOrNull } from "../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../lib/seo";
 import { JsonLd } from "../../components/discovery/JsonLd";
 import { SalonCard } from "../../components/discovery/SalonCard";
-import { HeroSlideshow } from "../../components/landing/HeroSlideshow";
+import { HeroVisual } from "../../components/landing/HeroVisual";
 import styles from "../../components/landing/landing.module.css";
 
-// No "BarberCue" here: the root layout's title template ("%s | BarberCue") already appends the
-// brand name — including it here duplicated it in the browser tab and every social share card.
 const TITLE = "Find a barbershop near you";
 const DESCRIPTION =
-  "Discover nearby barbershops, see the current wait, and book your chair online. No app required.";
+  "Find barbershops, book a barber, or join a live queue and follow your position in real time.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -36,45 +34,15 @@ function organizationJsonLd() {
   };
 }
 
-const HOW_IT_WORKS = [
-  {
-    title: "Find a shop",
-    text: "Browse barbershops by city, or search by name and service.",
-  },
-  {
-    title: "Book or join the queue",
-    text: "Reserve a time slot ahead, or check in remotely and join the live queue from wherever you are.",
-  },
-  {
-    title: "Get notified",
-    text: "Watch your position update in real time and get called when your chair is ready.",
-  },
-  {
-    title: "Walk in and go",
-    text: "Show up right on time — no waiting room, no wasted afternoon.",
-  },
+const BOOK_STEPS = ["Choose a service", "Choose your barber", "Pick a date and time", "Confirm your chair"];
+const QUEUE_STEPS = ["Join the live queue", "See your position", "Follow the line as it moves", "Arrive closer to your turn"];
+
+const OWNER_POINTS = [
+  "Run the live queue from one floor dashboard",
+  "Manage services, barbers, chairs and hours",
+  "Get a permanent, shareable BarberCue Shop ID",
 ];
 
-const CUSTOMER_BENEFITS = [
-  "See real-time wait times before you leave home",
-  "Book a specific time, or join the queue remotely",
-  "Track your position live — no more guessing",
-  "Sign in with Google or your phone number, no password to remember",
-];
-
-const OWNER_BENEFITS = [
-  "A live queue dashboard your staff can run the floor from",
-  "Online bookings that fill your chairs automatically",
-  "A unique, permanent Shop ID for your listing",
-  "Free to register — no setup fees to get started",
-];
-
-// Full landing-page redesign (major-upgrade phase) — replaces the Phase 1 foundation-shell
-// placeholder. Sections implemented: Hero (+ illustrated slideshow), How It Works, Find a Shop,
-// Skip the Queue, AI Style Advisor teaser, Popular Styles, Featured Shops, Customer Benefits,
-// Owner Benefits, Final CTA, Footer. "Book appointment" is folded into How It Works rather than
-// duplicated as its own section, and Testimonials is deliberately omitted — this is a pre-launch
-// product with no real customers yet, and a fabricated quote would be dishonest marketing filler.
 export default async function HomePage() {
   const [cities, featured] = await Promise.all([
     fetchDiscoveryOrNull<CityDto[]>(DISCOVERY_PATHS.cities, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
@@ -85,200 +53,224 @@ export default async function HomePage() {
   ]);
 
   return (
-    <main className={styles.page}>
+    <div className={styles.page}>
       <JsonLd data={organizationJsonLd()} />
 
-      {/* Hero */}
+      <header className={styles.landingHeader}>
+        <div className={styles.headerInner}>
+          <Link href="/" className={styles.wordmark} aria-label="BarberCue home">
+            <span className={styles.wordmarkMark} aria-hidden="true">BC</span>
+            <span>BarberCue</span>
+          </Link>
+          <nav className={styles.headerNav} aria-label="Primary">
+            <Link href="/search">Find a barber</Link>
+            <Link href="#book-or-queue">How it works</Link>
+            <Link href="#for-shops">For shops</Link>
+          </nav>
+          <div className={styles.headerActions}>
+            <Link href="/login" className={styles.headerSignIn}>Sign in</Link>
+            <Link href="/search" className={styles.headerPrimary}>Find a barber</Link>
+          </div>
+        </div>
+      </header>
+
+      <main>
       <section className={styles.hero}>
         <div className={styles.heroInner}>
-          <div>
-            <h1 className={styles.heroHeadline}>Skip the wait. Book your chair.</h1>
+          <div className={styles.heroCopy}>
+            <p className={styles.heroEyebrow}>Book ahead · Walk in smarter</p>
+            <h1 className={styles.heroHeadline}>Your barber.<br /><em>Your time.</em></h1>
             <p className={styles.heroSub}>
-              Find a nearby barbershop, see the current wait before you leave, and book online —
-              or join the live queue and walk in right when it&apos;s your turn.
+              Discover barbershops built around your day. Reserve a chair for later, or join a
+              live queue now and follow your place before you leave.
             </p>
-            <div className={styles.ctaRow}>
-              <Link href="/search" className={styles.ctaPrimary}>
-                Find a Barber Shop
-              </Link>
-              <Link href="/dashboard/register-shop" className={styles.ctaSecondary}>
-                Register your Shop
-              </Link>
+
+            <form className={styles.heroSearch} action="/search" method="get" aria-label="Find a barbershop">
+              <label className={styles.heroField}>
+                <span>Shop or service</span>
+                <input name="q" type="search" placeholder="Haircut, fade, BarberCue…" />
+              </label>
+              <label className={styles.heroField}>
+                <span>City</span>
+                <input name="city" type="search" placeholder="Bengaluru" />
+              </label>
+              <button type="submit" className={styles.heroSearchButton}>
+                Find a barber <span aria-hidden="true">→</span>
+              </button>
+            </form>
+
+            <div className={styles.heroMeta} aria-label="BarberCue benefits">
+              <span>No app required</span>
+              <span>Book or join live</span>
+              <span>Real-time queue position</span>
             </div>
+            <p className={styles.ownerPrompt}>
+              Run a barbershop? <Link href="/dashboard/register-shop">Register your shop</Link>
+            </p>
           </div>
-          <HeroSlideshow />
+          <HeroVisual />
         </div>
       </section>
 
-      {/* How it works */}
-      <section className={styles.section}>
+      <section id="book-or-queue" className={styles.choiceSection}>
         <div className={styles.inner}>
-          <p className={styles.eyebrow}>How it works</p>
-          <h2 className={styles.sectionTitle}>From find to chair in four steps</h2>
-          <div className={styles.stepGrid} style={{ marginTop: 28 }}>
-            {HOW_IT_WORKS.map((step, i) => (
-              <div key={step.title} className={styles.stepCard}>
-                <span className={styles.stepNumber}>{i + 1}</span>
-                <h3 className={styles.stepTitle}>{step.title}</h3>
-                <p className={styles.stepText}>{step.text}</p>
+          <div className={styles.sectionIntro}>
+            <p className={styles.eyebrow}>Two ways to the chair</p>
+            <h2 className={styles.sectionTitle}>Plan the cut—or skip the waiting room.</h2>
+            <p className={styles.sectionLead}>
+              BarberCue is designed around how barbershops actually work: scheduled appointments
+              when you want certainty, and a live queue when today works better.
+            </p>
+          </div>
+
+          <div className={styles.choiceGrid}>
+            <article className={styles.choiceCard}>
+              <div className={styles.choiceHead}>
+                <span className={styles.choiceIcon} aria-hidden="true">01</span>
+                <span className={styles.choiceKicker}>Book ahead</span>
               </div>
-            ))}
+              <h3>Keep a time that is yours.</h3>
+              <p>Choose the service, barber and slot before you go.</p>
+              <ol className={styles.flowList}>
+                {BOOK_STEPS.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+              <Link href="/search" className={styles.textLink}>Find a shop to book <span aria-hidden="true">→</span></Link>
+            </article>
+
+            <article className={`${styles.choiceCard} ${styles.queueChoiceCard}`}>
+              <div className={styles.choiceHead}>
+                <span className={styles.choiceIcon} aria-hidden="true">02</span>
+                <span className={styles.choiceKicker}>Join live</span>
+              </div>
+              <h3>Stand in line from anywhere.</h3>
+              <p>Keep moving while your position updates in real time.</p>
+              <ol className={styles.flowList}>
+                {QUEUE_STEPS.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+              <Link href="/search" className={styles.textLink}>Find a live queue <span aria-hidden="true">→</span></Link>
+            </article>
           </div>
         </div>
       </section>
 
-      {/* Find a shop */}
-      <section className={styles.sectionAlt}>
+      <section id="shops" className={styles.discoverySection}>
         <div className={styles.inner}>
-          <p className={styles.eyebrow}>Find a shop</p>
-          <h2 className={styles.sectionTitle}>Browse barbershops by city</h2>
-          {cities && cities.length > 0 ? (
-            <nav className={styles.chipRow} aria-label="Browse cities">
-              {cities.map((c) => (
-                <Link key={c.slug} href={`/${c.slug}`} className={styles.chip}>
-                  {c.name}
-                </Link>
-              ))}
-            </nav>
+          <div className={styles.discoveryHeader}>
+            <div>
+              <p className={styles.eyebrow}>Find your next barber</p>
+              <h2 className={styles.sectionTitle}>Shops worth knowing.</h2>
+            </div>
+            <Link href="/search" className={styles.outlineLink}>Explore all shops <span aria-hidden="true">→</span></Link>
+          </div>
+
+          {featured && featured.items.length > 0 ? (
+            <div className={styles.shopGrid}>
+              {featured.items.map((salon) => <SalonCard key={salon.id} salon={salon} />)}
+            </div>
           ) : (
-            <p style={{ color: "#6B6357" }}>No cities listed yet.</p>
+            <div className={styles.marketplaceEmpty}>
+              <div>
+                <strong>BarberCue is opening up shop by shop.</strong>
+                <p>Use search to see what is available near you, or bring your own barber onto BarberCue.</p>
+              </div>
+              <Link href="/search" className={styles.textLink}>Search BarberCue <span aria-hidden="true">→</span></Link>
+            </div>
           )}
-        </div>
-      </section>
 
-      {/* Skip the queue */}
-      <section className={styles.section}>
-        <div className={styles.inner}>
-          <p className={styles.eyebrow}>Skip the queue</p>
-          <h2 className={styles.sectionTitle}>Join the line without standing in it</h2>
-          <p className={styles.sectionLead}>
-            Check in remotely and track your position in the live queue in real time. When
-            you&apos;re close to the front, head over — your chair will be ready when you arrive.
-          </p>
-          <Link href="/search" className={styles.ctaSecondary}>
-            See shops with a live queue
-          </Link>
-        </div>
-      </section>
-
-      {/* AI Style Advisor */}
-      <section className={styles.sectionAlt}>
-        <div className={styles.inner}>
-          <p className={styles.eyebrow}>New</p>
-          <h2 className={styles.sectionTitle}>Not sure what to ask for? Try the AI Style Advisor</h2>
-          <p className={styles.sectionLead}>
-            Upload a selfie and preview a handful of hairstyles on your own face before you book —
-            each shown with an AI Style Match percentage, not a guarantee. Pick a look you like,
-            then book the shop to get it.
-          </p>
-          <Link href="/style-advisor" className={styles.ctaPrimary}>
-            Try the AI Style Advisor
-          </Link>
-        </div>
-      </section>
-
-      {/* Popular styles */}
-      <section className={styles.section}>
-        <div className={styles.inner}>
-          <p className={styles.eyebrow}>Popular styles</p>
-          <h2 className={styles.sectionTitle}>Styles customers are trying</h2>
-          <div className={styles.styleGrid} style={{ marginTop: 24 }}>
-            {HAIRSTYLE_CATALOG.map((style) => (
-              <Link key={style.id} href="/style-advisor" className={styles.styleChip}>
-                {style.name}
-              </Link>
-            ))}
+          <div className={styles.cityBar}>
+            <span className={styles.cityBarLabel}>Browse by city</span>
+            {cities && cities.length > 0 ? (
+              <nav className={styles.chipRow} aria-label="Browse cities">
+                {cities.map((city) => (
+                  <Link
+                    key={`${city.countryCode}:${city.slug}`}
+                    href={`/${city.countryCode.toLowerCase()}/${city.slug}`}
+                    className={styles.chip}
+                  >
+                    {city.name}
+                  </Link>
+                ))}
+              </nav>
+            ) : (
+              <p className={styles.cityEmpty}>City guides appear as shops open their BarberCue profiles.</p>
+            )}
           </div>
         </div>
       </section>
 
-      {/* Featured shops */}
-      {featured && featured.items.length > 0 && (
-        <section className={styles.sectionAlt}>
-          <div className={styles.inner}>
-            <p className={styles.eyebrow}>On BarberCue</p>
-            <h2 className={styles.sectionTitle}>Featured shops</h2>
-            <div className={styles.shopGrid} style={{ marginTop: 24 }}>
-              {featured.items.map((salon) => (
-                <SalonCard key={salon.id} salon={salon} />
-              ))}
+      <section className={styles.advisorSection}>
+        <div className={styles.inner}>
+          <div className={styles.advisorGrid}>
+            <div className={styles.advisorArt} aria-hidden="true">
+              <span className={styles.advisorHalo} />
+              <span className={styles.advisorProfile} />
+              <span className={`${styles.advisorSpark} ${styles.advisorSparkOne}`}>✦</span>
+              <span className={`${styles.advisorSpark} ${styles.advisorSparkTwo}`}>✦</span>
+              <span className={styles.advisorLabel}>AI Style Advisor</span>
+            </div>
+            <div className={styles.advisorCopy}>
+              <p className={styles.eyebrow}>Know the look before the cut</p>
+              <h2 className={styles.sectionTitle}>Walk in with a clearer idea.</h2>
+              <p className={styles.sectionLead}>
+                Preview supported hairstyles on your own photo, compare looks, and carry your
+                choice into booking. Style matches are guidance—not a guarantee.
+              </p>
+              <div className={styles.styleRow} aria-label="Styles available in the Style Advisor">
+                {HAIRSTYLE_CATALOG.slice(0, 6).map((style) => <span key={style.id}>{style.name}</span>)}
+              </div>
+              <Link href="/style-advisor" className={styles.primaryLink}>Try the Style Advisor <span aria-hidden="true">→</span></Link>
             </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
-      {/* Customer benefits */}
-      <section className={styles.section}>
-        <div className={styles.inner}>
-          <p className={styles.eyebrow}>For customers</p>
-          <h2 className={styles.sectionTitle}>Why customers use BarberCue</h2>
-          <div className={styles.benefitGrid} style={{ marginTop: 24 }}>
-            {CUSTOMER_BENEFITS.map((b) => (
-              <div key={b} className={styles.benefitItem}>
-                <span className={styles.benefitMark}>✓</span>
-                <p className={styles.benefitText}>{b}</p>
-              </div>
-            ))}
+      <section id="for-shops" className={styles.ownerSection}>
+        <div className={styles.ownerInner}>
+          <div>
+            <p className={styles.ownerEyebrow}>For modern barbershops</p>
+            <h2>Run the floor.<br /><em>Not the paperwork.</em></h2>
+          </div>
+          <div className={styles.ownerPanel}>
+            <p>
+              Give customers one place to book ahead or join today&apos;s line while your team runs
+              chairs, services and the live queue from one focused dashboard.
+            </p>
+            <ul>
+              {OWNER_POINTS.map((point) => <li key={point}>{point}</li>)}
+            </ul>
+            <Link href="/dashboard/register-shop" className={styles.ownerCta}>Register your shop <span aria-hidden="true">→</span></Link>
           </div>
         </div>
       </section>
 
-      {/* Owner benefits */}
-      <section className={styles.sectionAlt}>
-        <div className={styles.inner}>
-          <p className={styles.eyebrow}>For shop owners</p>
-          <h2 className={styles.sectionTitle}>Run your shop&apos;s floor from one dashboard</h2>
-          <div className={styles.benefitGrid} style={{ marginTop: 24, marginBottom: 28 }}>
-            {OWNER_BENEFITS.map((b) => (
-              <div key={b} className={styles.benefitItem}>
-                <span className={styles.benefitMark}>✓</span>
-                <p className={styles.benefitText}>{b}</p>
-              </div>
-            ))}
-          </div>
-          <Link href="/dashboard/register-shop" className={styles.ctaPrimary}>
-            Register your Shop
-          </Link>
-        </div>
-      </section>
-
-      {/* Final CTA */}
       <section className={styles.finalCta}>
         <div className={styles.finalCtaInner}>
-          <h2 className={styles.sectionTitle}>Ready to skip the wait?</h2>
-          <p style={{ opacity: 0.8, marginBottom: 24 }}>
-            Find a shop near you and book your next cut in under a minute.
-          </p>
-          <div className={styles.ctaRow}>
-            <Link href="/search" className={styles.ctaPrimary}>
-              Find a Barber Shop
-            </Link>
-            <Link href="/login" className={styles.ctaSecondary}>
-              Sign in
-            </Link>
+          <p className={styles.eyebrow}>Your next chair is closer than you think</p>
+          <h2>Book the time. Or join the line.</h2>
+          <p>Find a barbershop and choose the way you want to walk in.</p>
+          <div className={styles.finalActions}>
+            <Link href="/search" className={styles.finalPrimary}>Find a barber</Link>
+            <Link href="/login" className={styles.finalSecondary}>Sign in</Link>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
+      </main>
+
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
-          <div>
-            <strong className={styles.footerWordmark}>BarberCue</strong>
-            <p className={styles.footerNote} style={{ marginTop: 4 }}>
-              © {new Date().getFullYear()} BarberCue. Skip the wait, book your chair.
-            </p>
+          <div className={styles.footerBrand}>
+            <strong>BarberCue</strong>
+            <p>Purpose-built for modern barbershops.</p>
           </div>
           <nav className={styles.footerLinks} aria-label="Footer">
-            <Link href="/search">Find a shop</Link>
-            <Link href="/dashboard/register-shop">Register your shop</Link>
-            <Link href="/login">Customer login</Link>
-            <Link href="/owner/login">Owner login</Link>
-            <Link href="/staff/login">Staff login</Link>
-            <Link href="/admin/login">Admin login</Link>
+            <div><span>Customers</span><Link href="/search">Find a barber</Link><Link href="/account/bookings">My bookings</Link><Link href="/style-advisor">Style Advisor</Link></div>
+            <div><span>Shops</span><Link href="/dashboard/register-shop">Register your shop</Link><Link href="/owner/login">Owner login</Link><Link href="/staff/login">Staff login</Link></div>
+            <div><span>BarberCue</span><Link href="/login">Customer login</Link><Link href="/admin/login">Admin login</Link></div>
           </nav>
+          <p className={styles.footerNote}>© {new Date().getFullYear()} BarberCue.</p>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }
