@@ -1,10 +1,12 @@
 # BarberCue — Master State
 
-Persistent source of truth across sessions. Last updated at the end of the session that fixed the
-refresh-token rotation race condition, audited the backend for production-readiness, and — the
-headline result — **completed the global-location City import in production**. Every claim below
-was verified during this session — read this file before doing anything else in a new session, and
-update it again before your own handoff.
+Persistent source of truth across sessions. Last updated at the end of a follow-up session whose
+headline result was the **verified India `adm1` city override** (Patna and 16 other state
+capitals/UTs now resolve correctly) — see §6. That session built directly on the prior session's
+work (refresh-token rotation race fix, backend production-readiness audit, and the global-location
+City import reaching 99,797/99,797). Every claim below was verified during one of these two
+sessions — read this file before doing anything else in a new session, and update it again before
+your own handoff.
 
 ---
 
@@ -51,20 +53,32 @@ update it again before your own handoff.
 
 ## 2. Current phase / status
 
-1. **Global location City import — COMPLETE.** `City` = 99,797 exactly (target), `CityAlias` = 21,
-   `Country` = 250/250, `Region` = 5,308/5,308. All post-import safety checks passed (legacy cities
-   intact, no duplicates, zero orphaned salons). See §6 for the full verification and one genuine,
-   pre-existing data-classification finding (Patna, India is absent — not a bug, see §6).
-2. **Refresh-token rotation race condition — FIXED.** The previously-known "Invalid refresh token"
-   bug's root cause (a non-atomic check-then-revoke race in `TokenService.rotateRefreshToken`) is
-   fixed, tested, and verified live against real concurrent requests. See §7.
-3. **Backend production-readiness audit performed** — one dependency/index fix applied
-   (`RefreshToken.tokenHash` index), two real findings documented but NOT fixed pending more
-   information (CORS `origin:true`, missing Prisma `directUrl`) — see §9.
-4. **Premium visual refresh of `apps/web`** — complete, from an earlier session in this same
+1. **India `adm1` city override — COMPLETE (latest session).** 17 human-reviewed state
+   capital/UT-HQ rows (exact source IDs, not names) now classify as eligible cities. `City` =
+   99,814 (99,797 + 17). Patna, India now resolves correctly (`India → Bihar (IN-BR) → Patna`,
+   slug `patna`) via both direct lookup and search. See §6 for the full list, verification, and
+   rationale.
+2. **Global location City import — COMPLETE (prior session, unchanged this session except for the
+   +17 above).** `CityAlias` = 21, `Country` = 250/250, `Region` = 5,308/5,308. All post-import
+   safety checks passed (legacy cities intact, no duplicates, zero orphaned salons). See §6.
+3. **Refresh-token rotation race condition — FIXED (prior session).** The previously-known "Invalid
+   refresh token" bug's root cause (a non-atomic check-then-revoke race in
+   `TokenService.rotateRefreshToken`) is fixed, tested, and verified live against real concurrent
+   requests. See §7.
+4. **Backend production-readiness audit performed (prior session)** — one dependency/index fix
+   applied (`RefreshToken.tokenHash` index), two real findings documented but NOT fixed pending
+   more information (CORS `origin:true`, missing Prisma `directUrl`) — see §9.
+5. **Premium visual refresh of `apps/web`** — complete, from an earlier session in this same
    overall effort. See git history (`0911df0`, `b6ddec1`, `49afc36`, `bcfa0e1`, and the Style
-   Advisor/Premium-plans pass) if the detail is ever needed. Not touched this session
-   (backend-only scope this session, per explicit instruction).
+   Advisor/Premium-plans pass) if the detail is ever needed. Not touched in either of the last two
+   sessions (backend-only scope, per explicit standing instruction).
+6. **Mission B (India-first country-selector ordering in `apps/web`) — NOT STARTED, paused on an
+   unresolved scope conflict.** The latest session's request explicitly asked for this
+   `apps/web`-touching UX change, but an earlier standing instruction in the same session had
+   restricted scope to `apps/backend/**` only ("Codex will handle frontend/web work separately").
+   That conflict was surfaced back to the user rather than silently resolved either way, and no
+   follow-up has arrived yet. Do not start this without either an explicit go-ahead to touch
+   `apps/web` or confirmation that Codex is handling it. See §15.
 
 ---
 
@@ -73,9 +87,12 @@ update it again before your own handoff.
 - Railway deployment pipeline fixes, global-location registration flow (Country→Region→City-search),
   photo upload, two route-shadowing fixes (`b8566ba`, `93a32c9`), full premium visual refresh —
   all from earlier sessions, all deployed and stable.
-- **This session**: refresh-token race fix + regression tests (`117c94a`), `RefreshToken.tokenHash`
+- **Prior session**: refresh-token race fix + regression tests (`117c94a`), `RefreshToken.tokenHash`
   index (`e1c7c97`), global-location importer hardening (`4e201fa`), and the production import run
   itself (data-only, no code — see §6).
+- **Latest session**: verified India `adm1` city override — `APPROVED_ADM1_CITY_OVERRIDES` (17
+  exact source IDs) in `global-locations.util.ts`, 7 new tests, and the production re-run that
+  added exactly 17 rows (`5e546e7`). See §6.
 
 ---
 
@@ -94,16 +111,15 @@ touched this session. `apps/mobile` remains out of scope / untouched.
 
 ---
 
-## 6. Database / import status — COMPLETE
+## 6. Database / import status — COMPLETE (including the India `adm1` override)
 
 **Final verified state (production, checked directly via Prisma against Neon, not just the
 importer's own exit code):**
 ```
-Country:   250 / 250     (unchanged this session — already complete before)
-Region:    5,308 / 5,308 (unchanged this session — already complete before)
-City:      99,797        (exactly the predicted target: 21 legacy + 99,776 newly imported)
-CityAlias: 21             (native-name aliases for all 21 legacy cities — was 0 before this
-                           session; every prior failed attempt died before reaching this step)
+Country:   250 / 250     (unchanged — already complete before the prior session)
+Region:    5,308 / 5,308 (unchanged — already complete before the prior session)
+City:      99,814        (99,797 base import + 17 approved adm1-override cities, latest session)
+CityAlias: 21
 Salon:     2  (unchanged — 0 orphaned; both salons' cityId verified to resolve to a real City row)
 User:      4  (unchanged)
 Locality:  0  (unchanged)
@@ -119,20 +135,35 @@ to India. `GET /countries/:id/regions` returns real subdivisions for the US (50 
 confirmed present). The Country→Region→City-search registration flow is genuinely global now, not
 India-only.
 
-**One real, non-bug finding — read before assuming "city missing" means "import incomplete":**
-Patna (Bihar, India — a state capital) is **not** in the database, and this is **not** an import
-gap. Its row in the dr5hn source (`cities.sql`) is tagged `type='adm1'` (administrative-boundary
-level), not `'city'`. The importer's classification allowlist — an explicit, previously-reviewed
-decision (see `classifyCityType` in `global-locations.util.ts`) — treats `adm1-5` as an excluded
-"administrative boundary" type, the same rule that excludes districts/provinces/counties. This is
-almost certainly not unique to Patna; any other India state capital (or capital-equivalent
-elsewhere) tagged `adm1` in this dr5hn release would be excluded the same way. **This was not fixed
-this session** — the classification allowlist is a deliberate, previously-approved ruleset, and
-silently special-casing individual cities without a reviewed decision (the way the Kochi/Cochin
-override was reviewed and approved) would be exactly the kind of unreviewed change this project has
-consistently avoided. If this needs fixing, the right shape is almost certainly a new, explicitly
-curated override list (state-capital `adm1` entries that should be treated as cities), not a change
-to the general `adm1-5` exclusion rule. Flagged for an explicit decision, not silently patched.
+**Patna / India `adm1` finding — FIXED in the latest session.** Patna (Bihar, India — a state
+capital) was previously absent because its dr5hn source row is tagged `type='adm1'`
+(administrative-boundary level), the same tag used for genuine non-city rows (districts, urban
+agglomerations, wards) that the general classification rule correctly excludes. Rather than
+changing that general rule (which would have pulled in every non-city `adm1` row across the whole
+dataset — explicitly rejected as an approach), a full manual audit was done of **all India `adm1`
+rows**, and exactly **17 were confirmed to be genuine state capitals / union-territory HQs** that
+the general rule was wrongly excluding. Those 17 — and only those 17 — are now allow-listed **by
+exact source ID, not by name**, in `APPROVED_ADM1_CITY_OVERRIDES`
+(`apps/backend/src/global-locations/global-locations.util.ts`), following the same
+previously-approved Kochi/Cochin identity-override philosophy. The other India `adm1` rows
+(districts/UAs such as Bengaluru Urban, Central Delhi, North Delhi, Andheri, Dharavi) remain
+correctly excluded — spot-checked directly in production. Delhi and Bengaluru were deliberately
+**not** added to the override list because they already exist via the legacy-city path.
+
+The 17 approved source IDs (see the code comment for the full list with city/state names): `133386`
+(Patna), `57600` (Agartala), `57995` (Bhopal), `131649` (Daman), `131676` (Dehradun), `131778`
+(Dispur), `131900` (Gandhinagar), `131905` (Gangtok), `132178` (Itanagar), `132399` (Kargil),
+`132432` (Kavaratti), `132549` (Kohima), `133342` (Panaji), `133482` (Port Blair), `133490`
+(Puducherry), `133606` (Ranchi), `133870` (Shillong).
+
+Production re-run of the (already-idempotent) importer added exactly these 17 rows — confirmed via
+the importer's own resume-check log ("17/99793 candidates genuinely remain") and via direct
+post-write DB verification: all 17 present with correct region codes, zero duplicate
+`(countryId, slug)` groups, the 5 spot-checked excluded rows still correctly absent. Verified live
+via the production API: `GET /api/v1/cities/IN/patna` → `200`, `{"state":"Bihar","country":"India",
+"slug":"patna", ...}`; `GET /api/v1/cities/search?...q=patna` returns Patna as the top result;
+Bhopal, Ranchi, Dehradun, Panaji, Shillong, and Port Blair all independently spot-checked the same
+way. Commit `5e546e7`, deployment `0161bd2c` — `SUCCESS`.
 
 **The import process itself no longer exists** — it was a one-off, human-invoked script, not
 deployed code, and it has finished. Do not look for a "running importer" in any future session
@@ -252,15 +283,18 @@ deployment on top of that.
 - Branch: `master`. Working tree clean. `HEAD` = `origin/master` as of the end of this session — get
   ground truth with `git status` / `git rev-parse HEAD` / `git rev-parse origin/master` rather than
   trusting a hardcoded SHA here (this file cannot reliably record its own final commit hash).
-- Commits pushed this session, oldest first (on top of `8c09c748`, the prior session's final state):
+- Commits pushed across the prior + latest session, oldest first (on top of `8c09c748`):
   ```
   117c94a  fix(auth): make refresh-token rotation atomic, closing a check-then-act race
   e1c7c97  perf(db): add missing index on refresh_tokens.tokenHash
   4e201fa  feat(import): harden global-location importer for long-running Neon reliability
+  5e546e7  feat(location): add verified India adm1 city override (17 state capitals/UT HQs)
   ```
-- No untracked/ignored-file changes this session beyond what was already established (see prior
-  sessions' git history for `apps/backend/prisma/data/`, `import-global-locations-report.json`,
-  and `BARBERCUE_HANDOFF.md`'s status — all unchanged this session).
+- No untracked/ignored-file changes beyond what was already established (see prior sessions' git
+  history for `apps/backend/prisma/data/`, `import-global-locations-report.json`, and
+  `BARBERCUE_HANDOFF.md`'s status — unchanged).
+- Mission B (India-first country-selector ordering, `apps/web`) is **not** in this commit list —
+  it was not implemented. See §2.6 and §15.
 
 ---
 
@@ -274,9 +308,10 @@ not trust a hardcoded SHA in this section.
 ## 13. Known issues
 
 1. ~~"Invalid refresh token." race condition~~ — **FIXED this session**, see §7.
-2. ~~Global location import incomplete~~ — **COMPLETE this session**, see §6. One residual,
-   non-bug data-classification finding: Patna, India (and possibly other `adm1`-tagged state
-   capitals) excluded by design — see §6 for the exact explanation and recommended next step.
+2. ~~Global location import incomplete~~ — **COMPLETE**, see §6.
+2b. ~~Patna, India (and 16 other `adm1`-tagged state capitals/UT HQs) excluded by design~~ —
+   **FIXED in the latest session** via a 17-entry verified override, see §6. City count now
+   99,814.
 3. **CORS `origin: true` + `credentials: true`** — real gap, documented, not fixed. See §9.
 4. **No Prisma `directUrl`** — likely contributor to intermittent `migrate deploy` advisory-lock
    failures. Documented, not fixed (needs a new Railway secret). See §9.
@@ -287,6 +322,10 @@ not trust a hardcoded SHA in this section.
 8. **Unrelated remote branch** `origin/fix/railway-same-origin-auth` — unknown status, unrelated.
 9. Known, self-documented N+1 in `SalonsService.search` — low priority at current scale (2
    production salons), deliberately left alone. See §9.
+10. **Mission B (India-first country-selector ordering) not started** — requires touching
+    `apps/web`, which conflicts with the standing backend-only scope restriction from earlier in
+    the same session that requested it. Flagged back to the user, unresolved as of this writing.
+    See §2.6/§15.
 
 ---
 
@@ -305,11 +344,12 @@ not trust a hardcoded SHA in this section.
   Work Sans, gold as a sparing trust-signal accent. Do not switch direction without asking.
 - **`app.module.ts` import order is load-bearing, not cosmetic**: any controller mounted at
   `salons/:salonId/<literal>/...` must have its module imported before `SalonsModule`.
-- **City classification (`adm1-5` = excluded) is a previously-reviewed, deliberate rule** (new this
-  session, see §6/§13.2): do not change it unilaterally to "fix" a missing city like Patna. Any
-  change here needs an explicit, reviewed curated-override decision, the same process Kochi/Cochin
-  went through — not a blanket rule change that could pull in genuine non-city administrative rows
-  across the whole dataset.
+- **City classification (`adm1-5` = excluded) is a previously-reviewed, deliberate general rule**,
+  see §6/§13.2b: do not weaken it to "fix" a missing city. The one sanctioned exception is
+  `APPROVED_ADM1_CITY_OVERRIDES` — a fixed, human-audited list of exactly 17 source IDs (not names,
+  not a pattern) for genuine India state capitals/UT HQs. Any future addition to that list needs
+  the same explicit per-row human review the 17 got (and the Kochi/Cochin override before them) —
+  never widen it to "all adm1 rows" or add entries by name-matching.
 - **Refresh-token single-use is enforced by an atomic conditional `updateMany`, not a unique DB
   constraint** (new this session, see §7): `tokenHash` has an index for lookup speed, but
   intentionally no unique constraint — the application layer (the atomic claim) is what guarantees
@@ -321,14 +361,16 @@ not trust a hardcoded SHA in this section.
 ## 15. Exact next steps
 
 1. **Read this file fully before doing anything else.**
-2. Confirm this session's push landed (`git status`, `git log`) — don't assume, verify.
-3. If picking backend work back up: CORS hardening and the Prisma `directUrl` addition (§9/§13.3-4)
+2. Confirm the latest push landed (`git status`, `git log`) — don't assume, verify.
+3. **Resolve the Mission B scope question first if location/country-selector UX work comes up
+   again**: does India-first country-selector ordering belong to this backend-focused workstream
+   (touching `apps/web`), or is Codex handling frontend work as the earlier standing instruction
+   said? Get an explicit answer before touching `apps/web` — don't silently pick either
+   interpretation. See §2.6/§13.10.
+4. If picking backend work back up: CORS hardening and the Prisma `directUrl` addition (§9/§13.3-4)
    are the two most valuable remaining items, both documented with exact recommended fixes, both
    blocked only on information (mobile-web origin URL; a new Neon direct connection string) rather
    than uncertainty about what to do.
-4. If picking location-data work back up: consider whether the Patna/`adm1` exclusion pattern
-   (§6/§13.2) warrants an explicit curated-override decision, and if so, which other cities it
-   likely also affects (any other dr5hn row tagged `adm1` for a real, well-known city).
 5. A live human click-through of Google Sign-In against production is still a good idea whenever a
    frontend session next has capacity (§7) — not urgent, not a regression, just never re-verified
    since the FedCM fix's original deploy.
@@ -339,11 +381,13 @@ not trust a hardcoded SHA in this section.
 
 - Do NOT re-diagnose the refresh-token race condition — it's fixed, tested, and verified against
   real concurrency. See §7.
-- Do NOT re-run the global-location import assuming it's still incomplete — it finished this
-  session. Check §6's counts fresh, but expect City = 99,797.
-- Do NOT treat Patna's absence (or any other single missing city) as evidence the import needs
-  re-running — check whether its source row is tagged `adm1` (excluded by design) before assuming
-  a bug. See §6.
+- Do NOT re-run the global-location import assuming it's incomplete — it finished. Check §6's
+  counts fresh, but expect City = 99,814.
+- Do NOT re-investigate Patna, Bhopal, Ranchi, Dehradun, Panaji, Shillong, Port Blair, or the other
+  10 approved `adm1`-override cities as "missing" — they're fixed and verified. See §6.
+- Do NOT widen `APPROVED_ADM1_CITY_OVERRIDES` to "all adm1 rows" or add new entries by
+  name-matching — it's a fixed, human-audited list of exactly 17 source IDs. A genuinely new
+  candidate needs the same per-row review process, not a shortcut. See §6/§14.
 - Do NOT add a unique constraint on `RefreshToken.tokenHash` — the index (§9) is for lookup speed
   only; single-use is enforced at the application layer, by design (§14).
 - Do NOT change the CORS config or add a Prisma `directUrl` without first getting the missing
