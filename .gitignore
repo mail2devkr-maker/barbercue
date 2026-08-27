@@ -49,3 +49,10 @@ apps/mobile/eas-log.txt
 
 # Accidental nested repo snapshot (contains its own .git/.claude — not part of source control)
 /eas-inspect-archive/
+
+# Global-location import inputs/outputs (apps/backend/prisma/import-global-locations.ts) — the
+# ~108MB dr5hn source SQL the script reads, and the manual-review report it regenerates on every
+# run. Neither is source: the data directory is a large third-party download (obtained manually,
+# not by any script in this repo) and the report is disposable output. Never commit either.
+apps/backend/prisma/data/
+apps/backend/import-global-locations-report.json
