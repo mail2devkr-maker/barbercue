@@ -1,0 +1,446 @@
+/* Shared visual language for the booking flow — mirrors the Card/Button primitives already used
+   on the landing/profile/search surfaces, extended with a step-progress affordance (a common
+   Fresha/Booksy pattern for multi-step booking) and richer option cards. */
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: var(--bc-space-2);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.progressStep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.progressDot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1.5px solid var(--bc-border);
+  background: #ffffff;
+  color: var(--bc-muted);
+  flex: 0 0 auto;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.progressStepDone .progressDot {
+  background: var(--bc-accent);
+  border-color: var(--bc-accent);
+  color: #ffffff;
+}
+
+.progressStepCurrent .progressDot {
+  border-color: var(--bc-accent);
+  color: var(--bc-accent);
+}
+
+.progressLabel {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--bc-muted);
+  white-space: nowrap;
+}
+
+.progressStepDone .progressLabel,
+.progressStepCurrent .progressLabel {
+  color: var(--bc-ink);
+}
+
+.progressRule {
+  flex: 0 0 20px;
+  height: 1.5px;
+  background: var(--bc-border);
+}
+
+.progressStepDone + .progressRule {
+  background: var(--bc-accent);
+}
+
+/* ---------- Step cards ---------- */
+
+.stepCard {
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-5);
+}
+
+.stepHeading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-lg);
+  color: var(--bc-ink);
+  margin: 0 0 var(--bc-space-1);
+}
+
+.stepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bc-gold-soft);
+  color: var(--bc-gold);
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.stepHint {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  margin: 0 0 var(--bc-space-3);
+}
+
+.stepLoading {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+}
+
+/* ---------- Service options ---------- */
+
+.serviceList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: var(--bc-space-3);
+}
+
+.optionRow {
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--bc-radius-sm);
+  border: 1.5px solid var(--bc-border);
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.optionRow:hover {
+  border-color: var(--bc-ink);
+}
+
+.optionRowSelected {
+  border-color: var(--bc-accent);
+  background: var(--bc-gold-soft);
+  box-shadow: var(--bc-shadow-sm);
+}
+
+.optionRowHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.optionName {
+  font-weight: 600;
+  color: var(--bc-ink);
+  font-size: var(--bc-text-base);
+}
+
+.optionPrice {
+  font-weight: 700;
+  color: var(--bc-ink);
+  font-size: var(--bc-text-base);
+  white-space: nowrap;
+}
+
+.optionMeta {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  margin-top: 4px;
+}
+
+/* ---------- Pill chips (staff / date / time) ---------- */
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: var(--bc-space-3);
+}
+
+.chipRowScroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-top: var(--bc-space-3);
+}
+
+.chip {
+  flex: 0 0 auto;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--bc-border);
+  background: #ffffff;
+  color: var(--bc-ink);
+  font-size: var(--bc-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--bc-ink);
+}
+
+.chipSelected {
+  border-color: var(--bc-accent);
+  background: var(--bc-gold-soft);
+  color: var(--bc-ink);
+}
+
+.chip:disabled {
+  cursor: not-allowed;
+  color: #b4ac9c;
+  background: var(--bc-surface);
+}
+
+.dateChip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 16px;
+  border-radius: var(--bc-radius-sm);
+  border: 1.5px solid var(--bc-border);
+  background: #ffffff;
+  cursor: pointer;
+  min-width: 76px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dateChip:hover:not(:disabled) {
+  border-color: var(--bc-ink);
+}
+
+.dateChipSelected {
+  border-color: var(--bc-accent);
+  background: var(--bc-gold-soft);
+}
+
+.dateChip:disabled {
+  cursor: not-allowed;
+  background: var(--bc-surface);
+}
+
+.dateChipWeekday {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--bc-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dateChipDay {
+  font-size: var(--bc-text-base);
+  font-weight: 700;
+  color: var(--bc-ink);
+}
+
+.dateChip:disabled .dateChipDay,
+.dateChip:disabled .dateChipWeekday {
+  color: #b4ac9c;
+}
+
+.dateChipClosed {
+  font-size: 0.65rem;
+  color: #b4ac9c;
+}
+
+.slotGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  margin-top: var(--bc-space-3);
+}
+
+.slotChip {
+  padding: 10px 6px;
+  border-radius: var(--bc-radius-sm);
+  border: 1.5px solid var(--bc-border);
+  background: #ffffff;
+  color: var(--bc-ink);
+  font-size: var(--bc-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.slotChip:hover:not(:disabled) {
+  border-color: var(--bc-ink);
+}
+
+.slotChipSelected {
+  border-color: var(--bc-accent);
+  background: var(--bc-gold-soft);
+}
+
+.slotChip:disabled {
+  cursor: not-allowed;
+  color: #b4ac9c;
+  background: var(--bc-surface);
+}
+
+/* ---------- Confirm / summary ---------- */
+
+.summaryLine {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  margin: 0 0 4px;
+}
+
+.summaryLine strong {
+  color: var(--bc-ink);
+}
+
+.errorText {
+  color: #b0413e;
+  font-size: var(--bc-text-sm);
+  margin: 8px 0;
+}
+
+.confirmActions {
+  margin-top: var(--bc-space-4);
+}
+
+/* ---------- Confirmed booking ---------- */
+
+.confirmedCard {
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-5);
+  box-shadow: var(--bc-shadow-sm);
+}
+
+.confirmedHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--bc-space-2);
+}
+
+.confirmedIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1rem;
+  flex: 0 0 auto;
+}
+
+.confirmedIconOk {
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--bc-success);
+}
+
+.confirmedIconCancelled {
+  background: rgba(107, 99, 87, 0.12);
+  color: var(--bc-muted);
+}
+
+.confirmedTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-lg);
+  color: var(--bc-ink);
+  margin: 0;
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.statusConfirmed {
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--bc-success);
+}
+
+.statusPending {
+  background: rgba(179, 107, 0, 0.12);
+  color: var(--bc-warn);
+}
+
+.statusCancelled {
+  background: rgba(107, 99, 87, 0.12);
+  color: var(--bc-muted);
+}
+
+.confirmedActions {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-space-3);
+  margin-top: var(--bc-space-4);
+  flex-wrap: wrap;
+}
+
+.textLink {
+  color: var(--bc-ink);
+  font-weight: 600;
+  font-size: var(--bc-text-sm);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Cancel dialog ---------- */
+
+.dialogOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 26, 23, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.dialogCard {
+  background: #ffffff;
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-5);
+  max-width: 380px;
+  width: 100%;
+  box-shadow: var(--bc-shadow-lg);
+}
+
+.dialogTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-lg);
+  margin: 0 0 8px;
+  color: var(--bc-ink);
+}
+
+.dialogActions {
+  display: flex;
+  gap: 10px;
+  margin-top: var(--bc-space-4);
+}

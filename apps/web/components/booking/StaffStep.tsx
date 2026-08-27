@@ -1,6 +1,7 @@
 "use client";
 
 import type { StaffOptionDto } from "@barbercue/shared";
+import styles from "./booking.module.css";
 
 /** selectedStaffId: undefined = nothing chosen yet, null = "Any Staff" explicitly chosen, string = a specific staff id. */
 export function StaffStep({
@@ -14,19 +15,26 @@ export function StaffStep({
   onSelect: (staffId: string | null) => void;
   loading: boolean;
 }) {
-  if (loading) return <p style={{ color: "#6B6357" }}>Loading staff…</p>;
+  if (loading)
+    return (
+      <section className={styles.stepCard}>
+        <p className={styles.stepLoading}>Loading staff…</p>
+      </section>
+    );
 
   return (
-    <section>
-      <h2 style={{ fontSize: "1.1rem" }}>2. Choose a barber</h2>
-      <p style={{ color: "#6B6357", fontSize: "0.85rem" }}>
+    <section className={styles.stepCard}>
+      <h2 className={styles.stepHeading}>
+        <span className={styles.stepNumber}>2</span> Choose a barber
+      </h2>
+      <p className={styles.stepHint}>
         This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in.
       </p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+      <div className={styles.chipRow}>
         <button
           type="button"
           onClick={() => onSelect(null)}
-          style={optionStyle(selectedStaffId === null)}
+          className={`${styles.chip} ${selectedStaffId === null ? styles.chipSelected : ""}`}
         >
           Any Staff
         </button>
@@ -35,7 +43,7 @@ export function StaffStep({
             key={staff.id}
             type="button"
             onClick={() => onSelect(staff.id)}
-            style={optionStyle(staff.id === selectedStaffId)}
+            className={`${styles.chip} ${staff.id === selectedStaffId ? styles.chipSelected : ""}`}
           >
             {staff.displayName}
           </button>
@@ -43,14 +51,4 @@ export function StaffStep({
       </div>
     </section>
   );
-}
-
-function optionStyle(selected: boolean): React.CSSProperties {
-  return {
-    padding: "8px 16px",
-    borderRadius: 20,
-    border: selected ? "2px solid #B0413E" : "1px solid #E7E0D3",
-    background: selected ? "#FBEFEE" : "#fff",
-    cursor: "pointer",
-  };
 }

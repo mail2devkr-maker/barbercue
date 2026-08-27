@@ -34,9 +34,11 @@ export default async function BookPage({
   if (!salon) notFound();
 
   return (
-    <main style={{ padding: "2rem 1.5rem", maxWidth: 800, margin: "0 auto" }}>
-      <h1>Book at {salon.name}</h1>
-      <p style={{ color: "#6B6357" }}>{salon.addressLine}</p>
+    <main style={{ padding: "2.5rem 1.5rem 3rem", maxWidth: 720, margin: "0 auto" }}>
+      <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.8rem", letterSpacing: "-0.01em", marginBottom: 4 }}>
+        Book at {salon.name}
+      </h1>
+      <p style={{ color: "var(--bc-muted)" }}>{salon.addressLine}</p>
       <BookingFlow
         salonId={salon.id}
         services={salon.services}

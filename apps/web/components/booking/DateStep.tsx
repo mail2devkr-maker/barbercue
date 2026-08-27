@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { OperatingHoursDto } from "@barbercue/shared";
+import styles from "./booking.module.css";
 
 const DAYS_AHEAD = 30;
 
@@ -17,7 +18,7 @@ export function DateStep({
   // Client-side convenience only (which days to grey out) — the server's availability endpoint
   // is the sole authority on what's actually bookable, so day-boundary fuzziness here is cosmetic.
   const days = useMemo(() => {
-    const result: { date: string; label: string; closed: boolean }[] = [];
+    const result: { date: string; weekday: string; dayLabel: string; closed: boolean }[] = [];
     for (let i = 0; i < DAYS_AHEAD; i++) {
       const d = new Date();
       d.setDate(d.getDate() + i);
@@ -25,7 +26,8 @@ export function DateStep({
       const hours = operatingHours.find((h) => h.dayOfWeek === d.getDay());
       result.push({
         date: iso,
-        label: d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+        weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
+        dayLabel: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
         closed: !hours || hours.isClosed,
       });
     }
@@ -33,28 +35,22 @@ export function DateStep({
   }, [operatingHours]);
 
   return (
-    <section>
-      <h2 style={{ fontSize: "1.1rem" }}>3. Choose a date</h2>
-      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, marginTop: 12 }}>
+    <section className={styles.stepCard}>
+      <h2 className={styles.stepHeading}>
+        <span className={styles.stepNumber}>3</span> Choose a date
+      </h2>
+      <div className={styles.chipRowScroll}>
         {days.map((day) => (
           <button
             key={day.date}
             type="button"
             disabled={day.closed}
             onClick={() => onSelect(day.date)}
-            style={{
-              flex: "0 0 auto",
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: day.date === selectedDate ? "2px solid #B0413E" : "1px solid #E7E0D3",
-              background: day.closed ? "#F3EFE7" : day.date === selectedDate ? "#FBEFEE" : "#fff",
-              color: day.closed ? "#B4AC9C" : "#1C1A17",
-              cursor: day.closed ? "not-allowed" : "pointer",
-              whiteSpace: "nowrap",
-            }}
+            className={`${styles.dateChip} ${day.date === selectedDate ? styles.dateChipSelected : ""}`}
           >
-            {day.label}
-            {day.closed && <div style={{ fontSize: "0.7rem" }}>Closed</div>}
+            <span className={styles.dateChipWeekday}>{day.weekday}</span>
+            <span className={styles.dateChipDay}>{day.dayLabel}</span>
+            {day.closed && <span className={styles.dateChipClosed}>Closed</span>}
           </button>
         ))}
       </div>

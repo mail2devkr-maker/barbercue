@@ -2,6 +2,7 @@
 
 import type { ServiceDto } from "@barbercue/shared";
 import { formatMoney } from "@barbercue/shared";
+import styles from "./booking.module.css";
 
 export function ServiceStep({
   services,
@@ -18,30 +19,28 @@ export function ServiceStep({
   countryCode?: string | null;
 }) {
   return (
-    <section>
-      <h2 style={{ fontSize: "1.1rem" }}>1. Choose a service</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-        {services.map((service) => (
-          <button
-            key={service.id}
-            type="button"
-            onClick={() => onSelect(service.id)}
-            style={{
-              textAlign: "left",
-              padding: "12px 16px",
-              borderRadius: 10,
-              border: service.id === selectedServiceId ? "2px solid #B0413E" : "1px solid #E7E0D3",
-              background: service.id === selectedServiceId ? "#FBEFEE" : "#fff",
-              cursor: "pointer",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <strong>{service.name}</strong>
-              <span>{formatMoney(service.price, currency, countryCode)}</span>
-            </div>
-            <div style={{ color: "#6B6357", fontSize: "0.85rem" }}>{service.durationMinutes} min</div>
-          </button>
-        ))}
+    <section className={styles.stepCard}>
+      <h2 className={styles.stepHeading}>
+        <span className={styles.stepNumber}>1</span> Choose a service
+      </h2>
+      <div className={styles.serviceList}>
+        {services.map((service) => {
+          const selected = service.id === selectedServiceId;
+          return (
+            <button
+              key={service.id}
+              type="button"
+              onClick={() => onSelect(service.id)}
+              className={`${styles.optionRow} ${selected ? styles.optionRowSelected : ""}`}
+            >
+              <div className={styles.optionRowHead}>
+                <span className={styles.optionName}>{service.name}</span>
+                <span className={styles.optionPrice}>{formatMoney(service.price, currency, countryCode)}</span>
+              </div>
+              <div className={styles.optionMeta}>{service.durationMinutes} min</div>
+            </button>
+          );
+        })}
       </div>
     </section>
   );

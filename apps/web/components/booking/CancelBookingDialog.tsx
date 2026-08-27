@@ -13,6 +13,8 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
+import { Button } from "../ui/Button";
+import styles from "./booking.module.css";
 
 /**
  * Reused by both the post-confirm booking view and the "my bookings" list. Fetches the salon's
@@ -77,42 +79,27 @@ export function CancelBookingDialog({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(28,26,23,0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 50,
-      }}
-    >
-      <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 360, width: "90%" }}>
-        <h3 style={{ marginTop: 0 }}>Cancel booking?</h3>
-        <p style={{ color: "#6B6357" }}>
+    <div className={styles.dialogOverlay}>
+      <div className={styles.dialogCard}>
+        <h3 className={styles.dialogTitle}>Cancel booking?</h3>
+        <p className={styles.summaryLine}>
           {booking.serviceName} at {booking.salonName}, {new Date(booking.slotStart).toLocaleString()}
         </p>
-        {loading && <p style={{ color: "#6B6357" }}>Checking the cancellation policy…</p>}
+        {loading && <p className={styles.stepLoading}>Checking the cancellation policy…</p>}
         {!loading && preview !== null && preview > 0 && (
-          <p>
+          <p className={styles.summaryLine}>
             Cancelling now will charge <strong>{formatMoney(preview, booking.currency)}</strong> (outside the free cancellation window).
           </p>
         )}
-        {!loading && preview === 0 && <p>No charge — you&apos;re within the free cancellation window.</p>}
-        {error && <p style={{ color: "#E24B4A" }}>{error}</p>}
-        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-          <button type="button" onClick={onClose} disabled={submitting} style={{ padding: "8px 16px" }}>
+        {!loading && preview === 0 && <p className={styles.summaryLine}>No charge — you&apos;re within the free cancellation window.</p>}
+        {error && <p className={styles.errorText}>{error}</p>}
+        <div className={styles.dialogActions}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
             Keep booking
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleConfirm()}
-            disabled={submitting || loading}
-            style={{ padding: "8px 16px", background: "#B0413E", color: "#fff", border: "none", borderRadius: 8 }}
-          >
+          </Button>
+          <Button type="button" variant="primary" onClick={() => void handleConfirm()} disabled={submitting || loading}>
             {submitting ? "Cancelling…" : "Confirm cancellation"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

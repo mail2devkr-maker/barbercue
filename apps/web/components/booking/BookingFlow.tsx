@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BOOKING_PATHS,
@@ -16,12 +16,14 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
+import { Button } from "../ui/Button";
 import { ServiceStep } from "./ServiceStep";
 import { StaffStep } from "./StaffStep";
 import { DateStep } from "./DateStep";
 import { SlotStep } from "./SlotStep";
 import { CancelBookingDialog } from "./CancelBookingDialog";
 import { CheckInPanel, canCheckIn } from "../queue/CheckInPanel";
+import styles from "./booking.module.css";
 
 export function BookingFlow({
   salonId,
@@ -164,43 +166,51 @@ export function BookingFlow({
 
   if (confirmedBooking) {
     const booking = cancelResult?.booking ?? confirmedBooking;
+    const cancelled = booking.status === "CANCELLED";
+    const statusClass =
+      booking.status === "CONFIRMED"
+        ? styles.statusConfirmed
+        : booking.status === "PENDING_PAYMENT"
+          ? styles.statusPending
+          : styles.statusCancelled;
     return (
       <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: "1.1rem" }}>
-          {booking.status === "CANCELLED" ? "Booking cancelled" : "Booking confirmed"}
-        </h2>
-        <p>
-          <strong>{booking.serviceName}</strong> at {booking.salonName}
-        </p>
-        <p style={{ color: "#6B6357" }}>{new Date(booking.slotStart).toLocaleString()}</p>
-        {booking.selectedStyleName && (
-          <p style={{ color: "#6B6357" }}>Style: {booking.selectedStyleName}</p>
-        )}
-        <p>
-          Status: <strong>{booking.status}</strong>
-          {booking.status === "PENDING_PAYMENT" && booking.prepaymentRequiredAmount !== null && (
-            <> — prepayment of {formatMoney(booking.prepaymentRequiredAmount, currency, countryCode)} required</>
-          )}
-        </p>
-        {cancelResult && (
-          <p>
-            {cancelResult.chargeAmount > 0
-              ? `A cancellation charge of ${formatMoney(cancelResult.chargeAmount, currency, countryCode)} has been added to your account.`
-              : "No cancellation charge was applied."}
+        <div className={styles.confirmedCard}>
+          <div className={styles.confirmedHead}>
+            <span className={`${styles.confirmedIcon} ${cancelled ? styles.confirmedIconCancelled : styles.confirmedIconOk}`}>
+              {cancelled ? "✕" : "✓"}
+            </span>
+            <h2 className={styles.confirmedTitle}>{cancelled ? "Booking cancelled" : "Booking confirmed"}</h2>
+          </div>
+          <p className={styles.summaryLine}>
+            <strong>{booking.serviceName}</strong> at {booking.salonName}
           </p>
-        )}
-        {(booking.status === "CONFIRMED" || booking.status === "PENDING_PAYMENT") && (
-          <button
-            type="button"
-            onClick={() => setShowCancelDialog(true)}
-            style={{ padding: "8px 16px", marginRight: 8 }}
-          >
-            Cancel this booking
-          </button>
-        )}
-        <Link href="/account/bookings" style={{ marginLeft: 8 }}>
-          View my bookings
-        </Link>
+          <p className={styles.summaryLine}>{new Date(booking.slotStart).toLocaleString()}</p>
+          {booking.selectedStyleName && <p className={styles.summaryLine}>Style: {booking.selectedStyleName}</p>}
+          <p className={styles.summaryLine}>
+            <span className={`${styles.statusBadge} ${statusClass}`}>{booking.status.replace(/_/g, " ")}</span>
+            {booking.status === "PENDING_PAYMENT" && booking.prepaymentRequiredAmount !== null && (
+              <> — prepayment of {formatMoney(booking.prepaymentRequiredAmount, currency, countryCode)} required</>
+            )}
+          </p>
+          {cancelResult && (
+            <p className={styles.summaryLine}>
+              {cancelResult.chargeAmount > 0
+                ? `A cancellation charge of ${formatMoney(cancelResult.chargeAmount, currency, countryCode)} has been added to your account.`
+                : "No cancellation charge was applied."}
+            </p>
+          )}
+          <div className={styles.confirmedActions}>
+            {(booking.status === "CONFIRMED" || booking.status === "PENDING_PAYMENT") && (
+              <Button type="button" variant="outline" onClick={() => setShowCancelDialog(true)}>
+                Cancel this booking
+              </Button>
+            )}
+            <Link href="/account/bookings" className={styles.textLink}>
+              View my bookings
+            </Link>
+          </div>
+        </div>
         {canCheckIn(booking) && <CheckInPanel booking={booking} />}
         {showCancelDialog && (
           <CancelBookingDialog
@@ -216,8 +226,35 @@ export function BookingFlow({
     );
   }
 
+  // Purely derived from existing selection state, for the step-progress strip only — no new
+  // business state, no side effects.
+  const progressSteps = [
+    { key: "service", label: "Service", done: !!selectedServiceId },
+    { key: "barber", label: "Barber", done: selectedStaffId !== undefined },
+    { key: "date", label: "Date", done: !!selectedDate },
+    { key: "time", label: "Time", done: !!selectedSlot },
+    { key: "confirm", label: "Confirm", done: false },
+  ];
+  const currentStepIndex = progressSteps.findIndex((s) => !s.done);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, marginTop: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 24 }}>
+      <div className={styles.progress}>
+        {progressSteps.map((step, i) => (
+          <Fragment key={step.key}>
+            <div
+              className={`${styles.progressStep} ${step.done ? styles.progressStepDone : ""} ${
+                i === currentStepIndex ? styles.progressStepCurrent : ""
+              }`}
+            >
+              <span className={styles.progressDot}>{step.done ? "✓" : i + 1}</span>
+              <span className={styles.progressLabel}>{step.label}</span>
+            </div>
+            {i < progressSteps.length - 1 && <span className={styles.progressRule} />}
+          </Fragment>
+        ))}
+      </div>
+
       <ServiceStep
         services={services}
         selectedServiceId={selectedServiceId}
@@ -244,25 +281,22 @@ export function BookingFlow({
       )}
 
       {selectedSlot && (
-        <section>
-          <h2 style={{ fontSize: "1.1rem" }}>5. Confirm</h2>
-          <p style={{ color: "#6B6357" }}>
-            {services.find((s) => s.id === selectedServiceId)?.name} —{" "}
+        <section className={styles.stepCard}>
+          <h2 className={styles.stepHeading}>
+            <span className={styles.stepNumber}>5</span> Confirm
+          </h2>
+          <p className={styles.summaryLine}>
+            <strong>{services.find((s) => s.id === selectedServiceId)?.name}</strong> —{" "}
             {new Date(selectedSlot.slotStart).toLocaleString()}
             {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
           </p>
-          {selectedStyleName && (
-            <p style={{ color: "#6B6357" }}>Style: {selectedStyleName}</p>
-          )}
-          {submitError && <p style={{ color: "#E24B4A" }}>{submitError}</p>}
-          <button
-            type="button"
-            onClick={() => void handleConfirmBooking()}
-            disabled={submitting}
-            style={{ padding: "10px 20px", background: "#B0413E", color: "#fff", border: "none", borderRadius: 8 }}
-          >
-            {submitting ? "Booking…" : "Confirm booking"}
-          </button>
+          {selectedStyleName && <p className={styles.summaryLine}>Style: {selectedStyleName}</p>}
+          {submitError && <p className={styles.errorText}>{submitError}</p>}
+          <div className={styles.confirmActions}>
+            <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting}>
+              {submitting ? "Booking…" : "Confirm booking"}
+            </Button>
+          </div>
         </section>
       )}
     </div>
