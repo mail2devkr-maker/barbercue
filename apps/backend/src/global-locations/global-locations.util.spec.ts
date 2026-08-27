@@ -5,6 +5,7 @@ import {
   assignSlugsForCountry,
   matchExistingCity,
   APPROVED_IDENTITY_OVERRIDES,
+  APPROVED_ADM1_CITY_OVERRIDES,
   LEGACY_CITY_KEYS,
   isLegacyCityKey,
   type ExistingBarberCueCity,
@@ -36,6 +37,84 @@ describe('classifyCityType', () => {
       'review',
     );
     expect(classifyCityType({ type: null, name: 'Anywhere' })).toBe('review');
+  });
+});
+
+describe('classifyCityType -- approved adm1 city overrides (India)', () => {
+  it('has exactly the 17 human-reviewed source IDs approved for this override', () => {
+    // Locks the exact set so a future edit here is a deliberate, reviewed diff, not an accident.
+    expect([...APPROVED_ADM1_CITY_OVERRIDES].sort()).toEqual(
+      [
+        '133386', // Patna
+        '57600', // Agartala
+        '57995', // Bhopal
+        '131649', // Daman
+        '131676', // Dehradun
+        '131778', // Dispur
+        '131900', // Gandhinagar
+        '131905', // Gangtok
+        '132178', // Itanagar
+        '132399', // Kargil
+        '132432', // Kavaratti
+        '132549', // Kohima
+        '133342', // Panaji
+        '133482', // Port Blair
+        '133490', // Puducherry
+        '133606', // Ranchi
+        '133870', // Shillong
+      ].sort(),
+    );
+  });
+
+  it('Patna (sourceId 133386, type adm1) is eligible via the override', () => {
+    expect(classifyCityType({ type: 'adm1', name: 'Patna', id: '133386' })).toBe('eligible');
+  });
+
+  it('every one of the 17 approved sourceIds is eligible when typed adm1', () => {
+    for (const sourceId of APPROVED_ADM1_CITY_OVERRIDES) {
+      expect(classifyCityType({ type: 'adm1', name: 'irrelevant-for-this-check', id: sourceId })).toBe(
+        'eligible',
+      );
+    }
+  });
+
+  it('an approved sourceId only bypasses exclusion when the row is actually typed adm1', () => {
+    // A coincidental id match on a row of some other excluded type must not be eligible via
+    // this path -- the override is scoped to the adm1 misclassification it exists to fix, not a
+    // general "these ids are always eligible" backdoor.
+    expect(classifyCityType({ type: 'district', name: 'Patna', id: '133386' })).toBe('excluded');
+    expect(classifyCityType({ type: 'historical', name: 'Patna', id: '133386' })).toBe('excluded');
+  });
+
+  it('representative genuine India adm1 districts/wards remain excluded, unaffected by the override', () => {
+    // Real dr5hn rows verified during the classification audit: districts and Mumbai wards that
+    // happen to also be tagged adm1, deliberately NOT added to the override.
+    expect(classifyCityType({ type: 'adm1', name: 'Bengaluru Urban', id: '57848' })).toBe(
+      'excluded',
+    );
+    expect(classifyCityType({ type: 'adm1', name: 'Central Delhi', id: '58171' })).toBe(
+      'excluded',
+    );
+    expect(classifyCityType({ type: 'adm1', name: 'North Delhi', id: '133234' })).toBe(
+      'excluded',
+    );
+    expect(classifyCityType({ type: 'adm1', name: 'Andheri', id: '147680' })).toBe('excluded');
+    expect(classifyCityType({ type: 'adm1', name: 'Dharavi', id: '147737' })).toBe('excluded');
+  });
+
+  it('adm1 rows for India that are NOT in the override still exclude, even for a plausible city name', () => {
+    // Guards against the override accidentally widening to "any adm1 row for a well-known name" --
+    // an unlisted sourceId must never slip through even if its name looks like a real city.
+    expect(classifyCityType({ type: 'adm1', name: 'Patna', id: '999999999' })).toBe('excluded');
+  });
+
+  it('the general adm1 exclusion rule itself is unchanged for non-India / non-approved rows', () => {
+    expect(classifyCityType({ type: 'adm1', name: 'Some Other Country Region' })).toBe(
+      'excluded',
+    );
+    expect(
+      classifyCityType({ type: 'adm1', name: 'Some Other Country Region', id: '1' }),
+    ).toBe('excluded');
   });
 });
 

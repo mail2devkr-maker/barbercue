@@ -56,14 +56,76 @@ export const CITY_TYPE_EXCLUDED = new Set([
 const DISTRICT_NAME_PATTERN =
   /\b(Urban|Rural|District|Division|County|Metropolitan|Municipality|Prefecture|Suburban)\b/i;
 
+/**
+ * A small number of dr5hn rows for genuine, well-known Indian state/UT capitals are tagged
+ * type='adm1' (administrative-boundary level) rather than a CITY_TYPE_ALLOWED type -- a real
+ * inconsistency in dr5hn's own upstream classification for India specifically, confirmed by a
+ * full manual audit of all 41 India rows tagged 'adm1': population/type alone cannot reliably
+ * separate "genuine capital city mistagged as adm1" from "genuine administrative subdivision"
+ * (e.g. Delhi's own "Central Delhi"/"North Delhi" sub-districts are ALSO adm1 with real,
+ * substantial populations, and "Bengaluru"/"Bengaluru Urban" both appear as adm1 rows alongside
+ * BarberCue's already-legacy-protected Bengaluru city). A mechanical field-based rule was
+ * therefore rejected in favor of this small, individually human-reviewed allowlist -- the same
+ * "never silently merge/expand" philosophy as APPROVED_IDENTITY_OVERRIDES below.
+ *
+ * Each of the 17 entries here was individually verified against: (1) a real, substantial
+ * population and a real Wikidata *city* entity (not an administrative-division entity), (2)
+ * confirmed absent from BarberCue's City table under any name/type at the time of review, (3)
+ * confirmed no (countryId, slug) collision risk against the then-current 99,797-row table. The
+ * 15 other India adm1 rows reviewed alongside these (Bengaluru Urban; Central/North Delhi; and
+ * 11 Mumbai neighborhoods/wards -- Andheri, Bandra, Chembur, Dharavi, Fort, Ghatkopar, Mahim,
+ * Matunga, Mazagaon, Parel, Trombay, Vile Parle) were deliberately NOT added -- they are genuine
+ * administrative subdivisions or city wards, not independent cities, and remain excluded by the
+ * general adm1 rule below exactly as before. Two more India adm1 rows worth noting for whoever
+ * revisits this list -- "Delhi" and "Bengaluru" -- were reviewed and intentionally excluded from
+ * this override for a different reason: both names are *already* present in BarberCue's City
+ * table via the original legacy/reconciliation path, so adding their adm1 rows here would create
+ * a duplicate rather than fill a gap.
+ *
+ * Keyed by the row's immutable numeric sourceId (dr5hn's own `id` column), never by name --
+ * names collide across unrelated places in this source (multiple "Srinagar"s exist, for
+ * instance) and are not a safe identity for a hardcoded override. Adding an entry here is a
+ * deliberate, individually-reviewed decision -- never expanded mechanically, and never a
+ * blanket "allow all adm1 for India" rule.
+ */
+export const APPROVED_ADM1_CITY_OVERRIDES = new Set<string>([
+  '133386', // Patna, Bihar (IN-BR) -- state capital
+  '57600', // Agartala, Tripura (IN-TR) -- state capital
+  '57995', // Bhopal, Madhya Pradesh (IN-MP) -- state capital
+  '131649', // Daman, Dadra and Nagar Haveli and Daman and Diu (IN-DH) -- UT capital
+  '131676', // Dehradun, Uttarakhand (IN-UK) -- state capital
+  '131778', // Dispur, Assam (IN-AS) -- state capital
+  '131900', // Gandhinagar, Gujarat (IN-GJ) -- state capital
+  '131905', // Gangtok, Sikkim (IN-SK) -- state capital
+  '132178', // Itanagar, Arunachal Pradesh (IN-AR) -- state capital
+  '132399', // Kargil, Ladakh (IN-LA) -- major town / district HQ
+  '132432', // Kavaratti, Lakshadweep (IN-LD) -- UT capital
+  '132549', // Kohima, Nagaland (IN-NL) -- state capital
+  '133342', // Panaji, Goa (IN-GA) -- state capital
+  '133482', // Port Blair, Andaman and Nicobar Islands (IN-AN) -- UT capital
+  '133490', // Puducherry, Puducherry (IN-PY) -- UT capital
+  '133606', // Ranchi, Jharkhand (IN-JH) -- state capital
+  '133870', // Shillong, Meghalaya (IN-ML) -- state capital
+]);
+
 export type CityClassification = 'eligible' | 'excluded' | 'review';
 
 export function classifyCityType(
-  city: Pick<Dr5hnCityRow, 'type' | 'name'>,
+  // `id` is optional (not part of the original Pick) purely to avoid touching every existing
+  // call site/test that never had a reason to pass it -- omitting it simply means "this call
+  // can never match an override", which is the correct behavior for any caller that doesn't
+  // have a real sourceId to check (e.g. hand-written test fixtures for the general rules).
+  city: Pick<Dr5hnCityRow, 'type' | 'name'> & { id?: string | null },
 ): CityClassification {
   const type = city.type;
   if (type !== null && CITY_TYPE_ALLOWED.has(type)) {
     return DISTRICT_NAME_PATTERN.test(city.name ?? '') ? 'review' : 'eligible';
+  }
+  // Checked before the general exclusion below, and scoped to type==='adm1' specifically (the
+  // only type any approved override entry actually has) -- an id that happens to coincide with
+  // an override entry for a row of some other excluded type is not eligible via this path.
+  if (type === 'adm1' && city.id != null && APPROVED_ADM1_CITY_OVERRIDES.has(city.id)) {
+    return 'eligible';
   }
   if (type !== null && CITY_TYPE_EXCLUDED.has(type)) {
     return 'excluded';
