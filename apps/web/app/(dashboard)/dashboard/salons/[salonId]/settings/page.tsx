@@ -191,7 +191,7 @@ export default function DashboardSettingsPage({
       <p className={styles.pageSubtitle} style={{ marginTop: 24 }}>
         Payment policy and cancellation policy settings — placeholder, not yet implemented.
       </p>
-      <QueueQrSection salonId={salonId} />
+      {salon && <QueueQrSection salonId={salonId} salonName={salon.name} />}
     </main>
   );
 }
