@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL } from "../lib/seo";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
   return {
     rules: {
       userAgent: "*",
@@ -14,6 +14,6 @@ export default function robots(): MetadataRoute.Robots {
       // at all, including its canonical/noindex signals.
       disallow: ["/account", "/dashboard", "/book", "/search?"],
     },
-    sitemap: `${baseUrl}/sitemap.xml`,
+    sitemap: `${SITE_URL}/sitemap.xml`,
   };
 }
