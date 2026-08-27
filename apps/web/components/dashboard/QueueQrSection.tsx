@@ -80,7 +80,7 @@ export function QueueQrSection({ salonId }: { salonId: string }) {
       ) : (
         <>
           <div ref={svgWrapperRef} className={styles.qrBox}>
-            <QRCodeSVG value={qr.publicQueueUrl} size={200} level="M" />
+            <QRCodeSVG value={qr.publicQueueUrl} size={200} level="M" fgColor="#a8791f" bgColor="#ffffff" />
           </div>
 
           <p className={styles.hint} style={{ marginBottom: 4 }}>Public queue URL</p>
