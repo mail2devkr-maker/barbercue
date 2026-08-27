@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { PREMIUM_PATHS, STYLE_ADVISOR_PATHS } from "@barbercue/shared";
 import type {
   AiCreditBalanceDto,
@@ -11,6 +10,8 @@ import type {
   StyleAdvisorResultDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { Button, LinkButton } from "../ui/Button";
+import styles from "./style-advisor.module.css";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -132,54 +133,33 @@ export function StyleAdvisorFlow() {
   }
 
   if (premiumStatus === "checking") {
-    return <p style={{ color: "#6B6357" }}>Checking your Premium status…</p>;
+    return <p className={styles.loadingText}>Checking your Premium status…</p>;
   }
 
   if (premiumStatus === "locked") {
     return (
-      <div style={{ maxWidth: 480 }}>
-        <p style={{ fontSize: 16, marginBottom: 12 }}>🔒 AI Style Advisor is a Premium feature.</p>
-        <p style={{ color: "#6B6357", marginBottom: 20 }}>
+      <div className={styles.gateCard}>
+        <span className={styles.gateIcon} aria-hidden="true">🔒</span>
+        <p className={styles.gateTitle}>AI Style Advisor is a Premium feature</p>
+        <p className={styles.gateText}>
           Upgrade to Premium to preview hairstyles on your photo.
         </p>
-        <Link
-          href="/account/premium"
-          style={{
-            display: "inline-block",
-            padding: "12px 20px",
-            background: "#1C1A17",
-            color: "#fff",
-            borderRadius: 8,
-            fontWeight: 600,
-            textDecoration: "none",
-          }}
-        >
+        <LinkButton href="/account/premium" variant="secondary">
           View Premium Plans
-        </Link>
+        </LinkButton>
       </div>
     );
   }
 
   if (premiumStatus === "no-credits") {
     return (
-      <div style={{ maxWidth: 480 }}>
-        <p style={{ fontSize: 16, marginBottom: 20 }}>
+      <div className={styles.gateCard}>
+        <p className={styles.gateText} style={{ marginBottom: 20 }}>
           You&apos;ve used all your AI Style Credits for this subscription period.
         </p>
-        <Link
-          href="/account/premium"
-          style={{
-            display: "inline-block",
-            padding: "12px 20px",
-            background: "#1C1A17",
-            color: "#fff",
-            borderRadius: 8,
-            fontWeight: 600,
-            textDecoration: "none",
-          }}
-        >
+        <LinkButton href="/account/premium" variant="secondary">
           View Premium Plans
-        </Link>
+        </LinkButton>
       </div>
     );
   }
@@ -187,85 +167,67 @@ export function StyleAdvisorFlow() {
   if (status === "results") {
     return (
       <div>
-        <p style={{ color: "#6B6357", marginBottom: 20 }}>
+        <p className={styles.resultsIntro}>
           Here are a few looks to consider. Each shows an AI Style Match — not a guarantee of how
           it will turn out on you.
         </p>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-            gap: 16,
-          }}
-        >
+        <div className={styles.resultsGrid}>
           {results.map((r) => (
-            <div key={r.styleId} style={{ border: "1px solid #E7E0D3", borderRadius: 12, overflow: "hidden" }}>
+            <div key={r.styleId} className={styles.resultCard}>
               {/* eslint-disable-next-line @next/next/no-img-element -- provider-hosted preview URL, not a static/local asset next/image can optimize */}
-              <img src={r.previewUrl} alt={`Preview of the ${r.styleName} style`} style={{ width: "100%", display: "block" }} />
-              <div style={{ padding: 12 }}>
-                <strong>{r.styleName}</strong>
-                <p style={{ color: "#6B6357", fontSize: 13, margin: "4px 0 12px" }}>
-                  AI Style Match: {r.matchPercent}%
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleTryThisLook(r.styleName)}
-                  style={{ padding: "8px 14px", background: "#1C1A17", color: "#fff", border: "none", borderRadius: 8 }}
-                >
+              <img src={r.previewUrl} alt={`Preview of the ${r.styleName} style`} className={styles.resultImg} />
+              <div className={styles.resultBody}>
+                <p className={styles.resultName}>{r.styleName}</p>
+                <p className={styles.resultMatch}>AI Style Match: {r.matchPercent}%</p>
+                <Button type="button" variant="secondary" onClick={() => handleTryThisLook(r.styleName)}>
                   Try This Look
-                </button>
+                </Button>
               </div>
             </div>
           ))}
         </div>
-        <button type="button" onClick={handleStartOver} style={{ marginTop: 20, padding: "8px 16px" }}>
-          Start over
-        </button>
+        <div className={styles.startOverWrap}>
+          <Button type="button" variant="outline" onClick={handleStartOver}>
+            Start over
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 480 }}>
+    <div className={styles.uploadCard}>
       <input
         ref={fileInputRef}
+        id="style-advisor-file"
         type="file"
         accept={ACCEPTED_TYPES.join(",")}
         onChange={handleFileChange}
-        style={{ marginBottom: 16 }}
+        className={styles.fileInputWrap}
       />
+      <label htmlFor="style-advisor-file" className={styles.chooseButton}>
+        {file ? "Choose a different photo" : "+ Choose a photo"}
+      </label>
+      <p className={styles.hint}>JPEG, PNG, or WebP, up to 5MB.</p>
 
       {previewUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not an optimizable remote asset
-        <img
-          src={previewUrl}
-          alt="Your uploaded photo"
-          style={{ width: 220, height: 220, objectFit: "cover", borderRadius: 12, marginBottom: 16, display: "block" }}
-        />
+        <img src={previewUrl} alt="Your uploaded photo" className={styles.previewImg} />
       )}
 
-      {error && (
-        <p style={{ background: "#FBEAEA", color: "#B0413E", padding: "10px 14px", borderRadius: 8, marginBottom: 16 }}>
-          {error}
-        </p>
-      )}
+      {error && <p className={styles.errorBanner}>{error}</p>}
 
       {credits && (
-        <p style={{ color: "#6B6357", fontSize: 13, marginBottom: 12 }}>
+        <p className={styles.creditsNote}>
           AI Credits remaining: <strong>{credits.available}</strong>
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={() => void handleAnalyze()}
-        disabled={!file || status === "analyzing"}
-        style={{ padding: "12px 20px", background: "#1C1A17", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600 }}
-      >
+      <Button type="button" variant="secondary" onClick={() => void handleAnalyze()} disabled={!file || status === "analyzing"}>
         {status === "analyzing" ? "Analyzing…" : "Analyze my photo"}
-      </button>
+      </Button>
 
-      <p style={{ color: "#6B6357", fontSize: 13, marginTop: 16 }}>
+      <p className={styles.privacyNote}>
         Your photo is used only to generate these previews and is not stored.
       </p>
     </div>

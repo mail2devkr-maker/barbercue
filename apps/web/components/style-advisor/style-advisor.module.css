@@ -1,0 +1,206 @@
+/* Shared visual language for the AI Style Advisor — same tokens/card language as
+   booking.module.css / queue.module.css / dashboard.module.css. */
+
+.page {
+  padding: 2.5rem 1.5rem 3rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(1.5rem, 3vw, 1.9rem);
+  letter-spacing: -0.01em;
+  color: var(--bc-ink);
+  margin: 0 0 8px;
+}
+
+.pageSubtitle {
+  color: var(--bc-muted);
+  margin: 0 0 28px;
+  line-height: 1.55;
+}
+
+.loadingText {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+}
+
+/* ---------- Locked / no-credits gate ---------- */
+
+.gateCard {
+  max-width: 480px;
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-5);
+}
+
+.gateIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bc-gold-soft);
+  color: var(--bc-gold);
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+
+.gateTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-lg);
+  color: var(--bc-ink);
+  margin: 0 0 8px;
+}
+
+.gateText {
+  color: var(--bc-muted);
+  margin: 0 0 20px;
+  line-height: 1.55;
+}
+
+/* ---------- Upload form ---------- */
+
+.uploadCard {
+  max-width: 480px;
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-5);
+}
+
+.fileInputWrap {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chooseButton {
+  display: inline-block;
+  padding: 11px 18px;
+  min-height: 44px;
+  background: #ffffff;
+  border: 1px solid var(--bc-ink);
+  border-radius: var(--bc-radius-sm);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--bc-text-sm);
+  color: var(--bc-ink);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.chooseButton:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 2px;
+}
+
+.hint {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  margin-top: 8px;
+}
+
+.previewImg {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: var(--bc-radius-md);
+  margin: var(--bc-space-4) 0;
+  display: block;
+  border: 1px solid var(--bc-border);
+}
+
+.errorBanner {
+  background: rgba(176, 65, 62, 0.1);
+  color: var(--bc-accent);
+  padding: 10px 14px;
+  border-radius: var(--bc-radius-sm);
+  font-size: var(--bc-text-sm);
+  margin: var(--bc-space-3) 0;
+}
+
+.creditsNote {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  margin: 0 0 var(--bc-space-3);
+}
+
+.privacyNote {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  margin-top: var(--bc-space-4);
+}
+
+/* ---------- Results grid ---------- */
+
+.resultsIntro {
+  color: var(--bc-muted);
+  margin: 0 0 var(--bc-space-4);
+  line-height: 1.55;
+}
+
+.resultsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--bc-space-4);
+}
+
+.resultCard {
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  overflow: hidden;
+  background: #ffffff;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.resultCard:hover {
+  border-color: var(--bc-ink);
+  box-shadow: var(--bc-shadow-lg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resultCard {
+    transition: none;
+  }
+}
+
+.resultImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+}
+
+.resultBody {
+  padding: 14px;
+}
+
+.resultName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-base);
+  color: var(--bc-ink);
+}
+
+.resultMatch {
+  color: var(--bc-gold);
+  font-weight: 600;
+  font-size: var(--bc-text-xs);
+  margin: 4px 0 12px;
+}
+
+.startOverWrap {
+  margin-top: var(--bc-space-5);
+}
