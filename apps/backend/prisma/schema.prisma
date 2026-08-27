@@ -258,6 +258,13 @@ model RefreshToken {
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
 
+  // Every login, refresh, revoke, and session-list call looks this table up by tokenHash
+  // (TokenService) — the single hottest query in the whole auth system, and until this index it
+  // ran as a full table scan. tokenHash is 256 bits of random hex, so a plain (non-unique) index
+  // is sufficient — collisions are cryptographically negligible and the code never relies on
+  // DB-level uniqueness (rotateRefreshToken's atomic updateMany already guards single-use via
+  // revokedAt, not via a unique constraint on this column).
+  @@index([tokenHash])
   @@map("refresh_tokens")
 }
 
