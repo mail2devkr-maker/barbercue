@@ -9,7 +9,6 @@ import {
   Patch,
   Post,
   Put,
-  UsePipes,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -81,11 +80,11 @@ export class SalonSetupController {
   // ---------- Shop activation ----------
 
   @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.status}`)
-  @UsePipes(new ZodValidationPipe(updateSalonStatusSchema))
   updateStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
-    @Body() body: UpdateSalonStatusInput,
+    @Body(new ZodValidationPipe(updateSalonStatusSchema))
+    body: UpdateSalonStatusInput,
   ) {
     return this.activation.updateStatus(user.id, salonId, body);
   }
