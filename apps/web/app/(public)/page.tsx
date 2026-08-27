@@ -9,7 +9,9 @@ import { SalonCard } from "../../components/discovery/SalonCard";
 import { HeroSlideshow } from "../../components/landing/HeroSlideshow";
 import styles from "../../components/landing/landing.module.css";
 
-const TITLE = "BarberCue — Find a barbershop near you";
+// No "BarberCue" here: the root layout's title template ("%s | BarberCue") already appends the
+// brand name — including it here duplicated it in the browser tab and every social share card.
+const TITLE = "Find a barbershop near you";
 const DESCRIPTION =
   "Discover nearby barbershops, see the current wait, and book your chair online. No app required.";
 
@@ -262,7 +264,7 @@ export default async function HomePage() {
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div>
-            <strong>BarberCue</strong>
+            <strong className={styles.footerWordmark}>BarberCue</strong>
             <p className={styles.footerNote} style={{ marginTop: 4 }}>
               © {new Date().getFullYear()} BarberCue. Skip the wait, book your chair.
             </p>

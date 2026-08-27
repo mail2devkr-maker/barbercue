@@ -25,24 +25,29 @@
 }
 
 .eyebrow {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--warn);
-  margin: 0 0 8px;
+  color: var(--bc-gold);
+  margin: 0 0 10px;
 }
 
 .sectionTitle {
-  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 3vw, 2.3rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
   margin: 0 0 12px;
 }
 
 .sectionLead {
   color: var(--muted);
   max-width: 640px;
-  margin: 0 0 32px;
-  line-height: 1.55;
+  margin: 0 0 36px;
+  line-height: 1.6;
+  font-size: 1.02rem;
 }
 
 /* ---------- Hero ---------- */
@@ -68,23 +73,25 @@
 }
 
 .heroHeadline {
-  font-size: clamp(2rem, 5vw, 3.2rem);
-  line-height: 1.08;
-  margin: 0 0 18px;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(2.25rem, 5.5vw, 3.75rem);
+  line-height: 1.05;
+  margin: 0 0 20px;
+  letter-spacing: -0.015em;
 }
 
 .heroSub {
   color: var(--muted);
-  font-size: 1.05rem;
-  line-height: 1.6;
+  font-size: 1.1rem;
+  line-height: 1.65;
   max-width: 540px;
-  margin: 0 0 28px;
+  margin: 0 0 32px;
 }
 
 .ctaRow {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
@@ -93,11 +100,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 13px 24px;
-  border-radius: 10px;
+  padding: 14px 26px;
+  border-radius: var(--bc-radius-sm);
   font-weight: 600;
   font-size: 0.95rem;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  letter-spacing: 0.01em;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 .ctaPrimary {
@@ -105,14 +113,23 @@
   color: var(--accent-contrast);
 }
 
+.ctaPrimary:hover {
+  box-shadow: 0 8px 20px rgba(28, 26, 23, 0.22);
+}
+
 .ctaSecondary {
   border: 1px solid var(--border);
   color: var(--ink);
+  background: #fff;
+}
+
+.ctaSecondary:hover {
+  border-color: var(--ink);
 }
 
 .ctaPrimary:hover,
 .ctaSecondary:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -126,11 +143,12 @@
 
 .slideshow {
   position: relative;
-  border-radius: 20px;
+  border-radius: var(--bc-radius-lg);
   overflow: hidden;
   border: 1px solid var(--border);
   background: var(--surface);
   aspect-ratio: 4 / 3;
+  box-shadow: var(--bc-shadow-lg);
 }
 
 .slide {
@@ -207,16 +225,30 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   border: 1px solid var(--border);
-  background: #ffffffcc;
+  background: #ffffffe6;
+  backdrop-filter: blur(4px);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1rem;
+  box-shadow: 0 2px 8px rgba(28, 26, 23, 0.1);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.slideArrow:hover {
+  background: #ffffff;
+  transform: translateY(-50%) scale(1.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slideArrow:hover {
+    transform: translateY(-50%);
+  }
 }
 
 .slideArrowPrev {
@@ -238,27 +270,43 @@
 .stepCard {
   background: #ffffff;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 22px;
+  border-radius: var(--bc-radius-md);
+  padding: 26px 22px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.stepCard:hover {
+  border-color: var(--bc-border);
+  box-shadow: var(--bc-shadow-sm);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepCard:hover {
+    transform: none;
+  }
 }
 
 .stepNumber {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--ink);
   color: #fff;
-  font-size: 0.85rem;
-  font-weight: 700;
-  margin-bottom: 14px;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 16px;
 }
 
 .stepTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
   margin: 0 0 6px;
-  font-size: 1rem;
+  font-size: 1.1rem;
 }
 
 .stepText {
@@ -277,12 +325,19 @@
 }
 
 .chip {
-  padding: 8px 16px;
+  padding: 9px 18px;
   border: 1px solid var(--border);
   border-radius: 999px;
   font-size: 0.9rem;
+  font-weight: 500;
   color: var(--ink);
   background: #fff;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.chip:hover {
+  border-color: var(--ink);
+  background: var(--surface);
 }
 
 /* ---------- Style catalog chips ---------- */
@@ -295,12 +350,25 @@
 
 .styleChip {
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 12px;
+  border-radius: var(--bc-radius-sm);
+  padding: 18px 12px;
   text-align: center;
   font-size: 0.9rem;
   font-weight: 600;
   background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.styleChip:hover {
+  border-color: var(--bc-gold);
+  box-shadow: var(--bc-shadow-sm);
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .styleChip:hover {
+    transform: none;
+  }
 }
 
 /* ---------- Benefits ---------- */
@@ -341,7 +409,7 @@
 
 .finalCta {
   text-align: center;
-  padding: 64px 24px;
+  padding: 72px 24px;
   background: var(--ink);
   color: #fff;
 }
@@ -349,6 +417,10 @@
 .finalCtaInner {
   max-width: 640px;
   margin: 0 auto;
+}
+
+.finalCtaInner .sectionTitle {
+  color: #fff;
 }
 
 .finalCta .ctaPrimary {
@@ -380,6 +452,12 @@
   gap: 24px;
   justify-content: space-between;
   align-items: flex-start;
+}
+
+.footerWordmark {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .footerLinks {

@@ -1,0 +1,83 @@
+.link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  overflow: hidden;
+  height: 100%;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.card:hover {
+  border-color: var(--bc-ink);
+  box-shadow: var(--bc-shadow-lg);
+  transform: translateY(-3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover {
+    transform: none;
+  }
+}
+
+.imageWrap {
+  /* SalonImage renders its own aspect-ratio box; rounded={0} on it plus overflow:hidden here is
+     what gives a single, clean corner radius instead of a rounded image nested in a rounded card. */
+  border-bottom: 1px solid var(--bc-border);
+}
+
+.body {
+  padding: var(--bc-space-4) var(--bc-space-4) var(--bc-space-5);
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--bc-ink);
+  margin: 0 0 4px;
+  /* Long shop names shouldn't push the card's height around in a grid of otherwise-uniform cards. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.address {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--bc-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.88rem;
+}
+
+.rating {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--bc-gold);
+  font-weight: 600;
+}
+
+.ratingCount {
+  color: var(--bc-muted);
+  font-weight: 400;
+}
+
+.price {
+  color: var(--bc-ink);
+  font-weight: 600;
+}

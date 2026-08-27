@@ -5,6 +5,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import { SalonCard } from "../../../components/discovery/SalonCard";
+import { Button } from "../../../components/ui/Button";
+
+const inputStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 180,
+  padding: "12px 14px",
+  border: "1px solid var(--bc-border)",
+  borderRadius: "var(--bc-radius-sm)",
+  fontSize: "1rem",
+  fontFamily: "var(--font-body)",
+};
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
 
@@ -63,39 +74,47 @@ export default function SearchClient() {
   }
 
   return (
-    <main style={{ padding: "2rem 1.5rem", maxWidth: 800, margin: "0 auto" }}>
-      <h1>Find a barbershop</h1>
+    <main style={{ padding: "2.5rem 1.5rem 3rem", maxWidth: 1080, margin: "0 auto" }}>
+      <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "2rem", letterSpacing: "-0.01em", marginBottom: 8 }}>
+        Find a barbershop
+      </h1>
       {style && (
-        <p style={{ color: "#6B6357", fontSize: 14, marginBottom: 16 }}>
+        <p style={{ color: "var(--bc-muted)", fontSize: 14, marginBottom: 16 }}>
           Booking for the <strong>{style}</strong> look — pick a shop below to continue.
         </p>
       )}
-      <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", gap: 10, margin: "20px 0 36px", flexWrap: "wrap" }}>
         <input
           type="text"
           placeholder="Search by name..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          style={{ flex: 1, minWidth: 160, padding: "0.5rem", border: "1px solid #E7E0D3", borderRadius: 8 }}
+          style={inputStyle}
         />
         <input
           type="text"
           placeholder="City slug (e.g. bengaluru)"
           value={city}
           onChange={(e) => setCity(e.target.value)}
-          style={{ flex: 1, minWidth: 160, padding: "0.5rem", border: "1px solid #E7E0D3", borderRadius: 8 }}
+          style={inputStyle}
         />
-        <button type="submit" style={{ padding: "0.5rem 1rem", background: "#B0413E", color: "#fff", border: "none", borderRadius: 8 }}>
+        <Button type="submit" variant="primary">
           Search
-        </button>
+        </Button>
       </form>
 
-      {loading && <p style={{ color: "#6B6357" }}>Loading...</p>}
+      {loading && <p style={{ color: "var(--bc-muted)" }}>Loading…</p>}
       {error && <p style={{ color: "#E24B4A" }}>{error}</p>}
-      {!loading && !error && results.length === 0 && <p style={{ color: "#6B6357" }}>No salons found.</p>}
-      {results.map((s) => (
-        <SalonCard key={s.id} salon={s} styleName={style} />
-      ))}
+      {!loading && !error && results.length === 0 && (
+        <p style={{ color: "var(--bc-muted)" }}>No salons found. Try a different name or city.</p>
+      )}
+      {results.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20 }}>
+          {results.map((s) => (
+            <SalonCard key={s.id} salon={s} styleName={style} />
+          ))}
+        </div>
+      )}
     </main>
   );
 }

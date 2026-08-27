@@ -17,6 +17,51 @@
      queue, and shop registration (12+ files); reused here rather than introducing a second one. */
   --bc-accent: #b0413e;
   --bc-accent-contrast: #ffffff;
+  /* Warm brass — a second, sparingly-used accent for premium/trust signals (ratings, badges,
+     highlighted prices) that would read as noise if rendered in the same red as "Book now"
+     buttons. Never used for anything actionable, only for things being noticed, not clicked. */
+  --bc-gold: #a8791f;
+  --bc-gold-soft: #f7ecd3;
+
+  /* Typography — next/font exposes each family as a variable (see app/layout.tsx); the fallback
+     stacks here are what renders for the ~0ms before the webfont swaps in, chosen to be metrically
+     close so that swap doesn't visibly reflow. */
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Work Sans", Arial, Helvetica, sans-serif;
+
+  /* A deliberate type scale (1.25 ratio) rather than ad-hoc per-component font-sizes — every new
+     heading should pick one of these, not invent a new number. */
+  --bc-text-xs: 0.8rem;
+  --bc-text-sm: 0.9rem;
+  --bc-text-base: 1rem;
+  --bc-text-lg: 1.25rem;
+  --bc-text-xl: 1.6rem;
+  --bc-text-2xl: 2rem;
+  --bc-text-3xl: 2.5rem;
+  --bc-text-4xl: 3.25rem;
+
+  /* Spacing scale (4px base) — existing components keep their own hand-picked pixel values (out
+     of scope to touch everything at once), but new/refreshed surfaces reference these instead of
+     re-guessing "is it 18 or 20px here". */
+  --bc-space-1: 4px;
+  --bc-space-2: 8px;
+  --bc-space-3: 12px;
+  --bc-space-4: 16px;
+  --bc-space-5: 24px;
+  --bc-space-6: 32px;
+  --bc-space-7: 48px;
+  --bc-space-8: 64px;
+
+  --bc-radius-sm: 8px;
+  --bc-radius-md: 14px;
+  --bc-radius-lg: 20px;
+
+  /* A restrained elevation scale — two steps, not the six-shadow ramps design systems tend to
+     accumulate. "sm" replaces the old inline rgba() shadow scattered per-component; "lg" is new,
+     for the handful of surfaces (hero art, the salon-profile hero card) that should visibly lift
+     off the page rather than just sit on it. */
+  --bc-shadow-sm: 0 1px 2px rgba(28, 26, 23, 0.04), 0 4px 12px rgba(28, 26, 23, 0.05);
+  --bc-shadow-lg: 0 8px 24px rgba(28, 26, 23, 0.08), 0 2px 6px rgba(28, 26, 23, 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,7 +87,9 @@ body {
   flex-direction: column;
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  font-size: var(--bc-text-base);
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -56,6 +103,18 @@ body {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* Every heading defaults to the display face — components opt out per-element if a specific
+   heading should read as UI chrome instead (rare; most h1-h3 on customer-facing pages are the
+   editorial voice this face exists for). */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 
 @media (prefers-color-scheme: dark) {

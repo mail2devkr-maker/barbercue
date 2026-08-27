@@ -3,14 +3,16 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 22px;
-  border-radius: 10px;
+  padding: 13px 24px;
+  border-radius: var(--bc-radius-sm);
+  font-family: var(--font-body);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: var(--bc-text-sm);
+  letter-spacing: 0.01em;
   border: 1px solid transparent;
   cursor: pointer;
   text-decoration: none;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, background-color 0.15s ease;
 }
 
 .button:disabled {
@@ -27,17 +29,27 @@
   transform: translateY(-1px);
 }
 
+.button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .button:hover:not(:disabled) {
+  .button:hover:not(:disabled),
+  .button:active:not(:disabled) {
     transform: none;
   }
 }
 
 /* Same transactional red already used across booking/search/queue/registration — the primary
-   variant here intentionally matches, not a new accent. */
+   variant here intentionally matches, not a new accent. A soft lifted shadow on hover is the only
+   new behavior; the color itself is unchanged. */
 .primary {
   background: var(--bc-accent);
   color: var(--bc-accent-contrast);
+}
+
+.primary:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(176, 65, 62, 0.28);
 }
 
 /* Matches the landing page's own primary CTA color (near-black), used here for the secondary
@@ -47,10 +59,18 @@
   color: #ffffff;
 }
 
+.secondary:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(28, 26, 23, 0.22);
+}
+
 .outline {
   background: #ffffff;
   color: var(--bc-ink);
   border-color: var(--bc-border);
+}
+
+.outline:hover:not(:disabled) {
+  border-color: var(--bc-ink);
 }
 
 .fullWidth {

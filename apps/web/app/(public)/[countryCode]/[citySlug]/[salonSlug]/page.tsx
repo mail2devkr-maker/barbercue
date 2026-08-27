@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { DISCOVERY_PATHS, formatMoney } from "@barbercue/shared";
 import type { CityDto, LocalityDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
@@ -11,6 +10,9 @@ import { PhotoGallery } from "../../../../../components/discovery/PhotoGallery";
 import { ReviewList } from "../../../../../components/discovery/ReviewList";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../components/discovery/Breadcrumbs";
 import { JsonLd } from "../../../../../components/discovery/JsonLd";
+import { SalonImage } from "../../../../../components/ui/SalonImage";
+import { LinkButton } from "../../../../../components/ui/Button";
+import { Card } from "../../../../../components/ui/Card";
 
 interface SalonPageParams {
   // ISO-3166-1 alpha-2, lowercase in the URL — the backend uppercases it before the (countryCode,
@@ -168,77 +170,78 @@ export default async function SalonPage({
     { label: salon.name, href: salonPath(salon) },
   ];
 
+  const sectionHeadingStyle: React.CSSProperties = {
+    fontFamily: "var(--font-display)",
+    fontWeight: 600,
+    fontSize: "1.3rem",
+    marginBottom: 16,
+  };
+
   return (
-    <main style={{ padding: "2rem 1.5rem", maxWidth: 800, margin: "0 auto" }}>
+    <main style={{ maxWidth: 800, margin: "0 auto", padding: "0 0 3rem" }}>
       <JsonLd data={breadcrumbJsonLd(breadcrumbItems, SITE_URL)} />
       <JsonLd data={buildHairSalonJsonLd(salon)} />
-      <Breadcrumbs items={breadcrumbItems} />
 
-      <h1>{salon.name}</h1>
-      <p style={{ color: "#6B6357" }}>{salon.addressLine}</p>
-      {salon.phone && <p style={{ color: "#6B6357" }}>{salon.phone}</p>}
-      {salon.ratingCount > 0 && (
-        <p style={{ color: "#6B6357" }}>
-          ★ {salon.ratingAverage?.toFixed(1)} ({salon.ratingCount} review{salon.ratingCount === 1 ? "" : "s"})
-        </p>
-      )}
-      {salon.description && <p>{salon.description}</p>}
-
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <Link
-          href={bookHref}
-          style={{
-            display: "inline-block",
-            marginTop: 8,
-            padding: "10px 20px",
-            background: "#B0413E",
-            color: "#fff",
-            borderRadius: 8,
-            textDecoration: "none",
-          }}
-        >
-          Book an appointment
-        </Link>
-        <Link
-          href={`/queue/${salon.slug}?${cityQuery}`}
-          style={{
-            display: "inline-block",
-            marginTop: 8,
-            padding: "10px 20px",
-            background: "#fff",
-            color: "#B0413E",
-            border: "1px solid #B0413E",
-            borderRadius: 8,
-            textDecoration: "none",
-          }}
-        >
-          Join queue now
-        </Link>
+      <div style={{ padding: "1.25rem 1.5rem 0" }}>
+        <Breadcrumbs items={breadcrumbItems} />
       </div>
 
-      <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: "1.1rem" }}>Photos</h2>
-        <PhotoGallery photos={salon.photos} salonName={salon.name} />
-      </section>
+      {/* The cover photo is the first thing a visitor sees on Fresha/Booksy-style profile
+          pages — SalonImage's own honest empty state covers a shop with none, so this never
+          shows a placeholder photo that isn't really theirs. */}
+      <div style={{ padding: "0 1.5rem", marginBottom: 20 }}>
+        <SalonImage url={salon.coverPhotoUrl} alt={`${salon.name}'s cover photo`} aspectRatio="16 / 9" rounded={20} priority />
+      </div>
 
-      <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: "1.1rem" }}>Services</h2>
-        <ServiceList
-          services={salon.services}
-          currency={salon.currency}
-          countryCode={salon.countryCode}
-        />
-      </section>
+      <div style={{ padding: "0 1.5rem" }}>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "2rem", letterSpacing: "-0.01em", marginBottom: 6 }}>
+          {salon.name}
+        </h1>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 14px", marginBottom: 10 }}>
+          {salon.ratingCount > 0 && (
+            <span style={{ color: "var(--bc-gold)", fontWeight: 600, fontSize: "0.95rem" }}>
+              ★ {salon.ratingAverage?.toFixed(1)}{" "}
+              <span style={{ color: "var(--bc-muted)", fontWeight: 400 }}>
+                ({salon.ratingCount} review{salon.ratingCount === 1 ? "" : "s"})
+              </span>
+            </span>
+          )}
+          <span style={{ color: "var(--bc-muted)" }}>{salon.addressLine}</span>
+          {salon.phone && <span style={{ color: "var(--bc-muted)" }}>{salon.phone}</span>}
+        </div>
+        {salon.description && (
+          <p style={{ color: "var(--bc-ink)", lineHeight: 1.6, marginBottom: 20, maxWidth: 640 }}>{salon.description}</p>
+        )}
 
-      <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: "1.1rem" }}>Opening hours</h2>
-        <OperatingHoursTable hours={salon.operatingHours} />
-      </section>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 32 }}>
+          <LinkButton href={bookHref} variant="primary">
+            Book an appointment
+          </LinkButton>
+          <LinkButton href={`/queue/${salon.slug}?${cityQuery}`} variant="outline">
+            Join queue now
+          </LinkButton>
+        </div>
 
-      <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: "1.1rem" }}>Reviews</h2>
-        <ReviewList reviews={salon.reviews} />
-      </section>
+        <section style={{ marginBottom: 24 }}>
+          <h2 style={sectionHeadingStyle}>Photos</h2>
+          <PhotoGallery photos={salon.photos} salonName={salon.name} />
+        </section>
+
+        <Card style={{ marginBottom: 24 }}>
+          <h2 style={sectionHeadingStyle}>Services</h2>
+          <ServiceList services={salon.services} currency={salon.currency} countryCode={salon.countryCode} />
+        </Card>
+
+        <Card style={{ marginBottom: 24 }}>
+          <h2 style={sectionHeadingStyle}>Opening hours</h2>
+          <OperatingHoursTable hours={salon.operatingHours} />
+        </Card>
+
+        <Card>
+          <h2 style={sectionHeadingStyle}>Reviews</h2>
+          <ReviewList reviews={salon.reviews} />
+        </Card>
+      </div>
     </main>
   );
 }
