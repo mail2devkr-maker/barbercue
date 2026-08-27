@@ -27,8 +27,16 @@ import { SalonSetupModule } from './salon-setup/salon-setup.module';
     SalonAccessModule,
     HealthModule,
     AuthModule,
-    SalonsModule,
+    // BookingsModule is registered before SalonsModule so BookingInfoController's
+    // `salons/:salonId/booking/{staff,availability,cancellation-policy}` routes are matched by
+    // Nest/Express before SalonsController's `salons/:countryCode/:citySlug/:salonSlug` route —
+    // both are exactly 3 path-segments after `salons/`, and Express's router matches by
+    // registration order, not specificity, so the fully-wildcard discovery route was previously
+    // intercepting every booking-info request (see BookingInfoController's own doc comment, whose
+    // "structurally non-overlapping" claim assumed order-independent matching, which Express does
+    // not do).
     BookingsModule,
+    SalonsModule,
     RealtimeModule,
     QueueModule,
     PremiumModule,

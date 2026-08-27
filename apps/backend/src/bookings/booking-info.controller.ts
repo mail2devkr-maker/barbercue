@@ -14,12 +14,16 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 /**
  * Mounted at `salons/:salonId/booking/...` — deliberately NOT a bare `salons/:salonId/staff`
  * shape. SalonsController's public discovery route (`GET salons/:countryCode/:citySlug/:salonSlug`,
- * three dynamic segments as of B9) sits under the same `salons` prefix; a request like
- * `/salons/{uuid}/staff` would otherwise risk ambiguity with a same-arity discovery route, and
- * which one wins would depend on fragile module/controller registration order. The extra literal
- * `booking` segment makes the two shapes structurally non-overlapping regardless of registration
- * order — same fix philosophy as Phase 3A's `/areas/` locality route (resolve via a distinct path
- * shape, not by luck of ordering). API.md's Booking section is annotated accordingly.
+ * three dynamic segments as of B9) sits under the same `salons` prefix and is a fully-wildcard
+ * 3-segment pattern, so it structurally matches ANY 3-segment `salons/*` path — including this
+ * controller's own routes (`salons/:salonId/booking/staff` etc. are also exactly 3 segments after
+ * `salons/`). The literal `booking` segment does NOT make the two shapes non-overlapping (a
+ * previous version of this comment claimed it did — that was wrong and caused a real production
+ * bug: Nest/Express matches routes in registration order, not by pattern specificity, so whichever
+ * controller's module is imported first in AppModule wins for ANY 3-segment `salons/*` path).
+ * BookingsModule is now imported before SalonsModule in app.module.ts specifically so these routes
+ * are tried first — see the comment there. If you add another `salons/:salonId/...` sub-resource,
+ * either keep it behind a module imported before SalonsModule, or give it a different arity.
  */
 @Controller('salons/:salonId/booking')
 export class BookingInfoController {
