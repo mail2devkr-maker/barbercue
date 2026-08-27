@@ -32,7 +32,6 @@
     "owner": "dcw-team",
     "plugins": [
       "expo-secure-store",
-      "expo-web-browser",
       [
         "expo-image-picker",
         {

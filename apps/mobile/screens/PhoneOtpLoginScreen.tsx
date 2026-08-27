@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
+import {
+  GoogleOneTapSignIn,
+  isCancelledResponse,
+  isErrorWithCode,
+  isNoSavedCredentialFoundResponse,
+  isSuccessResponse,
+  statusCodes,
+} from 'react-native-nitro-google-signin';
 import {
   AUTH_PATHS,
   OTP_RESEND_COOLDOWN_SECONDS,
@@ -12,51 +18,56 @@ import {
 import { ApiError, apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 
-// Required once per app by expo-auth-session so the in-app browser tab closes itself after
-// Google redirects back — see https://docs.expo.dev/versions/v57.0.0/sdk/auth-session/.
-WebBrowser.maybeCompleteAuthSession();
+// GoogleSignInButton is only ever mounted when a web client ID is configured (see
+// GOOGLE_CONFIGURED below), so configure() only ever runs with a real value. Native Google
+// Sign-In via Android Credential Manager — no browser redirect, no custom URI scheme, so no
+// dependency on this app's own package/scheme being reachable from a browser tab. The Android
+// OAuth client (package name + release SHA-1, registered in Google Cloud Console) is still what
+// Credential Manager checks the caller against; only the Web client ID is passed here — Google's
+// own convention for native sign-in, so ID tokens can be verified server-side (GoogleAuthService)
+// against the same audience the web app already uses.
+const GOOGLE_CONFIGURED = Boolean(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+if (GOOGLE_CONFIGURED) {
+  GoogleOneTapSignIn.configure({ webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID! });
+}
 
 type Step = 'phone' | 'otp';
-
-// expo-auth-session's Google provider throws synchronously (invariantClientId) when the
-// platform-appropriate client ID is missing — it is NOT safe to call the hook unconditionally as
-// originally assumed here. GoogleSignInButton is only ever mounted when at least one client ID is
-// configured, so the hook never runs with a missing value; this constant gates that mount.
-const GOOGLE_CONFIGURED = Boolean(
-  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-);
 
 function GoogleSignInButton() {
   const { googleLogin } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useIdTokenAuthRequest({
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-  });
 
-  useEffect(() => {
-    if (googleResponse?.type !== 'success') return;
-    const idToken = googleResponse.params.id_token;
-    if (!idToken) return;
+  async function handleGoogleSignIn() {
     setError(null);
     setSubmitting(true);
-    googleLogin({ idToken })
-      .catch((err: unknown) => {
-        setError(err instanceof ApiError ? err.message : 'Could not sign in with Google. Please try again.');
-      })
-      .finally(() => setSubmitting(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googleResponse]);
+    try {
+      await GoogleOneTapSignIn.checkPlayServices();
+      // signIn() is the low-friction path (no account picker if there's already one saved
+      // credential); createAccount() falls back to the full picker when signIn() has nothing to
+      // offer — same "new here? this creates your account automatically" promise as OTP below.
+      let response = await GoogleOneTapSignIn.signIn();
+      if (isNoSavedCredentialFoundResponse(response)) {
+        response = await GoogleOneTapSignIn.createAccount();
+      }
+      if (isCancelledResponse(response)) return;
+      if (isSuccessResponse(response)) {
+        await googleLogin({ idToken: response.data.idToken });
+      }
+    } catch (err) {
+      if (isErrorWithCode(err) && err.code === statusCodes.SIGN_IN_CANCELLED) {
+        return;
+      }
+      setError(err instanceof ApiError ? err.message : 'Could not sign in with Google. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <>
       {error && <Text style={styles.error}>{error}</Text>}
-      <Pressable
-        style={styles.googleButton}
-        onPress={() => void promptGoogleSignIn()}
-        disabled={!googleRequest || submitting}
-      >
+      <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={submitting}>
         {submitting ? (
           <ActivityIndicator color="#1C1A17" />
         ) : (
