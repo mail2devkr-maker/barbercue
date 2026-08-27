@@ -9,7 +9,9 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
+import { Button } from "../ui/Button";
 import { QueueStatusPanel } from "./QueueStatusPanel";
+import styles from "./queue.module.css";
 
 export function WalkInJoinFlow({ salonId, services }: { salonId: string; services: ServiceDto[] }) {
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
@@ -54,34 +56,30 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
     }
   }
 
-  if (loading) return <p style={{ color: "#6B6357", marginTop: 16 }}>Loading…</p>;
+  if (loading) return <p className={styles.stepLoading}>Loading…</p>;
 
   if (entry && entry.salonId !== salonId) {
     return (
-      <p style={{ color: "#6B6357", marginTop: 16 }}>
+      <p className={styles.stepLoading}>
         You already have an active queue token at another salon. Finish or cancel it before joining here.
       </p>
     );
   }
 
   if (entry) {
-    return (
-      <div style={{ marginTop: 16 }}>
-        <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
-      </div>
-    );
+    return <QueueStatusPanel entry={entry} onEntryChange={setEntry} />;
   }
 
   return (
-    <div style={{ marginTop: 16 }}>
-      <label style={{ display: "block", marginBottom: 6, color: "#6B6357" }} htmlFor="walkin-service">
+    <div className={styles.joinCard}>
+      <label className={styles.fieldLabel} htmlFor="walkin-service">
         Service (optional)
       </label>
       <select
         id="walkin-service"
         value={selectedServiceId}
         onChange={(e) => setSelectedServiceId(e.target.value)}
-        style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #E7E0D3", minWidth: 220 }}
+        className={styles.select}
       >
         <option value="">Any service</option>
         {services.map((s) => (
@@ -91,25 +89,14 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
         ))}
       </select>
 
-      {error && <p style={{ color: "#E24B4A" }}>{error}</p>}
+      {error && <p className={styles.errorText}>{error}</p>}
 
-      <div>
-        <button
-          type="button"
-          onClick={() => void handleJoin()}
-          disabled={submitting}
-          style={{
-            marginTop: 16,
-            padding: "10px 20px",
-            background: "#B0413E",
-            color: "#fff",
-            border: "none",
-            borderRadius: 8,
-          }}
-        >
+      <div className={styles.joinActions}>
+        <Button type="button" variant="primary" onClick={() => void handleJoin()} disabled={submitting}>
           {submitting ? "Joining…" : "Join the queue"}
-        </button>
+        </Button>
       </div>
+      <p className={styles.reassure}>We&apos;ll keep your place — no need to stay by the counter.</p>
     </div>
   );
 }

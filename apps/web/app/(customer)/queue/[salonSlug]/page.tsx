@@ -4,6 +4,7 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { WalkInJoinFlow } from "../../../../components/queue/WalkInJoinFlow";
+import styles from "../../../../components/queue/queue.module.css";
 
 interface QueuePageParams {
   salonSlug: string;
@@ -32,9 +33,9 @@ export default async function QueuePage({
   if (!salon) notFound();
 
   return (
-    <main style={{ padding: "2rem 1.5rem", maxWidth: 600, margin: "0 auto" }}>
-      <h1>Join the queue at {salon.name}</h1>
-      <p style={{ color: "#6B6357" }}>{salon.addressLine}</p>
+    <main className={styles.page}>
+      <h1 className={styles.pageTitle}>Join the queue at {salon.name}</h1>
+      <p className={styles.pageSubtitle}>{salon.addressLine}</p>
       <WalkInJoinFlow salonId={salon.id} services={salon.services} />
     </main>
   );

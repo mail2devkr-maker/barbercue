@@ -1,0 +1,358 @@
+/* Shared visual language for the queue experience (customer join flows, live status ticket, and
+   the owner/staff dashboard view) — same design tokens and card language as booking.module.css,
+   applied to a queue's own shapes: a prominent "ticket" for live status, and dense entry rows for
+   the owner-facing live queue. */
+
+.page {
+  padding: 2.5rem 1.5rem 3rem;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.8rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+  color: var(--bc-ink);
+}
+
+.pageSubtitle {
+  color: var(--bc-muted);
+  margin-bottom: 20px;
+}
+
+/* ---------- Live status ticket (QueueStatusPanel) ---------- */
+
+.ticket {
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-5);
+  box-shadow: var(--bc-shadow-sm);
+  margin-top: var(--bc-space-3);
+}
+
+.ticketHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ticketTokenLabel {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.ticketToken {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-3xl);
+  color: var(--bc-ink);
+  line-height: 1;
+  margin: 0;
+}
+
+.ticketStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.statusWaiting {
+  background: rgba(179, 107, 0, 0.12);
+  color: var(--bc-warn);
+}
+
+.statusCalled {
+  background: rgba(176, 65, 62, 0.12);
+  color: var(--bc-accent);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+.statusInService {
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--bc-success);
+}
+
+.statusNeutral {
+  background: rgba(107, 99, 87, 0.12);
+  color: var(--bc-muted);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .statusCalled {
+    animation: none;
+  }
+}
+
+.ticketDetail {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  margin: var(--bc-space-3) 0 0;
+}
+
+.ticketDetail strong {
+  color: var(--bc-ink);
+}
+
+.ticketReassure {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  margin: var(--bc-space-2) 0 0;
+}
+
+/* ---------- Join forms ---------- */
+
+.joinCard {
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-5);
+  margin-top: var(--bc-space-3);
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  font-weight: 600;
+}
+
+.select {
+  display: block;
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: var(--bc-radius-sm);
+  border: 1px solid var(--bc-border);
+  font-family: var(--font-body);
+  font-size: var(--bc-text-base);
+  color: var(--bc-ink);
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 1px;
+}
+
+.textInput {
+  display: block;
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: var(--bc-radius-sm);
+  border: 1px solid var(--bc-border);
+  font-family: var(--font-body);
+  font-size: var(--bc-text-base);
+  color: var(--bc-ink);
+  box-sizing: border-box;
+  margin-bottom: var(--bc-space-3);
+}
+
+.textInput:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 1px;
+}
+
+.joinActions {
+  margin-top: var(--bc-space-4);
+}
+
+.errorText {
+  color: var(--bc-accent);
+  font-size: var(--bc-text-sm);
+  margin: 8px 0 0;
+}
+
+.stepLoading {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+}
+
+.reassure {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  margin-top: var(--bc-space-4);
+}
+
+/* ---------- Public scan-and-join page (no site chrome) ---------- */
+
+.publicWrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--bc-space-5);
+  background: var(--bc-surface);
+}
+
+.publicCard {
+  width: 100%;
+  max-width: 440px;
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-lg);
+  padding: var(--bc-space-6) var(--bc-space-5);
+  box-shadow: var(--bc-shadow-lg);
+}
+
+.publicWordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-sm);
+  color: var(--bc-muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin: 0 0 var(--bc-space-3);
+}
+
+.publicTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-2xl);
+  letter-spacing: -0.01em;
+  color: var(--bc-ink);
+  margin: 0 0 6px;
+}
+
+.publicIntro {
+  color: var(--bc-muted);
+  margin: 0 0 var(--bc-space-4);
+}
+
+/* ---------- Dashboard queue (owner/staff) ---------- */
+
+.dashSection {
+  margin-bottom: var(--bc-space-6);
+}
+
+.dashHeading {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-lg);
+  color: var(--bc-ink);
+  margin: 0 0 var(--bc-space-3);
+}
+
+.staffRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.staffChip {
+  border: 1px solid var(--bc-border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+}
+
+.staffChipName {
+  font-weight: 600;
+  color: var(--bc-ink);
+  font-size: var(--bc-text-sm);
+}
+
+.staffChipStatus {
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.entryList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.entryCard {
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-4);
+}
+
+.entryHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.entryToken {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-lg);
+  color: var(--bc-ink);
+}
+
+.entryMeta {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+}
+
+.entryDetail {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  margin: 6px 0 0;
+}
+
+.entryActions {
+  display: flex;
+  gap: 8px;
+  margin-top: var(--bc-space-3);
+  flex-wrap: wrap;
+}
+
+.assignRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: var(--bc-space-3);
+  padding-top: var(--bc-space-3);
+  border-top: 1px solid var(--bc-border);
+}
+
+.assignSelect {
+  padding: 7px 10px;
+  border-radius: var(--bc-radius-sm);
+  border: 1px solid var(--bc-border);
+  font-family: var(--font-body);
+  font-size: var(--bc-text-sm);
+  background: #ffffff;
+  color: var(--bc-ink);
+}
+
+.emptyState {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  padding: var(--bc-space-4);
+  text-align: center;
+  border: 1px dashed var(--bc-border);
+  border-radius: var(--bc-radius-md);
+}

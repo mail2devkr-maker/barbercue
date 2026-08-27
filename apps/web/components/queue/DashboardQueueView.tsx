@@ -13,6 +13,8 @@ import {
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { getRealtimeSocket, joinSalonRoom } from "../../lib/realtime";
+import { Button } from "../ui/Button";
+import styles from "./queue.module.css";
 
 const DASHBOARD_QUEUE_PATH = (salonId: string) =>
   `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.queue}`;
@@ -23,11 +25,11 @@ const SERVICE_SESSION_PATH = (id: string) =>
 const STAFF_STATUS_PATH = (id: string) =>
   `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.staff}/${id}/${DASHBOARD_PATHS.status}`;
 
-function statusColor(status: string): string {
-  if (status === "WAITING") return "#B36B00";
-  if (status === "CALLED") return "#B0413E";
-  if (status === "IN_SERVICE") return "#2E7D32";
-  return "#6B6357";
+function statusBadgeClass(status: string): string {
+  if (status === "CALLED") return styles.statusCalled;
+  if (status === "IN_SERVICE") return styles.statusInService;
+  if (status === "WAITING") return styles.statusWaiting;
+  return styles.statusNeutral;
 }
 
 function AssignForm({
@@ -67,8 +69,8 @@ function AssignForm({
   }
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
-      <select value={staffId} onChange={(e) => setStaffId(e.target.value)} style={{ padding: "4px 8px" }}>
+    <div className={styles.assignRow}>
+      <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={styles.assignSelect}>
         <option value="">Staff…</option>
         {activeStaff.map((s) => (
           <option key={s.id} value={s.id}>
@@ -76,7 +78,7 @@ function AssignForm({
           </option>
         ))}
       </select>
-      <select value={chairId} onChange={(e) => setChairId(e.target.value)} style={{ padding: "4px 8px" }}>
+      <select value={chairId} onChange={(e) => setChairId(e.target.value)} className={styles.assignSelect}>
         <option value="">Chair…</option>
         {chairs.map((c) => (
           <option key={c.id} value={c.id}>
@@ -84,15 +86,10 @@ function AssignForm({
           </option>
         ))}
       </select>
-      <button
-        type="button"
-        onClick={() => void handleAssign()}
-        disabled={submitting || !staffId || !chairId}
-        style={{ padding: "4px 12px" }}
-      >
+      <Button type="button" variant="outline" onClick={() => void handleAssign()} disabled={submitting || !staffId || !chairId}>
         {submitting ? "Assigning…" : "Confirm assign"}
-      </button>
-      {error && <span style={{ color: "#E24B4A", fontSize: "0.85rem" }}>{error}</span>}
+      </Button>
+      {error && <span className={styles.errorText}>{error}</span>}
     </div>
   );
 }
@@ -218,121 +215,95 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     }
   }
 
-  if (loading) return <p style={{ color: "#6B6357" }}>Loading…</p>;
-  if (error && !data) return <p style={{ color: "#E24B4A" }}>{error}</p>;
+  if (loading) return <p className={styles.stepLoading}>Loading…</p>;
+  if (error && !data) return <p className={styles.errorText}>{error}</p>;
   if (!data) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {error && <p style={{ color: "#E24B4A" }}>{error}</p>}
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {error && <p className={styles.errorText}>{error}</p>}
 
-      <section>
-        <h2 style={{ fontSize: "1.1rem" }}>Staff on duty</h2>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+      <section className={styles.dashSection}>
+        <h2 className={styles.dashHeading}>Staff on duty</h2>
+        <div className={styles.staffRow}>
           {data.staffRoster.map((s) => (
-            <div
-              key={s.id}
-              style={{
-                border: "1px solid #E7E0D3",
-                borderRadius: 8,
-                padding: "8px 12px",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}
-            >
-              <span>{s.displayName}</span>
-              <span style={{ color: statusColor(s.status), fontWeight: 600, fontSize: "0.85rem" }}>{s.status}</span>
-              <button
+            <div key={s.id} className={styles.staffChip}>
+              <span className={styles.staffChipName}>{s.displayName}</span>
+              <span
+                className={styles.staffChipStatus}
+                style={{ color: s.status === StaffMemberStatus.ACTIVE ? "var(--bc-success)" : "var(--bc-muted)" }}
+              >
+                {s.status}
+              </span>
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => void handleToggleStaffStatus(s)}
                 disabled={staffBusyId === s.id}
-                style={{ padding: "2px 10px" }}
               >
                 {s.status === StaffMemberStatus.ACTIVE ? "Clock out" : "Clock in"}
-              </button>
+              </Button>
             </div>
           ))}
-          {data.staffRoster.length === 0 && <p style={{ color: "#6B6357" }}>No staff on the roster.</p>}
+          {data.staffRoster.length === 0 && <p className={styles.emptyState}>No staff on the roster.</p>}
         </div>
       </section>
 
-      <section>
-        <h2 style={{ fontSize: "1.1rem" }}>Live queue</h2>
-        {data.entries.length === 0 && <p style={{ color: "#6B6357" }}>No one is currently waiting.</p>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <section className={styles.dashSection}>
+        <h2 className={styles.dashHeading}>Live queue</h2>
+        {data.entries.length === 0 && <p className={styles.emptyState}>No one is currently waiting.</p>}
+        <div className={styles.entryList}>
           {data.entries.map((entry) => (
-            <div key={entry.id} style={{ border: "1px solid #E7E0D3", borderRadius: 10, padding: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <div key={entry.id} className={styles.entryCard}>
+              <div className={styles.entryHead}>
                 <div>
-                  <strong>#{entry.tokenNumber}</strong>{" "}
-                  {entry.customerPhone && <span style={{ color: "#6B6357" }}>{entry.customerPhone}</span>}
-                  {entry.serviceName && <span style={{ color: "#6B6357" }}> — {entry.serviceName}</span>}
+                  <span className={styles.entryToken}>#{entry.tokenNumber}</span>{" "}
+                  {entry.customerPhone && <span className={styles.entryMeta}>{entry.customerPhone}</span>}
+                  {entry.serviceName && <span className={styles.entryMeta}> — {entry.serviceName}</span>}
                 </div>
-                <span style={{ color: statusColor(entry.status), fontWeight: 600 }}>
+                <span className={`${styles.ticketStatusBadge} ${statusBadgeClass(entry.status)}`}>
                   {entry.status}
                   {entry.status === "WAITING" && entry.position ? ` (#${entry.position})` : ""}
                 </span>
               </div>
               {entry.status === "WAITING" && entry.estimatedWaitMinutes !== null && (
-                <p style={{ color: "#6B6357", margin: "6px 0 0", fontSize: "0.85rem" }}>
-                  Est. wait: ~{entry.estimatedWaitMinutes} min
-                </p>
+                <p className={styles.entryDetail}>Est. wait: ~{entry.estimatedWaitMinutes} min</p>
               )}
               {entry.status === "IN_SERVICE" && (
-                <p style={{ color: "#6B6357", margin: "6px 0 0", fontSize: "0.85rem" }}>
+                <p className={styles.entryDetail}>
                   {entry.assignedStaffName} — {entry.assignedChairLabel}
                 </p>
               )}
 
-              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <div className={styles.entryActions}>
                 {entry.status === "WAITING" && (
-                  <button
-                    type="button"
-                    onClick={() => void handleCall(entry.id)}
-                    disabled={busyId === entry.id}
-                    style={{ padding: "4px 12px" }}
-                  >
+                  <Button type="button" variant="primary" onClick={() => void handleCall(entry.id)} disabled={busyId === entry.id}>
                     Call
-                  </button>
+                  </Button>
                 )}
                 {(entry.status === "WAITING" || entry.status === "CALLED") && (
-                  <button
-                    type="button"
-                    onClick={() => setAssigningId(assigningId === entry.id ? null : entry.id)}
-                    style={{ padding: "4px 12px" }}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setAssigningId(assigningId === entry.id ? null : entry.id)}>
                     Assign
-                  </button>
+                  </Button>
                 )}
                 {entry.status === "CALLED" && (
-                  <button
-                    type="button"
-                    onClick={() => void handleNoShow(entry.id)}
-                    disabled={busyId === entry.id}
-                    style={{ padding: "4px 12px" }}
-                  >
+                  <Button type="button" variant="outline" onClick={() => void handleNoShow(entry.id)} disabled={busyId === entry.id}>
                     No-show
-                  </button>
+                  </Button>
                 )}
                 {entry.status === "IN_SERVICE" && entry.activeServiceSessionId && (
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
                     onClick={() => void handleComplete(entry.activeServiceSessionId!)}
                     disabled={busyId === entry.activeServiceSessionId}
-                    style={{ padding: "4px 12px" }}
                   >
                     Complete
-                  </button>
+                  </Button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => void handleCancel(entry.id)}
-                  disabled={busyId === entry.id}
-                  style={{ padding: "4px 12px" }}
-                >
+                <Button type="button" variant="outline" onClick={() => void handleCancel(entry.id)} disabled={busyId === entry.id}>
                   Cancel
-                </button>
+                </Button>
               </div>
 
               {assigningId === entry.id && (

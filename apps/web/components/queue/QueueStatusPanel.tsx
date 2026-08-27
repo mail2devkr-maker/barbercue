@@ -4,14 +4,22 @@ import { useEffect } from "react";
 import { QUEUE_ENTRIES_PATH, type QueueEntryDetailDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom } from "../../lib/realtime";
+import styles from "./queue.module.css";
 
 const ACTIVE_STATUSES = new Set(["WAITING", "CALLED", "IN_SERVICE"]);
 
 function statusLabel(entry: QueueEntryDetailDto): string {
-  if (entry.status === "CALLED") return "You're being called — please head to the counter!";
+  if (entry.status === "CALLED") return "You're being called!";
   if (entry.status === "IN_SERVICE") return "In service";
-  if (entry.status === "WAITING" && entry.position) return `Position ${entry.position} in line`;
+  if (entry.status === "WAITING" && entry.position) return `Position ${entry.position}`;
   return entry.status;
+}
+
+function statusBadgeClass(status: string): string {
+  if (status === "CALLED") return styles.statusCalled;
+  if (status === "IN_SERVICE") return styles.statusInService;
+  if (status === "WAITING") return styles.statusWaiting;
+  return styles.statusNeutral;
 }
 
 /**
@@ -62,22 +70,30 @@ export function QueueStatusPanel({
   }, [entry.salonId, entry.status, onEntryChange]);
 
   return (
-    <div style={{ border: "1px solid #E7E0D3", borderRadius: 10, padding: 16, marginTop: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <strong style={{ fontSize: "1.4rem" }}>Token #{entry.tokenNumber}</strong>
-        <span style={{ fontWeight: 600, color: entry.status === "CALLED" ? "#B0413E" : "#6B6357" }}>
+    <div className={styles.ticket}>
+      <div className={styles.ticketHead}>
+        <div>
+          <p className={styles.ticketTokenLabel}>Your token</p>
+          <p className={styles.ticketToken}>#{entry.tokenNumber}</p>
+        </div>
+        <span className={`${styles.ticketStatusBadge} ${statusBadgeClass(entry.status)}`}>
           {statusLabel(entry)}
         </span>
       </div>
       {entry.status === "WAITING" && entry.estimatedWaitMinutes !== null && (
-        <p style={{ color: "#6B6357", margin: "8px 0 0" }}>
-          Estimated wait: ~{entry.estimatedWaitMinutes} min
+        <p className={styles.ticketDetail}>
+          Estimated wait: <strong>~{entry.estimatedWaitMinutes} min</strong>
         </p>
       )}
       {entry.status === "IN_SERVICE" && (
-        <p style={{ color: "#6B6357", margin: "8px 0 0" }}>
-          {entry.assignedStaffName ? `With ${entry.assignedStaffName}` : "In service"}
+        <p className={styles.ticketDetail}>
+          {entry.assignedStaffName ? <>With <strong>{entry.assignedStaffName}</strong></> : "In service"}
           {entry.assignedChairLabel ? ` — ${entry.assignedChairLabel}` : ""}
+        </p>
+      )}
+      {ACTIVE_STATUSES.has(entry.status) && (
+        <p className={styles.ticketReassure}>
+          This updates automatically — no need to refresh.
         </p>
       )}
     </div>

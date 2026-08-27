@@ -4,7 +4,9 @@ import { useState } from "react";
 import { BOOKING_PATHS, type BookingDetailDto, type QueueEntryDetailDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
+import { Button } from "../ui/Button";
 import { QueueStatusPanel } from "./QueueStatusPanel";
+import styles from "./queue.module.css";
 
 // Mirrors the backend's EARLY_CHECKIN_WINDOW_MINUTES (queue.service.ts) — a UI convenience only;
 // the backend remains authoritative and re-validates on the actual check-in request.
@@ -45,11 +47,11 @@ export function CheckInPanel({ booking }: { booking: BookingDetailDto }) {
   }
 
   return (
-    <div style={{ marginTop: 8 }}>
-      {error && <p style={{ color: "#E24B4A" }}>{error}</p>}
-      <button type="button" onClick={() => void handleCheckIn()} disabled={submitting} style={{ padding: "6px 14px" }}>
+    <div style={{ marginTop: 12 }}>
+      {error && <p className={styles.errorText}>{error}</p>}
+      <Button type="button" variant="outline" onClick={() => void handleCheckIn()} disabled={submitting}>
         {submitting ? "Checking in…" : "Check in"}
-      </button>
+      </Button>
     </div>
   );
 }
