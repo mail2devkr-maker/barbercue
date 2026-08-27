@@ -14,10 +14,13 @@ import { Idempotent } from '../common/decorators/idempotent.decorator';
 import { QueueService } from './queue.service';
 
 /**
- * Mounted at `salons/:salonId/queue` — a 3-segment shape deliberately, not a bare
- * `salons/:salonId/queue-status`, to avoid the same discovery-route collision class fixed in
- * Phase 3B (SalonsController's `GET salons/:countryCode/:citySlug/:salonSlug`, three dynamic
- * segments as of B9, sits under the same `salons` prefix).
+ * Mounted at `salons/:salonId/queue`. SalonsController's `GET
+ * salons/:countryCode/:citySlug/:salonSlug` is a fully-wildcard 3-segment route under the same
+ * `salons` prefix, so it structurally matches this controller's routes too (`salons/:salonId/
+ * queue/status` is also 3 segments after `salons/`) — Nest/Express matches by registration order,
+ * not pattern specificity, so this only works because QueueModule is imported before SalonsModule
+ * in app.module.ts. This was broken in production until that ordering fix (same root cause as the
+ * booking-info routes — see BookingInfoController's doc comment and app.module.ts).
  */
 @Controller('salons/:salonId/queue')
 export class SalonQueueController {
