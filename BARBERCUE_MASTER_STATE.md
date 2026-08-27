@@ -288,12 +288,19 @@ session started).
 
 ## 11. Git status
 
-- Branch: `master`. Working tree clean (only the pre-existing untracked files below).
-- Local `HEAD`: `0911df0` — **1 commit ahead of `origin/master` (`8d79332`), 0 behind.**
-- **`0911df0` has NOT been pushed.** It is the premium visual refresh (§3d/§5), deliberately kept
-  local because it is explicitly incomplete work, per the instruction that produced this document.
-- Commit history this session, newest first:
+- Branch: `master`. Working tree clean (only the pre-existing untracked files below) once this
+  document's own edits are committed.
+- Local `HEAD` is **2 commits ahead of `origin/master` (`8d79332`), 0 behind**: `0911df0` (the
+  premium visual refresh) plus a docs-only commit adding/updating this file. Run `git log
+  --oneline -3` for the exact current hashes — this file cannot reliably record its own final
+  commit hash (editing it to add that hash changes the hash again).
+- **Neither of those 2 commits has been pushed.** `0911df0` is kept local because it is explicitly
+  incomplete work, per the instruction that produced this document. The docs commit is left
+  unpushed alongside it simply to keep the push decision as one deliberate action for a future
+  session/human, rather than assumed here.
+- Commit history this session, newest first (docs commit hash omitted — see above):
   ```
+  (docs)   docs: add BARBERCUE_MASTER_STATE.md as the persistent handoff checkpoint              [LOCAL ONLY]
   0911df0  feat(web): premium visual refresh — foundation + landing/salon/search (in progress)   [LOCAL ONLY]
   8d79332  feat(location): global Country -> Region -> City-search registration flow              [pushed, deployed]
   48c7ca6  fix(web): resolve absolute URLs for server-side and WebSocket use                       [pushed, deployed]
@@ -317,7 +324,9 @@ session started).
 
 ## 12. Latest relevant commit/hash
 
-- **Local `HEAD` (uncommitted-to-remote)**: `0911df0df6e3e04659382e695f756fbc105a3466`
+- **Local `HEAD` (not pushed to remote)**: the docs commit adding this file, on top of `0911df0`
+  (the visual refresh) — run `git log --oneline -1` for its exact hash (see §11 for why it isn't
+  hardcoded here).
 - **`origin/master` / currently deployed to Railway (backend + web)**: `8d79332312c22360d7094ba6c42e62f45dffc529`
 - **Deployed to Railway mobile service**: `c94dbe398dc1da4611446f2f7327e6bd8dd4c380` (older; mobile
   only rebuilds on `apps/mobile/**` changes, none occurred this session)
