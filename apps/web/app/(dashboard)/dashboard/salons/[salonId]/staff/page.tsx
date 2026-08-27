@@ -5,6 +5,8 @@ import Link from "next/link";
 import { DASHBOARD_PATHS, StaffMemberStatus } from "@barbercue/shared";
 import type { SalonStaffDto, StaffInviteResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { Button } from "../../../../../../components/ui/Button";
+import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Barber roster (Phase 11) — replaces the previous placeholder. Adding a barber creates (or
 // links) their login account and issues an invitation link; the barber sets their own password
@@ -100,24 +102,24 @@ export default function DashboardStaffPage({
   }
 
   return (
-    <main style={{ padding: "2rem 1.25rem 3rem", maxWidth: 720, margin: "0 auto" }}>
-      <Link href={`/dashboard/salons/${salonId}/settings`} style={{ fontSize: 14 }}>
+    <main className={styles.page}>
+      <Link href={`/dashboard/salons/${salonId}/settings`} className={styles.backLink}>
         ← Back to shop setup
       </Link>
-      <h1 style={{ marginTop: 12 }}>Barbers</h1>
-      <p style={{ color: "#6B6357" }}>
+      <h1 className={styles.pageTitle}>Barbers</h1>
+      <p className={styles.pageSubtitle}>
         Add a barber and they&apos;ll get an emailed link to set their own password, then sign in
         at <code>/staff/login</code> to run the queue. You never see or set their password. Only
         barbers who are working count toward how many customers you can serve.
       </p>
 
-      {error && <p style={errorStyle}>{error}</p>}
-      {notice && <p style={noticeStyle}>{notice}</p>}
+      {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
+      {notice && <p className={`${styles.banner} ${styles.bannerNotice}`}>{notice}</p>}
 
       {inviteUrl && (
-        <div style={{ background: "#FFF8E7", border: "1px solid #E7D9B0", borderRadius: 10, padding: "12px 16px", margin: "16px 0" }}>
+        <div className={`${styles.banner} ${styles.bannerWarning}`}>
           <strong style={{ fontSize: 14 }}>Invitation link</strong>
-          <p style={{ fontSize: 13, color: "#6B6357", margin: "4px 0 8px" }}>
+          <p style={{ fontSize: 13, margin: "4px 0 8px" }}>
             No email provider is connected yet, so send this to the barber yourself. It expires in
             7 days and can only be used once.
           </p>
@@ -125,9 +127,9 @@ export default function DashboardStaffPage({
         </div>
       )}
 
-      <form onSubmit={handleCreate} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", margin: "20px 0 24px" }}>
-        <div style={{ flex: "1 1 180px" }}>
-          <label style={labelStyle} htmlFor="staff-name">Barber&apos;s name</label>
+      <form onSubmit={handleCreate} className={styles.form}>
+        <div style={{ flex: "1 1 180px" }} className={styles.fieldWrap}>
+          <label className={styles.fieldLabel} htmlFor="staff-name">Barber&apos;s name</label>
           <input
             id="staff-name"
             placeholder="Marcus"
@@ -136,11 +138,11 @@ export default function DashboardStaffPage({
             required
             maxLength={120}
             autoComplete="off"
-            style={inputStyle}
+            className={styles.input}
           />
         </div>
-        <div style={{ flex: "1 1 220px" }}>
-          <label style={labelStyle} htmlFor="staff-email">Their email</label>
+        <div style={{ flex: "1 1 220px" }} className={styles.fieldWrap}>
+          <label className={styles.fieldLabel} htmlFor="staff-email">Their email</label>
           <input
             id="staff-email"
             type="email"
@@ -150,39 +152,39 @@ export default function DashboardStaffPage({
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="off"
-            style={inputStyle}
+            className={styles.input}
           />
         </div>
-        <button type="submit" disabled={submitting} style={{ ...buttonStyle, flex: "1 1 100%" }}>
+        <Button type="submit" variant="secondary" fullWidth disabled={submitting}>
           {submitting ? "Sending invitation…" : "Add barber"}
-        </button>
+        </Button>
       </form>
 
-      {staff === null && <p>Loading…</p>}
-      {staff?.length === 0 && <p style={{ color: "#6B6357" }}>No barbers yet. Add your first one above.</p>}
+      {staff === null && <p className={styles.loadingText}>Loading…</p>}
+      {staff?.length === 0 && <p className={styles.emptyState}>No barbers yet. Add your first one above.</p>}
       {staff && staff.length > 0 && (
-        <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <ul className={styles.rowList}>
           {staff.map((m) => (
-            <li key={m.id} style={rowStyle}>
+            <li key={m.id} className={styles.row}>
               <div style={{ minWidth: 0 }}>
-                <strong style={{ opacity: m.status === StaffMemberStatus.ACTIVE ? 1 : 0.55 }}>
+                <span className={styles.rowTitle} style={{ opacity: m.status === StaffMemberStatus.ACTIVE ? 1 : 0.55 }}>
                   {m.displayName}
-                </strong>
-                <div style={{ fontSize: 13, color: "#6B6357", wordBreak: "break-word" }}>
+                </span>
+                <div className={styles.rowMeta} style={{ wordBreak: "break-word" }}>
                   {m.email}
                   {m.status !== StaffMemberStatus.ACTIVE && " · not working"}
                   {!m.hasPassword && " · hasn't set their password yet"}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div className={styles.rowActions}>
                 {!m.hasPassword && (
-                  <button type="button" onClick={() => void resendInvite(m)} style={secondaryButtonStyle}>
+                  <Button type="button" variant="outline" onClick={() => void resendInvite(m)}>
                     Resend invitation
-                  </button>
+                  </Button>
                 )}
-                <button type="button" onClick={() => void toggleActive(m)} style={secondaryButtonStyle}>
+                <Button type="button" variant="outline" onClick={() => void toggleActive(m)}>
                   {m.status === StaffMemberStatus.ACTIVE ? "Mark not working" : "Mark working"}
-                </button>
+                </Button>
               </div>
             </li>
           ))}
@@ -191,61 +193,3 @@ export default function DashboardStaffPage({
     </main>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "11px 12px",
-  borderRadius: 8,
-  border: "1px solid #E7E0D3",
-  // 16px minimum: anything smaller makes iOS Safari zoom the page on focus.
-  fontSize: 16,
-  boxSizing: "border-box",
-};
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  marginBottom: 5,
-  fontWeight: 600,
-  fontSize: 13,
-};
-const buttonStyle: React.CSSProperties = {
-  padding: "12px 20px",
-  minHeight: 46,
-  background: "#1C1A17",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  fontWeight: 600,
-  fontSize: 15,
-  cursor: "pointer",
-};
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  minHeight: 42,
-  background: "#fff",
-  border: "1px solid #E7E0D3",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontSize: 14,
-};
-const rowStyle: React.CSSProperties = {
-  border: "1px solid #E5DFD1",
-  borderRadius: 10,
-  padding: "12px 16px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap",
-};
-const errorStyle: React.CSSProperties = {
-  background: "#FBEAEA",
-  color: "#B0413E",
-  padding: "10px 14px",
-  borderRadius: 8,
-};
-const noticeStyle: React.CSSProperties = {
-  background: "#EAF6EC",
-  color: "#2E7D32",
-  padding: "10px 14px",
-  borderRadius: 8,
-};

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { DASHBOARD_PATHS, setOperatingHoursSchema } from "@barbercue/shared";
 import type { OperatingHoursDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { Button } from "../../../../../../components/ui/Button";
+import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // 0 = Sunday .. 6 = Saturday — the convention OperatingHours.dayOfWeek already uses.
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -91,33 +93,33 @@ export default function DashboardHoursPage({
   const openCount = (days ?? []).filter((d) => !d.isClosed).length;
 
   return (
-    <main style={{ padding: "2rem 1.25rem 3rem", maxWidth: 720, margin: "0 auto" }}>
-      <Link href={`/dashboard/salons/${salonId}/settings`} style={{ fontSize: 14 }}>
+    <main className={styles.page}>
+      <Link href={`/dashboard/salons/${salonId}/settings`} className={styles.backLink}>
         ← Back to shop setup
       </Link>
-      <h1 style={{ marginTop: 12 }}>Opening hours</h1>
-      <p style={{ color: "#6B6357" }}>
+      <h1 className={styles.pageTitle}>Opening hours</h1>
+      <p className={styles.pageSubtitle}>
         When customers can book an appointment with you. Walk-ins can still join your queue at any
         time — these hours only control online booking.
       </p>
 
-      {error && <p style={errorStyle}>{error}</p>}
-      {notice && <p style={noticeStyle}>{notice}</p>}
+      {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
+      {notice && <p className={`${styles.banner} ${styles.bannerNotice}`}>{notice}</p>}
       {days !== null && openCount === 0 && (
-        <p style={warningStyle}>
+        <p className={`${styles.banner} ${styles.bannerWarning}`}>
           Every day is set to closed, so nobody can book an appointment yet. Open at least one day.
         </p>
       )}
 
-      {days === null && <p>Loading…</p>}
+      {days === null && <p className={styles.loadingText}>Loading…</p>}
 
       {days && (
         <form onSubmit={handleSave}>
-          <ul style={{ listStyle: "none", padding: 0, margin: "20px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+          <ul className={styles.rowList} style={{ margin: "20px 0" }}>
             {days.map((d) => (
-              <li key={d.dayOfWeek} style={rowStyle}>
+              <li key={d.dayOfWeek} className={styles.row}>
                 <div style={{ flex: "1 1 130px", minWidth: 0 }}>
-                  <strong style={{ opacity: d.isClosed ? 0.55 : 1 }}>{DAY_NAMES[d.dayOfWeek]}</strong>
+                  <span className={styles.rowTitle} style={{ opacity: d.isClosed ? 0.55 : 1 }}>{DAY_NAMES[d.dayOfWeek]}</span>
                 </div>
 
                 <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, flex: "0 0 auto" }}>
@@ -131,7 +133,7 @@ export default function DashboardHoursPage({
                 </label>
 
                 {d.isClosed ? (
-                  <span style={{ flex: "1 1 200px", color: "#6B6357", fontSize: 14 }}>Closed</span>
+                  <span style={{ flex: "1 1 200px", color: "var(--bc-muted)", fontSize: 14 }}>Closed</span>
                 ) : (
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flex: "1 1 200px", flexWrap: "wrap" }}>
                     <input
@@ -139,17 +141,21 @@ export default function DashboardHoursPage({
                       aria-label={`${DAY_NAMES[d.dayOfWeek]} opening time`}
                       value={d.openTime}
                       onChange={(e) => updateDay(d.dayOfWeek, { openTime: e.target.value })}
-                      style={timeStyle}
+                      className={styles.timeInput}
                     />
-                    <span style={{ color: "#6B6357" }}>to</span>
+                    <span style={{ color: "var(--bc-muted)" }}>to</span>
                     <input
                       type="time"
                       aria-label={`${DAY_NAMES[d.dayOfWeek]} closing time`}
                       value={d.closeTime}
                       onChange={(e) => updateDay(d.dayOfWeek, { closeTime: e.target.value })}
-                      style={timeStyle}
+                      className={styles.timeInput}
                     />
-                    <button type="button" onClick={() => copyToAll(d)} style={linkButtonStyle}>
+                    <button
+                      type="button"
+                      onClick={() => copyToAll(d)}
+                      style={{ background: "none", border: "none", color: "var(--bc-muted)", fontSize: 13, textDecoration: "underline", cursor: "pointer", padding: "6px 2px" }}
+                    >
                       Use for all days
                     </button>
                   </div>
@@ -158,66 +164,11 @@ export default function DashboardHoursPage({
             ))}
           </ul>
 
-          <button type="submit" disabled={saving} style={buttonStyle}>
+          <Button type="submit" variant="secondary" disabled={saving}>
             {saving ? "Saving…" : "Save opening hours"}
-          </button>
+          </Button>
         </form>
       )}
     </main>
   );
 }
-
-const timeStyle: React.CSSProperties = {
-  padding: "9px 10px",
-  borderRadius: 8,
-  border: "1px solid #E7E0D3",
-  // 16px minimum: anything smaller makes iOS Safari zoom the page on focus.
-  fontSize: 16,
-};
-const buttonStyle: React.CSSProperties = {
-  padding: "12px 20px",
-  minHeight: 46,
-  background: "#1C1A17",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  fontWeight: 600,
-  fontSize: 15,
-  cursor: "pointer",
-};
-const linkButtonStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  color: "#6B6357",
-  fontSize: 13,
-  textDecoration: "underline",
-  cursor: "pointer",
-  padding: "6px 2px",
-};
-const rowStyle: React.CSSProperties = {
-  border: "1px solid #E5DFD1",
-  borderRadius: 10,
-  padding: "12px 16px",
-  display: "flex",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap",
-};
-const errorStyle: React.CSSProperties = {
-  background: "#FBEAEA",
-  color: "#B0413E",
-  padding: "10px 14px",
-  borderRadius: 8,
-};
-const noticeStyle: React.CSSProperties = {
-  background: "#EAF6EC",
-  color: "#2E7D32",
-  padding: "10px 14px",
-  borderRadius: 8,
-};
-const warningStyle: React.CSSProperties = {
-  background: "#FFF8E7",
-  color: "#8A5A00",
-  padding: "10px 14px",
-  borderRadius: 8,
-};

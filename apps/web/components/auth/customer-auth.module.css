@@ -1,16 +1,12 @@
-/* Customer login page only — reuses the same color tokens already defined in
-   apps/web/components/landing/landing.module.css (no new palette introduced). */
+/* Customer login page only — uses the shared --bc-* design tokens (globals.css), same as every
+   other premium-refresh surface. */
 
 .page {
-  --ink: #1c1a17;
-  --muted: #6b6357;
-  --border: #e7e0d3;
-  --surface: #fffdf9;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface);
+  background: var(--bc-surface);
   padding: 1.5rem;
 }
 
@@ -18,8 +14,9 @@
   width: 100%;
   max-width: 460px;
   background: #ffffff;
-  border-radius: 14px;
-  border: 1px solid var(--border);
+  border-radius: var(--bc-radius-lg);
+  border: 1px solid var(--bc-border);
+  box-shadow: var(--bc-shadow-lg);
   padding: 2.5rem 2rem;
 }
 
@@ -30,26 +27,28 @@
 }
 
 .wordmark {
+  font-family: var(--font-display);
   font-size: 0.95rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--ink);
+  color: var(--bc-ink);
   margin: 0 0 20px;
 }
 
 .headline {
+  font-family: var(--font-display);
   font-size: clamp(1.4rem, 4vw, 1.9rem);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.18;
   letter-spacing: -0.01em;
-  color: var(--ink);
+  color: var(--bc-ink);
   margin: 0 0 8px;
 }
 
 .supporting {
   font-size: 0.9rem;
   line-height: 1.5;
-  color: var(--muted);
+  color: var(--bc-muted);
   margin: 0 0 28px;
 }
 
@@ -58,7 +57,7 @@
    than a global change. */
 .card input:focus-visible,
 .card button:focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--bc-ink);
   outline-offset: 2px;
   border-radius: 6px;
 }

@@ -31,11 +31,11 @@ function loadPage(cursor?: string): Promise<PaginatedResult<BookingDetailDto>> {
 }
 
 function statusColor(status: string): string {
-  if (status === "CONFIRMED") return "#2E7D32";
+  if (status === "CONFIRMED") return "var(--bc-success)";
   if (status === "PENDING_PAYMENT") return "#B36B00";
-  if (status === "CANCELLED") return "#8A8377";
-  if (status === "COMPLETED") return "#1C1A17";
-  return "#6B6357";
+  if (status === "CANCELLED") return "var(--bc-muted)";
+  if (status === "COMPLETED") return "var(--bc-ink)";
+  return "var(--bc-muted)";
 }
 
 function formatWhen(slotStart: string): string {
@@ -77,9 +77,11 @@ function BookingRow({
         <p className={styles.bookingRowMeta}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</p>
       )}
       {CANCELLABLE_STATUSES.has(booking.status) && (
-        <button type="button" onClick={() => onCancel(booking)} style={{ marginTop: 8, padding: "6px 14px" }}>
-          Cancel
-        </button>
+        <div style={{ marginTop: 8 }}>
+          <Button type="button" variant="outline" onClick={() => onCancel(booking)}>
+            Cancel
+          </Button>
+        </div>
       )}
       {canCheckIn(booking) && <CheckInPanel booking={booking} />}
     </div>
@@ -179,7 +181,7 @@ export default function MyBookingsPage() {
       <section className={styles.section}>
         <p className={styles.sectionTitle}>Your next chair</p>
         {loading ? (
-          <p style={{ color: "#6B6357" }}>Loading…</p>
+          <p style={{ color: "var(--bc-muted)" }}>Loading…</p>
         ) : nextBooking ? (
           <Card raised className={styles.nextChairCard}>
             <span className={styles.nextChairEyebrow}>Upcoming</span>
@@ -270,9 +272,11 @@ export default function MyBookingsPage() {
       )}
 
       {nextCursor && (
-        <button type="button" onClick={() => void handleLoadMore()} disabled={loadingMore} style={{ marginTop: 8 }}>
-          {loadingMore ? "Loading…" : "Load more"}
-        </button>
+        <div style={{ marginTop: 8 }}>
+          <Button type="button" variant="outline" onClick={() => void handleLoadMore()} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load more"}
+          </Button>
+        </div>
       )}
 
       {cancelTarget && (

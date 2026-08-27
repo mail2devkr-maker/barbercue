@@ -11,6 +11,8 @@ import type {
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { QueueQrSection } from "../../../../../../components/dashboard/QueueQrSection";
 import { SetupChecklist } from "../../../../../../components/dashboard/SetupChecklist";
+import { Button } from "../../../../../../components/ui/Button";
+import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // SalonStatus values are database enums ("PENDING"), not language an owner should be shown.
 const STATUS_LABEL: Record<SalonStatus, string> = {
@@ -53,7 +55,7 @@ function ReadinessItem({
   doneLabel: string;
 }) {
   return (
-    <li style={{ color: done ? "#2E7D32" : "#8A5A00" }}>
+    <li style={{ color: done ? "var(--bc-success)" : "#8A5A00" }}>
       <span aria-hidden="true">{done ? "✓" : "✗"}</span>{" "}
       {done ? doneLabel : label}
     </li>
@@ -117,12 +119,12 @@ export default function DashboardSettingsPage({
   }, [salonId]);
 
   return (
-    <main style={{ padding: "3rem 1.5rem", maxWidth: 720, margin: "0 auto" }}>
-      <Link href="/dashboard/salons" style={{ fontSize: 14 }}>← Back to shops</Link>
-      <h1 style={{ marginTop: 12 }}>Settings — {salon?.name ?? "…"}</h1>
+    <main className={styles.page}>
+      <Link href="/dashboard/salons" className={styles.backLink}>← Back to shops</Link>
+      <h1 className={styles.pageTitle}>Settings — {salon?.name ?? "…"}</h1>
       {/* This page is where RegisterSalonForm lands a brand-new owner, so it has to be a hub:
           without these the only route to services/chairs/staff is back out to the shop list. */}
-      <nav style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 14, margin: "8px 0 4px" }}>
+      <nav className={styles.shopCardLinks} style={{ margin: "8px 0 4px" }}>
         <Link href={`/dashboard/salons/${salonId}/services`}>Services</Link>
         <Link href={`/dashboard/salons/${salonId}/hours`}>Opening hours</Link>
         <Link href={`/dashboard/salons/${salonId}/photos`}>Photos</Link>
@@ -130,7 +132,7 @@ export default function DashboardSettingsPage({
         <Link href={`/dashboard/salons/${salonId}/staff`}>Barbers</Link>
         <Link href={`/dashboard/salons/${salonId}/queue`}>Live queue</Link>
       </nav>
-      {error && <p style={{ color: "#B0413E" }}>{error}</p>}
+      {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
       {salon && (
         <dl style={{ margin: "18px 0", fontSize: 15 }}>
           <dt style={{ fontWeight: 600 }}>Shop ID</dt>
@@ -146,25 +148,20 @@ export default function DashboardSettingsPage({
         <SetupChecklist salonId={salonId} status={salon.status} onReadyChange={setReadiness} />
       )}
       {salon && (
-        <section style={{ marginTop: 8, paddingTop: 20, borderTop: "1px solid #E7E0D3" }}>
-          <h2 style={{ fontSize: 18, marginBottom: 4 }}>Shop status</h2>
+        <section className={styles.dividerSection}>
+          <h2 className={styles.sectionHeading}>Shop status</h2>
           {salon.status === SalonStatus.ACTIVE ? (
             <>
-              <p style={{ color: "#2E7D32", fontSize: 14 }}>
+              <p style={{ color: "var(--bc-success)", fontSize: 14, marginBottom: 12 }}>
                 Your shop is open — customers can find it and join the queue.
               </p>
-              <button
-                type="button"
-                onClick={() => void changeStatus(SalonStatus.SUSPENDED)}
-                disabled={updatingStatus}
-                style={{ padding: "11px 16px", minHeight: 44, borderRadius: 8, border: "1px solid #E7E0D3", background: "#fff", fontSize: 15, cursor: "pointer" }}
-              >
+              <Button type="button" variant="outline" onClick={() => void changeStatus(SalonStatus.SUSPENDED)} disabled={updatingStatus}>
                 {updatingStatus ? "Updating…" : "Close my shop"}
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <p style={{ color: "#B36B00", fontSize: 14 }}>
+              <p style={{ color: "#B36B00", fontSize: 14, marginBottom: 12 }}>
                 Your shop is <strong>{STATUS_LABEL[salon.status].toLowerCase()}</strong> — customers
                 can&apos;t find it in search, and its queue QR shows as unavailable, until you open
                 it. You can close it again at any time.
@@ -172,7 +169,7 @@ export default function DashboardSettingsPage({
               {/* The server is what actually enforces this (SALON_SETUP_INCOMPLETE); showing it
                   here just means the owner learns what's missing before clicking, not after. */}
               {salon.status === SalonStatus.PENDING && readiness && !isReady(readiness) && (
-                <div style={{ color: "#8A5A00", fontSize: 14, background: "#FFF8E7", padding: "12px 14px", borderRadius: 8 }}>
+                <div className={`${styles.banner} ${styles.bannerWarning}`}>
                   <p style={{ margin: "0 0 8px" }}>
                     Your shop can&apos;t open yet — finish these first:
                   </p>
@@ -183,20 +180,17 @@ export default function DashboardSettingsPage({
                   </ul>
                 </div>
               )}
-              <button
-                type="button"
-                onClick={() => void changeStatus(SalonStatus.ACTIVE)}
-                disabled={updatingStatus}
-                style={{ padding: "12px 20px", minHeight: 46, borderRadius: 8, border: "none", background: "#1C1A17", color: "#fff", fontWeight: 600, fontSize: 15, cursor: "pointer" }}
-              >
+              <Button type="button" variant="secondary" onClick={() => void changeStatus(SalonStatus.ACTIVE)} disabled={updatingStatus}>
                 {updatingStatus ? "Opening…" : "Open my shop"}
-              </button>
+              </Button>
             </>
           )}
         </section>
       )}
 
-      <p style={{ marginTop: 24 }}>Payment policy and cancellation policy settings — placeholder, not yet implemented.</p>
+      <p className={styles.pageSubtitle} style={{ marginTop: 24 }}>
+        Payment policy and cancellation policy settings — placeholder, not yet implemented.
+      </p>
       <QueueQrSection salonId={salonId} />
     </main>
   );

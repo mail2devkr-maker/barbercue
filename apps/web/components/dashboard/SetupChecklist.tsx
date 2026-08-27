@@ -11,6 +11,7 @@ import type {
   SalonStaffDto,
 } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
+import styles from "./dashboard.module.css";
 
 interface ChecklistStep {
   label: string;
@@ -153,33 +154,33 @@ export function SetupChecklist({
   const allDone = doneCount === steps.length;
 
   return (
-    <section style={{ marginTop: 8, paddingTop: 20, borderTop: "1px solid #E7E0D3" }}>
+    <section className={styles.dividerSection}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ fontSize: 18, margin: 0 }}>Shop setup</h2>
-        <span style={{ fontSize: 13, color: "#6B6357" }}>
+        <h2 className={styles.sectionHeading} style={{ margin: 0 }}>Shop setup</h2>
+        <span className={styles.hint} style={{ marginTop: 0 }}>
           {loading ? "Checking…" : `${doneCount} of ${steps.length} done`}
         </span>
       </div>
 
       {allDone && !loading && (
-        <p style={{ color: "#2E7D32", fontSize: 14, marginBottom: 0 }}>
+        <p style={{ color: "var(--bc-success)", fontSize: 14, marginBottom: 0, marginTop: 10 }}>
           🎉 You&apos;re all set — your shop is open and ready for customers.
         </p>
       )}
 
-      <ul style={{ listStyle: "none", padding: 0, margin: "12px 0 0", display: "flex", flexDirection: "column", gap: 10 }}>
+      <ul className={styles.checklist}>
         {steps.map((step) => (
-          <li key={step.label} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <li key={step.label} className={styles.checklistItem}>
             <span aria-hidden="true" style={{ lineHeight: 1.4 }}>{step.done ? "✅" : "⬜"}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 15, color: step.done ? "#6B6357" : "#1C1A17", fontWeight: step.done ? 400 : 600 }}>
+              <span className={`${styles.checklistLabel} ${step.done ? styles.checklistLabelDone : styles.checklistLabelPending}`}>
                 {step.label}
                 <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
                   {step.done ? " — done" : " — not done yet"}
                 </span>
               </span>
               {!step.done && !loading && (
-                <div style={{ fontSize: 13, color: "#6B6357", marginTop: 2 }}>
+                <div className={styles.checklistWhy}>
                   {step.why}
                   {step.href && (
                     <>

@@ -51,7 +51,7 @@ declare global {
 }
 
 const authSuccessStyle: React.CSSProperties = {
-  color: "#2E7D32",
+  color: "var(--bc-success)",
   fontSize: "0.85rem",
   marginBottom: 12,
 };
@@ -59,10 +59,11 @@ const authSuccessStyle: React.CSSProperties = {
 const resendButtonStyle: React.CSSProperties = {
   width: "100%",
   padding: "0.6rem",
-  borderRadius: 8,
-  border: "1px solid #E7E0D3",
+  borderRadius: "var(--bc-radius-sm)",
+  border: "1px solid var(--bc-border)",
   background: "transparent",
-  color: "#1C1A17",
+  color: "var(--bc-ink)",
+  fontFamily: "var(--font-body)",
   fontWeight: 600,
   fontSize: "0.9rem",
   cursor: "pointer",
@@ -73,7 +74,7 @@ const dividerStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 12,
-  color: "#6B6357",
+  color: "var(--bc-muted)",
   fontSize: "0.8rem",
   margin: "16px 0",
 };
@@ -84,7 +85,7 @@ const dividerStyle: React.CSSProperties = {
 // a fixed headline/supporting-text instead of a per-step subtitle.
 const contextLineStyle: React.CSSProperties = {
   fontSize: "0.85rem",
-  color: "#6B6357",
+  color: "var(--bc-muted)",
   marginBottom: 12,
 };
 
@@ -266,9 +267,9 @@ function CustomerLoginForm() {
             ) : (
               <>
                 <div style={dividerStyle}>
-                  <span style={{ flex: 1, borderTop: "1px solid #E7E0D3" }} />
+                  <span style={{ flex: 1, borderTop: "1px solid var(--bc-border)" }} />
                   OR
-                  <span style={{ flex: 1, borderTop: "1px solid #E7E0D3" }} />
+                  <span style={{ flex: 1, borderTop: "1px solid var(--bc-border)" }} />
                 </div>
                 <p style={contextLineStyle}>New here? Signing in creates your account automatically.</p>
                 {phoneOtpAvailable === null ? (

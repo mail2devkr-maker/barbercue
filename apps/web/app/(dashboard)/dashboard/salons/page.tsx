@@ -6,6 +6,8 @@ import { DISCOVERY_PATHS, SalonStatus } from "@barbercue/shared";
 import type { SalonWorkplaceDto } from "@barbercue/shared";
 import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
+import { Button, LinkButton } from "../../../../components/ui/Button";
+import styles from "../../../../components/dashboard/dashboard.module.css";
 
 // SalonStatus values are database enums ("PENDING"), not language an owner should be shown.
 const STATUS_LABEL: Record<SalonStatus, string> = {
@@ -44,21 +46,23 @@ export default function SalonsDashboardHomePage() {
   const ownsAny = (workplaces ?? []).some((w) => w.isOwner);
 
   return (
-    <main style={{ padding: "3rem 1.5rem", maxWidth: 700, margin: "0 auto" }}>
-      <h1>Your dashboard</h1>
-      <p>
+    <main className={styles.page}>
+      <h1 className={styles.pageTitle}>Your dashboard</h1>
+      <p className={styles.pageSubtitle}>
         Signed in as <strong>{user?.email}</strong>.
       </p>
 
       <div style={{ margin: "28px 0" }}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Your shops</h2>
-        {error && <p style={{ color: "#B0413E" }}>{error}</p>}
-        {workplaces === null && !error && <p>Loading…</p>}
+        <h2 className={styles.sectionHeading}>Your shops</h2>
+        {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
+        {workplaces === null && !error && <p className={styles.loadingText}>Loading…</p>}
 
         {workplaces?.length === 0 && (
-          <div style={{ border: "1px solid #E5DFD1", borderRadius: 10, padding: "18px 20px" }}>
-            <p style={{ margin: "0 0 6px", fontWeight: 600 }}>You&apos;re not part of a shop yet.</p>
-            <p style={{ margin: 0, color: "#6B6357", fontSize: 14 }}>
+          <div className={styles.emptyState}>
+            <p style={{ margin: "0 0 6px", fontWeight: 600, color: "var(--bc-ink)" }}>
+              You&apos;re not part of a shop yet.
+            </p>
+            <p style={{ margin: 0 }}>
               If you own a shop, register it below. If you work at one, ask the owner to add you as
               a barber — you&apos;ll get an invitation by email, and your shop will appear here once
               you accept it.
@@ -67,43 +71,51 @@ export default function SalonsDashboardHomePage() {
         )}
 
         {workplaces && workplaces.length > 0 && (
-          <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-            {workplaces.map((s) => (
-              <li key={s.id} style={{ border: "1px solid #E5DFD1", borderRadius: 10, padding: "14px 18px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                  <strong>{s.name}</strong>
-                  <span style={{ fontSize: 13, color: "#6B6357" }}>{s.publicId}</span>
-                </div>
-                <div style={{ fontSize: 13, color: "#6B6357", marginTop: 2 }}>
-                  {STATUS_LABEL[s.status]}
-                  {!s.isOwner && " · you work here"}
-                </div>
-
-                {s.isOwner && s.status !== SalonStatus.ACTIVE && (
-                  <div style={{ fontSize: 13, color: "#B36B00", marginTop: 6 }}>
-                    Customers can&apos;t find this shop or join its queue yet. Open it from Settings
-                    when you&apos;re ready.
+          <ul className={styles.rowList}>
+            {workplaces.map((s) => {
+              const statusClass =
+                s.status === SalonStatus.ACTIVE
+                  ? styles.statusActive
+                  : s.status === SalonStatus.PENDING
+                    ? styles.statusPending
+                    : styles.statusMuted;
+              return (
+                <li key={s.id} className={styles.shopCard}>
+                  <div className={styles.shopCardHead}>
+                    <span className={styles.shopCardName}>{s.name}</span>
+                    <span className={styles.shopCardId}>{s.publicId}</span>
                   </div>
-                )}
+                  <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span className={`${styles.statusBadge} ${statusClass}`}>{STATUS_LABEL[s.status]}</span>
+                    {!s.isOwner && <span className={styles.rowMeta}>you work here</span>}
+                  </div>
 
-                <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 14, flexWrap: "wrap" }}>
-                  {/* A barber gets the one thing they need — today's queue. Setup links are
-                      owner-only here purely so the UI matches what the API will allow; the server
-                      is what actually enforces it. */}
-                  <Link href={`/dashboard/salons/${s.id}/queue`}>Live queue</Link>
-                  {s.isOwner && (
-                    <>
-                      <Link href={`/dashboard/salons/${s.id}/settings`}>Set up &amp; open</Link>
-                      <Link href={`/dashboard/salons/${s.id}/services`}>Services</Link>
-                      <Link href={`/dashboard/salons/${s.id}/hours`}>Hours</Link>
-                      <Link href={`/dashboard/salons/${s.id}/photos`}>Photos</Link>
-                      <Link href={`/dashboard/salons/${s.id}/chairs`}>Chairs</Link>
-                      <Link href={`/dashboard/salons/${s.id}/staff`}>Barbers</Link>
-                    </>
+                  {s.isOwner && s.status !== SalonStatus.ACTIVE && (
+                    <p className={`${styles.banner} ${styles.bannerWarning}`} style={{ margin: "8px 0 0" }}>
+                      Customers can&apos;t find this shop or join its queue yet. Open it from Settings
+                      when you&apos;re ready.
+                    </p>
                   )}
-                </div>
-              </li>
-            ))}
+
+                  <div className={styles.shopCardLinks}>
+                    {/* A barber gets the one thing they need — today's queue. Setup links are
+                        owner-only here purely so the UI matches what the API will allow; the server
+                        is what actually enforces it. */}
+                    <Link href={`/dashboard/salons/${s.id}/queue`}>Live queue</Link>
+                    {s.isOwner && (
+                      <>
+                        <Link href={`/dashboard/salons/${s.id}/settings`}>Set up &amp; open</Link>
+                        <Link href={`/dashboard/salons/${s.id}/services`}>Services</Link>
+                        <Link href={`/dashboard/salons/${s.id}/hours`}>Hours</Link>
+                        <Link href={`/dashboard/salons/${s.id}/photos`}>Photos</Link>
+                        <Link href={`/dashboard/salons/${s.id}/chairs`}>Chairs</Link>
+                        <Link href={`/dashboard/salons/${s.id}/staff`}>Barbers</Link>
+                      </>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
 
@@ -111,15 +123,17 @@ export default function SalonsDashboardHomePage() {
             place is a normal path, and hiding this from them would be the same dead end this
             page exists to fix. */}
         {(ownsAny || workplaces?.length === 0) && (
-          <Link href="/dashboard/register-shop" style={{ display: "inline-block", marginTop: 16 }}>
-            + Register a new shop
-          </Link>
+          <div style={{ marginTop: 16 }}>
+            <LinkButton href="/dashboard/register-shop" variant="outline">
+              + Register a new shop
+            </LinkButton>
+          </div>
         )}
       </div>
 
-      <button onClick={() => void logout()} style={{ marginTop: 16 }}>
+      <Button type="button" variant="outline" onClick={() => void logout()}>
         Log out
-      </button>
+      </Button>
     </main>
   );
 }

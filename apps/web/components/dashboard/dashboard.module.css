@@ -1,0 +1,351 @@
+/* Shared visual language for the owner/staff dashboard — salon list, settings, services, staff,
+   chairs, hours, photos, setup checklist, queue QR. Same tokens and card language as
+   booking.module.css / queue.module.css, applied to CRUD-list and form shapes. */
+
+.page {
+  padding: 2.5rem 1.25rem 3rem;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.pageWide {
+  padding: 2.5rem 1.25rem 3rem;
+  max-width: 780px;
+  margin: 0 auto;
+}
+
+.backLink {
+  font-size: var(--bc-text-sm);
+  color: var(--bc-muted);
+  font-weight: 600;
+}
+
+.backLink:hover {
+  color: var(--bc-ink);
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-2xl);
+  letter-spacing: -0.01em;
+  color: var(--bc-ink);
+  margin: 10px 0 4px;
+}
+
+.pageSubtitle {
+  color: var(--bc-muted);
+  margin: 0 0 var(--bc-space-3);
+  line-height: 1.55;
+}
+
+.sectionHeading {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-lg);
+  color: var(--bc-ink);
+  margin: 0 0 8px;
+}
+
+/* ---------- Banners ---------- */
+
+.banner {
+  padding: 10px 14px;
+  border-radius: var(--bc-radius-sm);
+  font-size: var(--bc-text-sm);
+  margin: 12px 0;
+}
+
+.bannerError {
+  background: rgba(176, 65, 62, 0.1);
+  color: var(--bc-accent);
+}
+
+.bannerNotice {
+  background: rgba(46, 125, 50, 0.1);
+  color: var(--bc-success);
+}
+
+.bannerWarning {
+  background: var(--bc-gold-soft);
+  color: #8a5a00;
+}
+
+/* ---------- Forms ---------- */
+
+.form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin: var(--bc-space-4) 0 var(--bc-space-5);
+}
+
+.fieldWrap {
+  margin-bottom: var(--bc-space-4);
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 600;
+  font-size: var(--bc-text-xs);
+  color: var(--bc-ink);
+}
+
+.hint {
+  font-size: var(--bc-text-xs);
+  color: var(--bc-muted);
+  margin-top: 6px;
+}
+
+.input,
+.select {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: var(--bc-radius-sm);
+  border: 1px solid var(--bc-border);
+  font-family: var(--font-body);
+  /* 16px minimum: anything smaller makes iOS Safari zoom the page on focus. */
+  font-size: 16px;
+  color: var(--bc-ink);
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 1px;
+}
+
+.timeInput {
+  padding: 9px 10px;
+  border-radius: var(--bc-radius-sm);
+  border: 1px solid var(--bc-border);
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--bc-ink);
+}
+
+/* ---------- List rows (services / staff / chairs / hours / shops) ---------- */
+
+.rowList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #ffffff;
+}
+
+.rowTitle {
+  font-weight: 600;
+  color: var(--bc-ink);
+  font-family: var(--font-body);
+}
+
+.rowMeta {
+  font-size: var(--bc-text-xs);
+  color: var(--bc-muted);
+  margin-top: 2px;
+}
+
+.rowActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.emptyState {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  padding: var(--bc-space-4);
+  text-align: center;
+  border: 1px dashed var(--bc-border);
+  border-radius: var(--bc-radius-md);
+}
+
+.loadingText {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+}
+
+/* ---------- Status badges ---------- */
+
+.statusBadge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.statusActive {
+  background: rgba(46, 125, 50, 0.12);
+  color: var(--bc-success);
+}
+
+.statusPending {
+  background: var(--bc-gold-soft);
+  color: #8a5a00;
+}
+
+.statusMuted {
+  background: rgba(107, 99, 87, 0.12);
+  color: var(--bc-muted);
+}
+
+/* ---------- Shop cards (salons list) ---------- */
+
+.shopCard {
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: 16px 18px;
+  background: #ffffff;
+}
+
+.shopCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.shopCardName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-base);
+  color: var(--bc-ink);
+}
+
+.shopCardId {
+  font-size: var(--bc-text-xs);
+  color: var(--bc-muted);
+}
+
+.shopCardLinks {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: var(--bc-text-sm);
+  flex-wrap: wrap;
+}
+
+.shopCardLinks a {
+  color: var(--bc-ink);
+  font-weight: 600;
+}
+
+.shopCardLinks a:hover {
+  color: var(--bc-accent);
+}
+
+/* ---------- Setup checklist ---------- */
+
+.checklist {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checklistItem {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.checklistLabel {
+  font-size: var(--bc-text-base);
+}
+
+.checklistLabelDone {
+  color: var(--bc-muted);
+  font-weight: 400;
+}
+
+.checklistLabelPending {
+  color: var(--bc-ink);
+  font-weight: 600;
+}
+
+.checklistWhy {
+  font-size: var(--bc-text-xs);
+  color: var(--bc-muted);
+  margin-top: 2px;
+}
+
+.checklistWhy a {
+  color: var(--bc-accent);
+  font-weight: 600;
+}
+
+/* ---------- Toggle group (photo upload/link source) ---------- */
+
+.toggleRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toggle {
+  padding: 9px 14px;
+  min-height: 40px;
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-sm);
+  font-size: var(--bc-text-sm);
+  font-family: var(--font-body);
+  cursor: pointer;
+  color: var(--bc-ink);
+}
+
+.toggleActive {
+  background: var(--bc-ink);
+  color: #ffffff;
+  border-color: var(--bc-ink);
+  font-weight: 600;
+}
+
+/* ---------- QR section ---------- */
+
+.qrBox {
+  background: #ffffff;
+  padding: 16px;
+  border-radius: var(--bc-radius-md);
+  display: inline-block;
+  border: 1px solid var(--bc-border);
+}
+
+.qrUrl {
+  font-family: monospace;
+  font-size: var(--bc-text-xs);
+  word-break: break-all;
+  color: var(--bc-ink);
+}
+
+/* ---------- Divider section ---------- */
+
+.dividerSection {
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--bc-border);
+}

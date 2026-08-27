@@ -117,7 +117,7 @@
 }
 
 .errorText {
-  color: #b0413e;
+  color: var(--bc-accent, #b0413e);
   font-size: 0.88rem;
   margin-top: 8px;
 }

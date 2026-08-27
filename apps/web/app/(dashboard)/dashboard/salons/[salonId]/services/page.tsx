@@ -5,6 +5,8 @@ import Link from "next/link";
 import { DASHBOARD_PATHS, formatMoney } from "@barbercue/shared";
 import type { SalonServiceDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { Button } from "../../../../../../components/ui/Button";
+import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Mirrors createSalonServiceSchema's bounds so the owner is corrected here, in plain language,
 // instead of by a Zod message bounced back from the server.
@@ -145,21 +147,21 @@ export default function DashboardServicesPage({
   }
 
   return (
-    <main style={{ padding: "2rem 1.25rem 3rem", maxWidth: 720, margin: "0 auto" }}>
-      <Link href={`/dashboard/salons/${salonId}/settings`} style={{ fontSize: 14 }}>
+    <main className={styles.page}>
+      <Link href={`/dashboard/salons/${salonId}/settings`} className={styles.backLink}>
         ← Back to shop setup
       </Link>
-      <h1 style={{ marginTop: 12 }}>Services</h1>
-      <p style={{ color: "#6B6357" }}>
+      <h1 className={styles.pageTitle}>Services</h1>
+      <p className={styles.pageSubtitle}>
         What customers can book or queue for. Turning a service off keeps its past bookings but
         stops anyone choosing it again.
       </p>
 
-      {error && <p style={errorStyle}>{error}</p>}
+      {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
 
-      <form onSubmit={handleCreate} style={formStyle}>
-        <div style={{ flex: "2 1 200px" }}>
-          <label style={labelStyle} htmlFor="svc-name">Service</label>
+      <form onSubmit={handleCreate} className={styles.form}>
+        <div style={{ flex: "2 1 200px" }} className={styles.fieldWrap}>
+          <label className={styles.fieldLabel} htmlFor="svc-name">Service</label>
           <input
             id="svc-name"
             placeholder="Haircut"
@@ -167,11 +169,11 @@ export default function DashboardServicesPage({
             onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
             required
             maxLength={120}
-            style={inputStyle}
+            className={styles.input}
           />
         </div>
-        <div style={{ flex: "1 1 110px" }}>
-          <label style={labelStyle} htmlFor="svc-price">Price{currencyLabel}</label>
+        <div style={{ flex: "1 1 110px" }} className={styles.fieldWrap}>
+          <label className={styles.fieldLabel} htmlFor="svc-price">Price{currencyLabel}</label>
           <input
             id="svc-price"
             type="number"
@@ -182,11 +184,11 @@ export default function DashboardServicesPage({
             value={draft.price}
             onChange={(e) => setDraft((d) => ({ ...d, price: e.target.value }))}
             required
-            style={inputStyle}
+            className={styles.input}
           />
         </div>
-        <div style={{ flex: "1 1 110px" }}>
-          <label style={labelStyle} htmlFor="svc-minutes">Minutes</label>
+        <div style={{ flex: "1 1 110px" }} className={styles.fieldWrap}>
+          <label className={styles.fieldLabel} htmlFor="svc-minutes">Minutes</label>
           <input
             id="svc-minutes"
             type="number"
@@ -197,36 +199,36 @@ export default function DashboardServicesPage({
             value={draft.durationMinutes}
             onChange={(e) => setDraft((d) => ({ ...d, durationMinutes: e.target.value }))}
             required
-            style={inputStyle}
+            className={styles.input}
           />
         </div>
-        <button type="submit" disabled={submitting} style={{ ...buttonStyle, flex: "1 1 100%" }}>
+        <Button type="submit" variant="secondary" fullWidth disabled={submitting}>
           {submitting ? "Adding…" : "Add service"}
-        </button>
+        </Button>
       </form>
 
-      {services === null && <p>Loading…</p>}
+      {services === null && <p className={styles.loadingText}>Loading…</p>}
       {services?.length === 0 && (
-        <p style={{ color: "#6B6357" }}>No services yet. Add your first one above.</p>
+        <p className={styles.emptyState}>No services yet. Add your first one above.</p>
       )}
       {services && services.length > 0 && (
-        <ul style={{ listStyle: "none", padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <ul className={styles.rowList}>
           {services.map((s) =>
             editingId === s.id ? (
-              <li key={s.id} style={{ ...rowStyle, display: "block" }}>
+              <li key={s.id} className={styles.row} style={{ display: "block" }}>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ flex: "2 1 180px" }}>
-                    <label style={labelStyle} htmlFor={`edit-name-${s.id}`}>Service</label>
+                  <div style={{ flex: "2 1 180px" }} className={styles.fieldWrap}>
+                    <label className={styles.fieldLabel} htmlFor={`edit-name-${s.id}`}>Service</label>
                     <input
                       id={`edit-name-${s.id}`}
                       value={editDraft.name}
                       onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
                       maxLength={120}
-                      style={inputStyle}
+                      className={styles.input}
                     />
                   </div>
-                  <div style={{ flex: "1 1 100px" }}>
-                    <label style={labelStyle} htmlFor={`edit-price-${s.id}`}>Price{currencyLabel}</label>
+                  <div style={{ flex: "1 1 100px" }} className={styles.fieldWrap}>
+                    <label className={styles.fieldLabel} htmlFor={`edit-price-${s.id}`}>Price{currencyLabel}</label>
                     <input
                       id={`edit-price-${s.id}`}
                       type="number"
@@ -235,11 +237,11 @@ export default function DashboardServicesPage({
                       max={MAX_PRICE}
                       value={editDraft.price}
                       onChange={(e) => setEditDraft((d) => ({ ...d, price: e.target.value }))}
-                      style={inputStyle}
+                      className={styles.input}
                     />
                   </div>
-                  <div style={{ flex: "1 1 100px" }}>
-                    <label style={labelStyle} htmlFor={`edit-minutes-${s.id}`}>Minutes</label>
+                  <div style={{ flex: "1 1 100px" }} className={styles.fieldWrap}>
+                    <label className={styles.fieldLabel} htmlFor={`edit-minutes-${s.id}`}>Minutes</label>
                     <input
                       id={`edit-minutes-${s.id}`}
                       type="number"
@@ -249,34 +251,34 @@ export default function DashboardServicesPage({
                       step={5}
                       value={editDraft.durationMinutes}
                       onChange={(e) => setEditDraft((d) => ({ ...d, durationMinutes: e.target.value }))}
-                      style={inputStyle}
+                      className={styles.input}
                     />
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => void saveEdit(s)} style={buttonStyle}>
+                <div className={styles.rowActions} style={{ marginTop: 4 }}>
+                  <Button type="button" variant="secondary" onClick={() => void saveEdit(s)}>
                     Save
-                  </button>
-                  <button type="button" onClick={() => setEditingId(null)} style={secondaryButtonStyle}>
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setEditingId(null)}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </li>
             ) : (
-              <li key={s.id} style={rowStyle}>
+              <li key={s.id} className={styles.row}>
                 <div style={{ minWidth: 0 }}>
-                  <strong style={{ opacity: s.isActive ? 1 : 0.55 }}>{s.name}</strong>
-                  <div style={{ fontSize: 13, color: "#6B6357" }}>
+                  <span className={styles.rowTitle} style={{ opacity: s.isActive ? 1 : 0.55 }}>{s.name}</span>
+                  <div className={styles.rowMeta}>
                     {formatMoney(s.price, s.currency)} · {s.durationMinutes} min{!s.isActive && " · turned off"}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => startEdit(s)} style={secondaryButtonStyle}>
+                <div className={styles.rowActions}>
+                  <Button type="button" variant="outline" onClick={() => startEdit(s)}>
                     Edit
-                  </button>
-                  <button type="button" onClick={() => void toggleActive(s)} style={secondaryButtonStyle}>
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => void toggleActive(s)}>
                     {s.isActive ? "Turn off" : "Turn on"}
-                  </button>
+                  </Button>
                 </div>
               </li>
             ),
@@ -286,62 +288,3 @@ export default function DashboardServicesPage({
     </main>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "11px 12px",
-  borderRadius: 8,
-  border: "1px solid #E7E0D3",
-  // 16px minimum: anything smaller makes iOS Safari zoom the page on focus.
-  fontSize: 16,
-  boxSizing: "border-box",
-};
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  marginBottom: 5,
-  fontWeight: 600,
-  fontSize: 13,
-};
-const formStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 10,
-  flexWrap: "wrap",
-  alignItems: "flex-end",
-  margin: "20px 0 24px",
-};
-const buttonStyle: React.CSSProperties = {
-  padding: "12px 20px",
-  minHeight: 46,
-  background: "#1C1A17",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  fontWeight: 600,
-  fontSize: 15,
-  cursor: "pointer",
-};
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "10px 14px",
-  minHeight: 42,
-  background: "#fff",
-  border: "1px solid #E7E0D3",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontSize: 14,
-};
-const rowStyle: React.CSSProperties = {
-  border: "1px solid #E5DFD1",
-  borderRadius: 10,
-  padding: "12px 16px",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap",
-};
-const errorStyle: React.CSSProperties = {
-  background: "#FBEAEA",
-  color: "#B0413E",
-  padding: "10px 14px",
-  borderRadius: 8,
-};

@@ -11,6 +11,8 @@ import {
 import type { PhotoDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { SalonImage } from "../../../../../../components/ui/SalonImage";
+import { Button } from "../../../../../../components/ui/Button";
+import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 /** Which of the two routes to a photo the owner is using. Never both at once. */
 type Source = "upload" | "link";
@@ -211,21 +213,21 @@ export default function DashboardPhotosPage({
   const cover = (photos ?? []).find((p) => p.type === PhotoType.COVER) ?? null;
 
   return (
-    <main style={{ padding: "2rem 1.25rem 3rem", maxWidth: 720, margin: "0 auto" }}>
-      <Link href={`/dashboard/salons/${salonId}/settings`} style={{ fontSize: 14 }}>
+    <main className={styles.page}>
+      <Link href={`/dashboard/salons/${salonId}/settings`} className={styles.backLink}>
         ← Back to shop setup
       </Link>
-      <h1 style={{ marginTop: 12 }}>Photos</h1>
-      <p style={{ color: "#6B6357" }}>
+      <h1 className={styles.pageTitle}>Photos</h1>
+      <p className={styles.pageSubtitle}>
         Your cover photo is what customers see first when they find you. Upload one straight from
         your phone or computer, or paste a link to a photo you already have online.
       </p>
 
-      {error && <p style={errorStyle}>{error}</p>}
-      {success && <p style={successStyle}>{success}</p>}
+      {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
+      {success && <p className={`${styles.banner} ${styles.bannerNotice}`}>{success}</p>}
 
       <section style={{ margin: "20px 0" }}>
-        <h2 style={{ fontSize: 15, margin: "0 0 8px" }}>Cover photo</h2>
+        <h2 className={styles.sectionHeading} style={{ fontSize: 15 }}>Cover photo</h2>
         <div style={{ maxWidth: 360 }}>
           <SalonImage url={cover?.url ?? null} alt={cover?.altText ?? "Your shop's cover photo"} priority />
         </div>
@@ -233,13 +235,13 @@ export default function DashboardPhotosPage({
 
       <form onSubmit={handleAdd} style={{ display: "flex", flexDirection: "column", gap: 14, margin: "20px 0 28px" }}>
         <div>
-          <span style={labelStyle}>Add a photo</span>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} role="group" aria-label="How to add a photo">
+          <span className={styles.fieldLabel}>Add a photo</span>
+          <div className={styles.toggleRow} role="group" aria-label="How to add a photo">
             <button
               type="button"
               onClick={() => switchSource("upload")}
               aria-pressed={source === "upload"}
-              style={source === "upload" ? toggleActiveStyle : toggleStyle}
+              className={`${styles.toggle} ${source === "upload" ? styles.toggleActive : ""}`}
             >
               Upload photo
             </button>
@@ -247,7 +249,7 @@ export default function DashboardPhotosPage({
               type="button"
               onClick={() => switchSource("link")}
               aria-pressed={source === "link"}
-              style={source === "link" ? toggleActiveStyle : toggleStyle}
+              className={`${styles.toggle} ${source === "link" ? styles.toggleActive : ""}`}
             >
               Paste photo link
             </button>
@@ -276,10 +278,25 @@ export default function DashboardPhotosPage({
                 border: 0,
               }}
             />
-            <label htmlFor="photo-file" style={chooseButtonStyle}>
+            <label
+              htmlFor="photo-file"
+              style={{
+                display: "inline-block",
+                padding: "11px 18px",
+                minHeight: 44,
+                background: "#fff",
+                border: "1px solid var(--bc-ink)",
+                borderRadius: "var(--bc-radius-sm)",
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: "pointer",
+                boxSizing: "border-box",
+                color: "var(--bc-ink)",
+              }}
+            >
               {file ? "Choose a different photo" : "+ Choose photo"}
             </label>
-            <p style={hintStyle}>JPG, PNG or WebP, up to {MAX_MB} MB.</p>
+            <p className={styles.hint}>JPG, PNG or WebP, up to {MAX_MB} MB.</p>
 
             {file && previewUrl && (
               <div style={{ marginTop: 12 }}>
@@ -290,19 +307,19 @@ export default function DashboardPhotosPage({
                   <SalonImage url={previewUrl} alt="Preview of the photo you selected" priority />
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 13, color: "#6B6357", wordBreak: "break-all" }}>
+                  <span className={styles.hint} style={{ marginTop: 0, wordBreak: "break-all" }}>
                     {file.name} · {(file.size / (1024 * 1024)).toFixed(1)} MB
                   </span>
-                  <button type="button" onClick={clearFile} style={secondaryButtonStyle}>
+                  <Button type="button" variant="outline" onClick={clearFile}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
           </div>
         ) : (
           <div>
-            <label style={labelStyle} htmlFor="photo-url">Photo link</label>
+            <label className={styles.fieldLabel} htmlFor="photo-url">Photo link</label>
             <input
               id="photo-url"
               type="url"
@@ -310,48 +327,51 @@ export default function DashboardPhotosPage({
               placeholder="https://…"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              style={inputStyle}
+              className={styles.input}
             />
-            <p style={hintStyle}>
+            <p className={styles.hint}>
               A direct link to the image — your Google Business profile or Instagram both work.
             </p>
           </div>
         )}
 
         <div>
-          <label style={labelStyle} htmlFor="photo-alt">Describe the photo (optional)</label>
+          <label className={styles.fieldLabel} htmlFor="photo-alt">Describe the photo (optional)</label>
           <input
             id="photo-alt"
             placeholder="Inside the shop"
             value={altText}
             onChange={(e) => setAltText(e.target.value)}
             maxLength={200}
-            style={inputStyle}
+            className={styles.input}
           />
-          <p style={hintStyle}>
+          <p className={styles.hint}>
             Helps customers using a screen reader, and helps you show up in search.
           </p>
         </div>
         <div>
-          <label style={labelStyle} htmlFor="photo-type">Use as</label>
+          <label className={styles.fieldLabel} htmlFor="photo-type">Use as</label>
           <select
             id="photo-type"
             value={type}
             onChange={(e) => setType(e.target.value as PhotoType)}
-            style={{ ...inputStyle, maxWidth: 240 }}
+            className={styles.select}
+            style={{ maxWidth: 240 }}
           >
             <option value={PhotoType.COVER}>Cover photo</option>
             <option value={PhotoType.GALLERY}>Gallery photo</option>
           </select>
         </div>
-        <button type="submit" disabled={submitting} style={submitting ? busyButtonStyle : buttonStyle}>
-          {submitting ? (source === "upload" ? "Uploading…" : "Adding…") : "Add photo"}
-        </button>
+        <div>
+          <Button type="submit" variant="secondary" disabled={submitting}>
+            {submitting ? (source === "upload" ? "Uploading…" : "Adding…") : "Add photo"}
+          </Button>
+        </div>
       </form>
 
-      {photos === null && <p>Loading…</p>}
+      {photos === null && <p className={styles.loadingText}>Loading…</p>}
       {photos?.length === 0 && (
-        <p style={{ color: "#6B6357" }}>No photos yet. Add your cover photo above.</p>
+        <p className={styles.emptyState}>No photos yet. Add your cover photo above.</p>
       )}
       {photos && photos.length > 0 && (
         <ul style={{ listStyle: "none", padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 14 }}>
@@ -359,12 +379,12 @@ export default function DashboardPhotosPage({
             <li key={p.id}>
               <SalonImage url={p.url} alt={p.altText ?? "Shop photo"} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
-                <span style={{ fontSize: 13, color: "#6B6357" }}>
+                <span className={styles.rowMeta}>
                   {p.type === PhotoType.COVER ? "Cover" : "Gallery"}
                 </span>
-                <button type="button" onClick={() => void handleRemove(p)} style={secondaryButtonStyle}>
+                <Button type="button" variant="outline" onClick={() => void handleRemove(p)}>
                   Remove
-                </button>
+                </Button>
               </div>
             </li>
           ))}
@@ -373,88 +393,3 @@ export default function DashboardPhotosPage({
     </main>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "11px 12px",
-  borderRadius: 8,
-  border: "1px solid #E7E0D3",
-  // 16px minimum: anything smaller makes iOS Safari zoom the page on focus.
-  fontSize: 16,
-  boxSizing: "border-box",
-};
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  marginBottom: 5,
-  fontWeight: 600,
-  fontSize: 13,
-};
-const hintStyle: React.CSSProperties = { fontSize: 13, color: "#6B6357", marginTop: 6 };
-const buttonStyle: React.CSSProperties = {
-  padding: "12px 20px",
-  minHeight: 46,
-  background: "#1C1A17",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  fontWeight: 600,
-  fontSize: 15,
-  cursor: "pointer",
-  alignSelf: "flex-start",
-};
-const busyButtonStyle: React.CSSProperties = {
-  ...buttonStyle,
-  background: "#6B6357",
-  cursor: "progress",
-};
-// A <label> styled as the button: clicking it opens the real file input it points at, so the
-// picker is driven by the browser rather than by a synthetic click from JavaScript.
-const chooseButtonStyle: React.CSSProperties = {
-  display: "inline-block",
-  padding: "11px 18px",
-  minHeight: 44,
-  background: "#fff",
-  border: "1px solid #1C1A17",
-  borderRadius: 8,
-  fontWeight: 600,
-  fontSize: 14,
-  cursor: "pointer",
-  boxSizing: "border-box",
-};
-const toggleStyle: React.CSSProperties = {
-  padding: "9px 14px",
-  minHeight: 40,
-  background: "#fff",
-  border: "1px solid #E7E0D3",
-  borderRadius: 8,
-  fontSize: 14,
-  cursor: "pointer",
-};
-const toggleActiveStyle: React.CSSProperties = {
-  ...toggleStyle,
-  background: "#1C1A17",
-  color: "#fff",
-  borderColor: "#1C1A17",
-  fontWeight: 600,
-};
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  minHeight: 38,
-  background: "#fff",
-  border: "1px solid #E7E0D3",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontSize: 13,
-};
-const errorStyle: React.CSSProperties = {
-  background: "#FBEAEA",
-  color: "#B0413E",
-  padding: "10px 14px",
-  borderRadius: 8,
-};
-const successStyle: React.CSSProperties = {
-  background: "#EAF5EC",
-  color: "#2E7D32",
-  padding: "10px 14px",
-  borderRadius: 8,
-};

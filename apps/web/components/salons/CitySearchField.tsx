@@ -4,7 +4,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CitySearchResultDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
-import { hintStyle, inputStyle, secondaryButtonStyle } from "./form-styles";
+import { Button } from "../ui/Button";
+import { hintStyle, inputStyle } from "./form-styles";
 
 // Long enough that a stray keystroke never costs a request, short enough that the list still
 // feels live while the owner is mid-word.
@@ -152,20 +153,18 @@ export function CitySearchField({
           justifyContent: "space-between",
           gap: 10,
           padding: "8px 8px 8px 12px",
-          background: "#F7F4ED",
+          background: "var(--bc-gold-soft)",
         }}
       >
         <span style={{ minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: 15 }}>{selectedCity.name}</span>
+          <span style={{ fontWeight: 600, fontSize: 15, color: "var(--bc-ink)" }}>{selectedCity.name}</span>
           {region && <span style={{ ...hintStyle, marginTop: 0, display: "block" }}>{region}</span>}
         </span>
-        <button
-          type="button"
-          onClick={clearSelection}
-          style={{ ...secondaryButtonStyle, minHeight: 34, padding: "6px 12px", flexShrink: 0 }}
-        >
-          Change
-        </button>
+        <div style={{ flexShrink: 0 }}>
+          <Button type="button" variant="outline" onClick={clearSelection}>
+            Change
+          </Button>
+        </div>
       </div>
     );
   }
@@ -212,9 +211,9 @@ export function CitySearchField({
             padding: 4,
             listStyle: "none",
             background: "#fff",
-            border: "1px solid #D8D2C4",
-            borderRadius: 8,
-            boxShadow: "0 6px 18px rgba(28,26,23,0.12)",
+            border: "1px solid var(--bc-border)",
+            borderRadius: "var(--bc-radius-sm)",
+            boxShadow: "var(--bc-shadow-lg)",
             maxHeight: 280,
             overflowY: "auto",
           }}
@@ -238,10 +237,10 @@ export function CitySearchField({
                   padding: "9px 10px",
                   borderRadius: 6,
                   cursor: "pointer",
-                  background: index === activeIndex ? "#F1ECE1" : "transparent",
+                  background: index === activeIndex ? "var(--bc-gold-soft)" : "transparent",
                 }}
               >
-                <span style={{ fontSize: 15 }}>{city.name}</span>
+                <span style={{ fontSize: 15, color: "var(--bc-ink)" }}>{city.name}</span>
                 {region && <span style={{ ...hintStyle, marginTop: 0, display: "block" }}>{region}</span>}
               </li>
             );
@@ -254,7 +253,7 @@ export function CitySearchField({
         <p style={hintStyle}>No cities found for “{trimmed}”. Try a different spelling.</p>
       )}
       {!tooShort && state.kind === "failed" && (
-        <p style={{ ...hintStyle, color: "#B0413E" }}>Could not search cities. Please try again.</p>
+        <p style={{ ...hintStyle, color: "var(--bc-accent)" }}>Could not search cities. Please try again.</p>
       )}
       {tooShort && countryId && (
         <p style={hintStyle}>Type at least {MIN_QUERY_LENGTH} letters of your city&apos;s name.</p>

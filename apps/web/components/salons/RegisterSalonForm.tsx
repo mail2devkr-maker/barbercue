@@ -20,15 +20,9 @@ import type {
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { useAuth } from "../../lib/auth-context";
+import { Button } from "../ui/Button";
 import { CitySearchField } from "./CitySearchField";
-import {
-  fieldWrapStyle,
-  hintStyle,
-  inputStyle,
-  labelStyle,
-  primaryButtonStyle,
-  secondaryButtonStyle,
-} from "./form-styles";
+import { fieldWrapStyle, hintStyle, inputStyle, labelStyle } from "./form-styles";
 
 interface FormState {
   countryCode: string;
@@ -298,7 +292,15 @@ export function RegisterSalonForm() {
   return (
     <form onSubmit={handleSubmit} style={{ maxWidth: 480 }}>
       {error && (
-        <p style={{ background: "#FBEAEA", color: "#B0413E", padding: "10px 14px", borderRadius: 8, marginBottom: 18 }}>
+        <p
+          style={{
+            background: "rgba(176, 65, 62, 0.1)",
+            color: "var(--bc-accent)",
+            padding: "10px 14px",
+            borderRadius: "var(--bc-radius-sm)",
+            marginBottom: 18,
+          }}
+        >
           {error}
         </p>
       )}
@@ -458,7 +460,7 @@ export function RegisterSalonForm() {
         </select>
       </div>
 
-      <div style={{ ...fieldWrapStyle, border: "1px solid #E7E0D3", borderRadius: 10, padding: 14 }}>
+      <div style={{ ...fieldWrapStyle, border: "1px solid var(--bc-border)", borderRadius: "var(--bc-radius-md)", padding: 14 }}>
         <span style={labelStyle}>Pin your shop on the map (optional)</span>
         <p style={{ ...hintStyle, marginTop: 0, marginBottom: 10 }}>
           Helps customers navigate straight to your door. Stand at your shop and tap the button.
@@ -466,16 +468,18 @@ export function RegisterSalonForm() {
 
         {location.kind === "detected" && (
           <div>
-            <p style={{ color: "#2E7D32", fontWeight: 600, fontSize: 14, margin: "0 0 2px" }}>
+            <p style={{ color: "var(--bc-success)", fontWeight: 600, fontSize: 14, margin: "0 0 2px" }}>
               📍 Location detected
             </p>
             <p style={{ ...hintStyle, marginTop: 0 }}>
               {location.accuracyMetres !== null ? `Accurate to about ${location.accuracyMetres} m. ` : ""}
               Saved with your shop so customers can navigate to you.
             </p>
-            <button type="button" onClick={detectLocation} style={{ ...secondaryButtonStyle, marginTop: 4 }}>
-              Update location
-            </button>
+            <div style={{ marginTop: 4 }}>
+              <Button type="button" variant="outline" onClick={detectLocation}>
+                Update location
+              </Button>
+            </div>
           </div>
         )}
 
@@ -488,27 +492,24 @@ export function RegisterSalonForm() {
               No problem — your address, area, city and PIN code above are enough to register. You
               can add your map pin later from your shop settings.
             </p>
-            <button type="button" onClick={detectLocation} style={{ ...secondaryButtonStyle, marginTop: 4 }}>
-              Try again
-            </button>
+            <div style={{ marginTop: 4 }}>
+              <Button type="button" variant="outline" onClick={detectLocation}>
+                Try again
+              </Button>
+            </div>
           </div>
         )}
 
         {(location.kind === "idle" || location.kind === "detecting") && (
-          <button
-            type="button"
-            onClick={detectLocation}
-            disabled={location.kind === "detecting"}
-            style={{ ...primaryButtonStyle, width: "100%" }}
-          >
+          <Button type="button" variant="primary" fullWidth onClick={detectLocation} disabled={location.kind === "detecting"}>
             {location.kind === "detecting" ? "Finding your location…" : "📍 Use my current location"}
-          </button>
+          </Button>
         )}
       </div>
 
-      <button type="submit" disabled={submitting} style={{ ...primaryButtonStyle, width: "100%" }}>
+      <Button type="submit" variant="secondary" fullWidth disabled={submitting}>
         {submitting ? "Registering…" : "Register shop"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -62,7 +62,7 @@ export function EmailPasswordLoginForm({
         {submitting ? "Logging in..." : "Log in"}
       </button>
       <p style={{ textAlign: "center", marginTop: 16, fontSize: "0.85rem" }}>
-        <a href={forgotPasswordHref} style={{ color: "#6B6357" }}>
+        <a href={forgotPasswordHref} style={{ color: "var(--bc-muted)" }}>
           Forgot password?
         </a>
       </p>

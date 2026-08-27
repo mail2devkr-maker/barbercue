@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
       <AuthCard title="Check your email">
         <p>If that email is registered, we&apos;ve sent a password reset link. It expires in 15 minutes.</p>
         {devResetUrl && (
-          <p style={{ marginTop: 16, fontSize: "0.8rem", color: "#6B6357", wordBreak: "break-all" }}>
+          <p style={{ marginTop: 16, fontSize: "0.8rem", color: "var(--bc-muted)", wordBreak: "break-all" }}>
             <strong>Development only</strong> (no email provider configured — see EmailSender in
             ARCHITECTURE.md §4):{" "}
             <a href={devResetUrl}>{devResetUrl}</a>

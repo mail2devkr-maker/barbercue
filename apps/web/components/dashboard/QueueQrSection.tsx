@@ -5,6 +5,8 @@ import { QRCodeSVG } from "qrcode.react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { PublicQueueQrDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { Button } from "../ui/Button";
+import styles from "./dashboard.module.css";
 
 /**
  * Owner/staff-only "Customer Queue QR" panel — GET dashboard/salons/:salonId/queue-qr is
@@ -60,54 +62,42 @@ export function QueueQrSection({ salonId }: { salonId: string }) {
 
   if (error) {
     return (
-      <section style={{ marginTop: 24 }}>
-        <p style={{ color: "#B0413E" }}>{error}</p>
+      <section className={styles.dividerSection}>
+        <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>
       </section>
     );
   }
 
   return (
-    <section style={{ marginTop: 24, paddingTop: 24, borderTop: "1px solid #E7E0D3" }}>
-      <h2 style={{ fontSize: 18, marginBottom: 4 }}>Customer Queue QR</h2>
-      <p style={{ color: "#6B6357", fontSize: 14, marginBottom: 16 }}>
+    <section className={styles.dividerSection}>
+      <h2 className={styles.sectionHeading}>Customer Queue QR</h2>
+      <p className={styles.pageSubtitle} style={{ fontSize: 14 }}>
         Customers can scan this QR code at your shop to join the queue.
       </p>
 
       {!qr ? (
-        <p style={{ color: "#6B6357" }}>Loading…</p>
+        <p className={styles.loadingText}>Loading…</p>
       ) : (
         <>
-          <div ref={svgWrapperRef} style={{ background: "#fff", padding: 16, borderRadius: 8, display: "inline-block", border: "1px solid #E7E0D3" }}>
+          <div ref={svgWrapperRef} className={styles.qrBox}>
             <QRCodeSVG value={qr.publicQueueUrl} size={200} level="M" />
           </div>
 
-          <p style={{ marginTop: 12, marginBottom: 4, fontSize: 13, color: "#6B6357" }}>Public queue URL</p>
-          <p style={{ fontFamily: "monospace", fontSize: 13, wordBreak: "break-all", marginBottom: 12 }}>
+          <p className={styles.hint} style={{ marginBottom: 4 }}>Public queue URL</p>
+          <p className={styles.qrUrl} style={{ marginBottom: 12 }}>
             {qr.publicQueueUrl}
           </p>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              onClick={() => void handleCopy()}
-              style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #E7E0D3", background: "#fff", cursor: "pointer" }}
-            >
+            <Button type="button" variant="outline" onClick={() => void handleCopy()}>
               {copied ? "Copied!" : "Copy Link"}
-            </button>
-            <button
-              type="button"
-              onClick={handleDownload}
-              style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #E7E0D3", background: "#fff", cursor: "pointer" }}
-            >
+            </Button>
+            <Button type="button" variant="outline" onClick={handleDownload}>
               Download QR
-            </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #E7E0D3", background: "#fff", cursor: "pointer" }}
-            >
+            </Button>
+            <Button type="button" variant="outline" onClick={() => window.print()}>
               Print
-            </button>
+            </Button>
           </div>
         </>
       )}
