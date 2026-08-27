@@ -288,20 +288,23 @@ session started).
 
 ## 11. Git status
 
-- Branch: `master`. Working tree clean (only the pre-existing untracked files below) once this
-  document's own edits are committed.
-- Local `HEAD` is **2 commits ahead of `origin/master` (`8d79332`), 0 behind**: `0911df0` (the
-  premium visual refresh) plus a docs-only commit adding/updating this file. Run `git log
-  --oneline -3` for the exact current hashes — this file cannot reliably record its own final
-  commit hash (editing it to add that hash changes the hash again).
-- **Neither of those 2 commits has been pushed.** `0911df0` is kept local because it is explicitly
-  incomplete work, per the instruction that produced this document. The docs commit is left
+- Branch: `master`. Working tree clean (only the pre-existing untracked files below).
+- Local `HEAD` is **some small number of commits ahead of `origin/master` (base: `8d79332`), 0
+  behind** — `0911df0` (the premium visual refresh) plus one or more docs-only commits
+  adding/correcting this file itself. **Do not trust a specific count or hash typed into this
+  document** — this file cannot reliably record its own final commit hash (editing it to add that
+  hash changes the hash again). Run this instead, right now, for ground truth:
+  ```bash
+  git log --oneline origin/master..HEAD
+  ```
+- **None of those commits have been pushed.** `0911df0` is kept local because it is explicitly
+  incomplete work, per the instruction that produced this document. The docs commit(s) are left
   unpushed alongside it simply to keep the push decision as one deliberate action for a future
   session/human, rather than assumed here.
-- Commit history this session, newest first (docs commit hash omitted — see above):
+- The one commit hash worth hardcoding — because it's the fixed base everything above builds on
+  and does NOT change as this file is edited — is `origin/master`'s tip, `8d79332`, which IS what's
+  currently deployed to Railway. Full pushed/deployed history below it, newest first:
   ```
-  (docs)   docs: add BARBERCUE_MASTER_STATE.md as the persistent handoff checkpoint              [LOCAL ONLY]
-  0911df0  feat(web): premium visual refresh — foundation + landing/salon/search (in progress)   [LOCAL ONLY]
   8d79332  feat(location): global Country -> Region -> City-search registration flow              [pushed, deployed]
   48c7ca6  fix(web): resolve absolute URLs for server-side and WebSocket use                       [pushed, deployed]
   9765747  fix(web): make Railway auth and uploads same-origin           [made by the user directly, not this session]
