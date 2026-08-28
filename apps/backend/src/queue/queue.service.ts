@@ -12,6 +12,7 @@ import {
   computeSlotCapacity,
   estimateWaitMinutes,
   type AssignQueueEntryInput,
+  type ReassignQueueEntryInput,
   type ChairOptionDto,
   type DashboardQueueDto,
   type QueueEntryDetailDto,
@@ -420,6 +421,144 @@ export class QueueService {
     }, TRANSACTION_OPTIONS);
 
     await this.recomputeEtas(entry.salonId);
+    this.realtime.emitQueueUpdated(entry.salonId);
+    return this.getDetailOrThrow(entryId);
+  }
+
+  /**
+   * Moves an already in-service visit to another active barber/chair without replacing the queue
+   * entry or service session. Updating both rows in one transaction preserves token, join time,
+   * queue priority and service history while the partial unique indexes continue to enforce one
+   * active visit per barber/chair under concurrent requests.
+   */
+  async reassign(
+    userId: string,
+    entryId: string,
+    input: ReassignQueueEntryInput,
+  ): Promise<QueueEntryDetailDto> {
+    const entry = await this.getEntryOrThrow(entryId);
+    await this.salonAccess.assertAccess(userId, entry.salonId);
+    if (entry.status !== QueueEntryStatus.IN_SERVICE) {
+      throw new AppException(
+        QueueErrorCode.INVALID_QUEUE_TRANSITION,
+        'Only an in-service visit can be reassigned.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const session = await this.prisma.serviceSession.findFirst({
+      where: { queueEntryId: entryId, status: ServiceSessionStatus.ACTIVE },
+    });
+    if (!session) {
+      throw new AppException(
+        QueueErrorCode.SERVICE_SESSION_NOT_FOUND,
+        'The active service session could not be found.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const staffId = input.staffId ?? session.staffId;
+    const chairId = input.chairId ?? session.chairId;
+    await this.availability.assertStaffQualified(
+      entry.salonId,
+      session.serviceId,
+      staffId,
+    );
+
+    const chair = await this.prisma.chair.findFirst({
+      where: { id: chairId, salonId: entry.salonId },
+    });
+    if (!chair) {
+      throw new AppException(
+        QueueErrorCode.CHAIR_NOT_FOUND,
+        'Chair not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (chair.status !== ChairStatus.ACTIVE) {
+      throw new AppException(
+        QueueErrorCode.CHAIR_INACTIVE,
+        'This chair is not active.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    if (staffId === session.staffId && chairId === session.chairId) {
+      return this.getDetailOrThrow(entryId);
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const sessionClaim = await tx.serviceSession.updateMany({
+          where: {
+            id: session.id,
+            status: ServiceSessionStatus.ACTIVE,
+            staffId: session.staffId,
+            chairId: session.chairId,
+          },
+          data: { staffId, chairId },
+        });
+        if (sessionClaim.count === 0) {
+          throw new AppException(
+            QueueErrorCode.INVALID_QUEUE_TRANSITION,
+            'This visit was changed in another session. Refresh and try again.',
+            HttpStatus.CONFLICT,
+          );
+        }
+
+        const entryClaim = await tx.queueEntry.updateMany({
+          where: {
+            id: entryId,
+            status: QueueEntryStatus.IN_SERVICE,
+            assignedStaffId: entry.assignedStaffId,
+            assignedChairId: entry.assignedChairId,
+          },
+          // Deliberately assignment-only: tokenNumber, joinedAt, status, serviceStartedAt and
+          // estimatedWaitMinutes are not written and therefore cannot be reset by reassignment.
+          data: { assignedStaffId: staffId, assignedChairId: chairId },
+        });
+        if (entryClaim.count === 0) {
+          throw new AppException(
+            QueueErrorCode.INVALID_QUEUE_TRANSITION,
+            'This visit was changed in another session. Refresh and try again.',
+            HttpStatus.CONFLICT,
+          );
+        }
+      }, TRANSACTION_OPTIONS);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const rawTarget = error.meta?.target;
+        const target = (
+          Array.isArray(rawTarget)
+            ? rawTarget
+                .filter((value): value is string => typeof value === 'string')
+                .join(',')
+            : typeof rawTarget === 'string'
+              ? rawTarget
+              : ''
+        ).toLowerCase();
+        if (target.includes('staff')) {
+          throw new AppException(
+            QueueErrorCode.STAFF_ALREADY_OCCUPIED,
+            'This staff member is already serving another customer.',
+            HttpStatus.CONFLICT,
+          );
+        }
+        if (target.includes('chair')) {
+          throw new AppException(
+            QueueErrorCode.CHAIR_ALREADY_OCCUPIED,
+            'This chair is already occupied.',
+            HttpStatus.CONFLICT,
+          );
+        }
+      }
+      throw error;
+    }
+
+    this.realtime.emitQueueEntryReassigned(entry.salonId, entryId);
     this.realtime.emitQueueUpdated(entry.salonId);
     return this.getDetailOrThrow(entryId);
   }

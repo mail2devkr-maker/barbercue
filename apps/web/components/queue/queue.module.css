@@ -295,6 +295,22 @@
   padding: var(--bc-space-4);
 }
 
+.entryCardNew {
+  border-color: rgba(176, 65, 62, 0.55);
+  box-shadow: 0 0 0 3px rgba(176, 65, 62, 0.08);
+}
+
+.newBadge {
+  margin-left: 8px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--bc-accent);
+  color: #ffffff;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+
 .entryHead {
   display: flex;
   justify-content: space-between;
@@ -346,6 +362,86 @@
   font-size: var(--bc-text-sm);
   background: #ffffff;
   color: var(--bc-ink);
+}
+
+.assignSelect:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 1px;
+}
+
+.assignField {
+  min-width: min(190px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  font-weight: 650;
+}
+
+.queueTools {
+  margin-bottom: var(--bc-space-4);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.queueTools p {
+  margin: 0;
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+}
+
+.liveAnnouncer:empty {
+  display: none;
+}
+
+.newEntryBanner {
+  margin-bottom: var(--bc-space-4);
+  padding: 13px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(176, 65, 62, 0.32);
+  border-radius: var(--bc-radius-md);
+  background: rgba(176, 65, 62, 0.08);
+  color: var(--bc-ink);
+}
+
+.newEntryBanner strong,
+.newEntryBanner span {
+  display: block;
+}
+
+.newEntryBanner span {
+  margin-top: 3px;
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+}
+
+@media (max-width: 560px) {
+  .queueTools,
+  .newEntryBanner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .assignField,
+  .assignSelect {
+    width: 100%;
+  }
+
+  .assignRow > button,
+  .queueTools > button,
+  .newEntryBanner > button {
+    width: 100%;
+  }
 }
 
 .emptyState {

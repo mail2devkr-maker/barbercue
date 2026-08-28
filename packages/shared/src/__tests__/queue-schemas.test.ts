@@ -1,4 +1,4 @@
-import { assignQueueEntrySchema, joinQueueSchema, staffStatusSchema } from '../schemas';
+import { assignQueueEntrySchema, joinQueueSchema, reassignQueueEntrySchema, staffStatusSchema } from '../schemas';
 
 describe('joinQueueSchema', () => {
   it('accepts no serviceId (walk-in without a chosen service)', () => {
@@ -51,5 +51,21 @@ describe('staffStatusSchema', () => {
 
   it('rejects an unknown status value', () => {
     expect(staffStatusSchema.safeParse({ status: 'ON_BREAK' }).success).toBe(false);
+  });
+});
+
+describe('reassignQueueEntrySchema', () => {
+  const staffId = '11111111-1111-1111-1111-111111111111';
+  const chairId = '33333333-3333-3333-3333-333333333333';
+
+  it('accepts barber-only, chair-only, or both', () => {
+    expect(reassignQueueEntrySchema.safeParse({ staffId }).success).toBe(true);
+    expect(reassignQueueEntrySchema.safeParse({ chairId }).success).toBe(true);
+    expect(reassignQueueEntrySchema.safeParse({ staffId, chairId }).success).toBe(true);
+  });
+
+  it('rejects an empty or malformed reassignment', () => {
+    expect(reassignQueueEntrySchema.safeParse({}).success).toBe(false);
+    expect(reassignQueueEntrySchema.safeParse({ staffId: 'nope' }).success).toBe(false);
   });
 });

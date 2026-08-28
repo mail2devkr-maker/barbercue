@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DASHBOARD_PATHS,
   StaffMemberStatus,
@@ -8,6 +8,7 @@ import {
   type ChairOptionDto,
   type DashboardQueueDto,
   type QueueEntryDetailDto,
+  type ReassignQueueEntryInput,
   type StaffStatusDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
@@ -70,26 +71,92 @@ function AssignForm({
 
   return (
     <div className={styles.assignRow}>
-      <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={styles.assignSelect}>
+      <label className={styles.assignField}>
+        <span>Barber</span>
+        <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={styles.assignSelect}>
         <option value="">Staff…</option>
         {activeStaff.map((s) => (
           <option key={s.id} value={s.id}>
             {s.displayName}
           </option>
         ))}
-      </select>
-      <select value={chairId} onChange={(e) => setChairId(e.target.value)} className={styles.assignSelect}>
+        </select>
+      </label>
+      <label className={styles.assignField}>
+        <span>Chair</span>
+        <select value={chairId} onChange={(e) => setChairId(e.target.value)} className={styles.assignSelect}>
         <option value="">Chair…</option>
         {chairs.map((c) => (
           <option key={c.id} value={c.id}>
             {c.label}
           </option>
         ))}
-      </select>
+        </select>
+      </label>
       <Button type="button" variant="outline" onClick={() => void handleAssign()} disabled={submitting || !staffId || !chairId}>
         {submitting ? "Assigning…" : "Confirm assign"}
       </Button>
       {error && <span className={styles.errorText}>{error}</span>}
+    </div>
+  );
+}
+
+function ReassignForm({
+  entry,
+  staff,
+  chairs,
+  onAssigned,
+}: {
+  entry: QueueEntryDetailDto;
+  staff: StaffStatusDto[];
+  chairs: ChairOptionDto[];
+  onAssigned: () => void;
+}) {
+  const [staffId, setStaffId] = useState(entry.assignedStaffId ?? "");
+  const [chairId, setChairId] = useState(entry.assignedChairId ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const activeStaff = staff.filter((member) => member.status === StaffMemberStatus.ACTIVE);
+  const changed = staffId !== entry.assignedStaffId || chairId !== entry.assignedChairId;
+
+  async function handleReassign() {
+    if (!staffId || !chairId || !changed) return;
+    setSubmitting(true);
+    setError(null);
+    const input: ReassignQueueEntryInput = {};
+    if (staffId !== entry.assignedStaffId) input.staffId = staffId;
+    if (chairId !== entry.assignedChairId) input.chairId = chairId;
+    try {
+      await apiFetch(QUEUE_ENTRY_PATH(entry.id, DASHBOARD_PATHS.reassign), {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      });
+      onAssigned();
+    } catch (requestError) {
+      setError(requestError instanceof ApiError ? requestError.message : "Could not reassign this visit.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className={styles.assignRow}>
+      <label className={styles.assignField}>
+        <span>Move to barber</span>
+        <select value={staffId} onChange={(event) => setStaffId(event.target.value)} className={styles.assignSelect}>
+          {activeStaff.map((member) => <option key={member.id} value={member.id}>{member.displayName}</option>)}
+        </select>
+      </label>
+      <label className={styles.assignField}>
+        <span>Move to chair</span>
+        <select value={chairId} onChange={(event) => setChairId(event.target.value)} className={styles.assignSelect}>
+          {chairs.map((chair) => <option key={chair.id} value={chair.id}>{chair.label}</option>)}
+        </select>
+      </label>
+      <Button type="button" variant="outline" onClick={() => void handleReassign()} disabled={submitting || !staffId || !chairId || !changed}>
+        {submitting ? "Reassigning…" : "Confirm reassignment"}
+      </Button>
+      {error && <span className={styles.errorText} role="alert">{error}</span>}
     </div>
   );
 }
@@ -101,14 +168,60 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [staffBusyId, setStaffBusyId] = useState<string | null>(null);
+  const [newEntryIds, setNewEntryIds] = useState<string[]>([]);
+  const [newEntryNotice, setNewEntryNotice] = useState<QueueEntryDetailDto | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const initializedRef = useRef(false);
+  const knownWaitingIdsRef = useRef<Set<string>>(new Set());
+  const notifiedIdsRef = useRef<Set<string>>(new Set());
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const soundEnabledRef = useRef(false);
+
+  const playChime = useCallback(() => {
+    const context = audioContextRef.current;
+    if (!context || context.state !== "running") return;
+    const now = context.currentTime;
+    [660, 880].forEach((frequency, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.frequency.value = frequency;
+      oscillator.type = "sine";
+      gain.gain.setValueAtTime(0.0001, now + index * 0.13);
+      gain.gain.exponentialRampToValueAtTime(0.14, now + index * 0.13 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + index * 0.13 + 0.12);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now + index * 0.13);
+      oscillator.stop(now + index * 0.13 + 0.14);
+    });
+  }, []);
+
+  const applyQueueResult = useCallback((result: DashboardQueueDto, detectNew: boolean) => {
+    const waiting = result.entries.filter((entry) => entry.status === "WAITING");
+    const waitingIds = new Set(waiting.map((entry) => entry.id));
+    if (detectNew && initializedRef.current) {
+      const genuinelyNew = waiting.filter((entry) =>
+        !knownWaitingIdsRef.current.has(entry.id) && !notifiedIdsRef.current.has(entry.id),
+      );
+      if (genuinelyNew.length > 0) {
+        genuinelyNew.forEach((entry) => notifiedIdsRef.current.add(entry.id));
+        setNewEntryIds((current) => Array.from(new Set([...current, ...genuinelyNew.map((entry) => entry.id)])));
+        setNewEntryNotice(genuinelyNew[genuinelyNew.length - 1]);
+        if (soundEnabledRef.current) playChime();
+      }
+    }
+    knownWaitingIdsRef.current = waitingIds;
+    initializedRef.current = true;
+    setData(result);
+  }, [playChime]);
 
   const refetch = useCallback(() => {
     return apiFetch<DashboardQueueDto>(DASHBOARD_QUEUE_PATH(salonId))
-      .then((result) => setData(result))
+      .then((result) => applyQueueResult(result, true))
       .catch(() => {
         /* transient — the next realtime event or manual refresh will retry */
       });
-  }, [salonId]);
+  }, [applyQueueResult, salonId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +234,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
       })
       .then((result) => {
         if (cancelled || !result) return;
-        setData(result);
+        applyQueueResult(result, false);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Could not load the queue.");
@@ -132,7 +245,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [salonId]);
+  }, [applyQueueResult, salonId]);
 
   useEffect(() => {
     const socket = getRealtimeSocket();
@@ -143,10 +256,12 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     socket.on("queue.updated", onEvent);
     socket.on("queue.entry.called", onEvent);
     socket.on("staff.status.changed", onEvent);
+    socket.on("queue.entry.reassigned", onEvent);
     return () => {
       socket.off("queue.updated", onEvent);
       socket.off("queue.entry.called", onEvent);
       socket.off("staff.status.changed", onEvent);
+      socket.off("queue.entry.reassigned", onEvent);
     };
   }, [salonId, refetch]);
 
@@ -215,6 +330,16 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     }
   }
 
+  async function enableSound() {
+    const AudioContextClass = window.AudioContext;
+    const context = audioContextRef.current ?? new AudioContextClass();
+    audioContextRef.current = context;
+    if (context.state === "suspended") await context.resume();
+    soundEnabledRef.current = true;
+    setSoundEnabled(true);
+    playChime();
+  }
+
   if (loading) return <p className={styles.stepLoading}>Loading…</p>;
   if (error && !data) return <p className={styles.errorText}>{error}</p>;
   if (!data) return null;
@@ -222,6 +347,28 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {error && <p className={styles.errorText}>{error}</p>}
+      <div className={styles.queueTools}>
+        <p>Realtime updates are on.</p>
+        <Button type="button" variant="outline" onClick={() => void enableSound()} disabled={soundEnabled}>
+          {soundEnabled ? "Queue chime enabled" : "Enable queue chime"}
+        </Button>
+      </div>
+
+      <div className={styles.liveAnnouncer} aria-live="polite" aria-atomic="true">
+        {newEntryNotice && (
+          <div className={styles.newEntryBanner}>
+            <div>
+              <strong>New customer joined</strong>
+              <span>
+                Token #{newEntryNotice.tokenNumber}
+                {newEntryNotice.serviceName ? ` · ${newEntryNotice.serviceName}` : ""}
+                {newEntryNotice.customerPhone ? ` · ${newEntryNotice.customerPhone}` : ""}
+              </span>
+            </div>
+            <Button type="button" variant="outline" onClick={() => setNewEntryNotice(null)}>Dismiss</Button>
+          </div>
+        )}
+      </div>
 
       <section className={styles.dashSection}>
         <h2 className={styles.dashHeading}>Staff on duty</h2>
@@ -254,12 +401,13 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
         {data.entries.length === 0 && <p className={styles.emptyState}>No one is currently waiting.</p>}
         <div className={styles.entryList}>
           {data.entries.map((entry) => (
-            <div key={entry.id} className={styles.entryCard}>
+            <div key={entry.id} className={`${styles.entryCard} ${newEntryIds.includes(entry.id) ? styles.entryCardNew : ""}`}>
               <div className={styles.entryHead}>
                 <div>
                   <span className={styles.entryToken}>#{entry.tokenNumber}</span>{" "}
                   {entry.customerPhone && <span className={styles.entryMeta}>{entry.customerPhone}</span>}
                   {entry.serviceName && <span className={styles.entryMeta}> — {entry.serviceName}</span>}
+                  {newEntryIds.includes(entry.id) && <span className={styles.newBadge}>NEW</span>}
                 </div>
                 <span className={`${styles.ticketStatusBadge} ${statusBadgeClass(entry.status)}`}>
                   {entry.status}
@@ -292,14 +440,19 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
                   </Button>
                 )}
                 {entry.status === "IN_SERVICE" && entry.activeServiceSessionId && (
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => void handleComplete(entry.activeServiceSessionId!)}
-                    disabled={busyId === entry.activeServiceSessionId}
-                  >
-                    Complete
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={() => void handleComplete(entry.activeServiceSessionId!)}
+                      disabled={busyId === entry.activeServiceSessionId}
+                    >
+                      Complete
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setAssigningId(assigningId === entry.id ? null : entry.id)}>
+                      Reassign barber/chair
+                    </Button>
+                  </>
                 )}
                 <Button type="button" variant="outline" onClick={() => void handleCancel(entry.id)} disabled={busyId === entry.id}>
                   Cancel
@@ -307,15 +460,17 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
               </div>
 
               {assigningId === entry.id && (
-                <AssignForm
-                  entry={entry}
-                  staff={data.staffRoster}
-                  chairs={data.chairs}
-                  onAssigned={() => {
+                entry.status === "IN_SERVICE" ? (
+                  <ReassignForm entry={entry} staff={data.staffRoster} chairs={data.chairs} onAssigned={() => {
                     setAssigningId(null);
                     void refetch();
-                  }}
-                />
+                  }} />
+                ) : (
+                  <AssignForm entry={entry} staff={data.staffRoster} chairs={data.chairs} onAssigned={() => {
+                    setAssigningId(null);
+                    void refetch();
+                  }} />
+                )
               )}
             </div>
           ))}

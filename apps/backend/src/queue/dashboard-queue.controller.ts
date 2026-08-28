@@ -3,8 +3,10 @@ import {
   DASHBOARD_PATHS,
   Role,
   assignQueueEntrySchema,
+  reassignQueueEntrySchema,
   staffStatusSchema,
   type AssignQueueEntryInput,
+  type ReassignQueueEntryInput,
   type AuthenticatedUser,
   type StaffStatusInput,
 } from '@barbercue/shared';
@@ -45,6 +47,16 @@ export class DashboardQueueController {
     body: AssignQueueEntryInput,
   ) {
     return this.queueService.assign(user.id, id, body);
+  }
+
+  @Patch(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.reassign}`)
+  reassign(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(reassignQueueEntrySchema))
+    body: ReassignQueueEntryInput,
+  ) {
+    return this.queueService.reassign(user.id, id, body);
   }
 
   @Post(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.noShow}`)

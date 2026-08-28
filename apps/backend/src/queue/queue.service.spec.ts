@@ -56,6 +56,7 @@ interface PrismaMock {
     updateMany: jest.Mock<Promise<{ count: number }>, [unknown]>;
   };
   serviceSession: {
+    findFirst: jest.Mock<Promise<unknown>, [unknown]>;
     findUnique: jest.Mock<Promise<unknown>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
     create: jest.Mock<Promise<unknown>, [unknown]>;
@@ -93,6 +94,7 @@ describe('QueueService', () => {
     emitQueueUpdated: jest.Mock;
     emitEntryCalled: jest.Mock;
     emitStaffStatusChanged: jest.Mock;
+    emitQueueEntryReassigned: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -111,6 +113,7 @@ describe('QueueService', () => {
           .mockResolvedValue({ count: 1 }),
       },
       serviceSession: {
+        findFirst: jest.fn<Promise<unknown>, [unknown]>(),
         findUnique: jest.fn<Promise<unknown>, [unknown]>(),
         findMany: jest
           .fn<Promise<unknown[]>, [unknown]>()
@@ -176,6 +179,7 @@ describe('QueueService', () => {
       emitQueueUpdated: jest.fn(),
       emitEntryCalled: jest.fn(),
       emitStaffStatusChanged: jest.fn(),
+      emitQueueEntryReassigned: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -387,6 +391,133 @@ describe('QueueService', () => {
         status: 'ACTIVE',
       });
       expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+  });
+
+  describe('reassign', () => {
+    const activeEntry = makeRawEntry({
+      status: QueueEntryStatus.IN_SERVICE,
+      assignedStaffId: 'st1',
+      assignedChairId: 'ch1',
+      tokenNumber: 42,
+      joinedAt: new Date('2026-08-28T05:00:00.000Z'),
+    });
+    const activeSession = {
+      id: 'sess1',
+      queueEntryId: 'q1',
+      staffId: 'st1',
+      chairId: 'ch1',
+      serviceId: 'sv1',
+      status: 'ACTIVE',
+      startedAt: new Date('2026-08-28T05:15:00.000Z'),
+    };
+
+    beforeEach(() => {
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(activeEntry)
+        .mockResolvedValue(
+          makeDetailEntry({
+            ...activeEntry,
+            assignedStaffId: 'st2',
+            assignedChairId: 'ch2',
+          }),
+        );
+      prisma.serviceSession.findFirst.mockResolvedValue(activeSession);
+      prisma.chair.findFirst.mockResolvedValue({
+        id: 'ch2',
+        salonId: 's1',
+        status: 'ACTIVE',
+      });
+    });
+
+    it('moves barber and chair atomically while preserving token, join time and priority fields', async () => {
+      await service.reassign('owner1', 'q1', {
+        staffId: 'st2',
+        chairId: 'ch2',
+      });
+
+      expect(availability.assertStaffQualified).toHaveBeenCalledWith(
+        's1',
+        'sv1',
+        'st2',
+      );
+      const sessionData = lastCallData(prisma.serviceSession.updateMany);
+      expect(sessionData).toEqual({ staffId: 'st2', chairId: 'ch2' });
+      const queueData = lastCallData(prisma.queueEntry.updateMany);
+      expect(queueData).toEqual({
+        assignedStaffId: 'st2',
+        assignedChairId: 'ch2',
+      });
+      expect(queueData).not.toHaveProperty('tokenNumber');
+      expect(queueData).not.toHaveProperty('joinedAt');
+      expect(queueData).not.toHaveProperty('status');
+      expect(queueData).not.toHaveProperty('estimatedWaitMinutes');
+      expect(realtime.emitQueueEntryReassigned).toHaveBeenCalledWith(
+        's1',
+        'q1',
+      );
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+
+    it('supports barber-only and chair-only changes without replacing the service session', async () => {
+      await service.reassign('owner1', 'q1', { staffId: 'st2' });
+      expect(lastCallData(prisma.serviceSession.updateMany)).toEqual({
+        staffId: 'st2',
+        chairId: 'ch1',
+      });
+      expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+
+      jest.clearAllMocks();
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(activeEntry)
+        .mockResolvedValue(makeDetailEntry(activeEntry));
+      prisma.serviceSession.findFirst.mockResolvedValue(activeSession);
+      prisma.chair.findFirst.mockResolvedValue({
+        id: 'ch2',
+        salonId: 's1',
+        status: 'ACTIVE',
+      });
+      prisma.serviceSession.updateMany.mockResolvedValue({ count: 1 });
+      prisma.queueEntry.updateMany.mockResolvedValue({ count: 1 });
+      prisma.$transaction.mockImplementation(
+        (fn: (tx: unknown) => Promise<unknown>) => fn(prisma),
+      );
+      availability.assertStaffQualified.mockResolvedValue(undefined);
+
+      await service.reassign('owner1', 'q1', { chairId: 'ch2' });
+      expect(lastCallData(prisma.serviceSession.updateMany)).toEqual({
+        staffId: 'st1',
+        chairId: 'ch2',
+      });
+    });
+
+    it('constrains reassignment to active in-service visits with an active session', async () => {
+      prisma.queueEntry.findUnique
+        .mockReset()
+        .mockResolvedValue(makeRawEntry({ status: QueueEntryStatus.CALLED }));
+      await expect(
+        service.reassign('owner1', 'q1', { staffId: 'st2' }),
+      ).rejects.toMatchObject({ code: 'INVALID_QUEUE_TRANSITION' });
+
+      prisma.queueEntry.findUnique.mockReset().mockResolvedValue(activeEntry);
+      prisma.serviceSession.findFirst.mockResolvedValue(null);
+      await expect(
+        service.reassign('owner1', 'q1', { staffId: 'st2' }),
+      ).rejects.toMatchObject({ code: 'SERVICE_SESSION_NOT_FOUND' });
+    });
+
+    it('maps concurrent staff occupancy to a clear conflict and rolls back the entry update', async () => {
+      prisma.serviceSession.updateMany.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+          meta: { target: 'service_session_staff_active_uq' },
+        }),
+      );
+      await expect(
+        service.reassign('owner1', 'q1', { staffId: 'st2' }),
+      ).rejects.toMatchObject({ code: 'STAFF_ALREADY_OCCUPIED' });
+      expect(realtime.emitQueueEntryReassigned).not.toHaveBeenCalled();
     });
   });
 

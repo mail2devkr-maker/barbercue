@@ -78,6 +78,12 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.server.to(`salon:${salonId}`).emit('queue.updated', { salonId });
   }
 
+  emitQueueEntryReassigned(salonId: string, queueEntryId: string): void {
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('queue.entry.reassigned', { salonId, queueEntryId });
+  }
+
   emitEntryCalled(
     salonId: string,
     queueEntryId: string,
