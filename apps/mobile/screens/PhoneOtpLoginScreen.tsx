@@ -1,5 +1,17 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import {
   GoogleOneTapSignIn,
   isCancelledResponse,
@@ -17,6 +29,7 @@ import {
 } from '@barbercue/shared';
 import { ApiError, apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import { color, font, fontSize, radius, space } from '../lib/theme';
 
 // GoogleSignInButton is only ever mounted when a web client ID is configured (see
 // GOOGLE_CONFIGURED below), so configure() only ever runs with a real value. Native Google
@@ -66,10 +79,14 @@ function GoogleSignInButton() {
 
   return (
     <>
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <View style={styles.errorCard}>
+          <Text style={styles.errorCardText}>{error}</Text>
+        </View>
+      )}
       <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={submitting}>
         {submitting ? (
-          <ActivityIndicator color="#1C1A17" />
+          <ActivityIndicator color={color.ink} />
         ) : (
           <Text style={styles.googleButtonText}>Continue with Google</Text>
         )}
@@ -195,117 +212,315 @@ export default function PhoneOtpLoginScreen() {
     }
   }
 
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>BarberCue</Text>
-      <Text style={styles.subtitle}>
-        {step === 'phone'
-          ? phoneOtpAvailable === false
-            ? 'Continue with Google. New here? This creates your account automatically.'
-            : 'Continue with Google, or use a one-time code. New here? This creates your account automatically.'
-          : `Enter the code sent to ${phone}.`}
-      </Text>
+    <View style={styles.root}>
+      <StatusBar style="dark" />
+      {/* Restrained warmth without a gradient dependency — two soft, low-opacity tinted circles,
+          not an illustration or photo. */}
+      <View style={styles.blobGold} pointerEvents="none" />
+      <View style={styles.blobAccent} pointerEvents="none" />
 
-      {error && <Text style={styles.error}>{error}</Text>}
-      {resendMessage && <Text style={styles.success}>{resendMessage}</Text>}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={insets.top}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: Math.max(insets.top, space[6]), paddingBottom: Math.max(insets.bottom, space[6]) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.brandRow}>
+            <View style={styles.badgeHalo}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>BC</Text>
+              </View>
+            </View>
+            <Text style={styles.wordmark}>BarberCue</Text>
+          </View>
 
-      {step === 'phone' ? (
-        <>
-          {GOOGLE_CONFIGURED && <GoogleSignInButton />}
-          {phoneOtpAvailable === false ? (
-            <Text style={styles.subtitle}>
-              Phone sign-in is temporarily unavailable. Please continue with Google above — it&apos;s
-              the same account either way.
-            </Text>
-          ) : phoneOtpAvailable === null ? (
-            <ActivityIndicator color="#B8AFA0" />
-          ) : (
-            <>
-              <TextInput
-                style={styles.input}
-                placeholder="+919876543210"
-                placeholderTextColor="#B8AFA0"
-                keyboardType="phone-pad"
-                value={phone}
-                onChangeText={setPhone}
-              />
-              <Pressable style={styles.button} onPress={() => void requestOtp()} disabled={submitting}>
-                {submitting ? <ActivityIndicator color="#EDE6DA" /> : <Text style={styles.buttonText}>Send OTP</Text>}
-              </Pressable>
-            </>
+          <Text style={styles.eyebrow}>Sign in</Text>
+          <Text style={styles.subtitle}>
+            {step === 'phone'
+              ? phoneOtpAvailable === false
+                ? 'Continue with Google. New here? This creates your account automatically.'
+                : 'Continue with Google, or use a one-time code. New here? This creates your account automatically.'
+              : `Enter the code sent to ${phone}.`}
+          </Text>
+
+          {error && (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorCardText}>{error}</Text>
+            </View>
           )}
-        </>
-      ) : (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="6-digit code"
-            placeholderTextColor="#B8AFA0"
-            keyboardType="number-pad"
-            value={code}
-            onChangeText={setCode}
-            autoFocus
-          />
-          <Pressable style={styles.button} onPress={() => void verifyOtp()} disabled={submitting}>
-            {submitting ? (
-              <ActivityIndicator color="#EDE6DA" />
+          {resendMessage && (
+            <View style={styles.successCard}>
+              <Text style={styles.successCardText}>{resendMessage}</Text>
+            </View>
+          )}
+
+          <View style={styles.card}>
+            {step === 'phone' ? (
+              <>
+                {GOOGLE_CONFIGURED && <GoogleSignInButton />}
+                {phoneOtpAvailable === false ? (
+                  <View style={styles.noticeCard}>
+                    <Text style={styles.noticeCardText}>
+                      Phone sign-in is temporarily unavailable. Please continue with Google above —
+                      it&apos;s the same account either way.
+                    </Text>
+                  </View>
+                ) : phoneOtpAvailable === null ? (
+                  <ActivityIndicator color={color.muted} />
+                ) : (
+                  <>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="+919876543210"
+                      placeholderTextColor={color.muted}
+                      keyboardType="phone-pad"
+                      value={phone}
+                      onChangeText={setPhone}
+                    />
+                    <Pressable style={styles.primaryButton} onPress={() => void requestOtp()} disabled={submitting}>
+                      {submitting ? (
+                        <ActivityIndicator color={color.accentContrast} />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Send OTP</Text>
+                      )}
+                    </Pressable>
+                  </>
+                )}
+              </>
             ) : (
-              <Text style={styles.buttonText}>Verify & Continue</Text>
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="6-digit code"
+                  placeholderTextColor={color.muted}
+                  keyboardType="number-pad"
+                  value={code}
+                  onChangeText={setCode}
+                  autoFocus
+                />
+                <Pressable style={styles.primaryButton} onPress={() => void verifyOtp()} disabled={submitting}>
+                  {submitting ? (
+                    <ActivityIndicator color={color.accentContrast} />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Verify & Continue</Text>
+                  )}
+                </Pressable>
+                <Pressable
+                  style={[styles.resendButton, (resendCooldown > 0 || resending) && styles.resendButtonDisabled]}
+                  onPress={() => void handleResend()}
+                  disabled={resendCooldown > 0 || resending}
+                >
+                  {resending ? (
+                    <ActivityIndicator color={color.ink} />
+                  ) : (
+                    <Text style={styles.resendButtonText}>
+                      {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
+                    </Text>
+                  )}
+                </Pressable>
+              </>
             )}
-          </Pressable>
-          <Pressable
-            style={styles.resendButton}
-            onPress={() => void handleResend()}
-            disabled={resendCooldown > 0 || resending}
-          >
-            {resending ? (
-              <ActivityIndicator color="#EDE6DA" />
-            ) : (
-              <Text style={styles.resendButtonText}>
-                {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
-              </Text>
-            )}
-          </Pressable>
-        </>
-      )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1A17', justifyContent: 'center', padding: 24 },
-  title: { fontSize: 34, fontWeight: '700', color: '#EDE6DA', textAlign: 'center' },
-  subtitle: { fontSize: 14, color: '#B8AFA0', textAlign: 'center', marginTop: 8, marginBottom: 32 },
-  error: { color: '#E24B4A', fontSize: 13, textAlign: 'center', marginBottom: 12 },
-  success: { color: '#5FA777', fontSize: 13, textAlign: 'center', marginBottom: 12 },
-  input: {
-    backgroundColor: '#2A2723',
-    color: '#EDE6DA',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    marginBottom: 16,
+  root: { flex: 1, backgroundColor: color.surface },
+  flex: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: space[5] },
+
+  // Restrained warmth — two soft, low-opacity tinted circles standing in for a gradient. Gold
+  // (decorative) top-left, terracotta (also decorative here, not an action) bottom-right, both
+  // subtle enough to read as texture, not decoration competing with the form.
+  blobGold: {
+    position: 'absolute',
+    top: -80,
+    left: -70,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: color.goldSoft,
+    opacity: 0.6,
   },
-  button: { backgroundColor: '#B0413E', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
-  buttonText: { color: '#EDE6DA', fontSize: 16, fontWeight: '600' },
-  googleButton: {
-    backgroundColor: '#EDE6DA',
-    borderRadius: 12,
-    paddingVertical: 14,
+  blobAccent: {
+    position: 'absolute',
+    bottom: -100,
+    right: -90,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: color.accentSoft,
+  },
+
+  brandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space[6],
   },
-  googleButtonText: { color: '#1C1A17', fontSize: 15, fontWeight: '600' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 16 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#2A2723' },
-  dividerText: { color: '#B8AFA0', fontSize: 12, marginHorizontal: 10 },
-  resendButton: {
-    borderRadius: 12,
+  badgeHalo: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     borderWidth: 1,
-    borderColor: '#2A2723',
-    paddingVertical: 12,
+    borderColor: 'rgba(168, 121, 31, 0.35)',
     alignItems: 'center',
-    marginTop: 12,
+    justifyContent: 'center',
+    marginRight: space[3],
   },
-  resendButtonText: { color: '#EDE6DA', fontSize: 14, fontWeight: '600' },
+  badge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: color.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: color.surface,
+    fontFamily: font.bodyBold,
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  wordmark: {
+    fontFamily: font.displaySemiBold,
+    fontSize: fontSize.xl,
+    color: color.ink,
+    letterSpacing: -0.3,
+  },
+
+  eyebrow: {
+    fontFamily: font.bodyBold,
+    fontSize: 11,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    color: color.gold,
+    textAlign: 'center',
+    marginBottom: space[2],
+  },
+  subtitle: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.sm,
+    lineHeight: 21,
+    color: color.muted,
+    textAlign: 'center',
+    marginBottom: space[5],
+  },
+
+  errorCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(176, 65, 62, 0.24)',
+    backgroundColor: color.accentSoft,
+    borderRadius: radius.sm,
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    marginBottom: space[4],
+  },
+  errorCardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: '#8f302d', textAlign: 'center' },
+
+  successCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(46, 125, 50, 0.24)',
+    backgroundColor: color.successSoft,
+    borderRadius: radius.sm,
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    marginBottom: space[4],
+  },
+  successCardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: '#286d2c', textAlign: 'center' },
+
+  noticeCard: {
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.goldSoft,
+    borderRadius: radius.sm,
+    padding: space[4],
+  },
+  noticeCardText: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: 19, color: color.muted },
+
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    padding: space[5],
+    shadowColor: color.ink,
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+
+  input: {
+    minHeight: 52,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.sm,
+    color: color.ink,
+    fontFamily: font.bodyRegular,
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    fontSize: fontSize.base,
+    marginBottom: space[4],
+  },
+
+  primaryButton: {
+    minHeight: 52,
+    backgroundColor: color.accent,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: space[3],
+  },
+  primaryButtonText: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: color.accentContrast },
+
+  googleButton: {
+    minHeight: 52,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.ink,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: space[3],
+  },
+  googleButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: space[4] },
+  dividerLine: { flex: 1, height: 1, backgroundColor: color.border },
+  dividerText: {
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: color.muted,
+    marginHorizontal: space[3],
+  },
+
+  resendButton: {
+    minHeight: 46,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: color.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: space[2] + 4,
+    marginTop: space[3],
+  },
+  resendButtonDisabled: { borderColor: color.border },
+  resendButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
 });

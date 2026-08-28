@@ -2,7 +2,16 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
+import { Fraunces_500Medium, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
+import {
+  WorkSans_400Regular,
+  WorkSans_500Medium,
+  WorkSans_600SemiBold,
+  WorkSans_700Bold,
+} from '@expo-google-fonts/work-sans';
 import { AuthProvider, useAuth } from './lib/auth-context';
+import { color } from './lib/theme';
 import PhoneOtpLoginScreen from './screens/PhoneOtpLoginScreen';
 import RootNavigator from './navigation/RootNavigator';
 
@@ -19,7 +28,7 @@ function Root() {
   if (status === 'loading') {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color="#EDE6DA" size="large" />
+        <ActivityIndicator color={color.accent} size="large" />
       </View>
     );
   }
@@ -34,10 +43,32 @@ function Root() {
 }
 
 export default function App() {
+  // Loaded once for the whole app — Fraunces (display/headings) + Work Sans (body/UI), matching
+  // apps/web's --font-display / --font-body. Gated behind the same loading view already used for
+  // the auth-status check below, rather than a second splash/loading mechanism.
+  const [fontsLoaded] = useFonts({
+    Fraunces_500Medium,
+    Fraunces_600SemiBold,
+    WorkSans_400Regular,
+    WorkSans_500Medium,
+    WorkSans_600SemiBold,
+    WorkSans_700Bold,
+  });
+
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={color.accent} size="large" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
         <Root />
+        {/* Default for the authenticated app (RootNavigator's screens are dark-themed, unchanged
+            in this task) — PhoneOtpLoginScreen overrides this locally for its own light surface. */}
         <StatusBar style="light" />
       </AuthProvider>
     </SafeAreaProvider>
@@ -45,5 +76,5 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, backgroundColor: '#1C1A17', alignItems: 'center', justifyContent: 'center' },
+  loading: { flex: 1, backgroundColor: color.surface, alignItems: 'center', justifyContent: 'center' },
 });
