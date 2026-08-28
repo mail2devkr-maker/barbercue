@@ -197,6 +197,9 @@ export const DASHBOARD_PATHS = {
   // image they already host rather than uploading a file.
   photos: 'photos',
   resendInvite: 'resend-invite',
+  // Owner-only salon-scoped booking operations (Phase: owner booking dashboard) — mounted at
+  // dashboard/salons/:salonId/bookings, same shape as `queue` above.
+  bookings: 'bookings',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

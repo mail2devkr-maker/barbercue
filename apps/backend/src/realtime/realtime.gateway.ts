@@ -102,4 +102,16 @@ export class RealtimeGateway implements OnGatewayConnection {
       .to(`salon:${salonId}`)
       .emit('staff.status.changed', { salonId, staffId });
   }
+
+  // Fired once, after a booking transaction commits successfully — never on a failed/rolled-back
+  // create. Ids-only payload (same convention as emitEntryCalled): the owner dashboard refetches
+  // authoritative booking data via the existing owner bookings API rather than trusting a payload
+  // shape here, so this event can never leak customer details by itself.
+  emitBookingCreated(salonId: string, bookingId: string): void {
+    this.server.to(`salon:${salonId}`).emit('booking.created', { salonId, bookingId });
+  }
+
+  emitBookingCancelled(salonId: string, bookingId: string): void {
+    this.server.to(`salon:${salonId}`).emit('booking.cancelled', { salonId, bookingId });
+  }
 }

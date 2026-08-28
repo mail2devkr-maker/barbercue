@@ -298,6 +298,36 @@ export interface CancelBookingResponseDto {
   ledgerEntryCreated: boolean;
 }
 
+// ---------- Owner booking dashboard ----------
+
+// `today`/`upcoming` are date-window views over active bookings; `completed`/`cancelled`/
+// `no_show` are outcome views regardless of date; `all` is the unfiltered history feed. Kept as a
+// flat union (not derived from BookingStatus) since `today`/`upcoming`/`all` aren't statuses.
+export const OWNER_BOOKING_FILTERS = [
+  'today',
+  'upcoming',
+  'completed',
+  'cancelled',
+  'no_show',
+  'all',
+] as const;
+export type OwnerBookingFilter = (typeof OWNER_BOOKING_FILTERS)[number];
+
+// Adds owner-operational fields (customer contact, assigned barber, timestamps) on top of
+// BookingDetailDto — never exposed to the customer-facing booking endpoints, only the owner
+// dashboard. Same "extend the base DTO" pattern as BookingDetailDto extending BookingDto.
+export interface OwnerBookingDetailDto extends BookingDetailDto {
+  customerPhone: string | null;
+  customerEmail: string | null;
+  // The barber actually assigned at queue check-in (QueueEntry.assignedStaffId), distinct from
+  // preferredStaffId/preferredStaffName above (the customer's soft preference at booking time).
+  // Null until the booking reaches check-in.
+  assignedStaffId: string | null;
+  assignedStaffName: string | null;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
 export interface QueueEntryDto {
   id: string;
   salonId: string;

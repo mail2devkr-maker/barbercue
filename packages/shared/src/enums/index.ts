@@ -234,6 +234,8 @@ export const BookingErrorCode = {
   IDEMPOTENCY_KEY_REQUIRED: 'IDEMPOTENCY_KEY_REQUIRED',
   IDEMPOTENCY_KEY_REUSED: 'IDEMPOTENCY_KEY_REUSED',
   REQUEST_IN_PROGRESS: 'REQUEST_IN_PROGRESS',
+  // Owner booking dashboard: an unrecognized `filter` query value was supplied.
+  INVALID_FILTER: 'INVALID_FILTER',
 } as const;
 export type BookingErrorCode = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
 

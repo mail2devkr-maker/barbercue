@@ -4,6 +4,7 @@ import { BookingsService } from './bookings.service';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 function decimal(value: string) {
   return { toString: () => value } as unknown as number;
@@ -73,6 +74,10 @@ describe('BookingsService', () => {
   let cancellationPolicy: {
     getEffectivePolicy: jest.Mock<Promise<unknown>, [string]>;
   };
+  let realtime: {
+    emitBookingCreated: jest.Mock<void, [string, string]>;
+    emitBookingCancelled: jest.Mock<void, [string, string]>;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -126,6 +131,10 @@ describe('BookingsService', () => {
     cancellationPolicy = {
       getEffectivePolicy: jest.fn<Promise<unknown>, [string]>(),
     };
+    realtime = {
+      emitBookingCreated: jest.fn(),
+      emitBookingCancelled: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -133,6 +142,7 @@ describe('BookingsService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AvailabilityService, useValue: availability },
         { provide: CancellationPolicyService, useValue: cancellationPolicy },
+        { provide: RealtimeGateway, useValue: realtime },
       ],
     }).compile();
     service = moduleRef.get(BookingsService);
@@ -212,6 +222,8 @@ describe('BookingsService', () => {
         ),
       ).rejects.toMatchObject({ code: 'SLOT_FULL' });
       expect(prisma.booking.create).not.toHaveBeenCalled();
+      // No realtime emission on a failed/rolled-back create.
+      expect(realtime.emitBookingCreated).not.toHaveBeenCalled();
     });
 
     it('creates a CONFIRMED booking with no prepayment when the salon has no payment policy (defaults to NONE)', async () => {
@@ -225,6 +237,17 @@ describe('BookingsService', () => {
       expect(data.status).toBe('CONFIRMED');
       expect(data.prepaymentRequiredAmount).toBeNull();
       expect(data.idempotencyKey).toBe('key-1');
+    });
+
+    it('emits booking.created exactly once after a successful create', async () => {
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(realtime.emitBookingCreated).toHaveBeenCalledTimes(1);
+      expect(realtime.emitBookingCreated).toHaveBeenCalledWith('s1', 'b1');
     });
 
     it('creates a PENDING_PAYMENT booking with a snapshotted amount when the policy requires PARTIAL prepayment', async () => {
@@ -315,6 +338,7 @@ describe('BookingsService', () => {
       expect(result.ledgerEntryCreated).toBe(false);
       expect(prisma.customerLedgerEntry.create).not.toHaveBeenCalled();
       expect(prisma.auditLog.create).toHaveBeenCalled();
+      expect(realtime.emitBookingCancelled).toHaveBeenCalledWith('s1', 'b1');
     });
 
     it('charges the late-cancellation percentage and creates an OUTSTANDING ledger entry outside the free window', async () => {

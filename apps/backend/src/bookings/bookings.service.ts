@@ -16,6 +16,7 @@ import {
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 
@@ -54,6 +55,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly availability: AvailabilityService,
     private readonly cancellationPolicy: CancellationPolicyService,
+    private readonly realtime: RealtimeGateway,
   ) {}
 
   async create(
@@ -187,6 +189,10 @@ export class BookingsService {
       return created.id;
     }, TRANSACTION_OPTIONS);
 
+    // Only after the transaction has actually committed — never on a rolled-back create (e.g.
+    // SLOT_FULL), since that never reaches this line.
+    this.realtime.emitBookingCreated(input.salonId, bookingId);
+
     return this.getDetailOrThrow(bookingId, customerId);
   }
 
@@ -304,6 +310,8 @@ export class BookingsService {
 
       return result;
     }, TRANSACTION_OPTIONS);
+
+    this.realtime.emitBookingCancelled(updated.salonId, bookingId);
 
     return {
       booking: this.toDetailDto(updated),
