@@ -10,20 +10,27 @@ import {
   WorkSans_600SemiBold,
   WorkSans_700Bold,
 } from '@expo-google-fonts/work-sans';
+import { Role } from '@barbercue/shared';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { color } from './lib/theme';
-import PhoneOtpLoginScreen from './screens/PhoneOtpLoginScreen';
+import AuthStack from './navigation/AuthStack';
 import RootNavigator from './navigation/RootNavigator';
+import OwnerNavigator from './navigation/OwnerNavigator';
+import StaffNavigator from './navigation/StaffNavigator';
 
-// Phase 2: real authentication screens replace the Phase 1.5 foundation shell. Customer-only —
-// staff/owner/admin authenticate via the web dashboard, not this app (ARCHITECTURE.md §2). The
-// original prototype's screens remain as reference in /legacy-prototype.
-//
-// Phase 3B: once authenticated, mount the real navigation stack (salon browse + booking journey)
-// instead of rendering AccountScreen directly — every screen in RootNavigator assumes a logged-in
-// customer, same boundary as the web app's RequireRole gates.
+// Routes by the account's ACTUAL roles (never by which login screen was used to sign in) — an
+// owner-role account routes to the Owner shell even if it somehow also carries CUSTOMER, and an
+// owner+staff account gets the strictly-more-capable Owner shell. Customer is the fallback: every
+// account has at least one role, and the only other roles this app's login screens ever produce
+// are OWNER/STAFF, so falling through to Customer only happens for a genuine customer account.
+function AuthenticatedNavigator({ roles }: { roles: Role[] }) {
+  if (roles.includes(Role.SALON_OWNER)) return <OwnerNavigator />;
+  if (roles.includes(Role.SALON_STAFF)) return <StaffNavigator />;
+  return <RootNavigator />;
+}
+
 function Root() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
   if (status === 'loading') {
     return (
@@ -33,11 +40,9 @@ function Root() {
     );
   }
 
-  if (status !== 'authenticated') return <PhoneOtpLoginScreen />;
-
   return (
     <NavigationContainer>
-      <RootNavigator />
+      {status === 'authenticated' && user ? <AuthenticatedNavigator roles={user.roles} /> : <AuthStack />}
     </NavigationContainer>
   );
 }
@@ -67,9 +72,7 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <Root />
-        {/* Default for the authenticated app (RootNavigator's screens are dark-themed, unchanged
-            in this task) — PhoneOtpLoginScreen overrides this locally for its own light surface. */}
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </AuthProvider>
     </SafeAreaProvider>
   );

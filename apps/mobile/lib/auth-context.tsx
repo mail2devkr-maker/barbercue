@@ -5,6 +5,7 @@ import {
   type GoogleLoginInput,
   type MeResponse,
   type OtpVerifyInput,
+  type StaffLoginInput,
 } from '@barbercue/shared';
 import {
   apiFetch,
@@ -21,6 +22,11 @@ interface AuthContextValue {
   status: AuthStatus;
   verifyCustomerOtp: (input: OtpVerifyInput) => Promise<MeResponse>;
   googleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
+  // Same POST auth/staff/login endpoint web's own /owner/login and /staff/login pages call —
+  // it accepts either SALON_OWNER or SALON_STAFF accounts and returns MeResponse.roles, which
+  // callers use to route to the right shell. Not customer-facing; never exposed from the
+  // customer login screen.
+  staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
 }
 
@@ -86,6 +92,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuthResult],
   );
 
+  const staffLogin = useCallback(
+    async (input: StaffLoginInput): Promise<MeResponse> => {
+      // twoFactorRequired is always false in V1 (reserved for a future admin-style TOTP step on
+      // staff/owner accounts — see auth.service.ts) — every successful call already returns full
+      // tokens, so there is nothing else to branch on here.
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens; twoFactorRequired: boolean }>(
+        authPath(AUTH_PATHS.staffLogin),
+        { method: 'POST', body: JSON.stringify(input) },
+      );
+      return applyAuthResult(result);
+    },
+    [applyAuthResult],
+  );
+
   const logout = useCallback(async () => {
     const refreshToken = await getPersistedRefreshToken();
     try {
@@ -99,8 +119,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, status, verifyCustomerOtp, googleLogin, logout }),
-    [user, status, verifyCustomerOtp, googleLogin, logout],
+    () => ({ user, status, verifyCustomerOtp, googleLogin, staffLogin, logout }),
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
