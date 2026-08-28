@@ -1,6 +1,8 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   BookingErrorCode,
+  SalonSetupErrorCode,
+  normalizeServiceIdentity,
   type CreateSalonServiceInput,
   type SalonServiceDto,
   type UpdateSalonServiceInput,
@@ -43,10 +45,28 @@ export class SalonServicesService {
     input: CreateSalonServiceInput,
   ): Promise<SalonServiceDto> {
     await this.salonAccess.assertAccess(userId, salonId);
+    const existingServices = await this.prisma.service.findMany({
+      where: { salonId },
+    });
+    const identity = normalizeServiceIdentity(input.name, input.category);
+    const duplicate = existingServices.find(
+      (service) =>
+        normalizeServiceIdentity(service.name, service.category) === identity,
+    );
+    if (duplicate) {
+      throw new AppException(
+        SalonSetupErrorCode.SERVICE_ALREADY_EXISTS,
+        duplicate.isActive
+          ? 'That service is already in your catalog.'
+          : 'That service already exists but is turned off. Reactivate it instead.',
+        HttpStatus.CONFLICT,
+      );
+    }
     const created = await this.prisma.service.create({
       data: {
         salonId,
         name: input.name,
+        description: input.description?.trim() || null,
         // Prisma accepts a string for Decimal columns; going through String() avoids any
         // float-repr surprise on a money column.
         price: String(input.price),
@@ -82,6 +102,9 @@ export class SalonServicesService {
       where: { id: serviceId },
       data: {
         ...(input.name !== undefined && { name: input.name }),
+        ...(input.description !== undefined && {
+          description: input.description?.trim() || null,
+        }),
         ...(input.price !== undefined && { price: String(input.price) }),
         ...(input.durationMinutes !== undefined && {
           durationMinutes: input.durationMinutes,
@@ -106,6 +129,7 @@ export class SalonServicesService {
     service: {
       id: string;
       name: string;
+      description: string | null;
       durationMinutes: number;
       price: unknown;
       category: string | null;
@@ -116,6 +140,7 @@ export class SalonServicesService {
     return {
       id: service.id,
       name: service.name,
+      description: service.description,
       durationMinutes: service.durationMinutes,
       price: Number(service.price),
       category: service.category,

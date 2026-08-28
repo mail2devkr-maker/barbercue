@@ -319,10 +319,14 @@ export type StyleAdvisorErrorCode = (typeof StyleAdvisorErrorCode)[keyof typeof 
 // SalonAccessService failure) and BookingErrorCode.{SALON_NOT_FOUND,SERVICE_NOT_FOUND,
 // STAFF_NOT_FOUND,CHAIR_NOT_FOUND} rather than duplicating them.
 export const SalonSetupErrorCode = {
+  SERVICE_ALREADY_EXISTS: 'SERVICE_ALREADY_EXISTS',
   // Another SalonStaff row at this salon is already linked to that email's User account.
   STAFF_ALREADY_EXISTS: 'STAFF_ALREADY_EXISTS',
   // The email belongs to a User that is suspended — linking would create an unusable barber.
   STAFF_ACCOUNT_UNAVAILABLE: 'STAFF_ACCOUNT_UNAVAILABLE',
+  // Phone and email each resolve to a different existing User. Identities are never silently
+  // merged; the owner must correct one of them.
+  STAFF_IDENTITY_CONFLICT: 'STAFF_IDENTITY_CONFLICT',
   // Owner tried to open a PENDING salon that can't serve anyone yet. The error's `details` carry
   // a SalonSetupReadinessDto so the UI can tick off what's done and name what's missing, rather
   // than repeating a generic sentence.

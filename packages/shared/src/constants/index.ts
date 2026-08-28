@@ -32,6 +32,11 @@ export const AUTH_PATHS = {
   methods: 'methods',
 } as const;
 
+export const ADMIN_PATHS = {
+  admin: 'admin',
+  overview: 'overview',
+} as const;
+
 // Name of the httpOnly cookie the backend sets/reads for web refresh-token delivery. Shared so
 // the web app's fetch wrapper knows to send credentials, without needing to know the token value.
 export const REFRESH_TOKEN_COOKIE_NAME = 'barbercue_refresh_token';
@@ -166,6 +171,7 @@ export const DASHBOARD_PATHS = {
   staff: 'staff',
   call: 'call',
   assign: 'assign',
+  reassign: 'reassign',
   noShow: 'no-show',
   cancel: 'cancel',
   complete: 'complete',

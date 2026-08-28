@@ -1,11 +1,11 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
-import { DASHBOARD_PATHS, StaffMemberStatus } from "@barbercue/shared";
+import { createSalonStaffSchema, DASHBOARD_PATHS, StaffMemberStatus } from "@barbercue/shared";
 import type { SalonStaffDto, StaffInviteResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { Button } from "../../../../../../components/ui/Button";
+import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Barber roster (Phase 11) — replaces the previous placeholder. Adding a barber creates (or
@@ -23,6 +23,7 @@ export default function DashboardStaffPage({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // Populated only outside production, where the backend returns the invitation link because no
@@ -49,16 +50,30 @@ export default function DashboardStaffPage({
     setError(null);
     setNotice(null);
     setInviteUrl(null);
+    const parsed = createSalonStaffSchema.safeParse({
+      displayName: displayName.trim(),
+      phone: phone.replace(/[\s()-]/g, ""),
+      email: email.trim() || undefined,
+    });
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Check the barber's details.");
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await apiFetch<StaffInviteResultDto>(base, {
         method: "POST",
-        body: JSON.stringify({ displayName: displayName.trim(), email: email.trim() }),
+        body: JSON.stringify(parsed.data),
       });
       setStaff((prev) => [...(prev ?? []), result.staff]);
       setInviteUrl(result.inviteUrl ?? null);
-      setNotice(`Invitation sent to ${result.staff.email ?? "their email"}.`);
+      setNotice(
+        result.invitationSent && result.staff.email
+          ? `Barber added. Invitation sent to ${result.staff.email}.`
+          : "Barber added. No email invitation was sent.",
+      );
       setDisplayName("");
+      setPhone("");
       setEmail("");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not add that barber.");
@@ -103,15 +118,13 @@ export default function DashboardStaffPage({
 
   return (
     <main className={styles.page}>
-      <Link href={`/dashboard/salons/${salonId}/settings`} className={styles.backLink}>
-        ← Back to shop setup
-      </Link>
       <h1 className={styles.pageTitle}>Barbers</h1>
       <p className={styles.pageSubtitle}>
-        Add a barber and they&apos;ll get an emailed link to set their own password, then sign in
-        at <code>/staff/login</code> to run the queue. You never see or set their password. Only
-        barbers who are working count toward how many customers you can serve.
+        A name and international mobile number are required. Email is optional; when provided,
+        the barber receives the existing password setup invitation and can sign in at <code>/staff/login</code>.
+        Email-less barbers still work normally for staffing, assignments and queue capacity.
       </p>
+      <SetupNavigation salonId={salonId} currentStep="staff" section="steps" />
 
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
       {notice && <p className={`${styles.banner} ${styles.bannerNotice}`}>{notice}</p>}
@@ -142,7 +155,22 @@ export default function DashboardStaffPage({
           />
         </div>
         <div style={{ flex: "1 1 220px" }} className={styles.fieldWrap}>
-          <label className={styles.fieldLabel} htmlFor="staff-email">Their email</label>
+          <label className={styles.fieldLabel} htmlFor="staff-phone">Mobile number</label>
+          <input
+            id="staff-phone"
+            type="tel"
+            inputMode="tel"
+            placeholder="+91 98765 43210"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            required
+            autoComplete="tel"
+            className={styles.input}
+          />
+          <p className={styles.hint}>Use country code and number, such as +919876543210.</p>
+        </div>
+        <div style={{ flex: "1 1 220px" }} className={styles.fieldWrap}>
+          <label className={styles.fieldLabel} htmlFor="staff-email">Email (optional)</label>
           <input
             id="staff-email"
             type="email"
@@ -150,13 +178,12 @@ export default function DashboardStaffPage({
             placeholder="marcus@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="off"
+            autoComplete="email"
             className={styles.input}
           />
         </div>
         <Button type="submit" variant="secondary" fullWidth disabled={submitting}>
-          {submitting ? "Sending invitation…" : "Add barber"}
+          {submitting ? "Adding barber…" : "Add barber"}
         </Button>
       </form>
 
@@ -171,13 +198,14 @@ export default function DashboardStaffPage({
                   {m.displayName}
                 </span>
                 <div className={styles.rowMeta} style={{ wordBreak: "break-word" }}>
-                  {m.email}
+                  {m.phone ?? "Mobile not recorded (legacy staff)"}
+                  {m.email && ` · ${m.email}`}
                   {m.status !== StaffMemberStatus.ACTIVE && " · not working"}
-                  {!m.hasPassword && " · hasn't set their password yet"}
+                  {m.email && !m.hasPassword && " · hasn't set their password yet"}
                 </div>
               </div>
               <div className={styles.rowActions}>
-                {!m.hasPassword && (
+                {m.email && !m.hasPassword && (
                   <Button type="button" variant="outline" onClick={() => void resendInvite(m)}>
                     Resend invitation
                   </Button>
@@ -190,6 +218,7 @@ export default function DashboardStaffPage({
           ))}
         </ul>
       )}
+      <SetupNavigation salonId={salonId} currentStep="staff" section="actions" />
     </main>
   );
 }

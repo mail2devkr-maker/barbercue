@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import {
   DASHBOARD_PATHS,
   PhotoType,
@@ -12,6 +11,7 @@ import type { PhotoDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { SalonImage } from "../../../../../../components/ui/SalonImage";
 import { Button } from "../../../../../../components/ui/Button";
+import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 /** Which of the two routes to a photo the owner is using. Never both at once. */
@@ -200,6 +200,7 @@ export default function DashboardPhotosPage({
   }
 
   async function handleRemove(photo: PhotoDto) {
+    if (!window.confirm("Remove this photo from your shop? This only removes this photo record.")) return;
     setError(null);
     setSuccess(null);
     try {
@@ -211,17 +212,18 @@ export default function DashboardPhotosPage({
   }
 
   const cover = (photos ?? []).find((p) => p.type === PhotoType.COVER) ?? null;
+  const externalPreview = source === "link" && createSalonPhotoSchema.safeParse({
+    url: url.trim(), altText: altText.trim() || undefined, type,
+  }).success ? url.trim() : null;
 
   return (
     <main className={styles.page}>
-      <Link href={`/dashboard/salons/${salonId}/settings`} className={styles.backLink}>
-        ← Back to shop setup
-      </Link>
       <h1 className={styles.pageTitle}>Photos</h1>
       <p className={styles.pageSubtitle}>
         Your cover photo is what customers see first when they find you. Upload one straight from
-        your phone or computer, or paste a link to a photo you already have online.
+        your phone or computer, or paste a direct HTTPS image URL. Photos are optional during setup.
       </p>
+      <SetupNavigation salonId={salonId} currentStep="photos" section="steps" />
 
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
       {success && <p className={`${styles.banner} ${styles.bannerNotice}`}>{success}</p>}
@@ -330,8 +332,14 @@ export default function DashboardPhotosPage({
               className={styles.input}
             />
             <p className={styles.hint}>
-              A direct link to the image — your Google Business profile or Instagram both work.
+              Use a direct HTTPS URL ending in an image response. Google Business or Instagram
+              share-page links may block embedding and are not guaranteed to work.
             </p>
+            {externalPreview && (
+              <div style={{ maxWidth: 300, marginTop: 12 }}>
+                <SalonImage url={externalPreview} alt="Preview of the direct image URL" priority />
+              </div>
+            )}
           </div>
         )}
 
@@ -390,6 +398,7 @@ export default function DashboardPhotosPage({
           ))}
         </ul>
       )}
+      <SetupNavigation salonId={salonId} currentStep="photos" section="actions" />
     </main>
   );
 }

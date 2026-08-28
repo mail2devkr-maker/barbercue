@@ -66,13 +66,17 @@ function ReadinessItem({
 // publicId display (major-upgrade phase) is real: it's the shop's permanent, shareable identity.
 export default function DashboardSettingsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ salonId: string }>;
+  searchParams: Promise<{ setup?: string | string[] }>;
 }) {
   const { salonId } = use(params);
+  const query = use(searchParams);
   const [salon, setSalon] = useState<RegisterSalonResultDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const walkthroughComplete = query.setup === "complete";
   // Reported by SetupChecklist, which already counts services/chairs/barbers, and overwritten by
   // the server's own answer if an activation attempt is rejected. `setState` is a stable identity,
   // so passing it straight down can't loop the child's effect. Null until the counts load —
@@ -122,6 +126,12 @@ export default function DashboardSettingsPage({
     <main className={styles.page}>
       <Link href="/dashboard/salons" className={styles.backLink}>← Back to shops</Link>
       <h1 className={styles.pageTitle}>Settings — {salon?.name ?? "…"}</h1>
+      {walkthroughComplete && (
+        <div className={`${styles.banner} ${styles.bannerNotice}`} role="status">
+          <strong>Setup walkthrough complete.</strong> Review the readiness below. Your shop is not
+          opened automatically.
+        </div>
+      )}
       {/* This page is where RegisterSalonForm lands a brand-new owner, so it has to be a hub:
           without these the only route to services/chairs/staff is back out to the shop list. */}
       <nav className={styles.shopCardLinks} style={{ margin: "8px 0 4px" }}>
@@ -180,9 +190,15 @@ export default function DashboardSettingsPage({
                   </ul>
                 </div>
               )}
-              <Button type="button" variant="secondary" onClick={() => void changeStatus(SalonStatus.ACTIVE)} disabled={updatingStatus}>
-                {updatingStatus ? "Opening…" : "Open my shop"}
-              </Button>
+              {readiness && isReady(readiness) ? (
+                <Button type="button" variant="secondary" onClick={() => void changeStatus(SalonStatus.ACTIVE)} disabled={updatingStatus}>
+                  {updatingStatus ? "Opening…" : "Open my shop"}
+                </Button>
+              ) : (
+                <Link href={`/dashboard/salons/${salonId}/services`} className={styles.setupOverviewLink}>
+                  Continue setup →
+                </Link>
+              )}
             </>
           )}
         </section>

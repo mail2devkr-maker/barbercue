@@ -1,11 +1,11 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
 import { ChairStatus, DASHBOARD_PATHS } from "@barbercue/shared";
 import type { SalonChairDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { Button } from "../../../../../../components/ui/Button";
+import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // ChairStatus values are database enums, not language an owner should be shown.
@@ -28,6 +28,7 @@ export default function DashboardChairsPage({
 
   const [chairs, setChairs] = useState<SalonChairDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -65,15 +66,28 @@ export default function DashboardChairsPage({
 
   async function changeStatus(chair: SalonChairDto, status: ChairStatus) {
     setError(null);
+    setNotice(null);
     try {
       const updated = await apiFetch<SalonChairDto>(`${base}/${chair.id}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
       setChairs((prev) => (prev ?? []).map((c) => (c.id === updated.id ? updated : c)));
+      setNotice(
+        status === ChairStatus.INACTIVE
+          ? `${chair.label} removed from active capacity. Historical visits are unchanged.`
+          : status === ChairStatus.ACTIVE
+            ? `${chair.label} restored to active capacity.`
+            : `${chair.label} marked under repair.`,
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not update that chair.");
     }
+  }
+
+  function removeChair(chair: SalonChairDto) {
+    if (!window.confirm(`Remove ${chair.label} from active capacity? Past bookings and service history will remain intact.`)) return;
+    void changeStatus(chair, ChairStatus.INACTIVE);
   }
 
   const chairCount = chairs?.length ?? 0;
@@ -81,14 +95,12 @@ export default function DashboardChairsPage({
 
   return (
     <main className={styles.page}>
-      <Link href={`/dashboard/salons/${salonId}/settings`} className={styles.backLink}>
-        ← Back to shop setup
-      </Link>
       <h1 className={styles.pageTitle}>Chairs</h1>
       <p className={styles.pageSubtitle}>
         How many customers you can serve at once. Add one chair for each seat in your shop — most
         owners just name them Chair 1, Chair 2, Chair 3.
       </p>
+      <SetupNavigation salonId={salonId} currentStep="chairs" section="steps" />
 
       {chairs !== null && activeCount === 0 && chairCount > 0 && (
         <p className={`${styles.banner} ${styles.bannerWarning}`}>
@@ -96,6 +108,7 @@ export default function DashboardChairsPage({
         </p>
       )}
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
+      {notice && <p className={`${styles.banner} ${styles.bannerNotice}`} role="status">{notice}</p>}
 
       <form onSubmit={handleCreate} className={styles.form}>
         <div style={{ flex: "1 1 200px" }} className={styles.fieldWrap}>
@@ -125,21 +138,34 @@ export default function DashboardChairsPage({
                 <span className={styles.rowTitle} style={{ opacity: c.status === ChairStatus.ACTIVE ? 1 : 0.55 }}>{c.label}</span>
                 <div className={styles.rowMeta}>{STATUS_LABEL[c.status]}</div>
               </div>
-              <select
-                aria-label={`Status for ${c.label}`}
-                value={c.status}
-                onChange={(e) => void changeStatus(c, e.target.value as ChairStatus)}
-                className={styles.select}
-                style={{ width: "auto", minWidth: 150 }}
-              >
-                <option value={ChairStatus.ACTIVE}>{STATUS_LABEL[ChairStatus.ACTIVE]}</option>
-                <option value={ChairStatus.INACTIVE}>{STATUS_LABEL[ChairStatus.INACTIVE]}</option>
-                <option value={ChairStatus.MAINTENANCE}>{STATUS_LABEL[ChairStatus.MAINTENANCE]}</option>
-              </select>
+              <div className={styles.rowActions}>
+                {c.status === ChairStatus.INACTIVE ? (
+                  <Button type="button" variant="outline" onClick={() => void changeStatus(c, ChairStatus.ACTIVE)}>
+                    Restore chair
+                  </Button>
+                ) : (
+                  <>
+                    <select
+                      aria-label={`Operational status for ${c.label}`}
+                      value={c.status}
+                      onChange={(e) => void changeStatus(c, e.target.value as ChairStatus)}
+                      className={styles.select}
+                      style={{ width: "auto", minWidth: 150 }}
+                    >
+                      <option value={ChairStatus.ACTIVE}>{STATUS_LABEL[ChairStatus.ACTIVE]}</option>
+                      <option value={ChairStatus.MAINTENANCE}>{STATUS_LABEL[ChairStatus.MAINTENANCE]}</option>
+                    </select>
+                    <Button type="button" variant="outline" onClick={() => removeChair(c)}>
+                      Remove chair
+                    </Button>
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>
       )}
+      <SetupNavigation salonId={salonId} currentStep="chairs" section="actions" />
     </main>
   );
 }

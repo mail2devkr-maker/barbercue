@@ -55,6 +55,18 @@ export const assignQueueEntrySchema = z.object({
 });
 export type AssignQueueEntryInput = z.infer<typeof assignQueueEntrySchema>;
 
+// PATCH /dashboard/queue-entries/:id/reassign — only the assignment changes. Service, token,
+// queue position and timestamps remain authoritative on the existing entry/session.
+export const reassignQueueEntrySchema = z
+  .object({
+    staffId: z.string().uuid().optional(),
+    chairId: z.string().uuid().optional(),
+  })
+  .refine((v) => v.staffId !== undefined || v.chairId !== undefined, {
+    message: 'Choose a barber, a chair, or both',
+  });
+export type ReassignQueueEntryInput = z.infer<typeof reassignQueueEntrySchema>;
+
 // PATCH /dashboard/staff/:id/status
 export const staffStatusSchema = z.object({
   status: z.nativeEnum(StaffMemberStatus),
@@ -237,6 +249,7 @@ export type CancellationPolicyInput = z.infer<typeof cancellationPolicySchema>;
 // booking/slot engine works in minutes.
 export const createSalonServiceSchema = z.object({
   name: z.string().min(1).max(120),
+  description: z.string().trim().max(1000).optional(),
   price: z.number().min(0).max(1_000_000),
   durationMinutes: z.number().int().min(5).max(480),
   category: z.string().min(1).max(60).optional(),
@@ -249,6 +262,7 @@ export type CreateSalonServiceInput = z.infer<typeof createSalonServiceSchema>;
 export const updateSalonServiceSchema = z
   .object({
     name: z.string().min(1).max(120).optional(),
+    description: z.string().trim().max(1000).nullable().optional(),
     price: z.number().min(0).max(1_000_000).optional(),
     durationMinutes: z.number().int().min(5).max(480).optional(),
     category: z.string().min(1).max(60).nullable().optional(),
@@ -346,13 +360,18 @@ export const updateSalonChairSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateSalonChairInput = z.infer<typeof updateSalonChairSchema>;
 
-// POST dashboard/salons/:salonId/staff — onboard a barber. Email is required because it is both
-// the invitation destination and the barber's future /staff/login identity. MVP is BARBER-only
-// (see ARCHITECTURE.md §22): MANAGER exists in the schema but carries no distinct permissions
-// yet, so offering it would imply an authorization difference that does not exist.
+// POST dashboard/salons/:salonId/staff — onboard a barber. Phone is the required stable contact;
+// email is optional and enables the existing password invitation flow. MVP is BARBER-only (see
+// ARCHITECTURE.md §22): MANAGER exists in the schema but carries no distinct permissions yet.
+export const e164PhoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\+[1-9]\d{7,14}$/, 'Use international format, e.g. +919876543210');
+
 export const createSalonStaffSchema = z.object({
-  displayName: z.string().min(1).max(120),
-  email: z.string().email(),
+  displayName: z.string().trim().min(1).max(120),
+  phone: e164PhoneSchema,
+  email: z.string().trim().email().optional(),
 });
 export type CreateSalonStaffInput = z.infer<typeof createSalonStaffSchema>;
 

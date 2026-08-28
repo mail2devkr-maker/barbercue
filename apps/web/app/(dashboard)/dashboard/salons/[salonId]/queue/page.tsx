@@ -1,4 +1,6 @@
 import { DashboardQueueView } from "../../../../../../components/queue/DashboardQueueView";
+import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
+import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Live queue view for salon staff/owners — call/assign/complete/no-show/cancel and staff
 // clock-in/out, all with realtime push updates over the /realtime socket namespace.
@@ -9,20 +11,23 @@ export default async function DashboardQueuePage({
 }) {
   const { salonId } = await params;
   return (
-    <main style={{ padding: "2.5rem 1.5rem 3rem", maxWidth: 900, margin: "0 auto" }}>
-      <h1
-        style={{
-          fontFamily: "var(--font-display)",
-          fontWeight: 600,
-          fontSize: "1.8rem",
-          letterSpacing: "-0.01em",
-          marginBottom: 20,
-          color: "var(--bc-ink)",
-        }}
-      >
-        Live queue
-      </h1>
+    <main className={styles.pageWide}>
+      <h1 className={styles.pageTitle}>Live queue</h1>
+      <p className={styles.pageSubtitle}>
+        Your operational floor: call, assign and complete customer visits in real time.
+      </p>
+      <SetupNavigation salonId={salonId} currentStep="queue" section="steps" />
       <DashboardQueueView salonId={salonId} />
+      <SetupNavigation
+        salonId={salonId}
+        currentStep="queue"
+        section="actions"
+        nextAction={{
+          kind: "link",
+          href: `/dashboard/salons/${salonId}/settings?setup=complete`,
+          label: "Finish setup",
+        }}
+      />
     </main>
   );
 }

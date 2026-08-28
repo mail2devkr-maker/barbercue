@@ -31,8 +31,8 @@ export function SalonImage({
 }) {
   // A URL that 404s or is hotlink-blocked must degrade to the same honest empty state rather than
   // leaving a broken-image glyph on a premium page.
-  const [failed, setFailed] = useState(false);
-  const showImage = url !== null && !failed;
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const showImage = url !== null && failedUrl !== url;
 
   return (
     <div
@@ -56,7 +56,7 @@ export function SalonImage({
         <img
           src={url}
           alt={alt}
-          onError={() => setFailed(true)}
+          onError={() => setFailedUrl(url)}
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "auto"}
@@ -64,9 +64,38 @@ export function SalonImage({
         />
       ) : (
         <span
-          style={{ color: "var(--bc-muted, #6B6357)", fontSize: 13, padding: "0 12px", textAlign: "center" }}
+          role="img"
+          aria-label={alt}
+          style={{
+            color: "var(--bc-muted, #6B6357)",
+            fontSize: 13,
+            padding: "0 12px",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
+          }}
         >
-          No photo yet
+          <span
+            aria-hidden="true"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: "50%",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "var(--bc-ink, #1C1A17)",
+              color: "#fff",
+              fontSize: 11,
+              fontWeight: 750,
+              letterSpacing: "0.08em",
+            }}
+          >
+            BC
+          </span>
+          {url ? "Photo unavailable" : "No photo yet"}
         </span>
       )}
     </div>

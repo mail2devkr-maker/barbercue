@@ -11,6 +11,9 @@ import type {
   SalonStaffRole,
   SalonStatus,
   StaffMemberStatus,
+  SubscriptionStatus,
+  CustomerSubscriptionStatus,
+  UserStatus,
 } from '../enums';
 
 // DTO shapes only — no I/O, no ORM types leak here. These mirror DATABASE.md/API.md and are the
@@ -451,6 +454,7 @@ export interface PublicQueueQrDto {
 export interface SalonServiceDto {
   id: string;
   name: string;
+  description: string | null;
   durationMinutes: number;
   price: number;
   category: string | null;
@@ -467,23 +471,24 @@ export interface SalonChairDto {
   status: ChairStatus;
 }
 
-// Owner-facing roster entry. `email` comes from the linked User account (SalonStaff itself has no
-// email column) and is what the barber signs in with at /staff/login. `hasPassword` is false
-// until the barber completes their invitation, so the UI can show "invite pending".
+// Owner-facing roster entry. Phone/email come from the linked User account (SalonStaff itself has
+// no duplicate contact columns). Legacy staff may have email but no phone; new rows require phone.
 export interface SalonStaffDto {
   id: string;
   displayName: string;
+  phone: string | null;
   email: string | null;
   roleInSalon: SalonStaffRole;
   status: StaffMemberStatus;
   hasPassword: boolean;
 }
 
-// POST .../staff response. `inviteUrl` is populated ONLY outside production (same dev-convenience
-// rule as AuthService.forgotPassword's devResetUrl) — in production the link is delivered by
-// EmailSender and never returned over the API.
+// POST .../staff response. invitationSent stays truthful for email-less staff. `inviteUrl` is
+// populated ONLY outside production — in production a real link is delivered by EmailSender and
+// never returned over the API.
 export interface StaffInviteResultDto {
   staff: SalonStaffDto;
+  invitationSent: boolean;
   inviteUrl?: string;
 }
 
@@ -505,6 +510,81 @@ export interface SalonSetupReadinessDto {
   hasActiveService: boolean;
   hasActiveChair: boolean;
   hasActiveStaff: boolean;
+}
+
+// ---------- Platform admin monitoring ----------
+
+export interface PlatformAdminOverviewDto {
+  generatedAt: string;
+  counts: {
+    shops: number;
+    owners: number;
+    staff: number;
+    customers: number;
+    bookings: number;
+    liveQueueEntries: number;
+    activePremiumSubscriptions: number;
+  };
+  shops: Array<{
+    id: string;
+    publicId: string;
+    name: string;
+    status: SalonStatus;
+    subscriptionStatus: SubscriptionStatus;
+    ownerEmail: string | null;
+    ownerPhone: string | null;
+    staffCount: number;
+    bookingCount: number;
+    liveQueueCount: number;
+    createdAt: string;
+  }>;
+  staff: Array<{
+    id: string;
+    displayName: string;
+    status: StaffMemberStatus;
+    salonName: string;
+    salonPublicId: string;
+    email: string | null;
+    phone: string | null;
+  }>;
+  customers: Array<{
+    id: string;
+    status: UserStatus;
+    email: string | null;
+    phone: string | null;
+    bookingCount: number;
+    queueEntryCount: number;
+    isPremium: boolean;
+    createdAt: string;
+  }>;
+  recentBookings: Array<{
+    id: string;
+    status: BookingStatus;
+    slotStart: string;
+    salonName: string;
+    serviceName: string;
+    customerEmail: string | null;
+    customerPhone: string | null;
+  }>;
+  recentQueue: Array<{
+    id: string;
+    tokenNumber: number;
+    status: QueueEntryStatus;
+    joinedAt: string;
+    salonName: string;
+    serviceName: string | null;
+    customerPhone: string | null;
+    assignedStaffName: string | null;
+    assignedChairLabel: string | null;
+  }>;
+  premiumSubscriptions: Array<{
+    id: string;
+    status: CustomerSubscriptionStatus;
+    planName: string;
+    periodEnd: string;
+    customerEmail: string | null;
+    customerPhone: string | null;
+  }>;
 }
 
 export interface HealthCheckResponse {

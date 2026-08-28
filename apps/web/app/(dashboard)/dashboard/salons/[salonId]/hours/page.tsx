@@ -1,11 +1,12 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DASHBOARD_PATHS, setOperatingHoursSchema } from "@barbercue/shared";
 import type { OperatingHoursDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { Button } from "../../../../../../components/ui/Button";
+import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // 0 = Sunday .. 6 = Saturday — the convention OperatingHours.dayOfWeek already uses.
@@ -25,6 +26,7 @@ export default function DashboardHoursPage({
   params: Promise<{ salonId: string }>;
 }) {
   const { salonId } = use(params);
+  const router = useRouter();
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.operatingHours}`;
 
   const [days, setDays] = useState<OperatingHoursDto[] | null>(null);
@@ -83,6 +85,10 @@ export default function DashboardHoursPage({
       });
       setDays(saved);
       setNotice("Opening hours saved. Customers can now book during these times.");
+      const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+      if (submitter?.value === "next") {
+        router.push(`/dashboard/salons/${salonId}/photos`);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save your opening hours.");
     } finally {
@@ -94,14 +100,12 @@ export default function DashboardHoursPage({
 
   return (
     <main className={styles.page}>
-      <Link href={`/dashboard/salons/${salonId}/settings`} className={styles.backLink}>
-        ← Back to shop setup
-      </Link>
       <h1 className={styles.pageTitle}>Opening hours</h1>
       <p className={styles.pageSubtitle}>
         When customers can book an appointment with you. Walk-ins can still join your queue at any
         time — these hours only control online booking.
       </p>
+      <SetupNavigation salonId={salonId} currentStep="hours" section="steps" />
 
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
       {notice && <p className={`${styles.banner} ${styles.bannerNotice}`}>{notice}</p>}
@@ -114,7 +118,7 @@ export default function DashboardHoursPage({
       {days === null && <p className={styles.loadingText}>Loading…</p>}
 
       {days && (
-        <form onSubmit={handleSave}>
+        <form id="opening-hours-form" onSubmit={handleSave}>
           <ul className={styles.rowList} style={{ margin: "20px 0" }}>
             {days.map((d) => (
               <li key={d.dayOfWeek} className={styles.row}>
@@ -164,11 +168,17 @@ export default function DashboardHoursPage({
             ))}
           </ul>
 
-          <Button type="submit" variant="secondary" disabled={saving}>
+          <Button type="submit" name="setupIntent" value="save" variant="outline" disabled={saving}>
             {saving ? "Saving…" : "Save opening hours"}
           </Button>
         </form>
       )}
+      <SetupNavigation
+        salonId={salonId}
+        currentStep="hours"
+        section="actions"
+        nextAction={{ kind: "submit", formId: "opening-hours-form", disabled: saving || days === null }}
+      />
     </main>
   );
 }

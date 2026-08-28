@@ -37,9 +37,8 @@ function hashResetToken(rawToken: string): string {
  * no role, or SalonStaff with no login) is worse than none:
  *   User (login identity)  +  UserRole(SALON_STAFF, salonId)  +  SalonStaff (roster entry)
  *
- * Account handling follows the same find-or-link rule AuthService.googleLogin already uses: if
- * the email already belongs to a User, that User is linked rather than duplicated, so a person
- * who is already a customer can also become a barber on one account.
+ * Account handling resolves phone and optional email together. A single matching User is linked;
+ * identifiers that resolve to different Users are rejected and never silently merged.
  */
 @Injectable()
 export class SalonStaffService {
@@ -54,14 +53,16 @@ export class SalonStaffService {
     const staff = await this.prisma.salonStaff.findMany({
       where: { salonId },
       orderBy: [{ status: 'asc' }, { displayName: 'asc' }],
-      include: { user: { select: { email: true, passwordHash: true } } },
+      include: {
+        user: { select: { phone: true, email: true, passwordHash: true } },
+      },
     });
     return staff.map((s) => this.toDto(s));
   }
 
   /**
-   * Creates (or links) the barber's account and issues an invitation link. Returns the link in
-   * `inviteUrl` only outside production — identical dev-convenience rule to
+   * Creates (or links) the barber's account. When email was supplied it issues an invitation and
+   * returns the link in `inviteUrl` only outside production — identical dev-convenience rule to
    * AuthService.forgotPassword's `devResetUrl`, since no email provider is wired yet
    * (ConsoleEmailSender logs the link). In production the link is delivered by email only.
    */
@@ -72,22 +73,73 @@ export class SalonStaffService {
   ): Promise<StaffInviteResultDto> {
     await this.salonAccess.assertAccess(userId, salonId);
 
-    const email = input.email.trim().toLowerCase();
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
-    });
+    const phone = input.phone.trim();
+    const email = input.email?.trim().toLowerCase() || null;
+    const rawToken = email ? randomBytes(32).toString('hex') : null;
+    const staffId = await this.prisma.$transaction(async (tx) => {
+      const users = await tx.user.findMany({
+        where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
+      });
+      const byPhone =
+        users.find((candidate) => candidate.phone === phone) ?? null;
+      const byEmail = email
+        ? (users.find(
+            (candidate) => candidate.email?.toLowerCase() === email,
+          ) ?? null)
+        : null;
 
-    if (existingUser && existingUser.status !== UserStatus.ACTIVE) {
-      throw new AppException(
-        SalonSetupErrorCode.STAFF_ACCOUNT_UNAVAILABLE,
-        'That email belongs to a suspended account and cannot be added as staff.',
-        HttpStatus.CONFLICT,
-      );
-    }
+      if (byPhone && byEmail && byPhone.id !== byEmail.id) {
+        throw new AppException(
+          SalonSetupErrorCode.STAFF_IDENTITY_CONFLICT,
+          'That mobile number and email belong to different accounts. Check the details and try again.',
+          HttpStatus.CONFLICT,
+        );
+      }
 
-    if (existingUser) {
-      const alreadyOnRoster = await this.prisma.salonStaff.findFirst({
-        where: { salonId, userId: existingUser.id },
+      const existingUser = byPhone ?? byEmail;
+      if (existingUser && existingUser.status !== UserStatus.ACTIVE) {
+        throw new AppException(
+          SalonSetupErrorCode.STAFF_ACCOUNT_UNAVAILABLE,
+          'That mobile number or email belongs to a suspended account and cannot be added as staff.',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      if (
+        existingUser &&
+        ((existingUser.phone && existingUser.phone !== phone) ||
+          (email &&
+            existingUser.email &&
+            existingUser.email.toLowerCase() !== email))
+      ) {
+        throw new AppException(
+          SalonSetupErrorCode.STAFF_IDENTITY_CONFLICT,
+          'Those contact details do not match the same existing account.',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      // Link when either identifier finds an account. A missing phone/email may be filled, but a
+      // different existing identity is never overwritten or silently merged.
+      const identityPatch = existingUser
+        ? {
+            ...(!existingUser.phone && { phone }),
+            ...(email && !existingUser.email && { email }),
+          }
+        : null;
+      const user = existingUser
+        ? Object.keys(identityPatch ?? {}).length > 0
+          ? await tx.user.update({
+              where: { id: existingUser.id },
+              data: identityPatch!,
+            })
+          : existingUser
+        : await tx.user.create({
+            data: { phone, ...(email && { email }), status: UserStatus.ACTIVE },
+          });
+
+      const alreadyOnRoster = await tx.salonStaff.findFirst({
+        where: { salonId, userId: user.id },
       });
       if (alreadyOnRoster) {
         throw new AppException(
@@ -96,18 +148,6 @@ export class SalonStaffService {
           HttpStatus.CONFLICT,
         );
       }
-    }
-
-    const rawToken = randomBytes(32).toString('hex');
-    const staffId = await this.prisma.$transaction(async (tx) => {
-      // Link the existing account when there is one, otherwise create a passwordless User — the
-      // barber sets their own password by redeeming the invitation, so no temporary credential
-      // is ever generated, transmitted, or seen by the owner.
-      const user =
-        existingUser ??
-        (await tx.user.create({
-          data: { email, status: UserStatus.ACTIVE },
-        }));
 
       // upsert, not create: the person may already hold this role (e.g. re-added after being
       // removed from a different salon), and the composite unique is (userId, role, salonId).
@@ -135,24 +175,30 @@ export class SalonStaffService {
         },
       });
 
-      await tx.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          tokenHash: hashResetToken(rawToken),
-          expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60_000),
-        },
-      });
+      if (email && rawToken) {
+        await tx.passwordResetToken.create({
+          data: {
+            userId: user.id,
+            tokenHash: hashResetToken(rawToken),
+            expiresAt: new Date(
+              Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60_000,
+            ),
+          },
+        });
+      }
 
       return created.id;
     });
 
-    const inviteUrl = this.buildInviteUrl(rawToken);
-    await this.emailSender.sendPasswordReset(email, inviteUrl);
+    const inviteUrl = rawToken ? this.buildInviteUrl(rawToken) : null;
+    if (email && inviteUrl)
+      await this.emailSender.sendPasswordReset(email, inviteUrl);
 
     const staff = await this.getDtoOrThrow(salonId, staffId);
+    if (!email || !inviteUrl) return { staff, invitationSent: false };
     return process.env.NODE_ENV === 'production'
-      ? { staff }
-      : { staff, inviteUrl };
+      ? { staff, invitationSent: true }
+      : { staff, invitationSent: true, inviteUrl };
   }
 
   /** Re-issues an invitation link — for a barber who never redeemed the first one, or lost it. */
@@ -195,8 +241,8 @@ export class SalonStaffService {
 
     const dto = await this.getDtoOrThrow(salonId, staffId);
     return process.env.NODE_ENV === 'production'
-      ? { staff: dto }
-      : { staff: dto, inviteUrl };
+      ? { staff: dto, invitationSent: true }
+      : { staff: dto, invitationSent: true, inviteUrl };
   }
 
   async update(
@@ -242,7 +288,9 @@ export class SalonStaffService {
   ): Promise<SalonStaffDto> {
     const staff = await this.prisma.salonStaff.findFirst({
       where: { id: staffId, salonId },
-      include: { user: { select: { email: true, passwordHash: true } } },
+      include: {
+        user: { select: { phone: true, email: true, passwordHash: true } },
+      },
     });
     if (!staff) {
       throw new AppException(
@@ -259,11 +307,16 @@ export class SalonStaffService {
     displayName: string;
     roleInSalon: SalonStaffRole;
     status: StaffMemberStatus;
-    user: { email: string | null; passwordHash: string | null };
+    user: {
+      phone: string | null;
+      email: string | null;
+      passwordHash: string | null;
+    };
   }): SalonStaffDto {
     return {
       id: staff.id,
       displayName: staff.displayName,
+      phone: staff.user.phone,
       email: staff.user.email,
       roleInSalon: staff.roleInSalon,
       status: staff.status,
