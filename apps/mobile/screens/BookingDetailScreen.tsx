@@ -162,12 +162,25 @@ export default function BookingDetailScreen({ route }: Props) {
       <SectionHeader eyebrow="Booking" title={booking.serviceName} subtitle={booking.salonName} />
 
       <Card style={styles.card}>
-        <Text style={styles.line}>{new Date(booking.slotStart).toLocaleString()}</Text>
         <Text style={[styles.status, { color: statusColor(booking.status) }]}>Status: {booking.status}</Text>
+        <Text style={styles.line}>
+          {new Date(booking.slotStart).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+        </Text>
+        <Text style={styles.line}>
+          {new Date(booking.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} –{' '}
+          {new Date(booking.slotEnd).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          {` (${booking.serviceDurationMinutes} min)`}
+        </Text>
+        <Text style={styles.line}>{formatMoney(booking.servicePrice, booking.currency)}</Text>
         {booking.preferredStaffName && <Text style={styles.line}>Preferred barber: {booking.preferredStaffName}</Text>}
+        {booking.selectedStyleName && <Text style={styles.line}>Style: {booking.selectedStyleName}</Text>}
+        {booking.prepaymentRequiredAmount !== null && booking.prepaymentRequiredAmount > 0 && (
+          <Text style={styles.line}>Prepayment required: {formatMoney(booking.prepaymentRequiredAmount, booking.currency)}</Text>
+        )}
         {booking.cancellationChargeAmount !== null && booking.cancellationChargeAmount > 0 && (
           <Text style={styles.line}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
         )}
+        <Text style={styles.bookingId}>Booking ID: {booking.id.slice(0, 8).toUpperCase()}</Text>
       </Card>
 
       {error && <InlineError message={error} />}
@@ -221,7 +234,8 @@ const styles = StyleSheet.create({
   lineSkeleton: { height: 16, borderRadius: 6, width: '60%' },
   card: { marginBottom: space[4] },
   line: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginBottom: space[1] },
-  status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, marginTop: space[1], marginBottom: space[1] },
+  status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, marginBottom: space[2] },
+  bookingId: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
   actionButton: { marginBottom: space[3] },
   confirmBox: { marginBottom: space[4] },
   confirmTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, marginBottom: space[2] },

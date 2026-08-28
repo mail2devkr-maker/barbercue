@@ -27,6 +27,13 @@ interface AuthContextValue {
   // callers use to route to the right shell. Not customer-facing; never exposed from the
   // customer login screen.
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
+  // Same POST auth/staff/google contract as staffLogin above, but via Google Sign-In — verified
+  // server-side, restricted to accounts that already hold SALON_OWNER/SALON_STAFF (see
+  // auth.service.ts's staffGoogleLogin doc comment). Never creates a user, never elevates a
+  // customer-only account. Reuses the exact same GoogleOneTapSignIn flow the customer login
+  // screen uses to obtain the ID token — this method only differs in which backend endpoint the
+  // token is sent to.
+  staffGoogleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
 }
 
@@ -92,6 +99,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuthResult],
   );
 
+  const staffGoogleLogin = useCallback(
+    async (input: GoogleLoginInput): Promise<MeResponse> => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.staffGoogle), {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+      return applyAuthResult(result);
+    },
+    [applyAuthResult],
+  );
+
   const staffLogin = useCallback(
     async (input: StaffLoginInput): Promise<MeResponse> => {
       // twoFactorRequired is always false in V1 (reserved for a future admin-style TOTP step on
@@ -119,8 +137,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, status, verifyCustomerOtp, googleLogin, staffLogin, logout }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, logout],
+    () => ({ user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout }),
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

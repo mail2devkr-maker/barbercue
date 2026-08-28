@@ -1,6 +1,14 @@
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import {
+  GoogleOneTapSignIn,
+  isCancelledResponse,
+  isErrorWithCode,
+  isNoSavedCredentialFoundResponse,
+  isSuccessResponse,
+  statusCodes,
+} from 'react-native-nitro-google-signin';
 import { staffLoginSchema } from '@barbercue/shared';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
@@ -15,17 +23,26 @@ const COPY: Record<'OWNER' | 'STAFF', { eyebrow: string; title: string }> = {
   STAFF: { eyebrow: 'Barber / Staff', title: 'Sign in to work today' },
 };
 
+// GoogleOneTapSignIn.configure() runs once at module load inside PhoneOtpLoginScreen.tsx, which
+// AuthStack.tsx already imports unconditionally — evaluating that module (not rendering it)
+// triggers the top-level configure() call, so it has always already run by the time this screen
+// can be reached. This screen deliberately does NOT call configure() again — same singleton
+// native module, same Web client ID, same Android OAuth client. Only the backend endpoint the
+// resulting ID token is sent to differs (auth/staff/google here vs auth/google for customers).
+const GOOGLE_CONFIGURED = Boolean(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
+
 // Same POST auth/staff/login web's own /owner/login and /staff/login pages call — the account's
 // actual roles (not which button was tapped here) determine what the app shows after sign-in.
 // This screen never invents a password-reset or 2FA step the backend doesn't have; forgot-password
 // exists (auth/forgot-password) and could be wired in later the same way web's page does it.
 export default function OwnerStaffLoginScreen({ route }: Props) {
   const { role } = route.params;
-  const { staffLogin } = useAuth();
+  const { staffLogin, staffGoogleLogin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   async function handleSubmit() {
     setError(null);
@@ -46,13 +63,59 @@ export default function OwnerStaffLoginScreen({ route }: Props) {
     }
   }
 
+  async function handleGoogleSignIn() {
+    setError(null);
+    setGoogleSubmitting(true);
+    try {
+      await GoogleOneTapSignIn.checkPlayServices();
+      let response = await GoogleOneTapSignIn.signIn();
+      if (isNoSavedCredentialFoundResponse(response)) {
+        response = await GoogleOneTapSignIn.createAccount();
+      }
+      if (isCancelledResponse(response)) return;
+      if (isSuccessResponse(response)) {
+        // Backend rejects this exact idToken outright if the Google account isn't already a
+        // registered SALON_OWNER/SALON_STAFF — see auth.service.ts's staffGoogleLogin. Never
+        // creates an account and never grants a role based on this call.
+        await staffGoogleLogin({ idToken: response.data.idToken });
+      }
+    } catch (err) {
+      if (isErrorWithCode(err) && err.code === statusCodes.SIGN_IN_CANCELLED) {
+        return;
+      }
+      setError(err instanceof ApiError ? err.message : 'Could not sign in with Google. Please try again.');
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }
+
   const copy = COPY[role];
 
   return (
     <Screen contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle="Use the email and password from your BarberCue dashboard account." />
+      <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle="Use your BarberCue dashboard account." />
 
       {error && <InlineError message={error} />}
+
+      {GOOGLE_CONFIGURED && (
+        <>
+          <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={googleSubmitting}>
+            {googleSubmitting ? (
+              <ActivityIndicator color={color.ink} />
+            ) : (
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            )}
+          </Pressable>
+          <Text style={styles.googleNote}>
+            Only works if this Google account is already registered as {role === 'OWNER' ? 'a shop owner' : 'staff'}.
+          </Text>
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+        </>
+      )}
 
       <View style={styles.field}>
         <Text style={styles.label}>Email</Text>
@@ -100,4 +163,26 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
   },
   submitButton: { marginTop: space[2] },
+  googleButton: {
+    minHeight: 50,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.ink,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: space[3],
+  },
+  googleButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  googleNote: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2], textAlign: 'center' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: space[4] },
+  dividerLine: { flex: 1, height: 1, backgroundColor: color.border },
+  dividerText: {
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: color.muted,
+    marginHorizontal: space[3],
+  },
 });
