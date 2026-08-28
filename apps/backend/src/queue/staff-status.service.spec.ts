@@ -25,6 +25,7 @@ describe('StaffStatusService', () => {
   let prisma: {
     salonStaff: {
       findUnique: jest.Mock<Promise<unknown>, [unknown]>;
+      findFirst: jest.Mock<Promise<unknown>, [unknown]>;
       update: jest.Mock<Promise<unknown>, [unknown]>;
     };
   };
@@ -35,6 +36,7 @@ describe('StaffStatusService', () => {
     prisma = {
       salonStaff: {
         findUnique: jest.fn<Promise<unknown>, [unknown]>(),
+        findFirst: jest.fn<Promise<unknown>, [unknown]>(),
         update: jest.fn<Promise<unknown>, [unknown]>(),
       },
     };
@@ -137,5 +139,22 @@ describe('StaffStatusService', () => {
       service.updateStatus(otherStaff, 'staff1', StaffMemberStatus.ACTIVE),
     ).rejects.toMatchObject({ code: 'NOT_YOUR_STAFF_PROFILE' });
     expect(prisma.salonStaff.update).not.toHaveBeenCalled();
+  });
+
+  describe('getMe', () => {
+    it('resolves the caller\'s own SalonStaff row at this salon', async () => {
+      prisma.salonStaff.findFirst.mockResolvedValue(makeStaffRow());
+      const result = await service.getMe('user-staff1', 's1');
+      expect(prisma.salonStaff.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-staff1', salonId: 's1' },
+      });
+      expect(result).toEqual({ id: 'staff1', displayName: 'Marcus', status: StaffMemberStatus.INACTIVE });
+    });
+
+    it('returns null (not an error) when this user has no roster row at this salon', async () => {
+      prisma.salonStaff.findFirst.mockResolvedValue(null);
+      const result = await service.getMe('owner1', 's1');
+      expect(result).toBeNull();
+    });
   });
 });

@@ -82,4 +82,12 @@ export class DashboardQueueController {
   ) {
     return this.staffStatusService.updateStatus(user, id, body.status);
   }
+
+  @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.staff}/${DASHBOARD_PATHS.me}`)
+  getMyStaffProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.staffStatusService.getMe(user.id, salonId);
+  }
 }

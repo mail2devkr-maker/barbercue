@@ -200,6 +200,11 @@ export const DASHBOARD_PATHS = {
   // Owner-only salon-scoped booking operations (Phase: owner booking dashboard) — mounted at
   // dashboard/salons/:salonId/bookings, same shape as `queue` above.
   bookings: 'bookings',
+  // GET dashboard/salons/:salonId/staff/me — "which SalonStaff row is *me*" for the authenticated
+  // staff/owner user at this salon, so a client can self clock-in/out via the existing
+  // `dashboard/staff/:id/status` route without already knowing its own staffId. Never collides with
+  // salon-setup.controller.ts's `staff/:staffId` PATCH — there is no competing GET on that shape.
+  me: 'me',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

@@ -63,4 +63,16 @@ export class StaffStatusService {
       status: updated.status,
     };
   }
+
+  // "Which SalonStaff row is *me*, at this salon" — resolves the gap noted in staff-status.service's
+  // own updateStatus() above, where a caller must already know their staffId. Null (not a 404) when
+  // this user has no roster row here: an owner viewing a salon they don't work a chair at is not an
+  // error, just "nothing to self clock-in as."
+  async getMe(userId: string, salonId: string): Promise<StaffStatusDto | null> {
+    const staff = await this.prisma.salonStaff.findFirst({
+      where: { userId, salonId },
+    });
+    if (!staff) return null;
+    return { id: staff.id, displayName: staff.displayName, status: staff.status };
+  }
 }
