@@ -1,0 +1,180 @@
+.tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--bc-space-3);
+  margin-bottom: var(--bc-space-3);
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bc-space-2);
+  margin-bottom: var(--bc-space-4);
+}
+
+.filterChip {
+  border: 1px solid var(--bc-border);
+  background: var(--bc-surface);
+  color: var(--bc-muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: var(--bc-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filterChipActive {
+  border-color: var(--bc-accent);
+  background: color-mix(in srgb, var(--bc-accent) 12%, transparent);
+  color: var(--bc-accent);
+}
+
+.liveAnnouncer {
+  min-height: 0;
+}
+
+.newBookingBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bc-space-3);
+  background: color-mix(in srgb, var(--bc-success) 10%, var(--bc-surface));
+  border: 1px solid color-mix(in srgb, var(--bc-success) 30%, var(--bc-border));
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-3) var(--bc-space-4);
+  margin-bottom: var(--bc-space-3);
+}
+
+.newBookingBanner strong {
+  display: block;
+  color: var(--bc-success);
+}
+
+.newBookingBanner span {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+}
+
+.cancelBanner {
+  background: color-mix(in srgb, var(--bc-warn) 10%, var(--bc-surface));
+  border-color: color-mix(in srgb, var(--bc-warn) 30%, var(--bc-border));
+}
+
+.cancelBanner strong {
+  color: var(--bc-warn);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bc-space-3);
+}
+
+.card {
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  padding: var(--bc-space-4);
+  background: var(--bc-surface);
+  cursor: pointer;
+}
+
+.cardNew {
+  border-color: var(--bc-success);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bc-success) 40%, transparent);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--bc-space-3);
+}
+
+.cardTitle {
+  font-weight: 600;
+  color: var(--bc-ink);
+}
+
+.cardMeta {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  margin-top: 2px;
+}
+
+.newBadge {
+  background: var(--bc-success);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 8px;
+}
+
+.statusBadge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.statusConfirmed,
+.statusPending {
+  color: var(--bc-warn);
+  background: color-mix(in srgb, var(--bc-warn) 14%, transparent);
+}
+
+.statusCompleted {
+  color: var(--bc-success);
+  background: color-mix(in srgb, var(--bc-success) 14%, transparent);
+}
+
+.statusCancelled,
+.statusNoShow {
+  color: var(--bc-accent);
+  background: color-mix(in srgb, var(--bc-accent) 14%, transparent);
+}
+
+.detail {
+  margin-top: var(--bc-space-3);
+  padding-top: var(--bc-space-3);
+  border-top: 1px dashed var(--bc-border);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--bc-space-3);
+  font-size: var(--bc-text-sm);
+}
+
+.detailItem dt {
+  color: var(--bc-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.detailItem dd {
+  margin: 2px 0 0;
+  color: var(--bc-ink);
+}
+
+.loadMoreRow {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--bc-space-4);
+}
+
+.emptyState {
+  color: var(--bc-muted);
+  padding: var(--bc-space-5) 0;
+  text-align: center;
+}
+
+.errorText {
+  color: var(--bc-accent);
+}

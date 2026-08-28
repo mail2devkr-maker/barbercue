@@ -2,12 +2,65 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { DASHBOARD_PATHS, SalonSetupErrorCode, SalonStatus, type SalonStatusResultDto, type SalonSetupReadinessDto } from '@barbercue/shared';
+import {
+  DASHBOARD_PATHS,
+  SalonSetupErrorCode,
+  SalonStatus,
+  type OwnerBookingDetailDto,
+  type OwnerBookingFilter,
+  type PaginatedResult,
+  type SalonStatusResultDto,
+  type SalonSetupReadinessDto,
+} from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
+
+const SUMMARY_COUNT_LIMIT = 50;
+
+function bookingsPath(salonId: string): string {
+  return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
+}
+
+// No dedicated "counts" endpoint exists — reuses the same paginated list endpoint the Bookings tab
+// uses and reports items.length, "50+" once the page limit is hit rather than pretending to know
+// the true total. today's UTC window covers the whole IST calendar day either side, which the
+// backend then narrows precisely — see dashboard-bookings.service.ts's istDayBounds.
+function todayIsoRange(): { from: string; to: string } {
+  const now = new Date();
+  const from = new Date(now.getTime() - 24 * 60 * 60_000).toISOString();
+  const to = new Date(now.getTime() + 24 * 60 * 60_000).toISOString();
+  return { from, to };
+}
+
+interface BookingSummary {
+  today: string;
+  upcoming: string;
+  completedToday: string;
+  cancelledNoShowToday: string;
+}
+
+async function fetchCount(
+  salonId: string,
+  filter: OwnerBookingFilter,
+  range?: { from: string; to: string },
+): Promise<{ count: number; capped: boolean }> {
+  const params = new URLSearchParams({ filter, limit: String(SUMMARY_COUNT_LIMIT) });
+  if (range) {
+    params.set('from', range.from);
+    params.set('to', range.to);
+  }
+  const result = await apiFetch<PaginatedResult<OwnerBookingDetailDto>>(
+    `${bookingsPath(salonId)}?${params}`,
+  );
+  return { count: result.items.length, capped: result.nextCursor !== null };
+}
+
+function formatCount(count: number, capped: boolean): string {
+  return capped ? `${count}+` : String(count);
+}
 
 // Salon status is read from SalonWorkplaceDto (via useSalon) rather than re-fetched here — the
 // workplaces list already carries it, and PATCH .../status returns the fresh value which this
@@ -19,6 +72,7 @@ export default function OwnerDashboardScreen() {
   const [updating, setUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<SalonSetupReadinessDto | null>(null);
+  const [summary, setSummary] = useState<BookingSummary | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -26,6 +80,42 @@ export default function OwnerDashboardScreen() {
       setReadiness(null);
       setActionError(null);
     }, [selectedSalon]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!selectedSalonId) {
+        setSummary(null);
+        return;
+      }
+      let cancelled = false;
+      const { from, to } = todayIsoRange();
+      Promise.all([
+        fetchCount(selectedSalonId, 'today'),
+        fetchCount(selectedSalonId, 'upcoming'),
+        fetchCount(selectedSalonId, 'completed', { from, to }),
+        fetchCount(selectedSalonId, 'cancelled', { from, to }),
+        fetchCount(selectedSalonId, 'no_show', { from, to }),
+      ])
+        .then(([today, upcoming, completed, cancelled_, noShow]) => {
+          if (cancelled) return;
+          setSummary({
+            today: formatCount(today.count, today.capped),
+            upcoming: formatCount(upcoming.count, upcoming.capped),
+            completedToday: formatCount(completed.count, completed.capped),
+            cancelledNoShowToday: formatCount(
+              cancelled_.count + noShow.count,
+              cancelled_.capped || noShow.capped,
+            ),
+          });
+        })
+        .catch(() => {
+          if (!cancelled) setSummary(null);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [selectedSalonId]),
   );
 
   async function toggleStatus(next: 'ACTIVE' | 'SUSPENDED') {
@@ -114,7 +204,43 @@ export default function OwnerDashboardScreen() {
         </Card>
       )}
 
+      {summary && (
+        <View style={styles.summaryGrid}>
+          <Pressable
+            style={styles.summaryTile}
+            onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'today' })}
+          >
+            <Text style={styles.summaryValue}>{summary.today}</Text>
+            <Text style={styles.summaryLabel}>Today&apos;s bookings</Text>
+          </Pressable>
+          <Pressable
+            style={styles.summaryTile}
+            onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'upcoming' })}
+          >
+            <Text style={styles.summaryValue}>{summary.upcoming}</Text>
+            <Text style={styles.summaryLabel}>Upcoming</Text>
+          </Pressable>
+          <Pressable
+            style={styles.summaryTile}
+            onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'completed' })}
+          >
+            <Text style={styles.summaryValue}>{summary.completedToday}</Text>
+            <Text style={styles.summaryLabel}>Completed today</Text>
+          </Pressable>
+          <Pressable
+            style={styles.summaryTile}
+            onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'cancelled' })}
+          >
+            <Text style={styles.summaryValue}>{summary.cancelledNoShowToday}</Text>
+            <Text style={styles.summaryLabel}>Cancelled / no-show today</Text>
+          </Pressable>
+        </View>
+      )}
+
       <View style={styles.quickLinks}>
+        <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerBookingsTab', undefined)}>
+          <Text style={styles.quickLinkText}>Bookings</Text>
+        </Pressable>
         <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerQueueTab')}>
           <Text style={styles.quickLinkText}>Live queue</Text>
         </Pressable>
@@ -128,6 +254,18 @@ export default function OwnerDashboardScreen() {
 
 const styles = StyleSheet.create({
   skeleton: { height: 140, borderRadius: radius.lg },
+  summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
+  summaryTile: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.sm,
+    padding: space[3],
+  },
+  summaryValue: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, color: color.ink },
+  summaryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
   pickerChip: { paddingVertical: space[2], paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: color.border },
   pickerChipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },

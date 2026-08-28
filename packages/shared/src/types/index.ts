@@ -326,6 +326,7 @@ export interface OwnerBookingDetailDto extends BookingDetailDto {
   assignedStaffName: string | null;
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
+  cancelledAt: string | null; // ISO 8601
 }
 
 export interface QueueEntryDto {

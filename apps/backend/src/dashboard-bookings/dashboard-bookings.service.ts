@@ -213,6 +213,7 @@ export class DashboardBookingsService {
       assignedStaffName: latestEntry?.assignedStaff?.displayName ?? null,
       createdAt: booking.createdAt.toISOString(),
       updatedAt: booking.updatedAt.toISOString(),
+      cancelledAt: booking.cancelledAt ? booking.cancelledAt.toISOString() : null,
     };
   }
 }

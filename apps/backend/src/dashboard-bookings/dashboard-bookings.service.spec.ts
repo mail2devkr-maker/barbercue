@@ -23,6 +23,7 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     selectedStyleName: null,
     createdAt: new Date('2026-05-20T09:00:00.000Z'),
     updatedAt: new Date('2026-05-20T09:00:00.000Z'),
+    cancelledAt: null,
     salon: {
       name: 'BarberCue Demo Salon',
       slug: 'barbercue-demo',

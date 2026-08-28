@@ -1,4 +1,5 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { OwnerBookingFilter } from '@barbercue/shared';
 import OwnerDashboardScreen from '../screens/owner/OwnerDashboardScreen';
 import OwnerQueueScreen from '../screens/owner/OwnerQueueScreen';
 import OwnerBookingsScreen from '../screens/owner/OwnerBookingsScreen';
@@ -10,7 +11,9 @@ import { color, font } from '../lib/theme';
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
   OwnerQueueTab: undefined;
-  OwnerBookingsTab: undefined;
+  // Optional initial filter so the Dashboard tab's booking summary cards can deep-link straight
+  // into e.g. "Today" or "Cancelled" instead of always landing on the tab's own default.
+  OwnerBookingsTab: { filter?: OwnerBookingFilter } | undefined;
   OwnerShopTab: undefined;
   OwnerAccountTab: undefined;
 };
