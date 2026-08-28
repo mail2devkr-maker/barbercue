@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 
 type Variant = 'primary' | 'secondary' | 'outline';
@@ -9,7 +9,7 @@ interface ButtonProps {
   variant?: Variant;
   loading?: boolean;
   disabled?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 /** Primary = terracotta fill (the only action color). Secondary = ink-bordered cream. Outline =

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -12,6 +12,8 @@ import type {
   StyleAdvisorResultDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { color, font, fontSize, radius, space } from '../lib/theme';
+import { Screen, SectionHeader, Card, Button, InlineError, Skeleton } from '../components/ui';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
 
 // Registered in both HomeStack and AccountStack with the identical `StyleAdvisor: undefined`
@@ -120,113 +122,89 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
 
   if (premiumStatus === 'checking') {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator color="#EDE6DA" />
-      </View>
+      <Screen contentStyle={styles.checkingContent}>
+        <Skeleton style={styles.checkingSkeleton} />
+      </Screen>
     );
   }
 
   if (premiumStatus === 'locked') {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>🔒 AI Style Advisor is a Premium feature</Text>
-        <Text style={styles.subtitle}>
-          Upgrade to Premium on the BarberCue web app to preview hairstyles on your photo.
-        </Text>
-      </View>
+      <Screen scroll={false} contentStyle={styles.screenContent}>
+        <SectionHeader eyebrow="Premium" title="AI Style Advisor is a Premium feature" subtitle="Upgrade to Premium on the BarberCue web app to preview hairstyles on your photo." />
+      </Screen>
     );
   }
 
   if (premiumStatus === 'no-credits') {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>You&apos;re out of AI Style Credits</Text>
-        <Text style={styles.subtitle}>
-          You&apos;ve used all your AI Style Credits for this subscription period.
-        </Text>
-      </View>
+      <Screen scroll={false} contentStyle={styles.screenContent}>
+        <SectionHeader
+          eyebrow="AI Style Advisor"
+          title="You're out of AI Style Credits"
+          subtitle="You've used all your AI Style Credits for this subscription period."
+        />
+      </Screen>
     );
   }
 
   if (status === 'results') {
     return (
-      <View style={styles.container}>
-        <Text style={styles.subtitle}>
-          Here are a few looks to consider. Each shows an AI Style Match — not a guarantee of how
-          it will turn out on you.
-        </Text>
+      <Screen scroll={false} contentStyle={styles.screenContent}>
+        <SectionHeader eyebrow="AI Style Advisor" title="Your looks" subtitle="Each shows an AI Style Match — not a guarantee of how it will turn out on you." />
         <FlatList
           data={results}
           keyExtractor={(item) => item.styleId}
-          contentContainerStyle={{ paddingTop: 16 }}
+          contentContainerStyle={styles.resultsList}
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <Card style={styles.resultCard}>
               <Image source={{ uri: item.previewUrl }} style={styles.previewImage} />
               <Text style={styles.cardTitle}>{item.styleName}</Text>
               <Text style={styles.cardSubtitle}>AI Style Match: {item.matchPercent}%</Text>
-              <Pressable style={styles.button} onPress={() => handleTryThisLook(item.styleName)}>
-                <Text style={styles.buttonText}>Try This Look</Text>
-              </Pressable>
-            </View>
+              <Button title="Try This Look" onPress={() => handleTryThisLook(item.styleName)} />
+            </Card>
           )}
         />
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>AI Style Advisor</Text>
-      <Text style={styles.subtitle}>Upload a photo and preview a few hairstyles before you book.</Text>
+    <Screen contentStyle={styles.screenContent}>
+      <SectionHeader eyebrow="AI Style Advisor" title="Preview your next look" subtitle="Upload a photo and preview a few hairstyles before you book." />
 
       {asset && <Image source={{ uri: asset.uri }} style={styles.preview} />}
 
-      <Pressable style={styles.secondaryButton} onPress={() => void pickImage()}>
-        <Text style={styles.secondaryButtonText}>{asset ? 'Choose a different photo' : 'Choose a photo'}</Text>
-      </Pressable>
+      <Button title={asset ? 'Choose a different photo' : 'Choose a photo'} variant="secondary" onPress={() => void pickImage()} style={styles.pickButton} />
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <InlineError message={error} />}
 
       {credits && <Text style={styles.note}>AI Credits remaining: {credits.available}</Text>}
 
-      <Pressable
-        style={[styles.button, (!asset || status === 'analyzing') && styles.buttonDisabled]}
+      <Button
+        title="Analyze my photo"
         onPress={() => void handleAnalyze()}
-        disabled={!asset || status === 'analyzing'}
-      >
-        {status === 'analyzing' ? (
-          <ActivityIndicator color="#EDE6DA" />
-        ) : (
-          <Text style={styles.buttonText}>Analyze my photo</Text>
-        )}
-      </Pressable>
+        loading={status === 'analyzing'}
+        disabled={!asset}
+        style={styles.analyzeButton}
+      />
 
       <Text style={styles.note}>Your photo is used only to generate these previews and is not stored.</Text>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1A17', padding: 24 },
-  title: { fontSize: 22, fontWeight: '700', color: '#EDE6DA' },
-  subtitle: { fontSize: 14, color: '#B8AFA0', marginTop: 8, marginBottom: 16 },
-  note: { fontSize: 12, color: '#8A8377', marginTop: 16 },
-  error: { color: '#E24B4A', fontSize: 14, marginVertical: 12 },
-  preview: { width: 180, height: 180, borderRadius: 12, marginBottom: 16, alignSelf: 'center' },
-  previewImage: { width: '100%', height: 200, borderRadius: 12, marginBottom: 10 },
-  button: { backgroundColor: '#B0413E', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#EDE6DA', fontSize: 15, fontWeight: '600' },
-  secondaryButton: {
-    backgroundColor: '#2A2723',
-    borderWidth: 1,
-    borderColor: '#B8AFA0',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  secondaryButtonText: { color: '#EDE6DA', fontSize: 15, fontWeight: '600' },
-  card: { backgroundColor: '#2A2723', borderRadius: 12, padding: 16, marginBottom: 12 },
-  cardTitle: { color: '#EDE6DA', fontSize: 16, fontWeight: '600' },
-  cardSubtitle: { color: '#B8AFA0', fontSize: 13, marginTop: 4, marginBottom: 12 },
+  screenContent: { padding: space[5] },
+  checkingContent: { justifyContent: 'center', alignItems: 'center' },
+  checkingSkeleton: { width: 200, height: 20, borderRadius: 6 },
+  note: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[4] },
+  preview: { width: 180, height: 180, borderRadius: radius.lg, marginBottom: space[4], alignSelf: 'center' },
+  previewImage: { width: '100%', height: 200, borderRadius: radius.md, marginBottom: space[3] },
+  pickButton: { marginTop: space[2] },
+  analyzeButton: { marginTop: space[3] },
+  resultsList: { paddingTop: space[2] },
+  resultCard: { marginBottom: space[3] },
+  cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
+  cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1], marginBottom: space[3] },
 });

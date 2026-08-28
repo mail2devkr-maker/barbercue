@@ -1,4 +1,4 @@
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { color, radius } from '../../lib/theme';
 
 /**
@@ -6,7 +6,7 @@ import { color, radius } from '../../lib/theme';
  * instruction to avoid decorative complexity that costs performance on lower-end Android devices.
  * A muted flat block reads clearly as "loading" without an animation loop running underneath it.
  */
-export function Skeleton({ style }: { style?: ViewStyle }) {
+export function Skeleton({ style }: { style?: StyleProp<ViewStyle> }) {
   return <View style={[styles.block, style]} />;
 }
 

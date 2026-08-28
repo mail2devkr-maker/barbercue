@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { QUEUE_ENTRIES_PATH, SALON_QUEUE_PATHS, type QueueEntryDetailDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
+import { color, font, fontSize, radius, space } from '../lib/theme';
+import { Screen, SectionHeader, Button, Skeleton, InlineError } from '../components/ui';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'WalkInJoin'>;
@@ -55,34 +57,35 @@ export default function WalkInJoinScreen({ route }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#EDE6DA" />
-      </View>
+      <Screen scroll={false} contentStyle={styles.screenContent}>
+        <Skeleton style={styles.loadingSkeleton} />
+      </Screen>
     );
   }
 
   if (entry && entry.salonId !== salonId) {
     return (
-      <View style={styles.container}>
+      <Screen scroll={false} contentStyle={styles.screenContent}>
+        <SectionHeader eyebrow="Queue" title="Already in a queue" />
         <Text style={styles.subtitle}>
           You already have an active queue token at another salon. Finish or cancel it before joining here.
         </Text>
-      </View>
+      </Screen>
     );
   }
 
   if (entry) {
     return (
-      <View style={styles.container}>
+      <Screen scroll={false} contentStyle={styles.screenContent}>
+        <SectionHeader eyebrow="Queue" title="You're in line" />
         <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Join the queue</Text>
-      <Text style={styles.subtitle}>Service (optional)</Text>
+    <Screen scroll={false} contentStyle={styles.screenContent}>
+      <SectionHeader eyebrow="Live queue" title="Join the queue" subtitle="Service (optional)" />
       <View style={styles.serviceList}>
         <Pressable
           style={[styles.serviceOption, selectedServiceId === null && styles.serviceOptionSelected]}
@@ -103,25 +106,26 @@ export default function WalkInJoinScreen({ route }: Props) {
         ))}
       </View>
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && <InlineError message={error} />}
 
-      <Pressable style={styles.button} onPress={() => void handleJoin()} disabled={submitting}>
-        {submitting ? <ActivityIndicator color="#EDE6DA" /> : <Text style={styles.buttonText}>Join the queue</Text>}
-      </Pressable>
-    </View>
+      <Button title="Join the queue" onPress={() => void handleJoin()} loading={submitting} style={styles.actionButton} />
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1A17', padding: 24 },
-  center: { flex: 1, backgroundColor: '#1C1A17', justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: '700', color: '#EDE6DA' },
-  subtitle: { fontSize: 14, color: '#B8AFA0', marginTop: 12 },
-  serviceList: { marginTop: 12, gap: 8 },
-  serviceOption: { backgroundColor: '#2A2723', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#2A2723' },
-  serviceOptionSelected: { borderColor: '#B0413E' },
-  serviceOptionText: { color: '#EDE6DA', fontSize: 14 },
-  error: { color: '#E24B4A', fontSize: 14, marginTop: 12 },
-  button: { backgroundColor: '#B0413E', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 24 },
-  buttonText: { color: '#EDE6DA', fontSize: 16, fontWeight: '600' },
+  screenContent: { padding: space[5] },
+  loadingSkeleton: { height: 140, borderRadius: radius.lg },
+  subtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, lineHeight: 20 },
+  serviceList: { gap: space[2], marginBottom: space[4] },
+  serviceOption: {
+    backgroundColor: '#ffffff',
+    borderRadius: radius.sm,
+    padding: space[4],
+    borderWidth: 1,
+    borderColor: color.border,
+  },
+  serviceOptionSelected: { borderColor: color.accent },
+  serviceOptionText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink },
+  actionButton: { marginTop: space[2] },
 });

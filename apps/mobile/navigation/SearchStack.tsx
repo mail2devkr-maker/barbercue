@@ -6,17 +6,16 @@ import DateSelectScreen from '../screens/DateSelectScreen';
 import SlotSelectScreen from '../screens/SlotSelectScreen';
 import ConfirmBookingScreen from '../screens/ConfirmBookingScreen';
 import WalkInJoinScreen from '../screens/WalkInJoinScreen';
-import { darkStackOptions } from './screenOptions';
+import { lightStackOptions } from './screenOptions';
 import type { SearchStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<SearchStackParamList>();
 
 // Discovery + the full booking flow, nested under the Search tab so it keeps a native back
-// button through every step while the bottom tab bar stays visible. Screen visuals here are
-// unchanged from the MVP pass (M2B) — this checkpoint only moves them into the new shell.
+// button through every step while the bottom tab bar stays visible.
 export default function SearchStack() {
   return (
-    <Stack.Navigator initialRouteName="SalonSearch" screenOptions={darkStackOptions}>
+    <Stack.Navigator initialRouteName="SalonSearch" screenOptions={lightStackOptions}>
       <Stack.Screen name="SalonSearch" component={SalonSearchScreen} options={{ title: 'Find a salon' }} />
       <Stack.Screen name="SalonProfile" component={SalonProfileScreen} options={{ title: 'Salon' }} />
       <Stack.Screen name="StaffSelect" component={StaffSelectScreen} options={{ title: 'Choose a barber' }} />

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, space } from '../../lib/theme';
 
@@ -11,7 +11,7 @@ interface ScreenProps {
   /** Pull-to-refresh — only meaningful when scroll is true. */
   refreshing?: boolean;
   onRefresh?: () => void;
-  contentStyle?: ViewStyle;
+  contentStyle?: StyleProp<ViewStyle>;
   edges?: Array<'top' | 'bottom'>;
 }
 

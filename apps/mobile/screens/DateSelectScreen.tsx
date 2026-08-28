@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { color, font, fontSize, radius, space } from '../lib/theme';
+import { Screen, SectionHeader } from '../components/ui';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'DateSelect'>;
@@ -29,12 +31,12 @@ export default function DateSelectScreen({ route, navigation }: Props) {
   }, [operatingHours]);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Choose a date</Text>
+    <Screen scroll={false} contentStyle={styles.screenContent}>
+      <SectionHeader eyebrow="Booking" title="Choose a date" />
       <FlatList
         data={days}
         keyExtractor={(item) => item.date}
-        contentContainerStyle={{ paddingTop: 16 }}
+        contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <Pressable
             style={[styles.card, item.closed && styles.cardDisabled]}
@@ -46,15 +48,22 @@ export default function DateSelectScreen({ route, navigation }: Props) {
           </Pressable>
         )}
       />
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1A17', padding: 24 },
-  title: { fontSize: 20, fontWeight: '700', color: '#EDE6DA' },
-  card: { backgroundColor: '#2A2723', borderRadius: 12, padding: 16, marginBottom: 12 },
-  cardDisabled: { opacity: 0.4 },
-  cardTitle: { color: '#EDE6DA', fontSize: 16, fontWeight: '600' },
-  cardSubtitle: { color: '#B8AFA0', fontSize: 13, marginTop: 4 },
+  screenContent: { padding: space[5] },
+  listContent: { paddingTop: space[2] },
+  card: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    padding: space[4],
+    marginBottom: space[3],
+  },
+  cardDisabled: { opacity: 0.45 },
+  cardTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: color.ink },
+  cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
 });

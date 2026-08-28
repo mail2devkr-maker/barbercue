@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
 import type { StaffOptionDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { color, font, fontSize, radius, space } from '../lib/theme';
+import { Screen, SectionHeader, Skeleton, InlineError } from '../components/ui';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'StaffSelect'>;
@@ -38,18 +40,24 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Choose a barber</Text>
-      <Text style={styles.subtitle}>
-        This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in.
-      </Text>
-      {loading && <ActivityIndicator color="#EDE6DA" style={{ marginTop: 16 }} />}
-      {error && <Text style={styles.error}>{error}</Text>}
-      {!loading && (
+    <Screen scroll={false} contentStyle={styles.screenContent}>
+      <SectionHeader
+        eyebrow="Booking"
+        title="Choose a barber"
+        subtitle="This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in."
+      />
+      {loading && (
+        <>
+          <Skeleton style={styles.skeletonCard} />
+          <Skeleton style={styles.skeletonCard} />
+        </>
+      )}
+      {error && <InlineError message={error} />}
+      {!loading && !error && (
         <FlatList
           data={options}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingTop: 16 }}
+          contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <Pressable style={styles.card} onPress={() => choose(null, null)}>
               <Text style={styles.cardTitle}>Any Staff</Text>
@@ -62,15 +70,21 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
           )}
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1A17', padding: 24 },
-  title: { fontSize: 20, fontWeight: '700', color: '#EDE6DA' },
-  subtitle: { fontSize: 13, color: '#B8AFA0', marginTop: 8 },
-  error: { color: '#E24B4A', fontSize: 14, marginTop: 16 },
-  card: { backgroundColor: '#2A2723', borderRadius: 12, padding: 16, marginBottom: 12 },
-  cardTitle: { color: '#EDE6DA', fontSize: 16, fontWeight: '600' },
+  screenContent: { padding: space[5] },
+  skeletonCard: { height: 60, borderRadius: radius.md, marginBottom: space[3] },
+  listContent: { paddingTop: space[3] },
+  card: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    padding: space[4],
+    marginBottom: space[3],
+  },
+  cardTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: color.ink },
 });

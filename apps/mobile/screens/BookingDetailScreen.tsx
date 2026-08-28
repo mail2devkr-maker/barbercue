@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   BOOKING_PATHS,
@@ -17,6 +17,8 @@ import type {
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
+import { color, font, fontSize, radius, space } from '../lib/theme';
+import { Screen, SectionHeader, Card, Button, Skeleton, ErrorState, InlineError } from '../components/ui';
 import type { BookingsStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<BookingsStackParamList, 'BookingDetail'>;
@@ -30,6 +32,13 @@ function canCheckIn(booking: BookingDetailDto): boolean {
   if (booking.status !== 'CONFIRMED') return false;
   const minutesUntilSlot = (new Date(booking.slotStart).getTime() - Date.now()) / 60_000;
   return minutesUntilSlot <= EARLY_CHECKIN_WINDOW_MINUTES;
+}
+
+function statusColor(status: string): string {
+  if (status === 'CONFIRMED') return color.success;
+  if (status === 'PENDING_PAYMENT') return color.gold;
+  if (status === 'CANCELLED') return color.muted;
+  return color.ink;
 }
 
 export default function BookingDetailScreen({ route }: Props) {
@@ -54,8 +63,10 @@ export default function BookingDetailScreen({ route }: Props) {
   const [queueEntry, setQueueEntry] = useState<QueueEntryDetailDto | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
 
-  useEffect(() => {
+  function loadBooking() {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     apiFetch<BookingDetailDto>(`${BOOKING_PATHS.bookings}/${bookingId}`)
       .then((result) => {
         if (!cancelled) setBooking(result);
@@ -69,6 +80,11 @@ export default function BookingDetailScreen({ route }: Props) {
     return () => {
       cancelled = true;
     };
+  }
+
+  useEffect(() => {
+    return loadBooking();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
 
   async function startCancelFlow() {
@@ -126,101 +142,90 @@ export default function BookingDetailScreen({ route }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#EDE6DA" />
-      </View>
+      <Screen>
+        <Skeleton style={styles.heroSkeleton} />
+        <Skeleton style={styles.lineSkeleton} />
+      </Screen>
     );
   }
   if (error && !booking) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error}</Text>
-      </View>
+      <Screen scroll={false}>
+        <ErrorState message={error} onRetry={loadBooking} />
+      </Screen>
     );
   }
   if (!booking) return null;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{booking.serviceName}</Text>
-      <Text style={styles.subtitle}>{booking.salonName}</Text>
-      <Text style={styles.subtitle}>{new Date(booking.slotStart).toLocaleString()}</Text>
-      <Text style={styles.status}>Status: {booking.status}</Text>
-      {booking.preferredStaffName && (
-        <Text style={styles.subtitle}>Preferred barber: {booking.preferredStaffName}</Text>
-      )}
-      {booking.cancellationChargeAmount !== null && booking.cancellationChargeAmount > 0 && (
-        <Text style={styles.subtitle}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
-      )}
-      {error && <Text style={styles.error}>{error}</Text>}
+    <Screen>
+      <SectionHeader eyebrow="Booking" title={booking.serviceName} subtitle={booking.salonName} />
+
+      <Card style={styles.card}>
+        <Text style={styles.line}>{new Date(booking.slotStart).toLocaleString()}</Text>
+        <Text style={[styles.status, { color: statusColor(booking.status) }]}>Status: {booking.status}</Text>
+        {booking.preferredStaffName && <Text style={styles.line}>Preferred barber: {booking.preferredStaffName}</Text>}
+        {booking.cancellationChargeAmount !== null && booking.cancellationChargeAmount > 0 && (
+          <Text style={styles.line}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
+        )}
+      </Card>
+
+      {error && <InlineError message={error} />}
 
       {CANCELLABLE_STATUSES.has(booking.status) && !confirming && (
-        <Pressable style={styles.button} onPress={() => void startCancelFlow()}>
-          <Text style={styles.buttonText}>Cancel booking</Text>
-        </Pressable>
+        <Button title="Cancel booking" variant="secondary" onPress={() => void startCancelFlow()} style={styles.actionButton} />
       )}
 
       {confirming && (
-        <View style={styles.confirmBox}>
+        <Card style={styles.confirmBox}>
           <Text style={styles.confirmTitle}>Cancel booking?</Text>
-          {previewLoading && <ActivityIndicator color="#EDE6DA" style={{ marginTop: 8 }} />}
+          {previewLoading && <ActivityIndicator color={color.muted} style={styles.previewSpinner} />}
           {!previewLoading && preview !== null && preview > 0 && (
-            <Text style={styles.subtitle}>
+            <Text style={styles.line}>
               Cancelling now will charge {formatMoney(preview, booking.currency)} (outside the free cancellation window).
             </Text>
           )}
-          {!previewLoading && preview === 0 && (
-            <Text style={styles.subtitle}>No charge — you&apos;re within the free cancellation window.</Text>
-          )}
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-            <Pressable
-              style={[styles.button, styles.secondaryButton]}
+          {!previewLoading && preview === 0 && <Text style={styles.line}>No charge — you&apos;re within the free cancellation window.</Text>}
+          <View style={styles.confirmRow}>
+            <Button
+              title="Keep booking"
+              variant="outline"
               onPress={() => setConfirming(false)}
               disabled={cancelling}
-            >
-              <Text style={styles.buttonText}>Keep booking</Text>
-            </Pressable>
-            <Pressable style={styles.button} onPress={() => void confirmCancel()} disabled={cancelling || previewLoading}>
-              {cancelling ? (
-                <ActivityIndicator color="#EDE6DA" />
-              ) : (
-                <Text style={styles.buttonText}>Confirm cancellation</Text>
-              )}
-            </Pressable>
+              style={styles.confirmRowButton}
+            />
+            <Button
+              title="Confirm cancellation"
+              onPress={() => void confirmCancel()}
+              loading={cancelling}
+              disabled={previewLoading}
+              style={styles.confirmRowButton}
+            />
           </View>
-        </View>
+        </Card>
       )}
 
       {queueEntry ? (
         <QueueStatusPanel entry={queueEntry} onEntryChange={setQueueEntry} />
       ) : (
         canCheckIn(booking) && (
-          <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => void handleCheckIn()} disabled={checkingIn}>
-            {checkingIn ? <ActivityIndicator color="#EDE6DA" /> : <Text style={styles.buttonText}>Check in</Text>}
-          </Pressable>
+          <Button title="Check in" variant="secondary" onPress={() => void handleCheckIn()} loading={checkingIn} style={styles.actionButton} />
         )
       )}
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1A17', padding: 24 },
-  center: { flex: 1, backgroundColor: '#1C1A17', justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 22, fontWeight: '700', color: '#EDE6DA' },
-  subtitle: { fontSize: 14, color: '#B8AFA0', marginTop: 4 },
-  status: { fontSize: 15, color: '#EDE6DA', marginTop: 12, fontWeight: '600' },
-  error: { color: '#E24B4A', fontSize: 14, marginTop: 12 },
-  button: {
-    backgroundColor: '#B0413E',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 24,
-    flex: 1,
-  },
-  secondaryButton: { backgroundColor: '#2A2723', borderWidth: 1, borderColor: '#B8AFA0' },
-  buttonText: { color: '#EDE6DA', fontSize: 16, fontWeight: '600' },
-  confirmBox: { backgroundColor: '#2A2723', borderRadius: 12, padding: 16, marginTop: 24 },
-  confirmTitle: { color: '#EDE6DA', fontSize: 16, fontWeight: '700' },
+  heroSkeleton: { height: 90, borderRadius: radius.lg, marginBottom: space[3] },
+  lineSkeleton: { height: 16, borderRadius: 6, width: '60%' },
+  card: { marginBottom: space[4] },
+  line: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginBottom: space[1] },
+  status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, marginTop: space[1], marginBottom: space[1] },
+  actionButton: { marginBottom: space[3] },
+  confirmBox: { marginBottom: space[4] },
+  confirmTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, marginBottom: space[2] },
+  previewSpinner: { marginVertical: space[2], alignSelf: 'flex-start' },
+  confirmRow: { flexDirection: 'row', gap: space[3], marginTop: space[3] },
+  confirmRowButton: { flex: 1 },
 });
