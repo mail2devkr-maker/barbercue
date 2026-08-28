@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { QUEUE_ENTRIES_PATH, type QueueEntryDetailDto } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { getRealtimeSocket, joinSalonRoom } from '../lib/realtime';
+import { color, font, fontSize, radius, space } from '../lib/theme';
 
 const ACTIVE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
@@ -80,10 +81,16 @@ export function QueueStatusPanel({
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#2A2723', borderRadius: 12, padding: 16, marginTop: 12 },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    padding: space[5],
+  },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  token: { color: '#EDE6DA', fontSize: 20, fontWeight: '700' },
-  status: { color: '#B8AFA0', fontWeight: '600' },
-  statusCalled: { color: '#E24B4A' },
-  detail: { color: '#B8AFA0', fontSize: 13, marginTop: 8 },
+  token: { fontFamily: font.displaySemiBold, color: color.ink, fontSize: fontSize.xl },
+  status: { fontFamily: font.bodySemiBold, color: color.muted, fontSize: fontSize.sm },
+  statusCalled: { color: color.accent },
+  detail: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },
 });

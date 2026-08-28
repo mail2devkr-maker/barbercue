@@ -1,13 +1,18 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BOOKING_PATHS } from '@barbercue/shared';
 import type { BookingDetailDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
-import type { RootStackParamList } from '../navigation/types';
+import type { SearchStackParamList, TabParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'ConfirmBooking'>;
+type Props = CompositeScreenProps<
+  NativeStackScreenProps<SearchStackParamList, 'ConfirmBooking'>,
+  BottomTabScreenProps<TabParamList>
+>;
 
 export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const {
@@ -60,7 +65,14 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
         <Text style={styles.status}>Status: {booking.status}</Text>
         <Pressable
           style={styles.button}
-          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'MyBookings' }] })}
+          onPress={() => {
+            // Leave this stack clean for next time (pop back to the salon search root) before
+            // jumping to the Bookings tab — otherwise returning to Search later would land back
+            // on this now-stale confirmation screen. CompositeScreenProps below gives `navigate`
+            // both this stack's routes and the parent tab navigator's routes.
+            navigation.popToTop();
+            navigation.navigate('BookingsTab', { screen: 'MyBookings' });
+          }}
         >
           <Text style={styles.buttonText}>View my bookings</Text>
         </Pressable>

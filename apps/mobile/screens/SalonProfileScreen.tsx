@@ -4,9 +4,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, formatMoney } from '@barbercue/shared';
 import type { SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import type { RootStackParamList } from '../navigation/types';
+import type { SearchStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'SalonProfile'>;
+type Props = NativeStackScreenProps<SearchStackParamList, 'SalonProfile'>;
 
 // Public discovery endpoint — same GET /salons/:countryCode/:citySlug/:salonSlug apps/web uses (B9).
 export default function SalonProfileScreen({ route, navigation }: Props) {

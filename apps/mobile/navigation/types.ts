@@ -1,13 +1,9 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { OperatingHoursDto, ServiceDto } from '@barbercue/shared';
 
 // Params are carried forward step-to-step rather than re-fetched, since the customer already
 // loaded them on the salon profile screen — same data-flow shape as apps/web's BookingFlow.
-export type RootStackParamList = {
-  Account: undefined;
-  StyleAdvisor: undefined;
-  // selectedStyleName is present only when arriving via the AI Style Advisor's "Try This Look" —
-  // threaded through every step below the same way preferredStaffId already is, and included in
-  // ConfirmBookingScreen's POST /bookings body when set.
+export type SearchStackParamList = {
   SalonSearch: { selectedStyleName?: string } | undefined;
   SalonProfile: {
     countryCode: string;
@@ -60,7 +56,35 @@ export type RootStackParamList = {
     slotEnd: string;
     selectedStyleName?: string;
   };
+  WalkInJoin: { salonId: string; salonName: string; services: ServiceDto[] };
+};
+
+export type HomeStackParamList = {
+  Home: undefined;
+  StyleAdvisor: undefined;
+};
+
+export type BookingsStackParamList = {
   MyBookings: undefined;
   BookingDetail: { bookingId: string };
-  WalkInJoin: { salonId: string; salonName: string; services: ServiceDto[] };
+};
+
+export type QueueStackParamList = {
+  QueueHome: undefined;
+};
+
+export type AccountStackParamList = {
+  Account: undefined;
+  StyleAdvisor: undefined;
+};
+
+// Bottom-tab level — each tab owns its own native stack. NavigatorScreenParams lets a caller
+// jump into a specific screen of another tab's stack (e.g. Home's "Find a salon" CTA opening
+// SearchTab directly at SalonSearch) with full type-checking on the nested params.
+export type TabParamList = {
+  HomeTab: NavigatorScreenParams<HomeStackParamList>;
+  SearchTab: NavigatorScreenParams<SearchStackParamList>;
+  BookingsTab: NavigatorScreenParams<BookingsStackParamList>;
+  QueueTab: NavigatorScreenParams<QueueStackParamList>;
+  AccountTab: NavigatorScreenParams<AccountStackParamList>;
 };

@@ -17,9 +17,9 @@ import type {
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
-import type { RootStackParamList } from '../navigation/types';
+import type { BookingsStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'BookingDetail'>;
+type Props = NativeStackScreenProps<BookingsStackParamList, 'BookingDetail'>;
 
 const CANCELLABLE_STATUSES = new Set(['CONFIRMED', 'PENDING_PAYMENT']);
 // Mirrors the backend's EARLY_CHECKIN_WINDOW_MINUTES (queue.service.ts) — a UI convenience only;

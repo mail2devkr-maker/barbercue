@@ -4,9 +4,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
 import type { AvailabilitySlotDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import type { RootStackParamList } from '../navigation/types';
+import type { SearchStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'SlotSelect'>;
+type Props = NativeStackScreenProps<SearchStackParamList, 'SlotSelect'>;
 
 export default function SlotSelectScreen({ route, navigation }: Props) {
   const { salonId, serviceId, preferredStaffId, date, ...rest } = route.params;

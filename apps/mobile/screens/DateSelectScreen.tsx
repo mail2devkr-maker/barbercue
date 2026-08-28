@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/types';
+import type { SearchStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'DateSelect'>;
+type Props = NativeStackScreenProps<SearchStackParamList, 'DateSelect'>;
 
 const DAYS_AHEAD = 30;
 

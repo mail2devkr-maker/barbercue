@@ -4,9 +4,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BOOKING_PATHS } from '@barbercue/shared';
 import type { BookingDetailDto, PaginatedResult } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import type { RootStackParamList } from '../navigation/types';
+import type { BookingsStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'MyBookings'>;
+type Props = NativeStackScreenProps<BookingsStackParamList, 'MyBookings'>;
 
 function loadPage(cursor?: string): Promise<PaginatedResult<BookingDetailDto>> {
   const query = cursor ? `?cursor=${cursor}` : '';

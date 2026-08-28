@@ -5,9 +5,9 @@ import { QUEUE_ENTRIES_PATH, SALON_QUEUE_PATHS, type QueueEntryDetailDto } from 
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
-import type { RootStackParamList } from '../navigation/types';
+import type { SearchStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'WalkInJoin'>;
+type Props = NativeStackScreenProps<SearchStackParamList, 'WalkInJoin'>;
 
 export default function WalkInJoinScreen({ route }: Props) {
   const { salonId, services } = route.params;

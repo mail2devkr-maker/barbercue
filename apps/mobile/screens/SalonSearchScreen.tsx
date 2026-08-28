@@ -4,9 +4,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS } from '@barbercue/shared';
 import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import type { RootStackParamList } from '../navigation/types';
+import type { SearchStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'SalonSearch'>;
+type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
 export default function SalonSearchScreen({ navigation, route }: Props) {

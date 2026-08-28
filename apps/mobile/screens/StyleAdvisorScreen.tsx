@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import * as ImagePicker from 'expo-image-picker';
 import { PREMIUM_PATHS, STYLE_ADVISOR_PATHS } from '@barbercue/shared';
 import type {
@@ -10,9 +12,13 @@ import type {
   StyleAdvisorResultDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import type { RootStackParamList } from '../navigation/types';
+import type { HomeStackParamList, TabParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'StyleAdvisor'>;
+// Registered in both HomeStack and AccountStack with the identical `StyleAdvisor: undefined`
+// route shape — HomeStackParamList used here as the stack half is arbitrary (AccountStackParamList
+// would type-check identically); TabParamList lets it navigate cross-tab into Search regardless
+// of which stack it was actually reached from.
+type Props = CompositeScreenProps<NativeStackScreenProps<HomeStackParamList, 'StyleAdvisor'>, BottomTabScreenProps<TabParamList>>;
 type Status = 'idle' | 'analyzing' | 'results' | 'error';
 // Same meaning as apps/web's StyleAdvisorFlow. No native Premium-purchase screen exists yet
 // (out of scope — "do not redesign mobile"), so a locked/no-credits state here is informational
@@ -109,7 +115,7 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
   }
 
   function handleTryThisLook(styleName: string) {
-    navigation.navigate('SalonSearch', { selectedStyleName: styleName });
+    navigation.navigate('SearchTab', { screen: 'SalonSearch', params: { selectedStyleName: styleName } });
   }
 
   if (premiumStatus === 'checking') {
