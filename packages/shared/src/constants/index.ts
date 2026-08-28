@@ -13,6 +13,12 @@ export const AUTH_PATHS = {
   otpVerify: 'otp/verify',
   google: 'google',
   staffLogin: 'staff/login',
+  // Google Sign-In restricted to accounts that already hold SALON_OWNER and/or SALON_STAFF —
+  // deliberately a separate endpoint from `google` above, not a shared one branching on a role
+  // param: the two have opposite account-creation semantics (customer Google sign-in creates a
+  // user on no match; this one must never create one), and keeping them physically separate
+  // makes that difference impossible to blur by accident in either handler.
+  staffGoogle: 'staff/google',
   adminLogin: 'admin/login',
   refresh: 'refresh',
   logout: 'logout',

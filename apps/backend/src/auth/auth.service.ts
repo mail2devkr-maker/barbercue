@@ -230,6 +230,96 @@ export class AuthService {
     };
   }
 
+  // ---------- Staff / Owner: Google Sign-In ----------
+
+  /**
+   * Google Sign-In restricted to accounts that already hold SALON_OWNER and/or SALON_STAFF.
+   * Deliberately NOT the customer googleLogin's create-or-link-then-ensure-CUSTOMER flow — that
+   * method exists specifically to be permissive (anyone can become a customer via Google), while
+   * this one exists specifically to be restrictive:
+   *
+   *   1. An AuthIdentity already links this exact Google account (`sub`) — use its user.
+   *   2. No link yet, but the (Google-verified, never client-asserted) email matches an existing
+   *      User who ALREADY holds SALON_OWNER or SALON_STAFF — link this Google account to that
+   *      user. The role check happens BEFORE linking, not after: an existing customer-only
+   *      account with the same email is never linked or elevated by this method.
+   *   3. Anything else (no identity, no matching user, or a matching user with neither role) —
+   *      reject. Never creates a User. Never creates a UserRole. Never adds CUSTOMER.
+   *
+   * Roles are re-checked on the FINAL resolved user right before issuing tokens, not only at
+   * link time — an account that loses its OWNER/STAFF role after a Google identity was already
+   * linked must not keep signing in here, same as staffLogin re-checks on every call rather than
+   * trusting a one-time check.
+   */
+  async staffGoogleLogin(
+    idToken: string,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const identity = await this.googleAuthService.verifyIdToken(idToken);
+
+    const user = await this.prisma.$transaction(async (tx) => {
+      const existingIdentity = await tx.authIdentity.findUnique({
+        where: {
+          provider_providerSub: {
+            provider: AuthProvider.GOOGLE,
+            providerSub: identity.sub,
+          },
+        },
+        include: { user: { include: { roles: true } } },
+      });
+      if (existingIdentity) return existingIdentity.user;
+
+      if (!identity.email) return null;
+
+      const existingUser = await tx.user.findUnique({
+        where: { email: identity.email },
+        include: { roles: true },
+      });
+      if (!existingUser) return null;
+
+      const candidateRoles = existingUser.roles.map((r) => r.role);
+      const candidateIsStaffOrOwner = candidateRoles.some(
+        (r) => r === Role.SALON_STAFF || r === Role.SALON_OWNER,
+      );
+      // The role check gates the link itself — an existing customer-only user with this email
+      // is left completely untouched (no identity created, no role granted).
+      if (!candidateIsStaffOrOwner) return null;
+
+      await tx.authIdentity.create({
+        data: {
+          userId: existingUser.id,
+          provider: AuthProvider.GOOGLE,
+          providerSub: identity.sub,
+          email: identity.email,
+        },
+      });
+      return existingUser;
+    });
+
+    const roles = user?.roles.map((r) => r.role) ?? [];
+    const isStaffOrOwner = roles.some(
+      (r) => r === Role.SALON_STAFF || r === Role.SALON_OWNER,
+    );
+    if (!user || !isStaffOrOwner) {
+      throw new AppException(
+        AuthErrorCode.GOOGLE_ACCOUNT_NOT_STAFF,
+        'This Google account is not registered as a shop owner or staff member.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    this.assertActive(user.status);
+
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      roles,
+      deviceInfo,
+    );
+    return {
+      user: this.toMeResponse(user.id, roles, user.phone, user.email),
+      tokens,
+    };
+  }
+
   // ---------- Platform admin: email + password + mandatory TOTP ----------
 
   async adminLogin(

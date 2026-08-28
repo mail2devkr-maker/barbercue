@@ -191,6 +191,27 @@ export class AuthController {
     return result;
   }
 
+  // Same request/response shape as customer POST auth/google — deliberately a distinct route
+  // and a distinct AuthService method (staffGoogleLogin), not this handler branching on a role
+  // param, so the "never create a user, never elevate a customer account" guarantee lives in
+  // exactly one code path and can't be bypassed by passing the wrong flag.
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.staffGoogle)
+  @UsePipes(new ZodValidationPipe(googleLoginSchema))
+  async staffGoogleLogin(
+    @Body() body: GoogleLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.staffGoogleLogin(
+      body.idToken,
+      req.headers['user-agent'],
+    );
+    this.setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
   @Public()
   @Throttle(AUTH_THROTTLE)
   @Post(AUTH_PATHS.adminLogin)

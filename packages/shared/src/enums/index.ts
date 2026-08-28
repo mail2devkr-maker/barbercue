@@ -271,6 +271,13 @@ export const AuthErrorCode = {
   // Google ID token failed verification (expired, malformed, wrong audience, or the provider's
   // own email_verified claim was false) — never distinguishes *which* check failed to the client.
   GOOGLE_TOKEN_INVALID: 'GOOGLE_TOKEN_INVALID',
+  // POST auth/staff/google: the ID token verified fine, but no existing SALON_OWNER/SALON_STAFF
+  // account is linked to (or matches the verified email of) this Google account. Deliberately
+  // distinct from GOOGLE_TOKEN_INVALID — the token itself was genuine, the account just isn't
+  // authorized for this login path. Never distinguishes "no such account" from "account exists
+  // but isn't staff/owner" to the client, for the same reason INVALID_CREDENTIALS doesn't reveal
+  // which part of email+password was wrong.
+  GOOGLE_ACCOUNT_NOT_STAFF: 'GOOGLE_ACCOUNT_NOT_STAFF',
   TOTP_REQUIRED: 'TOTP_REQUIRED',
   TOTP_INVALID: 'TOTP_INVALID',
   TOTP_SETUP_REQUIRED: 'TOTP_SETUP_REQUIRED',

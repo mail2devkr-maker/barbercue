@@ -306,6 +306,168 @@ describe('AuthService', () => {
     });
   });
 
+  describe('staffGoogleLogin', () => {
+    const verifiedIdentity = {
+      sub: 'google-sub-999',
+      email: 'owner@example.com',
+      name: 'Priya',
+    };
+
+    it('authenticates an existing OWNER account matched by verified email, and links the identity', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'owner-1',
+        phone: null,
+        email: 'owner@example.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.SALON_OWNER }],
+      });
+
+      const result = await service.staffGoogleLogin('id-token');
+
+      expect(prisma.authIdentity.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'owner-1',
+          provider: 'GOOGLE',
+          providerSub: 'google-sub-999',
+          email: 'owner@example.com',
+        },
+      });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+      expect(result.user.roles).toEqual([Role.SALON_OWNER]);
+      expect(result.tokens).toBe(fakeTokens);
+    });
+
+    it('authenticates an existing STAFF account the same way', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'staff-1',
+        phone: null,
+        email: 'owner@example.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.SALON_STAFF }],
+      });
+
+      const result = await service.staffGoogleLogin('id-token');
+
+      expect(result.user.roles).toEqual([Role.SALON_STAFF]);
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+    });
+
+    it('logs in via an already-linked identity on a repeat login — never re-queries by email or creates a duplicate', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'ai1',
+        user: {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          status: UserStatus.ACTIVE,
+          roles: [{ role: Role.SALON_OWNER }],
+        },
+      });
+
+      const result = await service.staffGoogleLogin('id-token');
+
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.authIdentity.create).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(result.user.roles).toEqual([Role.SALON_OWNER]);
+    });
+
+    it('rejects a customer-only account matched by email — never links the identity, never elevates the account', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'customer-1',
+        phone: '+919876543210',
+        email: 'owner@example.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+
+      await expect(service.staffGoogleLogin('id-token')).rejects.toMatchObject({
+        code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_STAFF,
+      });
+      expect(prisma.authIdentity.create).not.toHaveBeenCalled();
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('rejects a Google account with no matching user at all — creates nothing', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.staffGoogleLogin('id-token')).rejects.toMatchObject({
+        code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_STAFF,
+      });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.authIdentity.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('rejects a verified Google token with no email claim and no existing linked identity', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue({ sub: 'google-sub-no-email', email: null, name: null });
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+
+      await expect(service.staffGoogleLogin('id-token')).rejects.toMatchObject({
+        code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_STAFF,
+      });
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('re-checks roles on the linked user even on a repeat login — rejects if the role was since removed', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'ai1',
+        user: {
+          id: 'former-owner',
+          email: 'owner@example.com',
+          status: UserStatus.ACTIVE,
+          roles: [{ role: Role.CUSTOMER }],
+        },
+      });
+
+      await expect(service.staffGoogleLogin('id-token')).rejects.toMatchObject({
+        code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_STAFF,
+      });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('propagates an invalid Google token without touching the database or issuing tokens', async () => {
+      googleAuthService.verifyIdToken.mockRejectedValue(
+        new AppException(AuthErrorCode.GOOGLE_TOKEN_INVALID, 'bad token', 401),
+      );
+      await expect(service.staffGoogleLogin('bad-token')).rejects.toMatchObject({
+        code: AuthErrorCode.GOOGLE_TOKEN_INVALID,
+      });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('rejects a suspended owner account, even with a fully valid token and a linked identity', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'ai1',
+        user: {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          status: UserStatus.SUSPENDED,
+          roles: [{ role: Role.SALON_OWNER }],
+        },
+      });
+      await expect(service.staffGoogleLogin('id-token')).rejects.toMatchObject({
+        code: AuthErrorCode.ACCOUNT_SUSPENDED,
+      });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+  });
+
   describe('staffLogin', () => {
     it('logs in a valid staff member', async () => {
       prisma.user.findUnique.mockResolvedValue({
