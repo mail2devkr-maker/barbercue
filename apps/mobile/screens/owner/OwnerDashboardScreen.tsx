@@ -16,6 +16,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
+import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 
 const SUMMARY_COUNT_LIMIT = 50;
@@ -203,6 +204,8 @@ export default function OwnerDashboardScreen() {
           )}
         </Card>
       )}
+
+      {selectedSalonId && <CapacitySummaryPanel salonId={selectedSalonId} />}
 
       {summary && (
         <View style={styles.summaryGrid}>

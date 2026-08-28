@@ -76,6 +76,7 @@ interface PrismaMock {
   booking: {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
     update: jest.Mock<Promise<unknown>, [unknown]>;
+    count: jest.Mock<Promise<number>, [unknown]>;
   };
   $executeRaw: jest.Mock<Promise<unknown>, [unknown]>;
   $transaction: jest.Mock;
@@ -147,6 +148,7 @@ describe('QueueService', () => {
       booking: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
         update: jest.fn<Promise<unknown>, [unknown]>(),
+        count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
       },
       $executeRaw: jest
         .fn<Promise<unknown>, [unknown]>()
@@ -736,6 +738,96 @@ describe('QueueService', () => {
       ]);
       await service.recomputeEtas('s1');
       expect(realtime.emitQueueEntryWaitAlert).toHaveBeenCalledWith('s1', 'c1', 'q1');
+    });
+  });
+
+  describe('getCapacitySummary (Phase 6 — Owner Capacity Dashboard)', () => {
+    it('checks salon access before returning anything', async () => {
+      salonAccess.assertAccess.mockRejectedValueOnce(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(
+        service.getCapacitySummary('outsider', 's1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.chair.findMany).not.toHaveBeenCalled();
+    });
+
+    it('splits chairs into active/busy/available/maintenance/inactive using ACTIVE service sessions', async () => {
+      prisma.chair.findMany.mockResolvedValueOnce([
+        { id: 'ch1', status: 'ACTIVE' },
+        { id: 'ch2', status: 'ACTIVE' },
+        { id: 'ch3', status: 'MAINTENANCE' },
+        { id: 'ch4', status: 'INACTIVE' },
+      ]);
+      prisma.salonStaff.findMany.mockResolvedValueOnce([]);
+      prisma.serviceSession.findMany.mockResolvedValueOnce([
+        { chairId: 'ch1', staffId: 'st1' },
+      ]);
+
+      const result = await service.getCapacitySummary('owner1', 's1');
+
+      expect(result.chairs).toEqual({
+        active: 2,
+        busy: 1,
+        available: 1,
+        maintenance: 1,
+        inactive: 1,
+      });
+    });
+
+    it('splits staff into active/busy/available/offDuty using ACTIVE service sessions', async () => {
+      prisma.chair.findMany.mockResolvedValueOnce([]);
+      prisma.salonStaff.findMany.mockResolvedValueOnce([
+        { id: 'st1', status: 'ACTIVE' },
+        { id: 'st2', status: 'ACTIVE' },
+        { id: 'st3', status: 'INACTIVE' },
+      ]);
+      prisma.serviceSession.findMany.mockResolvedValueOnce([
+        { chairId: 'ch1', staffId: 'st1' },
+      ]);
+
+      const result = await service.getCapacitySummary('owner1', 's1');
+
+      expect(result.staff).toEqual({ active: 2, busy: 1, available: 1, offDuty: 1 });
+    });
+
+    it('averages only the WAITING entries that already have an estimate', async () => {
+      prisma.chair.findMany.mockResolvedValueOnce([]);
+      prisma.salonStaff.findMany.mockResolvedValueOnce([]);
+      prisma.serviceSession.findMany.mockResolvedValueOnce([]);
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        { estimatedWaitMinutes: 10 },
+        { estimatedWaitMinutes: 20 },
+        { estimatedWaitMinutes: null },
+      ]);
+
+      const result = await service.getCapacitySummary('owner1', 's1');
+
+      expect(result.averageEstimatedWaitMinutes).toBe(15);
+    });
+
+    it('reports a null average when no WAITING entry has an estimate yet', async () => {
+      prisma.chair.findMany.mockResolvedValueOnce([]);
+      prisma.salonStaff.findMany.mockResolvedValueOnce([]);
+      prisma.serviceSession.findMany.mockResolvedValueOnce([]);
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]);
+
+      const result = await service.getCapacitySummary('owner1', 's1');
+
+      expect(result.averageEstimatedWaitMinutes).toBeNull();
+    });
+
+    it('reports currentServices as the count of ACTIVE service sessions', async () => {
+      prisma.chair.findMany.mockResolvedValueOnce([]);
+      prisma.salonStaff.findMany.mockResolvedValueOnce([]);
+      prisma.serviceSession.findMany.mockResolvedValueOnce([
+        { chairId: 'ch1', staffId: 'st1' },
+        { chairId: 'ch2', staffId: 'st2' },
+      ]);
+
+      const result = await service.getCapacitySummary('owner1', 's1');
+
+      expect(result.currentServices).toBe(2);
     });
   });
 });

@@ -1,0 +1,32 @@
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 14px 18px;
+  margin-bottom: var(--bc-space-4);
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  background: var(--bc-surface);
+  min-height: 54px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 64px;
+}
+
+.value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--bc-ink);
+}
+
+.label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--bc-muted);
+  margin-top: 2px;
+}

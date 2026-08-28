@@ -396,6 +396,27 @@ export interface DashboardQueueDto {
   chairs: ChairOptionDto[];
 }
 
+// GET /dashboard/salons/:salonId/capacity (Phase 6 — Owner Capacity Dashboard). "Busy" means
+// currently attached to an ACTIVE ServiceSession; "available" is active-minus-busy. Deliberately a
+// small, decision-oriented summary (per the mission's "don't overload the UI" instruction) rather
+// than a full analytics view — see Phase 9 for historical/trend reporting.
+export interface CapacityCountsDto {
+  active: number;
+  busy: number;
+  available: number;
+}
+
+export interface CapacitySummaryDto {
+  chairs: CapacityCountsDto & { maintenance: number; inactive: number };
+  staff: CapacityCountsDto & { offDuty: number };
+  currentServices: number; // ACTIVE ServiceSessions right now
+  waitingCustomers: number; // WAITING queue entries
+  queueSize: number; // WAITING + CALLED + IN_SERVICE
+  averageEstimatedWaitMinutes: number | null;
+  todaysBookings: number;
+  upcomingBookings: number;
+}
+
 // GET /salons/:salonId/queue/status — public, lightweight, no PII.
 export interface QueueStatusDto {
   salonId: string;

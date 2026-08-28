@@ -17,6 +17,7 @@ import {
   TURN_APPROACHING_THRESHOLD_MINUTES,
   type AssignQueueEntryInput,
   type ReassignQueueEntryInput,
+  type CapacitySummaryDto,
   type ChairOptionDto,
   type DashboardQueueDto,
   type QueueEntryDetailDto,
@@ -307,6 +308,123 @@ export class QueueService {
         status: s.status,
       })),
       chairs: chairs.map((c): ChairOptionDto => ({ id: c.id, label: c.label })),
+    };
+  }
+
+  /**
+   * Owner Capacity Dashboard (Phase 6) — a small, decision-oriented operational summary ("what do
+   * I do right now"), not a historical/trend report (that's Phase 9's job). "Busy" chairs/staff
+   * are whichever ones are attached to a currently-ACTIVE ServiceSession; "available" is
+   * active-minus-busy. today/upcoming booking counts mirror dashboard-bookings.service.ts's own
+   * IST-day-bounds convention (repeated locally rather than shared — see that file's istDayBounds
+   * for why: no salon timezone field is populated yet, same fixed +05:30 offset everywhere).
+   */
+  async getCapacitySummary(
+    userId: string,
+    salonId: string,
+  ): Promise<CapacitySummaryDto> {
+    await this.salonAccess.assertAccess(userId, salonId);
+
+    // Same IST-day-bounds idiom as this file's own nextTokenNumber() a few methods down.
+    const todayIst = utcToIstDateStr(new Date());
+    const todayStart = istWallTimeToUtc(todayIst, '00:00');
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60_000);
+
+    const [
+      chairs,
+      staff,
+      activeSessions,
+      waitingCount,
+      queueSize,
+      waitingEstimates,
+      todaysBookings,
+      upcomingBookings,
+    ] = await Promise.all([
+      this.prisma.chair.findMany({
+        where: { salonId },
+        select: { id: true, status: true },
+      }),
+      this.prisma.salonStaff.findMany({
+        where: { salonId },
+        select: { id: true, status: true },
+      }),
+      this.prisma.serviceSession.findMany({
+        where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
+        select: { chairId: true, staffId: true },
+      }),
+      this.prisma.queueEntry.count({
+        where: { salonId, status: QueueEntryStatus.WAITING },
+      }),
+      this.prisma.queueEntry.count({
+        where: {
+          salonId,
+          status: {
+            in: [
+              QueueEntryStatus.WAITING,
+              QueueEntryStatus.CALLED,
+              QueueEntryStatus.IN_SERVICE,
+            ],
+          },
+        },
+      }),
+      this.prisma.queueEntry.findMany({
+        where: { salonId, status: QueueEntryStatus.WAITING },
+        select: { estimatedWaitMinutes: true },
+      }),
+      this.prisma.booking.count({
+        where: { salonId, slotStart: { gte: todayStart, lt: todayEnd } },
+      }),
+      this.prisma.booking.count({
+        where: {
+          salonId,
+          slotStart: { gte: todayEnd },
+          status: {
+            in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+          },
+        },
+      }),
+    ]);
+
+    const busyChairIds = new Set(activeSessions.map((s) => s.chairId));
+    const busyStaffIds = new Set(activeSessions.map((s) => s.staffId));
+    const activeChairs = chairs.filter((c) => c.status === ChairStatus.ACTIVE);
+    const activeStaff = staff.filter(
+      (s) => s.status === StaffMemberStatus.ACTIVE,
+    );
+
+    const estimates = waitingEstimates
+      .map((e) => e.estimatedWaitMinutes)
+      .filter((m): m is number => m !== null);
+    const averageEstimatedWaitMinutes =
+      estimates.length > 0
+        ? Math.round(
+            estimates.reduce((sum, m) => sum + m, 0) / estimates.length,
+          )
+        : null;
+
+    return {
+      chairs: {
+        active: activeChairs.length,
+        busy: activeChairs.filter((c) => busyChairIds.has(c.id)).length,
+        available: activeChairs.filter((c) => !busyChairIds.has(c.id)).length,
+        maintenance: chairs.filter((c) => c.status === ChairStatus.MAINTENANCE)
+          .length,
+        inactive: chairs.filter((c) => c.status === ChairStatus.INACTIVE)
+          .length,
+      },
+      staff: {
+        active: activeStaff.length,
+        busy: activeStaff.filter((s) => busyStaffIds.has(s.id)).length,
+        available: activeStaff.filter((s) => !busyStaffIds.has(s.id)).length,
+        offDuty: staff.filter((s) => s.status === StaffMemberStatus.INACTIVE)
+          .length,
+      },
+      currentServices: activeSessions.length,
+      waitingCustomers: waitingCount,
+      queueSize,
+      averageEstimatedWaitMinutes,
+      todaysBookings,
+      upcomingBookings,
     };
   }
 

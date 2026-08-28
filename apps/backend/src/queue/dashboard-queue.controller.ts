@@ -90,4 +90,12 @@ export class DashboardQueueController {
   ) {
     return this.staffStatusService.getMe(user.id, salonId);
   }
+
+  @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.capacity}`)
+  getCapacitySummary(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.queueService.getCapacitySummary(user.id, salonId);
+  }
 }

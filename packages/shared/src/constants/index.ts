@@ -206,6 +206,8 @@ export const DASHBOARD_PATHS = {
   // `dashboard/staff/:id/status` route without already knowing its own staffId. Never collides with
   // salon-setup.controller.ts's `staff/:staffId` PATCH — there is no competing GET on that shape.
   me: 'me',
+  // GET dashboard/salons/:salonId/capacity (Phase 6 — Owner Capacity Dashboard).
+  capacity: 'capacity',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).
