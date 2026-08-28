@@ -166,3 +166,35 @@
     transform: none;
   }
 }
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.openBadge,
+.closedBadge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.openBadge {
+  color: var(--bc-success);
+  background: color-mix(in srgb, var(--bc-success) 14%, transparent);
+}
+
+.closedBadge {
+  color: var(--bc-muted);
+  background: color-mix(in srgb, var(--bc-muted) 14%, transparent);
+}
+
+.distanceText {
+  font-size: 0.8rem;
+  color: var(--bc-muted);
+}

@@ -27,11 +27,14 @@ export default function SearchClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const styleName = searchParams.get("style") ?? undefined;
+  const nearMeActive = searchParams.has("lat") && searchParams.has("lng");
 
   useEffect(() => {
     const params = new URLSearchParams();
-    for (const key of ["q", "city", "countryCode", "locality", "service"]) {
+    for (const key of ["q", "city", "countryCode", "locality", "service", "lat", "lng"]) {
       const value = searchParams.get(key);
       if (value) params.set(key, key === "city" ? cityNameToSlug(value) : value);
     }
@@ -74,6 +77,43 @@ export default function SearchClient() {
     router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
   }
 
+  // "Near Me" (Phase 4) — the browser's own Geolocation API, no paid Maps/geocoding SDK. On
+  // denial/unavailability this degrades gracefully to the existing city/text search rather than
+  // blocking the page; nothing here claims a location the browser didn't actually provide.
+  function handleNearMe() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationError("Location isn't available in this browser. Try searching by city instead.");
+      return;
+    }
+    setLocating(true);
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("lat", String(position.coords.latitude));
+        params.set("lng", String(position.coords.longitude));
+        router.push(`/search?${params.toString()}`);
+      },
+      (err) => {
+        setLocating(false);
+        setLocationError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission was denied. Try searching by city instead."
+            : "Couldn't get your location. Try searching by city instead.",
+        );
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+    );
+  }
+
+  function clearNearMe() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("lat");
+    params.delete("lng");
+    router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
+  }
+
   return (
     <main className={styles.page}>
       <section className={styles.intro} aria-labelledby="search-heading">
@@ -105,7 +145,16 @@ export default function SearchClient() {
           <Button type="submit" variant="primary">
             Find shops
           </Button>
+          <Button type="button" variant="outline" onClick={handleNearMe} disabled={locating}>
+            {locating ? "Locating…" : nearMeActive ? "Near me ✓" : "Near me"}
+          </Button>
         </form>
+        {locationError && <p className={styles.locationNotice}>{locationError}</p>}
+        {nearMeActive && (
+          <button type="button" className={styles.textLink} onClick={clearNearMe}>
+            Clear &ldquo;Near me&rdquo; and sort by name instead
+          </button>
+        )}
       </section>
 
       {styleName && (

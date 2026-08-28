@@ -144,6 +144,11 @@ export const salonSearchQuerySchema = z.object({
   q: z.string().optional(),
   cursor: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
+  // "Near Me" (Phase 4) — the device's current position, from the browser/RN geolocation API, not
+  // a paid geocoding service. Both-or-neither: a lone lat/lng is meaningless, so the service
+  // ignores either one supplied without its pair rather than guessing 0 for the other.
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
 });
 export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
 

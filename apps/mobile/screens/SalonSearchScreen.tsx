@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Location from 'expo-location';
 import { DISCOVERY_PATHS } from '@barbercue/shared';
 import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
@@ -19,14 +20,20 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [nearMe, setNearMe] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
 
-  async function handleSearch(isRefresh = false) {
+  async function runSearch(isRefresh: boolean, coords: { lat: number; lng: number } | null) {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
     setSearched(true);
     try {
       const params = new URLSearchParams();
       if (q.trim()) params.set('q', q.trim());
+      if (coords) {
+        params.set('lat', String(coords.lat));
+        params.set('lng', String(coords.lng));
+      }
       const result = await apiFetch<PaginatedResult<SalonListItemDto>>(
         `${DISCOVERY_PATHS.salons}?${params.toString()}`,
       );
@@ -36,6 +43,33 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }
+
+  function handleSearch(isRefresh = false) {
+    return runSearch(isRefresh, nearMe);
+  }
+
+  // "Near Me" (Phase 4) — expo-location's foreground permission flow, no paid Maps/geocoding SDK.
+  // Denial/unavailability degrades gracefully to the existing text search rather than blocking the
+  // screen (see the caught branches below).
+  async function handleNearMe() {
+    setLocating(true);
+    setError(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setError('Location permission was denied. Try searching by name instead.');
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+      setNearMe(coords);
+      await runSearch(false, coords);
+    } catch {
+      setError("Couldn't get your location. Try searching by name instead.");
+    } finally {
+      setLocating(false);
     }
   }
 
@@ -60,6 +94,14 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         />
         <Button title="Search" onPress={() => void handleSearch()} loading={loading} style={styles.searchButton} />
       </View>
+
+      <Button
+        title={locating ? 'Locating…' : nearMe ? 'Near me ✓' : 'Near me'}
+        variant="outline"
+        onPress={() => void handleNearMe()}
+        loading={locating}
+        style={styles.nearMeButton}
+      />
 
       {error && <InlineError message={error} />}
 
@@ -102,6 +144,13 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                     ★ {item.ratingAverage?.toFixed(1)} ({item.ratingCount})
                   </Text>
                 )}
+                {(item.isOpenNow !== null || item.distanceKm !== null) && (
+                  <Text style={styles.cardMeta}>
+                    {item.isOpenNow !== null ? (item.isOpenNow ? 'Open now' : 'Closed now') : ''}
+                    {item.isOpenNow !== null && item.distanceKm !== null ? ' · ' : ''}
+                    {item.distanceKm !== null ? `${item.distanceKm} km away` : ''}
+                  </Text>
+                )}
               </View>
             </Pressable>
           )}
@@ -129,6 +178,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
   },
   searchButton: { flexBasis: 110, flexGrow: 0 },
+  nearMeButton: { marginBottom: space[4] },
   skeletonStack: { gap: space[3] },
   skeletonCard: { height: 84, borderRadius: radius.lg },
   listContent: { paddingBottom: space[6] },

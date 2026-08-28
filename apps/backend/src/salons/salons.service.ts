@@ -4,6 +4,7 @@ import {
   Role,
   SalonStatus,
   currencyForCountry,
+  haversineDistanceKm,
   type PaginatedResult,
   type RegisterSalonInput,
   type RegisterSalonResultDto,
@@ -19,6 +20,8 @@ import { CitiesService } from './cities.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const RECENT_REVIEWS_LIMIT = 10;
+// "Near Me" candidate pool before in-memory distance sort — see search()'s own doc comment.
+const NEAR_ME_CANDIDATE_CAP = 200;
 // A brand-new shop's slug never collides in practice (name + city is a very sparse space at this
 // scale), but the DB-level @@unique([cityId, slug]) constraint is the real guarantee — this cap
 // just bounds how many times we retry a P2002 before giving up with a clear error instead of an
@@ -30,7 +33,24 @@ const listInclude = {
   city: true,
   locality: true,
   photos: { where: { type: 'COVER' as const }, take: 1 },
+  operatingHours: true,
 } satisfies Prisma.SalonInclude;
+
+// Mirrors bookings/availability.service.ts's own fixed +05:30 offset convention (no salon
+// timezone field is populated yet — see that file's doc comment) so "open now" agrees with how
+// every OperatingHours window is already interpreted elsewhere in the codebase.
+const IST_OFFSET_MINUTES = 330;
+
+function isOpenNow(hours: { dayOfWeek: number; isClosed: boolean; openTime: string; closeTime: string }[]): boolean | null {
+  if (hours.length === 0) return null;
+  const ist = new Date(Date.now() + IST_OFFSET_MINUTES * 60_000);
+  const today = hours.find((h) => h.dayOfWeek === ist.getUTCDay());
+  if (!today || today.isClosed) return today ? false : null;
+  const minutesNow = ist.getUTCHours() * 60 + ist.getUTCMinutes();
+  const [openH, openM] = today.openTime.split(':').map(Number);
+  const [closeH, closeM] = today.closeTime.split(':').map(Number);
+  return minutesNow >= openH * 60 + openM && minutesNow < closeH * 60 + closeM;
+}
 
 type SalonWithListRelations = Prisma.SalonGetPayload<{
   include: typeof listInclude;
@@ -76,6 +96,29 @@ export class SalonsService {
         { name: { contains: query.q, mode: 'insensitive' } },
         { description: { contains: query.q, mode: 'insensitive' } },
       ];
+    }
+
+    // "Near Me" (Phase 4): sorting by a computed haversine distance isn't something Prisma/Postgres
+    // can do without a geo extension (PostGIS earthdistance), which isn't set up here. Rather than
+    // fake a stable cursor over an in-memory sort, distance mode fetches a capped batch, sorts it
+    // in memory, and returns a single unpaginated page (nextCursor always null) — an honest
+    // limitation for a foundation-phase, demo-scale salon count, not a hidden bug.
+    const nearMe = query.lat !== undefined && query.lng !== undefined;
+    if (nearMe) {
+      const from = { lat: query.lat!, lng: query.lng! };
+      const candidates = await this.prisma.salon.findMany({
+        where,
+        take: NEAR_ME_CANDIDATE_CAP,
+        include: listInclude,
+      });
+      const withDistance = await Promise.all(
+        candidates.map((s) => this.toListItem(s, from)),
+      );
+      const sorted = withDistance
+        .filter((s) => s.distanceKm !== null)
+        .sort((a, b) => a.distanceKm! - b.distanceKm!)
+        .slice(0, limit);
+      return { items: sorted, nextCursor: null };
     }
 
     const salons = await this.prisma.salon.findMany({
@@ -146,6 +189,10 @@ export class SalonsService {
       ratingCount,
       priceMin,
       priceMax,
+      // No lat/lng of the viewer to compare against on the profile page (unlike search results)
+      // — the customer already navigated here, distance is no longer the decision being made.
+      distanceKm: null,
+      isOpenNow: isOpenNow(salon.operatingHours),
       description: salon.description,
       phone: salon.phone,
       services: salon.services.map((s) => ({
@@ -391,9 +438,14 @@ export class SalonsService {
 
   private async toListItem(
     salon: SalonWithListRelations,
+    from?: { lat: number; lng: number },
   ): Promise<SalonListItemDto> {
     const { ratingAverage, ratingCount, priceMin, priceMax } =
       await this.aggregate(salon.id);
+    const distanceKm =
+      from && salon.lat !== null && salon.lng !== null
+        ? Math.round(haversineDistanceKm(from.lat, from.lng, salon.lat, salon.lng) * 10) / 10
+        : null;
     return {
       id: salon.id,
       publicId: salon.publicId,
@@ -412,6 +464,8 @@ export class SalonsService {
       ratingCount,
       priceMin,
       priceMax,
+      distanceKm,
+      isOpenNow: isOpenNow(salon.operatingHours),
     };
   }
 

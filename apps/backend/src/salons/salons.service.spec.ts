@@ -24,6 +24,7 @@ function makeSalon(overrides: Partial<Record<string, unknown>> = {}) {
     currency: 'INR',
     locality: { slug: 'indiranagar' },
     photos: [],
+    operatingHours: [],
     ...overrides,
   };
 }
@@ -158,6 +159,38 @@ describe('SalonsService', () => {
       const result = await service.search({});
       expect(result.items[0].priceMin).toBe(300);
       expect(result.items[0].priceMax).toBe(600);
+    });
+
+    it('leaves distanceKm null when no lat/lng is supplied', async () => {
+      prisma.salon.findMany.mockResolvedValue([makeSalon()]);
+      const result = await service.search({});
+      expect(result.items[0].distanceKm).toBeNull();
+    });
+
+    describe('"near me" (lat/lng supplied)', () => {
+      it('sorts results by ascending distance and always returns a null nextCursor', async () => {
+        const near = makeSalon({ id: 'near', lat: 12.9716, lng: 77.6412 }); // ~0km from query point
+        const far = makeSalon({ id: 'far', lat: 13.5, lng: 78.5 }); // well outside Bengaluru
+        prisma.salon.findMany.mockResolvedValue([far, near]);
+        const result = await service.search({ lat: 12.9716, lng: 77.6412 });
+        expect(result.items.map((i) => i.id)).toEqual(['near', 'far']);
+        expect(result.items[0].distanceKm).toBeCloseTo(0, 0);
+        expect(result.nextCursor).toBeNull();
+      });
+
+      it('excludes salons with no coordinates rather than crashing or showing a fake 0', async () => {
+        const noCoords = makeSalon({ id: 'no-coords', lat: null, lng: null });
+        prisma.salon.findMany.mockResolvedValue([noCoords]);
+        const result = await service.search({ lat: 12.9716, lng: 77.6412 });
+        expect(result.items).toHaveLength(0);
+      });
+
+      it('does not send a cursor/orderBy to Prisma in near-me mode (in-memory sort instead)', async () => {
+        prisma.salon.findMany.mockResolvedValue([]);
+        await service.search({ lat: 12.9716, lng: 77.6412, cursor: 'ignored-in-near-me-mode' });
+        const call = prisma.salon.findMany.mock.calls[0][0] as unknown as Record<string, unknown>;
+        expect(call.cursor).toBeUndefined();
+      });
     });
   });
 

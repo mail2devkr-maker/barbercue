@@ -37,6 +37,12 @@
         {
           "photosPermission": "BarberCue needs access to your photos so you can try the AI Style Advisor."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "BarberCue uses your location to show nearby barbershops."
+        }
       ]
     ]
   }

@@ -182,6 +182,15 @@ export interface SalonListItemDto extends SalonSummary {
   ratingCount: number;
   priceMin: number | null; // computed from active services, null if none
   priceMax: number | null;
+  // "Near Me" (Phase 4) — null unless the search request carried lat/lng AND this salon has
+  // coordinates (see SalonSummary.lat/lng's own nullability). Pre-rounded to 1 decimal place so
+  // every client shows the exact figure the server sorted by, not its own rounding.
+  distanceKm: number | null;
+  // Computed from today's OperatingHours row against the current IST wall-clock time — same fixed
+  // +05:30 convention as availability.service.ts (see that file's own doc comment; no salon
+  // timezone field is populated yet). Null when the salon has no operating-hours data at all for
+  // today (never assumed open or closed without a real signal).
+  isOpenNow: boolean | null;
 }
 
 // Full profile page shape — everything a listing card has, plus the detail-page content.

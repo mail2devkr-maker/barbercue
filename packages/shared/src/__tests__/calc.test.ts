@@ -1,5 +1,11 @@
 import { ChargeType } from '../enums';
-import { computeCancellationCharge, computeSlotCapacity, estimateWaitMinutes, isSlotBookable } from '../calc';
+import {
+  computeCancellationCharge,
+  computeSlotCapacity,
+  estimateWaitMinutes,
+  haversineDistanceKm,
+  isSlotBookable,
+} from '../calc';
 
 describe('computeCancellationCharge', () => {
   const policy = {
@@ -72,5 +78,24 @@ describe('estimateWaitMinutes', () => {
 
   it('a single server serializes everyone ahead in sequence', () => {
     expect(estimateWaitMinutes(1, 3, 20, 0)).toBe(60);
+  });
+});
+
+describe('haversineDistanceKm', () => {
+  it('is 0 for the same point', () => {
+    expect(haversineDistanceKm(12.9716, 77.5946, 12.9716, 77.5946)).toBeCloseTo(0, 5);
+  });
+
+  it('matches the known ~1.5km straight-line distance between two Bengaluru landmarks', () => {
+    // MG Road (12.9716, 77.6033) to Cubbon Park (12.9763, 77.5929) — real-world reference distance.
+    const km = haversineDistanceKm(12.9716, 77.6033, 12.9763, 77.5929);
+    expect(km).toBeGreaterThan(1);
+    expect(km).toBeLessThan(2);
+  });
+
+  it('is symmetric', () => {
+    const a = haversineDistanceKm(12.97, 77.59, 13.08, 80.27);
+    const b = haversineDistanceKm(13.08, 80.27, 12.97, 77.59);
+    expect(a).toBeCloseTo(b, 8);
   });
 });

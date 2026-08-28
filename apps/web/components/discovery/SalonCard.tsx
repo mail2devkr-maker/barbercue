@@ -56,6 +56,17 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
           )}
         </div>
 
+        {(salon.isOpenNow !== null || salon.distanceKm !== null) && (
+          <div className={styles.statusRow}>
+            {salon.isOpenNow !== null && (
+              <span className={salon.isOpenNow ? styles.openBadge : styles.closedBadge}>
+                {salon.isOpenNow ? "Open now" : "Closed now"}
+              </span>
+            )}
+            {salon.distanceKm !== null && <span className={styles.distanceText}>{salon.distanceKm} km away</span>}
+          </div>
+        )}
+
         <div className={styles.actions}>
           <Link href={bookingHref} className={styles.primaryAction}>
             Book
