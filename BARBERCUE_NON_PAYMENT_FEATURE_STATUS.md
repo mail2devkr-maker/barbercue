@@ -47,10 +47,25 @@ gets a quieter toast-only notice.
   deep link (never claims proactive/automatic delivery).
 
 ## Phase 4 — GPS / Nearby Discovery
-**NOT STARTED.**
+**DONE.** Commit `5a7368a`. Real geolocation permission flow (browser Geolocation API / RN
+`expo-location`), haversine distance sort (in-memory, capped candidate batch — no PostGIS
+available, so near-me mode is a single unpaginated page rather than a faked cursor over a sort the
+DB didn't produce), Open/Closed badges from live OperatingHours. No paid Maps/geocoding SDK.
 
 ## Phase 5 — Advanced Smart Queue
-**NOT STARTED.** (Turn-approaching alerts, arrival windows, ETA recalculation, overrun handling.)
+**DONE.** Commit `f7af04e`.
+- **Arrival window**: `estimatedWaitRangeMinutes` (a proportional +/- band) replaces a falsely
+  precise single number on customer-facing queue status.
+- **Overrun-aware ETA**: `remainingSessionMinutes` floors at a small fixed tail (5 min) instead of
+  0 once a session passes its nominal duration — a documented heuristic (real ML-driven duration
+  prediction is Phase 32's job), not a data model.
+- **Fresh-on-read**: `getActiveForCustomer`/`getDashboardQueue` recompute ETAs on every read, not
+  only after a mutation — an overrunning service no longer leaves a stale number on screen.
+- **Turn-approaching / large-swing alerts**: `queue.entry.wait_alert` (ids-only, customer-room
+  only), emitted only on a genuine threshold crossing or >=10min swing (`isWaitAlertWorthy`) — web
+  gets a chime + banner, mobile gets vibration + speech + banner.
+- Booked appointment time (`Booking.slotStart`) vs. current queue ETA remain visually and
+  structurally distinct (different screens/DTOs) — not merged into one number anywhere.
 
 ## Phase 6 — Owner Capacity Dashboard
 **NOT STARTED.**
@@ -165,9 +180,10 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts: backend 439/439 tests passing (38 suites) · shared/backend/
-web/mobile typecheck clean · web lint clean · web production build (20 static/dynamic pages) ·
-backend production build clean · mobile Expo config resolves cleanly.
+**ONGOING, per-phase.** Current counts (after Phase 5): backend 452/452 tests passing (38 suites) ·
+shared 106/106 tests passing (7 suites) · shared/backend/web/mobile typecheck clean · web lint
+clean · web production build (20 static/dynamic pages) · backend production build clean · mobile
+Expo config resolves cleanly (including the new expo-location plugin/permissions).
 
 ## Phase 39 — Browser / Mobile Manual Validation
 **NOT STARTED** (beyond Phase 1's real-device Google login test). No manual click-through of the
