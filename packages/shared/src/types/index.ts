@@ -370,6 +370,12 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
   activeServiceSessionId: string | null; // target id for POST .../service-sessions/:id/complete
   joinedAt: string; // ISO 8601
   calledAt: string | null;
+  // Smart Queue (Phase 5) — a realistic range around estimatedWaitMinutes ("arrive between X-Y")
+  // rather than presenting queue timing as exact. Null exactly when estimatedWaitMinutes is null.
+  estimatedWaitRangeMinutes: { min: number; max: number } | null;
+  // Whether this entry is within TURN_APPROACHING_THRESHOLD_MINUTES — drives the client's
+  // turn-approaching banner/alert copy without duplicating the threshold constant client-side.
+  turnApproaching: boolean;
 }
 
 // GET /dashboard/salons/:salonId/booking/staff mirror for the live queue's chair dropdown.
@@ -395,6 +401,8 @@ export interface QueueStatusDto {
   salonId: string;
   waitingCount: number;
   estimatedWaitMinutes: number | null;
+  // Smart Queue (Phase 5) — see QueueEntryDetailDto's own doc comment.
+  estimatedWaitRangeMinutes: { min: number; max: number } | null;
 }
 
 // PATCH /dashboard/staff/:id/status response.

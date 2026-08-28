@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import * as Speech from 'expo-speech';
 import { QUEUE_ENTRIES_PATH, type QueueEntryDetailDto } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { getRealtimeSocket, joinSalonRoom } from '../lib/realtime';
@@ -29,6 +30,8 @@ export function QueueStatusPanel({
   entry: QueueEntryDetailDto;
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
 }) {
+  const [turnAlert, setTurnAlert] = useState(false);
+
   useEffect(() => {
     if (!ACTIVE_STATUSES.has(entry.status)) return undefined;
     const salonId = entry.salonId;
@@ -51,24 +54,47 @@ export function QueueStatusPanel({
     function onEntryCalled(payload: { salonId: string; queueEntryId: string }) {
       if (payload.salonId === salonId) refetch();
     }
+    // The backend only emits this on a genuine turn-approaching crossing or a large wait swing
+    // (see queue.service.ts's recomputeEtas) — every receipt is real news, no client dedup needed.
+    function onWaitAlert(payload: { salonId: string; queueEntryId: string }) {
+      if (payload.salonId !== salonId || payload.queueEntryId !== entry.id) return;
+      setTurnAlert(true);
+      Vibration.vibrate([0, 200, 100, 200]);
+      Speech.speak(entry.turnApproaching ? 'Your turn is almost here.' : 'Your wait time has changed.');
+      refetch();
+    }
 
     socket.on('queue.updated', onQueueUpdated);
     socket.on('queue.entry.called', onEntryCalled);
+    socket.on('queue.entry.wait_alert', onWaitAlert);
     return () => {
       cancelled = true;
       socket.off('queue.updated', onQueueUpdated);
       socket.off('queue.entry.called', onEntryCalled);
+      socket.off('queue.entry.wait_alert', onWaitAlert);
     };
-  }, [entry.salonId, entry.status, onEntryChange]);
+  }, [entry.salonId, entry.status, entry.id, entry.turnApproaching, onEntryChange]);
 
   return (
     <View style={styles.card}>
+      {turnAlert && (
+        <Pressable style={styles.turnAlertBanner} onPress={() => setTurnAlert(false)}>
+          <Text style={styles.turnAlertText}>
+            {entry.turnApproaching ? 'Your turn is almost here! Tap to dismiss.' : "Your wait time changed. Tap to dismiss."}
+          </Text>
+        </Pressable>
+      )}
       <View style={styles.headerRow}>
         <Text style={styles.token}>Token #{entry.tokenNumber}</Text>
         <Text style={[styles.status, entry.status === 'CALLED' && styles.statusCalled]}>{statusLabel(entry)}</Text>
       </View>
-      {entry.status === 'WAITING' && entry.estimatedWaitMinutes !== null && (
-        <Text style={styles.detail}>Estimated wait: ~{entry.estimatedWaitMinutes} min</Text>
+      {entry.status === 'WAITING' && entry.estimatedWaitRangeMinutes && (
+        <Text style={styles.detail}>
+          Estimated wait: {entry.estimatedWaitRangeMinutes.min}–{entry.estimatedWaitRangeMinutes.max} min
+        </Text>
+      )}
+      {entry.status === 'WAITING' && entry.turnApproaching && (
+        <Text style={styles.detail}>Please head over now — you&apos;re almost up.</Text>
       )}
       {entry.status === 'IN_SERVICE' && (
         <Text style={styles.detail}>
@@ -93,4 +119,13 @@ const styles = StyleSheet.create({
   status: { fontFamily: font.bodySemiBold, color: color.muted, fontSize: fontSize.sm },
   statusCalled: { color: color.accent },
   detail: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },
+  turnAlertBanner: {
+    backgroundColor: color.successSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 125, 50, 0.3)',
+    borderRadius: radius.sm,
+    padding: space[3],
+    marginBottom: space[3],
+  },
+  turnAlertText: { fontFamily: font.bodyBold, fontSize: fontSize.xs, color: '#2e7d32' },
 });

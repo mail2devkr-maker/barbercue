@@ -3,8 +3,11 @@ import {
   computeCancellationCharge,
   computeSlotCapacity,
   estimateWaitMinutes,
+  estimateWaitRangeMinutes,
   haversineDistanceKm,
   isSlotBookable,
+  isWaitAlertWorthy,
+  remainingSessionMinutes,
 } from '../calc';
 
 describe('computeCancellationCharge', () => {
@@ -97,5 +100,62 @@ describe('haversineDistanceKm', () => {
     const a = haversineDistanceKm(12.97, 77.59, 13.08, 80.27);
     const b = haversineDistanceKm(13.08, 80.27, 12.97, 77.59);
     expect(a).toBeCloseTo(b, 8);
+  });
+});
+
+describe('remainingSessionMinutes', () => {
+  it('returns the straightforward remainder when still within nominal duration', () => {
+    expect(remainingSessionMinutes(30, 10)).toBe(20);
+  });
+
+  it('is 0 remaining at the exact nominal duration', () => {
+    // Exactly 0 remaining is itself "not > 0", so it falls to the overrun tail (5) rather than 0 —
+    // still in the chair at minute 30 of a 30-minute cut is not "already done."
+    expect(remainingSessionMinutes(30, 30)).toBe(5);
+  });
+
+  it('floors at the overrun tail instead of reporting negative/zero once past nominal duration', () => {
+    expect(remainingSessionMinutes(30, 45)).toBe(5);
+  });
+});
+
+describe('estimateWaitRangeMinutes', () => {
+  it('is null when there is no point estimate to build a range around', () => {
+    expect(estimateWaitRangeMinutes(null)).toBeNull();
+  });
+
+  it('never goes below 0 on the low end even for a small estimate', () => {
+    expect(estimateWaitRangeMinutes(2)).toEqual({ min: 0, max: 7 });
+  });
+
+  it('widens proportionally for a larger estimate', () => {
+    // 40 * 0.25 = 10 band
+    expect(estimateWaitRangeMinutes(40)).toEqual({ min: 30, max: 50 });
+  });
+});
+
+describe('isWaitAlertWorthy', () => {
+  it('is true the moment the wait first drops into the turn-approaching window', () => {
+    expect(isWaitAlertWorthy(12, 4)).toBe(true);
+  });
+
+  it('is false when already within the window and staying there (no new information)', () => {
+    expect(isWaitAlertWorthy(4, 3)).toBe(false);
+  });
+
+  it('is true for a large swing even outside the approaching window', () => {
+    expect(isWaitAlertWorthy(15, 30)).toBe(true);
+  });
+
+  it('is false for a small routine fluctuation', () => {
+    expect(isWaitAlertWorthy(20, 22)).toBe(false);
+  });
+
+  it('is false once the estimate becomes unknown (nothing new to alert about)', () => {
+    expect(isWaitAlertWorthy(20, null)).toBe(false);
+  });
+
+  it('is true on the very first estimate landing inside the approaching window', () => {
+    expect(isWaitAlertWorthy(null, 3)).toBe(true);
   });
 });

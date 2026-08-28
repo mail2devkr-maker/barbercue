@@ -97,6 +97,20 @@ export class RealtimeGateway implements OnGatewayConnection {
         .emit('queue.entry.called', payload);
   }
 
+  // Smart Queue (Phase 5) — "your turn is approaching" / "your wait changed a lot". Customer-room
+  // only (not the salon room QueueService's other emits use): this is guidance for one specific
+  // customer, not operational data the owner dashboard needs. Ids-only, same convention as every
+  // other emit here — the client refetches GET queue-entries/mine/active for the actual numbers.
+  emitQueueEntryWaitAlert(
+    salonId: string,
+    customerId: string,
+    queueEntryId: string,
+  ): void {
+    this.server
+      .to(`customer:${customerId}`)
+      .emit('queue.entry.wait_alert', { salonId, queueEntryId });
+  }
+
   emitStaffStatusChanged(salonId: string, staffId: string): void {
     this.server
       .to(`salon:${salonId}`)

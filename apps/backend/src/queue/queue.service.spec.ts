@@ -50,6 +50,7 @@ interface PrismaMock {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
     findUnique: jest.Mock<Promise<unknown>, [unknown]>;
+    findUniqueOrThrow: jest.Mock<Promise<unknown>, [unknown]>;
     count: jest.Mock<Promise<number>, [unknown]>;
     create: jest.Mock<Promise<unknown>, [unknown]>;
     update: jest.Mock<Promise<unknown>, [unknown]>;
@@ -95,6 +96,7 @@ describe('QueueService', () => {
     emitEntryCalled: jest.Mock;
     emitStaffStatusChanged: jest.Mock;
     emitQueueEntryReassigned: jest.Mock;
+    emitQueueEntryWaitAlert: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -105,6 +107,7 @@ describe('QueueService', () => {
           .fn<Promise<unknown[]>, [unknown]>()
           .mockResolvedValue([]),
         findUnique: jest.fn<Promise<unknown>, [unknown]>(),
+        findUniqueOrThrow: jest.fn<Promise<unknown>, [unknown]>(),
         count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
         create: jest.fn<Promise<unknown>, [unknown]>(),
         update: jest.fn<Promise<unknown>, [unknown]>(),
@@ -180,6 +183,7 @@ describe('QueueService', () => {
       emitEntryCalled: jest.fn(),
       emitStaffStatusChanged: jest.fn(),
       emitQueueEntryReassigned: jest.fn(),
+      emitQueueEntryWaitAlert: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -605,6 +609,10 @@ describe('QueueService', () => {
     });
 
     it('assigns 1-based positions only to WAITING entries, in join order', async () => {
+      // getDashboardQueue now recomputes ETAs (Phase 5, "don't show a stale estimate") before
+      // reading — that's a separate queryEntry.findMany call (WAITING-only, for recomputeEtas)
+      // ahead of the actual display fetch below; an empty result makes recomputeEtas a no-op.
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]);
       prisma.queueEntry.findMany.mockResolvedValueOnce([
         makeDetailEntry({ id: 'q1', status: QueueEntryStatus.WAITING }),
         makeDetailEntry({ id: 'q2', status: QueueEntryStatus.CALLED }),
@@ -624,6 +632,110 @@ describe('QueueService', () => {
       prisma.chair.count.mockResolvedValueOnce(0);
       const result = await service.getQueueStatus('s1');
       expect(result.estimatedWaitMinutes).toBeNull();
+      expect(result.estimatedWaitRangeMinutes).toBeNull();
+    });
+
+    it('includes a matching estimatedWaitRangeMinutes whenever a point estimate exists', async () => {
+      prisma.salonStaff.count.mockResolvedValueOnce(3);
+      prisma.chair.count.mockResolvedValueOnce(4);
+      const result = await service.getQueueStatus('s1');
+      expect(result.estimatedWaitMinutes).not.toBeNull();
+      expect(result.estimatedWaitRangeMinutes).not.toBeNull();
+      expect(result.estimatedWaitRangeMinutes!.min).toBeLessThanOrEqual(result.estimatedWaitMinutes!);
+      expect(result.estimatedWaitRangeMinutes!.max).toBeGreaterThanOrEqual(result.estimatedWaitMinutes!);
+    });
+  });
+
+  describe('getActiveForCustomer (Phase 5 — recompute on read)', () => {
+    it('returns null when the customer has no active entry', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null);
+      expect(await service.getActiveForCustomer('c1')).toBeNull();
+    });
+
+    it('recomputes ETAs before returning a WAITING entry, not just a stale stored value', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(
+        makeRawEntry({ id: 'q1', salonId: 's1', status: QueueEntryStatus.WAITING }),
+      );
+      // First findMany call is recomputeEtas' own WAITING-only fetch.
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q1', customerId: 'c1', serviceId: null }),
+      ]);
+      prisma.queueEntry.findUniqueOrThrow.mockResolvedValueOnce(
+        makeDetailEntry({ id: 'q1', status: QueueEntryStatus.WAITING }),
+      );
+      await service.getActiveForCustomer('c1');
+      expect(prisma.queueEntry.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'q1' } }),
+      );
+      expect(prisma.queueEntry.findUniqueOrThrow).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'q1' } }),
+      );
+    });
+
+    it('skips the recompute for a CALLED/IN_SERVICE entry (recomputeEtas only ever touches WAITING rows)', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(
+        makeRawEntry({ id: 'q1', salonId: 's1', status: QueueEntryStatus.IN_SERVICE }),
+      );
+      prisma.queueEntry.findUniqueOrThrow.mockResolvedValueOnce(
+        makeDetailEntry({ id: 'q1', status: QueueEntryStatus.IN_SERVICE }),
+      );
+      await service.getActiveForCustomer('c1');
+      expect(prisma.queueEntry.update).not.toHaveBeenCalled();
+    });
+
+    it('includes estimatedWaitRangeMinutes and turnApproaching on the returned entry', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(
+        makeRawEntry({ id: 'q1', salonId: 's1', status: QueueEntryStatus.WAITING }),
+      );
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]); // recomputeEtas no-op
+      prisma.queueEntry.findUniqueOrThrow.mockResolvedValueOnce(
+        makeDetailEntry({ id: 'q1', status: QueueEntryStatus.WAITING, estimatedWaitMinutes: 3 }),
+      );
+      const result = await service.getActiveForCustomer('c1');
+      expect(result?.turnApproaching).toBe(true);
+      expect(result?.estimatedWaitRangeMinutes).toEqual({ min: 0, max: 8 });
+    });
+  });
+
+  describe('recomputeEtas — Smart Queue wait alerts (Phase 5)', () => {
+    it('emits a wait alert when a customer-linked entry crosses into the turn-approaching window', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q1', customerId: 'c1', serviceId: null, estimatedWaitMinutes: 20 }),
+      ]);
+      // Default staffCount(3)/chairCount(4)/activeRemaining(0) with a single WAITING entry (0
+      // people ahead) computes eta 0 — well inside the approaching window, down from 20.
+      await service.recomputeEtas('s1');
+      expect(realtime.emitQueueEntryWaitAlert).toHaveBeenCalledWith('s1', 'c1', 'q1');
+    });
+
+    it('does not emit for a walk-in entry with no linked customer account', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q1', customerId: null, serviceId: null, estimatedWaitMinutes: 20 }),
+      ]);
+      await service.recomputeEtas('s1');
+      expect(realtime.emitQueueEntryWaitAlert).not.toHaveBeenCalled();
+    });
+
+    it('does not emit when the estimate is already near its previous value (no new information)', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        // Old estimate (3) is already within the approaching window and close to the new one (0).
+        makeRawEntry({ id: 'q1', customerId: 'c1', serviceId: null, estimatedWaitMinutes: 3 }),
+      ]);
+      await service.recomputeEtas('s1');
+      expect(realtime.emitQueueEntryWaitAlert).not.toHaveBeenCalled();
+    });
+
+    it('emits for a large swing even when the new estimate is outside the approaching window', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q1', customerId: 'c1', serviceId: null, estimatedWaitMinutes: 5 }),
+      ]);
+      // A session that just started with a long nominal duration pushes the computed estimate up
+      // well past the approaching window and far from the old value (5) — a genuine large swing.
+      prisma.serviceSession.findMany.mockResolvedValueOnce([
+        { startedAt: new Date(Date.now() - 60_000), service: { durationMinutes: 60 } },
+      ]);
+      await service.recomputeEtas('s1');
+      expect(realtime.emitQueueEntryWaitAlert).toHaveBeenCalledWith('s1', 'c1', 'q1');
     });
   });
 });

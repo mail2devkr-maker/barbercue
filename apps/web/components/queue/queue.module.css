@@ -452,3 +452,28 @@
   border: 1px dashed var(--bc-border);
   border-radius: var(--bc-radius-md);
 }
+
+.turnAlertBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: var(--bc-space-3);
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--bc-success) 35%, var(--bc-border));
+  background: color-mix(in srgb, var(--bc-success) 10%, transparent);
+  border-radius: var(--bc-radius-md);
+  font-size: var(--bc-text-sm);
+  font-weight: 600;
+  color: var(--bc-success);
+}
+
+.turnAlertBanner button {
+  background: none;
+  border: none;
+  font-size: var(--bc-text-xs);
+  font-weight: 600;
+  color: var(--bc-muted);
+  cursor: pointer;
+  text-decoration: underline;
+}

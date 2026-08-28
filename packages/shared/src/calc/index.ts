@@ -103,3 +103,59 @@ export function haversineDistanceKm(
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return EARTH_RADIUS_KM * c;
 }
+
+// A service that has already run past its nominal duration hasn't necessarily just finished —
+// the customer is still literally in the chair. Flooring "remaining" at 0 the instant nominal
+// duration elapses (the old behaviour) understates how much longer everyone behind them will
+// actually wait. This assumes a modest fixed tail instead of pretending the session is already
+// over — a deliberate heuristic, not a data-driven prediction (that's Phase 32's job).
+export const OVERRUN_TAIL_MINUTES = 5;
+
+export function remainingSessionMinutes(
+  durationMinutes: number,
+  elapsedMinutes: number,
+): number {
+  const remaining = durationMinutes - elapsedMinutes;
+  return remaining > 0 ? remaining : OVERRUN_TAIL_MINUTES;
+}
+
+// Smart Queue (Phase 5) — "Please arrive between 4:10-4:20" instead of a falsely precise single
+// number. The band widens with the estimate itself (queue timing gets less certain the further out
+// it is) but never collapses below a few minutes even for a near-zero estimate, since "your turn
+// right now" still has some real slop in practice.
+const WAIT_RANGE_MIN_BAND_MINUTES = 5;
+const WAIT_RANGE_FRACTION = 0.25;
+
+export function estimateWaitRangeMinutes(
+  estimatedWaitMinutes: number | null,
+): { min: number; max: number } | null {
+  if (estimatedWaitMinutes === null) return null;
+  const band = Math.max(WAIT_RANGE_MIN_BAND_MINUTES, Math.round(estimatedWaitMinutes * WAIT_RANGE_FRACTION));
+  return { min: Math.max(0, estimatedWaitMinutes - band), max: estimatedWaitMinutes + band };
+}
+
+// Smart Queue (Phase 5) — "turn approaching" is the point a customer should start heading over.
+export const TURN_APPROACHING_THRESHOLD_MINUTES = 5;
+// "Estimated wait meaningfully changed" — small fluctuations every recompute cycle would be noisy
+// enough to be worse than no alert at all; only a real swing is worth interrupting the customer for.
+export const MEANINGFUL_WAIT_CHANGE_MINUTES = 10;
+
+/**
+ * Whether a queue wait-time update is worth actively alerting the customer about (vs. just quietly
+ * updating the displayed number) — newly within the turn-approaching window, or a large enough
+ * swing either direction that the customer's plans might change. Pure so both the backend (decides
+ * whether to emit a realtime alert) and any client rendering copy can agree on the same rule.
+ */
+export function isWaitAlertWorthy(
+  previousWaitMinutes: number | null,
+  nextWaitMinutes: number | null,
+): boolean {
+  if (nextWaitMinutes === null) return false;
+  const justApproaching =
+    nextWaitMinutes <= TURN_APPROACHING_THRESHOLD_MINUTES &&
+    (previousWaitMinutes === null || previousWaitMinutes > TURN_APPROACHING_THRESHOLD_MINUTES);
+  const meaningfulSwing =
+    previousWaitMinutes !== null &&
+    Math.abs(nextWaitMinutes - previousWaitMinutes) >= MEANINGFUL_WAIT_CHANGE_MINUTES;
+  return justApproaching || meaningfulSwing;
+}

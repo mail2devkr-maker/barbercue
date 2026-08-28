@@ -11,6 +11,10 @@ import {
   StaffMemberStatus,
   computeSlotCapacity,
   estimateWaitMinutes,
+  estimateWaitRangeMinutes,
+  isWaitAlertWorthy,
+  remainingSessionMinutes,
+  TURN_APPROACHING_THRESHOLD_MINUTES,
   type AssignQueueEntryInput,
   type ReassignQueueEntryInput,
   type ChairOptionDto,
@@ -164,7 +168,7 @@ export class QueueService {
   async getActiveForCustomer(
     customerId: string,
   ): Promise<QueueEntryDetailDto | null> {
-    const entry = await this.prisma.queueEntry.findFirst({
+    const existing = await this.prisma.queueEntry.findFirst({
       where: {
         customerId,
         status: {
@@ -175,10 +179,22 @@ export class QueueService {
           ],
         },
       },
-      include: queueEntryDetailInclude,
       orderBy: { joinedAt: 'desc' },
     });
-    if (!entry) return null;
+    if (!existing) return null;
+
+    // Recompute on read, not only after a mutation elsewhere in the salon — a service quietly
+    // overrunning its nominal duration would otherwise leave this customer staring at a stale
+    // estimate until someone else's action happens to trigger a recompute (Phase 5's "don't
+    // silently show stale times" requirement).
+    if (existing.status === QueueEntryStatus.WAITING) {
+      await this.recomputeEtas(existing.salonId);
+    }
+
+    const entry = await this.prisma.queueEntry.findUniqueOrThrow({
+      where: { id: existing.id },
+      include: queueEntryDetailInclude,
+    });
     const position =
       entry.status === QueueEntryStatus.WAITING
         ? await this.computePosition(entry)
@@ -223,7 +239,12 @@ export class QueueService {
       avgServiceDurationMinutes,
       activeRemaining,
     );
-    return { salonId, waitingCount, estimatedWaitMinutes };
+    return {
+      salonId,
+      waitingCount,
+      estimatedWaitMinutes,
+      estimatedWaitRangeMinutes: estimateWaitRangeMinutes(estimatedWaitMinutes),
+    };
   }
 
   // ---------- Staff/owner dashboard ----------
@@ -233,6 +254,10 @@ export class QueueService {
     salonId: string,
   ): Promise<DashboardQueueDto> {
     await this.salonAccess.assertAccess(userId, salonId);
+
+    // Same freshness rationale as getActiveForCustomer above — the owner dashboard shouldn't show
+    // a stale ETA for an overrunning service until some unrelated mutation happens to trigger one.
+    await this.recomputeEtas(salonId);
 
     const entries = await this.prisma.queueEntry.findMany({
       where: {
@@ -719,9 +744,9 @@ export class QueueService {
     if (sessions.length === 0) return 0;
     const now = Date.now();
     const remaining = sessions.map((s) =>
-      Math.max(
-        0,
-        s.service.durationMinutes - (now - s.startedAt.getTime()) / 60_000,
+      remainingSessionMinutes(
+        s.service.durationMinutes,
+        (now - s.startedAt.getTime()) / 60_000,
       ),
     );
     return remaining.reduce((sum, m) => sum + m, 0) / remaining.length;
@@ -785,6 +810,23 @@ export class QueueService {
         where: { id: entry.id },
         data: { estimatedWaitMinutes: eta },
       });
+
+      // Customer-facing "turn approaching" / "wait changed a lot" alert (Phase 5) — a targeted
+      // customer-room event, not the salon-wide queue.updated already emitted by every caller of
+      // this method. Only entries with a real customer (an app-joined visit, not a walk-in the
+      // owner logged for someone with no account) have anyone to alert. Comparing against
+      // entry.estimatedWaitMinutes (the value fetched *before* this loop overwrote it) is what
+      // makes this a real state-transition check, not a re-alert on every recompute cycle.
+      if (
+        entry.customerId &&
+        isWaitAlertWorthy(entry.estimatedWaitMinutes, eta)
+      ) {
+        this.realtime.emitQueueEntryWaitAlert(
+          salonId,
+          entry.customerId,
+          entry.id,
+        );
+      }
     }
   }
 
@@ -864,6 +906,10 @@ export class QueueService {
       activeServiceSessionId: entry.serviceSessions[0]?.id ?? null,
       joinedAt: entry.joinedAt.toISOString(),
       calledAt: entry.calledAt?.toISOString() ?? null,
+      estimatedWaitRangeMinutes: estimateWaitRangeMinutes(entry.estimatedWaitMinutes),
+      turnApproaching:
+        entry.estimatedWaitMinutes !== null &&
+        entry.estimatedWaitMinutes <= TURN_APPROACHING_THRESHOLD_MINUTES,
     };
   }
 }
