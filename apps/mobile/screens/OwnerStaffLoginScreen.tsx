@@ -1,17 +1,10 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import {
-  GoogleOneTapSignIn,
-  isCancelledResponse,
-  isErrorWithCode,
-  isNoSavedCredentialFoundResponse,
-  isSuccessResponse,
-  statusCodes,
-} from 'react-native-nitro-google-signin';
 import { staffLoginSchema } from '@barbercue/shared';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, InlineError } from '../components/ui';
 import type { AuthStackParamList } from '../navigation/AuthStack';
@@ -22,14 +15,6 @@ const COPY: Record<'OWNER' | 'STAFF', { eyebrow: string; title: string }> = {
   OWNER: { eyebrow: 'Shop Owner', title: 'Sign in to your shop' },
   STAFF: { eyebrow: 'Barber / Staff', title: 'Sign in to work today' },
 };
-
-// GoogleOneTapSignIn.configure() runs once at module load inside PhoneOtpLoginScreen.tsx, which
-// AuthStack.tsx already imports unconditionally — evaluating that module (not rendering it)
-// triggers the top-level configure() call, so it has always already run by the time this screen
-// can be reached. This screen deliberately does NOT call configure() again — same singleton
-// native module, same Web client ID, same Android OAuth client. Only the backend endpoint the
-// resulting ID token is sent to differs (auth/staff/google here vs auth/google for customers).
-const GOOGLE_CONFIGURED = Boolean(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
 
 // Same POST auth/staff/login web's own /owner/login and /staff/login pages call — the account's
 // actual roles (not which button was tapped here) determine what the app shows after sign-in.
@@ -67,22 +52,17 @@ export default function OwnerStaffLoginScreen({ route }: Props) {
     setError(null);
     setGoogleSubmitting(true);
     try {
-      await GoogleOneTapSignIn.checkPlayServices();
-      let response = await GoogleOneTapSignIn.signIn();
-      if (isNoSavedCredentialFoundResponse(response)) {
-        response = await GoogleOneTapSignIn.createAccount();
-      }
-      if (isCancelledResponse(response)) return;
-      if (isSuccessResponse(response)) {
-        // Backend rejects this exact idToken outright if the Google account isn't already a
-        // registered SALON_OWNER/SALON_STAFF — see auth.service.ts's staffGoogleLogin. Never
-        // creates an account and never grants a role based on this call.
-        await staffGoogleLogin({ idToken: response.data.idToken });
-      }
-    } catch (err) {
-      if (isErrorWithCode(err) && err.code === statusCodes.SIGN_IN_CANCELLED) {
+      const result = await getGoogleIdToken();
+      if (result.type === 'cancelled') return;
+      if (result.type === 'error') {
+        setError(result.message);
         return;
       }
+      // Backend rejects this exact idToken outright if the Google account isn't already a
+      // registered SALON_OWNER/SALON_STAFF — see auth.service.ts's staffGoogleLogin. Never
+      // creates an account and never grants a role based on this call.
+      await staffGoogleLogin({ idToken: result.idToken });
+    } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not sign in with Google. Please try again.');
     } finally {
       setGoogleSubmitting(false);
@@ -97,7 +77,7 @@ export default function OwnerStaffLoginScreen({ route }: Props) {
 
       {error && <InlineError message={error} />}
 
-      {GOOGLE_CONFIGURED && (
+      {GOOGLE_SIGNIN_CONFIGURED && (
         <>
           <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={googleSubmitting}>
             {googleSubmitting ? (

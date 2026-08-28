@@ -13,14 +13,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import {
-  GoogleOneTapSignIn,
-  isCancelledResponse,
-  isErrorWithCode,
-  isNoSavedCredentialFoundResponse,
-  isSuccessResponse,
-  statusCodes,
-} from 'react-native-nitro-google-signin';
-import {
   AUTH_PATHS,
   OTP_RESEND_COOLDOWN_SECONDS,
   otpRequestSchema,
@@ -29,20 +21,8 @@ import {
 } from '@barbercue/shared';
 import { ApiError, apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-
-// GoogleSignInButton is only ever mounted when a web client ID is configured (see
-// GOOGLE_CONFIGURED below), so configure() only ever runs with a real value. Native Google
-// Sign-In via Android Credential Manager — no browser redirect, no custom URI scheme, so no
-// dependency on this app's own package/scheme being reachable from a browser tab. The Android
-// OAuth client (package name + release SHA-1, registered in Google Cloud Console) is still what
-// Credential Manager checks the caller against; only the Web client ID is passed here — Google's
-// own convention for native sign-in, so ID tokens can be verified server-side (GoogleAuthService)
-// against the same audience the web app already uses.
-const GOOGLE_CONFIGURED = Boolean(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
-if (GOOGLE_CONFIGURED) {
-  GoogleOneTapSignIn.configure({ webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID! });
-}
 
 type Step = 'phone' | 'otp';
 
@@ -55,22 +35,14 @@ function GoogleSignInButton() {
     setError(null);
     setSubmitting(true);
     try {
-      await GoogleOneTapSignIn.checkPlayServices();
-      // signIn() is the low-friction path (no account picker if there's already one saved
-      // credential); createAccount() falls back to the full picker when signIn() has nothing to
-      // offer — same "new here? this creates your account automatically" promise as OTP below.
-      let response = await GoogleOneTapSignIn.signIn();
-      if (isNoSavedCredentialFoundResponse(response)) {
-        response = await GoogleOneTapSignIn.createAccount();
-      }
-      if (isCancelledResponse(response)) return;
-      if (isSuccessResponse(response)) {
-        await googleLogin({ idToken: response.data.idToken });
-      }
-    } catch (err) {
-      if (isErrorWithCode(err) && err.code === statusCodes.SIGN_IN_CANCELLED) {
+      const result = await getGoogleIdToken();
+      if (result.type === 'cancelled') return;
+      if (result.type === 'error') {
+        setError(result.message);
         return;
       }
+      await googleLogin({ idToken: result.idToken });
+    } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not sign in with Google. Please try again.');
     } finally {
       setSubmitting(false);
@@ -267,7 +239,7 @@ export default function PhoneOtpLoginScreen() {
           <View style={styles.card}>
             {step === 'phone' ? (
               <>
-                {GOOGLE_CONFIGURED && <GoogleSignInButton />}
+                {GOOGLE_SIGNIN_CONFIGURED && <GoogleSignInButton />}
                 {phoneOtpAvailable === false ? (
                   <View style={styles.noticeCard}>
                     <Text style={styles.noticeCardText}>
