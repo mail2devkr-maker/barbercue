@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
-import Script from "next/script";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AUTH_PATHS,
@@ -14,38 +13,11 @@ import { ApiError, apiFetch } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
 import { CustomerAuthCard } from "../../../components/auth/CustomerAuthCard";
 import { AuthPageFallback } from "../../../components/auth/AuthCard";
+import { GoogleIdentityButton } from "../../../components/auth/GoogleIdentityButton";
 import authStyles from "../../../components/auth/customer-auth.module.css";
 import { safeNextPath } from "../../../lib/safe-next-path";
 
 type Step = "phone" | "otp";
-
-// Google Identity Services attaches itself to window at runtime (script loaded via next/script
-// below) — declared here rather than pulling in a whole @types/google.accounts package for one
-// narrow, stable-shaped callback.
-interface GoogleCredentialResponse {
-  credential: string;
-}
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: {
-            client_id: string;
-            callback: (response: GoogleCredentialResponse) => void;
-            // Routes the rendered button's sign-in through the browser's native FedCM API
-            // instead of GSI's default window.open() popup — see the login flow's popup-mode
-            // failure investigation. FedCM's account picker is browser-chrome UI, not a popup
-            // window, so it is structurally exempt from popup blockers. Falls back to the
-            // existing popup flow automatically in browsers without FedCM support.
-            use_fedcm_for_button?: boolean;
-          }) => void;
-          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
-        };
-      };
-    };
-  }
-}
 
 function CustomerLoginForm() {
   const { verifyCustomerOtp, googleLogin } = useAuth();
@@ -66,9 +38,6 @@ function CustomerLoginForm() {
   // moment a code is sent (initial send or a resend) — a client-side throttle only, layered on
   // top of (never replacing) OtpService's server-side per-phone rate limit.
   const [resendCooldown, setResendCooldown] = useState(0);
-
-  const [googleScriptLoaded, setGoogleScriptLoaded] = useState(false);
-  const googleButtonRef = useRef<HTMLDivElement>(null);
 
   // Ticks the cooldown down once a second while on the OTP step. Cleared on unmount/step change
   // so no stale timer fires after the user leaves this screen.
@@ -92,32 +61,6 @@ function CustomerLoginForm() {
       setSubmitting(false);
     }
   }
-
-  // Renders Google's own button widget (not a custom-styled one) once both the GSI script has
-  // loaded and a client ID is configured — deliberately inert with no error shown when
-  // NEXT_PUBLIC_GOOGLE_CLIENT_ID is unset (e.g. local dev before Google Cloud setup is done);
-  // phone-OTP sign-in keeps working either way.
-  useEffect(() => {
-    if (!googleScriptLoaded || step !== "phone") return;
-    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    if (!clientId || !googleButtonRef.current || !window.google) return;
-    window.google.accounts.id.initialize({
-      client_id: clientId,
-      callback: (response) => void handleGoogleCredential(response.credential),
-      use_fedcm_for_button: true,
-    });
-    // Google's renderButton width is a fixed pixel number (max 400), not a percentage — measuring
-    // the actual container width here is what makes the button fit the card responsively instead
-    // of the previous hardcoded 320. theme/text/size are unchanged from before.
-    const width = Math.min(googleButtonRef.current.offsetWidth || 320, 400);
-    window.google.accounts.id.renderButton(googleButtonRef.current, {
-      theme: "outline",
-      size: "large",
-      width,
-      text: "continue_with",
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googleScriptLoaded, step]);
 
   async function sendOtp(targetPhone: string): Promise<void> {
     await apiFetch(`auth/${AUTH_PATHS.otpRequest}`, {
@@ -206,17 +149,16 @@ function CustomerLoginForm() {
 
   return (
     <>
-      <Script
-        src="https://accounts.google.com/gsi/client"
-        strategy="afterInteractive"
-        onLoad={() => setGoogleScriptLoaded(true)}
-      />
       <CustomerAuthCard>
         {error && <p className={authStyles.errorMessage} role="alert">{error}</p>}
         {resendMessage && <p className={authStyles.successMessage} role="status">{resendMessage}</p>}
         {step === "phone" ? (
           <>
-            <div ref={googleButtonRef} className={authStyles.googleButton} aria-label="Google sign-in" />
+            <GoogleIdentityButton
+              audienceLabel="customer"
+              onCredential={(token) => void handleGoogleCredential(token)}
+              disabled={submitting}
+            />
             {phoneOtpAvailable === false ? (
               <p className={authStyles.noticeMessage}>
                 Phone sign-in is temporarily unavailable. Please continue with Google above —

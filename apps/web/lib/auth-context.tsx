@@ -20,6 +20,7 @@ interface AuthContextValue {
   verifyCustomerOtp: (input: OtpVerifyInput) => Promise<MeResponse>;
   googleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
+  staffGoogleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   adminLogin: (input: AdminLoginInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -108,6 +109,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [handleAuthResult],
   );
 
+  const staffGoogleLogin = useCallback(
+    async (input: GoogleLoginInput) => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.staffGoogle), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return handleAuthResult(result);
+    },
+    [handleAuthResult],
+  );
+
   const adminLogin = useCallback(
     async (input: AdminLoginInput) => {
       const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.adminLogin), {
@@ -145,12 +157,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyCustomerOtp,
       googleLogin,
       staffLogin,
+      staffGoogleLogin,
       adminLogin,
       logout,
       refreshMe,
       refreshSession,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, adminLogin, logout, refreshMe, refreshSession],
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, adminLogin, logout, refreshMe, refreshSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
