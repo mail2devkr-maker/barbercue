@@ -286,6 +286,12 @@ export interface BookingDetailDto extends BookingDto {
   salonName: string;
   salonSlug: string;
   citySlug: string;
+  salonCountryCode: string;
+  salonAddress: string;
+  // Null when the salon never captured GPS coordinates (see Salon.lat/lng's own nullability) —
+  // "Get Directions" falls back to a text-address maps search in that case.
+  salonLat: number | null;
+  salonLng: number | null;
   serviceName: string;
   serviceDurationMinutes: number;
   servicePrice: number;

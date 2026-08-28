@@ -22,6 +22,8 @@ import { StaffStep } from "./StaffStep";
 import { DateStep } from "./DateStep";
 import { SlotStep } from "./SlotStep";
 import { CancelBookingDialog } from "./CancelBookingDialog";
+import { RescheduleBookingDialog } from "./RescheduleBookingDialog";
+import { BookingActionsBar } from "./BookingActionsBar";
 import { CheckInPanel, canCheckIn } from "../queue/CheckInPanel";
 import styles from "./booking.module.css";
 
@@ -32,6 +34,8 @@ export function BookingFlow({
   selectedStyleName,
   currency,
   countryCode,
+  initialServiceId,
+  initialStaffId,
 }: {
   salonId: string;
   services: ServiceDto[];
@@ -42,9 +46,14 @@ export function BookingFlow({
   // AI Style Advisor hand-off (major-upgrade phase) — set only when this flow was reached via
   // "Try This Look"; threaded straight into the booking-creation body when present.
   selectedStyleName?: string;
+  // "Book again" hand-off (Phase 3, customer convenience) — preselects service/barber from a past
+  // booking, same idea as selectedStyleName's Style Advisor hand-off. The customer still
+  // explicitly picks a new date and slot below; nothing here assumes the old slot is available.
+  initialServiceId?: string;
+  initialStaffId?: string | null;
 }) {
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [selectedStaffId, setSelectedStaffId] = useState<string | null | undefined>(undefined);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(initialServiceId ?? null);
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null | undefined>(initialStaffId);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
 
@@ -58,6 +67,8 @@ export function BookingFlow({
   const [confirmedBooking, setConfirmedBooking] = useState<BookingDetailDto | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelResult, setCancelResult] = useState<CancelBookingResponseDto | null>(null);
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  const [rescheduledBooking, setRescheduledBooking] = useState<BookingDetailDto | null>(null);
 
   // Stable across retries of the exact same attempt (same service/staff/date/slot); regenerates
   // the moment any earlier choice changes, since that's a materially different attempt. The deps
@@ -165,7 +176,7 @@ export function BookingFlow({
   }
 
   if (confirmedBooking) {
-    const booking = cancelResult?.booking ?? confirmedBooking;
+    const booking = rescheduledBooking ?? cancelResult?.booking ?? confirmedBooking;
     const cancelled = booking.status === "CANCELLED";
     const statusClass =
       booking.status === "CONFIRMED"
@@ -210,6 +221,7 @@ export function BookingFlow({
               View my bookings
             </Link>
           </div>
+          <BookingActionsBar booking={booking} onReschedule={() => setShowRescheduleDialog(true)} />
         </div>
         {canCheckIn(booking) && <CheckInPanel booking={booking} />}
         {showCancelDialog && (
@@ -219,6 +231,16 @@ export function BookingFlow({
             onCancelled={(result) => {
               setCancelResult(result);
               setShowCancelDialog(false);
+            }}
+          />
+        )}
+        {showRescheduleDialog && (
+          <RescheduleBookingDialog
+            booking={booking}
+            onClose={() => setShowRescheduleDialog(false)}
+            onRescheduled={(updated) => {
+              setRescheduledBooking(updated);
+              setShowRescheduleDialog(false);
             }}
           />
         )}

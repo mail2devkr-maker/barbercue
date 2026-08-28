@@ -33,7 +33,10 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     salon: {
       name: 'BarberCue Demo Salon',
       slug: 'barbercue-demo',
-      city: { slug: 'bengaluru' },
+      addressLine: '12 MG Road',
+      lat: 12.97,
+      lng: 77.59,
+      city: { slug: 'bengaluru', countryCode: 'IN' },
     },
     service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
     preferredStaff: null,
@@ -77,6 +80,7 @@ describe('BookingsService', () => {
   let realtime: {
     emitBookingCreated: jest.Mock<void, [string, string]>;
     emitBookingCancelled: jest.Mock<void, [string, string]>;
+    emitBookingRescheduled: jest.Mock<void, [string, string]>;
   };
 
   beforeEach(async () => {
@@ -134,6 +138,7 @@ describe('BookingsService', () => {
     realtime = {
       emitBookingCreated: jest.fn(),
       emitBookingCancelled: jest.fn(),
+      emitBookingRescheduled: jest.fn(),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -369,6 +374,89 @@ describe('BookingsService', () => {
         reason: 'CANCELLATION_CHARGE',
         status: 'OUTSTANDING',
       });
+    });
+  });
+
+  describe('reschedule', () => {
+    const futureSlot = new Date(Date.now() + 3 * 60 * 60_000);
+    const newFutureSlot = new Date(Date.now() + 26 * 60 * 60_000).toISOString();
+
+    beforeEach(() => {
+      prisma.booking.findFirst.mockResolvedValue(
+        makeBookingRow({ slotStart: futureSlot, status: 'CONFIRMED' }),
+      );
+      availability.getServiceOrThrow.mockResolvedValue({
+        id: 'sv1',
+        salonId: 's1',
+        durationMinutes: 30,
+        price: decimal('300'),
+      });
+      availability.getSlotCapacity.mockResolvedValue(2);
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.booking.update.mockResolvedValue(
+        makeBookingRow({ slotStart: new Date(newFutureSlot) }),
+      );
+    });
+
+    it('throws BOOKING_NOT_FOUND when no booking matches for that customer', async () => {
+      prisma.booking.findFirst.mockResolvedValue(null);
+      await expect(
+        service.reschedule('c1', 'missing', { slotStart: newFutureSlot }),
+      ).rejects.toMatchObject({ code: 'BOOKING_NOT_FOUND' });
+    });
+
+    it('throws BOOKING_NOT_RESCHEDULABLE when the booking is already COMPLETED', async () => {
+      prisma.booking.findFirst.mockResolvedValue(
+        makeBookingRow({ slotStart: futureSlot, status: 'COMPLETED' }),
+      );
+      await expect(
+        service.reschedule('c1', 'b1', { slotStart: newFutureSlot }),
+      ).rejects.toMatchObject({ code: 'BOOKING_NOT_RESCHEDULABLE' });
+    });
+
+    it('throws BOOKING_NOT_RESCHEDULABLE when the current slot has already passed', async () => {
+      prisma.booking.findFirst.mockResolvedValue(
+        makeBookingRow({ slotStart: new Date(Date.now() - 60_000), status: 'CONFIRMED' }),
+      );
+      await expect(
+        service.reschedule('c1', 'b1', { slotStart: newFutureSlot }),
+      ).rejects.toMatchObject({ code: 'BOOKING_NOT_RESCHEDULABLE' });
+    });
+
+    it('rejects a new slot that is not in the future', async () => {
+      const pastSlot = new Date(Date.now() - 60_000).toISOString();
+      await expect(
+        service.reschedule('c1', 'b1', { slotStart: pastSlot }),
+      ).rejects.toMatchObject({ code: 'SLOT_IN_PAST' });
+      expect(prisma.booking.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects with SLOT_FULL when the new slot has no remaining capacity', async () => {
+      prisma.booking.count.mockResolvedValue(2);
+      await expect(
+        service.reschedule('c1', 'b1', { slotStart: newFutureSlot }),
+      ).rejects.toMatchObject({ code: 'SLOT_FULL' });
+      expect(prisma.booking.update).not.toHaveBeenCalled();
+      expect(realtime.emitBookingRescheduled).not.toHaveBeenCalled();
+    });
+
+    it('excludes the booking\'s own current slot from the overlap count', async () => {
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
+      const [call] = prisma.booking.count.mock.calls;
+      expect((call[0] as { where: { id: { not: string } } }).where.id).toEqual({ not: 'b1' });
+    });
+
+    it('moves the same booking row and writes a BOOKING_RESCHEDULED audit entry', async () => {
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
+      expect(prisma.booking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'b1' },
+          data: { slotStart: new Date(newFutureSlot), slotEnd: expect.any(Date) },
+        }),
+      );
+      const auditData = lastCreateData(prisma.auditLog.create);
+      expect(auditData).toMatchObject({ action: 'BOOKING_RESCHEDULED', entityId: 'b1' });
+      expect(realtime.emitBookingRescheduled).toHaveBeenCalledWith('s1', 'b1');
     });
   });
 });

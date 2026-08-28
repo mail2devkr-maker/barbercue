@@ -13,6 +13,7 @@ import {
   type CancelBookingResponseDto,
   type CreateBookingInput,
   type PaginatedResult,
+  type RescheduleBookingInput,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
@@ -38,7 +39,10 @@ const bookingDetailInclude = {
       name: true,
       slug: true,
       currency: true,
-      city: { select: { slug: true } },
+      addressLine: true,
+      lat: true,
+      lng: true,
+      city: { select: { slug: true, countryCode: true } },
     },
   },
   service: { select: { name: true, durationMinutes: true, price: true } },
@@ -320,6 +324,125 @@ export class BookingsService {
     };
   }
 
+  // Moves an existing booking to a new slot in place (same id) rather than cancel-and-recreate —
+  // one row, one audit trail (a BOOKING_RESCHEDULED entry recording old->new time), matching
+  // STATE_MACHINES.md's "every transition with customer-facing consequences writes an AuditLog
+  // row" rule already followed by cancel() above. No charge is ever computed or collected here —
+  // this mission excludes payment processing entirely, unlike cancel()'s late-cancellation charge.
+  async reschedule(
+    customerId: string,
+    bookingId: string,
+    input: RescheduleBookingInput,
+  ): Promise<BookingDetailDto> {
+    const booking = await this.prisma.booking.findFirst({
+      where: { id: bookingId, customerId },
+      include: bookingDetailInclude,
+    });
+    if (!booking) {
+      throw new AppException(
+        BookingErrorCode.BOOKING_NOT_FOUND,
+        'Booking not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (
+      booking.status !== BookingStatus.CONFIRMED &&
+      booking.status !== BookingStatus.PENDING_PAYMENT
+    ) {
+      throw new AppException(
+        BookingErrorCode.BOOKING_NOT_RESCHEDULABLE,
+        'This booking can no longer be rescheduled.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (booking.slotStart.getTime() <= Date.now()) {
+      throw new AppException(
+        BookingErrorCode.BOOKING_NOT_RESCHEDULABLE,
+        'This booking has already passed and can no longer be rescheduled.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const newSlotStart = new Date(input.slotStart);
+    if (newSlotStart.getTime() <= Date.now()) {
+      throw new AppException(
+        BookingErrorCode.SLOT_IN_PAST,
+        'The requested slot must be in the future.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const service = await this.availability.getServiceOrThrow(
+      booking.salonId,
+      booking.serviceId,
+    );
+    const newSlotEnd = new Date(
+      newSlotStart.getTime() + service.durationMinutes * 60_000,
+    );
+    await this.availability.assertWithinOperatingHours(
+      booking.salonId,
+      newSlotStart,
+      newSlotEnd,
+    );
+
+    const previousSlotStart = booking.slotStart;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Same per-salon advisory lock as create() — a reschedule competes for slot capacity
+      // exactly like a new booking would.
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${booking.salonId}))`,
+      );
+
+      const slotCapacity = await this.availability.getSlotCapacity(
+        tx,
+        booking.salonId,
+        booking.serviceId,
+      );
+      const overlapping = await tx.booking.count({
+        where: {
+          id: { not: bookingId },
+          salonId: booking.salonId,
+          status: {
+            in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+          },
+          slotStart: { lt: newSlotEnd },
+          slotEnd: { gt: newSlotStart },
+        },
+      });
+      if (!isSlotBookable(slotCapacity, overlapping)) {
+        throw new AppException(
+          BookingErrorCode.SLOT_FULL,
+          'This time slot is fully booked. Please choose another time.',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      const result = await tx.booking.update({
+        where: { id: bookingId },
+        data: { slotStart: newSlotStart, slotEnd: newSlotEnd },
+        include: bookingDetailInclude,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: customerId,
+          action: 'BOOKING_RESCHEDULED',
+          entityType: 'Booking',
+          entityId: bookingId,
+          metadata: {
+            previousSlotStart: previousSlotStart.toISOString(),
+            newSlotStart: newSlotStart.toISOString(),
+          },
+        },
+      });
+
+      return result;
+    }, TRANSACTION_OPTIONS);
+
+    this.realtime.emitBookingRescheduled(booking.salonId, bookingId);
+
+    return this.toDetailDto(updated);
+  }
+
   private async getDetailOrThrow(
     bookingId: string,
     customerId: string,
@@ -363,6 +486,10 @@ export class BookingsService {
       salonName: booking.salon.name,
       salonSlug: booking.salon.slug,
       citySlug: booking.salon.city.slug,
+      salonCountryCode: booking.salon.city.countryCode,
+      salonAddress: booking.salon.addressLine,
+      salonLat: booking.salon.lat,
+      salonLng: booking.salon.lng,
       serviceName: booking.service.name,
       serviceDurationMinutes: booking.service.durationMinutes,
       servicePrice: Number(booking.service.price),

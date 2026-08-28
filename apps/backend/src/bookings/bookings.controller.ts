@@ -15,8 +15,10 @@ import {
   BookingSource,
   Role,
   createBookingSchema,
+  rescheduleBookingSchema,
   type AuthenticatedUser,
   type CreateBookingInput,
+  type RescheduleBookingInput,
 } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -77,5 +79,16 @@ export class BookingsController {
   @HttpCode(HttpStatus.OK)
   cancel(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.bookingsService.cancel(user.id, id);
+  }
+
+  @Post(`:id/${BOOKING_PATHS.reschedule}`)
+  @Idempotent()
+  @HttpCode(HttpStatus.OK)
+  reschedule(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(rescheduleBookingSchema)) body: RescheduleBookingInput,
+  ) {
+    return this.bookingsService.reschedule(user.id, id, body);
   }
 }

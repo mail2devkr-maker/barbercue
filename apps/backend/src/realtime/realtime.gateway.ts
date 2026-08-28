@@ -114,4 +114,8 @@ export class RealtimeGateway implements OnGatewayConnection {
   emitBookingCancelled(salonId: string, bookingId: string): void {
     this.server.to(`salon:${salonId}`).emit('booking.cancelled', { salonId, bookingId });
   }
+
+  emitBookingRescheduled(salonId: string, bookingId: string): void {
+    this.server.to(`salon:${salonId}`).emit('booking.rescheduled', { salonId, bookingId });
+  }
 }

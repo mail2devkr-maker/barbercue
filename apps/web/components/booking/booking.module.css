@@ -444,3 +444,32 @@
   gap: 10px;
   margin-top: var(--bc-space-4);
 }
+
+.actionsBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.actionLink {
+  font-family: inherit;
+  font-size: var(--bc-text-sm);
+  font-weight: 600;
+  color: var(--bc-accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.actionLink:hover {
+  text-decoration: underline;
+}
+
+.shareStatus {
+  font-size: var(--bc-text-xs);
+  color: var(--bc-muted);
+}

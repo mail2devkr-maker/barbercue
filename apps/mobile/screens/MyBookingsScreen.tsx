@@ -5,6 +5,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BOOKING_PATHS, formatMoney } from '@barbercue/shared';
 import type { BookingDetailDto, PaginatedResult } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { openDirections } from '../lib/booking-actions';
+import { useRebook } from '../lib/use-rebook';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Skeleton, EmptyState, InlineError, Button } from '../components/ui';
 import type { BookingsStackParamList } from '../navigation/types';
@@ -38,7 +40,17 @@ function statusBg(status: string): string {
   return color.goldSoft;
 }
 
-function BookingCard({ booking, onPress }: { booking: BookingDetailDto; onPress: () => void }) {
+function BookingCard({
+  booking,
+  onPress,
+  onRebook,
+  rebooking,
+}: {
+  booking: BookingDetailDto;
+  onPress: () => void;
+  onRebook: () => void;
+  rebooking: boolean;
+}) {
   const date = new Date(booking.slotStart);
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -66,6 +78,28 @@ function BookingCard({ booking, onPress }: { booking: BookingDetailDto; onPress:
         <Text style={styles.cardMetaWarn}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
       )}
 
+      <View style={styles.quickActionsRow}>
+        <Pressable
+          style={styles.quickActionButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            void openDirections(booking);
+          }}
+        >
+          <Text style={styles.quickActionText}>Get Directions</Text>
+        </Pressable>
+        <Pressable
+          style={styles.quickActionButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            onRebook();
+          }}
+          disabled={rebooking}
+        >
+          <Text style={styles.quickActionText}>{rebooking ? 'Loading…' : 'Book again'}</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.detailsRow}>
         <Text style={styles.detailsText}>View details</Text>
         <Text style={styles.chevron}>›</Text>
@@ -75,6 +109,7 @@ function BookingCard({ booking, onPress }: { booking: BookingDetailDto; onPress:
 }
 
 export default function MyBookingsScreen({ navigation }: Props) {
+  const { rebook, rebookingId, rebookError } = useRebook();
   const [bookings, setBookings] = useState<BookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,8 +162,14 @@ export default function MyBookingsScreen({ navigation }: Props) {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={color.accent} />}
+          ListHeaderComponent={rebookError ? <InlineError message={rebookError} /> : null}
           renderItem={({ item }) => (
-            <BookingCard booking={item} onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id })} />
+            <BookingCard
+              booking={item}
+              onPress={() => navigation.navigate('BookingDetail', { bookingId: item.id })}
+              onRebook={() => void rebook(item)}
+              rebooking={rebookingId === item.id}
+            />
           )}
           ListFooterComponent={
             nextCursor ? <Button title="Load more" variant="outline" onPress={() => void handleLoadMore()} style={styles.loadMore} /> : null
@@ -159,6 +200,16 @@ const styles = StyleSheet.create({
   cardSalon: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink, marginTop: space[2] },
   cardMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
   cardMetaWarn: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.accent, marginTop: 2 },
+  quickActionsRow: { flexDirection: 'row', gap: space[2], marginTop: space[3] },
+  quickActionButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.sm,
+    paddingVertical: space[2],
+    alignItems: 'center',
+  },
+  quickActionText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
   detailsRow: {
     flexDirection: 'row',
     alignItems: 'center',

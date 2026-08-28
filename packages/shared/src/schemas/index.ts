@@ -26,6 +26,13 @@ export const createBookingSchema = z.object({
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
+// POST bookings/:id/reschedule — only the slot moves; service/staff/salon are unchanged (a
+// different service or salon is a new booking, not a reschedule of this one).
+export const rescheduleBookingSchema = z.object({
+  slotStart: z.string().datetime(),
+});
+export type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
+
 // GET /salons/:salonId/availability query params.
 export const availabilityQuerySchema = z.object({
   serviceId: z.string().uuid(),

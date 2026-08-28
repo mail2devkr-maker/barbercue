@@ -94,6 +94,7 @@ export const BOOKING_PATHS = {
   mine: 'mine',
   cancel: 'cancel',
   checkIn: 'check-in',
+  reschedule: 'reschedule',
 } as const;
 
 // Sub-paths under `salons/:salonId/queue` (SalonQueueController) — a 3-segment shape deliberately,

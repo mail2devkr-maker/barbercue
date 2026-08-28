@@ -14,6 +14,8 @@ import type {
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
 import { CancelBookingDialog } from "../../../../components/booking/CancelBookingDialog";
+import { RescheduleBookingDialog } from "../../../../components/booking/RescheduleBookingDialog";
+import { BookingActionsBar } from "../../../../components/booking/BookingActionsBar";
 import { CheckInPanel, canCheckIn } from "../../../../components/queue/CheckInPanel";
 import { QueueStatusPanel } from "../../../../components/queue/QueueStatusPanel";
 import { Card } from "../../../../components/ui/Card";
@@ -62,9 +64,11 @@ function formatWhen(slotStart: string): string {
 function BookingRow({
   booking,
   onCancel,
+  onReschedule,
 }: {
   booking: BookingDetailDto;
   onCancel: (booking: BookingDetailDto) => void;
+  onReschedule: (booking: BookingDetailDto) => void;
 }) {
   return (
     <article className={styles.bookingRow}>
@@ -91,6 +95,7 @@ function BookingRow({
           </Button>
         </div>
       )}
+      <BookingActionsBar booking={booking} onReschedule={onReschedule} />
       {canCheckIn(booking) && <CheckInPanel booking={booking} />}
     </article>
   );
@@ -108,6 +113,7 @@ export default function MyBookingsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<BookingDetailDto | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<BookingDetailDto | null>(null);
   const [activeQueueEntry, setActiveQueueEntry] = useState<QueueEntryDetailDto | null>(null);
 
   useEffect(() => {
@@ -168,6 +174,11 @@ export default function MyBookingsPage() {
   function handleCancelled(result: CancelBookingResponseDto) {
     setBookings((prev) => prev.map((b) => (b.id === result.booking.id ? result.booking : b)));
     setCancelTarget(null);
+  }
+
+  function handleRescheduled(updated: BookingDetailDto) {
+    setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    setRescheduleTarget(null);
   }
 
   const upcoming = bookings.filter((b) => UPCOMING_STATUSES.has(b.status));
@@ -231,6 +242,7 @@ export default function MyBookingsPage() {
                 </Button>
               )}
             </div>
+            <BookingActionsBar booking={nextBooking} onReschedule={setRescheduleTarget} />
             {canCheckIn(nextBooking) && <CheckInPanel booking={nextBooking} />}
           </Card>
         ) : (
@@ -287,7 +299,7 @@ export default function MyBookingsPage() {
         <h2 className={styles.sectionTitle}>Upcoming bookings</h2>
         {!loading && upcoming.length === 0 && <p className={styles.emptyListNote}>No upcoming bookings.</p>}
         {upcoming.map((booking) => (
-          <BookingRow key={booking.id} booking={booking} onCancel={setCancelTarget} />
+          <BookingRow key={booking.id} booking={booking} onCancel={setCancelTarget} onReschedule={setRescheduleTarget} />
         ))}
       </section>
 
@@ -295,7 +307,7 @@ export default function MyBookingsPage() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Past bookings</h2>
           {past.map((booking) => (
-            <BookingRow key={booking.id} booking={booking} onCancel={setCancelTarget} />
+            <BookingRow key={booking.id} booking={booking} onCancel={setCancelTarget} onReschedule={setRescheduleTarget} />
           ))}
         </section>
       )}
@@ -313,6 +325,14 @@ export default function MyBookingsPage() {
           booking={cancelTarget}
           onClose={() => setCancelTarget(null)}
           onCancelled={handleCancelled}
+        />
+      )}
+
+      {rescheduleTarget && (
+        <RescheduleBookingDialog
+          booking={rescheduleTarget}
+          onClose={() => setRescheduleTarget(null)}
+          onRescheduled={handleRescheduled}
         />
       )}
     </div>

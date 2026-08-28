@@ -16,7 +16,10 @@ import type {
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import { openDirections, openWhatsappShare, salonPageUrl, shareSalon } from '../lib/booking-actions';
+import { useRebook } from '../lib/use-rebook';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
+import { RescheduleSheet } from '../components/RescheduleSheet';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, Skeleton, ErrorState, InlineError } from '../components/ui';
 import type { BookingsStackParamList } from '../navigation/types';
@@ -43,9 +46,12 @@ function statusColor(status: string): string {
 
 export default function BookingDetailScreen({ route }: Props) {
   const { bookingId } = route.params;
+  const { rebook, rebookingId, rebookError } = useRebook();
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Cancel confirmation is inline state, not react-native's Alert.alert: Alert.alert renders
   // nothing on React Native Web (found while verifying this screen through the web target,
@@ -86,6 +92,16 @@ export default function BookingDetailScreen({ route }: Props) {
     return loadBooking();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
+
+  async function handleShare() {
+    if (!booking) return;
+    setActionError(null);
+    try {
+      await shareSalon(booking);
+    } catch {
+      setActionError('Could not open the share sheet.');
+    }
+  }
 
   async function startCancelFlow() {
     if (!booking) return;
@@ -183,10 +199,51 @@ export default function BookingDetailScreen({ route }: Props) {
         <Text style={styles.bookingId}>Booking ID: {booking.id.slice(0, 8).toUpperCase()}</Text>
       </Card>
 
+      <View style={styles.linkRow}>
+        <Button title="Get Directions" variant="outline" onPress={() => void openDirections(booking)} style={styles.linkButton} />
+        <Button title="Share" variant="outline" onPress={() => void handleShare()} style={styles.linkButton} />
+      </View>
+      <View style={styles.linkRow}>
+        <Button
+          title="Share on WhatsApp"
+          variant="outline"
+          onPress={() => void openWhatsappShare(`Check out ${booking.salonName} on BarberCue: ${salonPageUrl(booking)}`)}
+          style={styles.linkButton}
+        />
+        <Button
+          title="Book again"
+          variant="outline"
+          onPress={() => void rebook(booking)}
+          loading={rebookingId === booking.id}
+          style={styles.linkButton}
+        />
+      </View>
+
       {error && <InlineError message={error} />}
+      {actionError && <InlineError message={actionError} />}
+      {rebookError && <InlineError message={rebookError} />}
 
       {CANCELLABLE_STATUSES.has(booking.status) && !confirming && (
-        <Button title="Cancel booking" variant="secondary" onPress={() => void startCancelFlow()} style={styles.actionButton} />
+        <View style={styles.linkRow}>
+          <Button title="Cancel booking" variant="secondary" onPress={() => void startCancelFlow()} style={styles.linkButton} />
+          <Button
+            title={rescheduling ? 'Hide reschedule' : 'Reschedule'}
+            variant="secondary"
+            onPress={() => setRescheduling((v) => !v)}
+            style={styles.linkButton}
+          />
+        </View>
+      )}
+
+      {rescheduling && (
+        <RescheduleSheet
+          booking={booking}
+          onClose={() => setRescheduling(false)}
+          onRescheduled={(updated) => {
+            setBooking(updated);
+            setRescheduling(false);
+          }}
+        />
       )}
 
       {confirming && (
@@ -237,6 +294,8 @@ const styles = StyleSheet.create({
   status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, marginBottom: space[2] },
   bookingId: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
   actionButton: { marginBottom: space[3] },
+  linkRow: { flexDirection: 'row', gap: space[2], marginBottom: space[3] },
+  linkButton: { flex: 1 },
   confirmBox: { marginBottom: space[4] },
   confirmTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, marginBottom: space[2] },
   previewSpinner: { marginVertical: space[2], alignSelf: 'flex-start' },

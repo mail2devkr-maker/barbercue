@@ -17,10 +17,10 @@ export default async function BookPage({
   searchParams,
 }: {
   params: Promise<BookPageParams>;
-  searchParams: Promise<{ city?: string; country?: string; style?: string }>;
+  searchParams: Promise<{ city?: string; country?: string; style?: string; serviceId?: string; staffId?: string }>;
 }) {
   const { salonSlug } = await params;
-  const { city, country, style } = await searchParams;
+  const { city, country, style, serviceId, staffId } = await searchParams;
   // Salon.slug is unique only per city, and City.slug is unique only per country (B9), so the
   // salon profile page's "Book an appointment" link always passes both alongside the slug.
   if (!city || !country) notFound();
@@ -46,6 +46,11 @@ export default async function BookPage({
         currency={salon.currency}
         countryCode={salon.countryCode}
         selectedStyleName={style}
+        initialServiceId={serviceId}
+        // A prefilled service (rebook or style hand-off) always came with an explicit staff choice
+        // already made on the original booking — default to "Any Staff" (null) rather than leaving
+        // the picker unset, unless a specific staffId was actually carried over.
+        initialStaffId={serviceId ? (staffId ?? null) : undefined}
       />
     </main>
   );
