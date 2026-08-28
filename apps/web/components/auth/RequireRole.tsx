@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { Role } from "@barbercue/shared";
 import { useAuth } from "../../lib/auth-context";
 import { withNextParam } from "../../lib/safe-next-path";
+import styles from "./require-role.module.css";
 
 /**
  * Client-side route guard. This is UX only, not the security boundary — the backend's
@@ -44,7 +45,19 @@ export function RequireRole({
     router.replace(withNextParam(redirectTo, `${pathname}${search}`));
   }, [status, authorized, redirectTo, router, pathname]);
 
-  if (status === "loading") return <p style={{ padding: "2rem" }}>Loading…</p>;
+  if (status === "loading") {
+    return (
+      <main className={styles.loadingPage}>
+        <div className={styles.loadingCard} role="status">
+          <span className={styles.loadingMark} aria-hidden="true">BC</span>
+          <div>
+            <strong>Preparing your BarberCue</strong>
+            <p>Restoring your secure session…</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
   if (!authorized) return null;
 
   return <>{children}</>;

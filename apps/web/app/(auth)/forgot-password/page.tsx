@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AUTH_PATHS, forgotPasswordSchema } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../../lib/api";
-import { AuthCard, authButtonStyle, authErrorStyle, authInputStyle } from "../../../components/auth/AuthCard";
+import { AuthCard } from "../../../components/auth/AuthCard";
+import authStyles from "../../../components/auth/customer-auth.module.css";
 
 // Staff/owner/admin only — customers authenticate via OTP and have no password to reset.
 export default function ForgotPasswordPage() {
@@ -38,13 +39,19 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <AuthCard title="Check your email">
-        <p>If that email is registered, we&apos;ve sent a password reset link. It expires in 15 minutes.</p>
+      <AuthCard
+        audience="recovery"
+        title="Check your email"
+        subtitle="If that email belongs to a password account, the reset link will arrive shortly and expire in 15 minutes."
+      >
+        <p className={authStyles.successMessage} role="status">
+          Your request has been processed. You can safely close this page after checking your inbox.
+        </p>
         {devResetUrl && (
-          <p style={{ marginTop: 16, fontSize: "0.8rem", color: "var(--bc-muted)", wordBreak: "break-all" }}>
+          <p className={authStyles.devMessage}>
             <strong>Development only</strong> (no email provider configured — see EmailSender in
             ARCHITECTURE.md §4):{" "}
-            <a href={devResetUrl}>{devResetUrl}</a>
+            <a href={devResetUrl} className={authStyles.textLink}>{devResetUrl}</a>
           </p>
         )}
       </AuthCard>
@@ -52,19 +59,29 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthCard title="Forgot password" subtitle="For salon owner, staff, and admin accounts only.">
-      <form onSubmit={handleSubmit}>
-        {error && <p style={authErrorStyle}>{error}</p>}
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={authInputStyle}
-          autoFocus
-        />
-        <button type="submit" style={authButtonStyle} disabled={submitting}>
-          {submitting ? "Sending..." : "Send reset link"}
+    <AuthCard
+      audience="recovery"
+      title="Reset your password"
+      subtitle="For shop owner, barber/staff and administrator password accounts. Customer accounts use Google or phone sign-in."
+    >
+      <form onSubmit={handleSubmit} className={authStyles.form}>
+        {error && <p className={authStyles.errorMessage} role="alert">{error}</p>}
+        <div className={authStyles.field}>
+          <label htmlFor="recovery-email">Account email</label>
+          <input
+            id="recovery-email"
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={authStyles.input}
+            autoFocus
+          />
+        </div>
+        <button type="submit" className={authStyles.primaryButton} disabled={submitting}>
+          {submitting ? "Sending…" : "Send reset link"}
         </button>
       </form>
     </AuthCard>

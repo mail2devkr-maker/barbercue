@@ -1,77 +1,129 @@
-export function AuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+import Link from "next/link";
+import styles from "./customer-auth.module.css";
+
+export type AuthAudience = "customer" | "owner" | "staff" | "admin" | "recovery";
+
+const STORIES: Record<AuthAudience, { eyebrow: string; title: string; copy: string }> = {
+  customer: {
+    eyebrow: "BOOK AHEAD · WALK IN SMARTER",
+    title: "Your barber. Your time.",
+    copy: "Keep bookings, live queue visits and style inspiration together in one calm place.",
+  },
+  owner: {
+    eyebrow: "SHOP OWNER WORKSPACE",
+    title: "Keep the shop in rhythm.",
+    copy: "Return to your shop dashboard, team setup and day-to-day BarberCue tools.",
+  },
+  staff: {
+    eyebrow: "BARBER & STAFF WORKSPACE",
+    title: "Your chair, clearly organised.",
+    copy: "Sign in with the staff account your shop owner invited you to use.",
+  },
+  admin: {
+    eyebrow: "PLATFORM ACCESS",
+    title: "BarberCue operations.",
+    copy: "Restricted access for authorised platform administrators.",
+  },
+  recovery: {
+    eyebrow: "ACCOUNT RECOVERY",
+    title: "Get back to your workspace.",
+    copy: "Password recovery is available for owner, staff and administrator accounts.",
+  },
+};
+
+const AUDIENCE_LINKS = [
+  { key: "customer", href: "/login", label: "Customer" },
+  { key: "owner", href: "/owner/login", label: "Shop owner" },
+  { key: "staff", href: "/staff/login", label: "Barber / staff" },
+] as const;
+
+export function AuthCard({
+  title,
+  subtitle,
+  audience,
+  children,
+  showAudienceLinks = true,
+}: {
+  title: string;
+  subtitle?: string;
+  audience: AuthAudience;
+  children: React.ReactNode;
+  showAudienceLinks?: boolean;
+}) {
+  const story = STORIES[audience];
+
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--bc-surface)",
-        padding: "1.5rem",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 400,
-          background: "#FFFFFF",
-          borderRadius: "var(--bc-radius-lg)",
-          border: "1px solid var(--bc-border)",
-          boxShadow: "var(--bc-shadow-lg)",
-          padding: "2rem",
-        }}
-      >
-        <h1
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: "1.5rem",
-            fontWeight: 600,
-            color: "var(--bc-ink)",
-            letterSpacing: "-0.01em",
-            marginBottom: subtitle ? 4 : 24,
-          }}
-        >
-          {title}
-        </h1>
-        {subtitle && <p style={{ fontSize: "0.875rem", color: "var(--bc-muted)", marginBottom: 24 }}>{subtitle}</p>}
-        {children}
+    <main className={styles.page}>
+      <header className={styles.topBar}>
+        <Link href="/" className={styles.wordmark} aria-label="BarberCue home">
+          <span className={styles.wordmarkMark} aria-hidden="true">BC</span>
+          <span>BarberCue</span>
+        </Link>
+        <Link href="/" className={styles.homeLink}>Home</Link>
+      </header>
+
+      <div className={styles.shell}>
+        <aside className={`${styles.storyPanel} ${styles[`story-${audience}`]}`} aria-label="About BarberCue">
+          <div className={styles.storyContent}>
+            <p className={styles.storyEyebrow}>{story.eyebrow}</p>
+            <p className={styles.storyTitle}>{story.title}</p>
+            <p className={styles.storyCopy}>{story.copy}</p>
+          </div>
+          <div className={styles.chairGraphic} aria-hidden="true">
+            <span className={styles.chairHalo} />
+            <span className={styles.chairBack} />
+            <span className={styles.chairSeat} />
+            <span className={styles.chairStem} />
+            <span className={styles.chairBase} />
+          </div>
+          <div className={styles.storyProof} aria-hidden="true">
+            <span>BOOK</span><i /><span>QUEUE</span><i /><span>CUT</span>
+          </div>
+        </aside>
+
+        <section className={styles.formPanel} aria-labelledby="auth-title">
+          <div className={styles.formHeader}>
+            <p className={styles.audienceLabel}>{story.eyebrow}</p>
+            <h1 id="auth-title" className={styles.formTitle}>{title}</h1>
+            {subtitle && <p className={styles.formSubtitle}>{subtitle}</p>}
+          </div>
+
+          <div className={styles.formBody}>{children}</div>
+
+          {showAudienceLinks && (
+            <nav className={styles.audienceNav} aria-label="Choose sign-in type">
+              <p>Signing in another way?</p>
+              <div className={styles.audienceLinks}>
+                {AUDIENCE_LINKS.map((link) => (
+                  <Link
+                    key={link.key}
+                    href={link.href}
+                    className={styles.audienceLink}
+                    aria-current={audience === link.key ? "page" : undefined}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </nav>
+          )}
+        </section>
       </div>
     </main>
   );
 }
 
-export const authInputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "0.7rem 0.75rem",
-  borderRadius: "var(--bc-radius-sm)",
-  border: "1px solid var(--bc-border)",
-  fontFamily: "var(--font-body)",
-  color: "var(--bc-ink)",
-  // Exactly 1rem, not 0.95: below 16px, iOS Safari zooms the whole page in when the field is
-  // focused and never zooms back out. Every auth screen is a phone-first screen — a barber
-  // redeeming their invitation on /reset-password most of all.
-  fontSize: "1rem",
-  marginBottom: 12,
-  boxSizing: "border-box",
-};
-
-export const authButtonStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "0.75rem",
-  borderRadius: "var(--bc-radius-sm)",
-  border: "none",
-  background: "var(--bc-accent)",
-  color: "var(--bc-accent-contrast)",
-  fontFamily: "var(--font-body)",
-  fontWeight: 600,
-  fontSize: "0.95rem",
-  cursor: "pointer",
-  marginTop: 4,
-  transition: "box-shadow 0.15s ease, transform 0.15s ease",
-};
-
-export const authErrorStyle: React.CSSProperties = {
-  color: "var(--bc-accent)",
-  fontSize: "0.85rem",
-  marginBottom: 12,
-};
+export function AuthPageFallback({ audience }: { audience: AuthAudience }) {
+  return (
+    <AuthCard
+      audience={audience}
+      title="Preparing sign in…"
+      subtitle="BarberCue is getting this secure sign-in route ready."
+      showAudienceLinks={false}
+    >
+      <div className={styles.authLoading} role="status" aria-label="Preparing sign in">
+        <span /><span /><span />
+      </div>
+    </AuthCard>
+  );
+}

@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
-import { AuthCard } from "../../../../components/auth/AuthCard";
+import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard";
 import { EmailPasswordLoginForm } from "../../../../components/auth/EmailPasswordLoginForm";
 import { safeNextPath } from "../../../../lib/safe-next-path";
 
@@ -13,7 +13,11 @@ function OwnerLoginForm() {
   const searchParams = useSearchParams();
 
   return (
-    <AuthCard title="Salon owner login">
+    <AuthCard
+      audience="owner"
+      title="Shop owner sign in"
+      subtitle="Use the owner account connected to your BarberCue shop. You’ll return to your shop dashboard after sign-in."
+    >
       <EmailPasswordLoginForm
         forgotPasswordHref="/forgot-password"
         onSubmit={async (input) => {
@@ -27,7 +31,7 @@ function OwnerLoginForm() {
 
 export default function OwnerLoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<AuthPageFallback audience="owner" />}>
       <OwnerLoginForm />
     </Suspense>
   );

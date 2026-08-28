@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AuthErrorCode, adminLoginSchema } from "@barbercue/shared";
 import { ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
-import { AuthCard, authButtonStyle, authErrorStyle, authInputStyle } from "../../../../components/auth/AuthCard";
+import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard";
+import authStyles from "../../../../components/auth/customer-auth.module.css";
 import { safeNextPath } from "../../../../lib/safe-next-path";
 
 function AdminLoginForm() {
@@ -45,37 +46,58 @@ function AdminLoginForm() {
   }
 
   return (
-    <AuthCard title="Platform admin login" subtitle="Email, password, and authenticator code required.">
-      <form onSubmit={handleSubmit}>
-        {error && <p style={authErrorStyle}>{error}</p>}
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={authInputStyle}
-          autoFocus
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={authInputStyle}
-        />
-        {needsTotp && (
+    <AuthCard
+      audience="admin"
+      title="Platform admin sign in"
+      subtitle="Restricted to authorised BarberCue administrators. An authenticator code appears when your account requires it."
+      showAudienceLinks={false}
+    >
+      <form onSubmit={handleSubmit} className={authStyles.form}>
+        {error && <p className={authStyles.errorMessage} role="alert">{error}</p>}
+        <div className={authStyles.field}>
+          <label htmlFor="admin-email">Email address</label>
           <input
-            type="text"
-            inputMode="numeric"
-            placeholder="6-digit authenticator code"
-            value={totpCode}
-            onChange={(e) => setTotpCode(e.target.value)}
-            style={authInputStyle}
+            id="admin-email"
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            placeholder="admin@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={authStyles.input}
             autoFocus
           />
+        </div>
+        <div className={authStyles.field}>
+          <label htmlFor="admin-password">Password</label>
+          <input
+            id="admin-password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={authStyles.input}
+          />
+        </div>
+        {needsTotp && (
+          <div className={authStyles.field}>
+            <label htmlFor="admin-totp">Authenticator code</label>
+            <input
+              id="admin-totp"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="6-digit code"
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value)}
+              className={authStyles.input}
+              autoFocus
+            />
+          </div>
         )}
-        <button type="submit" style={authButtonStyle} disabled={submitting}>
-          {submitting ? "Logging in..." : "Log in"}
+        <button type="submit" className={authStyles.primaryButton} disabled={submitting}>
+          {submitting ? "Signing in…" : "Sign in securely"}
         </button>
       </form>
     </AuthCard>
@@ -84,7 +106,7 @@ function AdminLoginForm() {
 
 export default function AdminLoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<AuthPageFallback audience="admin" />}>
       <AdminLoginForm />
     </Suspense>
   );

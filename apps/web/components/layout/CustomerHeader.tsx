@@ -82,17 +82,26 @@ export function CustomerHeader() {
                 aria-expanded={accountMenuOpen}
                 aria-haspopup="true"
               >
-                Account ▾
+                <span className={styles.accountDot} aria-hidden="true">BC</span>
+                My account <span aria-hidden="true">⌄</span>
               </button>
               {accountMenuOpen && (
                 <div className={styles.accountDropdown} role="menu">
+                  <Link
+                    href="/account/bookings"
+                    role="menuitem"
+                    className={styles.accountDropdownItem}
+                    onClick={() => setAccountMenuOpen(false)}
+                  >
+                    My bookings
+                  </Link>
                   <Link
                     href="/account/profile"
                     role="menuitem"
                     className={styles.accountDropdownItem}
                     onClick={() => setAccountMenuOpen(false)}
                   >
-                    Profile
+                    Profile & security
                   </Link>
                   <Link
                     href="/account/premium"
@@ -102,13 +111,21 @@ export function CustomerHeader() {
                   >
                     Premium
                   </Link>
+                  <Link
+                    href="/style-advisor"
+                    role="menuitem"
+                    className={styles.accountDropdownItem}
+                    onClick={() => setAccountMenuOpen(false)}
+                  >
+                    AI Style Advisor
+                  </Link>
                   <button
                     type="button"
                     role="menuitem"
-                    className={styles.accountDropdownItem}
+                    className={`${styles.accountDropdownItem} ${styles.logoutItem}`}
                     onClick={() => void handleLogout()}
                   >
-                    Logout
+                    Log out
                   </button>
                 </div>
               )}
@@ -146,13 +163,13 @@ export function CustomerHeader() {
           {isAuthenticated ? (
             <>
               <Link href="/account/profile" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                Profile
+                Profile & security
               </Link>
               <Link href="/account/premium" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
                 Premium
               </Link>
               <button type="button" className={styles.mobileNavLink} onClick={() => void handleLogout()}>
-                Logout
+                Log out
               </button>
             </>
           ) : (

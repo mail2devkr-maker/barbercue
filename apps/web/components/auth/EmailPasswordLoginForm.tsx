@@ -1,15 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { staffLoginSchema } from "@barbercue/shared";
 import { ApiError } from "../../lib/api";
-import { authButtonStyle, authErrorStyle, authInputStyle } from "./AuthCard";
+import styles from "./customer-auth.module.css";
 
-/**
- * Shared by /owner/login and /staff/login — both roles authenticate identically (email +
- * password against the same POST /auth/staff/login endpoint per AuthService), so the form logic
- * lives once here rather than being duplicated across two near-identical pages.
- */
+/** Owner and staff routes deliberately retain the same email/password auth operation. */
 export function EmailPasswordLoginForm({
   onSubmit,
   forgotPasswordHref,
@@ -41,30 +38,39 @@ export function EmailPasswordLoginForm({
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      {error && <p style={authErrorStyle}>{error}</p>}
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={authInputStyle}
-        autoFocus
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        style={authInputStyle}
-      />
-      <button type="submit" style={authButtonStyle} disabled={submitting}>
-        {submitting ? "Logging in..." : "Log in"}
+    <form onSubmit={handleSubmit} className={styles.form}>
+      {error && <p className={styles.errorMessage} role="alert">{error}</p>}
+      <div className={styles.field}>
+        <label htmlFor="workspace-email">Email address</label>
+        <input
+          id="workspace-email"
+          type="email"
+          inputMode="email"
+          autoComplete="username"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className={styles.input}
+          autoFocus
+        />
+      </div>
+      <div className={styles.field}>
+        <label htmlFor="workspace-password">Password</label>
+        <input
+          id="workspace-password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={styles.input}
+        />
+      </div>
+      <button type="submit" className={styles.primaryButton} disabled={submitting}>
+        {submitting ? "Signing in…" : "Sign in to workspace"}
       </button>
-      <p style={{ textAlign: "center", marginTop: 16, fontSize: "0.85rem" }}>
-        <a href={forgotPasswordHref} style={{ color: "var(--bc-muted)" }}>
-          Forgot password?
-        </a>
+      <p className={styles.formFootnote}>
+        <Link href={forgotPasswordHref}>Forgot your password?</Link>
       </p>
     </form>
   );

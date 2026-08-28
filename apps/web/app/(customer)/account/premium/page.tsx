@@ -5,6 +5,7 @@ import { PREMIUM_PATHS } from "@barbercue/shared";
 import type { AiCreditBalanceDto, CustomerPremiumPlanDto, PremiumEntitlementDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { Card } from "../../../../components/ui/Card";
+import { LinkButton } from "../../../../components/ui/Button";
 import styles from "./premium.module.css";
 
 // New page — Premium subscription plans + current entitlement/credit status. No real payment
@@ -45,38 +46,56 @@ export default function PremiumPlansPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.pageTitle}>Premium</h1>
-      <p className={styles.pageSubtitle}>
-        Get AI Style Advisor credits and preview new hairstyles on your own photo before you book.
-      </p>
+      <header className={styles.hero}>
+        <div>
+          <p className={styles.eyebrow}>BARBERCUE PREMIUM</p>
+          <h1 className={styles.pageTitle}>Plan the look before the chair.</h1>
+          <p className={styles.pageSubtitle}>
+            Premium plans include AI Style Advisor credits. Preview generation remains subject to the current image-service availability.
+          </p>
+        </div>
+        <LinkButton href="/style-advisor" variant="outline" className={styles.styleLink}>
+          Open Style Advisor
+        </LinkButton>
+      </header>
 
       {entitlement?.isPremium && (
         <Card raised className={styles.statusCard}>
-          <p className={styles.statusPlan}>
-            You&apos;re on the <strong>{entitlement.planName}</strong> plan.
-          </p>
-          {entitlement.periodEnd && (
-            <p className={styles.statusMeta}>
-              Renews {new Date(entitlement.periodEnd).toLocaleDateString()}
-            </p>
-          )}
+          <div>
+            <p className={styles.statusEyebrow}>CURRENT PLAN</p>
+            <p className={styles.statusPlan}>{entitlement.planName}</p>
+            {entitlement.periodEnd && (
+              <p className={styles.statusMeta}>Renews {new Date(entitlement.periodEnd).toLocaleDateString()}</p>
+            )}
+          </div>
           {credits && (
-            <p className={styles.statusMeta}>
-              AI Style Credits remaining: <strong>{credits.available}</strong> of {credits.allocated}
-            </p>
+            <div className={styles.creditBalance}>
+              <strong>{credits.available}</strong>
+              <span>of {credits.allocated} AI credits remaining</span>
+            </div>
           )}
         </Card>
       )}
 
-      {loading && <p className={styles.noteText}>Loading plans…</p>}
-      {error && <p className={styles.errorText}>{error}</p>}
+      <div className={styles.sectionHeader}>
+        <h2>Choose what fits</h2>
+        <p>Plan availability and prices below come directly from BarberCue.</p>
+      </div>
+
+      {loading && (
+        <div className={styles.loadingGrid} role="status" aria-label="Loading Premium plans">
+          <div className={styles.loadingCard}><span /><span /><span /></div>
+          <div className={styles.loadingCard}><span /><span /><span /></div>
+        </div>
+      )}
+      {error && <p className={styles.errorText} role="alert">{error} Refresh the page to try again.</p>}
 
       {!loading && !error && (
         <div className={styles.planGrid}>
           {plans.map((plan) => (
             <Card key={plan.id} raised={plan.isPopular} className={styles.planCard}>
               {plan.isPopular && <span className={styles.popularBadge}>MOST POPULAR</span>}
-              <p className={styles.planName}>{plan.name}</p>
+              <h3 className={styles.planName}>{plan.name}</h3>
               <p className={styles.planPrice}>
                 ₹{plan.priceInr}
                 <span className={styles.planPeriod}>/year</span>
@@ -95,6 +114,12 @@ export default function PremiumPlansPage() {
               </div>
             </Card>
           ))}
+          {plans.length === 0 && (
+            <Card className={styles.emptyCard}>
+              <h3>No Premium plans are available right now.</h3>
+              <p>Please check again later. Your current BarberCue account remains unchanged.</p>
+            </Card>
+          )}
         </div>
       )}
     </div>

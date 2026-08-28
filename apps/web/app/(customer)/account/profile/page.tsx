@@ -82,32 +82,51 @@ export default function ProfilePage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.pageTitle}>Account</h1>
+      <header className={styles.hero}>
+        <p className={styles.eyebrow}>PROFILE & SECURITY</p>
+        <h1 className={styles.pageTitle}>Your account, kept simple.</h1>
+        <p className={styles.pageSubtitle}>
+          Review the contact details connected to BarberCue and manage where your account is signed in.
+        </p>
+      </header>
 
       <section className={styles.section}>
-        <p className={styles.sectionTitle}>Profile</p>
-        <Card>
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>Email</span>
-            <span className={styles.fieldValue}>{user?.email ?? "Not set"}</span>
-          </div>
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>Phone</span>
-            <span className={styles.fieldValue}>{user?.phone ?? "Not set"}</span>
-          </div>
-          <div className={styles.fieldRow}>
-            <span className={styles.fieldLabel}>Account type</span>
-            <span className={styles.fieldValue}>
-              {user?.roles.map((r) => ROLE_LABELS[r] ?? r).join(", ") ?? "—"}
-            </span>
-          </div>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Account details</h2>
+          <p>These details come from your current authenticated BarberCue account.</p>
+        </div>
+        <Card className={styles.profileCard}>
+          <dl>
+            <div className={styles.fieldRow}>
+              <dt className={styles.fieldLabel}>Email</dt>
+              <dd className={styles.fieldValue}>{user?.email ?? "Not set"}</dd>
+            </div>
+            <div className={styles.fieldRow}>
+              <dt className={styles.fieldLabel}>Phone</dt>
+              <dd className={styles.fieldValue}>{user?.phone ?? "Not set"}</dd>
+            </div>
+            <div className={styles.fieldRow}>
+              <dt className={styles.fieldLabel}>Account type</dt>
+              <dd className={styles.fieldValue}>
+                {user?.roles.map((r) => ROLE_LABELS[r] ?? r).join(", ") ?? "—"}
+              </dd>
+            </div>
+          </dl>
         </Card>
       </section>
 
       <section className={styles.section}>
-        <p className={styles.sectionTitle}>Security</p>
-        <Card>
-          {sessionsLoading && <p className={styles.noteText}>Loading sessions…</p>}
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Signed-in devices</h2>
+          <p>Review active sessions and sign out devices you no longer recognise or use.</p>
+        </div>
+        <Card className={styles.securityCard}>
+          {sessionsLoading && (
+            <div className={styles.sessionLoading} role="status">
+              <span aria-hidden="true" />
+              <p>Loading your signed-in devices…</p>
+            </div>
+          )}
           {!sessionsLoading &&
             sessions.map((session) => (
               <div key={session.id} className={styles.sessionRow}>
@@ -132,7 +151,10 @@ export default function ProfilePage() {
                 )}
               </div>
             ))}
-          {error && <p className={styles.errorText}>{error}</p>}
+          {!sessionsLoading && sessions.length === 0 && !error && (
+            <p className={styles.noteText}>No active sessions were returned for this account.</p>
+          )}
+          {error && <p className={styles.errorText} role="alert">{error}</p>}
           <div className={styles.actions}>
             {otherSessionCount > 0 && (
               <Button variant="outline" onClick={() => void revokeOtherSessions()} disabled={revokingOthers}>
@@ -140,7 +162,7 @@ export default function ProfilePage() {
               </Button>
             )}
             <Button variant="secondary" onClick={() => void logout()}>
-              Log out
+              Log out of this device
             </Button>
           </div>
         </Card>

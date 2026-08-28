@@ -38,6 +38,14 @@ function statusColor(status: string): string {
   return "var(--bc-muted)";
 }
 
+function formatStatus(status: string): string {
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 function formatWhen(slotStart: string): string {
   const date = new Date(slotStart);
   const now = new Date();
@@ -59,11 +67,11 @@ function BookingRow({
   onCancel: (booking: BookingDetailDto) => void;
 }) {
   return (
-    <div className={styles.bookingRow}>
+    <article className={styles.bookingRow}>
       <div className={styles.bookingRowHead}>
         <strong>{booking.serviceName}</strong>
         <span className={styles.statusBadge} style={{ color: statusColor(booking.status) }}>
-          {booking.status}
+          {formatStatus(booking.status)}
         </span>
       </div>
       <p className={styles.bookingRowSalon}>
@@ -84,7 +92,7 @@ function BookingRow({
         </div>
       )}
       {canCheckIn(booking) && <CheckInPanel booking={booking} />}
-    </div>
+    </article>
   );
 }
 
@@ -172,16 +180,35 @@ export default function MyBookingsPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.welcome}>Welcome back{identifier ? `, ${identifier}` : ""}</h1>
-      <p className={styles.welcomeSub}>Your BarberCue home — bookings, queue, and quick actions in one place.</p>
+      <header className={styles.hero}>
+        <div>
+          <p className={styles.heroEyebrow}>YOUR BARBERCUE</p>
+          <h1 className={styles.welcome}>Good to see you.</h1>
+          <p className={styles.welcomeSub}>Your next chair, active queue and booking history—organised around your day.</p>
+        </div>
+        {identifier && (
+          <div className={styles.identityCard}>
+            <span>Signed in as</span>
+            <strong>{identifier}</strong>
+          </div>
+        )}
+      </header>
 
-      {error && <p className={styles.errorText}>{error}</p>}
+      {error && (
+        <div className={styles.errorPanel} role="alert">
+          <strong>We couldn&apos;t load everything.</strong>
+          <p>{error} Refresh the page to try again.</p>
+        </div>
+      )}
 
       {/* ---------- Your next chair ---------- */}
       <section className={styles.section}>
-        <p className={styles.sectionTitle}>Your next chair</p>
+        <h2 className={styles.sectionTitle}>Your next chair</h2>
         {loading ? (
-          <p style={{ color: "var(--bc-muted)" }}>Loading…</p>
+          <Card className={styles.loadingCard}>
+            <span className={styles.loadingPulse} aria-hidden="true" />
+            <p role="status">Loading your next chair…</p>
+          </Card>
         ) : nextBooking ? (
           <Card raised className={styles.nextChairCard}>
             <span className={styles.nextChairEyebrow}>Upcoming</span>
@@ -195,7 +222,7 @@ export default function MyBookingsPage() {
               <span className={styles.nextChairMeta}>Style: {nextBooking.selectedStyleName}</span>
             )}
             <span className={styles.nextChairStatus} style={{ color: statusColor(nextBooking.status) }}>
-              Status: {nextBooking.status}
+              {formatStatus(nextBooking.status)}
             </span>
             <div className={styles.nextChairActions}>
               {CANCELLABLE_STATUSES.has(nextBooking.status) && (
@@ -232,15 +259,17 @@ export default function MyBookingsPage() {
 
       {/* ---------- Quick actions ---------- */}
       <section className={styles.section}>
-        <p className={styles.sectionTitle}>Quick actions</p>
+        <h2 className={styles.sectionTitle}>Quick actions</h2>
         <div className={styles.quickActions}>
           <Link href="/search" className={styles.quickActionCard}>
+            <span className={styles.quickActionEyebrow}>DISCOVER</span>
             <p className={styles.quickActionTitle}>Find a Barber</p>
             <p className={styles.quickActionText}>Search barbershops, check services and wait times.</p>
           </Link>
           <Link href="/style-advisor" className={styles.quickActionCard}>
+            <span className={styles.quickActionEyebrow}>PREVIEW</span>
             <p className={styles.quickActionTitle}>AI Style Advisor</p>
-            <p className={styles.quickActionText}>Preview a new look before you book.</p>
+            <p className={styles.quickActionText}>Explore style options and current preview availability.</p>
           </Link>
         </div>
       </section>
@@ -248,14 +277,14 @@ export default function MyBookingsPage() {
       {/* ---------- Active queue ---------- */}
       {activeQueueEntry && (
         <section className={styles.section}>
-          <p className={styles.sectionTitle}>Active queue</p>
+          <h2 className={styles.sectionTitle}>Active queue</h2>
           <QueueStatusPanel entry={activeQueueEntry} onEntryChange={setActiveQueueEntry} />
         </section>
       )}
 
       {/* ---------- My bookings ---------- */}
       <section className={styles.section}>
-        <p className={styles.sectionTitle}>Upcoming bookings</p>
+        <h2 className={styles.sectionTitle}>Upcoming bookings</h2>
         {!loading && upcoming.length === 0 && <p className={styles.emptyListNote}>No upcoming bookings.</p>}
         {upcoming.map((booking) => (
           <BookingRow key={booking.id} booking={booking} onCancel={setCancelTarget} />
@@ -264,7 +293,7 @@ export default function MyBookingsPage() {
 
       {past.length > 0 && (
         <section className={styles.section}>
-          <p className={styles.sectionTitle}>Past bookings</p>
+          <h2 className={styles.sectionTitle}>Past bookings</h2>
           {past.map((booking) => (
             <BookingRow key={booking.id} booking={booking} onCancel={setCancelTarget} />
           ))}
@@ -272,7 +301,7 @@ export default function MyBookingsPage() {
       )}
 
       {nextCursor && (
-        <div style={{ marginTop: 8 }}>
+        <div className={styles.loadMoreWrap}>
           <Button type="button" variant="outline" onClick={() => void handleLoadMore()} disabled={loadingMore}>
             {loadingMore ? "Loading…" : "Load more"}
           </Button>

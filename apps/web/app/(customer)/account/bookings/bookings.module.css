@@ -1,24 +1,95 @@
 .page {
-  max-width: 880px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 40px 24px 64px;
+}
+
+.hero {
+  position: relative;
+  margin-bottom: 48px;
+  padding: clamp(28px, 5vw, 48px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(216, 181, 101, 0.24), transparent 30%),
+    linear-gradient(135deg, #211e1a 0%, #3c3328 100%);
+  color: #ffffff;
+  box-shadow: var(--bc-shadow-lg);
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  right: -90px;
+  bottom: -130px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+}
+
+.heroEyebrow {
+  margin: 0 0 14px;
+  color: #d8b565;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
 }
 
 .welcome {
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  font-weight: 700;
-  color: var(--bc-ink);
-  margin: 0 0 4px;
+  max-width: 620px;
+  font-size: clamp(2.25rem, 6vw, 4.5rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  color: #ffffff;
+  margin: 0 0 12px;
 }
 
 .welcomeSub {
-  color: var(--bc-muted);
-  font-size: 0.95rem;
-  margin: 0 0 32px;
+  max-width: 590px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.96rem;
+  line-height: 1.65;
+}
+
+.identityCard {
+  position: relative;
+  z-index: 1;
+  max-width: 310px;
+  padding: 14px 16px;
+  flex: 0 1 auto;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.identityCard span,
+.identityCard strong {
+  display: block;
+}
+
+.identityCard span {
+  margin-bottom: 3px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.identityCard strong {
+  overflow-wrap: anywhere;
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 600;
 }
 
 .section {
-  margin-bottom: 40px;
+  margin-bottom: 46px;
 }
 
 .sectionTitle {
@@ -30,12 +101,56 @@
   margin: 0 0 14px;
 }
 
+.errorPanel {
+  margin: -24px 0 34px;
+  padding: 16px 18px;
+  border: 1px solid rgba(176, 65, 62, 0.24);
+  border-radius: 12px;
+  background: rgba(176, 65, 62, 0.07);
+  color: #8f302d;
+}
+
+.errorPanel strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.errorPanel p {
+  color: var(--bc-muted);
+  font-size: 0.86rem;
+}
+
+.loadingCard {
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--bc-muted);
+}
+
+.loadingPulse {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--bc-gold-soft);
+  animation: loading-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes loading-pulse {
+  50% { opacity: 0.45; transform: scale(0.94); }
+}
+
 /* ---------- Next chair / empty state ---------- */
 
 .nextChairCard {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(24px, 4vw, 36px);
   display: flex;
   flex-direction: column;
   gap: 4px;
+  border-left: 4px solid var(--bc-gold);
 }
 
 .nextChairEyebrow {
@@ -47,8 +162,9 @@
 }
 
 .nextChairWhen {
-  font-size: 1.3rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 600;
   color: var(--bc-ink);
   margin: 4px 0 10px;
 }
@@ -80,7 +196,8 @@
 
 .emptyState {
   text-align: center;
-  padding: 48px 24px;
+  padding: clamp(42px, 7vw, 68px) 24px;
+  background: linear-gradient(160deg, #ffffff 0%, #fbf6ed 100%);
 }
 
 .emptyIcon {
@@ -121,17 +238,21 @@
 }
 
 .quickActionCard {
+  position: relative;
   display: block;
-  padding: 20px;
+  min-height: 150px;
+  padding: 24px;
   border-radius: 14px;
   border: 1px solid var(--bc-border);
   background: #ffffff;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  box-shadow: var(--bc-shadow-sm);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .quickActionCard:hover {
   transform: translateY(-2px);
   border-color: var(--bc-accent);
+  box-shadow: var(--bc-shadow-lg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -146,10 +267,11 @@
 }
 
 .quickActionTitle {
+  font-family: var(--font-display);
   font-weight: 700;
   color: var(--bc-ink);
-  font-size: 1rem;
-  margin: 0 0 4px;
+  font-size: 1.25rem;
+  margin: 12px 0 6px;
 }
 
 .quickActionText {
@@ -158,13 +280,22 @@
   margin: 0;
 }
 
+.quickActionEyebrow {
+  color: var(--bc-gold);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
 /* ---------- Bookings list ---------- */
 
 .bookingRow {
   border: 1px solid var(--bc-border);
-  border-radius: 12px;
-  padding: 16px 18px;
-  margin-bottom: 10px;
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 12px;
+  background: #ffffff;
+  box-shadow: var(--bc-shadow-sm);
 }
 
 .bookingRowHead {
@@ -188,7 +319,9 @@
 
 .statusBadge {
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
 .emptyListNote {
@@ -196,8 +329,47 @@
   font-size: 0.88rem;
 }
 
-.errorText {
-  color: var(--bc-accent);
-  font-size: 0.9rem;
-  margin-bottom: 16px;
+.loadMoreWrap {
+  margin-top: 8px;
+}
+
+@media (max-width: 680px) {
+  .hero {
+    margin-bottom: 36px;
+    padding: 28px 22px;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 22px;
+    border-radius: 18px;
+  }
+
+  .welcome {
+    font-size: clamp(2.35rem, 12vw, 3.35rem);
+  }
+
+  .identityCard {
+    max-width: none;
+  }
+
+  .section {
+    margin-bottom: 38px;
+  }
+
+  .bookingRowHead {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .nextChairActions,
+  .emptyActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingPulse {
+    animation: none;
+  }
 }

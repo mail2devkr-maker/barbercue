@@ -12,12 +12,9 @@ import {
 } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
-import {
-  authButtonStyle,
-  authErrorStyle,
-  authInputStyle,
-} from "../../../components/auth/AuthCard";
 import { CustomerAuthCard } from "../../../components/auth/CustomerAuthCard";
+import { AuthPageFallback } from "../../../components/auth/AuthCard";
+import authStyles from "../../../components/auth/customer-auth.module.css";
 import { safeNextPath } from "../../../lib/safe-next-path";
 
 type Step = "phone" | "otp";
@@ -49,45 +46,6 @@ declare global {
     };
   }
 }
-
-const authSuccessStyle: React.CSSProperties = {
-  color: "var(--bc-success)",
-  fontSize: "0.85rem",
-  marginBottom: 12,
-};
-
-const resendButtonStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "0.6rem",
-  borderRadius: "var(--bc-radius-sm)",
-  border: "1px solid var(--bc-border)",
-  background: "transparent",
-  color: "var(--bc-ink)",
-  fontFamily: "var(--font-body)",
-  fontWeight: 600,
-  fontSize: "0.9rem",
-  cursor: "pointer",
-  marginTop: 8,
-};
-
-const dividerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 12,
-  color: "var(--bc-muted)",
-  fontSize: "0.8rem",
-  margin: "16px 0",
-};
-
-// Same typographic treatment AuthCard's own subtitle used previously — preserved here since these
-// two lines carry information the old dynamic title/subtitle used to show (new-account framing on
-// the phone step, "code sent to X" on the OTP step), just relocated now that CustomerAuthCard owns
-// a fixed headline/supporting-text instead of a per-step subtitle.
-const contextLineStyle: React.CSSProperties = {
-  fontSize: "0.85rem",
-  color: "var(--bc-muted)",
-  marginBottom: 12,
-};
 
 function CustomerLoginForm() {
   const { verifyCustomerOtp, googleLogin } = useAuth();
@@ -254,39 +212,39 @@ function CustomerLoginForm() {
         onLoad={() => setGoogleScriptLoaded(true)}
       />
       <CustomerAuthCard>
-        {error && <p style={authErrorStyle}>{error}</p>}
-        {resendMessage && <p style={authSuccessStyle}>{resendMessage}</p>}
+        {error && <p className={authStyles.errorMessage} role="alert">{error}</p>}
+        {resendMessage && <p className={authStyles.successMessage} role="status">{resendMessage}</p>}
         {step === "phone" ? (
           <>
-            <div ref={googleButtonRef} style={{ display: "flex", justifyContent: "center", minHeight: 44 }} />
+            <div ref={googleButtonRef} className={authStyles.googleButton} aria-label="Google sign-in" />
             {phoneOtpAvailable === false ? (
-              <p style={contextLineStyle}>
+              <p className={authStyles.noticeMessage}>
                 Phone sign-in is temporarily unavailable. Please continue with Google above —
                 it&apos;s the same account either way.
               </p>
             ) : (
               <>
-                <div style={dividerStyle}>
-                  <span style={{ flex: 1, borderTop: "1px solid var(--bc-border)" }} />
-                  OR
-                  <span style={{ flex: 1, borderTop: "1px solid var(--bc-border)" }} />
-                </div>
-                <p style={contextLineStyle}>New here? Signing in creates your account automatically.</p>
+                <div className={authStyles.divider} aria-hidden="true">OR</div>
+                <p className={authStyles.contextLine}>New here? Signing in creates your customer account automatically.</p>
                 {phoneOtpAvailable === null ? (
-                  <p style={contextLineStyle}>Checking sign-in options…</p>
+                  <p className={authStyles.contextLine} role="status">Checking sign-in options…</p>
                 ) : (
-                  <form onSubmit={requestOtp}>
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder="+919876543210"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      style={authInputStyle}
-                    />
-                    <button type="submit" style={authButtonStyle} disabled={submitting}>
-                      {submitting ? "Sending..." : "Send OTP"}
+                  <form onSubmit={requestOtp} className={authStyles.form}>
+                    <div className={authStyles.field}>
+                      <label htmlFor="customer-phone">Mobile number</label>
+                      <input
+                        id="customer-phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="+91 98765 43210"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className={authStyles.input}
+                      />
+                    </div>
+                    <button type="submit" className={authStyles.primaryButton} disabled={submitting}>
+                      {submitting ? "Sending…" : "Send one-time code"}
                     </button>
                   </form>
                 )}
@@ -294,28 +252,33 @@ function CustomerLoginForm() {
             )}
           </>
         ) : (
-          <form onSubmit={verifyOtp}>
-            <p style={contextLineStyle}>Enter the code sent to {phone}.</p>
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="6-digit code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              style={authInputStyle}
-              autoFocus
-            />
-            <button type="submit" style={authButtonStyle} disabled={submitting}>
-              {submitting ? "Verifying..." : "Verify & Continue"}
+          <form onSubmit={verifyOtp} className={authStyles.form}>
+            <p className={authStyles.contextLine}>Enter the code sent to <strong>{phone}</strong>.</p>
+            <div className={authStyles.field}>
+              <label htmlFor="customer-otp">One-time code</label>
+              <input
+                id="customer-otp"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className={authStyles.input}
+                autoFocus
+              />
+            </div>
+            <button type="submit" className={authStyles.primaryButton} disabled={submitting}>
+              {submitting ? "Verifying…" : "Verify and continue"}
             </button>
             <button
               type="button"
-              style={resendButtonStyle}
+              className={authStyles.secondaryButton}
               onClick={() => void handleResend()}
               disabled={resendCooldown > 0 || resending}
             >
               {resending
-                ? "Resending..."
+                ? "Resending…"
                 : resendCooldown > 0
                   ? `Resend OTP in ${resendCooldown}s`
                   : "Resend OTP"}
@@ -329,7 +292,7 @@ function CustomerLoginForm() {
 
 export default function CustomerLoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<AuthPageFallback audience="customer" />}>
       <CustomerLoginForm />
     </Suspense>
   );

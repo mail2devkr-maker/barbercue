@@ -3,7 +3,7 @@
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
-import { AuthCard } from "../../../../components/auth/AuthCard";
+import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard";
 import { EmailPasswordLoginForm } from "../../../../components/auth/EmailPasswordLoginForm";
 import { safeNextPath } from "../../../../lib/safe-next-path";
 
@@ -13,7 +13,11 @@ function StaffLoginForm() {
   const searchParams = useSearchParams();
 
   return (
-    <AuthCard title="Staff login">
+    <AuthCard
+      audience="staff"
+      title="Barber & staff sign in"
+      subtitle="Use the email and password from your shop invitation. You’ll return to your shop workspace after sign-in."
+    >
       <EmailPasswordLoginForm
         forgotPasswordHref="/forgot-password"
         onSubmit={async (input) => {
@@ -27,7 +31,7 @@ function StaffLoginForm() {
 
 export default function StaffLoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<AuthPageFallback audience="staff" />}>
       <StaffLoginForm />
     </Suspense>
   );
