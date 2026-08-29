@@ -211,6 +211,8 @@ export const DASHBOARD_PATHS = {
   // dashboard/salons/:salonId/staff/:staffId/working-hours (Phase 7 — barber schedules). A
   // per-barber refinement layer, same shape/route convention as operatingHours above.
   workingHours: 'working-hours',
+  // GET dashboard/salons/:salonId/customers[/:customerId] (Phase 8 — owner customer CRM).
+  customers: 'customers',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

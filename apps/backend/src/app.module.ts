@@ -20,6 +20,7 @@ import { PublicQueueModule } from './public-queue/public-queue.module';
 import { SalonSetupModule } from './salon-setup/salon-setup.module';
 import { AdminModule } from './admin/admin.module';
 import { DashboardBookingsModule } from './dashboard-bookings/dashboard-bookings.module';
+import { DashboardCustomersModule } from './dashboard-customers/dashboard-customers.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { DashboardBookingsModule } from './dashboard-bookings/dashboard-bookings
     SalonSetupModule,
     AdminModule,
     DashboardBookingsModule,
+    DashboardCustomersModule,
     // Feature modules (staff/chair roster CRUD, payments, reviews, admin) are added in later
     // phases per PROJECT_STRUCTURE.md.
   ],

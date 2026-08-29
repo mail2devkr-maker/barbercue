@@ -353,6 +353,30 @@ export interface OwnerBookingDetailDto extends BookingDetailDto {
   cancelledAt: string | null; // ISO 8601
 }
 
+// ---------- Owner customer CRM (Phase 8) ----------
+
+// A deliberately small, factual heuristic on booking counts at THIS salon only — never inferred
+// from anything about the customer themselves. `new` = exactly one completed visit ever, `repeat`
+// = 2+, `frequent` = FREQUENT_CUSTOMER_THRESHOLD+ (see the backend constant of the same name).
+// Someone with 0 completed visits (only cancelled/no-show so far) gets none of these — they're
+// just not segmented yet, not a 4th category invented to force a label onto them.
+export type CustomerSegment = 'new' | 'repeat' | 'frequent';
+
+export interface OwnerCustomerSummaryDto {
+  customerId: string;
+  phone: string | null;
+  email: string | null;
+  totalBookings: number;
+  completedCount: number;
+  cancelledCount: number;
+  noShowCount: number;
+  firstVisitAt: string | null; // ISO 8601 — earliest COMPLETED booking's slotStart
+  lastVisitAt: string | null; // ISO 8601 — latest COMPLETED booking's slotStart
+  preferredServiceName: string | null; // most-completed service at this salon, if any
+  preferredStaffName: string | null; // most-frequent assigned barber at this salon, if derivable
+  segment: CustomerSegment | null;
+}
+
 export interface QueueEntryDto {
   id: string;
   salonId: string;
