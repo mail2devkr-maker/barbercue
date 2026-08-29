@@ -15,7 +15,7 @@ describe('SalonServicesService', () => {
       update: jest.Mock;
     };
   };
-  let salonAccess: { assertAccess: jest.Mock };
+  let salonAccess: { assertOwnerAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -28,21 +28,21 @@ describe('SalonServicesService', () => {
         update: jest.fn(),
       },
     };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
     service = new SalonServicesService(prisma as never, salonAccess as never);
   });
 
   describe('salon isolation', () => {
     it('checks salon access before listing', async () => {
       await service.list('owner-1', 'salon-1');
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
         'owner-1',
         'salon-1',
       );
     });
 
     it('propagates SALON_ACCESS_DENIED and never queries when access is refused', async () => {
-      salonAccess.assertAccess.mockRejectedValue(
+      salonAccess.assertOwnerAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(

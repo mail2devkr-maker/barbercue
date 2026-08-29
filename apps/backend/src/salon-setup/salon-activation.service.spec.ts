@@ -8,13 +8,17 @@ describe('SalonActivationService', () => {
     chair: { count: jest.Mock };
     salonStaff: { count: jest.Mock };
   };
-  let salonAccess: { assertAccess: jest.Mock };
+  let salonAccess: { assertOwnerAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
       salon: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'salon-1', status: 'PENDING' }),
-        update: jest.fn().mockResolvedValue({ id: 'salon-1', status: 'ACTIVE' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'salon-1', status: 'PENDING' }),
+        update: jest
+          .fn()
+          .mockResolvedValue({ id: 'salon-1', status: 'ACTIVE' }),
       },
       // Default to a fully set-up shop, so each readiness test states only the one thing it
       // removes rather than restating the whole fixture.
@@ -22,35 +26,50 @@ describe('SalonActivationService', () => {
       chair: { count: jest.fn().mockResolvedValue(1) },
       salonStaff: { count: jest.fn().mockResolvedValue(1) },
     };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
     service = new SalonActivationService(prisma as never, salonAccess as never);
   });
 
   it('activates a PENDING salon — the fix that makes a self-registered shop usable', async () => {
-    const result = await service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never });
+    const result = await service.updateStatus('owner-1', 'salon-1', {
+      status: 'ACTIVE' as never,
+    });
     expect(prisma.salon.update).toHaveBeenCalledWith({
-      where: { id: 'salon-1' }, data: { status: 'ACTIVE' },
+      where: { id: 'salon-1' },
+      data: { status: 'ACTIVE' },
     });
     expect(result).toEqual({ id: 'salon-1', status: 'ACTIVE' });
   });
 
   it('lets an owner pause their own shop (SUSPENDED)', async () => {
-    prisma.salon.update.mockResolvedValue({ id: 'salon-1', status: 'SUSPENDED' });
-    const result = await service.updateStatus('owner-1', 'salon-1', { status: 'SUSPENDED' as never });
+    prisma.salon.update.mockResolvedValue({
+      id: 'salon-1',
+      status: 'SUSPENDED',
+    });
+    const result = await service.updateStatus('owner-1', 'salon-1', {
+      status: 'SUSPENDED' as never,
+    });
     expect(result.status).toBe('SUSPENDED');
   });
 
   it('checks salon access first', async () => {
-    await service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never });
-    expect(salonAccess.assertAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
+    await service.updateStatus('owner-1', 'salon-1', {
+      status: 'ACTIVE' as never,
+    });
+    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      'owner-1',
+      'salon-1',
+    );
   });
 
   it('refuses to activate a salon the caller does not own, and writes nothing', async () => {
-    salonAccess.assertAccess.mockRejectedValue(
+    salonAccess.assertOwnerAccess.mockRejectedValue(
       Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
     );
     await expect(
-      service.updateStatus('intruder', 'someone-elses-salon', { status: 'ACTIVE' as never }),
+      service.updateStatus('intruder', 'someone-elses-salon', {
+        status: 'ACTIVE' as never,
+      }),
     ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
     expect(prisma.salon.update).not.toHaveBeenCalled();
   });
@@ -69,10 +88,16 @@ describe('SalonActivationService', () => {
     it('rejects activation when there is no active service', async () => {
       prisma.service.count.mockResolvedValue(0);
       await expect(
-        service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never }),
+        service.updateStatus('owner-1', 'salon-1', {
+          status: 'ACTIVE' as never,
+        }),
       ).rejects.toMatchObject({
         code: 'SALON_SETUP_INCOMPLETE',
-        details: { hasActiveService: false, hasActiveChair: true, hasActiveStaff: true },
+        details: {
+          hasActiveService: false,
+          hasActiveChair: true,
+          hasActiveStaff: true,
+        },
       });
       expect(prisma.salon.update).not.toHaveBeenCalled();
     });
@@ -80,10 +105,16 @@ describe('SalonActivationService', () => {
     it('rejects activation when there is no active chair', async () => {
       prisma.chair.count.mockResolvedValue(0);
       await expect(
-        service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never }),
+        service.updateStatus('owner-1', 'salon-1', {
+          status: 'ACTIVE' as never,
+        }),
       ).rejects.toMatchObject({
         code: 'SALON_SETUP_INCOMPLETE',
-        details: { hasActiveService: true, hasActiveChair: false, hasActiveStaff: true },
+        details: {
+          hasActiveService: true,
+          hasActiveChair: false,
+          hasActiveStaff: true,
+        },
       });
       expect(prisma.salon.update).not.toHaveBeenCalled();
     });
@@ -91,22 +122,32 @@ describe('SalonActivationService', () => {
     it('rejects activation when there is no active barber', async () => {
       prisma.salonStaff.count.mockResolvedValue(0);
       await expect(
-        service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never }),
+        service.updateStatus('owner-1', 'salon-1', {
+          status: 'ACTIVE' as never,
+        }),
       ).rejects.toMatchObject({
         code: 'SALON_SETUP_INCOMPLETE',
-        details: { hasActiveService: true, hasActiveChair: true, hasActiveStaff: false },
+        details: {
+          hasActiveService: true,
+          hasActiveChair: true,
+          hasActiveStaff: false,
+        },
       });
       expect(prisma.salon.update).not.toHaveBeenCalled();
     });
 
     it('activates when all three are present', async () => {
-      const result = await service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never });
+      const result = await service.updateStatus('owner-1', 'salon-1', {
+        status: 'ACTIVE' as never,
+      });
       expect(result).toEqual({ id: 'salon-1', status: 'ACTIVE' });
       expect(prisma.salon.update).toHaveBeenCalled();
     });
 
     it('counts only usable rows — a deactivated service/chair/barber does not satisfy the gate', async () => {
-      await service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never });
+      await service.updateStatus('owner-1', 'salon-1', {
+        status: 'ACTIVE' as never,
+      });
       expect(prisma.service.count).toHaveBeenCalledWith({
         where: { salonId: 'salon-1', isActive: true },
       });
@@ -123,7 +164,9 @@ describe('SalonActivationService', () => {
       prisma.chair.count.mockResolvedValue(0);
       prisma.salonStaff.count.mockResolvedValue(0);
       await expect(
-        service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never }),
+        service.updateStatus('owner-1', 'salon-1', {
+          status: 'ACTIVE' as never,
+        }),
       ).rejects.toMatchObject({
         message:
           'Complete your shop setup before opening it: add at least one service, one chair and one barber.',
@@ -131,11 +174,13 @@ describe('SalonActivationService', () => {
     });
 
     it('still enforces ownership before running any readiness count', async () => {
-      salonAccess.assertAccess.mockRejectedValue(
+      salonAccess.assertOwnerAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
-        service.updateStatus('intruder', 'someone-elses-salon', { status: 'ACTIVE' as never }),
+        service.updateStatus('intruder', 'someone-elses-salon', {
+          status: 'ACTIVE' as never,
+        }),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(prisma.service.count).not.toHaveBeenCalled();
       expect(prisma.chair.count).not.toHaveBeenCalled();
@@ -147,37 +192,53 @@ describe('SalonActivationService', () => {
   // of pausing and reopening, and losing the last chair never silently closes it.
   describe('the gate does not apply outside PENDING -> ACTIVE', () => {
     it('reopens a SUSPENDED salon even with nothing active — reopening after a pause is not first-time setup', async () => {
-      prisma.salon.findUnique.mockResolvedValue({ id: 'salon-1', status: 'SUSPENDED' });
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 'salon-1',
+        status: 'SUSPENDED',
+      });
       prisma.service.count.mockResolvedValue(0);
       prisma.chair.count.mockResolvedValue(0);
       prisma.salonStaff.count.mockResolvedValue(0);
 
-      const result = await service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never });
+      const result = await service.updateStatus('owner-1', 'salon-1', {
+        status: 'ACTIVE' as never,
+      });
 
       expect(result.status).toBe('ACTIVE');
       expect(prisma.service.count).not.toHaveBeenCalled();
     });
 
     it('leaves an already-ACTIVE salon unchanged and ungated', async () => {
-      prisma.salon.findUnique.mockResolvedValue({ id: 'salon-1', status: 'ACTIVE' });
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 'salon-1',
+        status: 'ACTIVE',
+      });
       prisma.service.count.mockResolvedValue(0);
       prisma.chair.count.mockResolvedValue(0);
       prisma.salonStaff.count.mockResolvedValue(0);
 
-      const result = await service.updateStatus('owner-1', 'salon-1', { status: 'ACTIVE' as never });
+      const result = await service.updateStatus('owner-1', 'salon-1', {
+        status: 'ACTIVE' as never,
+      });
 
       expect(result.status).toBe('ACTIVE');
       expect(prisma.service.count).not.toHaveBeenCalled();
       expect(prisma.salon.update).toHaveBeenCalledWith({
-        where: { id: 'salon-1' }, data: { status: 'ACTIVE' },
+        where: { id: 'salon-1' },
+        data: { status: 'ACTIVE' },
       });
     });
 
     it('never gates a PENDING salon being suspended', async () => {
       prisma.service.count.mockResolvedValue(0);
-      prisma.salon.update.mockResolvedValue({ id: 'salon-1', status: 'SUSPENDED' });
+      prisma.salon.update.mockResolvedValue({
+        id: 'salon-1',
+        status: 'SUSPENDED',
+      });
 
-      const result = await service.updateStatus('owner-1', 'salon-1', { status: 'SUSPENDED' as never });
+      const result = await service.updateStatus('owner-1', 'salon-1', {
+        status: 'SUSPENDED' as never,
+      });
 
       expect(result.status).toBe('SUSPENDED');
       expect(prisma.service.count).not.toHaveBeenCalled();

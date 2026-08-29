@@ -52,7 +52,9 @@ interface PrismaMock {
 describe('DashboardBookingsService', () => {
   let service: DashboardBookingsService;
   let prisma: PrismaMock;
-  let salonAccess: { assertAccess: jest.Mock<Promise<void>, [string, string]> };
+  let salonAccess: {
+    assertOwnerAccess: jest.Mock<Promise<void>, [string, string]>;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -62,7 +64,7 @@ describe('DashboardBookingsService', () => {
       },
     };
     salonAccess = {
-      assertAccess: jest
+      assertOwnerAccess: jest
         .fn<Promise<void>, [string, string]>()
         .mockResolvedValue(undefined),
     };
@@ -80,22 +82,41 @@ describe('DashboardBookingsService', () => {
   describe('authorization', () => {
     it('checks salon access before listing bookings', async () => {
       prisma.booking.findMany.mockResolvedValueOnce([]);
-      await service.list('owner1', 's1', undefined, undefined, undefined, undefined, undefined);
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith('owner1', 's1');
+      await service.list(
+        'owner1',
+        's1',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
+      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+        'owner1',
+        's1',
+      );
     });
 
     it('rejects an owner who does not operate this salon (cross-owner access)', async () => {
-      salonAccess.assertAccess.mockRejectedValueOnce(
+      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
-        service.list('owner-b', 's1', undefined, undefined, undefined, undefined, undefined),
+        service.list(
+          'owner-b',
+          's1',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(prisma.booking.findMany).not.toHaveBeenCalled();
     });
 
     it('rejects a booking-detail request for a booking in a different salon', async () => {
-      salonAccess.assertAccess.mockRejectedValueOnce(
+      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -118,34 +139,81 @@ describe('DashboardBookingsService', () => {
   describe('filters', () => {
     it('rejects an unknown filter value', async () => {
       await expect(
-        service.list('owner1', 's1', 'bogus', undefined, undefined, undefined, undefined),
+        service.list(
+          'owner1',
+          's1',
+          'bogus',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ),
       ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
       expect(prisma.booking.findMany).not.toHaveBeenCalled();
     });
 
     it('filters by status for completed/cancelled/no_show', async () => {
       prisma.booking.findMany.mockResolvedValue([]);
-      await service.list('owner1', 's1', 'completed', undefined, undefined, undefined, undefined);
+      await service.list(
+        'owner1',
+        's1',
+        'completed',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
       expect(prisma.booking.findMany).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ salonId: 's1', status: 'COMPLETED' }),
+          where: expect.objectContaining({
+            salonId: 's1',
+            status: 'COMPLETED',
+          }),
         }),
       );
 
-      await service.list('owner1', 's1', 'cancelled', undefined, undefined, undefined, undefined);
+      await service.list(
+        'owner1',
+        's1',
+        'cancelled',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
       expect(prisma.booking.findMany).toHaveBeenLastCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ status: 'CANCELLED' }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'CANCELLED' }),
+        }),
       );
 
-      await service.list('owner1', 's1', 'no_show', undefined, undefined, undefined, undefined);
+      await service.list(
+        'owner1',
+        's1',
+        'no_show',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
       expect(prisma.booking.findMany).toHaveBeenLastCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ status: 'NO_SHOW' }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({ status: 'NO_SHOW' }),
+        }),
       );
     });
 
     it('"all" applies no status filter and defaults when filter is omitted', async () => {
       prisma.booking.findMany.mockResolvedValue([]);
-      await service.list('owner1', 's1', undefined, undefined, undefined, undefined, undefined);
+      await service.list(
+        'owner1',
+        's1',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
       const call = prisma.booking.findMany.mock.calls[0][0] as {
         where: Record<string, unknown>;
       };
@@ -154,7 +222,15 @@ describe('DashboardBookingsService', () => {
 
     it('"upcoming" restricts to active statuses only', async () => {
       prisma.booking.findMany.mockResolvedValue([]);
-      await service.list('owner1', 's1', 'upcoming', undefined, undefined, undefined, undefined);
+      await service.list(
+        'owner1',
+        's1',
+        'upcoming',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
       const call = prisma.booking.findMany.mock.calls[0][0] as {
         where: { status: { in: string[] } };
       };
@@ -183,7 +259,15 @@ describe('DashboardBookingsService', () => {
 
     it('passes the cursor through as a Prisma cursor/skip pair', async () => {
       prisma.booking.findMany.mockResolvedValueOnce([]);
-      await service.list('owner1', 's1', 'all', 'b5', undefined, undefined, undefined);
+      await service.list(
+        'owner1',
+        's1',
+        'all',
+        'b5',
+        undefined,
+        undefined,
+        undefined,
+      );
       expect(prisma.booking.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ cursor: { id: 'b5' }, skip: 1 }),
       );

@@ -29,7 +29,9 @@ describe('StaffStatusService', () => {
       update: jest.Mock<Promise<unknown>, [unknown]>;
     };
   };
-  let salonAccess: { assertAccess: jest.Mock<Promise<void>, [string, string]> };
+  let salonAccess: {
+    assertOwnerAccess: jest.Mock<Promise<void>, [string, string]>;
+  };
   let realtime: { emitStaffStatusChanged: jest.Mock };
 
   beforeEach(async () => {
@@ -41,7 +43,7 @@ describe('StaffStatusService', () => {
       },
     };
     salonAccess = {
-      assertAccess: jest
+      assertOwnerAccess: jest
         .fn<Promise<void>, [string, string]>()
         .mockResolvedValue(undefined),
     };
@@ -85,7 +87,7 @@ describe('StaffStatusService', () => {
       StaffMemberStatus.ACTIVE,
     );
 
-    expect(salonAccess.assertAccess).toHaveBeenCalledWith('owner1', 's1');
+    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith('owner1', 's1');
     expect(result.status).toBe(StaffMemberStatus.ACTIVE);
     expect(realtime.emitStaffStatusChanged).toHaveBeenCalledWith(
       's1',
@@ -95,7 +97,7 @@ describe('StaffStatusService', () => {
 
   it('propagates SALON_ACCESS_DENIED when the owner has no UserRole membership at that salon', async () => {
     prisma.salonStaff.findUnique.mockResolvedValue(makeStaffRow());
-    salonAccess.assertAccess.mockRejectedValue(
+    salonAccess.assertOwnerAccess.mockRejectedValue(
       Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
     );
     const owner: AuthenticatedUser = {
@@ -106,6 +108,32 @@ describe('StaffStatusService', () => {
     await expect(
       service.updateStatus(owner, 'staff1', StaffMemberStatus.ACTIVE),
     ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    expect(prisma.salonStaff.update).not.toHaveBeenCalled();
+  });
+
+  it('denies a mixed-role user from managing another barber where they are only staff', async () => {
+    prisma.salonStaff.findUnique.mockResolvedValue(
+      makeStaffRow({ salonId: 'salon-b', userId: 'barber-b' }),
+    );
+    salonAccess.assertOwnerAccess.mockRejectedValue(
+      Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+    );
+    const ownerAtAStaffAtB: AuthenticatedUser = {
+      id: 'mixed-role-user',
+      roles: [Role.SALON_OWNER, Role.SALON_STAFF],
+    };
+
+    await expect(
+      service.updateStatus(
+        ownerAtAStaffAtB,
+        'staff1',
+        StaffMemberStatus.ACTIVE,
+      ),
+    ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      'mixed-role-user',
+      'salon-b',
+    );
     expect(prisma.salonStaff.update).not.toHaveBeenCalled();
   });
 
@@ -121,7 +149,7 @@ describe('StaffStatusService', () => {
 
     await service.updateStatus(self, 'staff1', StaffMemberStatus.ACTIVE);
 
-    expect(salonAccess.assertAccess).not.toHaveBeenCalled();
+    expect(salonAccess.assertOwnerAccess).not.toHaveBeenCalled();
     expect(prisma.salonStaff.update).toHaveBeenCalledWith({
       where: { id: 'staff1' },
       data: { status: StaffMemberStatus.ACTIVE },
@@ -142,13 +170,17 @@ describe('StaffStatusService', () => {
   });
 
   describe('getMe', () => {
-    it('resolves the caller\'s own SalonStaff row at this salon', async () => {
+    it("resolves the caller's own SalonStaff row at this salon", async () => {
       prisma.salonStaff.findFirst.mockResolvedValue(makeStaffRow());
       const result = await service.getMe('user-staff1', 's1');
       expect(prisma.salonStaff.findFirst).toHaveBeenCalledWith({
         where: { userId: 'user-staff1', salonId: 's1' },
       });
-      expect(result).toEqual({ id: 'staff1', displayName: 'Marcus', status: StaffMemberStatus.INACTIVE });
+      expect(result).toEqual({
+        id: 'staff1',
+        displayName: 'Marcus',
+        status: StaffMemberStatus.INACTIVE,
+      });
     });
 
     it('returns null (not an error) when this user has no roster row at this salon', async () => {

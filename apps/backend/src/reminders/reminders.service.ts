@@ -44,12 +44,18 @@ export class RemindersService {
    * without simulating cron timing. Returns how many reminders were sent. */
   async sendDueReminders(): Promise<number> {
     const now = new Date();
-    const windowEnd = new Date(now.getTime() + REMINDER_WINDOW_MINUTES * 60_000);
-    const windowStart = new Date(now.getTime() + REMINDER_MIN_LEAD_MINUTES * 60_000);
+    const windowEnd = new Date(
+      now.getTime() + REMINDER_WINDOW_MINUTES * 60_000,
+    );
+    const windowStart = new Date(
+      now.getTime() + REMINDER_MIN_LEAD_MINUTES * 60_000,
+    );
 
     const due = await this.prisma.booking.findMany({
       where: {
-        status: { in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT] },
+        status: {
+          in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+        },
         reminderSentAt: null,
         slotStart: { gte: windowStart, lt: windowEnd },
       },
@@ -63,26 +69,41 @@ export class RemindersService {
       },
     });
 
+    let sentCount = 0;
     for (const booking of due) {
-      await this.notifications.notify(
-        booking.customerId,
-        'booking.reminder',
-        {
-          salonId: booking.salonId,
-          salonName: booking.salon.name,
-          serviceName: booking.service.name,
-          slotStart: booking.slotStart.toISOString(),
-        },
-        'account/bookings',
-      );
-      // Marked sent even if a later step somehow failed for a different booking in this batch —
-      // each booking is independent, no partial-batch rollback needed.
-      await this.prisma.booking.update({
-        where: { id: booking.id },
-        data: { reminderSentAt: now },
+      const sent = await this.prisma.$transaction(async (tx) => {
+        // The conditional marker is the durable claim. Concurrent instances contend on the same
+        // row; only one can change reminderSentAt from null. Because notification creation runs
+        // in this transaction too, an insertion failure rolls the claim back for the next sweep.
+        const claim = await tx.booking.updateMany({
+          where: {
+            id: booking.id,
+            status: {
+              in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+            },
+            reminderSentAt: null,
+            slotStart: { gte: windowStart, lt: windowEnd },
+          },
+          data: { reminderSentAt: now },
+        });
+        if (claim.count === 0) return false;
+
+        return this.notifications.notifyInTransaction(
+          tx,
+          booking.customerId,
+          'booking.reminder',
+          {
+            salonId: booking.salonId,
+            salonName: booking.salon.name,
+            serviceName: booking.service.name,
+            slotStart: booking.slotStart.toISOString(),
+          },
+          'account/bookings',
+        );
       });
+      if (sent) sentCount += 1;
     }
 
-    return due.length;
+    return sentCount;
   }
 }

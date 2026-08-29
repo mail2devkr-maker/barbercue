@@ -60,9 +60,9 @@ const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:sal
  *
  * SALON_OWNER-only at the controller level — staff/barbers use the live-queue dashboard, they do
  * not configure the shop. That role check is only the outer gate: every service method also calls
- * SalonAccessService.assertAccess(userId, salonId), which is what actually prevents one owner
+ * SalonAccessService.assertOwnerAccess(userId, salonId), which is what actually prevents one owner
  * from managing another owner's salon. Both layers are required — the role alone says "an owner",
- * assertAccess says "an owner *of this salon*".
+ * assertOwnerAccess says "an owner *of this salon*".
  *
  * Routes live under the existing `dashboard/salons/:salonId/...` shape. Note DashboardQueueController
  * separately owns `dashboard/staff/:id/status` (clock in/out for an existing barber) — a different

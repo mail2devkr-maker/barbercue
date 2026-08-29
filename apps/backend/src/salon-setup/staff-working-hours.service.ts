@@ -57,7 +57,7 @@ export class StaffWorkingHoursService {
     salonId: string,
     staffId: string,
   ): Promise<StaffWorkingHoursDto[]> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     await this.assertStaffInSalon(salonId, staffId);
 
     const rows = await this.prisma.staffWorkingHours.findMany({
@@ -84,7 +84,7 @@ export class StaffWorkingHoursService {
     staffId: string,
     input: SetStaffWorkingHoursInput,
   ): Promise<StaffWorkingHoursDto[]> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     await this.assertStaffInSalon(salonId, staffId);
 
     await this.prisma.$transaction(

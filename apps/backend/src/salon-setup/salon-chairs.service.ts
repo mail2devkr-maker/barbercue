@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 
 /**
- * Owner-side Chair CRUD, same assertAccess-first shape as SalonServicesService.
+ * Owner-side Chair CRUD, same assertOwnerAccess-first shape as SalonServicesService.
  *
  * Chairs matter more than they look: bookable capacity is `min(activeQualifiedStaff,
  * activeChairs)` (see computeSlotCapacity), so a salon with zero ACTIVE chairs has capacity 0 and
@@ -27,7 +27,7 @@ export class SalonChairsService {
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonChairDto[]> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const chairs = await this.prisma.chair.findMany({
       where: { salonId },
       orderBy: { label: 'asc' },
@@ -40,7 +40,7 @@ export class SalonChairsService {
     salonId: string,
     input: CreateSalonChairInput,
   ): Promise<SalonChairDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const created = await this.prisma.chair.create({
       data: { salonId, label: input.label, status: ChairStatus.ACTIVE },
     });
@@ -53,7 +53,7 @@ export class SalonChairsService {
     chairId: string,
     input: UpdateSalonChairInput,
   ): Promise<SalonChairDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const existing = await this.prisma.chair.findFirst({
       where: { id: chairId, salonId },
     });

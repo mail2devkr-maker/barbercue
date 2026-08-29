@@ -49,7 +49,7 @@ export class SalonStaffService {
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonStaffDto[]> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const staff = await this.prisma.salonStaff.findMany({
       where: { salonId },
       orderBy: [{ status: 'asc' }, { displayName: 'asc' }],
@@ -71,7 +71,7 @@ export class SalonStaffService {
     salonId: string,
     input: CreateSalonStaffInput,
   ): Promise<StaffInviteResultDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
 
     const phone = input.phone.trim();
     const email = input.email?.trim().toLowerCase() || null;
@@ -207,7 +207,7 @@ export class SalonStaffService {
     salonId: string,
     staffId: string,
   ): Promise<StaffInviteResultDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const staff = await this.prisma.salonStaff.findFirst({
       where: { id: staffId, salonId },
       include: { user: { select: { id: true, email: true } } },
@@ -251,7 +251,7 @@ export class SalonStaffService {
     staffId: string,
     input: UpdateSalonStaffInput,
   ): Promise<SalonStaffDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const existing = await this.prisma.salonStaff.findFirst({
       where: { id: staffId, salonId },
     });
@@ -273,7 +273,9 @@ export class SalonStaffService {
         // '' clears the field (see updateSalonStaffSchema's own doc comment) — every other value,
         // including undefined (omitted), leaves the column untouched.
         ...(input.bio !== undefined && { bio: input.bio || null }),
-        ...(input.photoUrl !== undefined && { photoUrl: input.photoUrl || null }),
+        ...(input.photoUrl !== undefined && {
+          photoUrl: input.photoUrl || null,
+        }),
         ...(input.yearsExperience !== undefined && {
           yearsExperience: input.yearsExperience,
         }),

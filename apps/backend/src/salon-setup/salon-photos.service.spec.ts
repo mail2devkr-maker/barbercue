@@ -13,15 +13,19 @@ describe('SalonPhotosService', () => {
     };
     $transaction: jest.Mock;
   };
-  let salonAccess: { assertAccess: jest.Mock };
-  let storage: { isConfigured: boolean; putPublicObject: jest.Mock; deleteObject: jest.Mock };
+  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let storage: {
+    isConfigured: boolean;
+    putPublicObject: jest.Mock;
+    deleteObject: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
       photo: {
-        findMany: jest.fn().mockResolvedValue([
-          { url: 'https://cdn.test/existing.jpg' },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ url: 'https://cdn.test/existing.jpg' }]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue({
           id: 'p1',
@@ -32,12 +36,16 @@ describe('SalonPhotosService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
-      $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
+      $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) =>
+        fn(prisma),
+      ),
     };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
     storage = {
       isConfigured: true,
-      putPublicObject: jest.fn().mockResolvedValue('https://cdn.test/uploaded.jpg'),
+      putPublicObject: jest
+        .fn()
+        .mockResolvedValue('https://cdn.test/uploaded.jpg'),
       deleteObject: jest.fn().mockResolvedValue(undefined),
     };
     service = new SalonPhotosService(
@@ -54,11 +62,14 @@ describe('SalonPhotosService', () => {
 
   it('checks salon access before listing', async () => {
     await service.list('owner-1', 'salon-1');
-    expect(salonAccess.assertAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
+    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      'owner-1',
+      'salon-1',
+    );
   });
 
   it('refuses to add a photo to another owner’s salon, writing nothing', async () => {
-    salonAccess.assertAccess.mockRejectedValue(
+    salonAccess.assertOwnerAccess.mockRejectedValue(
       Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
     );
     await expect(
@@ -112,12 +123,16 @@ describe('SalonPhotosService', () => {
 
   it('best-effort deletes the underlying storage object after removing the row', async () => {
     await service.remove('owner-1', 'salon-1', 'p1');
-    expect(storage.deleteObject).toHaveBeenCalledWith('https://cdn.test/existing.jpg');
+    expect(storage.deleteObject).toHaveBeenCalledWith(
+      'https://cdn.test/existing.jpg',
+    );
   });
 
   it('removal succeeds even when storage cleanup unexpectedly throws', async () => {
     storage.deleteObject.mockRejectedValue(new Error('disk unavailable'));
-    await expect(service.remove('owner-1', 'salon-1', 'p1')).resolves.toBeUndefined();
+    await expect(
+      service.remove('owner-1', 'salon-1', 'p1'),
+    ).resolves.toBeUndefined();
     expect(prisma.photo.deleteMany).toHaveBeenCalled();
   });
 
@@ -176,7 +191,9 @@ describe('SalonPhotosService', () => {
       expect(contentType).toBe('image/jpeg');
       expect(prisma.photo.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ url: 'https://cdn.test/uploaded.jpg' }),
+          data: expect.objectContaining({
+            url: 'https://cdn.test/uploaded.jpg',
+          }),
         }),
       );
     });
@@ -220,11 +237,16 @@ describe('SalonPhotosService', () => {
     });
 
     it('checks salon access before touching storage', async () => {
-      salonAccess.assertAccess.mockRejectedValue(
+      salonAccess.assertOwnerAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
-        service.createFromUpload('intruder', 'someone-elses-salon', jpeg(), meta),
+        service.createFromUpload(
+          'intruder',
+          'someone-elses-salon',
+          jpeg(),
+          meta,
+        ),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(storage.putPublicObject).not.toHaveBeenCalled();
     });

@@ -16,7 +16,7 @@ describe('SalonOperatingHoursService', () => {
     operatingHours: { findMany: jest.Mock; upsert: jest.Mock };
     $transaction: jest.Mock;
   };
-  let salonAccess: { assertAccess: jest.Mock };
+  let salonAccess: { assertOwnerAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -27,7 +27,7 @@ describe('SalonOperatingHoursService', () => {
       // The service passes an array of upsert promises; the real client runs them atomically.
       $transaction: jest.fn().mockResolvedValue([]),
     };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
     service = new SalonOperatingHoursService(
       prisma as never,
       salonAccess as never,
@@ -37,7 +37,7 @@ describe('SalonOperatingHoursService', () => {
   describe('list', () => {
     it('checks salon access before reading anything', async () => {
       await service.list('owner-1', 'salon-1');
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
         'owner-1',
         'salon-1',
       );
@@ -56,7 +56,12 @@ describe('SalonOperatingHoursService', () => {
 
     it('merges stored rows over the closed default, keeping Sunday..Saturday order', async () => {
       prisma.operatingHours.findMany.mockResolvedValue([
-        { dayOfWeek: 3, openTime: '10:00', closeTime: '19:30', isClosed: false },
+        {
+          dayOfWeek: 3,
+          openTime: '10:00',
+          closeTime: '19:30',
+          isClosed: false,
+        },
       ]);
 
       const result = await service.list('owner-1', 'salon-1');
@@ -72,7 +77,7 @@ describe('SalonOperatingHoursService', () => {
     });
 
     it('refuses to read another owner’s salon', async () => {
-      salonAccess.assertAccess.mockRejectedValue(
+      salonAccess.assertOwnerAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -102,13 +107,14 @@ describe('SalonOperatingHoursService', () => {
     it('upserts rather than deleting, so a concurrent availability read never sees zero hours', async () => {
       await service.set('owner-1', 'salon-1', { days: week() });
       expect(
-        (prisma.operatingHours as unknown as Record<string, unknown>).deleteMany,
+        (prisma.operatingHours as unknown as Record<string, unknown>)
+          .deleteMany,
       ).toBeUndefined();
       expect(prisma.operatingHours.upsert).toHaveBeenCalled();
     });
 
     it('checks access before writing anything', async () => {
-      salonAccess.assertAccess.mockRejectedValue(
+      salonAccess.assertOwnerAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -174,8 +180,11 @@ describe('SalonOperatingHoursService', () => {
 
     it('allows any times on a closed day, since availability ignores them', () => {
       expect(
-        parse(week({ 0: { openTime: '20:00', closeTime: '02:00', isClosed: true } }))
-          .success,
+        parse(
+          week({
+            0: { openTime: '20:00', closeTime: '02:00', isClosed: true },
+          }),
+        ).success,
       ).toBe(true);
     });
 

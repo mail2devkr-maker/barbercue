@@ -44,7 +44,9 @@ const ALL_CHANNELS: NotificationChannel[] = [
 // The only channel with a real, configured provider today — see EmailSender/ConsoleEmailSender's
 // own doc comment for why EMAIL isn't in this set (no production email provider is wired either).
 // Single source of truth for both notify()'s gating and getPreferences()'s `available` field.
-const AVAILABLE_CHANNELS = new Set<NotificationChannel>([NotificationChannel.IN_APP]);
+const AVAILABLE_CHANNELS = new Set<NotificationChannel>([
+  NotificationChannel.IN_APP,
+]);
 
 /**
  * Notification Center (Phase 11) — reuses the existing Notification model (channel/type/payload/
@@ -65,16 +67,40 @@ export class NotificationsService {
     type: NotificationType,
     payload?: Record<string, unknown>,
     deepLink?: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
+    return this.notifyWithDb(this.prisma, userId, type, payload, deepLink);
+  }
+
+  /** Used when the event marker and notification must commit together (appointment reminders).
+   * Keeping the preference read and notification insert on the caller's transaction prevents a
+   * claimed reminder from being lost when insertion fails. */
+  async notifyInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    type: NotificationType,
+    payload?: Record<string, unknown>,
+    deepLink?: string,
+  ): Promise<boolean> {
+    return this.notifyWithDb(tx, userId, type, payload, deepLink);
+  }
+
+  private async notifyWithDb(
+    db: PrismaService | Prisma.TransactionClient,
+    userId: string,
+    type: NotificationType,
+    payload?: Record<string, unknown>,
+    deepLink?: string,
+  ): Promise<boolean> {
     const category = TYPE_CATEGORY[type];
     const enabled = await this.isEnabled(
+      db,
       userId,
       category,
       NotificationChannel.IN_APP,
     );
-    if (!enabled) return;
+    if (!enabled) return false;
 
-    await this.prisma.notification.create({
+    await db.notification.create({
       data: {
         userId,
         channel: NotificationChannel.IN_APP,
@@ -85,6 +111,7 @@ export class NotificationsService {
         deepLink: deepLink ?? null,
       },
     });
+    return true;
   }
 
   async listMine(
@@ -117,7 +144,11 @@ export class NotificationsService {
    * notification ids. */
   async markRead(userId: string, notificationId: string): Promise<void> {
     await this.prisma.notification.updateMany({
-      where: { id: notificationId, userId, channel: NotificationChannel.IN_APP },
+      where: {
+        id: notificationId,
+        userId,
+        channel: NotificationChannel.IN_APP,
+      },
       data: { readAt: new Date() },
     });
   }
@@ -133,11 +164,12 @@ export class NotificationsService {
    * an unconfigured channel/category the user never touched behaves exactly like the mission's
    * default expectations, not "silently off." */
   private async isEnabled(
+    db: PrismaService | Prisma.TransactionClient,
     userId: string,
     category: NotificationCategory,
     channel: NotificationChannel,
   ): Promise<boolean> {
-    const row = await this.prisma.notificationPreference.findUnique({
+    const row = await db.notificationPreference.findUnique({
       where: { userId_category_channel: { userId, category, channel } },
     });
     return row?.enabled ?? true;
@@ -147,7 +179,9 @@ export class NotificationsService {
     const rows = await this.prisma.notificationPreference.findMany({
       where: { userId },
     });
-    const byKey = new Map(rows.map((r) => [`${r.category}:${r.channel}`, r.enabled]));
+    const byKey = new Map(
+      rows.map((r) => [`${r.category}:${r.channel}`, r.enabled]),
+    );
 
     return {
       categories: ALL_CATEGORIES.map((category) => ({

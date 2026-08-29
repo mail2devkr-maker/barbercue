@@ -20,7 +20,7 @@ import {
 const MAX_PHOTOS_PER_SALON = 12;
 
 /**
- * Owner-side salon photos, same assertAccess-first shape as the rest of salon-setup.
+ * Owner-side salon photos, same assertOwnerAccess-first shape as the rest of salon-setup.
  *
  * A photo reaches a salon by one of two routes, and both end at the same `Photo` row with the
  * same {url, altText, type} shape — there is one photo model here, not two:
@@ -55,7 +55,7 @@ export class SalonPhotosService {
   ) {}
 
   async list(userId: string, salonId: string): Promise<PhotoDto[]> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const photos = await this.prisma.photo.findMany({
       where: { salonId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -69,7 +69,7 @@ export class SalonPhotosService {
     salonId: string,
     input: CreateSalonPhotoInput,
   ): Promise<PhotoDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const count = await this.assertUnderLimit(salonId);
     return this.insert(salonId, input.url, input.altText, input.type, count);
   }
@@ -87,7 +87,7 @@ export class SalonPhotosService {
     file: Express.Multer.File | undefined,
     meta: SalonPhotoUploadMetaInput,
   ): Promise<PhotoDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const count = await this.assertUnderLimit(salonId);
 
     if (!file || file.size === 0) {
@@ -175,7 +175,7 @@ export class SalonPhotosService {
     salonId: string,
     photoId: string,
   ): Promise<void> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     // deleteMany scoped by salonId, not delete-by-id: an id alone would let an owner of salon A
     // delete a photo belonging to salon B. url is selected out first (deleteMany itself cannot
     // return the row) so the storage-side cleanup below knows what to remove.

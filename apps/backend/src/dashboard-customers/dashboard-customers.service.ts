@@ -77,7 +77,7 @@ export class DashboardCustomersService {
     offsetRaw: string | undefined,
     limitRaw: string | undefined,
   ): Promise<PaginatedResult<OwnerCustomerSummaryDto>> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
 
     const offset = this.resolveOffset(offsetRaw);
     const limit = this.resolveLimit(limitRaw);
@@ -117,7 +117,7 @@ export class DashboardCustomersService {
     salonId: string,
     customerId: string,
   ): Promise<OwnerCustomerSummaryDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const [summary] = await this.buildSummaries(salonId, [customerId]);
     if (!summary) {
       throw new AppException(
@@ -249,7 +249,8 @@ export class DashboardCustomersService {
     const serviceCounts = new Map<string, Map<string, number>>();
     for (const row of serviceGrouped) {
       if (!row.serviceId) continue;
-      const byService = serviceCounts.get(row.customerId) ?? new Map<string, number>();
+      const byService =
+        serviceCounts.get(row.customerId) ?? new Map<string, number>();
       byService.set(row.serviceId, row._count._all);
       serviceCounts.set(row.customerId, byService);
     }
@@ -261,7 +262,8 @@ export class DashboardCustomersService {
       // customerId to non-null based on the where clause, so this guard is required for TS, not
       // just defensive.
       if (!row.assignedStaffId || !row.customerId) continue;
-      const byStaff = staffCounts.get(row.customerId) ?? new Map<string, number>();
+      const byStaff =
+        staffCounts.get(row.customerId) ?? new Map<string, number>();
       byStaff.set(row.assignedStaffId, row._count._all);
       staffCounts.set(row.customerId, byStaff);
     }
@@ -320,7 +322,9 @@ export class DashboardCustomersService {
           completedCount: agg.completed,
           cancelledCount: agg.cancelled,
           noShowCount: agg.noShow,
-          firstVisitAt: agg.firstVisitAt ? agg.firstVisitAt.toISOString() : null,
+          firstVisitAt: agg.firstVisitAt
+            ? agg.firstVisitAt.toISOString()
+            : null,
           lastVisitAt: agg.lastVisitAt ? agg.lastVisitAt.toISOString() : null,
           preferredServiceName: agg.preferredServiceId
             ? (serviceNameById.get(agg.preferredServiceId) ?? null)

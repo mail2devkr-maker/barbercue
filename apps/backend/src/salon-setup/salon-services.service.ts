@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 
 /**
- * Owner-side Service catalog CRUD. Every method begins with SalonAccessService.assertAccess —
+ * Owner-side Service catalog CRUD. Every method begins with SalonAccessService.assertOwnerAccess —
  * the same salon-isolation primitive every other dashboard route uses — so an owner can only
  * ever touch their own salon's services.
  *
@@ -30,7 +30,7 @@ export class SalonServicesService {
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonServiceDto[]> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const services = await this.prisma.service.findMany({
       where: { salonId },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
@@ -44,7 +44,7 @@ export class SalonServicesService {
     salonId: string,
     input: CreateSalonServiceInput,
   ): Promise<SalonServiceDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const existingServices = await this.prisma.service.findMany({
       where: { salonId },
     });
@@ -84,7 +84,7 @@ export class SalonServicesService {
     serviceId: string,
     input: UpdateSalonServiceInput,
   ): Promise<SalonServiceDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     // Scoped by BOTH id and salonId: an owner with access to salon A must not be able to mutate
     // salon B's service by guessing its id.
     const existing = await this.prisma.service.findFirst({

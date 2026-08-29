@@ -55,7 +55,13 @@ describe('NotificationsService', () => {
 
   describe('notify', () => {
     it('creates an IN_APP notification that starts unread and already SENT', async () => {
-      await service.notify('user1', 'booking.confirmed', { salonName: 'Demo' }, 'bookings/b1');
+      const created = await service.notify(
+        'user1',
+        'booking.confirmed',
+        { salonName: 'Demo' },
+        'bookings/b1',
+      );
+      expect(created).toBe(true);
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: {
           userId: 'user1',
@@ -70,8 +76,12 @@ describe('NotificationsService', () => {
     });
 
     it('stores a null deepLink when none is given', async () => {
-      await service.notify('user1', 'queue.turn_approaching', { salonId: 's1' });
-      const call = prisma.notification.create.mock.calls[0][0] as { data: { deepLink: unknown } };
+      await service.notify('user1', 'queue.turn_approaching', {
+        salonId: 's1',
+      });
+      const call = prisma.notification.create.mock.calls[0][0] as {
+        data: { deepLink: unknown };
+      };
       expect(call.data.deepLink).toBeNull();
     });
   });
@@ -87,7 +97,9 @@ describe('NotificationsService', () => {
     });
 
     it('trims to the page size and sets nextCursor when there are more results', async () => {
-      const rows = Array.from({ length: 3 }, (_, i) => makeRow({ id: `n${i}` }));
+      const rows = Array.from({ length: 3 }, (_, i) =>
+        makeRow({ id: `n${i}` }),
+      );
       prisma.notification.findMany.mockResolvedValueOnce(rows);
       const result = await service.listMine('user1', undefined, 2);
       expect(result.items).toHaveLength(2);
@@ -128,7 +140,7 @@ describe('NotificationsService', () => {
   });
 
   describe('markAllRead', () => {
-    it('only touches this user\'s unread IN_APP notifications', async () => {
+    it("only touches this user's unread IN_APP notifications", async () => {
       await service.markAllRead('user1');
       expect(prisma.notification.updateMany).toHaveBeenCalledWith({
         where: { userId: 'user1', channel: 'IN_APP', readAt: null },
@@ -145,8 +157,11 @@ describe('NotificationsService', () => {
     });
 
     it('skips creating the notification when the user has explicitly disabled this category/channel', async () => {
-      prisma.notificationPreference.findUnique.mockResolvedValueOnce({ enabled: false });
-      await service.notify('user1', 'booking.confirmed');
+      prisma.notificationPreference.findUnique.mockResolvedValueOnce({
+        enabled: false,
+      });
+      const created = await service.notify('user1', 'booking.confirmed');
+      expect(created).toBe(false);
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
@@ -164,6 +179,33 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('notifyInTransaction', () => {
+    it('uses the supplied transaction for both preference gating and notification creation', async () => {
+      const tx = {
+        notificationPreference: {
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+        notification: {
+          create: jest.fn().mockResolvedValue({}),
+        },
+      };
+
+      const created = await service.notifyInTransaction(
+        tx as never,
+        'user1',
+        'booking.reminder',
+        { bookingId: 'b1' },
+        'account/bookings',
+      );
+
+      expect(created).toBe(true);
+      expect(tx.notificationPreference.findUnique).toHaveBeenCalled();
+      expect(tx.notification.create).toHaveBeenCalled();
+      expect(prisma.notificationPreference.findUnique).not.toHaveBeenCalled();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getPreferences', () => {
     it('returns every category x channel combination, defaulting to enabled', async () => {
       const result = await service.getPreferences('user1');
@@ -176,8 +218,12 @@ describe('NotificationsService', () => {
 
     it('reports IN_APP as the only available channel', async () => {
       const result = await service.getPreferences('user1');
-      const bookingUpdates = result.categories.find((c) => c.category === 'BOOKING_UPDATES')!;
-      const byChannel = Object.fromEntries(bookingUpdates.channels.map((c) => [c.channel, c.available]));
+      const bookingUpdates = result.categories.find(
+        (c) => c.category === 'BOOKING_UPDATES',
+      )!;
+      const byChannel = Object.fromEntries(
+        bookingUpdates.channels.map((c) => [c.channel, c.available]),
+      );
       expect(byChannel).toEqual({
         IN_APP: true,
         PUSH: false,
@@ -192,7 +238,9 @@ describe('NotificationsService', () => {
         { category: 'PROMOTIONAL', channel: 'IN_APP', enabled: false },
       ]);
       const result = await service.getPreferences('user1');
-      const promo = result.categories.find((c) => c.category === 'PROMOTIONAL')!;
+      const promo = result.categories.find(
+        (c) => c.category === 'PROMOTIONAL',
+      )!;
       const inApp = promo.channels.find((c) => c.channel === 'IN_APP')!;
       expect(inApp.enabled).toBe(false);
     });
@@ -210,12 +258,22 @@ describe('NotificationsService', () => {
           },
         },
         update: { enabled: false },
-        create: { userId: 'user1', category: 'PROMOTIONAL', channel: 'IN_APP', enabled: false },
+        create: {
+          userId: 'user1',
+          category: 'PROMOTIONAL',
+          channel: 'IN_APP',
+          enabled: false,
+        },
       });
     });
 
     it('returns the full updated preferences list', async () => {
-      const result = await service.setPreference('user1', 'PROMOTIONAL', 'IN_APP', false);
+      const result = await service.setPreference(
+        'user1',
+        'PROMOTIONAL',
+        'IN_APP',
+        false,
+      );
       expect(result.categories).toHaveLength(4);
     });
   });

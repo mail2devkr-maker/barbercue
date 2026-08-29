@@ -42,9 +42,22 @@ export class StaffStatusService {
       );
     }
 
-    if (actor.roles.includes(Role.SALON_OWNER)) {
-      await this.salonAccess.assertAccess(actor.id, staff.salonId);
-    } else if (staff.userId !== actor.id) {
+    if (staff.userId !== actor.id) {
+      if (!actor.roles.includes(Role.SALON_OWNER)) {
+        throw new AppException(
+          QueueErrorCode.NOT_YOUR_STAFF_PROFILE,
+          'You can only update your own clock-in status.',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      // A global SALON_OWNER role is not enough: someone may own salon A while being ordinary
+      // staff at salon B. Updating another barber at B therefore requires an owner membership
+      // specifically for B, not SalonAccessService's broader owner-or-staff check.
+      await this.salonAccess.assertOwnerAccess(actor.id, staff.salonId);
+    } else if (
+      !actor.roles.includes(Role.SALON_STAFF) &&
+      !actor.roles.includes(Role.SALON_OWNER)
+    ) {
       throw new AppException(
         QueueErrorCode.NOT_YOUR_STAFF_PROFILE,
         'You can only update your own clock-in status.',
@@ -73,6 +86,10 @@ export class StaffStatusService {
       where: { userId, salonId },
     });
     if (!staff) return null;
-    return { id: staff.id, displayName: staff.displayName, status: staff.status };
+    return {
+      id: staff.id,
+      displayName: staff.displayName,
+      status: staff.status,
+    };
   }
 }

@@ -3,7 +3,6 @@ import {
   BookingErrorCode,
   BookingStatus,
   QueueEntrySource,
-  QueueEntryStatus,
   ServiceSessionStatus,
   type HourCountDto,
   type OwnerAnalyticsDto,
@@ -52,7 +51,7 @@ export class DashboardAnalyticsService {
     fromRaw: string | undefined,
     toRaw: string | undefined,
   ): Promise<OwnerAnalyticsDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
 
     const { from, to } = this.resolveRange(rangeRaw, fromRaw, toRaw);
 
@@ -123,7 +122,8 @@ export class DashboardAnalyticsService {
     ]);
 
     const countByStatus = new Map<string, number>();
-    for (const row of statusCounts) countByStatus.set(row.status, row._count._all);
+    for (const row of statusCounts)
+      countByStatus.set(row.status, row._count._all);
 
     const { newCustomerCount, repeatCustomerCount } =
       await this.classifyCustomers(salonId, completedBookings, from);
@@ -174,7 +174,11 @@ export class DashboardAnalyticsService {
     if (range === 'custom' && fromRaw && toRaw) {
       const from = new Date(fromRaw);
       const to = new Date(toRaw);
-      if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && from < to) {
+      if (
+        !Number.isNaN(from.getTime()) &&
+        !Number.isNaN(to.getTime()) &&
+        from < to
+      ) {
         return { from, to };
       }
       throw new AppException(
@@ -188,7 +192,9 @@ export class DashboardAnalyticsService {
     const todayStart = istWallTimeToUtc(todayIst, '00:00');
     const to = new Date(todayStart.getTime() + 24 * 60 * 60_000);
     const daysBack = range === '7d' ? 7 : range === '30d' ? 30 : 1;
-    const from = new Date(todayStart.getTime() - (daysBack - 1) * 24 * 60 * 60_000);
+    const from = new Date(
+      todayStart.getTime() - (daysBack - 1) * 24 * 60 * 60_000,
+    );
     return { from, to };
   }
 
@@ -203,7 +209,9 @@ export class DashboardAnalyticsService {
     completedBookings: { customerId: string }[],
     from: Date,
   ): Promise<{ newCustomerCount: number; repeatCustomerCount: number }> {
-    const customerIds = [...new Set(completedBookings.map((b) => b.customerId))];
+    const customerIds = [
+      ...new Set(completedBookings.map((b) => b.customerId)),
+    ];
     if (customerIds.length === 0) {
       return { newCustomerCount: 0, repeatCustomerCount: 0 };
     }
@@ -218,7 +226,9 @@ export class DashboardAnalyticsService {
       _count: { _all: true },
     });
     const priorIds = new Set(priorVisitors.map((r) => r.customerId));
-    const repeatCustomerCount = customerIds.filter((id) => priorIds.has(id)).length;
+    const repeatCustomerCount = customerIds.filter((id) =>
+      priorIds.has(id),
+    ).length;
     return {
       newCustomerCount: customerIds.length - repeatCustomerCount,
       repeatCustomerCount,
@@ -229,7 +239,9 @@ export class DashboardAnalyticsService {
     samples: { joinedAt: Date; calledAt: Date | null }[],
   ): number | null {
     const waits = samples
-      .filter((s): s is { joinedAt: Date; calledAt: Date } => s.calledAt !== null)
+      .filter(
+        (s): s is { joinedAt: Date; calledAt: Date } => s.calledAt !== null,
+      )
       .map((s) => (s.calledAt.getTime() - s.joinedAt.getTime()) / 60_000);
     if (waits.length === 0) return null;
     return Math.round(waits.reduce((sum, m) => sum + m, 0) / waits.length);
@@ -239,7 +251,9 @@ export class DashboardAnalyticsService {
     sessions: { startedAt: Date; endedAt: Date | null }[],
   ): number | null {
     const durations = sessions
-      .filter((s): s is { startedAt: Date; endedAt: Date } => s.endedAt !== null)
+      .filter(
+        (s): s is { startedAt: Date; endedAt: Date } => s.endedAt !== null,
+      )
       .map((s) => (s.endedAt.getTime() - s.startedAt.getTime()) / 60_000);
     if (durations.length === 0) return null;
     return Math.round(

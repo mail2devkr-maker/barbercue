@@ -1,6 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ReviewErrorCode, type OwnerReviewDto, type PaginatedResult } from '@barbercue/shared';
+import {
+  ReviewErrorCode,
+  type OwnerReviewDto,
+  type PaginatedResult,
+} from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
@@ -9,10 +13,17 @@ const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
 
 const reviewInclude = {
-  booking: { select: { customer: { select: { phone: true, email: true } }, service: { select: { name: true } } } },
+  booking: {
+    select: {
+      customer: { select: { phone: true, email: true } },
+      service: { select: { name: true } },
+    },
+  },
 } satisfies Prisma.ReviewInclude;
 
-type ReviewWithDetails = Prisma.ReviewGetPayload<{ include: typeof reviewInclude }>;
+type ReviewWithDetails = Prisma.ReviewGetPayload<{
+  include: typeof reviewInclude;
+}>;
 
 /**
  * Owner-side view of Ratings & Reviews (Phase 16) — the response half of what the customer-facing
@@ -32,7 +43,7 @@ export class DashboardReviewsService {
     cursor: string | undefined,
     limitRaw: string | undefined,
   ): Promise<PaginatedResult<OwnerReviewDto>> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const limit = this.resolveLimit(limitRaw);
 
     const reviews = await this.prisma.review.findMany({
@@ -56,10 +67,12 @@ export class DashboardReviewsService {
     reviewId: string,
     ownerResponse: string,
   ): Promise<OwnerReviewDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     // Scoped by salonId, not just id — a staff/owner at salon A must never respond to a review
     // that belongs to salon B even if they somehow know its id.
-    const existing = await this.prisma.review.findFirst({ where: { id: reviewId, salonId } });
+    const existing = await this.prisma.review.findFirst({
+      where: { id: reviewId, salonId },
+    });
     if (!existing) {
       throw new AppException(
         ReviewErrorCode.REVIEW_NOT_FOUND,

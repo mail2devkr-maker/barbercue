@@ -81,7 +81,7 @@ export class DashboardBookingsService {
     from: string | undefined,
     to: string | undefined,
   ): Promise<PaginatedResult<OwnerBookingDetailDto>> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
 
     const filter = this.resolveFilter(filterRaw);
     const limit = this.resolveLimit(limitRaw);
@@ -122,7 +122,7 @@ export class DashboardBookingsService {
     salonId: string,
     bookingId: string,
   ): Promise<OwnerBookingDetailDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     // Scoped by salonId, not just id — an owner of salon A must never fetch a booking that
     // belongs to salon B even if they somehow know its id.
     const booking = await this.prisma.booking.findFirst({
@@ -169,7 +169,9 @@ export class DashboardBookingsService {
         const { end } = istDayBounds(new Date());
         return {
           slotStart: { gte: end },
-          status: { in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT] },
+          status: {
+            in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+          },
         };
       }
       case 'completed':
@@ -183,7 +185,9 @@ export class DashboardBookingsService {
     }
   }
 
-  private toOwnerDetailDto(booking: OwnerBookingWithDetails): OwnerBookingDetailDto {
+  private toOwnerDetailDto(
+    booking: OwnerBookingWithDetails,
+  ): OwnerBookingDetailDto {
     const latestEntry = booking.queueEntries[0];
     return {
       id: booking.id,
@@ -222,7 +226,9 @@ export class DashboardBookingsService {
       assignedStaffName: latestEntry?.assignedStaff?.displayName ?? null,
       createdAt: booking.createdAt.toISOString(),
       updatedAt: booking.updatedAt.toISOString(),
-      cancelledAt: booking.cancelledAt ? booking.cancelledAt.toISOString() : null,
+      cancelledAt: booking.cancelledAt
+        ? booking.cancelledAt.toISOString()
+        : null,
       hasReview: booking.reviews.length > 0,
     };
   }

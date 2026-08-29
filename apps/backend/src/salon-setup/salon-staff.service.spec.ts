@@ -31,7 +31,7 @@ describe('SalonStaffService', () => {
     passwordResetToken: { create: jest.Mock };
     $transaction: jest.Mock;
   };
-  let salonAccess: { assertAccess: jest.Mock };
+  let salonAccess: { assertOwnerAccess: jest.Mock };
   let emailSender: { sendPasswordReset: jest.Mock };
   const originalEnv = { ...process.env };
 
@@ -44,17 +44,15 @@ describe('SalonStaffService', () => {
           .mockImplementation(({ data }) =>
             Promise.resolve({ id: 'user-1', ...data }),
           ),
-        update: jest
-          .fn()
-          .mockImplementation(({ where, data }) =>
-            Promise.resolve({
-              id: where.id,
-              phone: null,
-              email: null,
-              status: 'ACTIVE',
-              ...data,
-            }),
-          ),
+        update: jest.fn().mockImplementation(({ where, data }) =>
+          Promise.resolve({
+            id: where.id,
+            phone: null,
+            email: null,
+            status: 'ACTIVE',
+            ...data,
+          }),
+        ),
       },
       userRole: { upsert: jest.fn().mockResolvedValue({}) },
       salonStaff: {
@@ -72,7 +70,7 @@ describe('SalonStaffService', () => {
         fn(prisma),
       ),
     };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
     emailSender = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
     process.env.NODE_ENV = 'test';
     process.env.WEB_BASE_URL = 'https://web.example.com';
@@ -88,7 +86,7 @@ describe('SalonStaffService', () => {
   });
 
   it('checks salon access before creating anything', async () => {
-    salonAccess.assertAccess.mockRejectedValue(
+    salonAccess.assertOwnerAccess.mockRejectedValue(
       Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
     );
     await expect(
@@ -106,6 +104,10 @@ describe('SalonStaffService', () => {
       phone: '+919876543210',
     });
 
+    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      'owner-1',
+      'salon-1',
+    );
     expect(prisma.user.create).toHaveBeenCalledWith({
       data: { phone: '+919876543210', status: 'ACTIVE' },
     });

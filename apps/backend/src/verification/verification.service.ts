@@ -41,7 +41,9 @@ export class VerificationService {
     salonId: string,
     input: SubmitVerificationInput,
   ): Promise<VerificationRequestDto> {
-    const salon = await this.prisma.salon.findUnique({ where: { id: salonId } });
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+    });
     if (!salon || salon.ownerUserId !== userId) {
       throw new AppException(
         VerificationErrorCode.SALON_NOT_FOUND,
@@ -49,8 +51,7 @@ export class VerificationService {
         HttpStatus.NOT_FOUND,
       );
     }
-    const existing = await this.prisma.verificationRequest.findUnique({ where: { salonId } });
-    const row = await this.upsert(existing, {
+    const row = await this.upsert({
       subjectType: VerificationSubjectType.SHOP,
       salonId,
       staffId: null,
@@ -66,7 +67,9 @@ export class VerificationService {
     staffId: string,
     input: SubmitVerificationInput,
   ): Promise<VerificationRequestDto> {
-    const salon = await this.prisma.salon.findUnique({ where: { id: salonId } });
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+    });
     if (!salon || salon.ownerUserId !== userId) {
       throw new AppException(
         VerificationErrorCode.SALON_NOT_FOUND,
@@ -74,7 +77,9 @@ export class VerificationService {
         HttpStatus.NOT_FOUND,
       );
     }
-    const staff = await this.prisma.salonStaff.findFirst({ where: { id: staffId, salonId } });
+    const staff = await this.prisma.salonStaff.findFirst({
+      where: { id: staffId, salonId },
+    });
     if (!staff) {
       throw new AppException(
         BookingErrorCode.STAFF_NOT_FOUND,
@@ -82,8 +87,7 @@ export class VerificationService {
         HttpStatus.NOT_FOUND,
       );
     }
-    const existing = await this.prisma.verificationRequest.findUnique({ where: { staffId } });
-    const row = await this.upsert(existing, {
+    const row = await this.upsert({
       subjectType: VerificationSubjectType.PROFESSIONAL,
       salonId: null,
       staffId,
@@ -93,8 +97,13 @@ export class VerificationService {
     return this.toDto(row);
   }
 
-  async getForSalon(userId: string, salonId: string): Promise<VerificationRequestDto | null> {
-    const salon = await this.prisma.salon.findUnique({ where: { id: salonId } });
+  async getForSalon(
+    userId: string,
+    salonId: string,
+  ): Promise<VerificationRequestDto | null> {
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+    });
     if (!salon || salon.ownerUserId !== userId) {
       throw new AppException(
         VerificationErrorCode.SALON_NOT_FOUND,
@@ -102,7 +111,9 @@ export class VerificationService {
         HttpStatus.NOT_FOUND,
       );
     }
-    const row = await this.prisma.verificationRequest.findUnique({ where: { salonId } });
+    const row = await this.prisma.verificationRequest.findUnique({
+      where: { salonId },
+    });
     return row ? this.toDto(row) : null;
   }
 
@@ -111,7 +122,9 @@ export class VerificationService {
     salonId: string,
     staffId: string,
   ): Promise<VerificationRequestDto | null> {
-    const salon = await this.prisma.salon.findUnique({ where: { id: salonId } });
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+    });
     if (!salon || salon.ownerUserId !== userId) {
       throw new AppException(
         VerificationErrorCode.SALON_NOT_FOUND,
@@ -119,7 +132,19 @@ export class VerificationService {
         HttpStatus.NOT_FOUND,
       );
     }
-    const row = await this.prisma.verificationRequest.findUnique({ where: { staffId } });
+    const staff = await this.prisma.salonStaff.findFirst({
+      where: { id: staffId, salonId },
+    });
+    if (!staff) {
+      throw new AppException(
+        BookingErrorCode.STAFF_NOT_FOUND,
+        'Staff member not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const row = await this.prisma.verificationRequest.findUnique({
+      where: { staffId },
+    });
     return row ? this.toDto(row) : null;
   }
 
@@ -128,74 +153,122 @@ export class VerificationService {
    * SUBMITTED/UNDER_REVIEW one may not (already pending); an APPROVED one may not (already done).
    * Every transition is also logged to AuditLog so history survives even though this row only
    * ever holds the latest state. */
-  private async upsert(
-    existing: VerificationRow | null,
-    args: {
-      subjectType: VerificationSubjectType;
-      salonId: string | null;
-      staffId: string | null;
-      submittedByUserId: string;
-      input: SubmitVerificationInput;
-    },
-  ): Promise<VerificationRow> {
-    if (existing) {
-      if (existing.status === VerificationStatus.APPROVED) {
-        throw new AppException(
-          VerificationErrorCode.VERIFICATION_ALREADY_APPROVED,
-          'This is already verified.',
-          HttpStatus.CONFLICT,
+  private async upsert(args: {
+    subjectType: VerificationSubjectType;
+    salonId: string | null;
+    staffId: string | null;
+    submittedByUserId: string;
+    input: SubmitVerificationInput;
+  }): Promise<VerificationRow> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const existing = args.salonId
+          ? await tx.verificationRequest.findUnique({
+              where: { salonId: args.salonId },
+            })
+          : await tx.verificationRequest.findUnique({
+              where: { staffId: args.staffId! },
+            });
+
+        if (existing) {
+          if (existing.status === VerificationStatus.APPROVED) {
+            throw new AppException(
+              VerificationErrorCode.VERIFICATION_ALREADY_APPROVED,
+              'This is already verified.',
+              HttpStatus.CONFLICT,
+            );
+          }
+          if (existing.status !== VerificationStatus.REJECTED) {
+            throw new AppException(
+              VerificationErrorCode.VERIFICATION_ALREADY_PENDING,
+              'A verification request is already pending review.',
+              HttpStatus.CONFLICT,
+            );
+          }
+
+          const claim = await tx.verificationRequest.updateMany({
+            where: { id: existing.id, status: VerificationStatus.REJECTED },
+            data: {
+              status: VerificationStatus.SUBMITTED,
+              evidenceNotes: args.input.evidenceNotes ?? null,
+              evidenceUrls: args.input.evidenceUrls ?? [],
+              submittedByUserId: args.submittedByUserId,
+              submittedAt: new Date(),
+              reviewedByAdminId: null,
+              reviewNotes: null,
+              reviewedAt: null,
+            },
+          });
+          if (claim.count === 0) {
+            throw new AppException(
+              VerificationErrorCode.VERIFICATION_ALREADY_PENDING,
+              'This request changed while it was being resubmitted. Refresh and try again.',
+              HttpStatus.CONFLICT,
+            );
+          }
+          await this.logAudit(
+            tx,
+            args.submittedByUserId,
+            'VERIFICATION_RESUBMITTED',
+            existing.id,
+            { subjectType: args.subjectType },
+          );
+          const updated = await tx.verificationRequest.findUnique({
+            where: { id: existing.id },
+          });
+          if (!updated) {
+            throw new AppException(
+              VerificationErrorCode.VERIFICATION_NOT_FOUND,
+              'Verification request not found.',
+              HttpStatus.NOT_FOUND,
+            );
+          }
+          return updated;
+        }
+
+        const created = await tx.verificationRequest.create({
+          data: {
+            subjectType: args.subjectType,
+            salonId: args.salonId,
+            staffId: args.staffId,
+            status: VerificationStatus.SUBMITTED,
+            evidenceNotes: args.input.evidenceNotes ?? null,
+            evidenceUrls: args.input.evidenceUrls ?? [],
+            submittedByUserId: args.submittedByUserId,
+          },
+        });
+        await this.logAudit(
+          tx,
+          args.submittedByUserId,
+          'VERIFICATION_SUBMITTED',
+          created.id,
+          { subjectType: args.subjectType },
         );
-      }
-      if (existing.status !== VerificationStatus.REJECTED) {
+        return created;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         throw new AppException(
           VerificationErrorCode.VERIFICATION_ALREADY_PENDING,
           'A verification request is already pending review.',
           HttpStatus.CONFLICT,
         );
       }
-      const updated = await this.prisma.verificationRequest.update({
-        where: { id: existing.id },
-        data: {
-          status: VerificationStatus.SUBMITTED,
-          evidenceNotes: args.input.evidenceNotes ?? null,
-          evidenceUrls: args.input.evidenceUrls ?? [],
-          submittedByUserId: args.submittedByUserId,
-          submittedAt: new Date(),
-          reviewedByAdminId: null,
-          reviewNotes: null,
-          reviewedAt: null,
-        },
-      });
-      await this.logAudit(args.submittedByUserId, 'VERIFICATION_RESUBMITTED', updated.id, {
-        subjectType: args.subjectType,
-      });
-      return updated;
+      throw error;
     }
-
-    const created = await this.prisma.verificationRequest.create({
-      data: {
-        subjectType: args.subjectType,
-        salonId: args.salonId,
-        staffId: args.staffId,
-        status: VerificationStatus.SUBMITTED,
-        evidenceNotes: args.input.evidenceNotes ?? null,
-        evidenceUrls: args.input.evidenceUrls ?? [],
-        submittedByUserId: args.submittedByUserId,
-      },
-    });
-    await this.logAudit(args.submittedByUserId, 'VERIFICATION_SUBMITTED', created.id, {
-      subjectType: args.subjectType,
-    });
-    return created;
   }
 
   private async logAudit(
+    tx: Prisma.TransactionClient,
     actorUserId: string,
     action: string,
     entityId: string,
     metadata: Record<string, unknown>,
   ): Promise<void> {
-    await this.prisma.auditLog.create({
+    await tx.auditLog.create({
       data: {
         actorUserId,
         action,

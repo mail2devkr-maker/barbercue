@@ -30,7 +30,7 @@ const UNSET_DAY: Omit<OperatingHoursDto, 'dayOfWeek'> = {
  * a shop registered through the product could take walk-ins via the queue but could never be
  * booked. This service is the write path.
  *
- * Same shape as SalonServicesService/SalonChairsService: assertAccess first, everything scoped by
+ * Same shape as SalonServicesService/SalonChairsService: assertOwnerAccess first, everything scoped by
  * salonId. The whole week is replaced in one transaction rather than exposing per-day CRUD — an
  * owner edits a schedule as a unit, and a partial save (Monday written, Tuesday failed) would
  * leave a shop half-open in a way nobody asked for.
@@ -44,7 +44,7 @@ export class SalonOperatingHoursService {
 
   /** Always returns exactly 7 entries, ordered Sunday..Saturday, so the UI has a stable shape. */
   async list(userId: string, salonId: string): Promise<OperatingHoursDto[]> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const rows = await this.prisma.operatingHours.findMany({
       where: { salonId },
     });
@@ -72,7 +72,7 @@ export class SalonOperatingHoursService {
     salonId: string,
     input: SetOperatingHoursInput,
   ): Promise<OperatingHoursDto[]> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
 
     await this.prisma.$transaction(
       input.days.map((day) =>

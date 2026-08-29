@@ -40,7 +40,7 @@ export class SalonActivationService {
     salonId: string,
     input: UpdateSalonStatusInput,
   ): Promise<SalonStatusResultDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
     });

@@ -17,12 +17,14 @@ describe('StaffWorkingHoursService', () => {
     staffWorkingHours: { findMany: jest.Mock; upsert: jest.Mock };
     $transaction: jest.Mock;
   };
-  let salonAccess: { assertAccess: jest.Mock };
+  let salonAccess: { assertOwnerAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
       salonStaff: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'staff-1', salonId: 'salon-1' }),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'staff-1', salonId: 'salon-1' }),
       },
       staffWorkingHours: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -30,14 +32,20 @@ describe('StaffWorkingHoursService', () => {
       },
       $transaction: jest.fn().mockResolvedValue([]),
     };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
-    service = new StaffWorkingHoursService(prisma as never, salonAccess as never);
+    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    service = new StaffWorkingHoursService(
+      prisma as never,
+      salonAccess as never,
+    );
   });
 
   describe('list', () => {
     it('checks salon access before reading anything', async () => {
       await service.list('owner-1', 'salon-1', 'staff-1');
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
+      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+        'owner-1',
+        'salon-1',
+      );
     });
 
     it('rejects a staffId that does not belong to this salon', async () => {
@@ -63,7 +71,12 @@ describe('StaffWorkingHoursService', () => {
 
     it('merges stored rows over the unrestricted default and marks them configured', async () => {
       prisma.staffWorkingHours.findMany.mockResolvedValue([
-        { dayOfWeek: 3, openTime: '10:00', closeTime: '19:30', isClosed: false },
+        {
+          dayOfWeek: 3,
+          openTime: '10:00',
+          closeTime: '19:30',
+          isClosed: false,
+        },
       ]);
 
       const result = await service.list('owner-1', 'salon-1', 'staff-1');
@@ -78,8 +91,8 @@ describe('StaffWorkingHoursService', () => {
       expect(result[0].configured).toBe(false);
     });
 
-    it('refuses to read another owner\'s salon', async () => {
-      salonAccess.assertAccess.mockRejectedValue(
+    it("refuses to read another owner's salon", async () => {
+      salonAccess.assertOwnerAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -109,17 +122,21 @@ describe('StaffWorkingHoursService', () => {
     it('rejects a staffId that does not belong to this salon before writing anything', async () => {
       prisma.salonStaff.findFirst.mockResolvedValue(null);
       await expect(
-        service.set('owner-1', 'salon-1', 'someone-elses-staff', { days: week() }),
+        service.set('owner-1', 'salon-1', 'someone-elses-staff', {
+          days: week(),
+        }),
       ).rejects.toMatchObject({ code: 'STAFF_NOT_FOUND' });
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('checks access before writing anything', async () => {
-      salonAccess.assertAccess.mockRejectedValue(
+      salonAccess.assertOwnerAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
-        service.set('intruder', 'someone-elses-salon', 'staff-1', { days: week() }),
+        service.set('intruder', 'someone-elses-salon', 'staff-1', {
+          days: week(),
+        }),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(prisma.staffWorkingHours.upsert).not.toHaveBeenCalled();
@@ -129,7 +146,8 @@ describe('StaffWorkingHoursService', () => {
   // Validation lives in the shared schema (reused verbatim from operatingHoursEntrySchema), so it
   // is exercised here directly rather than through a second HTTP-shaped test.
   describe('setStaffWorkingHoursSchema', () => {
-    const parse = (days: unknown) => setStaffWorkingHoursSchema.safeParse({ days });
+    const parse = (days: unknown) =>
+      setStaffWorkingHoursSchema.safeParse({ days });
 
     it('accepts a well-formed week', () => {
       expect(parse(week()).success).toBe(true);

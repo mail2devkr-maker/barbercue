@@ -26,13 +26,17 @@ describe('DashboardReviewsService', () => {
   let prisma: {
     review: { findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
   };
-  let salonAccess: { assertAccess: jest.Mock };
+  let salonAccess: { assertOwnerAccess: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
-      review: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn(), update: jest.fn() },
+      review: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
     };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         DashboardReviewsService,
@@ -46,7 +50,18 @@ describe('DashboardReviewsService', () => {
   describe('list', () => {
     it('checks salon access before listing', async () => {
       await service.list('u1', 's1', undefined, undefined);
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith('u1', 's1');
+      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith('u1', 's1');
+    });
+
+    it('does not query reviews when salon-scoped ownership is denied', async () => {
+      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+
+      await expect(
+        service.list('mixed-role-user', 'salon-b', undefined, undefined),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.review.findMany).not.toHaveBeenCalled();
     });
 
     it('maps rows to OwnerReviewDto, including customer contact and service name', async () => {
@@ -68,7 +83,9 @@ describe('DashboardReviewsService', () => {
     });
 
     it('paginates via nextCursor when there are more results than the page size', async () => {
-      const rows = Array.from({ length: 3 }, (_, i) => makeReviewRow({ id: `r${i}` }));
+      const rows = Array.from({ length: 3 }, (_, i) =>
+        makeReviewRow({ id: `r${i}` }),
+      );
       prisma.review.findMany.mockResolvedValueOnce(rows);
       const result = await service.list('u1', 's1', undefined, '2');
       expect(result.items).toHaveLength(2);
@@ -79,23 +96,31 @@ describe('DashboardReviewsService', () => {
   describe('respond', () => {
     it('checks salon access before responding', async () => {
       prisma.review.findFirst.mockResolvedValue(makeReviewRow());
-      prisma.review.update.mockResolvedValue(makeReviewRow({ ownerResponse: 'Thank you!' }));
+      prisma.review.update.mockResolvedValue(
+        makeReviewRow({ ownerResponse: 'Thank you!' }),
+      );
       await service.respond('u1', 's1', 'r1', 'Thank you!');
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith('u1', 's1');
+      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith('u1', 's1');
     });
 
     it('rejects responding to a review that does not belong to this salon', async () => {
       prisma.review.findFirst.mockResolvedValue(null);
-      await expect(service.respond('u1', 's1', 'r1', 'Thanks!')).rejects.toMatchObject({
+      await expect(
+        service.respond('u1', 's1', 'r1', 'Thanks!'),
+      ).rejects.toMatchObject({
         code: 'REVIEW_NOT_FOUND',
       });
     });
 
     it('scopes the lookup by both reviewId and salonId', async () => {
       prisma.review.findFirst.mockResolvedValue(makeReviewRow());
-      prisma.review.update.mockResolvedValue(makeReviewRow({ ownerResponse: 'Thanks!' }));
+      prisma.review.update.mockResolvedValue(
+        makeReviewRow({ ownerResponse: 'Thanks!' }),
+      );
       await service.respond('u1', 's1', 'r1', 'Thanks!');
-      expect(prisma.review.findFirst).toHaveBeenCalledWith({ where: { id: 'r1', salonId: 's1' } });
+      expect(prisma.review.findFirst).toHaveBeenCalledWith({
+        where: { id: 'r1', salonId: 's1' },
+      });
       expect(prisma.review.update).toHaveBeenCalledWith({
         where: { id: 'r1' },
         data: { ownerResponse: 'Thanks!' },

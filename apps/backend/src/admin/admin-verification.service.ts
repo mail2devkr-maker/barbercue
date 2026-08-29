@@ -69,57 +69,98 @@ export class AdminVerificationService {
     return this.toDto(row);
   }
 
-  async startReview(adminUserId: string, id: string): Promise<AdminVerificationRequestDto> {
-    const existing = await this.getRowOrThrow(id);
-    if (existing.status !== VerificationStatus.SUBMITTED) {
+  async startReview(
+    adminUserId: string,
+    id: string,
+  ): Promise<AdminVerificationRequestDto> {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.verificationRequest.updateMany({
+        where: { id, status: VerificationStatus.SUBMITTED },
+        data: {
+          status: VerificationStatus.UNDER_REVIEW,
+          reviewedByAdminId: adminUserId,
+        },
+      });
+      if (claim.count === 0) {
+        await this.throwTransitionOrNotFound(
+          tx,
+          id,
+          'Only a newly submitted request can be moved to under review.',
+        );
+      }
+      await this.logAudit(
+        tx,
+        adminUserId,
+        'VERIFICATION_REVIEW_STARTED',
+        id,
+        {},
+      );
+      return tx.verificationRequest.findUnique({
+        where: { id },
+        include: requestInclude,
+      });
+    });
+    if (!updated) {
       throw new AppException(
-        VerificationErrorCode.INVALID_VERIFICATION_TRANSITION,
-        'Only a newly submitted request can be moved to under review.',
-        HttpStatus.CONFLICT,
+        VerificationErrorCode.VERIFICATION_NOT_FOUND,
+        'Verification request not found.',
+        HttpStatus.NOT_FOUND,
       );
     }
-    const updated = await this.prisma.verificationRequest.update({
-      where: { id },
-      data: { status: VerificationStatus.UNDER_REVIEW },
-      include: requestInclude,
-    });
-    await this.logAudit(adminUserId, 'VERIFICATION_REVIEW_STARTED', id, {});
     return this.toDto(updated);
   }
 
   async decide(
     adminUserId: string,
     id: string,
-    decision: typeof VerificationStatus.APPROVED | typeof VerificationStatus.REJECTED,
+    decision:
+      typeof VerificationStatus.APPROVED | typeof VerificationStatus.REJECTED,
     reviewNotes: string | undefined,
   ): Promise<AdminVerificationRequestDto> {
-    const existing = await this.getRowOrThrow(id);
-    if (
-      existing.status !== VerificationStatus.SUBMITTED &&
-      existing.status !== VerificationStatus.UNDER_REVIEW
-    ) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.verificationRequest.updateMany({
+        where: {
+          id,
+          status: VerificationStatus.UNDER_REVIEW,
+          reviewedByAdminId: adminUserId,
+        },
+        data: {
+          status: decision,
+          reviewNotes: reviewNotes ?? null,
+          reviewedAt: new Date(),
+        },
+      });
+      if (claim.count === 0) {
+        await this.throwTransitionOrNotFound(
+          tx,
+          id,
+          'Start review before deciding, and refresh if another admin changed this request.',
+        );
+      }
+      await this.logAudit(tx, adminUserId, `VERIFICATION_${decision}`, id, {
+        reviewNotes: reviewNotes ?? null,
+      });
+      return tx.verificationRequest.findUnique({
+        where: { id },
+        include: requestInclude,
+      });
+    });
+    if (!updated) {
       throw new AppException(
-        VerificationErrorCode.INVALID_VERIFICATION_TRANSITION,
-        'This request has already been decided.',
-        HttpStatus.CONFLICT,
+        VerificationErrorCode.VERIFICATION_NOT_FOUND,
+        'Verification request not found.',
+        HttpStatus.NOT_FOUND,
       );
     }
-    const updated = await this.prisma.verificationRequest.update({
-      where: { id },
-      data: {
-        status: decision,
-        reviewedByAdminId: adminUserId,
-        reviewNotes: reviewNotes ?? null,
-        reviewedAt: new Date(),
-      },
-      include: requestInclude,
-    });
-    await this.logAudit(adminUserId, `VERIFICATION_${decision}`, id, { reviewNotes: reviewNotes ?? null });
     return this.toDto(updated);
   }
 
-  private async getRowOrThrow(id: string) {
-    const row = await this.prisma.verificationRequest.findUnique({ where: { id } });
+  private async throwTransitionOrNotFound(
+    tx: Prisma.TransactionClient,
+    id: string,
+    conflictMessage: string,
+  ): Promise<never> {
+    const row = await tx.verificationRequest.findUnique({ where: { id } });
     if (!row) {
       throw new AppException(
         VerificationErrorCode.VERIFICATION_NOT_FOUND,
@@ -127,7 +168,11 @@ export class AdminVerificationService {
         HttpStatus.NOT_FOUND,
       );
     }
-    return row;
+    throw new AppException(
+      VerificationErrorCode.INVALID_VERIFICATION_TRANSITION,
+      conflictMessage,
+      HttpStatus.CONFLICT,
+    );
   }
 
   private resolveLimit(limitRaw: string | undefined): number {
@@ -136,18 +181,23 @@ export class AdminVerificationService {
     return Math.min(parsed, MAX_PAGE_SIZE);
   }
 
-  private resolveStatusFilter(raw: string | undefined): VerificationStatus | undefined {
+  private resolveStatusFilter(
+    raw: string | undefined,
+  ): VerificationStatus | undefined {
     const values = Object.values(VerificationStatus) as string[];
-    return raw && values.includes(raw) ? (raw as VerificationStatus) : undefined;
+    return raw && values.includes(raw)
+      ? (raw as VerificationStatus)
+      : undefined;
   }
 
   private async logAudit(
+    tx: Prisma.TransactionClient,
     actorUserId: string,
     action: string,
     entityId: string,
     metadata: Record<string, unknown>,
   ): Promise<void> {
-    await this.prisma.auditLog.create({
+    await tx.auditLog.create({
       data: {
         actorUserId,
         action,

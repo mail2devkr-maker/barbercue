@@ -15,7 +15,9 @@ describe('DashboardAnalyticsService', () => {
     queueEntry: { count: jest.Mock; findMany: jest.Mock };
     serviceSession: { findMany: jest.Mock };
   };
-  let salonAccess: { assertAccess: jest.Mock<Promise<void>, [string, string]> };
+  let salonAccess: {
+    assertOwnerAccess: jest.Mock<Promise<void>, [string, string]>;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -33,7 +35,9 @@ describe('DashboardAnalyticsService', () => {
       serviceSession: { findMany: jest.fn().mockResolvedValue([]) },
     };
     salonAccess = {
-      assertAccess: jest.fn<Promise<void>, [string, string]>().mockResolvedValue(undefined),
+      assertOwnerAccess: jest
+        .fn<Promise<void>, [string, string]>()
+        .mockResolvedValue(undefined),
     };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -47,11 +51,11 @@ describe('DashboardAnalyticsService', () => {
 
   it('checks salon access before reading anything', async () => {
     await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
-    expect(salonAccess.assertAccess).toHaveBeenCalledWith('owner1', 's1');
+    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith('owner1', 's1');
   });
 
   it('rejects an owner who does not operate this salon', async () => {
-    salonAccess.assertAccess.mockRejectedValueOnce(
+    salonAccess.assertOwnerAccess.mockRejectedValueOnce(
       Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
     );
     await expect(
@@ -66,7 +70,8 @@ describe('DashboardAnalyticsService', () => {
       where: { slotStart: { gte: Date; lt: Date } };
     };
     const spanHours =
-      (call.where.slotStart.lt.getTime() - call.where.slotStart.gte.getTime()) / (60 * 60_000);
+      (call.where.slotStart.lt.getTime() - call.where.slotStart.gte.getTime()) /
+      (60 * 60_000);
     expect(spanHours).toBe(24);
   });
 
@@ -76,7 +81,8 @@ describe('DashboardAnalyticsService', () => {
       where: { slotStart: { gte: Date; lt: Date } };
     };
     const spanDays =
-      (call.where.slotStart.lt.getTime() - call.where.slotStart.gte.getTime()) / (24 * 60 * 60_000);
+      (call.where.slotStart.lt.getTime() - call.where.slotStart.gte.getTime()) /
+      (24 * 60 * 60_000);
     expect(spanDays).toBe(7);
   });
 
@@ -110,28 +116,66 @@ describe('DashboardAnalyticsService', () => {
       { status: 'CANCELLED', _count: { _all: 2 } },
       { status: 'NO_SHOW', _count: { _all: 1 } },
     ]);
-    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'today',
+      undefined,
+      undefined,
+    );
     expect(result.completedCount).toBe(4);
     expect(result.cancelledCount).toBe(2);
     expect(result.noShowCount).toBe(1);
   });
 
-  it('sums estimated service value from completed bookings\' service prices', async () => {
+  it("sums estimated service value from completed bookings' service prices", async () => {
     prisma.booking.findMany.mockResolvedValueOnce([
-      { customerId: 'c1', serviceId: 'sv1', service: { name: 'Haircut', price: decimal('300') } },
-      { customerId: 'c2', serviceId: 'sv1', service: { name: 'Haircut', price: decimal('300') } },
+      {
+        customerId: 'c1',
+        serviceId: 'sv1',
+        service: { name: 'Haircut', price: decimal('300') },
+      },
+      {
+        customerId: 'c2',
+        serviceId: 'sv1',
+        service: { name: 'Haircut', price: decimal('300') },
+      },
     ]);
-    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'today',
+      undefined,
+      undefined,
+    );
     expect(result.estimatedServiceValue).toBe(600);
   });
 
   it('ranks service popularity by completed-booking count, descending', async () => {
     prisma.booking.findMany.mockResolvedValueOnce([
-      { customerId: 'c1', serviceId: 'sv1', service: { name: 'Haircut', price: decimal('300') } },
-      { customerId: 'c2', serviceId: 'sv1', service: { name: 'Haircut', price: decimal('300') } },
-      { customerId: 'c3', serviceId: 'sv2', service: { name: 'Shave', price: decimal('150') } },
+      {
+        customerId: 'c1',
+        serviceId: 'sv1',
+        service: { name: 'Haircut', price: decimal('300') },
+      },
+      {
+        customerId: 'c2',
+        serviceId: 'sv1',
+        service: { name: 'Haircut', price: decimal('300') },
+      },
+      {
+        customerId: 'c3',
+        serviceId: 'sv2',
+        service: { name: 'Shave', price: decimal('150') },
+      },
     ]);
-    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'today',
+      undefined,
+      undefined,
+    );
     expect(result.servicePopularity).toEqual([
       { serviceId: 'sv1', name: 'Haircut', completedCount: 2 },
       { serviceId: 'sv2', name: 'Shave', completedCount: 1 },
@@ -140,17 +184,33 @@ describe('DashboardAnalyticsService', () => {
 
   it('classifies a customer with no prior completed visit as new, and one with a prior visit as repeat', async () => {
     prisma.booking.findMany.mockResolvedValueOnce([
-      { customerId: 'first-timer', serviceId: 'sv1', service: { name: 'Haircut', price: decimal('300') } },
-      { customerId: 'regular', serviceId: 'sv1', service: { name: 'Haircut', price: decimal('300') } },
+      {
+        customerId: 'first-timer',
+        serviceId: 'sv1',
+        service: { name: 'Haircut', price: decimal('300') },
+      },
+      {
+        customerId: 'regular',
+        serviceId: 'sv1',
+        service: { name: 'Haircut', price: decimal('300') },
+      },
     ]);
     prisma.booking.groupBy.mockImplementation((args: { by: string[] }) => {
       if (args.by.includes('customerId')) {
         // The "prior visitor" lookup — only "regular" has an earlier completed booking.
-        return Promise.resolve([{ customerId: 'regular', _count: { _all: 1 } }]);
+        return Promise.resolve([
+          { customerId: 'regular', _count: { _all: 1 } },
+        ]);
       }
       return Promise.resolve([]); // status groupBy
     });
-    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'today',
+      undefined,
+      undefined,
+    );
     expect(result.newCustomerCount).toBe(1);
     expect(result.repeatCustomerCount).toBe(1);
   });
@@ -161,12 +221,24 @@ describe('DashboardAnalyticsService', () => {
       { joinedAt, calledAt: new Date(joinedAt.getTime() + 10 * 60_000) },
       { joinedAt, calledAt: new Date(joinedAt.getTime() + 20 * 60_000) },
     ]);
-    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'today',
+      undefined,
+      undefined,
+    );
     expect(result.averageWaitMinutes).toBe(15);
   });
 
   it('returns null averageWaitMinutes when there are no called entries', async () => {
-    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'today',
+      undefined,
+      undefined,
+    );
     expect(result.averageWaitMinutes).toBeNull();
   });
 
@@ -190,30 +262,56 @@ describe('DashboardAnalyticsService', () => {
         chair: { label: 'Chair 1' },
       },
     ]);
-    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'today',
+      undefined,
+      undefined,
+    );
     expect(result.barberUtilization).toEqual([
-      { id: 'st1', displayName: 'Marcus', completedSessions: 2, totalServiceMinutes: 50 },
+      {
+        id: 'st1',
+        displayName: 'Marcus',
+        completedSessions: 2,
+        totalServiceMinutes: 50,
+      },
     ]);
     expect(result.chairUtilization).toEqual([
-      { id: 'ch1', displayName: 'Chair 1', completedSessions: 2, totalServiceMinutes: 50 },
+      {
+        id: 'ch1',
+        displayName: 'Chair 1',
+        completedSessions: 2,
+        totalServiceMinutes: 50,
+      },
     ]);
     expect(result.averageServiceDurationMinutes).toBe(25);
   });
 
   it('buckets bookings into peak/slow hours by IST hour-of-day', async () => {
     // 09:00 IST = 03:30 UTC, 14:00 IST = 08:30 UTC
-    prisma.booking.findMany.mockImplementation((args: { select?: { slotStart?: boolean } }) => {
-      if (args.select?.slotStart) {
-        return Promise.resolve([
-          { slotStart: new Date('2026-06-01T03:30:00.000Z') },
-          { slotStart: new Date('2026-06-01T03:45:00.000Z') },
-          { slotStart: new Date('2026-06-01T08:30:00.000Z') },
-        ]);
-      }
-      return Promise.resolve([]); // completed-bookings query
-    });
-    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    prisma.booking.findMany.mockImplementation(
+      (args: { select?: { slotStart?: boolean } }) => {
+        if (args.select?.slotStart) {
+          return Promise.resolve([
+            { slotStart: new Date('2026-06-01T03:30:00.000Z') },
+            { slotStart: new Date('2026-06-01T03:45:00.000Z') },
+            { slotStart: new Date('2026-06-01T08:30:00.000Z') },
+          ]);
+        }
+        return Promise.resolve([]); // completed-bookings query
+      },
+    );
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'today',
+      undefined,
+      undefined,
+    );
     expect(result.peakHours[0]).toEqual({ hour: 9, count: 2 });
-    expect(result.slowHours.some((h) => h.hour === 14 && h.count === 1)).toBe(true);
+    expect(result.slowHours.some((h) => h.hour === 14 && h.count === 1)).toBe(
+      true,
+    );
   });
 });

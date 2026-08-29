@@ -43,26 +43,32 @@ function makeBookingGroupBy(
       return Promise.resolve(rows);
     }
     if (args.where.status === 'COMPLETED') {
-      const rows = Object.entries(data.completed ?? {}).map(([customerId, v]) => ({
-        customerId,
-        _count: { _all: v.count },
-        _min: { slotStart: v.min ?? null },
-        _max: { slotStart: v.max ?? null },
-      }));
+      const rows = Object.entries(data.completed ?? {}).map(
+        ([customerId, v]) => ({
+          customerId,
+          _count: { _all: v.count },
+          _min: { slotStart: v.min ?? null },
+          _max: { slotStart: v.max ?? null },
+        }),
+      );
       return Promise.resolve(rows);
     }
     if (args.where.status === 'CANCELLED') {
-      const rows = Object.entries(data.cancelled ?? {}).map(([customerId, count]) => ({
-        customerId,
-        _count: { _all: count },
-      }));
+      const rows = Object.entries(data.cancelled ?? {}).map(
+        ([customerId, count]) => ({
+          customerId,
+          _count: { _all: count },
+        }),
+      );
       return Promise.resolve(rows);
     }
     if (args.where.status === 'NO_SHOW') {
-      const rows = Object.entries(data.noShow ?? {}).map(([customerId, count]) => ({
-        customerId,
-        _count: { _all: count },
-      }));
+      const rows = Object.entries(data.noShow ?? {}).map(
+        ([customerId, count]) => ({
+          customerId,
+          _count: { _all: count },
+        }),
+      );
       return Promise.resolve(rows);
     }
     // No status filter, by:['customerId'] only — either list()'s own page query (has `skip`,
@@ -71,10 +77,12 @@ function makeBookingGroupBy(
     if (typeof args.skip === 'number') {
       return Promise.resolve(pageRows);
     }
-    const rows = Object.entries(data.total ?? {}).map(([customerId, count]) => ({
-      customerId,
-      _count: { _all: count },
-    }));
+    const rows = Object.entries(data.total ?? {}).map(
+      ([customerId, count]) => ({
+        customerId,
+        _count: { _all: count },
+      }),
+    );
     return Promise.resolve(rows);
   });
 }
@@ -88,7 +96,9 @@ describe('DashboardCustomersService', () => {
     service: { findMany: jest.Mock };
     salonStaff: { findMany: jest.Mock };
   };
-  let salonAccess: { assertAccess: jest.Mock<Promise<void>, [string, string]> };
+  let salonAccess: {
+    assertOwnerAccess: jest.Mock<Promise<void>, [string, string]>;
+  };
 
   function setup(overrides: {
     total?: Record<string, number>;
@@ -104,8 +114,13 @@ describe('DashboardCustomersService', () => {
       _count: { _all: number };
     }[];
   }) {
-    prisma.booking.groupBy = makeBookingGroupBy(overrides, overrides.pageRows ?? []);
-    prisma.queueEntry.groupBy = jest.fn().mockResolvedValue(overrides.staffGroupRows ?? []);
+    prisma.booking.groupBy = makeBookingGroupBy(
+      overrides,
+      overrides.pageRows ?? [],
+    );
+    prisma.queueEntry.groupBy = jest
+      .fn()
+      .mockResolvedValue(overrides.staffGroupRows ?? []);
     prisma.user.findMany = jest.fn().mockResolvedValue(overrides.users ?? []);
   }
 
@@ -118,7 +133,9 @@ describe('DashboardCustomersService', () => {
       salonStaff: { findMany: jest.fn().mockResolvedValue([]) },
     };
     salonAccess = {
-      assertAccess: jest.fn<Promise<void>, [string, string]>().mockResolvedValue(undefined),
+      assertOwnerAccess: jest
+        .fn<Promise<void>, [string, string]>()
+        .mockResolvedValue(undefined),
     };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -134,11 +151,14 @@ describe('DashboardCustomersService', () => {
     it('checks salon access before reading anything', async () => {
       setup({ pageRows: [] });
       await service.list('owner1', 's1', undefined, undefined);
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith('owner1', 's1');
+      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+        'owner1',
+        's1',
+      );
     });
 
     it('rejects an owner who does not operate this salon', async () => {
-      salonAccess.assertAccess.mockRejectedValueOnce(
+      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -155,11 +175,17 @@ describe('DashboardCustomersService', () => {
     });
 
     it('encodes the next offset as a string cursor when more customers remain', async () => {
-      const pageRows = Array.from({ length: 21 }, (_, i) => ({ customerId: `c${i}` }));
+      const pageRows = Array.from({ length: 21 }, (_, i) => ({
+        customerId: `c${i}`,
+      }));
       setup({
         pageRows,
         total: Object.fromEntries(pageRows.map((r) => [r.customerId, 1])),
-        users: pageRows.map((r) => ({ id: r.customerId, phone: null, email: null })),
+        users: pageRows.map((r) => ({
+          id: r.customerId,
+          phone: null,
+          email: null,
+        })),
       });
       const result = await service.list('owner1', 's1', undefined, '20');
       expect(result.items).toHaveLength(20);
@@ -206,15 +232,18 @@ describe('DashboardCustomersService', () => {
       [2, 'repeat'],
       [FREQUENT_CUSTOMER_THRESHOLD - 1, 'repeat'],
       [FREQUENT_CUSTOMER_THRESHOLD, 'frequent'],
-    ])('segments a customer with %i completed visits as %s', async (count, expected) => {
-      setup({
-        total: { c1: count || 1 }, // total must be >0 for the customer to appear at all
-        completed: count > 0 ? { c1: { count } } : {},
-        users: [{ id: 'c1', phone: null, email: null }],
-      });
-      const result = await service.getOne('owner1', 's1', 'c1');
-      expect(result.segment).toBe(expected);
-    });
+    ])(
+      'segments a customer with %i completed visits as %s',
+      async (count, expected) => {
+        setup({
+          total: { c1: count || 1 }, // total must be >0 for the customer to appear at all
+          completed: count > 0 ? { c1: { count } } : {},
+          users: [{ id: 'c1', phone: null, email: null }],
+        });
+        const result = await service.getOne('owner1', 's1', 'c1');
+        expect(result.segment).toBe(expected);
+      },
+    );
 
     it('resolves preferredServiceName from the service with the highest completed count', async () => {
       setup({

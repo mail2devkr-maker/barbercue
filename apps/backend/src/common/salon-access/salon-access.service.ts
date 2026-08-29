@@ -15,11 +15,31 @@ export class SalonAccessService {
   constructor(private readonly prisma: PrismaService) {}
 
   async assertAccess(userId: string, salonId: string): Promise<void> {
+    await this.assertRoles(userId, salonId, [
+      Role.SALON_STAFF,
+      Role.SALON_OWNER,
+    ]);
+  }
+
+  /**
+   * Owner-only controllers still need a salon-scoped owner check. RolesGuard proves that the
+   * caller owns *a* salon, not necessarily this one; accepting a SALON_STAFF membership here
+   * would let an owner of salon A use owner-only routes at salon B where they are only staff.
+   */
+  async assertOwnerAccess(userId: string, salonId: string): Promise<void> {
+    await this.assertRoles(userId, salonId, [Role.SALON_OWNER]);
+  }
+
+  private async assertRoles(
+    userId: string,
+    salonId: string,
+    roles: Role[],
+  ): Promise<void> {
     const membership = await this.prisma.userRole.findFirst({
       where: {
         userId,
         salonId,
-        role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] },
+        role: { in: roles },
       },
     });
     if (!membership) {
