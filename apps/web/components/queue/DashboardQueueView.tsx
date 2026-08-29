@@ -15,7 +15,7 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
-import { getRealtimeSocket, joinSalonRoom } from "../../lib/realtime";
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
 import styles from "./queue.module.css";
@@ -282,11 +282,15 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     socket.on("queue.entry.called", onEvent);
     socket.on("staff.status.changed", onEvent);
     socket.on("queue.entry.reassigned", onEvent);
+    // Phase 15: a dropped/restored connection may have missed events entirely — resync once the
+    // socket is reconnected, rather than waiting for the next queue change to happen to notice.
+    const unsubscribeReconnect = onReconnect(() => void refetch());
     return () => {
       socket.off("queue.updated", onEvent);
       socket.off("queue.entry.called", onEvent);
       socket.off("staff.status.changed", onEvent);
       socket.off("queue.entry.reassigned", onEvent);
+      unsubscribeReconnect();
     };
   }, [salonId, refetch]);
 

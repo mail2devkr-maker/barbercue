@@ -66,6 +66,24 @@ async function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+// Phase 15 (Low-Network / Resilience Mode). A network-level failure (offline, DNS failure, the
+// backend unreachable) makes `fetch()` itself reject — no Response, no status code — which is a
+// completely different failure mode from a real 4xx/5xx and deserves a message that says so
+// rather than the generic fallback every caller's `catch` already uses for ApiError-shaped
+// errors. Status 0 is not a real HTTP status; it exists only to make this ApiError distinguishable
+// from every server-issued one (whose status is always >= 100).
+const NETWORK_OFFLINE_MESSAGE = "You appear to be offline. Check your connection and try again.";
+function networkOfflineError(): ApiError {
+  return new ApiError(0, { error: { code: "NETWORK_OFFLINE", message: NETWORK_OFFLINE_MESSAGE } });
+}
+async function fetchOrOffline(path: string, options: RequestInit): Promise<Response> {
+  try {
+    return await rawFetch(path, options);
+  } catch {
+    throw networkOfflineError();
+  }
+}
+
 /**
  * Every authenticated call goes through here. On a 401 (access token expired — a normal,
  * expected event every ~15 minutes per ARCHITECTURE.md §4), it attempts exactly one silent
@@ -73,12 +91,12 @@ async function tryRefresh(): Promise<boolean> {
  * 401 propagates so the caller (AuthProvider) can clear state and redirect to login.
  */
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  let res = await rawFetch(path, options);
+  let res = await fetchOrOffline(path, options);
 
   if (res.status === 401 && path !== REFRESH_PATH) {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      res = await rawFetch(path, options);
+      res = await fetchOrOffline(path, options);
     }
   }
 

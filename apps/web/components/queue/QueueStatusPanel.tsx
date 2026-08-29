@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { QUEUE_ENTRIES_PATH, type QueueEntryDetailDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
-import { getRealtimeSocket, joinSalonRoom } from "../../lib/realtime";
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import styles from "./queue.module.css";
 
 const ACTIVE_STATUSES = new Set(["WAITING", "CALLED", "IN_SERVICE"]);
@@ -97,11 +97,15 @@ export function QueueStatusPanel({
     socket.on("queue.updated", onQueueUpdated);
     socket.on("queue.entry.called", onEntryCalled);
     socket.on("queue.entry.wait_alert", onWaitAlert);
+    // Phase 15: the "updates automatically, no need to refresh" promise below only holds if a
+    // dropped connection resyncs on its own once restored.
+    const unsubscribeReconnect = onReconnect(refetch);
     return () => {
       cancelled = true;
       socket.off("queue.updated", onQueueUpdated);
       socket.off("queue.entry.called", onEntryCalled);
       socket.off("queue.entry.wait_alert", onWaitAlert);
+      unsubscribeReconnect();
     };
   }, [entry.salonId, entry.status, entry.id, onEntryChange]);
 

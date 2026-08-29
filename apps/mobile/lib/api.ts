@@ -1,5 +1,6 @@
 import { AUTH_PATHS } from '@barbercue/shared';
 import { deleteItem, getItem, setItem } from './secure-storage';
+import { reportNetworkFailure, reportNetworkSuccess } from './network-status';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api/v1';
 const REFRESH_TOKEN_KEY = 'barbercue_refresh_token';
@@ -84,18 +85,38 @@ async function tryRefresh(): Promise<boolean> {
   return refreshInFlight;
 }
 
+// Phase 15 (Low-Network / Resilience Mode) — same rationale as apps/web/lib/api.ts's own
+// networkOfflineError: a network-level failure (no connectivity, backend unreachable) makes
+// fetch() itself reject with no status code at all, which is a different failure mode from a real
+// 4xx/5xx and deserves a message that says so. Status 0 is not a real HTTP status; it exists only
+// to make this distinguishable from every server-issued ApiError.
+const NETWORK_OFFLINE_MESSAGE = 'You appear to be offline. Check your connection and try again.';
+function networkOfflineError(): ApiError {
+  return new ApiError(0, { error: { code: 'NETWORK_OFFLINE', message: NETWORK_OFFLINE_MESSAGE } });
+}
+async function fetchOrOffline(path: string, options: RequestInit): Promise<Response> {
+  try {
+    const res = await rawFetch(path, options);
+    reportNetworkSuccess();
+    return res;
+  } catch {
+    reportNetworkFailure();
+    throw networkOfflineError();
+  }
+}
+
 /**
  * Same contract as apps/web/lib/api.ts: on a 401 (expired access token — expected roughly every
  * 15 minutes), attempts exactly one silent refresh using the persisted refresh token and retries
  * once. This is "handle expired access tokens via refresh token" for mobile.
  */
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  let res = await rawFetch(path, options);
+  let res = await fetchOrOffline(path, options);
 
   if (res.status === 401 && path !== REFRESH_PATH) {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      res = await rawFetch(path, options);
+      res = await fetchOrOffline(path, options);
     }
   }
 

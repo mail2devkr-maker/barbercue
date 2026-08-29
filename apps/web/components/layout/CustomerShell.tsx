@@ -1,5 +1,6 @@
 import { CustomerHeader } from "./CustomerHeader";
 import { CustomerFooter } from "./CustomerFooter";
+import { OfflineBanner } from "./OfflineBanner";
 import styles from "./customer-shell.module.css";
 
 // Applied to public discovery pages (search/city/locality/salon-profile) and authenticated
@@ -9,6 +10,7 @@ import styles from "./customer-shell.module.css";
 export function CustomerShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={styles.shell}>
+      <OfflineBanner />
       <CustomerHeader />
       <div className={styles.main}>{children}</div>
       <CustomerFooter />

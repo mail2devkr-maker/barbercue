@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DASHBOARD_PATHS, type ChairOptionDto, type DashboardQueueDto, type QueueEntryDetailDto, type StaffStatusDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
-import { getRealtimeSocket, joinSalonRoom } from '../../lib/realtime';
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Card, Button, EmptyState, Skeleton, InlineError } from '../ui';
 
@@ -181,9 +181,11 @@ export function LiveQueuePanel({ salonId }: { salonId: string }) {
     }
     socket.on('queue.updated', onUpdate);
     socket.on('queue.entry.called', onUpdate);
+    const unsubscribeReconnect = onReconnect(() => void load()); // Phase 15: resync after reconnect
     return () => {
       socket.off('queue.updated', onUpdate);
       socket.off('queue.entry.called', onUpdate);
+      unsubscribeReconnect();
     };
   }, [salonId, load]);
 

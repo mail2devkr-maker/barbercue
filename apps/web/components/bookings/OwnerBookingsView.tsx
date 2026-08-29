@@ -11,7 +11,7 @@ import {
   type PaginatedResult,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
-import { getRealtimeSocket, joinSalonRoom } from "../../lib/realtime";
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
 import styles from "./bookings.module.css";
@@ -301,9 +301,13 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
 
     socket.on("booking.created", onCreated);
     socket.on("booking.cancelled", onCancelled);
+    // Phase 15: resync the list once the socket reconnects — a dropped connection may have
+    // missed a booking.created/cancelled event entirely, and there's no server-side replay.
+    const unsubscribeReconnect = onReconnect(() => void loadPage(filterRef.current, undefined, false));
     return () => {
       socket.off("booking.created", onCreated);
       socket.off("booking.cancelled", onCancelled);
+      unsubscribeReconnect();
     };
   }, [salonId, loadPage, playChime, speak]);
 

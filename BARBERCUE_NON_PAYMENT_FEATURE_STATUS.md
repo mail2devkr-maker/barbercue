@@ -174,7 +174,23 @@ addition a compile error. Deliberately NOT a general UI-string translation layer
 product stays English-only; that would be a much larger, separately-scoped effort.
 
 ## Phase 15 — Low-Network / Resilience Mode
-**NOT STARTED.**
+**DONE**, scoped to the two concrete gaps that actually existed: stale realtime state after a
+dropped connection, and unhelpful errors on a genuine network failure. (1) Realtime rejoin/resync:
+`getRealtimeSocket()` (web + mobile) now tracks joined salon rooms and re-emits `join:salon` on
+every reconnect — server-side room membership doesn't survive a dropped connection, so without
+this a client on flaky data would silently stop receiving `queue.updated`/etc. for a salon it's
+still viewing. A new `onReconnect()` helper additionally triggers a one-time REST resync (missed
+events are never replayed by the backend) in every realtime-consuming component: web's
+`DashboardQueueView`/`OwnerBookingsView`/`CapacitySummaryPanel`/customer `QueueStatusPanel`, and
+mobile's equivalents plus `LiveQueuePanel`. (2) Honest network errors: `apiFetch` (web + mobile)
+now distinguishes a network-level failure (offline, backend unreachable — `fetch()` itself
+rejects) from a real 4xx/5xx, surfacing a stable `NETWORK_OFFLINE` `ApiError` with a clear message
+instead of every caller's generic fallback text. A small `OfflineBanner` (web: `navigator.onLine`
++ online/offline events, mounted in both the customer and dashboard shells; mobile: driven by
+apiFetch's own success/failure reporting rather than a new native NetInfo dependency, mounted once
+in `App.tsx`) shows "you're offline" app-wide. Deliberately NOT a write-behind offline mutation
+queue (booking/queue actions still require a live connection to submit) — that's a much larger,
+separately-scoped effort with real conflict-resolution questions, not a client resilience fix.
 
 ## Phase 16 — Ratings & Reviews
 **NOT STARTED.** (Review model already exists in the schema from an earlier phase; this mission's

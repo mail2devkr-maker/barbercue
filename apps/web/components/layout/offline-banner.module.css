@@ -1,0 +1,11 @@
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--bc-warn);
+  color: #ffffff;
+  text-align: center;
+  padding: var(--bc-space-2) var(--bc-space-4);
+  font-size: var(--bc-text-sm);
+  font-weight: 600;
+}

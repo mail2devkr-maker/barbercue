@@ -4,7 +4,7 @@ import * as Speech from 'expo-speech';
 import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, voiceAnnouncementsFor, type QueueEntryDetailDto } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
-import { getRealtimeSocket, joinSalonRoom } from '../lib/realtime';
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../lib/realtime';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 
 const ACTIVE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
@@ -73,11 +73,15 @@ export function QueueStatusPanel({
     socket.on('queue.updated', onQueueUpdated);
     socket.on('queue.entry.called', onEntryCalled);
     socket.on('queue.entry.wait_alert', onWaitAlert);
+    // Phase 15 (Low-Network / Resilience Mode): resync once a dropped connection is restored — a
+    // missed queue.entry.called while offline should never leave a customer's screen stale.
+    const unsubscribeReconnect = onReconnect(refetch);
     return () => {
       cancelled = true;
       socket.off('queue.updated', onQueueUpdated);
       socket.off('queue.entry.called', onEntryCalled);
       socket.off('queue.entry.wait_alert', onWaitAlert);
+      unsubscribeReconnect();
     };
   }, [entry.salonId, entry.status, entry.id, entry.turnApproaching, onEntryChange, user?.preferredLanguage]);
 

@@ -3,7 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { StyleSheet, Text, View } from 'react-native';
 import { DASHBOARD_PATHS, type CapacitySummaryDto } from '@barbercue/shared';
 import { apiFetch } from '../../lib/api';
-import { getRealtimeSocket, joinSalonRoom } from '../../lib/realtime';
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 
 function capacityPath(salonId: string): string {
@@ -42,11 +42,13 @@ export function CapacitySummaryPanel({ salonId }: { salonId: string }) {
     socket.on('staff.status.changed', onEvent);
     socket.on('booking.created', onEvent);
     socket.on('booking.cancelled', onEvent);
+    const unsubscribeReconnect = onReconnect(load); // Phase 15: resync after a dropped connection
     return () => {
       socket.off('queue.updated', onEvent);
       socket.off('staff.status.changed', onEvent);
       socket.off('booking.created', onEvent);
       socket.off('booking.cancelled', onEvent);
+      unsubscribeReconnect();
     };
   }, [salonId, load]);
 

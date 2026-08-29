@@ -15,7 +15,7 @@ import {
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
-import { getRealtimeSocket, joinSalonRoom } from '../../lib/realtime';
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
@@ -191,9 +191,13 @@ export default function OwnerBookingsScreen({ route }: Props) {
 
     socket.on('booking.created', onCreated);
     socket.on('booking.cancelled', onCancelled);
+    // Phase 15: resync once the socket reconnects — a missed booking.created/cancelled while
+    // offline is never replayed by the backend.
+    const unsubscribeReconnect = onReconnect(() => void loadPage(filterRef.current, undefined, false));
     return () => {
       socket.off('booking.created', onCreated);
       socket.off('booking.cancelled', onCancelled);
+      unsubscribeReconnect();
     };
   }, [selectedSalonId, loadPage]);
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { DASHBOARD_PATHS, type CapacitySummaryDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
-import { getRealtimeSocket, joinSalonRoom } from "../../lib/realtime";
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import styles from "./capacity-summary.module.css";
 
 function capacityPath(salonId: string): string {
@@ -45,12 +45,14 @@ export function CapacitySummaryPanel({ salonId }: { salonId: string }) {
     socket.on("staff.status.changed", onEvent);
     socket.on("booking.created", onEvent);
     socket.on("booking.cancelled", onEvent);
+    const unsubscribeReconnect = onReconnect(load); // Phase 15: resync after a dropped connection
     return () => {
       cancelled = true;
       socket.off("queue.updated", onEvent);
       socket.off("staff.status.changed", onEvent);
       socket.off("booking.created", onEvent);
       socket.off("booking.cancelled", onEvent);
+      unsubscribeReconnect();
     };
   }, [salonId]);
 
