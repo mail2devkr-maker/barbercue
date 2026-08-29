@@ -21,6 +21,7 @@ import { SalonSetupModule } from './salon-setup/salon-setup.module';
 import { AdminModule } from './admin/admin.module';
 import { DashboardBookingsModule } from './dashboard-bookings/dashboard-bookings.module';
 import { DashboardCustomersModule } from './dashboard-customers/dashboard-customers.module';
+import { DashboardAnalyticsModule } from './dashboard-analytics/dashboard-analytics.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { DashboardCustomersModule } from './dashboard-customers/dashboard-custom
     AdminModule,
     DashboardBookingsModule,
     DashboardCustomersModule,
+    DashboardAnalyticsModule,
     // Feature modules (staff/chair roster CRUD, payments, reviews, admin) are added in later
     // phases per PROJECT_STRUCTURE.md.
   ],

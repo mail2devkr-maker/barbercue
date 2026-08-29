@@ -377,6 +377,53 @@ export interface OwnerCustomerSummaryDto {
   segment: CustomerSegment | null;
 }
 
+// ---------- Owner analytics & reporting (Phase 9) ----------
+
+export const OWNER_ANALYTICS_RANGES = ['today', '7d', '30d', 'custom'] as const;
+export type OwnerAnalyticsRange = (typeof OWNER_ANALYTICS_RANGES)[number];
+
+export interface UtilizationEntryDto {
+  id: string;
+  displayName: string;
+  completedSessions: number;
+  totalServiceMinutes: number;
+}
+
+export interface HourCountDto {
+  hour: number; // 0-23, IST wall-clock hour
+  count: number;
+}
+
+export interface ServicePopularityDto {
+  serviceId: string;
+  name: string;
+  completedCount: number;
+}
+
+// BarberCue does not process payment (see the mission's explicit scope), so this is never a
+// record of money actually collected - purely listed-price x completed-bookings within the range,
+// clearly labeled as an estimate everywhere it's shown. Never call this "revenue" in any UI copy.
+export interface OwnerAnalyticsDto {
+  from: string; // ISO 8601 — inclusive
+  to: string; // ISO 8601 — exclusive
+  currency: string | null;
+  appointmentsBooked: number;
+  completedCount: number;
+  cancelledCount: number;
+  noShowCount: number;
+  walkInCount: number;
+  newCustomerCount: number;
+  repeatCustomerCount: number;
+  averageWaitMinutes: number | null;
+  averageServiceDurationMinutes: number | null;
+  barberUtilization: UtilizationEntryDto[];
+  chairUtilization: UtilizationEntryDto[];
+  peakHours: HourCountDto[]; // top 5 busiest hours, descending by count
+  slowHours: HourCountDto[]; // bottom 5 hours that had at least one booking, ascending by count
+  servicePopularity: ServicePopularityDto[]; // descending by completedCount
+  estimatedServiceValue: number;
+}
+
 export interface QueueEntryDto {
   id: string;
   salonId: string;

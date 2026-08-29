@@ -143,6 +143,7 @@ export default function DashboardSettingsPage({
         <Link href={`/dashboard/salons/${salonId}/queue`}>Live queue</Link>
         <Link href={`/dashboard/salons/${salonId}/bookings`}>Bookings</Link>
         <Link href={`/dashboard/salons/${salonId}/customers`}>Customers</Link>
+        <Link href={`/dashboard/salons/${salonId}/analytics`}>Analytics</Link>
       </nav>
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
       {salon && (

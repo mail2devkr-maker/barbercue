@@ -213,6 +213,8 @@ export const DASHBOARD_PATHS = {
   workingHours: 'working-hours',
   // GET dashboard/salons/:salonId/customers[/:customerId] (Phase 8 — owner customer CRM).
   customers: 'customers',
+  // GET dashboard/salons/:salonId/analytics (Phase 9 — owner analytics/reporting).
+  analytics: 'analytics',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).
