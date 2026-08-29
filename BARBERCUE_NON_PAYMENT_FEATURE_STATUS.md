@@ -134,10 +134,19 @@ owner.walk_in.joined, staff staff.assigned. `GET notifications/mine[+unread-coun
 `POST notifications/:id/read`, `POST notifications/mine/read-all` — scoped by caller's own userId,
 no role restriction. Web `NotificationBell` (bell + unread badge + dropdown) shared by
 `DashboardHeader` and `CustomerHeader`. deepLinks point only at routes that actually exist (no
-per-booking detail page exists yet, so links go to the relevant list). Mobile UI deferred.
+per-booking detail page exists yet, so links go to the relevant list). Mobile UI added in Phase 12
+(see below) — full list screen for customer, unread badge for all three roles.
 
 ## Phase 12 — Appointment Reminders
-**NOT STARTED.**
+**DONE.** Commit `fa3d8ee`. `RemindersService` — `@nestjs/schedule` cron, every 5 minutes — sweeps
+CONFIRMED/PENDING_PAYMENT bookings entering a fixed 60-minute reminder window (5-minute minimum
+lead) and sends one `booking.reminder` in-app notification per booking, tracked via the new
+additive `Booking.reminderSentAt` column so the sweep never double-reminds. In-app/foreground only,
+per the mission — no background Android push invented (FCM V1 still unconfigured, tracked as
+BLOCKED below). Mobile: extracted the unread-count polling hook to `lib/notifications.ts`, wired a
+badge into all three tab navigators (customer/owner/staff), and added a full Notifications list
+screen for the customer app (mobile is the primary customer surface). Owner/staff get the badge
+only — their full list stays on web's `NotificationBell`, matching the owner-web-primary pattern.
 
 ## Phase 13 — Communication Preferences
 **NOT STARTED.**
@@ -228,7 +237,7 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 11): backend 522/522 tests passing (43
+**ONGOING, per-phase.** Current counts (after Phase 12): backend 527/527 tests passing (44
 suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (22
 static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
