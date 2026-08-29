@@ -117,8 +117,12 @@ deliberately never labeled revenue anywhere (listed-price x completed bookings, 
 doesn't process payment). Web page with Today/7d/30d range tabs. Mobile UI deferred.
 
 ## Phase 10 — Multi-Branch Experience
-**NOT STARTED.** (Existing salon-picker foundations from `SalonProvider`/`useSalon` predate this
-mission — not yet extended per this phase's requirements.)
+**DONE.** Commit `4aaaab1`. New `GET dashboard/overview` — aggregate-only (total/open shops,
+today's bookings, active queue) across every salon the caller owns, derived from their own
+UserRole rows (no separate authorization check needed). Web `DashboardHeader` gained a cross-shop
+switcher (shown when 2+ owned shops) that preserves the current sub-path across shops; shop-list
+page shows the aggregate overview and gained missing Bookings/Customers/Analytics card links.
+Mobile already had cross-shop switching via `SalonProvider`/`useSalon` (pre-existing).
 
 ## Phase 11 — Notification Center
 **NOT STARTED.**
@@ -215,8 +219,8 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 9): backend 510/510 tests passing (41 suites) ·
-shared/backend/web/mobile typecheck clean · web lint clean · web production build (22
+**ONGOING, per-phase.** Current counts (after Phase 10): backend 514/514 tests passing (42
+suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (22
 static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
 ## Phase 39 — Browser / Mobile Manual Validation
