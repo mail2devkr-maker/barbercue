@@ -497,6 +497,31 @@ export interface CapacitySummaryDto {
   upcomingBookings: number;
 }
 
+// ---------- Notification Center (Phase 11) ----------
+
+// The concrete notification types this mission actually emits — kept as a closed union so
+// producing code can't typo a type string, and consuming UI can exhaustively switch on it for
+// icons/copy. Grows as new event sources wire in; never a catch-all "misc" bucket.
+export const NOTIFICATION_TYPES = [
+  'booking.confirmed',
+  'booking.cancelled',
+  'queue.turn_approaching',
+  'owner.booking.created',
+  'owner.booking.cancelled',
+  'owner.walk_in.joined',
+  'staff.assigned',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+export interface NotificationDto {
+  id: string;
+  type: NotificationType;
+  payload: Record<string, unknown> | null;
+  deepLink: string | null;
+  readAt: string | null; // ISO 8601, null = unread
+  createdAt: string; // ISO 8601
+}
+
 // GET dashboard/overview (Phase 10 — multi-branch experience). Aggregate-only across every salon
 // this owner operates — no per-salon breakdown, so this never becomes a way to peek at one shop's
 // numbers through a differently-authorized endpoint; every count here is a plain sum the owner

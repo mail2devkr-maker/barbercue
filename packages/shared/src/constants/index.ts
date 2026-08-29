@@ -225,3 +225,13 @@ export const PUBLIC_QUEUE_PATHS = {
   publicQueue: 'public-queue',
   join: 'join',
 } as const;
+
+// NotificationsController's `@Controller('notifications')` prefix (Phase 11 — Notification
+// Center). Every route here is scoped to the authenticated caller's own notifications only.
+export const NOTIFICATION_PATHS = {
+  notifications: 'notifications',
+  mine: 'mine',
+  unreadCount: 'unread-count',
+  read: 'read',
+  readAll: 'read-all',
+} as const;

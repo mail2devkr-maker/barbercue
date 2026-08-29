@@ -23,6 +23,7 @@ import { DashboardBookingsModule } from './dashboard-bookings/dashboard-bookings
 import { DashboardCustomersModule } from './dashboard-customers/dashboard-customers.module';
 import { DashboardAnalyticsModule } from './dashboard-analytics/dashboard-analytics.module';
 import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview
     DashboardCustomersModule,
     DashboardAnalyticsModule,
     DashboardOverviewModule,
+    NotificationsModule,
     // Feature modules (staff/chair roster CRUD, payments, reviews, admin) are added in later
     // phases per PROJECT_STRUCTURE.md.
   ],

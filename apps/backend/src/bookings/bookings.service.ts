@@ -18,6 +18,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 
@@ -42,6 +43,7 @@ const bookingDetailInclude = {
       addressLine: true,
       lat: true,
       lng: true,
+      ownerUserId: true,
       city: { select: { slug: true, countryCode: true } },
     },
   },
@@ -60,6 +62,7 @@ export class BookingsService {
     private readonly availability: AvailabilityService,
     private readonly cancellationPolicy: CancellationPolicyService,
     private readonly realtime: RealtimeGateway,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(
@@ -68,7 +71,7 @@ export class BookingsService {
     source: BookingSource,
     idempotencyKey: string,
   ): Promise<BookingDetailDto> {
-    await this.availability.getSalonOrThrow(input.salonId);
+    const salon = await this.availability.getSalonOrThrow(input.salonId);
     const service = await this.availability.getServiceOrThrow(
       input.salonId,
       input.serviceId,
@@ -201,6 +204,20 @@ export class BookingsService {
     // Only after the transaction has actually committed — never on a rolled-back create (e.g.
     // SLOT_FULL), since that never reaches this line.
     this.realtime.emitBookingCreated(input.salonId, bookingId);
+    await this.notifications.notify(
+      customerId,
+      'booking.confirmed',
+      { salonId: input.salonId, salonName: salon.name, serviceName: service.name },
+      // No per-booking detail route exists on web yet (the list at account/bookings is the whole
+      // surface) — the deep link must point at a route that actually exists, not an imagined one.
+      'account/bookings',
+    );
+    await this.notifications.notify(
+      salon.ownerUserId,
+      'owner.booking.created',
+      { salonId: input.salonId, bookingId, serviceName: service.name },
+      `dashboard/salons/${input.salonId}/bookings`,
+    );
 
     return this.getDetailOrThrow(bookingId, customerId);
   }
@@ -321,6 +338,18 @@ export class BookingsService {
     }, TRANSACTION_OPTIONS);
 
     this.realtime.emitBookingCancelled(updated.salonId, bookingId);
+    await this.notifications.notify(
+      customerId,
+      'booking.cancelled',
+      { salonId: updated.salonId, salonName: updated.salon.name },
+      'account/bookings',
+    );
+    await this.notifications.notify(
+      updated.salon.ownerUserId,
+      'owner.booking.cancelled',
+      { salonId: updated.salonId, bookingId },
+      `dashboard/salons/${updated.salonId}/bookings`,
+    );
 
     return {
       booking: this.toDetailDto(updated),

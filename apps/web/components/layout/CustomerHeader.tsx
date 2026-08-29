@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
+import { NotificationBell } from "./NotificationBell";
 import styles from "./customer-shell.module.css";
 
 const NAV_LINKS = [
@@ -72,7 +73,8 @@ export function CustomerHeader() {
           ))}
         </nav>
 
-        <div className={styles.accountArea} ref={accountAreaRef}>
+        <div className={styles.accountArea} ref={accountAreaRef} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {isAuthenticated && <NotificationBell />}
           {isAuthenticated ? (
             <>
               <button

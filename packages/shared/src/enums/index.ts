@@ -205,6 +205,8 @@ export const NotificationChannel = {
   SMS: 'SMS',
   PUSH: 'PUSH',
   EMAIL: 'EMAIL',
+  // Phase 11 (Notification Center) — see the Prisma schema's own doc comment on this value.
+  IN_APP: 'IN_APP',
 } as const;
 export type NotificationChannel = (typeof NotificationChannel)[keyof typeof NotificationChannel];
 

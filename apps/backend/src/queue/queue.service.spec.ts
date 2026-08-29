@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { AvailabilityService } from '../bookings/availability.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 function lastCallData(
   mock: jest.Mock<Promise<unknown>, [unknown]>,
@@ -71,6 +72,7 @@ interface PrismaMock {
   salonStaff: {
     count: jest.Mock<Promise<number>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+    findUnique: jest.Mock<Promise<unknown>, [unknown]>;
   };
   service: { aggregate: jest.Mock<Promise<unknown>, [unknown]> };
   booking: {
@@ -99,6 +101,7 @@ describe('QueueService', () => {
     emitQueueEntryReassigned: jest.Mock;
     emitQueueEntryWaitAlert: jest.Mock;
   };
+  let notifications: { notify: jest.Mock<Promise<void>, [string, string, unknown?, string?]> };
 
   beforeEach(async () => {
     prisma = {
@@ -139,6 +142,9 @@ describe('QueueService', () => {
         findMany: jest
           .fn<Promise<unknown[]>, [unknown]>()
           .mockResolvedValue([]),
+        findUnique: jest
+          .fn<Promise<unknown>, [unknown]>()
+          .mockResolvedValue({ userId: 'staff-user-1' }),
       },
       service: {
         aggregate: jest
@@ -164,7 +170,7 @@ describe('QueueService', () => {
     availability = {
       getSalonOrThrow: jest
         .fn<Promise<unknown>, [string]>()
-        .mockResolvedValue({ id: 's1', status: 'ACTIVE' }),
+        .mockResolvedValue({ id: 's1', status: 'ACTIVE', ownerUserId: 'owner1' }),
       getServiceOrThrow: jest
         .fn<Promise<unknown>, [string, string]>()
         .mockResolvedValue({ id: 'sv1', salonId: 's1' }),
@@ -187,6 +193,7 @@ describe('QueueService', () => {
       emitQueueEntryReassigned: jest.fn(),
       emitQueueEntryWaitAlert: jest.fn(),
     };
+    notifications = { notify: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -195,6 +202,7 @@ describe('QueueService', () => {
         { provide: AvailabilityService, useValue: availability },
         { provide: SalonAccessService, useValue: salonAccess },
         { provide: RealtimeGateway, useValue: realtime },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
     service = moduleRef.get(QueueService);

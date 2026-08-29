@@ -5,6 +5,7 @@ import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 function decimal(value: string) {
   return { toString: () => value } as unknown as number;
@@ -36,6 +37,7 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
       addressLine: '12 MG Road',
       lat: 12.97,
       lng: 77.59,
+      ownerUserId: 'owner1',
       city: { slug: 'bengaluru', countryCode: 'IN' },
     },
     service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
@@ -83,6 +85,7 @@ describe('BookingsService', () => {
     emitBookingCancelled: jest.Mock<void, [string, string]>;
     emitBookingRescheduled: jest.Mock<void, [string, string]>;
   };
+  let notifications: { notify: jest.Mock<Promise<void>, [string, string, unknown?, string?]> };
 
   beforeEach(async () => {
     prisma = {
@@ -114,7 +117,12 @@ describe('BookingsService', () => {
     availability = {
       getSalonOrThrow: jest
         .fn<Promise<unknown>, [string]>()
-        .mockResolvedValue({ id: 's1', status: 'ACTIVE' }),
+        .mockResolvedValue({
+          id: 's1',
+          status: 'ACTIVE',
+          name: 'BarberCue Demo Salon',
+          ownerUserId: 'owner1',
+        }),
       getServiceOrThrow: jest
         .fn<Promise<unknown>, [string, string]>()
         .mockResolvedValue({
@@ -144,6 +152,7 @@ describe('BookingsService', () => {
       emitBookingCancelled: jest.fn(),
       emitBookingRescheduled: jest.fn(),
     };
+    notifications = { notify: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -152,6 +161,7 @@ describe('BookingsService', () => {
         { provide: AvailabilityService, useValue: availability },
         { provide: CancellationPolicyService, useValue: cancellationPolicy },
         { provide: RealtimeGateway, useValue: realtime },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
     service = moduleRef.get(BookingsService);

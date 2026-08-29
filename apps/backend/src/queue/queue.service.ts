@@ -32,6 +32,7 @@ import {
   utcToIstDateStr,
 } from '../bookings/availability.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 
 // Allowed from 15 minutes before slotStart onward, no upper bound — the automatic no-show sweep
 // that would otherwise cap lateness isn't built in this phase (see the plan's explicit scoping).
@@ -66,6 +67,7 @@ export class QueueService {
     private readonly availability: AvailabilityService,
     private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ---------- Customer-facing ----------
@@ -141,7 +143,7 @@ export class QueueService {
     salonId: string,
     serviceId?: string,
   ): Promise<QueueEntryDetailDto> {
-    await this.availability.getSalonOrThrow(salonId);
+    const salon = await this.availability.getSalonOrThrow(salonId);
     if (serviceId)
       await this.availability.getServiceOrThrow(salonId, serviceId);
     await this.assertNotAlreadyInQueue(customerId);
@@ -163,6 +165,12 @@ export class QueueService {
 
     await this.recomputeEtas(salonId);
     this.realtime.emitQueueUpdated(salonId);
+    await this.notifications.notify(
+      salon.ownerUserId,
+      'owner.walk_in.joined',
+      { salonId },
+      `dashboard/salons/${salonId}/queue`,
+    );
     return this.getDetailOrThrow(entryId);
   }
 
@@ -565,6 +573,20 @@ export class QueueService {
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitQueueUpdated(entry.salonId);
+
+    const assignedStaff = await this.prisma.salonStaff.findUnique({
+      where: { id: input.staffId },
+      select: { userId: true },
+    });
+    if (assignedStaff) {
+      await this.notifications.notify(
+        assignedStaff.userId,
+        'staff.assigned',
+        { salonId: entry.salonId, queueEntryId: entryId },
+        `dashboard/salons/${entry.salonId}/queue`,
+      );
+    }
+
     return this.getDetailOrThrow(entryId);
   }
 
@@ -943,6 +965,11 @@ export class QueueService {
           salonId,
           entry.customerId,
           entry.id,
+        );
+        await this.notifications.notify(
+          entry.customerId,
+          'queue.turn_approaching',
+          { salonId, queueEntryId: entry.id, estimatedWaitMinutes: eta },
         );
       }
     }

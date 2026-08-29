@@ -171,6 +171,11 @@ enum NotificationChannel {
   SMS
   PUSH
   EMAIL
+  // Phase 11 (Notification Center) — the only channel with no external provider to configure;
+  // every in-app notification is this channel, always immediately SENT (there is nothing to fail
+  // to deliver). SMS/PUSH/EMAIL stay reserved for when a real provider is actually wired
+  // (Phase 13's communication-preferences architecture) — this mission does not add one.
+  IN_APP
 }
 
 enum NotificationStatus {
@@ -889,6 +894,12 @@ model Notification {
   status    NotificationStatus  @default(PENDING)
   sentAt    DateTime?
   createdAt DateTime            @default(now())
+  // Phase 11 additions — an IN_APP notification is read/unread (null = unread) rather than the
+  // PENDING/SENT/FAILED delivery-attempt lifecycle SMS/PUSH/EMAIL rows use; deepLink is a client
+  // route (e.g. "owner/bookings/:id") the notification-center UI navigates to on tap, optional
+  // since not every notification type has one obvious destination.
+  readAt    DateTime?
+  deepLink  String?
 
   @@map("notifications")
 }

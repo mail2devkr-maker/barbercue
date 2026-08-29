@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { SalonWorkplaceDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
+import { NotificationBell } from "./NotificationBell";
 import styles from "./dashboard-shell.module.css";
 
 // Matches /dashboard/salons/:salonId(/rest...) — captures the salonId and everything after it, so
@@ -79,6 +80,7 @@ export function DashboardHeader() {
               ))}
             </select>
           )}
+          <NotificationBell />
           <Link href="/" className={styles.publicLink}>
             <span aria-hidden="true">←</span> Visit public site
           </Link>
