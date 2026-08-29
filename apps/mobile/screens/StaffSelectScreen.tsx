@@ -10,6 +10,28 @@ import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'StaffSelect'>;
 
+// A per-barber initial (not a generic brand mark) reads better here — kept as its own small
+// component with real onError handling so a broken photoUrl degrades to the same initial-letter
+// placeholder shown when there was never a photo at all, not a permanently-broken image icon.
+function StaffPhoto({ url, displayName }: { url: string | null; displayName: string }) {
+  const [failed, setFailed] = useState(false);
+  if (url && !failed) {
+    return (
+      <Image
+        source={{ uri: url }}
+        style={styles.cardPhoto}
+        accessibilityLabel={displayName}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={[styles.cardPhoto, styles.cardPhotoPlaceholder]}>
+      <Text style={styles.cardPhotoInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+    </View>
+  );
+}
+
 export default function StaffSelectScreen({ route, navigation }: Props) {
   const { salonId, serviceId, ...rest } = route.params;
   const [options, setOptions] = useState<StaffOptionDto[]>([]);
@@ -66,13 +88,7 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
           renderItem={({ item }) => (
             <Pressable style={styles.card} onPress={() => choose(item.id, item.displayName)}>
               <View style={styles.cardRow}>
-                {item.photoUrl ? (
-                  <Image source={{ uri: item.photoUrl }} style={styles.cardPhoto} accessibilityLabel={item.displayName} />
-                ) : (
-                  <View style={[styles.cardPhoto, styles.cardPhotoPlaceholder]}>
-                    <Text style={styles.cardPhotoInitial}>{item.displayName.charAt(0).toUpperCase()}</Text>
-                  </View>
-                )}
+                <StaffPhoto url={item.photoUrl} displayName={item.displayName} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>{item.displayName}</Text>
                   {item.yearsExperience !== null && (

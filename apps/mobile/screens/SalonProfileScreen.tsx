@@ -6,12 +6,35 @@ import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from '@barbe
 import type { SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Button, Skeleton, ErrorState } from '../components/ui';
+import { Screen, SectionHeader, Button, Skeleton, ErrorState, SafeImage } from '../components/ui';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonProfile'>;
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// A per-person initial (not the generic "BC" mark components/ui/SafeImage falls back to) reads
+// better for a team member than a brand placeholder — kept as its own small component rather than
+// SafeImage so a broken photoUrl degrades to the same initial-letter placeholder shown when there
+// was never a photo at all, not a generic mark.
+function TeamPhoto({ url, displayName }: { url: string | null; displayName: string }) {
+  const [failed, setFailed] = useState(false);
+  if (url && !failed) {
+    return (
+      <Image
+        source={{ uri: url }}
+        style={styles.teamPhoto}
+        accessibilityLabel={displayName}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <View style={[styles.teamPhoto, styles.teamPhotoPlaceholder]}>
+      <Text style={styles.teamPhotoInitial}>{displayName.charAt(0).toUpperCase()}</Text>
+    </View>
+  );
+}
 
 // Public discovery endpoint — same GET /salons/:countryCode/:citySlug/:salonSlug apps/web uses (B9).
 export default function SalonProfileScreen({ route, navigation }: Props) {
@@ -69,7 +92,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         {salon.photos.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoStrip}>
             {salon.photos.map((photo) => (
-              <Image key={photo.id} source={{ uri: photo.url }} style={styles.photo} accessibilityLabel={photo.altText ?? salon.name} />
+              <SafeImage key={photo.id} url={photo.url} alt={photo.altText ?? salon.name} style={styles.photo} />
             ))}
           </ScrollView>
         )}
@@ -126,13 +149,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.teamStrip}>
               {salon.team.map((member) => (
                 <View key={member.id} style={styles.teamCard}>
-                  {member.photoUrl ? (
-                    <Image source={{ uri: member.photoUrl }} style={styles.teamPhoto} accessibilityLabel={member.displayName} />
-                  ) : (
-                    <View style={[styles.teamPhoto, styles.teamPhotoPlaceholder]}>
-                      <Text style={styles.teamPhotoInitial}>{member.displayName.charAt(0).toUpperCase()}</Text>
-                    </View>
-                  )}
+                  <TeamPhoto url={member.photoUrl} displayName={member.displayName} />
                   <Text style={styles.teamName} numberOfLines={1}>
                     {member.displayName}
                     {member.verified && <Text style={styles.verifiedMark}> ✓</Text>}

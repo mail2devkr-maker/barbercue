@@ -11,6 +11,7 @@ import type {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { Button, LinkButton } from "../ui/Button";
+import { SalonImage } from "../ui/SalonImage";
 import styles from "./style-advisor.module.css";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -174,8 +175,7 @@ export function StyleAdvisorFlow() {
         <div className={styles.resultsGrid}>
           {results.map((r) => (
             <div key={r.styleId} className={styles.resultCard}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- provider-hosted preview URL, not a static/local asset next/image can optimize */}
-              <img src={r.previewUrl} alt={`Preview of the ${r.styleName} style`} className={styles.resultImg} />
+              <SalonImage url={r.previewUrl} alt={`Preview of the ${r.styleName} style`} aspectRatio="1 / 1" rounded={0} />
               <div className={styles.resultBody}>
                 <p className={styles.resultName}>{r.styleName}</p>
                 <p className={styles.resultMatch}>AI Style Match: {r.matchPercent}%</p>

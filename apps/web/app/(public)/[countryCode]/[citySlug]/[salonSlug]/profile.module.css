@@ -54,7 +54,16 @@
   margin: 0;
   font-size: clamp(2.5rem, 5vw, 4.4rem);
   letter-spacing: -0.045em;
-  line-height: 0.98;
+  /* Sub-1.0 line-height reads as tight/premium for a name that fits on one line, but once a
+     longer name wraps to 2-3 lines it pulls consecutive lines close enough for descenders and
+     ascenders to visibly overlap. 1.05 keeps the same tight display-type feel for the common
+     one-line case while leaving wrapped names legible. */
+  line-height: 1.05;
+  /* .hero has overflow: hidden — without a break rule, a long single-word name (no spaces to
+     wrap at) would silently clip against that boundary rather than wrap, cutting the name off
+     with no visual indication. overflow-wrap: anywhere breaks even mid-word only when a normal
+     word-boundary wrap isn't possible, so an ordinary multi-word name is completely unaffected. */
+  overflow-wrap: anywhere;
 }
 
 .ratingLine {

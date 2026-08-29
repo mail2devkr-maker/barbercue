@@ -13,7 +13,7 @@ import type {
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Card, Button, InlineError, Skeleton } from '../components/ui';
+import { Screen, SectionHeader, Card, Button, InlineError, Skeleton, SafeImage } from '../components/ui';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
 
 // Registered in both HomeStack and AccountStack with the identical `StyleAdvisor: undefined`
@@ -158,7 +158,7 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
           contentContainerStyle={styles.resultsList}
           renderItem={({ item }) => (
             <Card style={styles.resultCard}>
-              <Image source={{ uri: item.previewUrl }} style={styles.previewImage} />
+              <SafeImage url={item.previewUrl} alt={item.styleName} style={styles.previewImage} />
               <Text style={styles.cardTitle}>{item.styleName}</Text>
               <Text style={styles.cardSubtitle}>AI Style Match: {item.matchPercent}%</Text>
               <Button title="Try This Look" onPress={() => handleTryThisLook(item.styleName)} />

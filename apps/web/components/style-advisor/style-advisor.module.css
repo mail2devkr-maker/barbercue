@@ -176,13 +176,6 @@
   }
 }
 
-.resultImg {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  display: block;
-}
-
 .resultBody {
   padding: 14px;
 }

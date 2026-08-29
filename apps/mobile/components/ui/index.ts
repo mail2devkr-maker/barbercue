@@ -5,3 +5,4 @@ export { SectionHeader } from './SectionHeader';
 export { EmptyState } from './EmptyState';
 export { ErrorState, InlineError } from './ErrorState';
 export { Skeleton } from './Skeleton';
+export { SafeImage } from './SafeImage';

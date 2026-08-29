@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import { DISCOVERY_PATHS } from '@barbercue/shared';
 import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError } from '../components/ui';
+import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, SafeImage } from '../components/ui';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -131,11 +131,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                 })
               }
             >
-              {item.coverPhotoUrl ? (
-                <Image source={{ uri: item.coverPhotoUrl }} style={styles.cardImage} />
-              ) : (
-                <View style={styles.cardImagePlaceholder} />
-              )}
+              <SafeImage url={item.coverPhotoUrl} alt={item.name} style={styles.cardImage} />
               <View style={styles.cardBody}>
                 <Text style={styles.cardTitle}>
                   {item.name}
@@ -195,13 +191,6 @@ const styles = StyleSheet.create({
     marginBottom: space[3],
   },
   cardImage: { width: 72, height: 72, borderRadius: radius.sm, marginRight: space[3] },
-  cardImagePlaceholder: {
-    width: 72,
-    height: 72,
-    borderRadius: radius.sm,
-    marginRight: space[3],
-    backgroundColor: color.goldSoft,
-  },
   cardBody: { flex: 1, justifyContent: 'center' },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
   verifiedMark: { color: color.success, fontFamily: font.bodyBold },
