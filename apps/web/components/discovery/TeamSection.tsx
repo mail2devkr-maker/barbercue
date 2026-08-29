@@ -1,4 +1,5 @@
 import type { TeamMemberDto } from "@barbercue/shared";
+import { VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
 import { SalonImage } from "../ui/SalonImage";
 import styles from "./discovery-content.module.css";
 
@@ -23,7 +24,14 @@ export function TeamSection({ team }: { team: TeamMemberDto[] }) {
           <div className={styles.teamPhoto}>
             <SalonImage url={member.photoUrl} alt={member.displayName} aspectRatio="1 / 1" rounded={12} />
           </div>
-          <p className={styles.teamName}>{member.displayName}</p>
+          <p className={styles.teamName}>
+            {member.displayName}
+            {member.verified && (
+              <span title={VERIFICATION_BADGE_CAPTION} style={{ marginLeft: 4, color: "var(--bc-success)", fontSize: "0.8em" }}>
+                ✓
+              </span>
+            )}
+          </p>
           <p className={styles.teamMeta}>
             {ROLE_LABEL[member.roleInSalon] ?? member.roleInSalon}
             {member.yearsExperience !== null &&

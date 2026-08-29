@@ -137,7 +137,10 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                 <View style={styles.cardImagePlaceholder} />
               )}
               <View style={styles.cardBody}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardTitle}>
+                  {item.name}
+                  {item.verified && <Text style={styles.verifiedMark}> ✓</Text>}
+                </Text>
                 <Text style={styles.cardSubtitle}>{item.addressLine}</Text>
                 {item.ratingCount > 0 && (
                   <Text style={styles.cardMeta}>
@@ -201,6 +204,7 @@ const styles = StyleSheet.create({
   },
   cardBody: { flex: 1, justifyContent: 'center' },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
+  verifiedMark: { color: color.success, fontFamily: font.bodyBold },
   cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
   cardMeta: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.gold, marginTop: space[1] },
 });

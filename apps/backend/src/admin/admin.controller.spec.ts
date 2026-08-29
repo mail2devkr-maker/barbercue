@@ -11,14 +11,44 @@ describe('AdminController authorization', () => {
     ]);
   });
 
-  it('delegates only to the read-only monitoring operation', async () => {
+  it('delegates the read-only monitoring operation', async () => {
     const overview = { generatedAt: '2026-08-28T00:00:00.000Z' };
     const monitoring = { getOverview: jest.fn().mockResolvedValue(overview) };
-    const controller = new AdminController(monitoring as never);
+    const verification = {
+      list: jest.fn(),
+      getOne: jest.fn(),
+      startReview: jest.fn(),
+      decide: jest.fn(),
+    };
+    const controller = new AdminController(monitoring as never, verification as never);
     await expect(controller.overview()).resolves.toBe(overview);
-    expect(Object.getOwnPropertyNames(AdminController.prototype)).toEqual([
-      'constructor',
-      'overview',
-    ]);
+  });
+
+  // Phase 18 — the only mutating surface on this otherwise read-only controller: a human
+  // PLATFORM_ADMIN's explicit approve/reject decision, never an automated one.
+  it('delegates the verification review-queue operations', async () => {
+    const monitoring = { getOverview: jest.fn() };
+    const verification = {
+      list: jest.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      getOne: jest.fn().mockResolvedValue({ id: 'vr-1' }),
+      startReview: jest.fn().mockResolvedValue({ id: 'vr-1', status: 'UNDER_REVIEW' }),
+      decide: jest.fn().mockResolvedValue({ id: 'vr-1', status: 'APPROVED' }),
+    };
+    const controller = new AdminController(monitoring as never, verification as never);
+
+    await controller.listVerification('SUBMITTED', undefined, undefined);
+    expect(verification.list).toHaveBeenCalledWith('SUBMITTED', undefined, undefined);
+
+    await controller.getVerification('vr-1');
+    expect(verification.getOne).toHaveBeenCalledWith('vr-1');
+
+    await controller.startReview({ id: 'admin-1' } as never, 'vr-1');
+    expect(verification.startReview).toHaveBeenCalledWith('admin-1', 'vr-1');
+
+    await controller.decide({ id: 'admin-1' } as never, 'vr-1', {
+      decision: 'APPROVED',
+      reviewNotes: undefined,
+    } as never);
+    expect(verification.decide).toHaveBeenCalledWith('admin-1', 'vr-1', 'APPROVED', undefined);
   });
 });

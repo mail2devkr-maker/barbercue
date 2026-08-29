@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { DISCOVERY_PATHS, formatMoney } from '@barbercue/shared';
+import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from '@barbercue/shared';
 import type { SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
@@ -75,6 +75,11 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         )}
 
         <SectionHeader eyebrow="Salon" title={salon.name} subtitle={salon.addressLine} />
+        {salon.verified && (
+          <View style={styles.verifiedBadge}>
+            <Text style={styles.verifiedBadgeText}>✓ Verified — {VERIFICATION_BADGE_CAPTION}</Text>
+          </View>
+        )}
         {salon.ratingCount > 0 && (
           <Text style={styles.rating}>
             ★ {salon.ratingAverage?.toFixed(1)} · {salon.ratingCount} review{salon.ratingCount === 1 ? '' : 's'}
@@ -128,7 +133,10 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
                       <Text style={styles.teamPhotoInitial}>{member.displayName.charAt(0).toUpperCase()}</Text>
                     </View>
                   )}
-                  <Text style={styles.teamName} numberOfLines={1}>{member.displayName}</Text>
+                  <Text style={styles.teamName} numberOfLines={1}>
+                    {member.displayName}
+                    {member.verified && <Text style={styles.verifiedMark}> ✓</Text>}
+                  </Text>
                   {member.yearsExperience !== null && (
                     <Text style={styles.teamMeta}>
                       {member.yearsExperience} yr{member.yearsExperience === 1 ? '' : 's'} exp.
@@ -186,6 +194,15 @@ const styles = StyleSheet.create({
   photo: { width: 220, height: 150, borderRadius: radius.lg, marginRight: space[3] },
 
   rating: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.gold, marginTop: -space[2], marginBottom: space[2] },
+  verifiedBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: color.successSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: space[3],
+    paddingVertical: space[1],
+    marginBottom: space[2],
+  },
+  verifiedBadgeText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.success },
   description: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 20, color: color.muted, marginBottom: space[3] },
   queueButton: { marginBottom: space[5] },
 
@@ -217,6 +234,7 @@ const styles = StyleSheet.create({
   teamPhotoPlaceholder: { backgroundColor: color.goldSoft, alignItems: 'center', justifyContent: 'center' },
   teamPhotoInitial: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.gold },
   teamName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  verifiedMark: { color: color.success, fontFamily: font.bodyBold },
   teamMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
   teamBio: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1], lineHeight: 16 },
 

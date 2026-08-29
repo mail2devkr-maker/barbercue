@@ -26,6 +26,7 @@ function makeSalon(overrides: Partial<Record<string, unknown>> = {}) {
     photos: [],
     operatingHours: [],
     staff: [],
+    verification: null,
     ...overrides,
   };
 }
@@ -336,6 +337,7 @@ describe('SalonsService', () => {
               photoUrl: 'https://example.com/marcus.jpg',
               bio: 'Fades and tapers specialist.',
               yearsExperience: 8,
+              verification: { status: 'APPROVED' },
             },
           ],
         }),
@@ -344,6 +346,7 @@ describe('SalonsService', () => {
       expect(profile.team).toEqual([
         {
           id: 'st1',
+          verified: true,
           displayName: 'Marcus',
           roleInSalon: 'BARBER',
           photoUrl: 'https://example.com/marcus.jpg',

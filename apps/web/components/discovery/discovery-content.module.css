@@ -29,6 +29,23 @@
   grid-row: span 2;
 }
 
+.photoUnavailable {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: #eee8dd;
+  border-radius: var(--bc-radius-sm);
+  color: var(--bc-muted);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 8px;
+}
+
+.photoUnavailable:first-child:nth-last-child(n + 3) {
+  grid-row: span 2;
+}
+
 .dataTable {
   width: 100%;
   border-collapse: collapse;

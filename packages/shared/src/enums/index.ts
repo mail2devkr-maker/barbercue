@@ -376,6 +376,41 @@ export const ReviewErrorCode = {
 } as const;
 export type ReviewErrorCode = (typeof ReviewErrorCode)[keyof typeof ReviewErrorCode];
 
+// Phase 18 (Shop / Barber Verification Foundation) — foundation only: manual PLATFORM_ADMIN
+// review of owner-supplied evidence, never automated KYC/identity verification. See
+// VerificationRequest's own schema.prisma doc comment for the full lifecycle rationale.
+export const VerificationSubjectType = {
+  SHOP: 'SHOP',
+  PROFESSIONAL: 'PROFESSIONAL',
+} as const;
+export type VerificationSubjectType =
+  (typeof VerificationSubjectType)[keyof typeof VerificationSubjectType];
+
+// NOT_SUBMITTED is never a stored value — see VerificationRequest's own doc comment: absence of a
+// row IS "not submitted," the same "no row = default" convention used elsewhere in this schema.
+export const VerificationStatus = {
+  SUBMITTED: 'SUBMITTED',
+  UNDER_REVIEW: 'UNDER_REVIEW',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+export type VerificationStatus = (typeof VerificationStatus)[keyof typeof VerificationStatus];
+
+export const VerificationErrorCode = {
+  SALON_NOT_FOUND: 'SALON_NOT_FOUND',
+  STAFF_NOT_FOUND: 'STAFF_NOT_FOUND',
+  VERIFICATION_NOT_FOUND: 'VERIFICATION_NOT_FOUND',
+  // A SUBMITTED or UNDER_REVIEW request already exists for this subject — resubmission is only
+  // allowed after a REJECTED outcome (or before any submission at all).
+  VERIFICATION_ALREADY_PENDING: 'VERIFICATION_ALREADY_PENDING',
+  // Already APPROVED — re-verifying something already approved isn't a supported flow here.
+  VERIFICATION_ALREADY_APPROVED: 'VERIFICATION_ALREADY_APPROVED',
+  // e.g. deciding a request that isn't UNDER_REVIEW, or starting review on one that isn't SUBMITTED.
+  INVALID_VERIFICATION_TRANSITION: 'INVALID_VERIFICATION_TRANSITION',
+} as const;
+export type VerificationErrorCode =
+  (typeof VerificationErrorCode)[keyof typeof VerificationErrorCode];
+
 export const PremiumErrorCode = {
   PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
   // The dev-only test-activation endpoint was called outside a non-production environment — see

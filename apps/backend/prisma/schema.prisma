@@ -258,6 +258,11 @@ model User {
   ledgerEntries       CustomerLedgerEntry[]
   auditLogs           AuditLog[]
   premiumSubscriptions CustomerSubscription[]
+  // Phase 18 (Shop / Barber Verification Foundation) — an owner submitting evidence, and a
+  // PLATFORM_ADMIN reviewing it, are deliberately separate relations (never the same person in
+  // practice, and keeping them distinct makes that impossible to blur by accident).
+  submittedVerifications VerificationRequest[] @relation("VerificationSubmitter")
+  reviewedVerifications  VerificationRequest[] @relation("VerificationReviewer")
 
   @@map("users")
 }
@@ -570,6 +575,9 @@ model Salon {
   reviews               Review[]
   ledgerEntries         CustomerLedgerEntry[]
   staffChairAssignments StaffChairAssignment[]
+  // Phase 18 — at most one row (VerificationRequest.salonId is @@unique; NULL salonId rows, i.e.
+  // PROFESSIONAL-type requests, are unaffected by that constraint under Postgres NULLS DISTINCT).
+  verification          VerificationRequest?
 
   @@unique([cityId, slug])
   @@map("salons")
@@ -674,6 +682,8 @@ model SalonStaff {
   queueEntriesAssigned QueueEntry[]           @relation("AssignedStaff")
   preferredByBookings  Booking[]              @relation("BookingPreferredStaff")
   workingHours         StaffWorkingHours[]
+  // Phase 18 — at most one row (VerificationRequest.staffId is @@unique).
+  verification         VerificationRequest?
 
   @@map("salon_staff")
 }
@@ -937,6 +947,65 @@ model Review {
   updatedAt     DateTime @updatedAt
 
   @@map("reviews")
+}
+
+// ---------- Verification (Phase 18 — foundation only) ----------
+//
+// Deliberately NOT identity/KYC verification: no Aadhaar/PAN/passport collection, no third-party
+// KYC provider, no automated document verification. "Evidence" is owner-supplied free text plus a
+// list of already-hosted https links (same "URL-based, no object storage configured" convention as
+// Salon photos and SalonStaff.photoUrl) that a human PLATFORM_ADMIN reviews manually. The public
+// badge this unlocks must always read as "profile evidence reviewed by BarberCue," never "identity
+// verified" — see VERIFICATION_BADGE_CAPTION in packages/shared/src/constants, the single place
+// that wording lives so it can never drift between surfaces.
+//
+// One row per subject (salonId or staffId, whichever applies — never both), enforced by the two
+// @@unique constraints below relying on Postgres's default NULLS DISTINCT behavior: a row with
+// salonId set is unique on that value, while any number of PROFESSIONAL-type rows (salonId always
+// NULL) coexist freely, and symmetrically for staffId. `status` holds the CURRENT state only —
+// "NOT_SUBMITTED" is never stored, it is simply the absence of a row for that subject, the same
+// "no row = default" convention used elsewhere in this schema (NotificationPreference,
+// StaffWorkingHours). Every transition (submit, start review, approve, reject, resubmit) also
+// writes an AuditLog entry, so full history survives even though this row only ever holds the
+// latest state — reusing the existing generic audit trail rather than inventing a parallel one.
+enum VerificationSubjectType {
+  SHOP
+  PROFESSIONAL
+}
+
+enum VerificationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model VerificationRequest {
+  id            String                  @id @default(uuid())
+  subjectType   VerificationSubjectType
+  salonId       String?
+  salon         Salon?                  @relation(fields: [salonId], references: [id])
+  staffId       String?
+  staff         SalonStaff?             @relation(fields: [staffId], references: [id])
+  status        VerificationStatus      @default(SUBMITTED)
+  evidenceNotes String?
+  evidenceUrls  String[]
+
+  submittedByUserId String
+  submittedBy       User     @relation("VerificationSubmitter", fields: [submittedByUserId], references: [id])
+  submittedAt       DateTime @default(now())
+
+  reviewedByAdminId String?
+  reviewedByAdmin   User?     @relation("VerificationReviewer", fields: [reviewedByAdminId], references: [id])
+  reviewNotes       String?
+  reviewedAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([salonId])
+  @@unique([staffId])
+  @@map("verification_requests")
 }
 
 // ---------- Notifications ----------

@@ -17,6 +17,8 @@ import type {
   SubscriptionStatus,
   CustomerSubscriptionStatus,
   UserStatus,
+  VerificationStatus,
+  VerificationSubjectType,
 } from '../enums';
 
 // DTO shapes only — no I/O, no ORM types leak here. These mirror DATABASE.md/API.md and are the
@@ -216,6 +218,34 @@ export interface OwnerReviewDto extends ReviewDetailDto {
   serviceName: string;
 }
 
+// ---------- Verification (Phase 18) ----------
+
+// Owner's own view of their shop's or one barber's verification request — GET/POST
+// dashboard/salons/:salonId/verification and .../staff/:staffId/verification.
+export interface VerificationRequestDto {
+  id: string;
+  subjectType: VerificationSubjectType;
+  status: VerificationStatus;
+  evidenceNotes: string | null;
+  evidenceUrls: string[];
+  submittedAt: string; // ISO 8601
+  reviewNotes: string | null;
+  reviewedAt: string | null; // null until APPROVED or REJECTED
+}
+
+// GET admin/verification[/:id] — adds the review-queue context an admin needs on top of
+// VerificationRequestDto, same "extend the base DTO" pattern as OwnerReviewDto. Exactly one of
+// salonName / (staffDisplayName + staffSalonName) is populated, matching subjectType.
+export interface AdminVerificationRequestDto extends VerificationRequestDto {
+  salonId: string | null;
+  salonName: string | null;
+  staffId: string | null;
+  staffDisplayName: string | null;
+  staffSalonName: string | null;
+  submitterEmail: string | null;
+  submitterPhone: string | null;
+}
+
 // Listing/search-result card shape — extends the existing SalonSummary rather than duplicating
 // its fields, adding only what a card needs beyond identity/location.
 export interface SalonListItemDto extends SalonSummary {
@@ -233,6 +263,9 @@ export interface SalonListItemDto extends SalonSummary {
   // timezone field is populated yet). Null when the salon has no operating-hours data at all for
   // today (never assumed open or closed without a real signal).
   isOpenNow: boolean | null;
+  // Phase 18 — true only once an admin has APPROVED a VerificationRequest for this salon. Clients
+  // must pair any badge with VERIFICATION_BADGE_CAPTION's exact wording, never invent their own.
+  verified: boolean;
 }
 
 // Full profile page shape — everything a listing card has, plus the detail-page content.
@@ -256,6 +289,8 @@ export interface TeamMemberDto {
   photoUrl: string | null;
   bio: string | null;
   yearsExperience: number | null;
+  // Phase 18 — true only once an admin has APPROVED a VerificationRequest for this staff member.
+  verified: boolean;
 }
 
 // POST /salons response — deliberately minimal (not a full SalonProfileDto): a brand-new shop has

@@ -165,6 +165,7 @@ export default function SalonsDashboardHomePage() {
                         <Link href={`/dashboard/salons/${s.id}/customers`}>Customers</Link>
                         <Link href={`/dashboard/salons/${s.id}/analytics`}>Analytics</Link>
                         <Link href={`/dashboard/salons/${s.id}/reviews`}>Reviews</Link>
+                        <Link href={`/dashboard/salons/${s.id}/verification`}>Verification</Link>
                         <Link href={`/dashboard/salons/${s.id}/services`}>Services</Link>
                         <Link href={`/dashboard/salons/${s.id}/hours`}>Hours</Link>
                         <Link href={`/dashboard/salons/${s.id}/photos`}>Photos</Link>

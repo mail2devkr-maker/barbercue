@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { DISCOVERY_PATHS, formatMoney } from "@barbercue/shared";
+import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from "@barbercue/shared";
 import type { CityDto, LocalityDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../lib/seo";
@@ -193,7 +193,30 @@ export default async function SalonPage({
 
         <div className={styles.identity}>
           <p className={styles.eyebrow}>Barbershop in {city?.name ?? citySlug}</p>
-          <h1>{salon.name}</h1>
+          <h1>
+            {salon.name}
+            {salon.verified && (
+              <span
+                title={VERIFICATION_BADGE_CAPTION}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  marginLeft: 10,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.02em",
+                  color: "var(--bc-success)",
+                  background: "color-mix(in srgb, var(--bc-success) 12%, transparent)",
+                  verticalAlign: "middle",
+                }}
+              >
+                ✓ Verified
+              </span>
+            )}
+          </h1>
           <div className={styles.ratingLine}>
             {salon.ratingCount > 0 ? (
               <span className={styles.rating}>

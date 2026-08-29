@@ -9,6 +9,7 @@ import {
   PrepaymentRequirement,
   SalonStatus,
   StaffMemberStatus,
+  VerificationStatus,
 } from '../enums';
 import { PREMIUM_PLAN_IDS } from '../constants';
 import { isValidPostalCode, postalCodeRuleFor } from '../locale';
@@ -492,3 +493,33 @@ export const respondToReviewSchema = z.object({
   ownerResponse: z.string().trim().min(1).max(1000),
 });
 export type RespondToReviewInput = z.infer<typeof respondToReviewSchema>;
+
+// ---------- Verification (Phase 18) ----------
+
+// POST dashboard/salons/:salonId/verification and .../staff/:staffId/verification — evidence is
+// free text plus a bounded list of already-hosted https links (salonPhotoUrlSchema), never a file
+// upload (no object storage configured — same convention as Salon photos/SalonStaff.photoUrl).
+// Both fields optional individually, but at least one must carry real content: a request with
+// neither notes nor links gives the reviewing admin nothing to actually review.
+export const submitVerificationSchema = z
+  .object({
+    evidenceNotes: z.string().trim().max(2000).optional(),
+    evidenceUrls: z.array(salonPhotoUrlSchema).max(10).optional(),
+  })
+  .refine((v) => !!v.evidenceNotes || (v.evidenceUrls && v.evidenceUrls.length > 0), {
+    message: 'Add a note or at least one evidence link',
+  });
+export type SubmitVerificationInput = z.infer<typeof submitVerificationSchema>;
+
+// POST admin/verification/:id/decide — reviewNotes required on REJECTED (the owner needs to know
+// what to fix before resubmitting); optional on APPROVED.
+export const decideVerificationSchema = z
+  .object({
+    decision: z.enum([VerificationStatus.APPROVED, VerificationStatus.REJECTED]),
+    reviewNotes: z.string().trim().max(1000).optional(),
+  })
+  .refine((v) => v.decision !== VerificationStatus.REJECTED || !!v.reviewNotes, {
+    message: 'A reason is required when rejecting a verification request',
+    path: ['reviewNotes'],
+  });
+export type DecideVerificationInput = z.infer<typeof decideVerificationSchema>;

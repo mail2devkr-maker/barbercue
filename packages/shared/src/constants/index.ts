@@ -37,7 +37,19 @@ export const AUTH_PATHS = {
 export const ADMIN_PATHS = {
   admin: 'admin',
   overview: 'overview',
+  // Phase 18 — admin/verification[/:id[/start-review|/decide]], the PLATFORM_ADMIN review queue.
+  verification: 'verification',
+  startReview: 'start-review',
+  decide: 'decide',
 } as const;
+
+// The ONLY place this wording is allowed to live — every surface that shows a Verified badge
+// imports this constant rather than writing its own copy, so the legally-sensitive distinction
+// (evidence reviewed, not identity verified, not a quality guarantee) can never drift between web,
+// mobile, and any future surface. Never replace with "Identity Verified" without an actual
+// identity-verification/KYC process behind it.
+export const VERIFICATION_BADGE_CAPTION =
+  'Business/profile evidence reviewed by BarberCue. Verification is not a guarantee of service quality.';
 
 // Name of the httpOnly cookie the backend sets/reads for web refresh-token delivery. Shared so
 // the web app's fetch wrapper knows to send credentials, without needing to know the token value.
@@ -232,6 +244,9 @@ export const DASHBOARD_PATHS = {
   // owner-response side of Ratings & Reviews; the customer write side is REVIEW_PATHS instead).
   reviews: 'reviews',
   response: 'response',
+  // Phase 18 — dashboard/salons/:salonId/verification (shop) and
+  // dashboard/salons/:salonId/staff/:staffId/verification (professional, `staff` above reused).
+  verification: 'verification',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

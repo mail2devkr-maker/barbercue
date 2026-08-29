@@ -9,6 +9,7 @@ import {
   type RegisterSalonInput,
   type RegisterSalonResultDto,
   StaffMemberStatus,
+  VerificationStatus,
   type SalonListItemDto,
   type SalonProfileDto,
   type SalonSearchQueryInput,
@@ -36,6 +37,8 @@ const listInclude = {
   locality: true,
   photos: { where: { type: 'COVER' as const }, take: 1 },
   operatingHours: true,
+  // Phase 18 — status only; a salon with no row at all (never submitted) is simply not verified.
+  verification: { select: { status: true } },
 } satisfies Prisma.SalonInclude;
 
 // Mirrors bookings/availability.service.ts's own fixed +05:30 offset convention (no salon
@@ -162,7 +165,11 @@ export class SalonsService {
         staff: {
           where: { status: StaffMemberStatus.ACTIVE },
           orderBy: { displayName: 'asc' },
+          // Phase 18 — status only, same reasoning as the salon's own verification include below.
+          include: { verification: { select: { status: true } } },
         },
+        // Phase 18 — status only; no row at all means "never submitted," not verified.
+        verification: { select: { status: true } },
       },
     });
     if (!salon) {
@@ -201,6 +208,7 @@ export class SalonsService {
       // — the customer already navigated here, distance is no longer the decision being made.
       distanceKm: null,
       isOpenNow: isOpenNow(salon.operatingHours),
+      verified: salon.verification?.status === VerificationStatus.APPROVED,
       description: salon.description,
       phone: salon.phone,
       services: salon.services.map((s) => ({
@@ -238,6 +246,7 @@ export class SalonsService {
           photoUrl: s.photoUrl,
           bio: s.bio,
           yearsExperience: s.yearsExperience,
+          verified: s.verification?.status === VerificationStatus.APPROVED,
         }),
       ),
     };
@@ -484,6 +493,7 @@ export class SalonsService {
       priceMax,
       distanceKm,
       isOpenNow: isOpenNow(salon.operatingHours),
+      verified: salon.verification?.status === VerificationStatus.APPROVED,
     };
   }
 

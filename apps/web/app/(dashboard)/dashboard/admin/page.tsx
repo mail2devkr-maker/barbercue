@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ADMIN_PATHS, SalonStatus, type PlatformAdminOverviewDto } from "@barbercue/shared";
 import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
-import { Button } from "../../../../components/ui/Button";
+import { Button, LinkButton } from "../../../../components/ui/Button";
 import styles from "./admin.module.css";
 
 function contact(email: string | null, phone: string | null): string {
@@ -54,7 +54,10 @@ export default function AdminDashboardPage() {
           <h1>Platform monitoring</h1>
           <p>Read-only visibility across BarberCue. Signed in as {user?.email ?? "platform admin"}.</p>
         </div>
-        <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
+          <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
+        </div>
       </header>
 
       {error && <p className={styles.error} role="alert">{error}</p>}

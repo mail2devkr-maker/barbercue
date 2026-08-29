@@ -8,6 +8,7 @@ import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { StaffHoursEditor } from "../../../../../../components/dashboard/StaffHoursEditor";
 import { StaffProfileEditor } from "../../../../../../components/dashboard/StaffProfileEditor";
+import { StaffVerificationPanel } from "../../../../../../components/dashboard/StaffVerificationPanel";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Barber roster (Phase 11) — replaces the previous placeholder. Adding a barber creates (or
@@ -34,6 +35,7 @@ export default function DashboardStaffPage({
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [hoursOpenFor, setHoursOpenFor] = useState<string | null>(null);
   const [profileOpenFor, setProfileOpenFor] = useState<string | null>(null);
+  const [verificationOpenFor, setVerificationOpenFor] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -231,6 +233,13 @@ export default function DashboardStaffPage({
                 >
                   {profileOpenFor === m.id ? "Hide profile" : "Edit profile"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setVerificationOpenFor(verificationOpenFor === m.id ? null : m.id)}
+                >
+                  {verificationOpenFor === m.id ? "Hide verification" : "Verification"}
+                </Button>
               </div>
               {hoursOpenFor === m.id && <StaffHoursEditor salonId={salonId} staffId={m.id} />}
               {profileOpenFor === m.id && (
@@ -243,6 +252,7 @@ export default function DashboardStaffPage({
                   }}
                 />
               )}
+              {verificationOpenFor === m.id && <StaffVerificationPanel salonId={salonId} staffId={m.id} />}
             </li>
           ))}
         </ul>

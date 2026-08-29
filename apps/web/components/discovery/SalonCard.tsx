@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { SalonListItemDto } from "@barbercue/shared";
-import { formatMoney } from "@barbercue/shared";
+import { formatMoney, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
 import { SalonImage } from "../ui/SalonImage";
 import styles from "./salon-card.module.css";
 
@@ -32,7 +32,30 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
         <div className={styles.titleRow}>
           <div>
             <Link href={profileHref} className={styles.nameLink}>
-              <h3 className={styles.name}>{salon.name}</h3>
+              <h3 className={styles.name}>
+                {salon.name}
+                {salon.verified && (
+                  <span
+                    title={VERIFICATION_BADGE_CAPTION}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 3,
+                      marginLeft: 8,
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.02em",
+                      color: "var(--bc-success)",
+                      background: "color-mix(in srgb, var(--bc-success) 12%, transparent)",
+                      verticalAlign: "middle",
+                    }}
+                  >
+                    ✓ Verified
+                  </span>
+                )}
+              </h3>
             </Link>
             <p className={styles.address}>{salon.addressLine}</p>
           </div>

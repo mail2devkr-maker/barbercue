@@ -225,7 +225,42 @@ stays web-only — no mobile owner staff-roster screen exists at all yet, so the
 extend there, consistent with the established owner-mobile-secondary pattern. 5 new backend tests.
 
 ## Phase 18 — Shop / Barber Verification Foundation
-**NOT STARTED.**
+**DONE**, foundation-scoped per explicit policy: manual PLATFORM_ADMIN review only, never
+automated KYC, never a third-party identity provider, never "Identity Verified" wording. New
+`VerificationRequest` model (one row per subject — SHOP via `salonId` or PROFESSIONAL via
+`staffId`, enforced by two `@@unique` constraints relying on Postgres's default NULLS DISTINCT
+behaviour) with lifecycle `SUBMITTED → UNDER_REVIEW → APPROVED/REJECTED`; `NOT_SUBMITTED` is never
+stored, it's the absence of a row, the same "no row = default" convention used elsewhere. Evidence
+is owner-supplied free text plus a bounded list of already-hosted https links — no document
+upload, no object storage. Every transition (submit/resubmit/start-review/approve/reject) writes
+to the existing generic `AuditLog` table rather than a parallel history table, so full history
+survives even though the row itself only holds the latest state. Owner-facing:
+`VerificationController` at `dashboard/salons/:salonId/verification` (shop) and
+`.../staff/:staffId/verification` (professional), owner-only. Admin-facing: extended the existing
+`AdminController` with `admin/verification` (list/filter), `GET :id`, `POST :id/start-review`,
+`POST :id/decide` (decision + required-on-reject reviewNotes) — every APPROVED/REJECTED outcome is
+a human admin's explicit action. Public exposure: `verified: boolean` added to `SalonListItemDto`
+(search cards), `SalonProfileDto` (profile hero), and `TeamMemberDto` (per-barber, "Meet the
+team") — true only once APPROVED. The exact truthful badge wording lives in exactly one place,
+`VERIFICATION_BADGE_CAPTION` in `packages/shared/src/constants`, so it can never drift between
+web, mobile, and any future surface: "Business/profile evidence reviewed by BarberCue.
+Verification is not a guarantee of service quality." Web: owner submit UI (shop-level page +
+per-barber panel on the staff roster page, both showing current status/admin notes and allowing
+resubmission after rejection) and an admin review-queue page (filter by status, evidence links,
+approve/reject with notes). Mobile: verified checkmark on salon search cards, the salon profile
+hero, and each team member — customer-facing display only; owner submission and admin review stay
+web-only, matching the established owner/admin-mobile-secondary pattern. 19 new backend tests.
+
+**Also this run (functional audit, not tied to any single phase):** fixed a real bug found while
+auditing — `PhotoGallery.tsx` (salon photo gallery on the public profile page) used a bare `<img>`
+with no broken-image fallback, unlike every other photo surface in the codebase (`SalonImage`).
+Fixed with a per-photo load-failure state that degrades to an honest "Photo unavailable" tile
+without changing the grid's DOM shape (a naive swap to `SalonImage` was tried first and reverted —
+it silently broke the grid's row-sizing and its "first photo spans two rows" layout, since that
+CSS depends on `<img>` being a direct grid child). Investigated a reproducible `/staff/login` 404
+and confirmed it was a transient Turbopack dev-server route-manifest staleness issue (resolved by
+a dev server restart), not a real code defect — `/owner/login` and every other auth page were
+unaffected throughout.
 
 ## Phase 19 — Support / Disputes
 **NOT STARTED.**
@@ -297,13 +332,18 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 17): backend 558/558 tests passing (46
-suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (23
+**ONGOING, per-phase.** Current counts (after Phase 18): backend 575/575 tests passing (48
+suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (25
 static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
 ## Phase 39 — Browser / Mobile Manual Validation
-**NOT STARTED** (beyond Phase 1's real-device Google login test). No manual click-through of the
-new booking/reschedule/rebook flows in a live browser/emulator yet this session.
+**PARTIAL.** No live backend/DB is available in this environment, so full data-driven flows
+(booking, queue, dashboards with real data) still haven't been click-tested live. This session did
+run a real web-dev-server audit pass against the pages that work without a backend: landing page
+(desktop + mobile viewport), search page's graceful "shops unavailable" degraded state, customer
+login, owner login, staff login (see the Phase 18 entry's note on the transient dev-server 404
+found and ruled out there), and the `/dashboard/*` unauthenticated-redirect gate. No visual defects
+found beyond the Next.js dev-mode toolbar badge (expected, dev-only, absent in production).
 
 ## Phase 40 — Database Migration Rules
 **DONE, ongoing.** Every migration this session is additive and hand-authored (no live dev DB
@@ -311,8 +351,8 @@ connection in this environment) matching Prisma's exact generated SQL convention
 against prior migrations: `add_staff_working_hours` (Phase 7), `add_notification_center_fields`
 (Phase 11), `add_booking_reminder_sent_at` (Phase 12), `add_notification_preferences` (Phase 13,
 also adds `NotificationChannel.WHATSAPP`), `add_user_preferred_language` (Phase 14),
-`add_staff_professional_profile` (Phase 17). No destructive change (drop/rename/narrowing) in any
-of them.
+`add_staff_professional_profile` (Phase 17), `add_verification_requests` (Phase 18). No
+destructive change (drop/rename/narrowing) in any of them.
 
 ## Phase 41 — Git / Multi-Agent Discipline
 **DONE, ongoing.** Exact-path staging throughout (never `git add .`), coherent per-feature-family
