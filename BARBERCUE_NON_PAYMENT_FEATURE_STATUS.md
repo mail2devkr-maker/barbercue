@@ -149,6 +149,17 @@ screen for the customer app (mobile is the primary customer surface). Owner/staf
 only — their full list stays on web's `NotificationBell`, matching the owner-web-primary pattern.
 
 ## Phase 13 — Communication Preferences
+**DONE** (backend + web customer) **/ PARTIAL** (owner/staff UI deferred). Commit `f841b6f`.
+New `NotificationPreference` model (additive) — one row per (user, category, channel) changed from
+default; absence = default enabled. 4 categories x 5 channels (IN_APP/PUSH/EMAIL/SMS/WHATSAPP —
+WHATSAPP added this phase). `NotificationsService.notify()` now checks the preference before
+writing. `GET/PUT notifications/preferences` report a server-computed `available` flag — verified
+by checking `EmailSender`: only `ConsoleEmailSender` exists, so EMAIL is honestly reported
+unavailable too, not just the never-wired SMS/PUSH/WHATSAPP. Web: preferences section on customer
+profile page (one working IN_APP toggle per category; architecture supports the rest once a
+provider exists). Owner/staff preferences UI deferred — API works for any role already.
+
+## Phase 14 — Localization & Voice Operations
 **NOT STARTED.**
 
 ## Phase 14 — Localization & Voice Operations
