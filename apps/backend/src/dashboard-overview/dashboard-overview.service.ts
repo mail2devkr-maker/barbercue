@@ -6,10 +6,7 @@ import {
   type OwnerMultiShopOverviewDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  istWallTimeToUtc,
-  utcToIstDateStr,
-} from '../bookings/availability.service';
+import { resolveSalonTimeZone, zonedDayBounds } from '../common/timezone/timezone';
 
 /**
  * Multi-branch aggregate overview (Phase 10) — every count here is a plain sum across the salons
@@ -44,20 +41,15 @@ export class DashboardOverviewService {
       };
     }
 
-    // Same fixed +05:30 IST convention used throughout this codebase.
-    const todayIst = utcToIstDateStr(new Date());
-    const todayStart = istWallTimeToUtc(todayIst, '00:00');
-    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60_000);
-
-    const [salons, todaysBookingsTotal, activeQueueTotal] = await Promise.all([
+    const now = new Date();
+    const [salons, activeQueueTotal] = await Promise.all([
       this.prisma.salon.findMany({
         where: { id: { in: salonIds } },
-        select: { status: true },
-      }),
-      this.prisma.booking.count({
-        where: {
-          salonId: { in: salonIds },
-          slotStart: { gte: todayStart, lt: todayEnd },
+        select: {
+          id: true,
+          status: true,
+          timezone: true,
+          city: { select: { countryCode: true } },
         },
       }),
       this.prisma.queueEntry.count({
@@ -74,11 +66,50 @@ export class DashboardOverviewService {
       }),
     ]);
 
+    const todaysBookingsTotal = await this.sumTodaysBookings(salons, now);
+
     return {
       totalShops: salonIds.length,
       openShops: salons.filter((s) => s.status === SalonStatus.ACTIVE).length,
       todaysBookingsTotal,
       activeQueueTotal,
     };
+  }
+
+  /**
+   * Owned shops can be in different timezones, so "today" is not one shared window across them —
+   * each salon's own local calendar day is resolved independently and OR'd into a single query.
+   * Returns null (never a silently partial sum) the moment any owned salon lacks a trustworthy
+   * timezone — a total that quietly excluded one shop's bookings would look like a real, complete
+   * number while actually under-reporting it.
+   */
+  private async sumTodaysBookings(
+    salons: {
+      id: string;
+      timezone: string | null;
+      city: { countryCode: string };
+    }[],
+    now: Date,
+  ): Promise<number | null> {
+    const perSalonRanges: { salonId: string; start: Date; end: Date }[] = [];
+    for (const salon of salons) {
+      const timeZone = resolveSalonTimeZone({
+        timezone: salon.timezone,
+        countryCode: salon.city.countryCode,
+      });
+      const bounds = timeZone ? zonedDayBounds(now, timeZone) : null;
+      if (!bounds) return null;
+      perSalonRanges.push({ salonId: salon.id, start: bounds.start, end: bounds.end });
+    }
+    if (perSalonRanges.length === 0) return 0;
+
+    return this.prisma.booking.count({
+      where: {
+        OR: perSalonRanges.map((r) => ({
+          salonId: r.salonId,
+          slotStart: { gte: r.start, lt: r.end },
+        })),
+      },
+    });
   }
 }

@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { CitiesService } from './cities.service';
+import { isOpenAt, resolveSalonTimeZone } from '../common/timezone/timezone';
 
 const DEFAULT_PAGE_SIZE = 20;
 const RECENT_REVIEWS_LIMIT = 10;
@@ -41,20 +42,19 @@ const listInclude = {
   verification: { select: { status: true } },
 } satisfies Prisma.SalonInclude;
 
-// Mirrors bookings/availability.service.ts's own fixed +05:30 offset convention (no salon
-// timezone field is populated yet — see that file's doc comment) so "open now" agrees with how
-// every OperatingHours window is already interpreted elsewhere in the codebase.
-const IST_OFFSET_MINUTES = 330;
-
-function isOpenNow(hours: { dayOfWeek: number; isClosed: boolean; openTime: string; closeTime: string }[]): boolean | null {
-  if (hours.length === 0) return null;
-  const ist = new Date(Date.now() + IST_OFFSET_MINUTES * 60_000);
-  const today = hours.find((h) => h.dayOfWeek === ist.getUTCDay());
-  if (!today || today.isClosed) return today ? false : null;
-  const minutesNow = ist.getUTCHours() * 60 + ist.getUTCMinutes();
-  const [openH, openM] = today.openTime.split(':').map(Number);
-  const [closeH, closeM] = today.closeTime.split(':').map(Number);
-  return minutesNow >= openH * 60 + openM && minutesNow < closeH * 60 + closeM;
+// Resolved per salon (Salon.timezone, falling back to Asia/Kolkata only for an India-city salon —
+// see resolveSalonTimeZone's own doc comment) rather than a fixed +05:30 offset. Null — never a
+// guessed Open or Closed — when no trustworthy zone exists, same honest-unknown convention as
+// isOpenAt's own contract.
+function isOpenNow(
+  hours: { dayOfWeek: number; isClosed: boolean; openTime: string; closeTime: string }[],
+  salon: { timezone: string | null; city: { countryCode: string } },
+): boolean | null {
+  const timeZone = resolveSalonTimeZone({
+    timezone: salon.timezone,
+    countryCode: salon.city.countryCode,
+  });
+  return isOpenAt(hours, timeZone);
 }
 
 type SalonWithListRelations = Prisma.SalonGetPayload<{
@@ -107,12 +107,21 @@ export class SalonsService {
     // can do without a geo extension (PostGIS earthdistance), which isn't set up here. Rather than
     // fake a stable cursor over an in-memory sort, distance mode fetches a capped batch, sorts it
     // in memory, and returns a single unpaginated page (nextCursor always null) — an honest
-    // limitation for a foundation-phase, demo-scale salon count, not a hidden bug.
+    // limitation for a foundation-phase, demo-scale salon count, not a hidden bug. Still bounded
+    // candidates + in-memory Haversine, never PostGIS/a real nearest-neighbour index.
     const nearMe = query.lat !== undefined && query.lng !== undefined;
     if (nearMe) {
       const from = { lat: query.lat!, lng: query.lng! };
+      // A salon with no lat/lng can never get a distance and is always dropped by the
+      // distanceKm-not-null filter below — fetching it into the capped candidate set would only
+      // ever waste one of the NEAR_ME_CANDIDATE_CAP slots. At scale this matters: if 200+ salons
+      // matching `where` have no coordinates, an unfiltered `take: 200` could fill the entire
+      // candidate set with rows that were always going to be discarded, silently returning zero
+      // results even when real coordinate-bearing salons exist and match. Filtering coordinates
+      // at the DB level spends every one of the capped rows on a salon that can actually appear
+      // in the sorted result.
       const candidates = await this.prisma.salon.findMany({
-        where,
+        where: { ...where, lat: { not: null }, lng: { not: null } },
         take: NEAR_ME_CANDIDATE_CAP,
         include: listInclude,
       });
@@ -121,7 +130,12 @@ export class SalonsService {
       );
       const sorted = withDistance
         .filter((s) => s.distanceKm !== null)
-        .sort((a, b) => a.distanceKm! - b.distanceKm!)
+        // Tie-broken by id: the candidate query has no explicit orderBy, so two salons at an
+        // identical distance would otherwise sort in whatever incidental row order Postgres
+        // happened to return them in — never guaranteed, and not something a client can rely on
+        // page-to-page. Sorting is stable (ES2019+), so this tiebreaker makes the full order
+        // deterministic rather than merely "probably consistent."
+        .sort((a, b) => a.distanceKm! - b.distanceKm! || a.id.localeCompare(b.id))
         .slice(0, limit);
       return { items: sorted, nextCursor: null };
     }
@@ -207,7 +221,7 @@ export class SalonsService {
       // No lat/lng of the viewer to compare against on the profile page (unlike search results)
       // — the customer already navigated here, distance is no longer the decision being made.
       distanceKm: null,
-      isOpenNow: isOpenNow(salon.operatingHours),
+      isOpenNow: isOpenNow(salon.operatingHours, salon),
       verified: salon.verification?.status === VerificationStatus.APPROVED,
       description: salon.description,
       phone: salon.phone,
@@ -492,7 +506,7 @@ export class SalonsService {
       priceMin,
       priceMax,
       distanceKm,
-      isOpenNow: isOpenNow(salon.operatingHours),
+      isOpenNow: isOpenNow(salon.operatingHours, salon),
       verified: salon.verification?.status === VerificationStatus.APPROVED,
     };
   }

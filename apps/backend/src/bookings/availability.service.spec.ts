@@ -181,7 +181,15 @@ describe('AvailabilityService', () => {
 
   describe('getAvailability', () => {
     beforeEach(() => {
-      prisma.salon.findUnique.mockResolvedValue({ id: 's1', status: 'ACTIVE' });
+      // India fallback resolves to Asia/Kolkata (+05:30, no DST) — every existing "09:00 IST =
+      // 03:30 UTC"-style assertion below stays valid as-is; see the dedicated timezone describe
+      // block further down for non-India/DST/unknown-zone coverage of this same method.
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        timezone: null,
+        city: { countryCode: 'IN' },
+      });
       prisma.service.findFirst.mockResolvedValue({
         id: 'sv1',
         salonId: 's1',
@@ -344,12 +352,20 @@ describe('AvailabilityService', () => {
   });
 
   describe('assertStaffWithinWorkingHours', () => {
+    beforeEach(() => {
+      prisma.salon.findUnique.mockResolvedValue({
+        timezone: null,
+        city: { countryCode: 'IN' },
+      });
+    });
+
     it('is a no-op when the barber has no configured working hours', async () => {
       prisma.staffWorkingHours.findUnique.mockResolvedValue(null);
       const day = futureDateString(2);
       const [y, m, d] = day.split('-').map(Number);
       await expect(
         service.assertStaffWithinWorkingHours(
+          's1',
           'st1',
           new Date(Date.UTC(y, m - 1, d, 3, 30)),
           new Date(Date.UTC(y, m - 1, d, 4, 0)),
@@ -368,6 +384,7 @@ describe('AvailabilityService', () => {
       // 09:00 IST = 03:30 UTC — before the barber's 11:00 start.
       await expect(
         service.assertStaffWithinWorkingHours(
+          's1',
           'st1',
           new Date(Date.UTC(y, m - 1, d, 3, 30)),
           new Date(Date.UTC(y, m - 1, d, 4, 0)),
@@ -385,6 +402,7 @@ describe('AvailabilityService', () => {
       const [y, m, d] = day.split('-').map(Number);
       await expect(
         service.assertStaffWithinWorkingHours(
+          's1',
           'st1',
           new Date(Date.UTC(y, m - 1, d, 5, 30)),
           new Date(Date.UTC(y, m - 1, d, 6, 0)),
@@ -403,11 +421,118 @@ describe('AvailabilityService', () => {
       // 11:00 IST = 05:30 UTC — within 09:00-18:00.
       await expect(
         service.assertStaffWithinWorkingHours(
+          's1',
           'st1',
           new Date(Date.UTC(y, m - 1, d, 5, 30)),
           new Date(Date.UTC(y, m - 1, d, 6, 0)),
         ),
       ).resolves.toBeUndefined();
+    });
+
+    it('throws SALON_TIMEZONE_REQUIRED when the salon has no resolvable timezone', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        timezone: null,
+        city: { countryCode: 'US' },
+      });
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      await expect(
+        service.assertStaffWithinWorkingHours(
+          's1',
+          'st1',
+          new Date(Date.UTC(y, m - 1, d, 5, 30)),
+          new Date(Date.UTC(y, m - 1, d, 6, 0)),
+        ),
+      ).rejects.toMatchObject({ code: 'SALON_TIMEZONE_REQUIRED' });
+    });
+  });
+
+  // Required timezone coverage (non-India zone, DST transition, missing timezone) beyond what
+  // timezone.spec.ts already covers in isolation — these prove AvailabilityService actually uses
+  // the salon's OWN resolved zone end-to-end, not a hardcoded IST assumption anywhere in between.
+  describe('timezone correctness (global salons — not India-only)', () => {
+    beforeEach(() => {
+      prisma.service.findFirst.mockResolvedValue({
+        id: 'sv1',
+        salonId: 's1',
+        durationMinutes: 30,
+        isActive: true,
+      });
+      prisma.staffService.count.mockResolvedValue(0);
+      prisma.salonStaff.count.mockResolvedValue(2);
+      prisma.chair.count.mockResolvedValue(2);
+      prisma.booking.findMany.mockResolvedValue([]);
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('honours an explicit non-India IANA timezone (Europe/London) rather than defaulting to IST', async () => {
+      // "Now" pinned within the 30-day booking window of the requested (BST) date.
+      jest.useFakeTimers({ now: new Date('2026-06-25T00:00:00.000Z') });
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        timezone: 'Europe/London',
+        city: { countryCode: 'GB' },
+      });
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '10:00',
+        isClosed: false,
+      });
+      // A summer date: 09:00 London (BST, +01:00) = 08:00 UTC — NOT 03:30 UTC, which is what the
+      // old fixed +05:30 IST assumption would have produced for this same wall-clock time.
+      const slots = await service.getAvailability('s1', 'sv1', '2026-07-01');
+      expect(slots.length).toBeGreaterThan(0);
+      expect(slots[0].slotStart).toBe('2026-07-01T08:00:00.000Z');
+    });
+
+    it('applies the correct offset across a DST transition for the same salon', async () => {
+      // "Now" pinned within the 30-day booking window of the requested (GMT) date — a separate
+      // fake-clock window from the BST test above, since the two seasons are ~6 months apart and
+      // MAX_BOOKING_DAYS_AHEAD is only 30 days.
+      jest.useFakeTimers({ now: new Date('2026-01-05T00:00:00.000Z') });
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        timezone: 'Europe/London',
+        city: { countryCode: 'GB' },
+      });
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '10:00',
+        isClosed: false,
+      });
+      // A winter date: 09:00 London (GMT, +00:00) = 09:00 UTC.
+      const slots = await service.getAvailability('s1', 'sv1', '2026-01-15');
+      expect(slots.length).toBeGreaterThan(0);
+      expect(slots[0].slotStart).toBe('2026-01-15T09:00:00.000Z');
+    });
+
+    it('throws SALON_TIMEZONE_REQUIRED — never silently falls back to IST — for a salon with no timezone and a non-India city', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        timezone: null,
+        city: { countryCode: 'US' },
+      });
+      await expect(
+        service.getAvailability('s1', 'sv1', futureDateString(2)),
+      ).rejects.toMatchObject({ code: 'SALON_TIMEZONE_REQUIRED' });
+    });
+
+    it('throws SALON_TIMEZONE_REQUIRED for an invalid stored IANA timezone string, not a crash', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        timezone: 'Not/AZone',
+        city: { countryCode: 'US' },
+      });
+      await expect(
+        service.getAvailability('s1', 'sv1', futureDateString(2)),
+      ).rejects.toMatchObject({ code: 'SALON_TIMEZONE_REQUIRED' });
     });
   });
 });

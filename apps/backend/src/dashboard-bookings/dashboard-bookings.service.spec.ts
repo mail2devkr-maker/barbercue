@@ -47,6 +47,7 @@ interface PrismaMock {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
   };
+  salon: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
 }
 
 describe('DashboardBookingsService', () => {
@@ -61,6 +62,14 @@ describe('DashboardBookingsService', () => {
       booking: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
         findMany: jest.fn<Promise<unknown[]>, [unknown]>(),
+      },
+      // Asia/Kolkata by default — every existing IST-day-boundary 'today'/'upcoming' assertion in
+      // this file stays valid as-is; timezone-specific correctness is covered in
+      // availability.service.spec.ts instead of being re-tested per consumer.
+      salon: {
+        findUnique: jest
+          .fn<Promise<unknown>, [unknown]>()
+          .mockResolvedValue({ timezone: null, city: { countryCode: 'IN' } }),
       },
     };
     salonAccess = {

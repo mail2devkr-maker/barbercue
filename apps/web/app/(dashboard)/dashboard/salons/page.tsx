@@ -91,10 +91,11 @@ export default function SalonsDashboardHomePage() {
           </div>
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.1rem" }}>
-              {overview.todaysBookingsTotal}
+              {overview.todaysBookingsTotal ?? "—"}
             </div>
             <div style={{ fontSize: 11, color: "var(--bc-muted)", textTransform: "uppercase" }}>
               Today&apos;s bookings, all shops
+              {overview.todaysBookingsTotal === null && " (set a timezone on every shop to see this)"}
             </div>
           </div>
           <div>

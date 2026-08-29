@@ -26,11 +26,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
-import {
-  AvailabilityService,
-  istWallTimeToUtc,
-  utcToIstDateStr,
-} from '../bookings/availability.service';
+import { AvailabilityService } from '../bookings/availability.service';
+import { zonedDayBounds } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -323,9 +320,10 @@ export class QueueService {
    * Owner Capacity Dashboard (Phase 6) — a small, decision-oriented operational summary ("what do
    * I do right now"), not a historical/trend report (that's Phase 9's job). "Busy" chairs/staff
    * are whichever ones are attached to a currently-ACTIVE ServiceSession; "available" is
-   * active-minus-busy. today/upcoming booking counts mirror dashboard-bookings.service.ts's own
-   * IST-day-bounds convention (repeated locally rather than shared — see that file's istDayBounds
-   * for why: no salon timezone field is populated yet, same fixed +05:30 offset everywhere).
+   * active-minus-busy. today/upcoming booking counts are computed in the salon's own IANA
+   * timezone and come back null (not a fabricated 0) when it has none set — this is a live
+   * operational snapshot, so the rest of it (chairs, staff, queue) stays usable either way rather
+   * than failing the whole endpoint over an unset timezone.
    */
   async getCapacitySummary(
     userId: string,
@@ -333,10 +331,8 @@ export class QueueService {
   ): Promise<CapacitySummaryDto> {
     await this.salonAccess.assertAccess(userId, salonId);
 
-    // Same IST-day-bounds idiom as this file's own nextTokenNumber() a few methods down.
-    const todayIst = utcToIstDateStr(new Date());
-    const todayStart = istWallTimeToUtc(todayIst, '00:00');
-    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60_000);
+    const timeZone = await this.availability.getSalonTimeZone(salonId);
+    const bounds = timeZone ? zonedDayBounds(new Date(), timeZone) : null;
 
     const [
       chairs,
@@ -379,18 +375,22 @@ export class QueueService {
         where: { salonId, status: QueueEntryStatus.WAITING },
         select: { estimatedWaitMinutes: true },
       }),
-      this.prisma.booking.count({
-        where: { salonId, slotStart: { gte: todayStart, lt: todayEnd } },
-      }),
-      this.prisma.booking.count({
-        where: {
-          salonId,
-          slotStart: { gte: todayEnd },
-          status: {
-            in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
-          },
-        },
-      }),
+      bounds
+        ? this.prisma.booking.count({
+            where: { salonId, slotStart: { gte: bounds.start, lt: bounds.end } },
+          })
+        : Promise.resolve(null),
+      bounds
+        ? this.prisma.booking.count({
+            where: {
+              salonId,
+              slotStart: { gte: bounds.end },
+              status: {
+                in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+              },
+            },
+          })
+        : Promise.resolve(null),
     ]);
 
     const busyChairIds = new Set(activeSessions.map((s) => s.chairId));
@@ -983,11 +983,21 @@ export class QueueService {
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${salonId}))`,
     );
-    const todayIst = utcToIstDateStr(new Date());
-    const dayStart = istWallTimeToUtc(todayIst, '00:00');
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60_000);
+    // Token numbering resets once per SALON-LOCAL day — a real, definite answer is required here
+    // (unlike the read-only capacity summary above), so this throws rather than guessing IST for
+    // a salon with no trustworthy timezone. A plain (non-transaction) read is fine: timezone is
+    // effectively immutable within one request's lifetime.
+    const timeZone = await this.availability.resolveTimeZoneOrThrow(salonId);
+    const bounds = zonedDayBounds(new Date(), timeZone);
+    if (!bounds) {
+      throw new AppException(
+        BookingErrorCode.SALON_TIMEZONE_REQUIRED,
+        'Could not resolve today in this salon’s timezone.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
     const last = await tx.queueEntry.findFirst({
-      where: { salonId, joinedAt: { gte: dayStart, lt: dayEnd } },
+      where: { salonId, joinedAt: { gte: bounds.start, lt: bounds.end } },
       orderBy: { tokenNumber: 'desc' },
     });
     return (last?.tokenNumber ?? 0) + 1;

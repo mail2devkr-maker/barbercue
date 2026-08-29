@@ -258,10 +258,8 @@ export interface SalonListItemDto extends SalonSummary {
   // coordinates (see SalonSummary.lat/lng's own nullability). Pre-rounded to 1 decimal place so
   // every client shows the exact figure the server sorted by, not its own rounding.
   distanceKm: number | null;
-  // Computed from today's OperatingHours row against the current IST wall-clock time — same fixed
-  // +05:30 convention as availability.service.ts (see that file's own doc comment; no salon
-  // timezone field is populated yet). Null when the salon has no operating-hours data at all for
-  // today (never assumed open or closed without a real signal).
+  // Computed from today's OperatingHours row in the salon's valid IANA timezone. Null when the
+  // timezone or today's hours are unknown — never guessed for a multi-timezone country.
   isOpenNow: boolean | null;
   // Phase 18 — true only once an admin has APPROVED a VerificationRequest for this salon. Clients
   // must pair any badge with VERIFICATION_BADGE_CAPTION's exact wording, never invent their own.
@@ -480,7 +478,7 @@ export interface UtilizationEntryDto {
 }
 
 export interface HourCountDto {
-  hour: number; // 0-23, IST wall-clock hour
+  hour: number; // 0-23 in the salon's local wall clock
   count: number;
 }
 
@@ -583,8 +581,9 @@ export interface CapacitySummaryDto {
   waitingCustomers: number; // WAITING queue entries
   queueSize: number; // WAITING + CALLED + IN_SERVICE
   averageEstimatedWaitMinutes: number | null;
-  todaysBookings: number;
-  upcomingBookings: number;
+  // Null when the salon has no trustworthy IANA timezone; other live capacity remains usable.
+  todaysBookings: number | null;
+  upcomingBookings: number | null;
 }
 
 // ---------- Notification Center (Phase 11) ----------
@@ -640,7 +639,8 @@ export interface NotificationPreferencesDto {
 export interface OwnerMultiShopOverviewDto {
   totalShops: number;
   openShops: number; // SalonStatus.ACTIVE
-  todaysBookingsTotal: number;
+  // Null if any owned shop lacks a trustworthy timezone, avoiding a silently partial total.
+  todaysBookingsTotal: number | null;
   activeQueueTotal: number; // WAITING + CALLED + IN_SERVICE, summed across all owned shops
 }
 

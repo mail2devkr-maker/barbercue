@@ -193,6 +193,69 @@ describe('SalonsService', () => {
         const call = prisma.salon.findMany.mock.calls[0][0] as unknown as Record<string, unknown>;
         expect(call.cursor).toBeUndefined();
       });
+
+      // A salon with no usable coordinates can never get a distance and is always dropped by the
+      // distanceKm-not-null filter — so fetching it into the bounded NEAR_ME_CANDIDATE_CAP
+      // candidate set only ever wastes a slot. At real scale (200+ coordinate-less salons in a
+      // city, say) an unfiltered query could fill the entire capped set with rows that were
+      // always going to be discarded, silently returning zero results even when real
+      // coordinate-bearing salons exist and match every other filter.
+      it('filters coordinate-less salons out of the candidate query itself, not just the final result', async () => {
+        prisma.salon.findMany.mockResolvedValue([]);
+        await service.search({ lat: 12.9716, lng: 77.6412 });
+        const call = prisma.salon.findMany.mock.calls[0][0] as unknown as {
+          where: { lat: { not: null }; lng: { not: null } };
+          take: number;
+        };
+        expect(call.where.lat).toEqual({ not: null });
+        expect(call.where.lng).toEqual({ not: null });
+        // The full candidate cap is spent entirely on rows that can actually appear in the
+        // distance-sorted result — this is what actually prevents the crowding-out bug once the
+        // coordinate filter above is applied at the database level.
+        expect(call.take).toBe(200);
+      });
+
+      it('still considers every coordinate-bearing salon even when many others in the same query have none', async () => {
+        // The mock can't simulate a real WHERE filter, so this proves the *other* half of the
+        // fix: every returned (coordinate-bearing, per the query above) candidate is still
+        // correctly distance-sorted and included, none silently dropped just for being one of many.
+        const far = makeSalon({ id: 'far', lat: 20.0, lng: 80.0 });
+        const near = makeSalon({ id: 'near', lat: 12.9716, lng: 77.6412 });
+        const mid = makeSalon({ id: 'mid', lat: 13.2, lng: 77.8 });
+        prisma.salon.findMany.mockResolvedValue([far, near, mid]);
+        const result = await service.search({ lat: 12.9716, lng: 77.6412 });
+        expect(result.items.map((i) => i.id)).toEqual(['near', 'mid', 'far']);
+      });
+
+      it('excludes a salon with only one of lat/lng set (malformed/partial coordinates), not just fully-null', async () => {
+        const partial = makeSalon({ id: 'partial', lat: 12.9716, lng: null });
+        prisma.salon.findMany.mockResolvedValue([partial]);
+        const result = await service.search({ lat: 12.9716, lng: 77.6412 });
+        expect(result.items).toHaveLength(0);
+      });
+
+      it('does not enter near-me mode at all when only one of lat/lng is supplied in the query', async () => {
+        prisma.salon.findMany.mockResolvedValue([makeSalon()]);
+        await service.search({ lat: 12.9716 });
+        const call = prisma.salon.findMany.mock.calls[0][0] as unknown as {
+          where: Record<string, unknown>;
+        };
+        // Falls through to the ordinary cursor-paginated path — no coordinate filter applied.
+        expect(call.where.lat).toBeUndefined();
+      });
+
+      it('breaks an exact distance tie deterministically by id, not by incidental row order', async () => {
+        // Both salons are equidistant from the query point (same lat/lng as each other).
+        const b = makeSalon({ id: 'b-salon', lat: 13.0, lng: 78.0 });
+        const a = makeSalon({ id: 'a-salon', lat: 13.0, lng: 78.0 });
+        prisma.salon.findMany.mockResolvedValueOnce([b, a]);
+        const first = await service.search({ lat: 12.9716, lng: 77.6412 });
+        prisma.salon.findMany.mockResolvedValueOnce([a, b]);
+        const second = await service.search({ lat: 12.9716, lng: 77.6412 });
+        // Same tie-break result regardless of which order Prisma happened to return the rows in.
+        expect(first.items.map((i) => i.id)).toEqual(['a-salon', 'b-salon']);
+        expect(second.items.map((i) => i.id)).toEqual(['a-salon', 'b-salon']);
+      });
     });
   });
 
@@ -354,6 +417,103 @@ describe('SalonsService', () => {
           yearsExperience: 8,
         },
       ]);
+    });
+
+    // isOpenNow used to be computed against a fixed +05:30 IST offset for every salon regardless
+    // of where it actually is — these prove it now resolves each salon's OWN timezone instead.
+    describe('isOpenNow (global timezone correctness)', () => {
+      const mondayHours = [
+        { dayOfWeek: 1, isClosed: false, openTime: '09:00', closeTime: '18:00' },
+      ];
+
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      async function loadProfile() {
+        citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
+          id: 'c1',
+          slug: 'bengaluru',
+          countryCode: 'IN',
+        });
+        return service.getProfile('IN', 'bengaluru', 'barbercue-demo');
+      }
+
+      it('is open for an India salon with no explicit timezone (country fallback to Asia/Kolkata)', async () => {
+        // Monday 2026-06-01, 11:00 IST = 05:30 UTC.
+        jest.useFakeTimers({ now: new Date('2026-06-01T05:30:00.000Z') });
+        prisma.salon.findFirst.mockResolvedValue(
+          makeSalon({ operatingHours: mondayHours, services: [], reviews: [] }),
+        );
+        const profile = await loadProfile();
+        expect(profile.isOpenNow).toBe(true);
+      });
+
+      it('is open using London\'s real +01:00 BST offset, at an instant the old fixed +05:30 IST assumption would have wrongly called closed', async () => {
+        // 2026-06-01T16:30:00Z: correct London local time is 17:30 (BST, +01:00) — inside
+        // 09:00-18:00, so open. The old fixed +05:30 offset would have computed "23:30" for this
+        // same UTC instant — outside 09:00-18:00 — and wrongly reported closed.
+        jest.useFakeTimers({ now: new Date('2026-06-01T16:30:00.000Z') });
+        prisma.salon.findFirst.mockResolvedValue(
+          makeSalon({
+            city: { slug: 'london', countryCode: 'GB' },
+            timezone: 'Europe/London',
+            operatingHours: mondayHours,
+            services: [],
+            reviews: [],
+          }),
+        );
+        const profile = await loadProfile();
+        expect(profile.isOpenNow).toBe(true);
+      });
+
+      it('is closed using London\'s real offset, at an instant the old fixed +05:30 IST assumption would have wrongly called open', async () => {
+        // 2026-06-01T06:00:00Z: correct London local time is 07:00 (BST) — before this salon's
+        // 09:00 open, so closed. The old fixed +05:30 offset would have computed "11:30" for this
+        // same UTC instant — inside 09:00-18:00 — and wrongly reported open.
+        jest.useFakeTimers({ now: new Date('2026-06-01T06:00:00.000Z') });
+        prisma.salon.findFirst.mockResolvedValue(
+          makeSalon({
+            city: { slug: 'london', countryCode: 'GB' },
+            timezone: 'Europe/London',
+            operatingHours: mondayHours,
+            services: [],
+            reviews: [],
+          }),
+        );
+        const profile = await loadProfile();
+        expect(profile.isOpenNow).toBe(false);
+      });
+
+      it('is null — never falsely Open or Closed — for a non-India salon with no explicit timezone', async () => {
+        jest.useFakeTimers({ now: new Date('2026-06-01T05:30:00.000Z') });
+        prisma.salon.findFirst.mockResolvedValue(
+          makeSalon({
+            city: { slug: 'newyork', countryCode: 'US' },
+            timezone: null,
+            operatingHours: mondayHours,
+            services: [],
+            reviews: [],
+          }),
+        );
+        const profile = await loadProfile();
+        expect(profile.isOpenNow).toBeNull();
+      });
+
+      it('is null for an invalid stored IANA timezone string, not a crash', async () => {
+        jest.useFakeTimers({ now: new Date('2026-06-01T05:30:00.000Z') });
+        prisma.salon.findFirst.mockResolvedValue(
+          makeSalon({
+            city: { slug: 'newyork', countryCode: 'US' },
+            timezone: 'Not/AZone',
+            operatingHours: mondayHours,
+            services: [],
+            reviews: [],
+          }),
+        );
+        const profile = await loadProfile();
+        expect(profile.isOpenNow).toBeNull();
+      });
     });
   });
 

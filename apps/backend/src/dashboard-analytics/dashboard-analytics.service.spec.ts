@@ -21,8 +21,13 @@ describe('DashboardAnalyticsService', () => {
 
   beforeEach(async () => {
     prisma = {
+      // Asia/Kolkata by default — every existing IST-based hour/range assertion in this file
+      // stays valid as-is; non-India/DST/missing-timezone correctness is covered directly in
+      // availability.service.spec.ts instead of being re-tested per consumer.
       salon: {
-        findUnique: jest.fn().mockResolvedValue({ currency: 'INR' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ currency: 'INR', timezone: null, city: { countryCode: 'IN' } }),
       },
       booking: {
         groupBy: jest.fn().mockResolvedValue([]),

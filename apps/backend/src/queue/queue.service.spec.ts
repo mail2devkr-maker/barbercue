@@ -92,6 +92,8 @@ describe('QueueService', () => {
     getServiceOrThrow: jest.Mock<Promise<unknown>, [string, string]>;
     assertStaffQualified: jest.Mock<Promise<void>, [string, string, string]>;
     getSlotCapacity: jest.Mock<Promise<number>, [unknown, string, string]>;
+    getSalonTimeZone: jest.Mock<Promise<string | null>, [string]>;
+    resolveTimeZoneOrThrow: jest.Mock<Promise<string>, [string]>;
   };
   let salonAccess: { assertAccess: jest.Mock<Promise<void>, [string, string]> };
   let realtime: {
@@ -180,6 +182,14 @@ describe('QueueService', () => {
       getSlotCapacity: jest
         .fn<Promise<number>, [unknown, string, string]>()
         .mockResolvedValue(3),
+      // Asia/Kolkata by default — every existing IST-day-boundary assertion in this file stays
+      // valid as-is; timezone-specific correctness itself is covered in availability.service.spec.ts.
+      getSalonTimeZone: jest
+        .fn<Promise<string | null>, [string]>()
+        .mockResolvedValue('Asia/Kolkata'),
+      resolveTimeZoneOrThrow: jest
+        .fn<Promise<string>, [string]>()
+        .mockResolvedValue('Asia/Kolkata'),
     };
     salonAccess = {
       assertAccess: jest

@@ -104,6 +104,7 @@ export class BookingsService {
         input.preferredStaffId,
       );
       await this.availability.assertStaffWithinWorkingHours(
+        input.salonId,
         input.preferredStaffId,
         slotStart,
         slotEnd,
@@ -422,6 +423,7 @@ export class BookingsService {
     );
     if (booking.preferredStaffId) {
       await this.availability.assertStaffWithinWorkingHours(
+        booking.salonId,
         booking.preferredStaffId,
         newSlotStart,
         newSlotEnd,

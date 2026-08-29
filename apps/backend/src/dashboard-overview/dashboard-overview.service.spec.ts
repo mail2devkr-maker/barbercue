@@ -56,16 +56,22 @@ describe('DashboardOverviewService', () => {
       { salonId: 's3' },
     ]);
     prisma.salon.findMany.mockResolvedValueOnce([
-      { status: 'ACTIVE' },
-      { status: 'ACTIVE' },
-      { status: 'PENDING' },
+      { id: 's1', status: 'ACTIVE', timezone: null, city: { countryCode: 'IN' } },
+      { id: 's2', status: 'ACTIVE', timezone: null, city: { countryCode: 'IN' } },
+      { id: 's3', status: 'PENDING', timezone: null, city: { countryCode: 'IN' } },
     ]);
     const result = await service.getOverview('owner1');
     expect(result.openShops).toBe(2);
   });
 
-  it('scopes booking/queue aggregates to exactly the owned salon ids', async () => {
+  it('scopes today\'s-bookings to each owned salon\'s OWN local calendar day, not one shared window', async () => {
     prisma.userRole.findMany.mockResolvedValueOnce([{ salonId: 's1' }, { salonId: 's2' }]);
+    // Two different timezones — this is exactly why a single global slotStart range would be
+    // wrong: "today" is a different UTC window for each of these two owned shops.
+    prisma.salon.findMany.mockResolvedValueOnce([
+      { id: 's1', status: 'ACTIVE', timezone: null, city: { countryCode: 'IN' } },
+      { id: 's2', status: 'ACTIVE', timezone: 'Europe/London', city: { countryCode: 'GB' } },
+    ]);
     prisma.booking.count.mockResolvedValueOnce(7);
     prisma.queueEntry.count.mockResolvedValueOnce(3);
 
@@ -74,8 +80,26 @@ describe('DashboardOverviewService', () => {
     expect(result.todaysBookingsTotal).toBe(7);
     expect(result.activeQueueTotal).toBe(3);
     const bookingArgs = prisma.booking.count.mock.calls[0][0] as {
-      where: { salonId: { in: string[] } };
+      where: { OR: { salonId: string; slotStart: { gte: Date; lt: Date } }[] };
     };
-    expect(bookingArgs.where.salonId.in.sort()).toEqual(['s1', 's2']);
+    const salonIds = bookingArgs.where.OR.map((clause) => clause.salonId).sort();
+    expect(salonIds).toEqual(['s1', 's2']);
+    // Each clause carries its own start/end — not a single window reused for both salons.
+    const [s1Clause, s2Clause] = bookingArgs.where.OR;
+    expect(s1Clause.slotStart.gte.getTime()).not.toBe(s2Clause.slotStart.gte.getTime());
+  });
+
+  it('reports todaysBookingsTotal as null — never a silently partial number — when any owned salon has no trustworthy timezone', async () => {
+    prisma.userRole.findMany.mockResolvedValueOnce([{ salonId: 's1' }, { salonId: 's2' }]);
+    prisma.salon.findMany.mockResolvedValueOnce([
+      { id: 's1', status: 'ACTIVE', timezone: null, city: { countryCode: 'IN' } },
+      // Unresolvable: no explicit timezone, and a non-India country never falls back.
+      { id: 's2', status: 'ACTIVE', timezone: null, city: { countryCode: 'US' } },
+    ]);
+
+    const result = await service.getOverview('owner1');
+
+    expect(result.todaysBookingsTotal).toBeNull();
+    expect(prisma.booking.count).not.toHaveBeenCalled();
   });
 });

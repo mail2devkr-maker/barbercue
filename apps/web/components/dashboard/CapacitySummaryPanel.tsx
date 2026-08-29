@@ -88,7 +88,7 @@ export function CapacitySummaryPanel({ salonId }: { salonId: string }) {
         <span className={styles.label}>Avg wait</span>
       </div>
       <div className={styles.stat}>
-        <span className={styles.value}>{data.todaysBookings}</span>
+        <span className={styles.value}>{data.todaysBookings ?? "—"}</span>
         <span className={styles.label}>Today&apos;s bookings</span>
       </div>
       {(data.chairs.maintenance > 0 || data.staff.offDuty > 0) && (

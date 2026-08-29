@@ -70,7 +70,7 @@ interface AvailabilityMock {
   getServiceOrThrow: jest.Mock<Promise<unknown>, [string, string]>;
   assertWithinOperatingHours: jest.Mock<Promise<void>, [string, Date, Date]>;
   assertStaffQualified: jest.Mock<Promise<void>, [string, string, string]>;
-  assertStaffWithinWorkingHours: jest.Mock<Promise<void>, [string, Date, Date]>;
+  assertStaffWithinWorkingHours: jest.Mock<Promise<void>, [string, string, Date, Date]>;
   getSlotCapacity: jest.Mock<Promise<number>, [unknown, string, string]>;
 }
 
@@ -139,7 +139,7 @@ describe('BookingsService', () => {
         .fn<Promise<void>, [string, string, string]>()
         .mockResolvedValue(undefined),
       assertStaffWithinWorkingHours: jest
-        .fn<Promise<void>, [string, Date, Date]>()
+        .fn<Promise<void>, [string, string, Date, Date]>()
         .mockResolvedValue(undefined),
       getSlotCapacity: jest
         .fn<Promise<number>, [unknown, string, string]>()
@@ -243,6 +243,7 @@ describe('BookingsService', () => {
         'key-1',
       );
       expect(availability.assertStaffWithinWorkingHours).toHaveBeenCalledWith(
+        's1',
         'st1',
         expect.any(Date),
         expect.any(Date),
@@ -531,6 +532,7 @@ describe('BookingsService', () => {
       );
       await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
       expect(availability.assertStaffWithinWorkingHours).toHaveBeenCalledWith(
+        's1',
         'st1',
         new Date(newFutureSlot),
         expect.any(Date),

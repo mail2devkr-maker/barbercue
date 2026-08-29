@@ -13,40 +13,25 @@ import {
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
+import {
+  resolveSalonTimeZone,
+  zonedDateToDayOfWeek,
+  zonedWallTimeToUtc,
+  utcToZonedDateStr,
+} from '../common/timezone/timezone';
 
-// V1 is India-only (Razorpay/INR throughout DATABASE.md/PAYMENTS.md) and Salon/OperatingHours have
-// no timezone field — a deliberate, explicitly-stated assumption, not a silent pick: every
-// OperatingHours "HH:mm" and every `date=` query param is interpreted as Asia/Kolkata wall-clock
-// time, a fixed +05:30 offset with no DST.
-const IST_OFFSET_MINUTES = 330;
+// Every OperatingHours/StaffWorkingHours "HH:mm" and every `date=` query param is interpreted in
+// the SALON's own IANA timezone (Salon.timezone, falling back to Asia/Kolkata only when the
+// salon's city is in India — see resolveSalonTimeZone's own doc comment). A salon with neither an
+// explicit timezone nor a resolvable India fallback cannot have its booking-critical time math
+// validated safely, so every method below throws SALON_TIMEZONE_REQUIRED rather than silently
+// guessing IST for a shop that might not even be in that zone.
 const SLOT_GRANULARITY_MINUTES = 15;
 const MAX_BOOKING_DAYS_AHEAD = 30;
 
 // Exported so queue.service.ts (Phase 3C) can pass its own transaction client into the reused
 // qualifiedStaffWhere/getSlotCapacity helpers below.
 export type Db = PrismaService | Prisma.TransactionClient;
-
-function istWallTimeToUtc(dateStr: string, timeStr: string): Date {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const [hour, minute] = timeStr.split(':').map(Number);
-  return new Date(
-    Date.UTC(year, month - 1, day, hour, minute) - IST_OFFSET_MINUTES * 60_000,
-  );
-}
-
-function istDateToDayOfWeek(dateStr: string): number {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-}
-
-/** Inverse of istWallTimeToUtc's date component — which IST calendar day does this instant fall on. */
-function utcToIstDateStr(date: Date): string {
-  const ist = new Date(date.getTime() + IST_OFFSET_MINUTES * 60_000);
-  const y = ist.getUTCFullYear();
-  const m = String(ist.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(ist.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 
 @Injectable()
 export class AvailabilityService {
@@ -64,6 +49,43 @@ export class AvailabilityService {
       );
     }
     return salon;
+  }
+
+  /**
+   * Resolves the IANA zone every OperatingHours/StaffWorkingHours wall-clock time in this salon
+   * must be interpreted in, or null if none can be trusted (see resolveSalonTimeZone's own doc
+   * comment). A minimal, indexed lookup — not a reuse of getSalonOrThrow's row — so callers that
+   * already hold a full salon record don't pay for one they don't need. Public: queue.service.ts
+   * (already injects this service) reuses it too, rather than re-implementing the same salon+city
+   * lookup, for its own read-only "degrade to unknown, don't throw" call sites.
+   */
+  async getSalonTimeZone(salonId: string): Promise<string | null> {
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { timezone: true, city: { select: { countryCode: true } } },
+    });
+    return salon
+      ? resolveSalonTimeZone({
+          timezone: salon.timezone,
+          countryCode: salon.city.countryCode,
+        })
+      : null;
+  }
+
+  /** Booking-critical variant of getSalonTimeZone: throws SALON_TIMEZONE_REQUIRED rather than
+   * ever falling back to a fixed IST offset for a salon outside India — see this file's own
+   * header comment. Every booking-path caller needs a definite answer; read-only/display call
+   * sites should call getSalonTimeZone directly instead and degrade to an honest unknown state. */
+  async resolveTimeZoneOrThrow(salonId: string): Promise<string> {
+    const zone = await this.getSalonTimeZone(salonId);
+    if (!zone) {
+      throw new AppException(
+        BookingErrorCode.SALON_TIMEZONE_REQUIRED,
+        'This salon has not set a timezone yet, so bookings cannot be validated safely.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    return zone;
   }
 
   async getServiceOrThrow(
@@ -170,23 +192,25 @@ export class AvailabilityService {
    * configured working hours (the "unrestricted" default).
    */
   async assertStaffWithinWorkingHours(
+    salonId: string,
     staffId: string,
     slotStart: Date,
     slotEnd: Date,
   ): Promise<void> {
-    const dateStr = utcToIstDateStr(slotStart);
-    const dayOfWeek = istDateToDayOfWeek(dateStr);
+    const timeZone = await this.resolveTimeZoneOrThrow(salonId);
+    const dateStr = utcToZonedDateStr(slotStart, timeZone);
+    const dayOfWeek = zonedDateToDayOfWeek(dateStr);
     const staffHours = await this.prisma.staffWorkingHours.findUnique({
       where: { staffId_dayOfWeek: { staffId, dayOfWeek } },
     });
     if (!staffHours) return;
     const openAt =
       !staffHours.isClosed
-        ? istWallTimeToUtc(dateStr, staffHours.openTime)
+        ? zonedWallTimeToUtc(dateStr, staffHours.openTime, timeZone)
         : null;
     const closeAt =
       !staffHours.isClosed
-        ? istWallTimeToUtc(dateStr, staffHours.closeTime)
+        ? zonedWallTimeToUtc(dateStr, staffHours.closeTime, timeZone)
         : null;
     if (!openAt || !closeAt || slotStart < openAt || slotEnd > closeAt) {
       throw new AppException(
@@ -220,18 +244,19 @@ export class AvailabilityService {
     slotStart: Date,
     slotEnd: Date,
   ): Promise<void> {
-    const dateStr = utcToIstDateStr(slotStart);
-    const dayOfWeek = istDateToDayOfWeek(dateStr);
+    const timeZone = await this.resolveTimeZoneOrThrow(salonId);
+    const dateStr = utcToZonedDateStr(slotStart, timeZone);
+    const dayOfWeek = zonedDateToDayOfWeek(dateStr);
     const hours = await this.prisma.operatingHours.findUnique({
       where: { salonId_dayOfWeek: { salonId, dayOfWeek } },
     });
     const openAt =
       hours && !hours.isClosed
-        ? istWallTimeToUtc(dateStr, hours.openTime)
+        ? zonedWallTimeToUtc(dateStr, hours.openTime, timeZone)
         : null;
     const closeAt =
       hours && !hours.isClosed
-        ? istWallTimeToUtc(dateStr, hours.closeTime)
+        ? zonedWallTimeToUtc(dateStr, hours.closeTime, timeZone)
         : null;
     if (!openAt || !closeAt || slotStart < openAt || slotEnd > closeAt) {
       throw new AppException(
@@ -263,22 +288,27 @@ export class AvailabilityService {
     await this.getSalonOrThrow(salonId);
     const service = await this.getServiceOrThrow(salonId, serviceId);
     if (staffId) await this.assertStaffQualified(salonId, serviceId, staffId);
+    const timeZone = await this.resolveTimeZoneOrThrow(salonId);
 
     const now = new Date();
     const maxAdvance = new Date(
       now.getTime() + MAX_BOOKING_DAYS_AHEAD * 24 * 60 * 60_000,
     );
-    const dayStart = istWallTimeToUtc(date, '00:00');
-    if (dayStart > maxAdvance) return [];
+    // `date` is the requested SALON-LOCAL calendar day (never IST-fixed) — if midnight itself
+    // falls in a DST spring-forward gap for this zone, there is no honest instant to return, so
+    // the day is treated as having no slots rather than guessing.
+    const dayStart = zonedWallTimeToUtc(date, '00:00', timeZone);
+    if (!dayStart || dayStart > maxAdvance) return [];
 
-    const dayOfWeek = istDateToDayOfWeek(date);
+    const dayOfWeek = zonedDateToDayOfWeek(date);
     const hours = await this.prisma.operatingHours.findUnique({
       where: { salonId_dayOfWeek: { salonId, dayOfWeek } },
     });
     if (!hours || hours.isClosed) return [];
 
-    let openAt = istWallTimeToUtc(date, hours.openTime);
-    let closeAt = istWallTimeToUtc(date, hours.closeTime);
+    let openAt = zonedWallTimeToUtc(date, hours.openTime, timeZone);
+    let closeAt = zonedWallTimeToUtc(date, hours.closeTime, timeZone);
+    if (!openAt || !closeAt) return [];
 
     if (staffId) {
       const staffHours = await this.prisma.staffWorkingHours.findUnique({
@@ -286,8 +316,9 @@ export class AvailabilityService {
       });
       if (staffHours) {
         if (staffHours.isClosed) return [];
-        const staffOpenAt = istWallTimeToUtc(date, staffHours.openTime);
-        const staffCloseAt = istWallTimeToUtc(date, staffHours.closeTime);
+        const staffOpenAt = zonedWallTimeToUtc(date, staffHours.openTime, timeZone);
+        const staffCloseAt = zonedWallTimeToUtc(date, staffHours.closeTime, timeZone);
+        if (!staffOpenAt || !staffCloseAt) return [];
         openAt = openAt > staffOpenAt ? openAt : staffOpenAt;
         closeAt = closeAt < staffCloseAt ? closeAt : staffCloseAt;
         if (openAt >= closeAt) return [];
@@ -336,9 +367,4 @@ export class AvailabilityService {
   }
 }
 
-export {
-  istWallTimeToUtc,
-  istDateToDayOfWeek,
-  utcToIstDateStr,
-  MAX_BOOKING_DAYS_AHEAD,
-};
+export { MAX_BOOKING_DAYS_AHEAD };

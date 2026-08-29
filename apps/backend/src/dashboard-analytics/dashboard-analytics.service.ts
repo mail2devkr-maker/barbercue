@@ -14,19 +14,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import {
-  istWallTimeToUtc,
-  utcToIstDateStr,
-} from '../bookings/availability.service';
+  addZonedCalendarDays,
+  resolveSalonTimeZone,
+  utcToZonedDateStr,
+  zonedHourOf,
+  zonedWallTimeToUtc,
+} from '../common/timezone/timezone';
 
 const PEAK_SLOW_HOUR_COUNT = 5;
-// Same fixed +05:30 offset convention used throughout this codebase (no salon timezone field is
-// populated yet — see availability.service.ts's own doc comment).
-const IST_OFFSET_MINUTES = 330;
-
-function istHourOf(date: Date): number {
-  const ist = new Date(date.getTime() + IST_OFFSET_MINUTES * 60_000);
-  return ist.getUTCHours();
-}
 
 /**
  * Owner operational analytics (Phase 9) — real DB aggregates only, no external analytics provider
@@ -53,10 +48,32 @@ export class DashboardAnalyticsService {
   ): Promise<OwnerAnalyticsDto> {
     await this.salonAccess.assertOwnerAccess(userId, salonId);
 
-    const { from, to } = this.resolveRange(rangeRaw, fromRaw, toRaw);
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { currency: true, timezone: true, city: { select: { countryCode: true } } },
+    });
+    if (!salon) {
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Salon not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const timeZone = resolveSalonTimeZone({
+      timezone: salon.timezone,
+      countryCode: salon.city.countryCode,
+    });
+    if (!timeZone) {
+      throw new AppException(
+        BookingErrorCode.SALON_TIMEZONE_REQUIRED,
+        'This salon has not set a timezone yet, so analytics cannot be computed safely.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    const { from, to } = this.resolveRange(timeZone, rangeRaw, fromRaw, toRaw);
 
     const [
-      salon,
       statusCounts,
       completedBookings,
       walkInCount,
@@ -64,10 +81,6 @@ export class DashboardAnalyticsService {
       queueWaitSamples,
       completedSessions,
     ] = await Promise.all([
-      this.prisma.salon.findUnique({
-        where: { id: salonId },
-        select: { currency: true },
-      }),
       this.prisma.booking.groupBy({
         by: ['status'],
         where: { salonId, slotStart: { gte: from, lt: to } },
@@ -131,7 +144,7 @@ export class DashboardAnalyticsService {
     return {
       from: from.toISOString(),
       to: to.toISOString(),
-      currency: salon?.currency ?? null,
+      currency: salon.currency ?? null,
       appointmentsBooked: allBookingsInRange.length,
       completedCount: countByStatus.get(BookingStatus.COMPLETED) ?? 0,
       cancelledCount: countByStatus.get(BookingStatus.CANCELLED) ?? 0,
@@ -152,7 +165,7 @@ export class DashboardAnalyticsService {
         (s) => s.chairId,
         (s) => s.chair?.label ?? null,
       ),
-      ...this.hourDistribution(allBookingsInRange),
+      ...this.hourDistribution(allBookingsInRange, timeZone),
       servicePopularity: this.servicePopularity(completedBookings),
       estimatedServiceValue: completedBookings.reduce(
         (sum, b) => sum + (b.service ? Number(b.service.price) : 0),
@@ -162,6 +175,7 @@ export class DashboardAnalyticsService {
   }
 
   private resolveRange(
+    timeZone: string,
     rangeRaw: string | undefined,
     fromRaw: string | undefined,
     toRaw: string | undefined,
@@ -188,13 +202,23 @@ export class DashboardAnalyticsService {
       );
     }
 
-    const todayIst = utcToIstDateStr(new Date());
-    const todayStart = istWallTimeToUtc(todayIst, '00:00');
-    const to = new Date(todayStart.getTime() + 24 * 60 * 60_000);
+    // Calendar-day arithmetic, not a fixed 24h-per-day assumption: a local day spans 23 or 25
+    // real hours across a DST transition, so "tomorrow midnight" and "N days ago" are computed by
+    // adding whole calendar days in the salon's own zone, then converting each boundary to an
+    // instant — never by adding N * 86_400_000 milliseconds to an instant.
+    const today = utcToZonedDateStr(new Date(), timeZone);
     const daysBack = range === '7d' ? 7 : range === '30d' ? 30 : 1;
-    const from = new Date(
-      todayStart.getTime() - (daysBack - 1) * 24 * 60 * 60_000,
-    );
+    const fromDate = addZonedCalendarDays(today, -(daysBack - 1));
+    const toDate = addZonedCalendarDays(today, 1);
+    const from = zonedWallTimeToUtc(fromDate, '00:00', timeZone);
+    const to = zonedWallTimeToUtc(toDate, '00:00', timeZone);
+    if (!from || !to) {
+      throw new AppException(
+        BookingErrorCode.SALON_TIMEZONE_REQUIRED,
+        'Could not resolve today in this salon’s timezone.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
     return { from, to };
   }
 
@@ -298,13 +322,16 @@ export class DashboardAnalyticsService {
     );
   }
 
-  private hourDistribution(bookings: { slotStart: Date }[]): {
+  private hourDistribution(
+    bookings: { slotStart: Date }[],
+    timeZone: string,
+  ): {
     peakHours: HourCountDto[];
     slowHours: HourCountDto[];
   } {
     const counts = new Map<number, number>();
     for (const b of bookings) {
-      const hour = istHourOf(b.slotStart);
+      const hour = zonedHourOf(b.slotStart, timeZone);
       counts.set(hour, (counts.get(hour) ?? 0) + 1);
     }
     const entries: HourCountDto[] = [...counts.entries()]

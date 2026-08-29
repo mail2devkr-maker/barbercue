@@ -11,24 +11,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { resolveSalonTimeZone, zonedDayBounds } from '../common/timezone/timezone';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
-
-// Mirrors bookings/availability.service.ts's own fixed +05:30 offset convention (no salon
-// timezone field is populated yet — see that file's doc comment) so "today"/"upcoming" agree with
-// how every OperatingHours window and booking slot is already interpreted.
-const IST_OFFSET_MINUTES = 330;
-
-function istDayBounds(reference: Date): { start: Date; end: Date } {
-  const ist = new Date(reference.getTime() + IST_OFFSET_MINUTES * 60_000);
-  const y = ist.getUTCFullYear();
-  const m = ist.getUTCMonth();
-  const d = ist.getUTCDate();
-  const start = new Date(Date.UTC(y, m, d) - IST_OFFSET_MINUTES * 60_000);
-  const end = new Date(Date.UTC(y, m, d + 1) - IST_OFFSET_MINUTES * 60_000);
-  return { start, end };
-}
 
 // Shared by list/getOne so the mapping to OwnerBookingDetailDto's fields never drifts across call
 // sites — same pattern as bookings.service.ts's bookingDetailInclude. queueEntries is limited to
@@ -88,7 +74,7 @@ export class DashboardBookingsService {
 
     const where: Prisma.BookingWhereInput = {
       salonId,
-      ...this.filterWhere(filter),
+      ...(await this.filterWhere(filter, salonId)),
     };
     if (from || to) {
       where.slotStart = {
@@ -157,16 +143,19 @@ export class DashboardBookingsService {
     return Math.min(parsed, MAX_PAGE_SIZE);
   }
 
-  private filterWhere(filter: OwnerBookingFilter): Prisma.BookingWhereInput {
+  private async filterWhere(
+    filter: OwnerBookingFilter,
+    salonId: string,
+  ): Promise<Prisma.BookingWhereInput> {
     switch (filter) {
       case 'today': {
-        const { start, end } = istDayBounds(new Date());
+        const { start, end } = await this.zonedDayBoundsForSalon(salonId);
         return { slotStart: { gte: start, lt: end } };
       }
       case 'upcoming': {
         // Deliberately excludes today's own remaining slots — those belong to the `today` filter
         // — and only the still-actionable statuses, not a future booking someone already cancelled.
-        const { end } = istDayBounds(new Date());
+        const { end } = await this.zonedDayBoundsForSalon(salonId);
         return {
           slotStart: { gte: end },
           status: {
@@ -183,6 +172,32 @@ export class DashboardBookingsService {
       case 'all':
         return {};
     }
+  }
+
+  /** Only queried for the 'today'/'upcoming' filters — every other filter needs no timezone at
+   * all, so this stays a separate lookup rather than something list() always pays for. */
+  private async zonedDayBoundsForSalon(
+    salonId: string,
+  ): Promise<{ start: Date; end: Date }> {
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { timezone: true, city: { select: { countryCode: true } } },
+    });
+    const timeZone = salon
+      ? resolveSalonTimeZone({
+          timezone: salon.timezone,
+          countryCode: salon.city.countryCode,
+        })
+      : null;
+    const bounds = timeZone ? zonedDayBounds(new Date(), timeZone) : null;
+    if (!bounds) {
+      throw new AppException(
+        BookingErrorCode.SALON_TIMEZONE_REQUIRED,
+        'This salon has not set a timezone yet, so today/upcoming cannot be computed safely.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    return { start: bounds.start, end: bounds.end };
   }
 
   private toOwnerDetailDto(
