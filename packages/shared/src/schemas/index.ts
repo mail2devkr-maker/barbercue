@@ -435,10 +435,16 @@ export const createSalonStaffSchema = z.object({
 });
 export type CreateSalonStaffInput = z.infer<typeof createSalonStaffSchema>;
 
+// Phase 17 (Barber Professional Profile) — bio/photoUrl accept '' as an explicit "clear this
+// field" signal (SalonStaffService maps '' -> null); omitting the key entirely means "leave
+// unchanged", same convention as every other partial-update schema in this file.
 export const updateSalonStaffSchema = z
   .object({
     displayName: z.string().min(1).max(120).optional(),
     status: z.nativeEnum(StaffMemberStatus).optional(),
+    bio: z.string().trim().max(500).optional(),
+    photoUrl: z.union([salonPhotoUrlSchema, z.literal('')]).optional(),
+    yearsExperience: z.number().int().min(0).max(80).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateSalonStaffInput = z.infer<typeof updateSalonStaffSchema>;

@@ -25,6 +25,7 @@ function makeSalon(overrides: Partial<Record<string, unknown>> = {}) {
     locality: { slug: 'indiranagar' },
     photos: [],
     operatingHours: [],
+    staff: [],
     ...overrides,
   };
 }
@@ -314,6 +315,42 @@ describe('SalonsService', () => {
       );
       const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
       expect(profile.services[0].category).toBe('');
+    });
+
+    it('maps ACTIVE staff to the public team list (Phase 17)', async () => {
+      citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
+        id: 'c1',
+        slug: 'bengaluru',
+        countryCode: 'IN',
+      });
+      prisma.salon.findFirst.mockResolvedValue(
+        makeSalon({
+          services: [],
+          operatingHours: [],
+          reviews: [],
+          staff: [
+            {
+              id: 'st1',
+              displayName: 'Marcus',
+              roleInSalon: 'BARBER',
+              photoUrl: 'https://example.com/marcus.jpg',
+              bio: 'Fades and tapers specialist.',
+              yearsExperience: 8,
+            },
+          ],
+        }),
+      );
+      const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
+      expect(profile.team).toEqual([
+        {
+          id: 'st1',
+          displayName: 'Marcus',
+          roleInSalon: 'BARBER',
+          photoUrl: 'https://example.com/marcus.jpg',
+          bio: 'Fades and tapers specialist.',
+          yearsExperience: 8,
+        },
+      ]);
     });
   });
 

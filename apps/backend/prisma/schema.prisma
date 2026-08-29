@@ -657,8 +657,16 @@ model SalonStaff {
   displayName String
   roleInSalon SalonStaffRole
   status      StaffMemberStatus @default(ACTIVE)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  // Phase 17 (Barber Professional Profile) — all optional/additive. Which services this barber is
+  // actually qualified for already lives in StaffService, a real DB-backed relation; these are the
+  // genuinely new fields (no existing model covered them). photoUrl follows the same "URL-based,
+  // no object storage configured" convention as Salon photos — an owner/staff links an
+  // already-hosted image rather than uploading a file.
+  bio             String?
+  photoUrl        String?
+  yearsExperience Int?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   chairAssignments     StaffChairAssignment[]
   serviceSessions      ServiceSession[]

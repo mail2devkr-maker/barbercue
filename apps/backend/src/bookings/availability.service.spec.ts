@@ -119,6 +119,46 @@ describe('AvailabilityService', () => {
     });
   });
 
+  describe('listQualifiedStaff (Phase 17 — Barber Professional Profile)', () => {
+    it('includes photoUrl/bio/yearsExperience on each option', async () => {
+      prisma.service.findFirst.mockResolvedValue({ id: 'sv1' });
+      prisma.staffService.count.mockResolvedValue(0);
+      prisma.salonStaff.findMany.mockResolvedValue([
+        {
+          id: 'st1',
+          displayName: 'Marcus',
+          photoUrl: 'https://example.com/marcus.jpg',
+          bio: 'Fades and tapers specialist.',
+          yearsExperience: 8,
+        },
+        {
+          id: 'st2',
+          displayName: 'Priya',
+          photoUrl: null,
+          bio: null,
+          yearsExperience: null,
+        },
+      ]);
+      const result = await service.listQualifiedStaff('s1', 'sv1');
+      expect(result).toEqual([
+        {
+          id: 'st1',
+          displayName: 'Marcus',
+          photoUrl: 'https://example.com/marcus.jpg',
+          bio: 'Fades and tapers specialist.',
+          yearsExperience: 8,
+        },
+        {
+          id: 'st2',
+          displayName: 'Priya',
+          photoUrl: null,
+          bio: null,
+          yearsExperience: null,
+        },
+      ]);
+    });
+  });
+
   describe('getSlotCapacity', () => {
     it('is the minimum of qualified staff and active chairs (3 staff, 2 chairs -> 2)', async () => {
       prisma.staffService.count.mockResolvedValue(0);

@@ -270,6 +270,13 @@ export class SalonStaffService {
           displayName: input.displayName,
         }),
         ...(input.status !== undefined && { status: input.status }),
+        // '' clears the field (see updateSalonStaffSchema's own doc comment) — every other value,
+        // including undefined (omitted), leaves the column untouched.
+        ...(input.bio !== undefined && { bio: input.bio || null }),
+        ...(input.photoUrl !== undefined && { photoUrl: input.photoUrl || null }),
+        ...(input.yearsExperience !== undefined && {
+          yearsExperience: input.yearsExperience,
+        }),
       },
     });
     return this.getDtoOrThrow(salonId, staffId);
@@ -307,6 +314,9 @@ export class SalonStaffService {
     displayName: string;
     roleInSalon: SalonStaffRole;
     status: StaffMemberStatus;
+    bio: string | null;
+    photoUrl: string | null;
+    yearsExperience: number | null;
     user: {
       phone: string | null;
       email: string | null;
@@ -323,6 +333,9 @@ export class SalonStaffService {
       // Never leaks the hash itself — only whether the invitation has been redeemed, so the UI
       // can show an "invite pending" state.
       hasPassword: staff.user.passwordHash !== null,
+      bio: staff.bio,
+      photoUrl: staff.photoUrl,
+      yearsExperience: staff.yearsExperience,
     };
   }
 }

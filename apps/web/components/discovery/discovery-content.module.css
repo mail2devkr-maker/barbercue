@@ -122,6 +122,41 @@
   line-height: 1.65;
 }
 
+.teamGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 20px;
+}
+
+.teamCard {
+  display: flex;
+  flex-direction: column;
+}
+
+.teamPhoto {
+  width: 96px;
+}
+
+.teamName {
+  margin: 10px 0 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--bc-ink);
+}
+
+.teamMeta {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--bc-muted);
+}
+
+.teamBio {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: #48433c;
+  line-height: 1.5;
+}
+
 @media (max-width: 600px) {
   .photoGrid {
     grid-auto-rows: 130px;

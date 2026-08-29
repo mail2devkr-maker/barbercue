@@ -213,6 +213,60 @@
   background: var(--bc-surface);
 }
 
+/* Phase 17 (Barber Professional Profile) — a richer alternative to .chip for the "choose a
+   barber" step, once a real photo/bio/experience exists to show. */
+.staffCardRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: var(--bc-space-3);
+}
+
+.staffCard {
+  flex: 0 0 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--bc-radius-md);
+  border: 1.5px solid var(--bc-border);
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.staffCard:hover {
+  border-color: var(--bc-ink);
+}
+
+.staffCardSelected {
+  border-color: var(--bc-accent);
+  background: var(--bc-gold-soft);
+}
+
+.staffCardPhoto {
+  width: 64px;
+}
+
+.staffCardName {
+  font-weight: 600;
+  color: var(--bc-ink);
+  font-size: var(--bc-text-sm);
+}
+
+.staffCardMeta {
+  font-size: 0.72rem;
+  color: var(--bc-muted);
+}
+
+.staffCardBio {
+  font-size: 0.75rem;
+  color: #6b6357;
+  line-height: 1.4;
+}
+
 .dateChip {
   flex: 0 0 auto;
   display: flex;

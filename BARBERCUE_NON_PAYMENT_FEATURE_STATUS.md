@@ -210,7 +210,19 @@ deferred to web only, matching the established owner-mobile-secondary pattern. 1
 tests (`ReviewsService`, `DashboardReviewsService`).
 
 ## Phase 17 — Barber Professional Profile
-**NOT STARTED.**
+**DONE.** `SalonStaff` gains `bio`/`photoUrl`/`yearsExperience` (additive migration, all
+nullable) — genuinely new fields; which services a barber is qualified for already existed as a
+real DB relation (`StaffService`) and is surfaced as-is rather than duplicated as free text.
+`photoUrl` follows the same "URL-based, no object storage configured" convention as Salon photos.
+Owner-only edit via the existing `PATCH dashboard/salons/:salonId/staff/:staffId` (extended
+schema; `''` explicitly clears a field, omitted means unchanged) — a new "Edit profile" toggle on
+the web staff roster page, matching the existing "Set working hours" pattern. Surfaced to
+customers in two places: the public salon profile's new "Meet the team" section (`SalonProfileDto.
+team`, ACTIVE staff only) on both web and mobile, and the booking flow's "choose a barber" step
+(`StaffOptionDto` gained the same three fields) on both web (upgrades from plain chips to photo
+cards once any barber has a profile set, chips otherwise) and mobile. Owner-side profile editing
+stays web-only — no mobile owner staff-roster screen exists at all yet, so there was nothing to
+extend there, consistent with the established owner-mobile-secondary pattern. 5 new backend tests.
 
 ## Phase 18 — Shop / Barber Verification Foundation
 **NOT STARTED.**
@@ -285,7 +297,7 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 16): backend 553/553 tests passing (46
+**ONGOING, per-phase.** Current counts (after Phase 17): backend 558/558 tests passing (46
 suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (23
 static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
@@ -298,8 +310,9 @@ new booking/reschedule/rebook flows in a live browser/emulator yet this session.
 connection in this environment) matching Prisma's exact generated SQL conventions, verified
 against prior migrations: `add_staff_working_hours` (Phase 7), `add_notification_center_fields`
 (Phase 11), `add_booking_reminder_sent_at` (Phase 12), `add_notification_preferences` (Phase 13,
-also adds `NotificationChannel.WHATSAPP`), `add_user_preferred_language` (Phase 14). No destructive
-change (drop/rename/narrowing) in any of them.
+also adds `NotificationChannel.WHATSAPP`), `add_user_preferred_language` (Phase 14),
+`add_staff_professional_profile` (Phase 17). No destructive change (drop/rename/narrowing) in any
+of them.
 
 ## Phase 41 — Git / Multi-Agent Discipline
 **DONE, ongoing.** Exact-path staging throughout (never `git add .`), coherent per-feature-family

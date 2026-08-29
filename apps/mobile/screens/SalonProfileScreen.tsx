@@ -115,6 +115,34 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
           </Pressable>
         ))}
 
+        {salon.team.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Meet the team</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.teamStrip}>
+              {salon.team.map((member) => (
+                <View key={member.id} style={styles.teamCard}>
+                  {member.photoUrl ? (
+                    <Image source={{ uri: member.photoUrl }} style={styles.teamPhoto} accessibilityLabel={member.displayName} />
+                  ) : (
+                    <View style={[styles.teamPhoto, styles.teamPhotoPlaceholder]}>
+                      <Text style={styles.teamPhotoInitial}>{member.displayName.charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.teamName} numberOfLines={1}>{member.displayName}</Text>
+                  {member.yearsExperience !== null && (
+                    <Text style={styles.teamMeta}>
+                      {member.yearsExperience} yr{member.yearsExperience === 1 ? '' : 's'} exp.
+                    </Text>
+                  )}
+                  {member.bio && (
+                    <Text style={styles.teamBio} numberOfLines={3}>{member.bio}</Text>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
         {salon.operatingHours.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Hours</Text>
@@ -174,6 +202,23 @@ const styles = StyleSheet.create({
   cardRow: { flexDirection: 'row', justifyContent: 'space-between' },
   cardTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: color.ink },
   cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
+
+  teamStrip: { marginBottom: space[2] },
+  teamCard: {
+    width: 140,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    padding: space[3],
+    marginRight: space[3],
+  },
+  teamPhoto: { width: 56, height: 56, borderRadius: radius.pill, marginBottom: space[2] },
+  teamPhotoPlaceholder: { backgroundColor: color.goldSoft, alignItems: 'center', justifyContent: 'center' },
+  teamPhotoInitial: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.gold },
+  teamName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  teamMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
+  teamBio: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1], lineHeight: 16 },
 
   hoursCard: {
     backgroundColor: '#ffffff',

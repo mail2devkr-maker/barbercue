@@ -8,6 +8,7 @@ import { ServiceList } from "../../../../../components/discovery/ServiceList";
 import { OperatingHoursTable } from "../../../../../components/discovery/OperatingHoursTable";
 import { PhotoGallery } from "../../../../../components/discovery/PhotoGallery";
 import { ReviewList } from "../../../../../components/discovery/ReviewList";
+import { TeamSection } from "../../../../../components/discovery/TeamSection";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../components/discovery/Breadcrumbs";
 import { JsonLd } from "../../../../../components/discovery/JsonLd";
 import { SalonImage } from "../../../../../components/ui/SalonImage";
@@ -246,6 +247,16 @@ export default async function SalonPage({
               countryCode={salon.countryCode}
             />
           </section>
+
+          {salon.team.length > 0 && (
+            <section className={styles.sectionCard}>
+              <div className={styles.sectionHeading}>
+                <p className={styles.eyebrow}>Who&apos;s working</p>
+                <h2>Meet the team</h2>
+              </div>
+              <TeamSection team={salon.team} />
+            </section>
+          )}
 
           <section className={styles.sectionCard}>
             <div className={styles.sectionHeading}>

@@ -7,6 +7,7 @@ import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { StaffHoursEditor } from "../../../../../../components/dashboard/StaffHoursEditor";
+import { StaffProfileEditor } from "../../../../../../components/dashboard/StaffProfileEditor";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Barber roster (Phase 11) — replaces the previous placeholder. Adding a barber creates (or
@@ -32,6 +33,7 @@ export default function DashboardStaffPage({
   // and the barber receives the link by email.
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [hoursOpenFor, setHoursOpenFor] = useState<string | null>(null);
+  const [profileOpenFor, setProfileOpenFor] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,8 +224,25 @@ export default function DashboardStaffPage({
                 >
                   {hoursOpenFor === m.id ? "Hide hours" : "Set working hours"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setProfileOpenFor(profileOpenFor === m.id ? null : m.id)}
+                >
+                  {profileOpenFor === m.id ? "Hide profile" : "Edit profile"}
+                </Button>
               </div>
               {hoursOpenFor === m.id && <StaffHoursEditor salonId={salonId} staffId={m.id} />}
+              {profileOpenFor === m.id && (
+                <StaffProfileEditor
+                  salonId={salonId}
+                  member={m}
+                  onSaved={(updated) => {
+                    setStaff((prev) => (prev ?? []).map((s) => (s.id === updated.id ? updated : s)));
+                    setProfileOpenFor(null);
+                  }}
+                />
+              )}
             </li>
           ))}
         </ul>

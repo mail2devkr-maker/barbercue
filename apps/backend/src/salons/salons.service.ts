@@ -8,10 +8,12 @@ import {
   type PaginatedResult,
   type RegisterSalonInput,
   type RegisterSalonResultDto,
+  StaffMemberStatus,
   type SalonListItemDto,
   type SalonProfileDto,
   type SalonSearchQueryInput,
   type SalonWorkplaceDto,
+  type TeamMemberDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
@@ -155,6 +157,12 @@ export class SalonsService {
         services: { where: { isActive: true }, orderBy: { name: 'asc' } },
         operatingHours: { orderBy: { dayOfWeek: 'asc' } },
         reviews: { orderBy: { createdAt: 'desc' }, take: RECENT_REVIEWS_LIMIT },
+        // Phase 17 (Barber Professional Profile) — "Meet the team". Only staff currently working
+        // here; someone marked INACTIVE (left, on leave) isn't shown to customers browsing the shop.
+        staff: {
+          where: { status: StaffMemberStatus.ACTIVE },
+          orderBy: { displayName: 'asc' },
+        },
       },
     });
     if (!salon) {
@@ -222,6 +230,16 @@ export class SalonsService {
         comment: r.comment,
         createdAt: r.createdAt.toISOString(),
       })),
+      team: salon.staff.map(
+        (s): TeamMemberDto => ({
+          id: s.id,
+          displayName: s.displayName,
+          roleInSalon: s.roleInSalon,
+          photoUrl: s.photoUrl,
+          bio: s.bio,
+          yearsExperience: s.yearsExperience,
+        }),
+      ),
     };
   }
 

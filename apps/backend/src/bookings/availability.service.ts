@@ -121,7 +121,13 @@ export class AvailabilityService {
       where,
       orderBy: { displayName: 'asc' },
     });
-    return staff.map((s) => ({ id: s.id, displayName: s.displayName }));
+    return staff.map((s) => ({
+      id: s.id,
+      displayName: s.displayName,
+      photoUrl: s.photoUrl,
+      bio: s.bio,
+      yearsExperience: s.yearsExperience,
+    }));
   }
 
   async assertStaffQualified(

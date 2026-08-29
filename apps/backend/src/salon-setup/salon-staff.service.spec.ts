@@ -6,6 +6,9 @@ const STAFF_ROW = {
   displayName: 'Marcus',
   roleInSalon: 'BARBER',
   status: 'ACTIVE',
+  bio: null,
+  photoUrl: null,
+  yearsExperience: null,
   user: {
     id: 'user-1',
     phone: '+919876543210',
@@ -329,5 +332,44 @@ describe('SalonStaffService', () => {
     expect(
       (service as unknown as Record<string, unknown>).delete,
     ).toBeUndefined();
+  });
+
+  describe('update — professional profile (Phase 17)', () => {
+    it('sets bio/photoUrl/yearsExperience', async () => {
+      await service.update('owner-1', 'salon-1', 'staff-1', {
+        bio: 'Fades and tapers specialist.',
+        photoUrl: 'https://example.com/marcus.jpg',
+        yearsExperience: 8,
+      } as never);
+      expect(prisma.salonStaff.update).toHaveBeenCalledWith({
+        where: { id: 'staff-1' },
+        data: {
+          bio: 'Fades and tapers specialist.',
+          photoUrl: 'https://example.com/marcus.jpg',
+          yearsExperience: 8,
+        },
+      });
+    });
+
+    it('treats an empty string as "clear this field", not "leave unchanged"', async () => {
+      await service.update('owner-1', 'salon-1', 'staff-1', {
+        bio: '',
+        photoUrl: '',
+      } as never);
+      expect(prisma.salonStaff.update).toHaveBeenCalledWith({
+        where: { id: 'staff-1' },
+        data: { bio: null, photoUrl: null },
+      });
+    });
+
+    it('omits untouched fields from the update entirely', async () => {
+      await service.update('owner-1', 'salon-1', 'staff-1', {
+        yearsExperience: 3,
+      } as never);
+      expect(prisma.salonStaff.update).toHaveBeenCalledWith({
+        where: { id: 'staff-1' },
+        data: { yearsExperience: 3 },
+      });
+    });
   });
 });

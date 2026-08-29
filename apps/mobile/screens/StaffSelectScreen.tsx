@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
 import type { StaffOptionDto } from '@barbercue/shared';
@@ -65,7 +65,26 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
           }
           renderItem={({ item }) => (
             <Pressable style={styles.card} onPress={() => choose(item.id, item.displayName)}>
-              <Text style={styles.cardTitle}>{item.displayName}</Text>
+              <View style={styles.cardRow}>
+                {item.photoUrl ? (
+                  <Image source={{ uri: item.photoUrl }} style={styles.cardPhoto} accessibilityLabel={item.displayName} />
+                ) : (
+                  <View style={[styles.cardPhoto, styles.cardPhotoPlaceholder]}>
+                    <Text style={styles.cardPhotoInitial}>{item.displayName.charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{item.displayName}</Text>
+                  {item.yearsExperience !== null && (
+                    <Text style={styles.cardMeta}>
+                      {item.yearsExperience} yr{item.yearsExperience === 1 ? '' : 's'} experience
+                    </Text>
+                  )}
+                  {item.bio && (
+                    <Text style={styles.cardBio} numberOfLines={2}>{item.bio}</Text>
+                  )}
+                </View>
+              </View>
             </Pressable>
           )}
         />
@@ -87,4 +106,10 @@ const styles = StyleSheet.create({
     marginBottom: space[3],
   },
   cardTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: color.ink },
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
+  cardPhoto: { width: 44, height: 44, borderRadius: radius.pill },
+  cardPhotoPlaceholder: { backgroundColor: color.goldSoft, alignItems: 'center', justifyContent: 'center' },
+  cardPhotoInitial: { fontFamily: font.displaySemiBold, fontSize: fontSize.sm, color: color.gold },
+  cardMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
+  cardBio: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2, lineHeight: 16 },
 });

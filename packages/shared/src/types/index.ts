@@ -243,6 +243,19 @@ export interface SalonProfileDto extends SalonListItemDto {
   operatingHours: OperatingHoursDto[];
   photos: PhotoDto[];
   reviews: ReviewSummaryDto[]; // most recent, capped server-side (see API.md)
+  team: TeamMemberDto[]; // Phase 17 — "Meet the team", ACTIVE staff only
+}
+
+// Public "Meet the team" entry on a salon's discovery profile page (Phase 17). Deliberately never
+// exposes phone/email (those are SalonStaffDto's owner-only fields) — this is what a customer
+// browsing the shop gets to see, nothing account-related.
+export interface TeamMemberDto {
+  id: string;
+  displayName: string;
+  roleInSalon: SalonStaffRole;
+  photoUrl: string | null;
+  bio: string | null;
+  yearsExperience: number | null;
 }
 
 // POST /salons response — deliberately minimal (not a full SalonProfileDto): a brand-new shop has
@@ -321,6 +334,11 @@ export interface StyleAdvisorResultDto {
 export interface StaffOptionDto {
   id: string;
   displayName: string;
+  // Phase 17 (Barber Professional Profile) — lets the "choose a barber" step show a face/bio, not
+  // just a name. All null until the owner/staff fills them in on the dashboard.
+  photoUrl: string | null;
+  bio: string | null;
+  yearsExperience: number | null;
 }
 
 export interface AvailabilitySlotDto {
@@ -730,6 +748,11 @@ export interface SalonStaffDto {
   roleInSalon: SalonStaffRole;
   status: StaffMemberStatus;
   hasPassword: boolean;
+  // Phase 17 (Barber Professional Profile) — owner/staff-editable, shown to customers on the
+  // salon's public profile ("Meet the team") and the booking flow's barber picker.
+  bio: string | null;
+  photoUrl: string | null;
+  yearsExperience: number | null;
 }
 
 // POST .../staff response. invitationSent stays truthful for email-less staff. `inviteUrl` is
