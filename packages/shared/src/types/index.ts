@@ -3,6 +3,7 @@ import type {
   BookingStatus,
   ChairStatus,
   ChargeType,
+  Language,
   NotificationCategory,
   NotificationChannel,
   PhotoType,
@@ -32,6 +33,10 @@ export interface AuthenticatedUser {
 export interface MeResponse extends AuthenticatedUser {
   phone: string | null;
   email: string | null;
+  // Phase 14 (Localization & Voice Operations) — defaults to EN for every existing user (see the
+  // migration). Drives both the language switcher's initial state and which VoiceAnnouncements
+  // dictionary realtime alert handlers speak from.
+  preferredLanguage: Language;
 }
 
 /**

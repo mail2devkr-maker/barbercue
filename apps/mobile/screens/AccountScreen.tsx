@@ -4,7 +4,16 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { AUTH_PATHS, PREMIUM_PATHS, Role, type AuthSession, type PremiumEntitlementDto } from '@barbercue/shared';
+import {
+  AUTH_PATHS,
+  LANGUAGE_LABELS,
+  Language,
+  PREMIUM_PATHS,
+  Role,
+  type AuthSession,
+  type MeResponse,
+  type PremiumEntitlementDto,
+} from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
@@ -25,19 +34,37 @@ type Nav = CompositeNavigationProp<
 >;
 
 // Fields shown are exactly what MeResponse carries (id, roles, phone, email) — the same set web's
-// own /account/profile page shows. There is no profile-edit endpoint on the backend (web's page
-// is read-only too), so this screen is read-only by design, not by omission.
+// own /account/profile page shows. There is no general profile-edit endpoint on the backend (web's
+// page is read-only too); the one exception is preferredLanguage (Phase 14), which has its own
+// dedicated PATCH auth/language endpoint and switcher below, mirroring web's profile page.
 export default function AccountScreen() {
   const navigation = useNavigation<Nav>();
-  const { user, logout } = useAuth();
+  const { user, logout, refreshMe } = useAuth();
 
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingOthers, setRevokingOthers] = useState(false);
+  const [savingLanguage, setSavingLanguage] = useState(false);
 
   const [premium, setPremium] = useState<PremiumEntitlementDto | null>(null);
+
+  async function changeLanguage(language: Language) {
+    if (language === user?.preferredLanguage || savingLanguage) return;
+    setSavingLanguage(true);
+    try {
+      await apiFetch<MeResponse>(`auth/${AUTH_PATHS.language}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ language }),
+      });
+      await refreshMe();
+    } catch {
+      /* the buttons below just keep reflecting whatever preferredLanguage actually saved */
+    } finally {
+      setSavingLanguage(false);
+    }
+  }
 
   const loadSessions = useCallback(async () => {
     setSessionsError(null);
@@ -107,6 +134,25 @@ export default function AccountScreen() {
         <View style={[styles.fieldRow, styles.fieldRowLast]}>
           <Text style={styles.fieldLabel}>Account type</Text>
           <Text style={styles.fieldValue}>{user?.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ') ?? '—'}</Text>
+        </View>
+      </Card>
+
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>Language</Text>
+        <Text style={styles.noteText}>Also controls voice announcements read aloud on this device.</Text>
+        <View style={styles.languageRow}>
+          {Object.values(Language).map((lang) => (
+            <Pressable
+              key={lang}
+              onPress={() => void changeLanguage(lang)}
+              disabled={savingLanguage}
+              style={[styles.languagePill, user?.preferredLanguage === lang && styles.languagePillActive]}
+            >
+              <Text style={[styles.languagePillText, user?.preferredLanguage === lang && styles.languagePillTextActive]}>
+                {LANGUAGE_LABELS[lang]}
+              </Text>
+            </Pressable>
+          ))}
         </View>
       </Card>
 
@@ -189,6 +235,18 @@ const styles = StyleSheet.create({
   fieldRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
   fieldLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.muted },
   fieldValue: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+
+  languageRow: { flexDirection: 'row', gap: space[2], marginTop: space[2] },
+  languagePill: {
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: space[4],
+    paddingVertical: space[2],
+  },
+  languagePillActive: { backgroundColor: color.ink, borderColor: color.ink },
+  languagePillText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  languagePillTextActive: { color: color.accentContrast },
 
   shortcutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3], marginBottom: space[4] },
   shortcutCard: {

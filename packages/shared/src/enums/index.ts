@@ -22,6 +22,16 @@ export const UserStatus = {
 } as const;
 export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 
+// Phase 14 (Localization & Voice Operations). Deliberately tiny — every entry is a language the
+// platform actually has real translated voice-announcement/UI strings for (see
+// packages/shared/src/i18n). Adding a language means adding both an enum value here AND a
+// complete VoiceAnnouncements implementation in i18n/index.ts — never a code without strings.
+export const Language = {
+  EN: 'EN',
+  HI: 'HI',
+} as const;
+export type Language = (typeof Language)[keyof typeof Language];
+
 export const OtpPurpose = {
   LOGIN: 'LOGIN',
   SIGNUP: 'SIGNUP',

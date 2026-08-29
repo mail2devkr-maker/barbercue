@@ -7,6 +7,7 @@ import {
   UserStatus,
   type AuthSession,
   type AuthTokens,
+  type Language,
   type MeResponse,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -79,7 +80,7 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email),
+      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
       tokens,
     };
   }
@@ -171,7 +172,7 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email),
+      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
       tokens,
     };
   }
@@ -221,7 +222,7 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email),
+      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
       tokens,
       // Always false in V1 — no staff/owner account can have 2FA enabled yet (only the admin
       // seed script provisions a TOTP secret, and only for PLATFORM_ADMIN). Reserved per API.md
@@ -315,7 +316,7 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email),
+      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
       tokens,
     };
   }
@@ -385,7 +386,7 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email),
+      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
       tokens,
     };
   }
@@ -424,7 +425,17 @@ export class AuthService {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    return this.toMeResponse(user.id, tokenRoles, user.phone, user.email);
+    return this.toMeResponse(user.id, tokenRoles, user.phone, user.email, user.preferredLanguage);
+  }
+
+  /** PATCH auth/language (Phase 14) — the caller's own tokenRoles are reused as-is; changing
+   * language never affects role membership. */
+  async setLanguage(userId: string, tokenRoles: Role[], language: Language): Promise<MeResponse> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { preferredLanguage: language },
+    });
+    return this.toMeResponse(user.id, tokenRoles, user.phone, user.email, user.preferredLanguage);
   }
 
   // ---------- Forgot / reset password (staff/owner/admin only — customers have no password) ----------
@@ -511,7 +522,8 @@ export class AuthService {
     roles: Role[],
     phone: string | null,
     email: string | null,
+    preferredLanguage: Language,
   ): MeResponse {
-    return { id, roles, phone, email };
+    return { id, roles, phone, email, preferredLanguage };
   }
 }

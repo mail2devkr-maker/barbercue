@@ -35,6 +35,9 @@ interface AuthContextValue {
   // token is sent to.
   staffGoogleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
+  // Reloads auth/me and applies the result to state — used after a change that doesn't rotate
+  // tokens (e.g. PATCH auth/language), mirroring apps/web/lib/auth-context.tsx's own refreshMe.
+  refreshMe: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -67,6 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, [fetchMe]);
+
+  const refreshMe = useCallback(async () => {
+    const me = await fetchMe();
+    setUser(me);
+    setStatus(me ? 'authenticated' : 'unauthenticated');
   }, [fetchMe]);
 
   const applyAuthResult = useCallback(async (result: { user: MeResponse; tokens: AuthTokens }) => {
@@ -137,8 +146,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout],
+    () => ({ user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout, refreshMe }),
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout, refreshMe],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -4,12 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DASHBOARD_PATHS,
   OWNER_BOOKING_FILTERS,
+  SPEECH_LOCALE,
+  voiceAnnouncementsFor,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom } from "../../lib/realtime";
+import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
 import styles from "./bookings.module.css";
 
@@ -155,6 +158,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
  * the socket payload itself.
  */
 export function OwnerBookingsView({ salonId }: { salonId: string }) {
+  const { user } = useAuth();
   const [filter, setFilter] = useState<OwnerBookingFilter>("today");
   const [items, setItems] = useState<OwnerBookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -174,6 +178,12 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
   useEffect(() => {
     filterRef.current = filter;
   }, [filter]);
+  // Set on the profile page — this dashboard speaks in whichever owner/staff member is watching
+  // it right now, same pattern as DashboardQueueView's own preferredLanguageRef.
+  const preferredLanguageRef = useRef(user?.preferredLanguage);
+  useEffect(() => {
+    preferredLanguageRef.current = user?.preferredLanguage;
+  }, [user?.preferredLanguage]);
 
   const playChime = useCallback(() => {
     const context = audioContextRef.current;
@@ -198,8 +208,10 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
 
   const speak = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (preferredLanguageRef.current) utterance.lang = SPEECH_LOCALE[preferredLanguageRef.current];
     window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    window.speechSynthesis.speak(utterance);
   }, []);
 
   async function enableAlerts() {
@@ -268,9 +280,10 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
           if (alertsEnabledRef.current) {
             playChime();
             speak(
-              `New booking received${detail.serviceName ? ` for ${detail.serviceName}` : ""}${
-                detail.slotStart ? ` at ${formatTime(detail.slotStart)}` : ""
-              }.`,
+              voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
+                detail.serviceName ?? null,
+                detail.slotStart ? formatTime(detail.slotStart) : null,
+              ),
             );
           }
         })
@@ -283,7 +296,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
       if (payload.salonId !== salonId) return;
       void loadPage(filterRef.current, undefined, false);
       setCancelNotice(payload.bookingId);
-      if (alertsEnabledRef.current) speak("Booking cancelled.");
+      if (alertsEnabledRef.current) speak(voiceAnnouncementsFor(preferredLanguageRef.current).bookingCancelled());
     }
 
     socket.on("booking.created", onCreated);

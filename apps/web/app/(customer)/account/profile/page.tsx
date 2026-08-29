@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AUTH_PATHS, NOTIFICATION_PATHS, Role } from "@barbercue/shared";
-import type { AuthSession, NotificationPreferencesDto } from "@barbercue/shared";
+import {
+  AUTH_PATHS,
+  LANGUAGE_LABELS,
+  Language,
+  NOTIFICATION_PATHS,
+  Role,
+} from "@barbercue/shared";
+import type { AuthSession, MeResponse, NotificationPreferencesDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
 import { Button } from "../../../../components/ui/Button";
@@ -28,7 +34,7 @@ const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
 // `user`), GET/DELETE auth/sessions. Only fields that actually exist on MeResponse/AuthSession are
 // shown — no fabricated profile data.
 export default function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshMe } = useAuth();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +42,23 @@ export default function ProfilePage() {
   const [revokingOthers, setRevokingOthers] = useState(false);
   const [preferences, setPreferences] = useState<NotificationPreferencesDto | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savingLanguage, setSavingLanguage] = useState(false);
+
+  async function changeLanguage(language: Language) {
+    if (language === user?.preferredLanguage || savingLanguage) return;
+    setSavingLanguage(true);
+    try {
+      await apiFetch<MeResponse>(`auth/${AUTH_PATHS.language}`, {
+        method: "PATCH",
+        body: JSON.stringify({ language }),
+      });
+      await refreshMe();
+    } catch {
+      /* the buttons below just keep reflecting whatever preferredLanguage actually saved */
+    } finally {
+      setSavingLanguage(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -150,6 +173,31 @@ export default function ProfilePage() {
               </dd>
             </div>
           </dl>
+        </Card>
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Language</h2>
+          <p>Controls voice announcements on the owner/staff dashboard, and this account&apos;s language going forward.</p>
+        </div>
+        <Card className={styles.securityCard}>
+          <div className={styles.fieldRow}>
+            <dt className={styles.fieldLabel}>Spoken / display language</dt>
+            <dd className={styles.fieldValue} style={{ display: "flex", gap: 8 }}>
+              {Object.values(Language).map((lang) => (
+                <Button
+                  key={lang}
+                  type="button"
+                  variant={user?.preferredLanguage === lang ? "primary" : "outline"}
+                  onClick={() => void changeLanguage(lang)}
+                  disabled={savingLanguage}
+                >
+                  {LANGUAGE_LABELS[lang]}
+                </Button>
+              ))}
+            </dd>
+          </div>
         </Card>
       </section>
 

@@ -33,6 +33,14 @@ enum UserStatus {
   SUSPENDED
 }
 
+// Phase 14 (Localization & Voice Operations). Deliberately tiny — see packages/shared/src/i18n's
+// own doc comment: a language only belongs here once real translated voice-announcement strings
+// exist for it.
+enum Language {
+  EN
+  HI
+}
+
 enum OtpPurpose {
   LOGIN
   SIGNUP
@@ -227,6 +235,11 @@ model User {
   status           UserStatus @default(ACTIVE)
   twoFactorEnabled Boolean    @default(false)
   totpSecret       String?
+  // Phase 14 (Localization & Voice Operations) — drives which packages/shared/src/i18n
+  // VoiceAnnouncements dictionary realtime alert handlers speak from, plus the language switcher's
+  // initial state. Defaults to EN, so every existing/new user behaves exactly as before this field
+  // existed until they explicitly change it.
+  preferredLanguage Language  @default(EN)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 

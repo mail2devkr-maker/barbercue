@@ -4,4 +4,5 @@ export * from './schemas';
 export * from './calc';
 export * from './constants';
 export * from './locale';
+export * from './i18n';
 export * from './catalog/service-catalog';

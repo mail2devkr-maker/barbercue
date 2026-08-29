@@ -160,10 +160,18 @@ profile page (one working IN_APP toggle per category; architecture supports the 
 provider exists). Owner/staff preferences UI deferred — API works for any role already.
 
 ## Phase 14 — Localization & Voice Operations
-**NOT STARTED.**
-
-## Phase 14 — Localization & Voice Operations
-**NOT STARTED.**
+**DONE**, deliberately scoped narrow. `User.preferredLanguage` (EN/HI, additive migration,
+defaults EN) drives a language switcher on web's profile page and mobile's Account screen, both
+calling the new `PATCH auth/language`. `packages/shared/src/i18n` is a small, typed,
+extensible `VoiceAnnouncements` dictionary (EN + HI, Devanagari script) for the handful of phrases
+actually spoken aloud by the realtime alert handlers that already existed — `Speech.speak()` on
+mobile's `QueueStatusPanel`/`OwnerBookingsScreen`, `speechSynthesis` on web's
+`DashboardQueueView`/`OwnerBookingsView` — plus a new "Enable voice announcements" toggle on web's
+queue dashboard (mobile's owner alerts were already voice-enabled from an earlier phase; this
+phase made them bilingual). Adding a language means one enum value + one complete
+`VoiceAnnouncements` object — the `Record<Language, VoiceAnnouncements>` type makes a partial
+addition a compile error. Deliberately NOT a general UI-string translation layer — the rest of the
+product stays English-only; that would be a much larger, separately-scoped effort.
 
 ## Phase 15 — Low-Network / Resilience Mode
 **NOT STARTED.**
@@ -248,7 +256,7 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 12): backend 527/527 tests passing (44
+**ONGOING, per-phase.** Current counts (after Phase 14): backend 537/537 tests passing (44
 suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (22
 static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
@@ -257,10 +265,12 @@ static/dynamic pages) · backend production build clean · mobile Expo config re
 new booking/reschedule/rebook flows in a live browser/emulator yet this session.
 
 ## Phase 40 — Database Migration Rules
-**N/A so far.** No new Prisma migrations this session — every field/model added
-(`Booking.slotStart/slotEnd` reuse, `AuditLog` reuse) uses existing schema; no new columns were
-needed (salonAddress/lat/lng/countryCode are DTO-layer additions reading existing Salon/City
-columns, not new tables).
+**DONE, ongoing.** Every migration this session is additive and hand-authored (no live dev DB
+connection in this environment) matching Prisma's exact generated SQL conventions, verified
+against prior migrations: `add_staff_working_hours` (Phase 7), `add_notification_center_fields`
+(Phase 11), `add_booking_reminder_sent_at` (Phase 12), `add_notification_preferences` (Phase 13,
+also adds `NotificationChannel.WHATSAPP`), `add_user_preferred_language` (Phase 14). No destructive
+change (drop/rename/narrowing) in any of them.
 
 ## Phase 41 — Git / Multi-Agent Discipline
 **DONE, ongoing.** Exact-path staging throughout (never `git add .`), coherent per-feature-family

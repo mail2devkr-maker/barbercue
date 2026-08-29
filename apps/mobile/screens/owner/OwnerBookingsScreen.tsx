@@ -5,12 +5,16 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import * as Speech from 'expo-speech';
 import {
   DASHBOARD_PATHS,
+  Language,
   OWNER_BOOKING_FILTERS,
+  SPEECH_LOCALE,
+  voiceAnnouncementsFor,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
+import { useAuth } from '../../lib/auth-context';
 import { getRealtimeSocket, joinSalonRoom } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
@@ -92,6 +96,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
  */
 export default function OwnerBookingsScreen({ route }: Props) {
   const { selectedSalonId } = useSalon();
+  const { user } = useAuth();
   const [filter, setFilter] = useState<OwnerBookingFilter>(route.params?.filter ?? 'today');
   const [items, setItems] = useState<OwnerBookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -106,6 +111,8 @@ export default function OwnerBookingsScreen({ route }: Props) {
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const filterRef = useRef(filter);
   filterRef.current = filter;
+  const preferredLanguageRef = useRef(user?.preferredLanguage);
+  preferredLanguageRef.current = user?.preferredLanguage;
 
   const loadPage = useCallback(
     (targetFilter: OwnerBookingFilter, cursor: string | undefined, append: boolean) => {
@@ -161,9 +168,11 @@ export default function OwnerBookingsScreen({ route }: Props) {
         .then((detail) => {
           setNewNotice(detail);
           Speech.speak(
-            `New booking received${detail.serviceName ? ` for ${detail.serviceName}` : ''}${
-              detail.slotStart ? ` at ${formatTime(detail.slotStart)}` : ''
-            }.`,
+            voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
+              detail.serviceName ?? null,
+              detail.slotStart ? formatTime(detail.slotStart) : null,
+            ),
+            { language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN] },
           );
         })
         .catch(() => {
@@ -175,7 +184,9 @@ export default function OwnerBookingsScreen({ route }: Props) {
       if (payload.salonId !== selectedSalonId) return;
       void loadPage(filterRef.current, undefined, false);
       setCancelNotice(true);
-      Speech.speak('Booking cancelled.');
+      Speech.speak(voiceAnnouncementsFor(preferredLanguageRef.current).bookingCancelled(), {
+        language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN],
+      });
     }
 
     socket.on('booking.created', onCreated);

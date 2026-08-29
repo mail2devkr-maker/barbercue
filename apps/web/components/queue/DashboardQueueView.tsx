@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DASHBOARD_PATHS,
+  SPEECH_LOCALE,
   StaffMemberStatus,
+  voiceAnnouncementsFor,
   type AssignQueueEntryInput,
   type ChairOptionDto,
   type DashboardQueueDto,
@@ -14,6 +16,7 @@ import {
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { getRealtimeSocket, joinSalonRoom } from "../../lib/realtime";
+import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
 import styles from "./queue.module.css";
 
@@ -162,6 +165,7 @@ function ReassignForm({
 }
 
 export function DashboardQueueView({ salonId }: { salonId: string }) {
+  const { user } = useAuth();
   const [data, setData] = useState<DashboardQueueDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -171,11 +175,27 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
   const [newEntryIds, setNewEntryIds] = useState<string[]>([]);
   const [newEntryNotice, setNewEntryNotice] = useState<QueueEntryDetailDto | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const initializedRef = useRef(false);
   const knownWaitingIdsRef = useRef<Set<string>>(new Set());
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const audioContextRef = useRef<AudioContext | null>(null);
   const soundEnabledRef = useRef(false);
+  const voiceEnabledRef = useRef(false);
+  // Set language (see profile page) rather than the queue itself — this bell rings for whichever
+  // owner/staff member is watching this dashboard right now.
+  const preferredLanguageRef = useRef(user?.preferredLanguage);
+  useEffect(() => {
+    preferredLanguageRef.current = user?.preferredLanguage;
+  }, [user?.preferredLanguage]);
+
+  const speak = useCallback((text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (preferredLanguageRef.current) utterance.lang = SPEECH_LOCALE[preferredLanguageRef.current];
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  }, []);
 
   const playChime = useCallback(() => {
     const context = audioContextRef.current;
@@ -206,14 +226,19 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
       if (genuinelyNew.length > 0) {
         genuinelyNew.forEach((entry) => notifiedIdsRef.current.add(entry.id));
         setNewEntryIds((current) => Array.from(new Set([...current, ...genuinelyNew.map((entry) => entry.id)])));
-        setNewEntryNotice(genuinelyNew[genuinelyNew.length - 1]);
+        const latest = genuinelyNew[genuinelyNew.length - 1];
+        setNewEntryNotice(latest);
         if (soundEnabledRef.current) playChime();
+        if (voiceEnabledRef.current) {
+          const announcements = voiceAnnouncementsFor(preferredLanguageRef.current);
+          speak(announcements.newCustomerJoined(latest.tokenNumber, latest.serviceName));
+        }
       }
     }
     knownWaitingIdsRef.current = waitingIds;
     initializedRef.current = true;
     setData(result);
-  }, [playChime]);
+  }, [playChime, speak]);
 
   const refetch = useCallback(() => {
     return apiFetch<DashboardQueueDto>(DASHBOARD_QUEUE_PATH(salonId))
@@ -340,6 +365,12 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     playChime();
   }
 
+  function enableVoice() {
+    voiceEnabledRef.current = true;
+    setVoiceEnabled(true);
+    speak(voiceAnnouncementsFor(preferredLanguageRef.current).voiceAnnouncementsOn());
+  }
+
   if (loading) return <p className={styles.stepLoading}>Loading…</p>;
   if (error && !data) return <p className={styles.errorText}>{error}</p>;
   if (!data) return null;
@@ -351,6 +382,9 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
         <p>Realtime updates are on.</p>
         <Button type="button" variant="outline" onClick={() => void enableSound()} disabled={soundEnabled}>
           {soundEnabled ? "Queue chime enabled" : "Enable queue chime"}
+        </Button>
+        <Button type="button" variant="outline" onClick={enableVoice} disabled={voiceEnabled}>
+          {voiceEnabled ? "Voice announcements enabled" : "Enable voice announcements"}
         </Button>
       </div>
 

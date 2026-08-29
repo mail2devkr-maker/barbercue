@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ChairStatus,
   ChargeType,
+  Language,
   NotificationCategory,
   NotificationChannel,
   PhotoType,
@@ -357,6 +358,12 @@ export const setNotificationPreferenceSchema = z.object({
 export type SetNotificationPreferenceInput = z.infer<
   typeof setNotificationPreferenceSchema
 >;
+
+// PATCH auth/language (Phase 14).
+export const setLanguageSchema = z.object({
+  language: z.nativeEnum(Language),
+});
+export type SetLanguageInput = z.infer<typeof setLanguageSchema>;
 
 // Salon photo by URL. Binary upload is not wired (no object storage is configured), so an owner
 // points at an image they already host — their Google Business profile, Instagram, or a CDN.

@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { AuthErrorCode, Role, UserStatus } from '@barbercue/shared';
+import { AuthErrorCode, Language, Role, UserStatus } from '@barbercue/shared';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from './services/password.service';
@@ -656,6 +656,40 @@ describe('AuthService', () => {
       await service.resetPassword('good-token', 'newpassword123');
       expect(prisma.$transaction).toHaveBeenCalled();
       expect(tokenService.revokeAllForUser).toHaveBeenCalledWith('u1');
+    });
+  });
+
+  describe('me / setLanguage (Phase 14)', () => {
+    it('includes preferredLanguage in the me() response', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        phone: '+919876543210',
+        email: null,
+        preferredLanguage: 'HI',
+      });
+      const result = await service.me('u1', [Role.CUSTOMER]);
+      expect(result.preferredLanguage).toBe('HI');
+    });
+
+    it('updates preferredLanguage and returns it in the response, without touching roles', async () => {
+      prisma.user.update.mockResolvedValue({
+        id: 'u1',
+        phone: '+919876543210',
+        email: null,
+        preferredLanguage: 'HI',
+      });
+      const result = await service.setLanguage('u1', [Role.SALON_OWNER], Language.HI);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: { preferredLanguage: 'HI' },
+      });
+      expect(result).toEqual({
+        id: 'u1',
+        roles: [Role.SALON_OWNER],
+        phone: '+919876543210',
+        email: null,
+        preferredLanguage: 'HI',
+      });
     });
   });
 });

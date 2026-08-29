@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import * as Speech from 'expo-speech';
-import { QUEUE_ENTRIES_PATH, type QueueEntryDetailDto } from '@barbercue/shared';
+import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, voiceAnnouncementsFor, type QueueEntryDetailDto } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
+import { useAuth } from '../lib/auth-context';
 import { getRealtimeSocket, joinSalonRoom } from '../lib/realtime';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 
@@ -30,6 +31,7 @@ export function QueueStatusPanel({
   entry: QueueEntryDetailDto;
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
 }) {
+  const { user } = useAuth();
   const [turnAlert, setTurnAlert] = useState(false);
 
   useEffect(() => {
@@ -60,7 +62,11 @@ export function QueueStatusPanel({
       if (payload.salonId !== salonId || payload.queueEntryId !== entry.id) return;
       setTurnAlert(true);
       Vibration.vibrate([0, 200, 100, 200]);
-      Speech.speak(entry.turnApproaching ? 'Your turn is almost here.' : 'Your wait time has changed.');
+      const announcements = voiceAnnouncementsFor(user?.preferredLanguage);
+      Speech.speak(
+        entry.turnApproaching ? announcements.turnApproaching() : announcements.waitTimeChanged(),
+        { language: SPEECH_LOCALE[user?.preferredLanguage ?? Language.EN] },
+      );
       refetch();
     }
 
@@ -73,7 +79,7 @@ export function QueueStatusPanel({
       socket.off('queue.entry.called', onEntryCalled);
       socket.off('queue.entry.wait_alert', onWaitAlert);
     };
-  }, [entry.salonId, entry.status, entry.id, entry.turnApproaching, onEntryChange]);
+  }, [entry.salonId, entry.status, entry.id, entry.turnApproaching, onEntryChange, user?.preferredLanguage]);
 
   return (
     <View style={styles.card}>

@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Req,
   Res,
@@ -25,6 +26,7 @@ import {
   otpVerifySchema,
   refreshRequestSchema,
   resetPasswordSchema,
+  setLanguageSchema,
   staffLoginSchema,
   type AdminLoginInput,
   type AuthenticatedUser,
@@ -35,6 +37,7 @@ import {
   type OtpVerifyInput,
   type RefreshRequestInput,
   type ResetPasswordInput,
+  type SetLanguageInput,
   type StaffLoginInput,
 } from '@barbercue/shared';
 import { AuthService } from './auth.service';
@@ -316,5 +319,14 @@ export class AuthController {
   @Get(AUTH_PATHS.me)
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.me(user.id, user.roles);
+  }
+
+  @Patch(AUTH_PATHS.language)
+  @UsePipes(new ZodValidationPipe(setLanguageSchema))
+  setLanguage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: SetLanguageInput,
+  ) {
+    return this.authService.setLanguage(user.id, user.roles, body.language);
   }
 }

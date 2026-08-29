@@ -30,6 +30,8 @@ export const AUTH_PATHS = {
   // auth/methods — which sign-in methods this deployment can actually complete right now.
   // Booleans only; never echoes any configuration value.
   methods: 'methods',
+  // PATCH auth/language (Phase 14) — sets User.preferredLanguage, returns the updated MeResponse.
+  language: 'language',
 } as const;
 
 export const ADMIN_PATHS = {
