@@ -189,7 +189,14 @@ export function NotificationBell() {
               <div
                 key={n.id}
                 role="menuitem"
+                tabIndex={0}
                 onClick={() => handleItemClick(n)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleItemClick(n);
+                  }
+                }}
                 style={{ padding: "10px 14px", borderBottom: "1px solid var(--bc-border)", cursor: "pointer" }}
               >
                 {content}

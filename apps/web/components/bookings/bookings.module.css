@@ -77,7 +77,6 @@
   border-radius: var(--bc-radius-md);
   padding: var(--bc-space-4);
   background: var(--bc-surface);
-  cursor: pointer;
 }
 
 .cardNew {
@@ -90,6 +89,19 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--bc-space-3);
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cardHead:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 2px;
 }
 
 .cardTitle {

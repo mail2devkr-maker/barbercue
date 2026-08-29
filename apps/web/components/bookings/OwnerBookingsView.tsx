@@ -65,8 +65,13 @@ function formatTime(iso: string): string {
 function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={`${styles.card} ${isNew ? styles.cardNew : ""}`} onClick={() => setOpen((v) => !v)}>
-      <div className={styles.cardHead}>
+    <div className={`${styles.card} ${isNew ? styles.cardNew : ""}`}>
+      <button
+        type="button"
+        className={styles.cardHead}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
         <div>
           <span className={styles.cardTitle}>{booking.serviceName}</span>
           {isNew && <span className={styles.newBadge}>NEW</span>}
@@ -83,7 +88,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
         <span className={`${styles.statusBadge} ${statusClass(booking.status)}`}>
           {STATUS_LABEL[booking.status] ?? booking.status}
         </span>
-      </div>
+      </button>
 
       {open && (
         <dl className={styles.detail}>
