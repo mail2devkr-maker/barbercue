@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { DISCOVERY_PATHS, SalonStatus } from "@barbercue/shared";
-import type { SalonWorkplaceDto } from "@barbercue/shared";
+import { DASHBOARD_PATHS, DISCOVERY_PATHS, SalonStatus } from "@barbercue/shared";
+import type { OwnerMultiShopOverviewDto, SalonWorkplaceDto } from "@barbercue/shared";
 import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { Button, LinkButton } from "../../../../components/ui/Button";
@@ -27,6 +27,7 @@ const STATUS_LABEL: Record<SalonStatus, string> = {
 export default function SalonsDashboardHomePage() {
   const { user, logout } = useAuth();
   const [workplaces, setWorkplaces] = useState<SalonWorkplaceDto[] | null>(null);
+  const [overview, setOverview] = useState<OwnerMultiShopOverviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,12 +46,67 @@ export default function SalonsDashboardHomePage() {
 
   const ownsAny = (workplaces ?? []).some((w) => w.isOwner);
 
+  // Multi-branch aggregate overview (Phase 10) — only worth fetching once we know this user owns
+  // more than one shop; a single-shop owner already sees everything on that one shop's own
+  // dashboard, and 403s harmlessly for a staff-only account (never rendered in that case).
+  useEffect(() => {
+    if (!workplaces || workplaces.filter((w) => w.isOwner).length < 2) return;
+    let cancelled = false;
+    apiFetch<OwnerMultiShopOverviewDto>(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.overview}`)
+      .then((result) => {
+        if (!cancelled) setOverview(result);
+      })
+      .catch(() => {
+        /* non-critical widget — the per-shop cards below still work */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workplaces]);
+
   return (
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Your dashboard</h1>
       <p className={styles.pageSubtitle}>
         Signed in as <strong>{user?.email}</strong>.
       </p>
+
+      {overview && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 18,
+            padding: "14px 18px",
+            margin: "16px 0",
+            border: "1px solid var(--bc-border)",
+            borderRadius: "var(--bc-radius-md)",
+          }}
+        >
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.1rem" }}>
+              {overview.openShops}/{overview.totalShops}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--bc-muted)", textTransform: "uppercase" }}>Shops open</div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.1rem" }}>
+              {overview.todaysBookingsTotal}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--bc-muted)", textTransform: "uppercase" }}>
+              Today&apos;s bookings, all shops
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.1rem" }}>
+              {overview.activeQueueTotal}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--bc-muted)", textTransform: "uppercase" }}>
+              Active queue, all shops
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ margin: "28px 0" }}>
         <h2 className={styles.sectionHeading}>Your shops</h2>
@@ -105,6 +161,9 @@ export default function SalonsDashboardHomePage() {
                     {s.isOwner && (
                       <>
                         <Link href={`/dashboard/salons/${s.id}/settings`}>Set up &amp; open</Link>
+                        <Link href={`/dashboard/salons/${s.id}/bookings`}>Bookings</Link>
+                        <Link href={`/dashboard/salons/${s.id}/customers`}>Customers</Link>
+                        <Link href={`/dashboard/salons/${s.id}/analytics`}>Analytics</Link>
                         <Link href={`/dashboard/salons/${s.id}/services`}>Services</Link>
                         <Link href={`/dashboard/salons/${s.id}/hours`}>Hours</Link>
                         <Link href={`/dashboard/salons/${s.id}/photos`}>Photos</Link>

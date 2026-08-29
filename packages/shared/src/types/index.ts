@@ -497,6 +497,17 @@ export interface CapacitySummaryDto {
   upcomingBookings: number;
 }
 
+// GET dashboard/overview (Phase 10 — multi-branch experience). Aggregate-only across every salon
+// this owner operates — no per-salon breakdown, so this never becomes a way to peek at one shop's
+// numbers through a differently-authorized endpoint; every count here is a plain sum the owner
+// could already see by opening each shop's own dashboard.
+export interface OwnerMultiShopOverviewDto {
+  totalShops: number;
+  openShops: number; // SalonStatus.ACTIVE
+  todaysBookingsTotal: number;
+  activeQueueTotal: number; // WAITING + CALLED + IN_SERVICE, summed across all owned shops
+}
+
 // GET /salons/:salonId/queue/status — public, lightweight, no PII.
 export interface QueueStatusDto {
   salonId: string;

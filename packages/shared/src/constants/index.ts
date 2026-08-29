@@ -215,6 +215,8 @@ export const DASHBOARD_PATHS = {
   customers: 'customers',
   // GET dashboard/salons/:salonId/analytics (Phase 9 — owner analytics/reporting).
   analytics: 'analytics',
+  // GET dashboard/overview (Phase 10 — multi-branch aggregate overview, no :salonId).
+  overview: 'overview',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).
