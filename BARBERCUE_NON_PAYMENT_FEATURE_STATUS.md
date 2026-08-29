@@ -68,12 +68,34 @@ DB didn't produce), Open/Closed badges from live OperatingHours. No paid Maps/ge
   structurally distinct (different screens/DTOs) — not merged into one number anywhere.
 
 ## Phase 6 — Owner Capacity Dashboard
-**NOT STARTED.**
+**DONE.** Commit `c5485dc`. New `GET dashboard/salons/:salonId/capacity`
+(`QueueService.getCapacitySummary`): active/busy/available chairs and staff, current in-service
+count, waiting customers, queue size, average estimated wait, today's/upcoming booking counts.
+Compact realtime summary strip — web at the top of the live queue page, mobile on the Owner
+Dashboard tab. Deliberately small/decision-oriented, not a trend report (that's Phase 9).
 
 ## Phase 7 — Barber Working Hours / Skills / Availability
-**PARTIAL.** Staff self-identity gap resolved this session (`1056a21`, from Phase 1's continuation):
-`GET dashboard/salons/:salonId/staff/me` + mobile self clock-in/out control. Working-hours/skills
-configuration itself: not started.
+**DONE** (working hours + availability integration) **/ PARTIAL** (mobile UI deferred). Commit
+`a2de19d`.
+- Staff self-identity gap: resolved earlier (`1056a21`) — `GET dashboard/salons/:salonId/staff/me`.
+- Skills/qualifications: already existed pre-mission (`StaffService` join table + owner CRUD) —
+  confirmed still correct, no changes needed.
+- **New**: `StaffWorkingHours` model (additive migration), owner CRUD at
+  `dashboard/salons/:salonId/staff/:staffId/working-hours`, opposite default from OperatingHours
+  (unconfigured = unrestricted, not closed).
+- **Wired into real availability**: `AvailabilityService.getAvailability` clips the slot grid to
+  shop-hours ∩ barber-hours when a specific `preferredStaffId` is requested; re-validated
+  authoritatively at `create()`/`reschedule()` time via `assertStaffWithinWorkingHours`. The
+  general pool-based capacity model (no specific staffId) is deliberately untouched — a documented
+  existing architectural decision (DATABASE.md's soft-preference design), not something this
+  mission should silently override.
+- Web owner UI: inline per-barber hours editor on the Staff page.
+- **Deferred**: mobile working-hours editor UI. The backend contract + web configuration surface
+  are complete and load-bearing; a barber can be scheduled correctly today without a native editor.
+- **Active/off-duty + temporary-unavailable state**: covered by existing `StaffMemberStatus`
+  ACTIVE/INACTIVE (deliberately not expanded to a third enum value — see code comments for why:
+  that enum is load-bearing across capacity/dashboard filters and expanding it is a materially
+  larger, riskier change than this phase's scope justified).
 
 ## Phase 8 — Customer CRM
 **NOT STARTED.**
@@ -180,10 +202,10 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 5): backend 452/452 tests passing (38 suites) ·
-shared 106/106 tests passing (7 suites) · shared/backend/web/mobile typecheck clean · web lint
-clean · web production build (20 static/dynamic pages) · backend production build clean · mobile
-Expo config resolves cleanly (including the new expo-location plugin/permissions).
+**ONGOING, per-phase.** Current counts (after Phase 7): backend 482/482 tests passing (39 suites) ·
+shared/backend/web/mobile typecheck clean · web lint clean · web production build (20
+static/dynamic pages) · backend production build clean (Prisma client regenerates with the new
+StaffWorkingHours model) · mobile Expo config resolves cleanly.
 
 ## Phase 39 — Browser / Mobile Manual Validation
 **NOT STARTED** (beyond Phase 1's real-device Google login test). No manual click-through of the
@@ -203,10 +225,15 @@ commits, regular pushes to `origin/claude/owner-bookings-realtime`.
 **No action taken** — no manual deploy triggered, nothing pushed to `master`.
 
 ## Phase 43 — Mobile Builds
-**One build so far**: EAS `26b629c2-891b-4c4e-ade3-6eab994550ab` (Phase 1's Google fix only). No
-new preview build yet for the booking-dashboard/realtime/reschedule work — next milestone build due
-after Phase 5 (Smart Queue) or before this branch is considered integration-ready, per the mission's
-"don't build after every tiny feature" guidance.
+**Two builds so far**:
+1. EAS `26b629c2-891b-4c4e-ade3-6eab994550ab` — Phase 1's Google fix only.
+2. EAS `3081905e-e91d-4bbb-9409-85200a3d3b3e` — milestone build after Owner Bookings/realtime/
+   reschedule-rebook-directions-share/GPS-near-me/Smart Queue, built from commit `c574aaa`.
+   APK: https://expo.dev/artifacts/eas/qbLlnjbGthAt4PLySUCD9F2-0EZXHKW3bL_jPlsz8bA.apk
+No new build yet covering Phase 6/7 (capacity dashboard, barber working hours) — both are
+backend+web-only changes with no native/mobile-visible surface, so no build was needed for them
+specifically. Next milestone build due before this branch is considered integration-ready, or
+sooner if an upcoming phase touches mobile native behavior again.
 
 ## Phase 44 — This tracker
 **DONE** — created this session.
