@@ -67,6 +67,7 @@ interface AvailabilityMock {
   getServiceOrThrow: jest.Mock<Promise<unknown>, [string, string]>;
   assertWithinOperatingHours: jest.Mock<Promise<void>, [string, Date, Date]>;
   assertStaffQualified: jest.Mock<Promise<void>, [string, string, string]>;
+  assertStaffWithinWorkingHours: jest.Mock<Promise<void>, [string, Date, Date]>;
   getSlotCapacity: jest.Mock<Promise<number>, [unknown, string, string]>;
 }
 
@@ -127,6 +128,9 @@ describe('BookingsService', () => {
         .mockResolvedValue(undefined),
       assertStaffQualified: jest
         .fn<Promise<void>, [string, string, string]>()
+        .mockResolvedValue(undefined),
+      assertStaffWithinWorkingHours: jest
+        .fn<Promise<void>, [string, Date, Date]>()
         .mockResolvedValue(undefined),
       getSlotCapacity: jest
         .fn<Promise<number>, [unknown, string, string]>()
@@ -213,6 +217,57 @@ describe('BookingsService', () => {
         ),
       ).rejects.toMatchObject({ code: 'STAFF_NOT_QUALIFIED' });
       expect(prisma.booking.create).not.toHaveBeenCalled();
+    });
+
+    it('also checks the preferred barber\'s working hours (Phase 7), not just qualification', async () => {
+      await service.create(
+        'c1',
+        {
+          salonId: 's1',
+          serviceId: 'sv1',
+          slotStart: futureSlot,
+          preferredStaffId: 'st1',
+        },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(availability.assertStaffWithinWorkingHours).toHaveBeenCalledWith(
+        'st1',
+        expect.any(Date),
+        expect.any(Date),
+      );
+    });
+
+    it('propagates a preferred barber being outside their working hours', async () => {
+      availability.assertStaffWithinWorkingHours.mockRejectedValueOnce(
+        Object.assign(new Error('not working'), {
+          code: 'OUTSIDE_OPERATING_HOURS',
+        }),
+      );
+      await expect(
+        service.create(
+          'c1',
+          {
+            salonId: 's1',
+            serviceId: 'sv1',
+            slotStart: futureSlot,
+            preferredStaffId: 'st1',
+          },
+          BookingSource.WEB,
+          'key-1',
+        ),
+      ).rejects.toMatchObject({ code: 'OUTSIDE_OPERATING_HOURS' });
+      expect(prisma.booking.create).not.toHaveBeenCalled();
+    });
+
+    it('does not check working hours at all when no preferred barber is given', async () => {
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(availability.assertStaffWithinWorkingHours).not.toHaveBeenCalled();
     });
 
     it('rejects with SLOT_FULL when consumed capacity has reached the computed slot capacity', async () => {
@@ -457,6 +512,23 @@ describe('BookingsService', () => {
       const auditData = lastCreateData(prisma.auditLog.create);
       expect(auditData).toMatchObject({ action: 'BOOKING_RESCHEDULED', entityId: 'b1' });
       expect(realtime.emitBookingRescheduled).toHaveBeenCalledWith('s1', 'b1');
+    });
+
+    it('re-checks the existing preferred barber\'s working hours against the new slot (Phase 7)', async () => {
+      prisma.booking.findFirst.mockResolvedValue(
+        makeBookingRow({ slotStart: futureSlot, status: 'CONFIRMED', preferredStaffId: 'st1' }),
+      );
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
+      expect(availability.assertStaffWithinWorkingHours).toHaveBeenCalledWith(
+        'st1',
+        new Date(newFutureSlot),
+        expect.any(Date),
+      );
+    });
+
+    it('does not check working hours when the booking has no preferred barber', async () => {
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
+      expect(availability.assertStaffWithinWorkingHours).not.toHaveBeenCalled();
     });
   });
 });

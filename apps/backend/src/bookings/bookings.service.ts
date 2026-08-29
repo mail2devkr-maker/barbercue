@@ -97,6 +97,11 @@ export class BookingsService {
         input.serviceId,
         input.preferredStaffId,
       );
+      await this.availability.assertStaffWithinWorkingHours(
+        input.preferredStaffId,
+        slotStart,
+        slotEnd,
+      );
     }
 
     // API.md's documented default policy: block new bookings at the same salon until an
@@ -383,6 +388,13 @@ export class BookingsService {
       newSlotStart,
       newSlotEnd,
     );
+    if (booking.preferredStaffId) {
+      await this.availability.assertStaffWithinWorkingHours(
+        booking.preferredStaffId,
+        newSlotStart,
+        newSlotEnd,
+      );
+    }
 
     const previousSlotStart = booking.slotStart;
     const updated = await this.prisma.$transaction(async (tx) => {

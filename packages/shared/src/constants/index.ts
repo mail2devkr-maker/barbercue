@@ -208,6 +208,9 @@ export const DASHBOARD_PATHS = {
   me: 'me',
   // GET dashboard/salons/:salonId/capacity (Phase 6 — Owner Capacity Dashboard).
   capacity: 'capacity',
+  // dashboard/salons/:salonId/staff/:staffId/working-hours (Phase 7 — barber schedules). A
+  // per-barber refinement layer, same shape/route convention as operatingHours above.
+  workingHours: 'working-hours',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

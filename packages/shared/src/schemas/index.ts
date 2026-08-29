@@ -317,6 +317,22 @@ export const setOperatingHoursSchema = z
   });
 export type SetOperatingHoursInput = z.infer<typeof setOperatingHoursSchema>;
 
+// PUT dashboard/salons/:salonId/staff/:staffId/working-hours (Phase 7) — same one-call,
+// whole-week-replaced shape and rationale as setOperatingHoursSchema, reusing the exact same
+// per-day entry schema (identical validation rules — a "HH:mm" pair and an overnight-hours guard
+// apply equally to a barber's personal hours).
+export const setStaffWorkingHoursSchema = z
+  .object({
+    days: z.array(operatingHoursEntrySchema).length(7),
+  })
+  .refine((v) => new Set(v.days.map((d) => d.dayOfWeek)).size === 7, {
+    message: 'Provide exactly one entry for each day of the week',
+    path: ['days'],
+  });
+export type SetStaffWorkingHoursInput = z.infer<
+  typeof setStaffWorkingHoursSchema
+>;
+
 // Salon photo by URL. Binary upload is not wired (no object storage is configured), so an owner
 // points at an image they already host — their Google Business profile, Instagram, or a CDN.
 //

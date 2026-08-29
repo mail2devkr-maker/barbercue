@@ -22,6 +22,7 @@ import {
   SALON_PHOTO_UPLOAD,
   createSalonStaffSchema,
   setOperatingHoursSchema,
+  setStaffWorkingHoursSchema,
   updateSalonChairSchema,
   updateSalonServiceSchema,
   updateSalonStaffSchema,
@@ -33,6 +34,7 @@ import {
   type SalonPhotoUploadMetaInput,
   type CreateSalonStaffInput,
   type SetOperatingHoursInput,
+  type SetStaffWorkingHoursInput,
   type UpdateSalonChairInput,
   type UpdateSalonServiceInput,
   type UpdateSalonStaffInput,
@@ -49,6 +51,7 @@ import { SalonStaffService } from './salon-staff.service';
 import { SalonActivationService } from './salon-activation.service';
 import { SalonOperatingHoursService } from './salon-operating-hours.service';
 import { SalonPhotosService } from './salon-photos.service';
+import { StaffWorkingHoursService } from './staff-working-hours.service';
 
 const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId`;
 
@@ -75,6 +78,7 @@ export class SalonSetupController {
     private readonly activation: SalonActivationService,
     private readonly operatingHours: SalonOperatingHoursService,
     private readonly photos: SalonPhotosService,
+    private readonly staffWorkingHours: StaffWorkingHoursService,
   ) {}
 
   // ---------- Shop activation ----------
@@ -271,5 +275,31 @@ export class SalonSetupController {
     @Param('staffId') staffId: string,
   ) {
     return this.staff.resendInvite(user.id, salonId, staffId);
+  }
+
+  // ---------- Barber working hours (Phase 7) ----------
+
+  @Get(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.staff}/:staffId/${DASHBOARD_PATHS.workingHours}`,
+  )
+  listStaffWorkingHours(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('staffId') staffId: string,
+  ) {
+    return this.staffWorkingHours.list(user.id, salonId, staffId);
+  }
+
+  @Put(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.staff}/:staffId/${DASHBOARD_PATHS.workingHours}`,
+  )
+  setStaffWorkingHours(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('staffId') staffId: string,
+    @Body(new ZodValidationPipe(setStaffWorkingHoursSchema))
+    body: SetStaffWorkingHoursInput,
+  ) {
+    return this.staffWorkingHours.set(user.id, salonId, staffId, body);
   }
 }

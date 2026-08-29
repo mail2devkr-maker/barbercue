@@ -158,6 +158,15 @@ export interface OperatingHoursDto {
   isClosed: boolean;
 }
 
+// Phase 7 (barber schedules). Same shape as OperatingHoursDto but the opposite default: a day
+// this barber has never configured means "unrestricted" (works whenever the shop is open), not
+// closed — see StaffWorkingHours' own schema.prisma doc comment. `configured: false` on an entry
+// tells the UI "this is the unrestricted default, not something the barber actually set" without
+// a client needing to separately track which days exist server-side.
+export interface StaffWorkingHoursDto extends OperatingHoursDto {
+  configured: boolean;
+}
+
 export interface PhotoDto {
   id: string;
   url: string;

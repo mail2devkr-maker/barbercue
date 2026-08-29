@@ -6,6 +6,7 @@ import type { SalonStaffDto, StaffInviteResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
+import { StaffHoursEditor } from "../../../../../../components/dashboard/StaffHoursEditor";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Barber roster (Phase 11) — replaces the previous placeholder. Adding a barber creates (or
@@ -30,6 +31,7 @@ export default function DashboardStaffPage({
   // email provider is wired yet (ConsoleEmailSender just logs it). In production this stays null
   // and the barber receives the link by email.
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [hoursOpenFor, setHoursOpenFor] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,7 +215,15 @@ export default function DashboardStaffPage({
                 <Button type="button" variant="outline" onClick={() => void toggleActive(m)}>
                   {m.status === StaffMemberStatus.ACTIVE ? "Mark not working" : "Mark working"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setHoursOpenFor(hoursOpenFor === m.id ? null : m.id)}
+                >
+                  {hoursOpenFor === m.id ? "Hide hours" : "Set working hours"}
+                </Button>
               </div>
+              {hoursOpenFor === m.id && <StaffHoursEditor salonId={salonId} staffId={m.id} />}
             </li>
           ))}
         </ul>

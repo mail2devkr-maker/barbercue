@@ -18,6 +18,7 @@ interface PrismaMock {
   };
   chair: { count: jest.Mock<Promise<number>, [unknown]> };
   operatingHours: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
+  staffWorkingHours: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   booking: { findMany: jest.Mock<Promise<unknown[]>, [unknown]> };
 }
 
@@ -37,6 +38,9 @@ describe('AvailabilityService', () => {
       },
       chair: { count: jest.fn<Promise<number>, [unknown]>() },
       operatingHours: { findUnique: jest.fn<Promise<unknown>, [unknown]>() },
+      staffWorkingHours: {
+        findUnique: jest.fn<Promise<unknown>, [unknown]>(),
+      },
       booking: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
     };
     const moduleRef = await Test.createTestingModule({
@@ -224,6 +228,146 @@ describe('AvailabilityService', () => {
         (s) => s.slotStart === slotStartUtc.toISOString(),
       );
       expect(firstSlot?.available).toBe(false);
+    });
+
+    describe('with a specific staffId (Phase 7 — barber working hours)', () => {
+      beforeEach(() => {
+        prisma.salonStaff.findFirst.mockResolvedValue({ id: 'st1' });
+        prisma.operatingHours.findUnique.mockResolvedValue({
+          openTime: '09:00',
+          closeTime: '18:00',
+          isClosed: false,
+        });
+      });
+
+      it('is unaffected by a barber with no configured working hours (unrestricted default)', async () => {
+        prisma.staffWorkingHours.findUnique.mockResolvedValue(null);
+        const slots = await service.getAvailability(
+          's1',
+          'sv1',
+          futureDateString(2),
+          'st1',
+        );
+        // Full 09:00-18:00 shop window, 30 min service, 15 min granularity.
+        expect(slots.length).toBeGreaterThan(0);
+        expect(slots[0].slotStart).toContain('T03:30'); // 09:00 IST = 03:30 UTC
+      });
+
+      it('clips the slot window to the intersection of shop hours and the barber\'s configured hours', async () => {
+        prisma.staffWorkingHours.findUnique.mockResolvedValue({
+          openTime: '11:00',
+          closeTime: '13:00',
+          isClosed: false,
+        });
+        const slots = await service.getAvailability(
+          's1',
+          'sv1',
+          futureDateString(2),
+          'st1',
+        );
+        expect(slots.length).toBeGreaterThan(0);
+        // 11:00 IST = 05:30 UTC — the barber's own (narrower) window, not the shop's 09:00.
+        expect(slots[0].slotStart).toContain('T05:30');
+        expect(slots.every((s) => s.slotStart < `${futureDateString(2)}T07:31`)).toBe(true);
+      });
+
+      it('returns no slots when the barber is explicitly off that day', async () => {
+        prisma.staffWorkingHours.findUnique.mockResolvedValue({
+          openTime: '09:00',
+          closeTime: '18:00',
+          isClosed: true,
+        });
+        const slots = await service.getAvailability(
+          's1',
+          'sv1',
+          futureDateString(2),
+          'st1',
+        );
+        expect(slots).toEqual([]);
+      });
+
+      it('returns no slots when the barber\'s configured hours fall entirely outside shop hours', async () => {
+        prisma.staffWorkingHours.findUnique.mockResolvedValue({
+          openTime: '19:00',
+          closeTime: '20:00',
+          isClosed: false,
+        });
+        const slots = await service.getAvailability(
+          's1',
+          'sv1',
+          futureDateString(2),
+          'st1',
+        );
+        expect(slots).toEqual([]);
+      });
+    });
+  });
+
+  describe('assertStaffWithinWorkingHours', () => {
+    it('is a no-op when the barber has no configured working hours', async () => {
+      prisma.staffWorkingHours.findUnique.mockResolvedValue(null);
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      await expect(
+        service.assertStaffWithinWorkingHours(
+          'st1',
+          new Date(Date.UTC(y, m - 1, d, 3, 30)),
+          new Date(Date.UTC(y, m - 1, d, 4, 0)),
+        ),
+      ).resolves.toBeUndefined();
+    });
+
+    it('throws OUTSIDE_OPERATING_HOURS when the slot falls outside the barber\'s configured hours', async () => {
+      prisma.staffWorkingHours.findUnique.mockResolvedValue({
+        openTime: '11:00',
+        closeTime: '13:00',
+        isClosed: false,
+      });
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      // 09:00 IST = 03:30 UTC — before the barber's 11:00 start.
+      await expect(
+        service.assertStaffWithinWorkingHours(
+          'st1',
+          new Date(Date.UTC(y, m - 1, d, 3, 30)),
+          new Date(Date.UTC(y, m - 1, d, 4, 0)),
+        ),
+      ).rejects.toMatchObject({ code: 'OUTSIDE_OPERATING_HOURS' });
+    });
+
+    it('throws when the barber is marked off that day regardless of the requested time', async () => {
+      prisma.staffWorkingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '18:00',
+        isClosed: true,
+      });
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      await expect(
+        service.assertStaffWithinWorkingHours(
+          'st1',
+          new Date(Date.UTC(y, m - 1, d, 5, 30)),
+          new Date(Date.UTC(y, m - 1, d, 6, 0)),
+        ),
+      ).rejects.toMatchObject({ code: 'OUTSIDE_OPERATING_HOURS' });
+    });
+
+    it('resolves when the slot falls within the barber\'s configured hours', async () => {
+      prisma.staffWorkingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '18:00',
+        isClosed: false,
+      });
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      // 11:00 IST = 05:30 UTC — within 09:00-18:00.
+      await expect(
+        service.assertStaffWithinWorkingHours(
+          'st1',
+          new Date(Date.UTC(y, m - 1, d, 5, 30)),
+          new Date(Date.UTC(y, m - 1, d, 6, 0)),
+        ),
+      ).resolves.toBeUndefined();
     });
   });
 });

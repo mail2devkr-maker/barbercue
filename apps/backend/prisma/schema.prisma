@@ -565,6 +565,24 @@ model OperatingHours {
   @@map("operating_hours")
 }
 
+// Phase 7 (barber schedules) — an optional per-barber refinement layer on top of the salon's own
+// OperatingHours, not a replacement for it. Deliberately opposite default from OperatingHours: a
+// day with NO row here means "unrestricted — this barber works whenever the shop is open," not
+// closed, since personal hours are an owner-configured refinement most barbers will never touch.
+// Same shape/convention as OperatingHours (dayOfWeek 0=Sunday..6=Saturday, "HH:mm" strings).
+model StaffWorkingHours {
+  id        String     @id @default(uuid())
+  staffId   String
+  staff     SalonStaff @relation(fields: [staffId], references: [id])
+  dayOfWeek Int
+  openTime  String
+  closeTime String
+  isClosed  Boolean    @default(false)
+
+  @@unique([staffId, dayOfWeek])
+  @@map("staff_working_hours")
+}
+
 model Photo {
   id        String    @id @default(uuid())
   salonId   String
@@ -597,6 +615,7 @@ model SalonStaff {
   services             StaffService[]
   queueEntriesAssigned QueueEntry[]           @relation("AssignedStaff")
   preferredByBookings  Booking[]              @relation("BookingPreferredStaff")
+  workingHours         StaffWorkingHours[]
 
   @@map("salon_staff")
 }

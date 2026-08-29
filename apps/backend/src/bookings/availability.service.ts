@@ -156,6 +156,41 @@ export class AvailabilityService {
     );
   }
 
+  /**
+   * Same intersection-of-hours check getAvailability applies when generating the slot grid, but
+   * re-validated authoritatively at the moment a booking with a specific preferredStaffId is
+   * actually created/rescheduled — a client could otherwise request a slot outside that barber's
+   * configured hours without ever calling getAvailability first. A no-op when the barber has no
+   * configured working hours (the "unrestricted" default).
+   */
+  async assertStaffWithinWorkingHours(
+    staffId: string,
+    slotStart: Date,
+    slotEnd: Date,
+  ): Promise<void> {
+    const dateStr = utcToIstDateStr(slotStart);
+    const dayOfWeek = istDateToDayOfWeek(dateStr);
+    const staffHours = await this.prisma.staffWorkingHours.findUnique({
+      where: { staffId_dayOfWeek: { staffId, dayOfWeek } },
+    });
+    if (!staffHours) return;
+    const openAt =
+      !staffHours.isClosed
+        ? istWallTimeToUtc(dateStr, staffHours.openTime)
+        : null;
+    const closeAt =
+      !staffHours.isClosed
+        ? istWallTimeToUtc(dateStr, staffHours.closeTime)
+        : null;
+    if (!openAt || !closeAt || slotStart < openAt || slotEnd > closeAt) {
+      throw new AppException(
+        BookingErrorCode.OUTSIDE_OPERATING_HOURS,
+        'This barber is not working at the requested time.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
   /** DATABASE.md's capacity model: slotCapacity = min(qualifiedStaffPool, activeChairPool). */
   async getSlotCapacity(
     db: Db,
@@ -204,8 +239,14 @@ export class AvailabilityService {
   /**
    * Candidate slots at a fixed 15-minute granularity across the day's OperatingHours window,
    * skipping isClosed days entirely and any slot whose end would cross closing time. `staffId` is
-   * optional and, per the soft-preference decision (DATABASE.md), only validated for
-   * qualification/active status — it never changes which slots come back.
+   * optional; per the soft-preference decision (DATABASE.md) it never changes the *pool capacity*
+   * math (that stays min(qualifiedStaffCount, activeChairCount) regardless of which specific staff
+   * are scheduled) — but Phase 7 narrows the window itself when a specific barber is requested:
+   * qualification/active status is checked as before, and if that barber has configured personal
+   * working hours (StaffWorkingHours) for this day, the returned slots are additionally clipped to
+   * the intersection of shop hours and that barber's hours (or emptied entirely if they're off).
+   * A barber with no configured hours is unaffected — same "0 rows = unrestricted" fallback
+   * qualifiedStaffWhere already uses for StaffService.
    */
   async getAvailability(
     salonId: string,
@@ -230,8 +271,23 @@ export class AvailabilityService {
     });
     if (!hours || hours.isClosed) return [];
 
-    const openAt = istWallTimeToUtc(date, hours.openTime);
-    const closeAt = istWallTimeToUtc(date, hours.closeTime);
+    let openAt = istWallTimeToUtc(date, hours.openTime);
+    let closeAt = istWallTimeToUtc(date, hours.closeTime);
+
+    if (staffId) {
+      const staffHours = await this.prisma.staffWorkingHours.findUnique({
+        where: { staffId_dayOfWeek: { staffId, dayOfWeek } },
+      });
+      if (staffHours) {
+        if (staffHours.isClosed) return [];
+        const staffOpenAt = istWallTimeToUtc(date, staffHours.openTime);
+        const staffCloseAt = istWallTimeToUtc(date, staffHours.closeTime);
+        openAt = openAt > staffOpenAt ? openAt : staffOpenAt;
+        closeAt = closeAt < staffCloseAt ? closeAt : staffCloseAt;
+        if (openAt >= closeAt) return [];
+      }
+    }
+
     const durationMs = service.durationMinutes * 60_000;
     const slotCapacity = await this.getSlotCapacity(
       this.prisma,
