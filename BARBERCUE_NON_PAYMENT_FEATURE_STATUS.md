@@ -98,7 +98,14 @@ Dashboard tab. Deliberately small/decision-oriented, not a trend report (that's 
   larger, riskier change than this phase's scope justified).
 
 ## Phase 8 — Customer CRM
-**NOT STARTED.**
+**DONE** (backend + web) **/ PARTIAL** (mobile UI deferred). Commit `ddf8647`.
+`GET dashboard/salons/:salonId/customers[/:customerId]` — total/completed/cancelled/no-show
+counts, first/last visit, preferred service/barber where derivable, new/repeat/frequent segment
+(purely a completed-visit-count threshold, never inferred from anything about the customer).
+Cross-salon isolation via `SalonAccessService.assertAccess` in every query, same as every other
+owner dashboard endpoint. Offset-paginated (groupBy results have no row id to cursor over) but the
+response shape matches every other dashboard list. Web Customers page under the settings hub nav.
+Mobile UI deferred — read-only convenience surface, doesn't block any workflow.
 
 ## Phase 9 — Owner Analytics & Reporting
 **NOT STARTED.**
@@ -202,10 +209,9 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 7): backend 482/482 tests passing (39 suites) ·
-shared/backend/web/mobile typecheck clean · web lint clean · web production build (20
-static/dynamic pages) · backend production build clean (Prisma client regenerates with the new
-StaffWorkingHours model) · mobile Expo config resolves cleanly.
+**ONGOING, per-phase.** Current counts (after Phase 8): backend 496/496 tests passing (40 suites) ·
+shared/backend/web/mobile typecheck clean · web lint clean · web production build (21
+static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
 ## Phase 39 — Browser / Mobile Manual Validation
 **NOT STARTED** (beyond Phase 1's real-device Google login test). No manual click-through of the
