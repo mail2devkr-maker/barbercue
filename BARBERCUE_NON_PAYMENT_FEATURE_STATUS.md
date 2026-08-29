@@ -125,7 +125,16 @@ page shows the aggregate overview and gained missing Bookings/Customers/Analytic
 Mobile already had cross-shop switching via `SalonProvider`/`useSalon` (pre-existing).
 
 ## Phase 11 — Notification Center
-**NOT STARTED.**
+**DONE** (backend + web) **/ PARTIAL** (mobile UI deferred). Commit `0a88f75`.
+Extended the existing `Notification` model (additive migration: `IN_APP` channel, `readAt`,
+`deepLink`) rather than a parallel system. `NotificationsService.notify()` injected directly into
+`BookingsService`/`QueueService` at concrete event points: customer booking.confirmed/cancelled +
+queue.turn_approaching (reuses Phase 5's alert trigger), owner owner.booking.created/cancelled +
+owner.walk_in.joined, staff staff.assigned. `GET notifications/mine[+unread-count]`,
+`POST notifications/:id/read`, `POST notifications/mine/read-all` — scoped by caller's own userId,
+no role restriction. Web `NotificationBell` (bell + unread badge + dropdown) shared by
+`DashboardHeader` and `CustomerHeader`. deepLinks point only at routes that actually exist (no
+per-booking detail page exists yet, so links go to the relevant list). Mobile UI deferred.
 
 ## Phase 12 — Appointment Reminders
 **NOT STARTED.**
@@ -219,7 +228,7 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 10): backend 514/514 tests passing (42
+**ONGOING, per-phase.** Current counts (after Phase 11): backend 522/522 tests passing (43
 suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (22
 static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
