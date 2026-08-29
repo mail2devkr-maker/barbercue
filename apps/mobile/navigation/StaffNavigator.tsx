@@ -2,6 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import StaffTodayScreen from '../screens/staff/StaffTodayScreen';
 import DashboardAccountScreen from '../screens/dashboard/DashboardAccountScreen';
 import { SalonProvider } from '../lib/salon-context';
+import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
 
 export type StaffTabParamList = {
@@ -15,6 +16,7 @@ const Tab = createBottomTabNavigator<StaffTabParamList>();
 // (see App.tsx) — deliberately just two tabs. Staff has no shop-management surface (that stays
 // on OwnerNavigator's Dashboard/Shop tabs only), so there is nothing else to give it a tab for.
 export default function StaffNavigator() {
+  const unreadCount = useUnreadNotificationCount();
   return (
     <SalonProvider>
       <Tab.Navigator
@@ -27,7 +29,14 @@ export default function StaffNavigator() {
         }}
       >
         <Tab.Screen name="StaffTodayTab" component={StaffTodayScreen} options={{ tabBarLabel: 'Today' }} />
-        <Tab.Screen name="StaffAccountTab" component={DashboardAccountScreen} options={{ tabBarLabel: 'Account' }} />
+        <Tab.Screen
+          name="StaffAccountTab"
+          component={DashboardAccountScreen}
+          options={{
+            tabBarLabel: 'Account',
+            tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
+          }}
+        />
       </Tab.Navigator>
     </SalonProvider>
   );

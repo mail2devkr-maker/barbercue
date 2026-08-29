@@ -6,6 +6,7 @@ import OwnerBookingsScreen from '../screens/owner/OwnerBookingsScreen';
 import OwnerShopScreen from '../screens/owner/OwnerShopScreen';
 import DashboardAccountScreen from '../screens/dashboard/DashboardAccountScreen';
 import { SalonProvider } from '../lib/salon-context';
+import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
 
 export type OwnerTabParamList = {
@@ -24,6 +25,7 @@ const Tab = createBottomTabNavigator<OwnerTabParamList>();
 // SalonProvider scopes salon selection to this navigator's lifetime only — a customer or staff
 // session never mounts it.
 export default function OwnerNavigator() {
+  const unreadCount = useUnreadNotificationCount();
   return (
     <SalonProvider>
       <Tab.Navigator
@@ -39,7 +41,14 @@ export default function OwnerNavigator() {
         <Tab.Screen name="OwnerQueueTab" component={OwnerQueueScreen} options={{ tabBarLabel: 'Queue' }} />
         <Tab.Screen name="OwnerBookingsTab" component={OwnerBookingsScreen} options={{ tabBarLabel: 'Bookings' }} />
         <Tab.Screen name="OwnerShopTab" component={OwnerShopScreen} options={{ tabBarLabel: 'Shop' }} />
-        <Tab.Screen name="OwnerAccountTab" component={DashboardAccountScreen} options={{ tabBarLabel: 'Account' }} />
+        <Tab.Screen
+          name="OwnerAccountTab"
+          component={DashboardAccountScreen}
+          options={{
+            tabBarLabel: 'Account',
+            tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
+          }}
+        />
       </Tab.Navigator>
     </SalonProvider>
   );

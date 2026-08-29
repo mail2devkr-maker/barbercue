@@ -725,6 +725,10 @@ model Booking {
   cancellationChargeAmount Decimal?      @db.Decimal(10, 2)
   createdAt                DateTime      @default(now())
   updatedAt                DateTime      @updatedAt
+  // Phase 12 (Appointment Reminders) — set once the reminder sweep has notified this booking's
+  // customer, so the periodic sweep never double-reminds. Null means "not sent yet", not "no
+  // reminder wanted" — every eligible booking gets exactly one until it's sent.
+  reminderSentAt           DateTime?
 
   queueEntries  QueueEntry[]
   payments      Payment[]

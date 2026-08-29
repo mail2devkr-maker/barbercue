@@ -120,6 +120,9 @@ export default function AccountScreen() {
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('StyleAdvisor')}>
           <Text style={styles.shortcutTitle}>AI Style Advisor</Text>
         </Pressable>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('Notifications')}>
+          <Text style={styles.shortcutTitle}>Notifications</Text>
+        </Pressable>
         <View style={styles.shortcutCard}>
           <Text style={styles.shortcutTitle}>Premium</Text>
           <Text style={styles.shortcutMeta}>

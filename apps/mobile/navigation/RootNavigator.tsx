@@ -4,6 +4,7 @@ import SearchStack from './SearchStack';
 import BookingsStack from './BookingsStack';
 import QueueStack from './QueueStack';
 import AccountStack from './AccountStack';
+import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
 import type { TabParamList } from './types';
 
@@ -14,6 +15,8 @@ const Tab = createBottomTabNavigator<TabParamList>();
 // Text-only tab labels (no icon library added) — active tab reads via color + weight, matching
 // the app's restrained, editorial visual language rather than a generic icon-driven tab bar.
 export default function RootNavigator() {
+  const unreadCount = useUnreadNotificationCount();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -35,7 +38,14 @@ export default function RootNavigator() {
       <Tab.Screen name="SearchTab" component={SearchStack} options={{ tabBarLabel: 'Search' }} />
       <Tab.Screen name="BookingsTab" component={BookingsStack} options={{ tabBarLabel: 'Bookings' }} />
       <Tab.Screen name="QueueTab" component={QueueStack} options={{ tabBarLabel: 'Queue' }} />
-      <Tab.Screen name="AccountTab" component={AccountStack} options={{ tabBarLabel: 'Account' }} />
+      <Tab.Screen
+        name="AccountTab"
+        component={AccountStack}
+        options={{
+          tabBarLabel: 'Account',
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
+        }}
+      />
     </Tab.Navigator>
   );
 }

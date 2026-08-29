@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { HealthModule } from './health/health.module';
@@ -24,10 +25,12 @@ import { DashboardCustomersModule } from './dashboard-customers/dashboard-custom
 import { DashboardAnalyticsModule } from './dashboard-analytics/dashboard-analytics.module';
 import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { RemindersModule } from './reminders/reminders.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
     PrismaModule,
     SalonAccessModule,
@@ -57,6 +60,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     DashboardAnalyticsModule,
     DashboardOverviewModule,
     NotificationsModule,
+    RemindersModule,
     // Feature modules (staff/chair roster CRUD, payments, reviews, admin) are added in later
     // phases per PROJECT_STRUCTURE.md.
   ],
