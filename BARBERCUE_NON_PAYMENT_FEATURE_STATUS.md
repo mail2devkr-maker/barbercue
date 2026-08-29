@@ -108,7 +108,13 @@ response shape matches every other dashboard list. Web Customers page under the 
 Mobile UI deferred — read-only convenience surface, doesn't block any workflow.
 
 ## Phase 9 — Owner Analytics & Reporting
-**NOT STARTED.**
+**DONE** (backend + web) **/ PARTIAL** (mobile UI deferred). Commit `50c1317`.
+`GET dashboard/salons/:salonId/analytics?range=today|7d|30d|custom` — appointments booked,
+completed/cancelled/no-show, walk-ins, new/repeat customers, average queue wait, average service
+duration, barber/chair utilization, peak/slow hours (IST), service popularity, estimated service
+value. All real DB aggregates, no external analytics provider. `estimatedServiceValue` is
+deliberately never labeled revenue anywhere (listed-price x completed bookings, since BarberCue
+doesn't process payment). Web page with Today/7d/30d range tabs. Mobile UI deferred.
 
 ## Phase 10 — Multi-Branch Experience
 **NOT STARTED.** (Existing salon-picker foundations from `SalonProvider`/`useSalon` predate this
@@ -209,8 +215,8 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 8): backend 496/496 tests passing (40 suites) ·
-shared/backend/web/mobile typecheck clean · web lint clean · web production build (21
+**ONGOING, per-phase.** Current counts (after Phase 9): backend 510/510 tests passing (41 suites) ·
+shared/backend/web/mobile typecheck clean · web lint clean · web production build (22
 static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
 ## Phase 39 — Browser / Mobile Manual Validation
