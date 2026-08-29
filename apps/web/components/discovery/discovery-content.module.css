@@ -29,6 +29,27 @@
   grid-row: span 2;
 }
 
+.photoThumb {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.photoThumb:hover,
+.photoThumb:focus-visible {
+  opacity: 0.85;
+}
+
+.photoThumb:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photoThumb {
+    transition: none;
+  }
+}
+
 .photoUnavailable {
   display: grid;
   place-items: center;
@@ -44,6 +65,116 @@
 
 .photoUnavailable:first-child:nth-last-child(n + 3) {
   grid-row: span 2;
+}
+
+.lightboxBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 18, 15, 0.92);
+  padding: 24px;
+}
+
+.lightboxImage {
+  max-width: min(92vw, 1100px);
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: var(--bc-radius-sm);
+  box-shadow: var(--bc-shadow-lg);
+}
+
+.lightboxClose {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.12);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.lightboxClose:hover,
+.lightboxClose:focus-visible {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lightboxClose:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.lightboxNav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 2.2rem;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.12);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.lightboxNav:hover,
+.lightboxNav:focus-visible {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lightboxNav:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.lightboxPrev {
+  left: 16px;
+}
+
+.lightboxNext {
+  right: 16px;
+}
+
+.lightboxCounter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 5px 14px;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+@media (max-width: 600px) {
+  .lightboxNav {
+    width: 40px;
+    height: 40px;
+    font-size: 1.7rem;
+  }
+
+  .lightboxPrev {
+    left: 8px;
+  }
+
+  .lightboxNext {
+    right: 8px;
+  }
 }
 
 .dataTable {
