@@ -234,4 +234,6 @@ export const NOTIFICATION_PATHS = {
   unreadCount: 'unread-count',
   read: 'read',
   readAll: 'read-all',
+  // GET/PUT notifications/preferences (Phase 13 — communication preferences).
+  preferences: 'preferences',
 } as const;

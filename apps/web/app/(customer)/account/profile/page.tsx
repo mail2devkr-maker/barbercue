@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AUTH_PATHS, Role } from "@barbercue/shared";
-import type { AuthSession } from "@barbercue/shared";
+import { AUTH_PATHS, NOTIFICATION_PATHS, Role } from "@barbercue/shared";
+import type { AuthSession, NotificationPreferencesDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
 import { Button } from "../../../../components/ui/Button";
@@ -16,6 +16,13 @@ const ROLE_LABELS: Record<string, string> = {
   [Role.PLATFORM_ADMIN]: "Platform Admin",
 };
 
+const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
+  BOOKING_UPDATES: { title: "Booking updates", description: "Confirmations and cancellations." },
+  QUEUE_UPDATES: { title: "Queue updates", description: "Turn-approaching and wait-time alerts." },
+  REMINDERS: { title: "Appointment reminders", description: "A heads-up before your appointment." },
+  PROMOTIONAL: { title: "Offers & promotions", description: "Deals from shops you've visited." },
+};
+
 // New page (previously no customer profile UI existed) built entirely against endpoints that
 // already existed and were already used elsewhere: GET auth/me (via useAuth()'s already-loaded
 // `user`), GET/DELETE auth/sessions. Only fields that actually exist on MeResponse/AuthSession are
@@ -27,6 +34,37 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingOthers, setRevokingOthers] = useState(false);
+  const [preferences, setPreferences] = useState<NotificationPreferencesDto | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<NotificationPreferencesDto>(`${NOTIFICATION_PATHS.notifications}/${NOTIFICATION_PATHS.preferences}`)
+      .then((result) => {
+        if (!cancelled) setPreferences(result);
+      })
+      .catch(() => {
+        /* non-critical section — the rest of the page still works */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function togglePreference(category: string, channel: string, nextEnabled: boolean) {
+    setSavingKey(`${category}:${channel}`);
+    try {
+      const result = await apiFetch<NotificationPreferencesDto>(
+        `${NOTIFICATION_PATHS.notifications}/${NOTIFICATION_PATHS.preferences}`,
+        { method: "PUT", body: JSON.stringify({ category, channel, enabled: nextEnabled }) },
+      );
+      setPreferences(result);
+    } catch {
+      /* leave the previous state in place — the toggle below reflects what was actually saved */
+    } finally {
+      setSavingKey(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -165,6 +203,44 @@ export default function ProfilePage() {
               Log out of this device
             </Button>
           </div>
+        </Card>
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Notification preferences</h2>
+          <p>
+            Choose what you hear from BarberCue. In-app is the only channel available today — SMS,
+            email and WhatsApp aren&apos;t connected yet.
+          </p>
+        </div>
+        <Card className={styles.securityCard}>
+          {preferences === null ? (
+            <p className={styles.noteText}>Loading…</p>
+          ) : (
+            preferences.categories.map((cat) => {
+              const inApp = cat.channels.find((c) => c.channel === "IN_APP");
+              if (!inApp) return null;
+              const key = `${cat.category}:IN_APP`;
+              return (
+                <div key={cat.category} className={styles.fieldRow}>
+                  <div>
+                    <dt className={styles.fieldLabel}>{CATEGORY_LABEL[cat.category]?.title ?? cat.category}</dt>
+                    <p className={styles.sessionMeta}>{CATEGORY_LABEL[cat.category]?.description}</p>
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={inApp.enabled}
+                      disabled={savingKey === key}
+                      onChange={(e) => void togglePreference(cat.category, "IN_APP", e.target.checked)}
+                      style={{ width: 18, height: 18 }}
+                    />
+                  </label>
+                </div>
+              );
+            })
+          )}
         </Card>
       </section>
     </div>

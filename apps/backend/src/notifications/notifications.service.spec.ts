@@ -23,6 +23,11 @@ describe('NotificationsService', () => {
       count: jest.Mock;
       updateMany: jest.Mock;
     };
+    notificationPreference: {
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+      upsert: jest.Mock;
+    };
   };
 
   beforeEach(async () => {
@@ -32,6 +37,11 @@ describe('NotificationsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      notificationPreference: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        upsert: jest.fn().mockResolvedValue({}),
       },
     };
     const moduleRef = await Test.createTestingModule({
@@ -124,6 +134,89 @@ describe('NotificationsService', () => {
         where: { userId: 'user1', channel: 'IN_APP', readAt: null },
         data: { readAt: expect.any(Date) },
       });
+    });
+  });
+
+  describe('notify — preference gating (Phase 13)', () => {
+    it('creates the notification when no preference row exists (default enabled)', async () => {
+      prisma.notificationPreference.findUnique.mockResolvedValueOnce(null);
+      await service.notify('user1', 'booking.confirmed');
+      expect(prisma.notification.create).toHaveBeenCalled();
+    });
+
+    it('skips creating the notification when the user has explicitly disabled this category/channel', async () => {
+      prisma.notificationPreference.findUnique.mockResolvedValueOnce({ enabled: false });
+      await service.notify('user1', 'booking.confirmed');
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('maps queue.turn_approaching to the QUEUE_UPDATES category when checking preferences', async () => {
+      await service.notify('user1', 'queue.turn_approaching');
+      expect(prisma.notificationPreference.findUnique).toHaveBeenCalledWith({
+        where: {
+          userId_category_channel: {
+            userId: 'user1',
+            category: 'QUEUE_UPDATES',
+            channel: 'IN_APP',
+          },
+        },
+      });
+    });
+  });
+
+  describe('getPreferences', () => {
+    it('returns every category x channel combination, defaulting to enabled', async () => {
+      const result = await service.getPreferences('user1');
+      expect(result.categories).toHaveLength(4);
+      for (const cat of result.categories) {
+        expect(cat.channels).toHaveLength(5);
+        expect(cat.channels.every((c) => c.enabled)).toBe(true);
+      }
+    });
+
+    it('reports IN_APP as the only available channel', async () => {
+      const result = await service.getPreferences('user1');
+      const bookingUpdates = result.categories.find((c) => c.category === 'BOOKING_UPDATES')!;
+      const byChannel = Object.fromEntries(bookingUpdates.channels.map((c) => [c.channel, c.available]));
+      expect(byChannel).toEqual({
+        IN_APP: true,
+        PUSH: false,
+        EMAIL: false,
+        SMS: false,
+        WHATSAPP: false,
+      });
+    });
+
+    it('reflects a stored disabled preference', async () => {
+      prisma.notificationPreference.findMany.mockResolvedValueOnce([
+        { category: 'PROMOTIONAL', channel: 'IN_APP', enabled: false },
+      ]);
+      const result = await service.getPreferences('user1');
+      const promo = result.categories.find((c) => c.category === 'PROMOTIONAL')!;
+      const inApp = promo.channels.find((c) => c.channel === 'IN_APP')!;
+      expect(inApp.enabled).toBe(false);
+    });
+  });
+
+  describe('setPreference', () => {
+    it('upserts the preference scoped to this user', async () => {
+      await service.setPreference('user1', 'PROMOTIONAL', 'IN_APP', false);
+      expect(prisma.notificationPreference.upsert).toHaveBeenCalledWith({
+        where: {
+          userId_category_channel: {
+            userId: 'user1',
+            category: 'PROMOTIONAL',
+            channel: 'IN_APP',
+          },
+        },
+        update: { enabled: false },
+        create: { userId: 'user1', category: 'PROMOTIONAL', channel: 'IN_APP', enabled: false },
+      });
+    });
+
+    it('returns the full updated preferences list', async () => {
+      const result = await service.setPreference('user1', 'PROMOTIONAL', 'IN_APP', false);
+      expect(result.categories).toHaveLength(4);
     });
   });
 });

@@ -3,6 +3,8 @@ import type {
   BookingStatus,
   ChairStatus,
   ChargeType,
+  NotificationCategory,
+  NotificationChannel,
   PhotoType,
   PrepaymentRequirement,
   QueueEntrySource,
@@ -521,6 +523,26 @@ export interface NotificationDto {
   deepLink: string | null;
   readAt: string | null; // ISO 8601, null = unread
   createdAt: string; // ISO 8601
+}
+
+// Phase 13 (Communication Preferences). `available` is server-computed truth about whether a real
+// provider is actually wired for that channel today — IN_APP is always true; PUSH/EMAIL/SMS/
+// WHATSAPP report false until this mission's explicitly-out-of-scope external providers are
+// configured (see Phase 45's blocker policy). The UI must never let a user "enable" an unavailable
+// channel and imply it will do anything.
+export interface NotificationChannelPreferenceDto {
+  channel: NotificationChannel;
+  enabled: boolean;
+  available: boolean;
+}
+
+export interface NotificationCategoryPreferenceDto {
+  category: NotificationCategory;
+  channels: NotificationChannelPreferenceDto[];
+}
+
+export interface NotificationPreferencesDto {
+  categories: NotificationCategoryPreferenceDto[];
 }
 
 // GET dashboard/overview (Phase 10 — multi-branch experience). Aggregate-only across every salon

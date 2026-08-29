@@ -2,6 +2,8 @@ import { z } from 'zod';
 import {
   ChairStatus,
   ChargeType,
+  NotificationCategory,
+  NotificationChannel,
   PhotoType,
   PrepaymentRequirement,
   SalonStatus,
@@ -331,6 +333,29 @@ export const setStaffWorkingHoursSchema = z
   });
 export type SetStaffWorkingHoursInput = z.infer<
   typeof setStaffWorkingHoursSchema
+>;
+
+// PUT notifications/preferences (Phase 13) — one (category, channel) toggle per call; the client
+// already has the full NotificationPreferencesDto to render from, so there's no need for a
+// whole-preferences-replaced-at-once shape the way OperatingHours/StaffWorkingHours use.
+export const setNotificationPreferenceSchema = z.object({
+  category: z.enum([
+    NotificationCategory.BOOKING_UPDATES,
+    NotificationCategory.QUEUE_UPDATES,
+    NotificationCategory.REMINDERS,
+    NotificationCategory.PROMOTIONAL,
+  ]),
+  channel: z.enum([
+    NotificationChannel.IN_APP,
+    NotificationChannel.PUSH,
+    NotificationChannel.EMAIL,
+    NotificationChannel.SMS,
+    NotificationChannel.WHATSAPP,
+  ]),
+  enabled: z.boolean(),
+});
+export type SetNotificationPreferenceInput = z.infer<
+  typeof setNotificationPreferenceSchema
 >;
 
 // Salon photo by URL. Binary upload is not wired (no object storage is configured), so an owner

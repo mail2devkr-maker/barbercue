@@ -1,15 +1,50 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  NotificationCategory,
   NotificationChannel,
   NotificationStatus,
+  type NotificationChannelPreferenceDto,
   type NotificationDto,
+  type NotificationPreferencesDto,
   type NotificationType,
   type PaginatedResult,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DEFAULT_PAGE_SIZE = 20;
+
+// Every NotificationType maps to exactly one category — see NotificationCategory's own doc
+// comment in schema.prisma. A type missing here is a bug (the TS types keep this exhaustive since
+// TYPE_CATEGORY is declared as Record<NotificationType, ...>).
+const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
+  'booking.confirmed': NotificationCategory.BOOKING_UPDATES,
+  'booking.cancelled': NotificationCategory.BOOKING_UPDATES,
+  'booking.reminder': NotificationCategory.REMINDERS,
+  'queue.turn_approaching': NotificationCategory.QUEUE_UPDATES,
+  'owner.booking.created': NotificationCategory.BOOKING_UPDATES,
+  'owner.booking.cancelled': NotificationCategory.BOOKING_UPDATES,
+  'owner.walk_in.joined': NotificationCategory.QUEUE_UPDATES,
+  'staff.assigned': NotificationCategory.QUEUE_UPDATES,
+};
+
+const ALL_CATEGORIES: NotificationCategory[] = [
+  NotificationCategory.BOOKING_UPDATES,
+  NotificationCategory.QUEUE_UPDATES,
+  NotificationCategory.REMINDERS,
+  NotificationCategory.PROMOTIONAL,
+];
+const ALL_CHANNELS: NotificationChannel[] = [
+  NotificationChannel.IN_APP,
+  NotificationChannel.PUSH,
+  NotificationChannel.EMAIL,
+  NotificationChannel.SMS,
+  NotificationChannel.WHATSAPP,
+];
+// The only channel with a real, configured provider today — see EmailSender/ConsoleEmailSender's
+// own doc comment for why EMAIL isn't in this set (no production email provider is wired either).
+// Single source of truth for both notify()'s gating and getPreferences()'s `available` field.
+const AVAILABLE_CHANNELS = new Set<NotificationChannel>([NotificationChannel.IN_APP]);
 
 /**
  * Notification Center (Phase 11) — reuses the existing Notification model (channel/type/payload/
@@ -31,6 +66,14 @@ export class NotificationsService {
     payload?: Record<string, unknown>,
     deepLink?: string,
   ): Promise<void> {
+    const category = TYPE_CATEGORY[type];
+    const enabled = await this.isEnabled(
+      userId,
+      category,
+      NotificationChannel.IN_APP,
+    );
+    if (!enabled) return;
+
     await this.prisma.notification.create({
       data: {
         userId,
@@ -84,6 +127,54 @@ export class NotificationsService {
       where: { userId, channel: NotificationChannel.IN_APP, readAt: null },
       data: { readAt: new Date() },
     });
+  }
+
+  /** No stored row = default enabled (see NotificationPreference's schema.prisma doc comment) —
+   * an unconfigured channel/category the user never touched behaves exactly like the mission's
+   * default expectations, not "silently off." */
+  private async isEnabled(
+    userId: string,
+    category: NotificationCategory,
+    channel: NotificationChannel,
+  ): Promise<boolean> {
+    const row = await this.prisma.notificationPreference.findUnique({
+      where: { userId_category_channel: { userId, category, channel } },
+    });
+    return row?.enabled ?? true;
+  }
+
+  async getPreferences(userId: string): Promise<NotificationPreferencesDto> {
+    const rows = await this.prisma.notificationPreference.findMany({
+      where: { userId },
+    });
+    const byKey = new Map(rows.map((r) => [`${r.category}:${r.channel}`, r.enabled]));
+
+    return {
+      categories: ALL_CATEGORIES.map((category) => ({
+        category,
+        channels: ALL_CHANNELS.map(
+          (channel): NotificationChannelPreferenceDto => ({
+            channel,
+            enabled: byKey.get(`${category}:${channel}`) ?? true,
+            available: AVAILABLE_CHANNELS.has(channel),
+          }),
+        ),
+      })),
+    };
+  }
+
+  async setPreference(
+    userId: string,
+    category: NotificationCategory,
+    channel: NotificationChannel,
+    enabled: boolean,
+  ): Promise<NotificationPreferencesDto> {
+    await this.prisma.notificationPreference.upsert({
+      where: { userId_category_channel: { userId, category, channel } },
+      update: { enabled },
+      create: { userId, category, channel, enabled },
+    });
+    return this.getPreferences(userId);
   }
 
   private toDto(row: {

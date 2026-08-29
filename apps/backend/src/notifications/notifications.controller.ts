@@ -1,6 +1,12 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
-import { NOTIFICATION_PATHS, type AuthenticatedUser } from '@barbercue/shared';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  NOTIFICATION_PATHS,
+  setNotificationPreferenceSchema,
+  type AuthenticatedUser,
+  type SetNotificationPreferenceInput,
+} from '@barbercue/shared';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { NotificationsService } from './notifications.service';
 
 // No @Roles() restriction — every authenticated user (customer, owner, staff, admin) reads their
@@ -37,5 +43,24 @@ export class NotificationsController {
   async markAllRead(@CurrentUser() user: AuthenticatedUser) {
     await this.notifications.markAllRead(user.id);
     return { ok: true };
+  }
+
+  @Get(NOTIFICATION_PATHS.preferences)
+  getPreferences(@CurrentUser() user: AuthenticatedUser) {
+    return this.notifications.getPreferences(user.id);
+  }
+
+  @Put(NOTIFICATION_PATHS.preferences)
+  setPreference(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(setNotificationPreferenceSchema))
+    body: SetNotificationPreferenceInput,
+  ) {
+    return this.notifications.setPreference(
+      user.id,
+      body.category,
+      body.channel,
+      body.enabled,
+    );
   }
 }

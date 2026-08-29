@@ -176,12 +176,43 @@ enum NotificationChannel {
   // to deliver). SMS/PUSH/EMAIL stay reserved for when a real provider is actually wired
   // (Phase 13's communication-preferences architecture) — this mission does not add one.
   IN_APP
+  // Phase 13 — architecture-only, same as SMS/PUSH/EMAIL: manual/deep-link WhatsApp sharing
+  // already exists (Phase 3's share flow), but proactive WhatsApp Business API delivery is
+  // explicitly out of scope for this mission (no provider configured).
+  WHATSAPP
 }
 
 enum NotificationStatus {
   PENDING
   SENT
   FAILED
+}
+
+// Phase 13 (Communication Preferences) — every NotificationType (packages/shared) maps to exactly
+// one of these; see NotificationsService's TYPE_CATEGORY. OPERATIONAL categories default enabled
+// (a customer expects to hear about their own bookings); PROMOTIONAL defaults enabled too today
+// only because nothing currently produces that category — Phase 20+'s offers work should default
+// it to opt-in rather than assuming this default carries over.
+enum NotificationCategory {
+  BOOKING_UPDATES
+  QUEUE_UPDATES
+  REMINDERS
+  PROMOTIONAL
+}
+
+// One row per (user, category, channel) the user has explicitly changed from its default. No row
+// = default (enabled), same "absence means default" convention as StaffWorkingHours (Phase 7).
+model NotificationPreference {
+  id        String                @id @default(uuid())
+  userId    String
+  user      User                  @relation(fields: [userId], references: [id])
+  category  NotificationCategory
+  channel   NotificationChannel
+  enabled   Boolean
+  updatedAt DateTime              @updatedAt
+
+  @@unique([userId, category, channel])
+  @@map("notification_preferences")
 }
 
 // ---------- Identity & access ----------
@@ -210,6 +241,7 @@ model User {
   queueEntries        QueueEntry[]
   reviews             Review[]
   notifications       Notification[]
+  notificationPreferences NotificationPreference[]
   ledgerEntries       CustomerLedgerEntry[]
   auditLogs           AuditLog[]
   premiumSubscriptions CustomerSubscription[]

@@ -207,6 +207,8 @@ export const NotificationChannel = {
   EMAIL: 'EMAIL',
   // Phase 11 (Notification Center) — see the Prisma schema's own doc comment on this value.
   IN_APP: 'IN_APP',
+  // Phase 13 (Communication Preferences) — architecture-only, see the Prisma schema's doc comment.
+  WHATSAPP: 'WHATSAPP',
 } as const;
 export type NotificationChannel = (typeof NotificationChannel)[keyof typeof NotificationChannel];
 
@@ -216,6 +218,17 @@ export const NotificationStatus = {
   FAILED: 'FAILED',
 } as const;
 export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus];
+
+// Phase 13 (Communication Preferences) — see NotificationPreference's own schema.prisma doc
+// comment for what "no row" (the default) means for each category.
+export const NotificationCategory = {
+  BOOKING_UPDATES: 'BOOKING_UPDATES',
+  QUEUE_UPDATES: 'QUEUE_UPDATES',
+  REMINDERS: 'REMINDERS',
+  PROMOTIONAL: 'PROMOTIONAL',
+} as const;
+export type NotificationCategory =
+  (typeof NotificationCategory)[keyof typeof NotificationCategory];
 
 // Stable machine-readable error codes for authentication — API.md's convention: clients branch on
 // `error.code`, never on `error.message`. Shared so backend and every client agree on the exact
