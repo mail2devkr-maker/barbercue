@@ -193,8 +193,21 @@ queue (booking/queue actions still require a live connection to submit) — that
 separately-scoped effort with real conflict-resolution questions, not a client resilience fix.
 
 ## Phase 16 — Ratings & Reviews
-**NOT STARTED.** (Review model already exists in the schema from an earlier phase; this mission's
-extensions not yet built.)
+**DONE.** The public read side (aggregate rating + recent-reviews list on a salon's discovery
+profile) already existed; this phase built the missing write/response half on the same `Review`
+model — no migration needed. New `ReviewsController` (`reviews`, customer-facing, no `@Roles()` —
+scoped by caller id): `POST` to leave a review on a booking (must be the caller's own, must be
+COMPLETED, one per booking — `Review.bookingId` is `@unique`), `PATCH :id` to edit it, `GET
+booking/:bookingId` to fetch it back. New `DashboardReviewsController`
+(`dashboard/salons/:salonId/reviews`, owner-only — same customerPhone/customerEmail PII reasoning
+as the bookings dashboard): paginated list + `PUT :reviewId/response` to reply publicly.
+`BookingDetailDto` gained `hasReview` so clients know whether to show "Leave a review" or the
+existing one without an extra round-trip. Web: review UI on the customer bookings page (star
+picker, optional comment, shows the shop's response once posted) and a new owner
+`dashboard/salons/:salonId/reviews` page (respond/edit response per review). Mobile: same review
+flow on `BookingDetailScreen` (customer is the primary mobile surface); owner-side response UI
+deferred to web only, matching the established owner-mobile-secondary pattern. 16 new backend
+tests (`ReviewsService`, `DashboardReviewsService`).
 
 ## Phase 17 — Barber Professional Profile
 **NOT STARTED.**
@@ -272,8 +285,8 @@ this-session endpoints together has not been run yet.
 only documented safe fields (tested — no hashes/tokens). No new WebSocket broadcast carries PII.
 
 ## Phase 38 — Testing Strategy
-**ONGOING, per-phase.** Current counts (after Phase 14): backend 537/537 tests passing (44
-suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (22
+**ONGOING, per-phase.** Current counts (after Phase 16): backend 553/553 tests passing (46
+suites) · shared/backend/web/mobile typecheck clean · web lint clean · web production build (23
 static/dynamic pages) · backend production build clean · mobile Expo config resolves cleanly.
 
 ## Phase 39 — Browser / Mobile Manual Validation

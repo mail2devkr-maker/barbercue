@@ -16,6 +16,7 @@ import { useAuth } from "../../../../lib/auth-context";
 import { CancelBookingDialog } from "../../../../components/booking/CancelBookingDialog";
 import { RescheduleBookingDialog } from "../../../../components/booking/RescheduleBookingDialog";
 import { BookingActionsBar } from "../../../../components/booking/BookingActionsBar";
+import { ReviewPanel } from "../../../../components/booking/ReviewPanel";
 import { CheckInPanel, canCheckIn } from "../../../../components/queue/CheckInPanel";
 import { QueueStatusPanel } from "../../../../components/queue/QueueStatusPanel";
 import { Card } from "../../../../components/ui/Card";
@@ -65,10 +66,12 @@ function BookingRow({
   booking,
   onCancel,
   onReschedule,
+  onReviewed,
 }: {
   booking: BookingDetailDto;
   onCancel: (booking: BookingDetailDto) => void;
   onReschedule: (booking: BookingDetailDto) => void;
+  onReviewed: (bookingId: string) => void;
 }) {
   return (
     <article className={styles.bookingRow}>
@@ -97,6 +100,7 @@ function BookingRow({
       )}
       <BookingActionsBar booking={booking} onReschedule={onReschedule} />
       {canCheckIn(booking) && <CheckInPanel booking={booking} />}
+      <ReviewPanel booking={booking} onReviewed={onReviewed} />
     </article>
   );
 }
@@ -179,6 +183,10 @@ export default function MyBookingsPage() {
   function handleRescheduled(updated: BookingDetailDto) {
     setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
     setRescheduleTarget(null);
+  }
+
+  function handleReviewed(bookingId: string) {
+    setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, hasReview: true } : b)));
   }
 
   const upcoming = bookings.filter((b) => UPCOMING_STATUSES.has(b.status));
@@ -299,7 +307,13 @@ export default function MyBookingsPage() {
         <h2 className={styles.sectionTitle}>Upcoming bookings</h2>
         {!loading && upcoming.length === 0 && <p className={styles.emptyListNote}>No upcoming bookings.</p>}
         {upcoming.map((booking) => (
-          <BookingRow key={booking.id} booking={booking} onCancel={setCancelTarget} onReschedule={setRescheduleTarget} />
+          <BookingRow
+            key={booking.id}
+            booking={booking}
+            onCancel={setCancelTarget}
+            onReschedule={setRescheduleTarget}
+            onReviewed={handleReviewed}
+          />
         ))}
       </section>
 
@@ -307,7 +321,13 @@ export default function MyBookingsPage() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Past bookings</h2>
           {past.map((booking) => (
-            <BookingRow key={booking.id} booking={booking} onCancel={setCancelTarget} onReschedule={setRescheduleTarget} />
+            <BookingRow
+            key={booking.id}
+            booking={booking}
+            onCancel={setCancelTarget}
+            onReschedule={setRescheduleTarget}
+            onReviewed={handleReviewed}
+          />
           ))}
         </section>
       )}

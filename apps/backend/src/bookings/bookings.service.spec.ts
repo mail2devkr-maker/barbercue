@@ -42,6 +42,7 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     },
     service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
     preferredStaff: null,
+    reviews: [],
     ...overrides,
   };
 }

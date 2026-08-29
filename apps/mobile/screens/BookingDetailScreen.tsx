@@ -20,6 +20,7 @@ import { openDirections, openWhatsappShare, salonPageUrl, shareSalon } from '../
 import { useRebook } from '../lib/use-rebook';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import { RescheduleSheet } from '../components/RescheduleSheet';
+import { ReviewPanel } from '../components/ReviewPanel';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, Skeleton, ErrorState, InlineError } from '../components/ui';
 import type { BookingsStackParamList } from '../navigation/types';
@@ -282,6 +283,13 @@ export default function BookingDetailScreen({ route }: Props) {
           <Button title="Check in" variant="secondary" onPress={() => void handleCheckIn()} loading={checkingIn} style={styles.actionButton} />
         )
       )}
+
+      <ReviewPanel
+        booking={booking}
+        onReviewed={(bookingId) =>
+          setBooking((prev) => (prev && prev.id === bookingId ? { ...prev, hasReview: true } : prev))
+        }
+      />
     </Screen>
   );
 }

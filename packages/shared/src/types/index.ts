@@ -190,6 +190,32 @@ export interface ReviewSummaryDto {
   createdAt: string; // ISO 8601
 }
 
+// ---------- Ratings & Reviews (Phase 16) ----------
+
+// POST reviews / PATCH reviews/:id / GET reviews/booking/:bookingId response — the customer's own
+// full view of one review, including ownerResponse (ReviewSummaryDto above is the public,
+// salon-profile-page shape and deliberately omits it, matching the DB model's own doc comment).
+export interface ReviewDetailDto {
+  id: string;
+  bookingId: string;
+  salonId: string;
+  rating: number;
+  comment: string | null;
+  ownerResponse: string | null;
+  createdAt: string; // ISO 8601
+  updatedAt: string;
+}
+
+// GET dashboard/salons/:salonId/reviews — adds the operational context an owner needs to respond
+// (which contact this review even came from) on top of ReviewDetailDto, same "extend the base DTO"
+// pattern as OwnerBookingDetailDto extending BookingDetailDto. No customer display-name for the
+// same schema-gap reason as ReviewSummaryDto above.
+export interface OwnerReviewDto extends ReviewDetailDto {
+  customerPhone: string | null;
+  customerEmail: string | null;
+  serviceName: string;
+}
+
 // Listing/search-result card shape — extends the existing SalonSummary rather than duplicating
 // its fields, adding only what a card needs beyond identity/location.
 export interface SalonListItemDto extends SalonSummary {
@@ -321,6 +347,10 @@ export interface BookingDetailDto extends BookingDto {
   serviceDurationMinutes: number;
   servicePrice: number;
   preferredStaffName: string | null;
+  // Phase 16 (Ratings & Reviews) — whether the Review.bookingId-unique row already exists for this
+  // booking, so a client can show "Leave a review" vs. "You reviewed this" without a second
+  // round-trip. Never the review's own content (that's GET reviews/mine/:bookingId).
+  hasReview: boolean;
 }
 
 export interface CancelBookingResponseDto {

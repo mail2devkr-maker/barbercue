@@ -110,6 +110,15 @@ export const SALON_QUEUE_PATHS = {
 // QueueEntriesController's `@Controller('queue-entries')` prefix (customer view).
 export const QUEUE_ENTRIES_PATH = 'queue-entries';
 
+// ReviewsController's `@Controller('reviews')` prefix (Phase 16 — Ratings & Reviews).
+// GET reviews/booking/:bookingId, POST reviews, PATCH reviews/:id — the owner-response side lives
+// under DASHBOARD_PATHS.reviews instead (dashboard/salons/:salonId/reviews), same
+// customer-vs-owner controller split as every other feature in this codebase.
+export const REVIEW_PATHS = {
+  reviews: 'reviews',
+  booking: 'booking',
+} as const;
+
 // StyleAdvisorController's `@Controller('style-advisor')` prefix.
 export const STYLE_ADVISOR_PATHS = {
   styleAdvisor: 'style-advisor',
@@ -219,6 +228,10 @@ export const DASHBOARD_PATHS = {
   analytics: 'analytics',
   // GET dashboard/overview (Phase 10 — multi-branch aggregate overview, no :salonId).
   overview: 'overview',
+  // GET dashboard/salons/:salonId/reviews, PUT .../reviews/:reviewId/response (Phase 16 — the
+  // owner-response side of Ratings & Reviews; the customer write side is REVIEW_PATHS instead).
+  reviews: 'reviews',
+  response: 'response',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

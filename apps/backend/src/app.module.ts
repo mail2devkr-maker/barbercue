@@ -26,6 +26,8 @@ import { DashboardAnalyticsModule } from './dashboard-analytics/dashboard-analyt
 import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { DashboardReviewsModule } from './dashboard-reviews/dashboard-reviews.module';
 
 @Module({
   imports: [
@@ -61,8 +63,10 @@ import { RemindersModule } from './reminders/reminders.module';
     DashboardOverviewModule,
     NotificationsModule,
     RemindersModule,
-    // Feature modules (staff/chair roster CRUD, payments, reviews, admin) are added in later
-    // phases per PROJECT_STRUCTURE.md.
+    ReviewsModule,
+    DashboardReviewsModule,
+    // Feature modules (staff/chair roster CRUD, payments, admin) are added in later phases per
+    // PROJECT_STRUCTURE.md.
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

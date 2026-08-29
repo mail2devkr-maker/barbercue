@@ -37,6 +37,7 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     preferredStaff: null,
     customer: { phone: '+919876543210', email: null },
     queueEntries: [],
+    reviews: [],
     ...overrides,
   };
 }

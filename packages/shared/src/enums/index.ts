@@ -362,6 +362,20 @@ export const SalonSetupErrorCode = {
 } as const;
 export type SalonSetupErrorCode = (typeof SalonSetupErrorCode)[keyof typeof SalonSetupErrorCode];
 
+// Stable machine-readable error codes for Ratings & Reviews (Phase 16) — same convention as
+// BookingErrorCode. Reuses QueueErrorCode.SALON_ACCESS_DENIED for the owner-response permission
+// check (the existing SalonAccessService failure) rather than duplicating it.
+export const ReviewErrorCode = {
+  BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
+  // Only a COMPLETED booking can be reviewed — the service was actually received.
+  BOOKING_NOT_COMPLETED: 'BOOKING_NOT_COMPLETED',
+  REVIEW_ALREADY_EXISTS: 'REVIEW_ALREADY_EXISTS',
+  REVIEW_NOT_FOUND: 'REVIEW_NOT_FOUND',
+  // The review exists, but the caller isn't the customer who wrote it.
+  NOT_YOUR_REVIEW: 'NOT_YOUR_REVIEW',
+} as const;
+export type ReviewErrorCode = (typeof ReviewErrorCode)[keyof typeof ReviewErrorCode];
+
 export const PremiumErrorCode = {
   PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
   // The dev-only test-activation endpoint was called outside a non-production environment — see

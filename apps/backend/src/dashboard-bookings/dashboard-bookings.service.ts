@@ -57,6 +57,8 @@ const ownerBookingInclude = {
     orderBy: { createdAt: 'desc' },
     take: 1,
   },
+  // Phase 16 (Ratings & Reviews) — id only, same as bookings.service.ts's own bookingDetailInclude.
+  reviews: { select: { id: true } },
 } satisfies Prisma.BookingInclude;
 
 type OwnerBookingWithDetails = Prisma.BookingGetPayload<{
@@ -221,6 +223,7 @@ export class DashboardBookingsService {
       createdAt: booking.createdAt.toISOString(),
       updatedAt: booking.updatedAt.toISOString(),
       cancelledAt: booking.cancelledAt ? booking.cancelledAt.toISOString() : null,
+      hasReview: booking.reviews.length > 0,
     };
   }
 }

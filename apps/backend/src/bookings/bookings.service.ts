@@ -49,6 +49,9 @@ const bookingDetailInclude = {
   },
   service: { select: { name: true, durationMinutes: true, price: true } },
   preferredStaff: { select: { displayName: true } },
+  // Phase 16 (Ratings & Reviews) — id only, just to derive hasReview below; the review's own
+  // content is fetched separately by ReviewsService, never duplicated onto BookingDetailDto.
+  reviews: { select: { id: true } },
 } satisfies Prisma.BookingInclude;
 
 type BookingWithDetails = Prisma.BookingGetPayload<{
@@ -535,6 +538,7 @@ export class BookingsService {
       serviceDurationMinutes: booking.service.durationMinutes,
       servicePrice: Number(booking.service.price),
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
+      hasReview: booking.reviews.length > 0,
     };
   }
 }

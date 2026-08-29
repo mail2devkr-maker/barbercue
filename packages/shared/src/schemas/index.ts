@@ -458,3 +458,31 @@ export const devActivatePremiumSchema = z.object({
   planId: z.enum(PREMIUM_PLAN_IDS),
 });
 export type DevActivatePremiumInput = z.infer<typeof devActivatePremiumSchema>;
+
+// ---------- Ratings & Reviews (Phase 16) ----------
+
+// POST reviews — one review per booking (Review.bookingId is @unique; ReviewsService's own
+// re-check gives a friendlier ALREADY_REVIEWED error before the DB constraint would).
+export const createReviewSchema = z.object({
+  bookingId: z.string().uuid(),
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().max(1000).optional(),
+});
+export type CreateReviewInput = z.infer<typeof createReviewSchema>;
+
+// PATCH reviews/:id — both fields optional (edit just the rating, or just the comment), but at
+// least one must actually change something, same convention as updateSalonStaffSchema above.
+export const updateReviewSchema = z
+  .object({
+    rating: z.number().int().min(1).max(5).optional(),
+    comment: z.string().trim().max(1000).optional(),
+  })
+  .refine((v) => v.rating !== undefined || v.comment !== undefined, { message: 'No fields to update' });
+export type UpdateReviewInput = z.infer<typeof updateReviewSchema>;
+
+// PUT dashboard/salons/:salonId/reviews/:reviewId/response — owner's reply. Required non-empty:
+// an owner clearing a response entirely isn't a real use case worth a separate DELETE route.
+export const respondToReviewSchema = z.object({
+  ownerResponse: z.string().trim().min(1).max(1000),
+});
+export type RespondToReviewInput = z.infer<typeof respondToReviewSchema>;
