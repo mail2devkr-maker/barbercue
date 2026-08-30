@@ -1,12 +1,13 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DASHBOARD_PATHS, DISCOVERY_PATHS, SalonSetupErrorCode, SalonStatus } from "@barbercue/shared";
 import type {
   RegisterSalonResultDto,
   SalonSetupReadinessDto,
   SalonStatusResultDto,
+  SalonTimezoneResultDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { QueueQrSection } from "../../../../../../components/dashboard/QueueQrSection";
@@ -59,6 +60,137 @@ function ReadinessItem({
       <span aria-hidden="true">{done ? "✓" : "✗"}</span>{" "}
       {done ? doneLabel : label}
     </li>
+  );
+}
+
+// Every modern browser and Node 18+ implements this (it's how the browser itself knows what zones
+// exist), so it's a live, always-current IANA list rather than a hand-maintained array that goes
+// stale as the tz database adds/renames zones. The `in` check is only for a runtime old enough not
+// to have it — this app's own browserslist target already assumes evergreen browsers, so that path
+// is a safety net, not an expected case.
+//
+// "Asia/Kolkata" is deliberately forced into the list even though it's missing from it: ICU's
+// canonical-name table lists the *older* "Asia/Calcutta" identifier instead (both are the same,
+// real IANA zone — Kolkata is a link/alias to Calcutta in the tz database, and `supportedValuesOf`
+// only returns canonical names). This codebase's own INDIA_TIME_ZONE constant, everywhere a
+// salon's timezone is set or compared, uses "Asia/Kolkata" specifically — without forcing it in
+// here, the single most common value a new Indian shop would want is simply never selectable, and
+// an existing salon already storing exactly that string (as every seeded/legacy one does) couldn't
+// have its own current value re-selected in the dropdown, only shown as text above it.
+function supportedTimeZones(current: string | null): string[] {
+  const zones = typeof Intl.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone")
+    : ["UTC"];
+  const withKolkata = zones.includes("Asia/Kolkata") ? zones : ["Asia/Kolkata", ...zones];
+  // Whatever the salon already has stored (even a legacy/unusual value not in ICU's canonical
+  // list) must stay selectable — otherwise loading the page with such a value pre-selects nothing.
+  if (current && !withKolkata.includes(current)) return [current, ...withKolkata];
+  return withKolkata;
+}
+
+// Owner-facing counterpart to Global timezone correctness (booking/analytics/isOpenNow all need a
+// real IANA zone, and throw SALON_TIMEZONE_REQUIRED for a booking-critical path when none is set).
+// India shops keep working unchanged with no zone set at all (resolveSalonTimeZone's own
+// country-code fallback) — this control exists for every OTHER country, and for an India shop that
+// wants to set one explicitly anyway.
+function TimezoneSection({ salonId }: { salonId: string }) {
+  const [current, setCurrent] = useState<string | null | undefined>(undefined);
+  const [selected, setSelected] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const zones = useMemo(
+    () => supportedTimeZones(current === undefined ? null : current),
+    [current],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<SalonTimezoneResultDto>(
+      `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.timezone}`,
+    )
+      .then((result) => {
+        if (cancelled) return;
+        setCurrent(result.timezone);
+        setSelected(result.timezone ?? "");
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Could not load your time zone.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [salonId]);
+
+  async function save() {
+    if (!selected) return;
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const result = await apiFetch<SalonTimezoneResultDto>(
+        `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.timezone}`,
+        { method: "PATCH", body: JSON.stringify({ timezone: selected }) },
+      );
+      setCurrent(result.timezone);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save your time zone.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className={styles.dividerSection}>
+      <h2 className={styles.sectionHeading}>Time zone</h2>
+      <p style={{ color: "var(--bc-muted)", fontSize: 14, marginBottom: 12 }}>
+        Used for your opening hours, booking availability, and analytics day boundaries. Without
+        one set, an India shop still works (assumed Asia/Kolkata); a shop anywhere else can&apos;t
+        take bookings until this is set.
+      </p>
+      {error && <p className={`${styles.banner} ${styles.bannerError}`} role="alert">{error}</p>}
+      {current === undefined && !error && <p className={styles.loadingText}>Loading…</p>}
+      {current !== undefined && (
+        <>
+          <p style={{ fontSize: 14, marginBottom: 8 }}>
+            Current: <strong>{current ?? "Not set"}</strong>
+          </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <select
+              value={selected}
+              onChange={(e) => {
+                setSelected(e.target.value);
+                setSaved(false);
+              }}
+              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", minWidth: 260 }}
+            >
+              <option value="" disabled>
+                Choose a time zone…
+              </option>
+              {zones.map((z) => (
+                <option key={z} value={z}>
+                  {z}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void save()}
+              disabled={saving || !selected || selected === current}
+            >
+              {saving ? "Saving…" : "Save time zone"}
+            </Button>
+          </div>
+          {saved && (
+            <p role="status" style={{ color: "var(--bc-success)", fontSize: 13, marginTop: 8 }}>
+              Saved.
+            </p>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -206,6 +338,8 @@ export default function DashboardSettingsPage({
           )}
         </section>
       )}
+
+      {salon && <TimezoneSection salonId={salonId} />}
 
       <p className={styles.pageSubtitle} style={{ marginTop: 24 }}>
         Payment policy and cancellation policy settings — placeholder, not yet implemented.

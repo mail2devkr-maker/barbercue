@@ -4,6 +4,7 @@ import {
   createSalonServiceSchema,
   createSalonStaffSchema,
   normalizeServiceIdentity,
+  updateSalonTimezoneSchema,
 } from '..';
 
 describe('owner setup contracts', () => {
@@ -46,5 +47,19 @@ describe('owner setup contracts', () => {
   it('normalizes punctuation and case for duplicate matching', () => {
     expect(normalizeServiceIdentity(' Skin-Fade ', "Men's Hair & Grooming"))
       .toBe(normalizeServiceIdentity('skin fade', "MEN'S HAIR & GROOMING"));
+  });
+
+  // Real IANA-name validity (recognized by Intl.DateTimeFormat) is checked server-side in
+  // SalonTimezoneService, not here — this schema only enforces the general "Area/Location" shape,
+  // since a real validity check needs the Intl runtime a zod schema doesn't have access to.
+  it('accepts a plausible Area/Location time zone name', () => {
+    expect(updateSalonTimezoneSchema.safeParse({ timezone: 'Asia/Kolkata' }).success).toBe(true);
+    expect(updateSalonTimezoneSchema.safeParse({ timezone: 'America/New_York' }).success).toBe(true);
+  });
+
+  it('rejects an empty string, a bare offset, or a non-Area/Location shape', () => {
+    expect(updateSalonTimezoneSchema.safeParse({ timezone: '' }).success).toBe(false);
+    expect(updateSalonTimezoneSchema.safeParse({ timezone: 'UTC+5:30' }).success).toBe(false);
+    expect(updateSalonTimezoneSchema.safeParse({ timezone: 'IST' }).success).toBe(false);
   });
 });

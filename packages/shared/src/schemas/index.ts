@@ -458,6 +458,22 @@ export const updateSalonStatusSchema = z.object({
 });
 export type UpdateSalonStatusInput = z.infer<typeof updateSalonStatusSchema>;
 
+// PATCH dashboard/salons/:salonId/timezone — owner-set IANA timezone (Global timezone
+// correctness). Real validity (a name Intl actually recognizes, e.g. "Asia/Kolkata" not
+// "IST"/"UTC+5:30") can only be checked with Intl.DateTimeFormat, which isn't available inside a
+// zod schema in a platform-portable way — this only checks shape (non-empty, plausible
+// "Area/Location" form); SalonTimezoneService.updateTimezone is the real, server-side authority via
+// isValidTimeZone, and rejects anything this shape check lets through but Intl doesn't recognize.
+export const updateSalonTimezoneSchema = z.object({
+  timezone: z
+    .string()
+    .trim()
+    .min(1)
+    .max(60)
+    .regex(/^[A-Za-z0-9_+-]+\/[A-Za-z0-9_+\-/]+$/, 'Enter a valid IANA time zone, e.g. Asia/Kolkata'),
+});
+export type UpdateSalonTimezoneInput = z.infer<typeof updateSalonTimezoneSchema>;
+
 // POST premium/dev/activate — dev/test-only Premium activation for the calling user. The backend
 // route itself is unreachable outside a non-production environment (see PremiumController); this
 // schema only validates shape, not who's allowed to call it.

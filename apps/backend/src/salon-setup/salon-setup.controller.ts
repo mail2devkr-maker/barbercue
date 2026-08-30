@@ -27,6 +27,7 @@ import {
   updateSalonServiceSchema,
   updateSalonStaffSchema,
   updateSalonStatusSchema,
+  updateSalonTimezoneSchema,
   type AuthenticatedUser,
   type CreateSalonChairInput,
   type CreateSalonServiceInput,
@@ -39,6 +40,7 @@ import {
   type UpdateSalonServiceInput,
   type UpdateSalonStaffInput,
   type UpdateSalonStatusInput,
+  type UpdateSalonTimezoneInput,
 } from '@barbercue/shared';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -52,6 +54,7 @@ import { SalonActivationService } from './salon-activation.service';
 import { SalonOperatingHoursService } from './salon-operating-hours.service';
 import { SalonPhotosService } from './salon-photos.service';
 import { StaffWorkingHoursService } from './staff-working-hours.service';
+import { SalonTimezoneService } from './salon-timezone.service';
 
 const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId`;
 
@@ -79,6 +82,7 @@ export class SalonSetupController {
     private readonly operatingHours: SalonOperatingHoursService,
     private readonly photos: SalonPhotosService,
     private readonly staffWorkingHours: StaffWorkingHoursService,
+    private readonly timezone: SalonTimezoneService,
   ) {}
 
   // ---------- Shop activation ----------
@@ -91,6 +95,26 @@ export class SalonSetupController {
     body: UpdateSalonStatusInput,
   ) {
     return this.activation.updateStatus(user.id, salonId, body);
+  }
+
+  // ---------- Timezone ----------
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.timezone}`)
+  getTimezone(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.timezone.getTimezone(user.id, salonId);
+  }
+
+  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.timezone}`)
+  updateTimezone(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(updateSalonTimezoneSchema))
+    body: UpdateSalonTimezoneInput,
+  ) {
+    return this.timezone.updateTimezone(user.id, salonId, body);
   }
 
   // ---------- Operating hours ----------

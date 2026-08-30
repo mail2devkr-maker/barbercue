@@ -247,6 +247,10 @@ export const DASHBOARD_PATHS = {
   // Phase 18 — dashboard/salons/:salonId/verification (shop) and
   // dashboard/salons/:salonId/staff/:staffId/verification (professional, `staff` above reused).
   verification: 'verification',
+  // GET/PATCH dashboard/salons/:salonId/timezone (Global timezone correctness) — the owner-facing
+  // counterpart to SALON_TIMEZONE_REQUIRED: booking/analytics/isOpenNow all need a real IANA zone,
+  // and until this endpoint existed there was no way for an owner to actually set one.
+  timezone: 'timezone',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

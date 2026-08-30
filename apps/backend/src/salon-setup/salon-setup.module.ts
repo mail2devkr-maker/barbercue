@@ -8,6 +8,7 @@ import { SalonActivationService } from './salon-activation.service';
 import { SalonOperatingHoursService } from './salon-operating-hours.service';
 import { SalonPhotosService } from './salon-photos.service';
 import { StaffWorkingHoursService } from './staff-working-hours.service';
+import { SalonTimezoneService } from './salon-timezone.service';
 import { StorageModule } from '../storage/storage.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { StorageModule } from '../storage/storage.module';
     SalonOperatingHoursService,
     SalonPhotosService,
     StaffWorkingHoursService,
+    SalonTimezoneService,
   ],
 })
 export class SalonSetupModule {}

@@ -805,6 +805,12 @@ export interface SalonStatusResultDto {
   status: SalonStatus;
 }
 
+// PATCH dashboard/salons/:salonId/timezone response, and GET .../timezone's current-value shape.
+export interface SalonTimezoneResultDto {
+  id: string;
+  timezone: string | null;
+}
+
 /**
  * What a PENDING salon still needs before it can be opened. Carried as the `details` payload of a
  * SALON_SETUP_INCOMPLETE error so the client can render a per-item checklist ("✓ Service added /
