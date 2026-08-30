@@ -35,6 +35,11 @@ export function CancelBookingDialog({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Distinct from `error` (also used for a failed *confirm* attempt, which should stay retryable)
+  // — this specifically blocks Confirm cancellation while the preview never loaded, since without
+  // it the button stayed clickable and just reproduced the identical failure a second time on the
+  // real cancel call, showing the customer two confusing errors in a row for one root cause.
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   // Date.now() is impure, so it belongs here (an effect, run after render) rather than computed
   // directly in the render body — see React's rules-of-hooks "purity" requirement.
@@ -51,8 +56,14 @@ export function CancelBookingDialog({
         const minutesUntilSlot = (new Date(booking.slotStart).getTime() - Date.now()) / 60_000;
         setPreview(computeCancellationCharge(policy, booking.servicePrice, minutesUntilSlot, false));
       })
-      .catch(() => {
-        if (!cancelled) setError("Could not load the cancellation policy.");
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPreviewFailed(true);
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : "Could not load the cancellation policy. Please check your connection and try again.",
+        );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -97,7 +108,12 @@ export function CancelBookingDialog({
           <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
             Keep booking
           </Button>
-          <Button type="button" variant="primary" onClick={() => void handleConfirm()} disabled={submitting || loading}>
+          <Button
+            type="button"
+            variant="primary"
+            onClick={() => void handleConfirm()}
+            disabled={submitting || loading || previewFailed}
+          >
             {submitting ? "Cancelling…" : "Confirm cancellation"}
           </Button>
         </div>
