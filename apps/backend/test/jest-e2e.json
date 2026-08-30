@@ -7,5 +7,5 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "transformIgnorePatterns": ["node_modules/(?!(otplib|@otplib|@scure|@noble)/)"]
+  "transformIgnorePatterns": ["node_modules/(?!(otplib|@otplib|@scure|@noble|@nestjs/schedule)/)"]
 }
