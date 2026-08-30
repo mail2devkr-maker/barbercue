@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { CitySearchResultDto } from "@barbercue/shared";
-import { apiFetch } from "../../lib/api";
+import { apiFetch, ApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
 import { hintStyle, inputStyle } from "./form-styles";
 
@@ -23,7 +23,9 @@ type SearchState =
   | { kind: "idle" } // nothing typed, or still under MIN_QUERY_LENGTH
   | { kind: "loading" }
   | { kind: "results"; cities: CitySearchResultDto[] }
-  | { kind: "failed" };
+  | { kind: "failed" }
+  | { kind: "creating" } // Issue 7 — submitting the "Use as entered" fallback
+  | { kind: "create-failed"; message: string };
 
 interface CitySearchFieldProps {
   /** Empty until a country is chosen — the search endpoint requires it, so we don't call without. */
@@ -120,6 +122,29 @@ export function CitySearchField({
     onSelect(null);
     // The input only mounts once selectedCity is null, so focus has to wait for that render.
     requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  /**
+   * Issue 7 — "Use '<name>' as entered". Only reachable after a real search already came back
+   * empty (see the render branch below), so this never bypasses search; it's what search hands
+   * off to when the ~99,800-row imported master list genuinely has no match for this city.
+   */
+  async function createAsEntered() {
+    const name = trimmed;
+    if (!name || !countryId) return;
+    setState({ kind: "creating" });
+    try {
+      const created = await apiFetch<CitySearchResultDto>(DISCOVERY_PATHS.cities, {
+        method: "POST",
+        body: JSON.stringify({ name, countryId, regionId: regionId || undefined }),
+      });
+      choose(created);
+    } catch (err) {
+      setState({
+        kind: "create-failed",
+        message: err instanceof ApiError ? err.message : "Could not add this city. Please try again.",
+      });
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -250,7 +275,21 @@ export function CitySearchField({
 
       {!tooShort && state.kind === "loading" && <p style={hintStyle}>Searching cities…</p>}
       {!tooShort && state.kind === "results" && cities.length === 0 && (
-        <p style={hintStyle}>No cities found for “{trimmed}”. Try a different spelling.</p>
+        <div style={{ marginTop: 6 }}>
+          <p style={hintStyle}>No matching city found for “{trimmed}”.</p>
+          <Button type="button" variant="outline" onClick={() => void createAsEntered()}>
+            Use &ldquo;{trimmed}&rdquo; as entered
+          </Button>
+        </div>
+      )}
+      {state.kind === "creating" && <p style={hintStyle}>Adding “{trimmed}”…</p>}
+      {state.kind === "create-failed" && (
+        <div style={{ marginTop: 6 }}>
+          <p style={{ ...hintStyle, color: "var(--bc-accent)" }}>{state.message}</p>
+          <Button type="button" variant="outline" onClick={() => void createAsEntered()}>
+            Try again — use &ldquo;{trimmed}&rdquo; as entered
+          </Button>
+        </div>
       )}
       {!tooShort && state.kind === "failed" && (
         <p style={{ ...hintStyle, color: "var(--bc-accent)" }}>Could not search cities. Please try again.</p>

@@ -29,6 +29,7 @@ import { RemindersModule } from './reminders/reminders.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { DashboardReviewsModule } from './dashboard-reviews/dashboard-reviews.module';
 import { VerificationModule } from './verification/verification.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { VerificationModule } from './verification/verification.module';
     ReviewsModule,
     DashboardReviewsModule,
     VerificationModule,
+    SearchModule,
     // Feature modules (staff/chair roster CRUD, payments, admin) are added in later phases per
     // PROJECT_STRUCTURE.md.
   ],

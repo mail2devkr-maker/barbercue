@@ -87,6 +87,13 @@ export const DISCOVERY_PATHS = {
   workplaces: 'workplaces',
 } as const;
 
+// SearchController's `@Controller('search')` prefix (Issue 3) — typo-tolerant shop/service
+// autosuggest, separate from DISCOVERY_PATHS.salons' own full search/listing endpoint.
+export const SEARCH_PATHS = {
+  search: 'search',
+  suggest: 'suggest',
+} as const;
+
 // New top-level `countries` controller (Phase 6A) — separate resource from DISCOVERY_PATHS'
 // `cities`, additive to the existing discovery API surface.
 export const COUNTRY_PATHS = {

@@ -533,6 +533,13 @@
   font-weight: 700;
 }
 
+.catalogBulkActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .catalogFilters {
   margin: 18px 0;
   display: grid;

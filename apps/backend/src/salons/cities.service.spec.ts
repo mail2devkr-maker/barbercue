@@ -1,7 +1,15 @@
 import { Test } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import { CitiesService } from './cities.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
+
+function uniqueViolation(): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+    code: 'P2002',
+    clientVersion: 'test',
+  });
+}
 
 const bengaluru = {
   id: 'c1',
@@ -16,15 +24,29 @@ const bengaluru = {
 describe('CitiesService', () => {
   let service: CitiesService;
   let prisma: {
-    city: { findMany: jest.Mock; findUnique: jest.Mock; findFirst: jest.Mock };
+    city: {
+      findMany: jest.Mock;
+      findUnique: jest.Mock;
+      findFirst: jest.Mock;
+      create: jest.Mock;
+    };
     locality: { findMany: jest.Mock; findUnique: jest.Mock };
+    country: { findUnique: jest.Mock };
+    region: { findUnique: jest.Mock };
     $queryRaw: jest.Mock;
   };
 
   beforeEach(async () => {
     prisma = {
-      city: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
+      city: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        create: jest.fn(),
+      },
       locality: { findMany: jest.fn(), findUnique: jest.fn() },
+      country: { findUnique: jest.fn() },
+      region: { findUnique: jest.fn() },
       $queryRaw: jest.fn(),
     };
     const moduleRef = await Test.createTestingModule({
@@ -176,6 +198,7 @@ describe('CitiesService', () => {
       name: 'Bengaluru',
       slug: 'bengaluru',
       countryCode: 'IN',
+      countryName: 'India',
       regionId: 'r1',
       regionName: 'Karnataka',
       regionCode: 'IN-KA',
@@ -211,9 +234,29 @@ describe('CitiesService', () => {
           name: 'Bengaluru',
           slug: 'bengaluru',
           countryCode: 'IN',
+          countryName: 'India',
           region: { id: 'r1', name: 'Karnataka', code: 'IN-KA' },
         },
       ]);
+    });
+
+    // Issue 10 — the search page's city field has no country pre-selected.
+    it('omits the countryId filter entirely when none is given (global search-page mode)', async () => {
+      prisma.$queryRaw.mockResolvedValue([bengaluruRow]);
+      await service.searchCities({ q: 'ben' });
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      expect(sqlFragment.sql).not.toContain('"countryId"');
+    });
+
+    // Issue 10 — plain ILIKE containment alone cannot find a real typo (a transposed/missing
+    // letter breaks substring matching); the trigram OR clause is what makes this "typo-tolerant"
+    // rather than merely "prefix/substring tolerant".
+    it('includes the trigram similarity clause so a genuine typo (not just a substring) can still match', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.searchCities({ q: 'bengalore' });
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      expect(sqlFragment.sql).toContain('similarity(c.name');
+      expect(sqlFragment.values).toContain(0.3);
     });
 
     it('includes the region filter in the query parameters when regionId is provided', async () => {
@@ -247,6 +290,152 @@ describe('CitiesService', () => {
       await service.searchCities({ countryId: 'country-1', q: 'ben' });
       const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
       expect(sqlFragment.values).toContain(20);
+    });
+  });
+
+  // Issue 7's "Use as entered" fallback: registration must not dead-end when an owner's real city
+  // is missing from the imported master list.
+  describe('createOwnerSubmittedCity', () => {
+    const india = { id: 'country-1', isoCode2: 'IN', name: 'India' };
+    const karnataka = { id: 'region-1', countryId: 'country-1', name: 'Karnataka', code: 'IN-KA' };
+
+    it('throws COUNTRY_NOT_FOUND for an unknown countryId', async () => {
+      prisma.country.findUnique.mockResolvedValue(null);
+      await expect(
+        service.createOwnerSubmittedCity({ name: 'Mysuru', countryId: 'nope' }),
+      ).rejects.toMatchObject({ code: 'COUNTRY_NOT_FOUND' });
+      expect(prisma.city.create).not.toHaveBeenCalled();
+    });
+
+    it('throws REGION_NOT_FOUND when the region belongs to a different country', async () => {
+      prisma.country.findUnique.mockResolvedValue(india);
+      prisma.region.findUnique.mockResolvedValue({ ...karnataka, countryId: 'other-country' });
+      await expect(
+        service.createOwnerSubmittedCity({
+          name: 'Mysuru',
+          countryId: 'country-1',
+          regionId: 'region-1',
+        }),
+      ).rejects.toMatchObject({ code: 'REGION_NOT_FOUND' });
+      expect(prisma.city.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a new City scoped to the chosen country/region, marked owner-submitted', async () => {
+      prisma.country.findUnique.mockResolvedValue(india);
+      prisma.region.findUnique.mockResolvedValue(karnataka);
+      prisma.city.findUnique.mockResolvedValue(null); // no existing slug collision
+      prisma.city.create.mockResolvedValue({
+        id: 'new-city',
+        name: 'Mysuru',
+        slug: 'mysuru',
+        countryCode: 'IN',
+      });
+
+      const result = await service.createOwnerSubmittedCity({
+        name: 'Mysuru',
+        countryId: 'country-1',
+        regionId: 'region-1',
+      });
+
+      expect(prisma.city.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'Mysuru',
+          slug: 'mysuru',
+          countryCode: 'IN',
+          regionCode: 'IN-KA',
+          state: 'Karnataka',
+          country: 'India',
+          countryId: 'country-1',
+          regionId: 'region-1',
+          sourceDataset: 'owner-submitted',
+        }),
+      });
+      expect(result).toEqual({
+        id: 'new-city',
+        name: 'Mysuru',
+        slug: 'mysuru',
+        countryCode: 'IN',
+        region: { id: 'region-1', name: 'Karnataka', code: 'IN-KA' },
+      });
+    });
+
+    it('creates with an empty state and no region fields when no region is chosen', async () => {
+      prisma.country.findUnique.mockResolvedValue(india);
+      prisma.city.findUnique.mockResolvedValue(null);
+      prisma.city.create.mockResolvedValue({
+        id: 'new-city',
+        name: 'Mysuru',
+        slug: 'mysuru',
+        countryCode: 'IN',
+      });
+
+      const result = await service.createOwnerSubmittedCity({
+        name: 'Mysuru',
+        countryId: 'country-1',
+      });
+
+      expect(prisma.city.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ state: '', regionCode: null, regionId: null }),
+      });
+      expect(result.region).toBeNull();
+      expect(prisma.region.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('reuses an existing City rather than duplicating when the same name already resolves to this slug', async () => {
+      prisma.country.findUnique.mockResolvedValue(india);
+      prisma.city.findUnique.mockResolvedValue({
+        id: 'existing-city',
+        name: 'Mysuru',
+        slug: 'mysuru',
+        countryCode: 'IN',
+      });
+
+      const result = await service.createOwnerSubmittedCity({
+        name: 'mysuru', // different casing — still the same city
+        countryId: 'country-1',
+      });
+
+      expect(prisma.city.create).not.toHaveBeenCalled();
+      expect(result.id).toBe('existing-city');
+    });
+
+    it('retries with a numeric-suffixed slug when a DIFFERENT city already owns the base slug', async () => {
+      prisma.country.findUnique.mockResolvedValue(india);
+      // The existing row at this slug has a different name, so it is not a reuse candidate — a
+      // genuine two-different-cities-same-slug collision.
+      prisma.city.findUnique.mockResolvedValue({
+        id: 'other-city',
+        name: 'Some Other Place',
+        slug: 'mysuru',
+        countryCode: 'IN',
+      });
+      prisma.city.create
+        .mockRejectedValueOnce(uniqueViolation())
+        .mockResolvedValueOnce({ id: 'new-city', name: 'Mysuru', slug: 'mysuru-2', countryCode: 'IN' });
+
+      const result = await service.createOwnerSubmittedCity({
+        name: 'Mysuru',
+        countryId: 'country-1',
+      });
+
+      expect(prisma.city.create).toHaveBeenCalledTimes(2);
+      expect(prisma.city.create).toHaveBeenNthCalledWith(1, {
+        data: expect.objectContaining({ slug: 'mysuru' }),
+      });
+      expect(prisma.city.create).toHaveBeenNthCalledWith(2, {
+        data: expect.objectContaining({ slug: 'mysuru-2' }),
+      });
+      expect(result.slug).toBe('mysuru-2');
+    });
+
+    it('propagates a non-collision error from city.create unchanged', async () => {
+      prisma.country.findUnique.mockResolvedValue(india);
+      prisma.city.findUnique.mockResolvedValue(null);
+      prisma.city.create.mockRejectedValue(new Error('db is down'));
+
+      await expect(
+        service.createOwnerSubmittedCity({ name: 'Mysuru', countryId: 'country-1' }),
+      ).rejects.toThrow('db is down');
     });
   });
 });

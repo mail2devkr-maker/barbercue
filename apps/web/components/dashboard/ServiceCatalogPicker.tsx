@@ -56,6 +56,30 @@ export function ServiceCatalogPicker({
     );
   }, [category, query]);
 
+  const isFiltered = category !== "all" || query.trim().length > 0;
+  function isSelectable(candidate: ServiceCatalogItem): boolean {
+    return (
+      !selected[candidate.id] &&
+      !existingByIdentity.get(normalizeServiceIdentity(candidate.name, candidate.category))
+    );
+  }
+  // Cheap (<=98 items) — plain filters recomputed each render rather than memoized, no need to
+  // manage a dependency list for arrays this small.
+  const selectableVisibleCount = visible.filter(isSelectable).length;
+  const selectableAllCount = SERVICE_CATALOG.filter(isSelectable).length;
+
+  function draftFor(item: ServiceCatalogItem): CatalogDraft {
+    // suggestedPriceInr (Issue 4) pre-fills a starting point — the owner still sees it in an
+    // editable field and must submit for it to take effect, so this never becomes the saved price
+    // without the owner looking at it.
+    return {
+      item,
+      price: String(item.suggestedPriceInr),
+      durationMinutes: String(item.defaultDurationMinutes),
+      description: "",
+    };
+  }
+
   function toggle(item: ServiceCatalogItem) {
     const existing = existingByIdentity.get(normalizeServiceIdentity(item.name, item.category));
     if (existing) return;
@@ -65,16 +89,27 @@ export function ServiceCatalogPicker({
         delete next[item.id];
         return next;
       }
-      return {
-        ...current,
-        [item.id]: {
-          item,
-          price: "",
-          durationMinutes: String(item.defaultDurationMinutes),
-          description: "",
-        },
-      };
+      return { ...current, [item.id]: draftFor(item) };
     });
+    onError(null);
+  }
+
+  // Issue 8 — distinguishes "select all visible/filtered" (the search/category-filtered subset
+  // actually on screen) from "select all" (the entire 98-item catalog, regardless of filter).
+  function selectAll(items: readonly ServiceCatalogItem[]) {
+    setSelected((current) => {
+      const next = { ...current };
+      for (const item of items) {
+        if (!isSelectable(item)) continue;
+        next[item.id] = draftFor(item);
+      }
+      return next;
+    });
+    onError(null);
+  }
+
+  function deselectAll() {
+    setSelected({});
     onError(null);
   }
 
@@ -160,6 +195,24 @@ export function ServiceCatalogPicker({
           <p className={styles.hint}>Select what you offer, then enter your own prices.</p>
         </div>
         <span className={styles.selectionCount}>{Object.keys(selected).length} selected</span>
+      </div>
+
+      <div className={styles.catalogBulkActions}>
+        {selectableVisibleCount > 0 && (
+          <Button type="button" variant="outline" onClick={() => selectAll(visible)}>
+            {isFiltered ? `Select all visible (${selectableVisibleCount})` : `Select all (${selectableVisibleCount})`}
+          </Button>
+        )}
+        {isFiltered && selectableAllCount > selectableVisibleCount && (
+          <Button type="button" variant="outline" onClick={() => selectAll(SERVICE_CATALOG)}>
+            Select all {selectableAllCount} services (every category)
+          </Button>
+        )}
+        {Object.keys(selected).length > 0 && (
+          <Button type="button" variant="outline" onClick={deselectAll}>
+            Deselect all
+          </Button>
+        )}
       </div>
 
       <div className={styles.catalogFilters}>

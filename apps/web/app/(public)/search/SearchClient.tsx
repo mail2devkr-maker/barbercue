@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { PaginatedResult, SalonListItemDto } from "@barbercue/shared";
-import { DISCOVERY_PATHS } from "@barbercue/shared";
+import type {
+  CitySearchResultDto,
+  PaginatedResult,
+  SalonListItemDto,
+  SearchSuggestResultDto,
+} from "@barbercue/shared";
+import { DISCOVERY_PATHS, SEARCH_PATHS } from "@barbercue/shared";
+import { apiFetch } from "../../../lib/api";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
 import { EditorialImage } from "../../../components/editorial/EditorialImage";
 import { SalonCard } from "../../../components/discovery/SalonCard";
@@ -12,6 +18,9 @@ import { Button } from "../../../components/ui/Button";
 import styles from "./search.module.css";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
+// Same "still typing" convention as CitySearchField/CitiesService.searchCities.
+const SUGGEST_MIN_LENGTH = 2;
+const SUGGEST_DEBOUNCE_MS = 250;
 
 function cityNameToSlug(value: string) {
   return value
@@ -19,6 +28,59 @@ function cityNameToSlug(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+type SuggestState<T> =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ready"; data: T }
+  | { kind: "failed" };
+
+/**
+ * Debounced, race-safe autosuggest fetch (Issue 3/10) — same monotonic-request-sequence pattern
+ * as CitySearchField, generalized so the "shop or service" and "city" fields on this page can
+ * share it instead of duplicating the debounce/race-guard logic twice.
+ */
+function useSuggestions<T>(
+  query: string,
+  fetcher: (trimmed: string) => Promise<T>,
+): SuggestState<T> {
+  const [state, setState] = useState<SuggestState<T>>({ kind: "idle" });
+  const seqRef = useRef(0);
+  const trimmed = query.trim();
+
+  useEffect(() => {
+    // Below the minimum length, nothing is fetched and the state is left exactly as it was —
+    // callers must gate rendering on their own `trimmed.length >= SUGGEST_MIN_LENGTH` check (see
+    // qExpanded/cityExpanded below), the same "hide stale results rather than reset state
+    // synchronously in an effect" convention CitySearchField already uses.
+    if (trimmed.length < SUGGEST_MIN_LENGTH) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      const seq = (seqRef.current += 1);
+      setState({ kind: "loading" });
+      fetcher(trimmed)
+        .then((data) => {
+          if (!cancelled && seq === seqRef.current) setState({ kind: "ready", data });
+        })
+        .catch(() => {
+          if (!cancelled && seq === seqRef.current) setState({ kind: "failed" });
+        });
+    }, SUGGEST_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetcher is expected to be stable per call site
+  }, [trimmed]);
+
+  return state;
+}
+
+/** "Karnataka" / "Karnataka (KA)" / null — never a fabricated placeholder for a region-less city. */
+function regionLabel(city: CitySearchResultDto): string | null {
+  if (!city.region) return null;
+  return city.region.code ? `${city.region.name} (${city.region.code})` : city.region.name;
 }
 
 export default function SearchClient() {
@@ -34,6 +96,55 @@ export default function SearchClient() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const styleName = searchParams.get("style") ?? undefined;
   const nearMeActive = searchParams.has("lat") && searchParams.has("lng");
+
+  // Issue 3/10 — typo-tolerant autosuggest for both search fields. Each field tracks whether its
+  // own dropdown should be open (focus + enough text) independently of the other.
+  const qListboxId = useId();
+  const cityListboxId = useId();
+  const [qOpen, setQOpen] = useState(false);
+  const [cityOpen, setCityOpen] = useState(false);
+  const [qActiveIndex, setQActiveIndex] = useState(0);
+  const [cityActiveIndex, setCityActiveIndex] = useState(0);
+  // A precise selection made by clicking a suggestion — carried into the submitted search as an
+  // exact filter (service name / city slug+country) rather than the fuzzy free-text `q`/`city`
+  // fields. Cleared the instant the owner edits the text again, since it can no longer be trusted
+  // to describe what's now typed.
+  const [serviceSelection, setServiceSelection] = useState<string | null>(null);
+  const [citySelection, setCitySelection] = useState<CitySearchResultDto | null>(null);
+
+  const qSuggest = useSuggestions(q, (trimmed) =>
+    apiFetch<SearchSuggestResultDto>(
+      `${SEARCH_PATHS.search}/${SEARCH_PATHS.suggest}?q=${encodeURIComponent(trimmed)}`,
+    ),
+  );
+  const citySuggest = useSuggestions(city, (trimmed) =>
+    apiFetch<CitySearchResultDto[]>(
+      `${DISCOVERY_PATHS.cities}/${DISCOVERY_PATHS.citySearch}?q=${encodeURIComponent(trimmed)}`,
+    ),
+  );
+  const qShops = qSuggest.kind === "ready" ? qSuggest.data.shops : [];
+  const qServices = qSuggest.kind === "ready" ? qSuggest.data.services : [];
+  const qOptionCount = qShops.length + qServices.length;
+  const cityOptions = citySuggest.kind === "ready" ? citySuggest.data : [];
+  const qExpanded = qOpen && q.trim().length >= SUGGEST_MIN_LENGTH;
+  const cityExpanded = cityOpen && city.trim().length >= SUGGEST_MIN_LENGTH;
+
+  function chooseShop(shop: SearchSuggestResultDto["shops"][number]) {
+    setQOpen(false);
+    router.push(`/${shop.countryCode.toLowerCase()}/${shop.citySlug}/${shop.slug}`);
+  }
+
+  function chooseService(service: SearchSuggestResultDto["services"][number]) {
+    setQ(service.name);
+    setServiceSelection(service.name);
+    setQOpen(false);
+  }
+
+  function chooseCity(picked: CitySearchResultDto) {
+    setCity(picked.name);
+    setCitySelection(picked);
+    setCityOpen(false);
+  }
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -72,10 +183,30 @@ export default function SearchClient() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setQOpen(false);
+    setCityOpen(false);
     const params = new URLSearchParams();
-    const normalizedCity = cityNameToSlug(city);
-    if (q.trim()) params.set("q", q.trim());
-    if (normalizedCity) params.set("city", normalizedCity);
+    const trimmedQ = q.trim();
+    // A precise pick from the suggestion dropdown, still unedited since — filters by the exact
+    // service name (Service.name/category) rather than the fuzzy salon-name/description `q` OR,
+    // which is what made "fade" also (correctly, but non-specifically) match a salon literally
+    // named "Fade Barbershop".
+    if (serviceSelection && trimmedQ === serviceSelection) {
+      params.set("service", serviceSelection);
+    } else if (trimmedQ) {
+      params.set("q", trimmedQ);
+    }
+    // A precise city pick carries its real slug + countryCode straight through (Issue 10) — no
+    // longer round-tripped through cityNameToSlug's lossy guess, and now unambiguous even when two
+    // countries share a city name. Free-text entry (no pick, or edited since picking) falls back
+    // to the original best-effort slugify, unscoped by country exactly as before.
+    if (citySelection && city.trim() === citySelection.name) {
+      params.set("city", citySelection.slug);
+      params.set("countryCode", citySelection.countryCode);
+    } else {
+      const normalizedCity = cityNameToSlug(city);
+      if (normalizedCity) params.set("city", normalizedCity);
+    }
     if (styleName) params.set("style", styleName);
     router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
   }
@@ -133,8 +264,84 @@ export default function SearchClient() {
               type="search"
               placeholder="Fade, beard trim, shop name…"
               value={q}
-              onChange={(event) => setQ(event.target.value)}
+              role="combobox"
+              aria-expanded={qExpanded && qOptionCount > 0}
+              aria-controls={qListboxId}
+              aria-autocomplete="list"
+              aria-activedescendant={qExpanded && qOptionCount > 0 ? `${qListboxId}-${qActiveIndex}` : undefined}
+              autoComplete="off"
+              onChange={(event) => {
+                const value = event.target.value;
+                setQ(value);
+                if (serviceSelection && value !== serviceSelection) setServiceSelection(null);
+                setQActiveIndex(0);
+                setQOpen(true);
+              }}
+              onFocus={() => setQOpen(true)}
+              onBlur={() => setQOpen(false)}
+              onKeyDown={(event) => {
+                if (!qExpanded || qOptionCount === 0) return;
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setQActiveIndex((i) => (i + 1) % qOptionCount);
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setQActiveIndex((i) => (i - 1 + qOptionCount) % qOptionCount);
+                } else if (event.key === "Enter") {
+                  event.preventDefault();
+                  if (qActiveIndex < qShops.length) chooseShop(qShops[qActiveIndex]);
+                  else chooseService(qServices[qActiveIndex - qShops.length]);
+                } else if (event.key === "Escape") {
+                  setQOpen(false);
+                }
+              }}
             />
+            {qExpanded && (qOptionCount > 0 || qSuggest.kind === "loading") && (
+              <ul id={qListboxId} role="listbox" className={styles.suggestList}>
+                {qSuggest.kind === "loading" && qOptionCount === 0 && (
+                  <li className={styles.suggestEmpty}>Searching…</li>
+                )}
+                {qShops.length > 0 && <li className={styles.suggestGroupLabel}>Shops</li>}
+                {qShops.map((shop, index) => (
+                  <li
+                    key={shop.id}
+                    id={`${qListboxId}-${index}`}
+                    role="option"
+                    aria-selected={index === qActiveIndex}
+                    className={`${styles.suggestOption} ${index === qActiveIndex ? styles.suggestOptionActive : ""}`}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      chooseShop(shop);
+                    }}
+                    onMouseEnter={() => setQActiveIndex(index)}
+                  >
+                    <span className={styles.suggestOptionName}>{shop.name}</span>
+                    <span className={styles.suggestOptionMeta}>{shop.citySlug}</span>
+                  </li>
+                ))}
+                {qServices.length > 0 && <li className={styles.suggestGroupLabel}>Services</li>}
+                {qServices.map((service, serviceIndex) => {
+                  const index = qShops.length + serviceIndex;
+                  return (
+                    <li
+                      key={service.name}
+                      id={`${qListboxId}-${index}`}
+                      role="option"
+                      aria-selected={index === qActiveIndex}
+                      className={`${styles.suggestOption} ${index === qActiveIndex ? styles.suggestOptionActive : ""}`}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        chooseService(service);
+                      }}
+                      onMouseEnter={() => setQActiveIndex(index)}
+                    >
+                      <span className={styles.suggestOptionName}>{service.name}</span>
+                      {service.category && <span className={styles.suggestOptionMeta}>{service.category}</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </label>
           <label className={styles.field}>
             <span>City</span>
@@ -142,8 +349,69 @@ export default function SearchClient() {
               type="search"
               placeholder="For example, Bengaluru"
               value={city}
-              onChange={(event) => setCity(event.target.value)}
+              role="combobox"
+              aria-expanded={cityExpanded && cityOptions.length > 0}
+              aria-controls={cityListboxId}
+              aria-autocomplete="list"
+              aria-activedescendant={
+                cityExpanded && cityOptions.length > 0 ? `${cityListboxId}-${cityActiveIndex}` : undefined
+              }
+              autoComplete="off"
+              onChange={(event) => {
+                const value = event.target.value;
+                setCity(value);
+                if (citySelection && value !== citySelection.name) setCitySelection(null);
+                setCityActiveIndex(0);
+                setCityOpen(true);
+              }}
+              onFocus={() => setCityOpen(true)}
+              onBlur={() => setCityOpen(false)}
+              onKeyDown={(event) => {
+                if (!cityExpanded || cityOptions.length === 0) return;
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setCityActiveIndex((i) => (i + 1) % cityOptions.length);
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setCityActiveIndex((i) => (i - 1 + cityOptions.length) % cityOptions.length);
+                } else if (event.key === "Enter") {
+                  event.preventDefault();
+                  chooseCity(cityOptions[cityActiveIndex]);
+                } else if (event.key === "Escape") {
+                  setCityOpen(false);
+                }
+              }}
             />
+            {cityExpanded && (cityOptions.length > 0 || citySuggest.kind !== "idle") && (
+              <ul id={cityListboxId} role="listbox" className={styles.suggestList}>
+                {citySuggest.kind === "loading" && <li className={styles.suggestEmpty}>Searching…</li>}
+                {citySuggest.kind === "ready" && cityOptions.length === 0 && (
+                  <li className={styles.suggestEmpty}>No matching city — you can still search with what you typed.</li>
+                )}
+                {cityOptions.map((option, index) => {
+                  const region = regionLabel(option);
+                  return (
+                    <li
+                      key={option.id}
+                      id={`${cityListboxId}-${index}`}
+                      role="option"
+                      aria-selected={index === cityActiveIndex}
+                      className={`${styles.suggestOption} ${index === cityActiveIndex ? styles.suggestOptionActive : ""}`}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        chooseCity(option);
+                      }}
+                      onMouseEnter={() => setCityActiveIndex(index)}
+                    >
+                      <span className={styles.suggestOptionName}>{option.name}</span>
+                      <span className={styles.suggestOptionMeta}>
+                        {[region, option.countryName].filter(Boolean).join(", ")}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </label>
           <Button type="submit" variant="primary">
             Find shops

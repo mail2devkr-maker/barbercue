@@ -1,10 +1,22 @@
-import { Controller, Get, Param, Query, UsePipes } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UsePipes,
+} from '@nestjs/common';
 import {
   DISCOVERY_PATHS,
+  Role,
   citySearchQuerySchema,
+  createOwnerCitySchema,
   type CitySearchQueryInput,
+  type CreateOwnerCityInput,
 } from '@barbercue/shared';
 import { Public } from '../auth/decorators/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CitiesService } from './cities.service';
 
@@ -36,6 +48,16 @@ export class CitiesController {
   @UsePipes(new ZodValidationPipe(citySearchQuerySchema))
   searchCities(@Query() query: CitySearchQueryInput) {
     return this.citiesService.searchCities(query);
+  }
+
+  // Issue 7's "Use as entered" fallback — same authenticated population as POST salons
+  // (registerSalonSchema's own controller), since this is only ever called from that same
+  // registration flow when a real city search has already come back empty.
+  @Roles(Role.CUSTOMER, Role.SALON_OWNER)
+  @Post()
+  @UsePipes(new ZodValidationPipe(createOwnerCitySchema))
+  createOwnerSubmittedCity(@Body() body: CreateOwnerCityInput) {
+    return this.citiesService.createOwnerSubmittedCity(body);
   }
 
   // B9: country-scoped city URLs (/{countryCode}/{citySlug}/...). countryCode is case-insensitive

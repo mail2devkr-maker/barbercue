@@ -33,7 +33,7 @@ describe('owner setup contracts', () => {
     }).success).toBe(false);
   });
 
-  it('ships the complete extensible preset categories without any default prices', () => {
+  it('ships the complete extensible preset categories with a suggested (not authoritative) INR price', () => {
     expect(SERVICE_CATALOG_CATEGORIES).toHaveLength(11);
     expect(SERVICE_CATALOG.length).toBeGreaterThanOrEqual(90);
     expect(SERVICE_CATALOG).toEqual(expect.arrayContaining([
@@ -41,6 +41,10 @@ describe('owner setup contracts', () => {
       expect.objectContaining({ name: 'Bridal Makeup', category: 'Makeup & Occasion' }),
       expect.objectContaining({ name: 'Full Body Wax', category: 'Waxing' }),
     ]));
+    // Issue 4 — every preset ships a positive suggestedPriceInr starting point; still just a
+    // pre-fill, never the field createSalonServiceSchema actually persists (that's `price`, always
+    // owner-entered — see the "requires an explicit price" test above).
+    expect(SERVICE_CATALOG.every((preset) => Number.isFinite(preset.suggestedPriceInr) && preset.suggestedPriceInr > 0)).toBe(true);
     expect(SERVICE_CATALOG.some((preset) => 'price' in preset)).toBe(false);
   });
 

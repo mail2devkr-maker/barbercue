@@ -160,7 +160,34 @@ export interface CitySearchResultDto {
   name: string;
   slug: string;
   countryCode: string;
+  // Issue 10 — the search page's global (no country pre-selected) mode needs a human-readable
+  // country name for on-screen City/State/Country disambiguation; countryCode alone ("IN") isn't
+  // enough for a customer to tell two same-named cities in different countries apart at a glance.
+  // Always present (registration's own country-scoped search callers can simply ignore it).
+  countryName: string;
   region: { id: string; name: string; code: string | null } | null;
+}
+
+// GET search/suggest response (Issue 3). Services are deduplicated by (name, category) across
+// every salon — a suggestion is a service CONCEPT ("Beard Trim"), not one row per salon offering
+// it — so picking one plugs back into the existing salonSearchQuerySchema.service filter, which
+// already does its own salon-wide match.
+export interface SearchSuggestShopDto {
+  id: string;
+  name: string;
+  slug: string;
+  citySlug: string;
+  countryCode: string;
+}
+
+export interface SearchSuggestServiceDto {
+  name: string;
+  category: string | null;
+}
+
+export interface SearchSuggestResultDto {
+  shops: SearchSuggestShopDto[];
+  services: SearchSuggestServiceDto[];
 }
 
 export interface OperatingHoursDto {

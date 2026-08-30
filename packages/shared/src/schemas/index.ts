@@ -164,13 +164,37 @@ export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
 // `q` is intentionally left unbounded in length here (trimmed/short-circuited in the service, not
 // rejected here) so an empty/short query is a normal "still typing" UI state, not a validation
 // error.
+// countryId is optional (Issue 10): the registration flow always supplies it (a scoped, in-app
+// picker with no reason to search worldwide), but the public search page's city field has no
+// country pre-selected, and forcing one before the customer can even start typing would be worse
+// UX than a capped, index-backed global search. When omitted, searchCities matches across every
+// country and returns each result's own country/region for on-screen disambiguation.
 export const citySearchQuerySchema = z.object({
-  countryId: z.string().uuid(),
+  countryId: z.string().uuid().optional(),
   regionId: z.string().uuid().optional(),
   q: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 export type CitySearchQueryInput = z.infer<typeof citySearchQuerySchema>;
+
+// GET search/suggest query params (Issue 3) — typo-tolerant shop/service autosuggest for the
+// search page's "Shop or service" field. Same MIN-length short-circuit convention as city search:
+// enforced in the service, not rejected here, so one typed letter is a quiet "keep typing" state.
+export const searchSuggestQuerySchema = z.object({
+  q: z.string().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(20).optional(),
+});
+export type SearchSuggestQueryInput = z.infer<typeof searchSuggestQuerySchema>;
+
+// POST cities (Issue 7) — the "Use '<name>' as entered" fallback for a shop whose city genuinely
+// isn't in the imported master list yet. Only ever reachable from the registration flow after a
+// real city search has already come back empty, never a substitute for searching first.
+export const createOwnerCitySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  countryId: z.string().uuid(),
+  regionId: z.string().uuid().optional(),
+});
+export type CreateOwnerCityInput = z.infer<typeof createOwnerCitySchema>;
 
 export const otpRequestSchema = z.object({
   phone: z
