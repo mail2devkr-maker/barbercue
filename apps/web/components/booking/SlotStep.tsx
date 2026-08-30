@@ -1,6 +1,7 @@
 "use client";
 
 import type { AvailabilitySlotDto } from "@barbercue/shared";
+import { formatZonedTime } from "../../lib/salon-time";
 import styles from "./booking.module.css";
 
 export function SlotStep({
@@ -8,11 +9,13 @@ export function SlotStep({
   selectedSlot,
   onSelect,
   loading,
+  timeZone,
 }: {
   slots: AvailabilitySlotDto[];
   selectedSlot: AvailabilitySlotDto | null;
   onSelect: (slot: AvailabilitySlotDto) => void;
   loading: boolean;
+  timeZone: string | null;
 }) {
   if (loading)
     return (
@@ -43,7 +46,7 @@ export function SlotStep({
               onClick={() => onSelect(slot)}
               className={`${styles.slotChip} ${selected ? styles.slotChipSelected : ""}`}
             >
-              {new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+              {timeZone ? formatZonedTime(slot.slotStart, timeZone) : new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
             </button>
           );
         })}

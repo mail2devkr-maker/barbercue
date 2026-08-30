@@ -16,6 +16,7 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
+import { formatZonedDateTime } from "../../lib/salon-time";
 import { Button } from "../ui/Button";
 import { ServiceStep } from "./ServiceStep";
 import { StaffStep } from "./StaffStep";
@@ -34,6 +35,7 @@ export function BookingFlow({
   selectedStyleName,
   currency,
   countryCode,
+  salonTimeZone,
   initialServiceId,
   initialStaffId,
 }: {
@@ -43,6 +45,9 @@ export function BookingFlow({
   // From the salon this flow belongs to — every amount shown here is in its currency.
   currency: string | null;
   countryCode?: string | null;
+  // The salon's resolved IANA zone — every date/time in this flow is generated and displayed in
+  // this zone, never the customer's own browser timezone (see lib/salon-time.ts).
+  salonTimeZone: string | null;
   // AI Style Advisor hand-off (major-upgrade phase) — set only when this flow was reached via
   // "Try This Look"; threaded straight into the booking-creation body when present.
   selectedStyleName?: string;
@@ -198,7 +203,11 @@ export function BookingFlow({
           <p className={styles.summaryLine}>
             <strong>{booking.serviceName}</strong> at {booking.salonName}
           </p>
-          <p className={styles.summaryLine}>{new Date(booking.slotStart).toLocaleString()}</p>
+          <p className={styles.summaryLine}>
+            {booking.salonTimeZone
+              ? formatZonedDateTime(booking.slotStart, booking.salonTimeZone)
+              : new Date(booking.slotStart).toLocaleString()}
+          </p>
           {booking.selectedStyleName && <p className={styles.summaryLine}>Style: {booking.selectedStyleName}</p>}
           <p className={styles.summaryLine}>
             <span className={`${styles.statusBadge} ${statusClass}`}>{booking.status.replace(/_/g, " ")}</span>
@@ -298,11 +307,11 @@ export function BookingFlow({
       )}
 
       {selectedServiceId && selectedStaffId !== undefined && (
-        <DateStep operatingHours={operatingHours} selectedDate={selectedDate} onSelect={handleSelectDate} />
+        <DateStep operatingHours={operatingHours} selectedDate={selectedDate} onSelect={handleSelectDate} timeZone={salonTimeZone} />
       )}
 
       {selectedDate && (
-        <SlotStep slots={slots} selectedSlot={selectedSlot} onSelect={setSelectedSlot} loading={slotsLoading} />
+        <SlotStep slots={slots} selectedSlot={selectedSlot} onSelect={setSelectedSlot} loading={slotsLoading} timeZone={salonTimeZone} />
       )}
 
       {selectedSlot && (
@@ -312,7 +321,9 @@ export function BookingFlow({
           </h2>
           <p className={styles.summaryLine}>
             <strong>{services.find((s) => s.id === selectedServiceId)?.name}</strong> —{" "}
-            {new Date(selectedSlot.slotStart).toLocaleString()}
+            {salonTimeZone
+              ? formatZonedDateTime(selectedSlot.slotStart, salonTimeZone)
+              : new Date(selectedSlot.slotStart).toLocaleString()}
             {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
           </p>
           {selectedStyleName && <p className={styles.summaryLine}>Style: {selectedStyleName}</p>}

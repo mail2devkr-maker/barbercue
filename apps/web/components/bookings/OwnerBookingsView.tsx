@@ -13,6 +13,7 @@ import {
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
+import { formatZonedDateTime, formatZonedTime } from "../../lib/salon-time";
 import { Button } from "../ui/Button";
 import styles from "./bookings.module.css";
 
@@ -48,18 +49,24 @@ function bookingsPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
 }
 
-function formatSlot(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+// Always in the salon's own timezone (never the owner's browser timezone) — an owner checking
+// their dashboard while traveling must see the same times a person standing in the shop would.
+function formatSlot(iso: string, timeZone: string | null): string {
+  return timeZone
+    ? formatZonedDateTime(iso, timeZone)
+    : new Date(iso).toLocaleString(undefined, {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      });
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+function formatTime(iso: string, timeZone: string | null): string {
+  return timeZone
+    ? formatZonedTime(iso, timeZone)
+    : new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
@@ -76,7 +83,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           <span className={styles.cardTitle}>{booking.serviceName}</span>
           {isNew && <span className={styles.newBadge}>NEW</span>}
           <p className={styles.cardMeta}>
-            {formatSlot(booking.slotStart)}
+            {formatSlot(booking.slotStart, booking.salonTimeZone)}
             {booking.customerPhone ? ` · ${booking.customerPhone}` : ""}
             {booking.assignedStaffName
               ? ` · ${booking.assignedStaffName}`
@@ -132,12 +139,12 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           )}
           <div className={styles.detailItem}>
             <dt>Booked on</dt>
-            <dd>{formatSlot(booking.createdAt)}</dd>
+            <dd>{formatSlot(booking.createdAt, booking.salonTimeZone)}</dd>
           </div>
           {booking.cancelledAt && (
             <div className={styles.detailItem}>
               <dt>Cancelled</dt>
-              <dd>{formatSlot(booking.cancelledAt)}</dd>
+              <dd>{formatSlot(booking.cancelledAt, booking.salonTimeZone)}</dd>
             </div>
           )}
           {booking.cancellationChargeAmount !== null && (
@@ -287,7 +294,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
             speak(
               voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
                 detail.serviceName ?? null,
-                detail.slotStart ? formatTime(detail.slotStart) : null,
+                detail.slotStart ? formatTime(detail.slotStart, detail.salonTimeZone) : null,
               ),
             );
           }
@@ -331,7 +338,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
             <div>
               <strong>New booking received</strong>
               <span>
-                {newNotice.serviceName} · {formatSlot(newNotice.slotStart)}
+                {newNotice.serviceName} · {formatSlot(newNotice.slotStart, newNotice.salonTimeZone)}
                 {newNotice.customerPhone ? ` · ${newNotice.customerPhone}` : ""}
               </span>
             </div>

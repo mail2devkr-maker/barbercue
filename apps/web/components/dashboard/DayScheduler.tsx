@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { OwnerBookingDetailDto, PaginatedResult, SalonStaffDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { addZonedDays, todayInZone, minutesFromZonedHour } from "../../lib/salon-time";
 import { Button } from "../ui/Button";
 import styles from "./schedule.module.css";
 
@@ -17,40 +18,12 @@ function salonPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
 }
 
-// Every position on the grid is computed from the salon's OWN local wall-clock time, never the
-// viewer's browser timezone — an owner checking their shop's schedule from a different timezone
-// than their shop must see the same grid a person standing in the shop would, not their own
-// local time silently substituted in. Real IANA-zone math via Intl, same approach as the backend's
-// own DST-safe timezone module — this deliberately re-derives it in the browser rather than
-// trusting the browser's Date to already be in the right zone, which it never is.
-function zonedParts(iso: string, timeZone: string): { year: number; month: number; day: number; hour: number; minute: number } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(iso));
-  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
-  return { year: get("year"), month: get("month"), day: get("day"), hour: get("hour"), minute: get("minute") };
-}
-
-function todayInZone(timeZone: string): string {
-  const p = zonedParts(new Date().toISOString(), timeZone);
-  return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
-}
-
 function addDays(dateStr: string, days: number): string {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const next = new Date(Date.UTC(y, m - 1, d + days));
-  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
+  return addZonedDays(dateStr, days);
 }
 
 function minutesFromGridStart(iso: string, timeZone: string): number {
-  const p = zonedParts(iso, timeZone);
-  return (p.hour - GRID_START_HOUR) * 60 + p.minute;
+  return minutesFromZonedHour(iso, timeZone, GRID_START_HOUR);
 }
 
 const STATUS_LABEL: Record<string, string> = {

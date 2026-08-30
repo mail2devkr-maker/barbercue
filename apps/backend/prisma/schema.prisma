@@ -771,10 +771,14 @@ model Booking {
   idempotencyKey           String        @unique
   // Snapshot of SalonPaymentPolicy x Service.price at creation time — see DATABASE.md.
   prepaymentRequiredAmount Decimal?      @db.Decimal(10, 2)
-  // Phase 3B addition: a soft customer preference only, never a capacity constraint — the booking
-  // capacity model above stays pool-based (min qualified staff, active chairs), unchanged. Real
-  // staff/chair assignment still only happens at queue check-in/dashboard-assign time. Null means
-  // "Any Staff". See DATABASE.md's Booking section for the full rationale.
+  // Launch-fixes revision: a *specific* named staff member (non-null) is now a real per-staff
+  // exclusivity constraint, enforced in BookingsService.create()/reschedule() inside the same
+  // per-salon advisory-lock transaction that already guards pool capacity — no two
+  // CONFIRMED/PENDING_PAYMENT bookings for the same staffId may have overlapping [slotStart,
+  // slotEnd) intervals. Null still means "Any Staff": the pool-based capacity model (min qualified
+  // staff, active chairs) is unchanged and unaffected for that case. Real chair/queue assignment
+  // still only happens at queue check-in/dashboard-assign time — this column only reserves the
+  // *staff member's* time, not a chair.
   preferredStaffId         String?
   preferredStaff           SalonStaff?   @relation("BookingPreferredStaff", fields: [preferredStaffId], references: [id])
   // AI Style Advisor phase: the style label the customer picked before booking (e.g. "Textured

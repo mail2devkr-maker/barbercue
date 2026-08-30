@@ -10,21 +10,22 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
+import { addZonedDays, formatZonedDateTime, formatZonedTime, todayInZone, zonedDayLabel, zonedWeekdayLabel } from "../../lib/salon-time";
 import { Button } from "../ui/Button";
 import styles from "./booking.module.css";
 
 const DAYS_AHEAD = 14;
 
-function nextDays(): { date: string; weekday: string; dayLabel: string }[] {
+// Zoned in the salon's own timezone, same helper DateStep uses — previously this generated the
+// date VALUE from `toISOString()` (UTC) while LABELING it from `toLocaleDateString(undefined, ...)`
+// (the viewer's browser-local timezone), which could silently disagree by a day.
+function nextDays(timeZone: string | null): { date: string; weekday: string; dayLabel: string }[] {
+  const zone = timeZone ?? "UTC";
+  const start = todayInZone(zone);
   const result: { date: string; weekday: string; dayLabel: string }[] = [];
   for (let i = 0; i < DAYS_AHEAD; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    result.push({
-      date: d.toISOString().slice(0, 10),
-      weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
-      dayLabel: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-    });
+    const date = addZonedDays(start, i);
+    result.push({ date, weekday: zonedWeekdayLabel(date), dayLabel: zonedDayLabel(date) });
   }
   return result;
 }
@@ -50,7 +51,7 @@ export function RescheduleBookingDialog({
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const days = nextDays();
+  const days = nextDays(booking.salonTimeZone);
 
   useEffect(() => {
     if (!selectedDate) return undefined;
@@ -105,7 +106,10 @@ export function RescheduleBookingDialog({
       <div className={styles.dialogCard}>
         <h3 className={styles.dialogTitle}>Reschedule booking</h3>
         <p className={styles.summaryLine}>
-          {booking.serviceName} at {booking.salonName} — currently {new Date(booking.slotStart).toLocaleString()}
+          {booking.serviceName} at {booking.salonName} — currently{" "}
+          {booking.salonTimeZone
+            ? formatZonedDateTime(booking.slotStart, booking.salonTimeZone)
+            : new Date(booking.slotStart).toLocaleString()}
         </p>
 
         <div className={styles.chipRowScroll}>
@@ -139,7 +143,9 @@ export function RescheduleBookingDialog({
                     onClick={() => setSelectedSlot(slot)}
                     className={`${styles.slotChip} ${selectedSlot?.slotStart === slot.slotStart ? styles.slotChipSelected : ""}`}
                   >
-                    {new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                    {booking.salonTimeZone
+                      ? formatZonedTime(slot.slotStart, booking.salonTimeZone)
+                      : new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
                   </button>
                 ))}
               </div>

@@ -341,7 +341,7 @@ export class AvailabilityService {
         slotStart: { lt: closeAt },
         slotEnd: { gt: openAt },
       },
-      select: { slotStart: true, slotEnd: true },
+      select: { slotStart: true, slotEnd: true, preferredStaffId: true },
     });
 
     const slots: AvailabilitySlotDto[] = [];
@@ -354,13 +354,20 @@ export class AvailabilityService {
     ) {
       if (slotStart <= now) continue;
       const slotEnd = new Date(slotStart.getTime() + durationMs);
-      const consumed = overlapCandidates.filter(
+      const overlappingHere = overlapCandidates.filter(
         (b) => b.slotStart < slotEnd && b.slotEnd > slotStart,
-      ).length;
+      );
+      // Pool capacity governs "Any Staff" bookability regardless of who holds each overlapping
+      // slot. A *specific* requested staffId additionally needs that exact professional free —
+      // the pool could have room while that one named barber is already taken, and vice versa.
+      const staffTaken =
+        !!staffId && overlappingHere.some((b) => b.preferredStaffId === staffId);
+      const available =
+        isSlotBookable(slotCapacity, overlappingHere.length) && !staffTaken;
       slots.push({
         slotStart: slotStart.toISOString(),
         slotEnd: slotEnd.toISOString(),
-        available: isSlotBookable(slotCapacity, consumed),
+        available,
       });
     }
     return slots;

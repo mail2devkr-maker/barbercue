@@ -17,6 +17,7 @@ import {
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
+import { resolveSalonTimeZone } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AvailabilityService } from './availability.service';
@@ -44,6 +45,7 @@ const bookingDetailInclude = {
       lat: true,
       lng: true,
       ownerUserId: true,
+      timezone: true,
       city: { select: { slug: true, countryCode: true } },
     },
   },
@@ -185,6 +187,31 @@ export class BookingsService {
           'This time slot is fully booked. Please choose another time.',
           HttpStatus.CONFLICT,
         );
+      }
+
+      // A specific staff member is a real exclusivity constraint (not the salon-wide pool check
+      // above): that one professional cannot be double-booked, even if the salon otherwise has
+      // spare pool capacity. Checked inside the same per-salon advisory-locked transaction, so
+      // this is race-safe against a second concurrent request for the same staff/interval.
+      if (input.preferredStaffId) {
+        const staffOverlapping = await tx.booking.count({
+          where: {
+            salonId: input.salonId,
+            preferredStaffId: input.preferredStaffId,
+            status: {
+              in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+            },
+            slotStart: { lt: slotEnd },
+            slotEnd: { gt: slotStart },
+          },
+        });
+        if (staffOverlapping > 0) {
+          throw new AppException(
+            BookingErrorCode.STAFF_SLOT_UNAVAILABLE,
+            'This barber is already booked at the requested time. Please choose another time or barber.',
+            HttpStatus.CONFLICT,
+          );
+        }
       }
 
       const created = await tx.booking.create({
@@ -462,6 +489,30 @@ export class BookingsService {
         );
       }
 
+      // Same per-staff exclusivity constraint create() enforces — a reschedule to a new time
+      // competes for that specific staff member exactly like a new booking would.
+      if (booking.preferredStaffId) {
+        const staffOverlapping = await tx.booking.count({
+          where: {
+            id: { not: bookingId },
+            salonId: booking.salonId,
+            preferredStaffId: booking.preferredStaffId,
+            status: {
+              in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+            },
+            slotStart: { lt: newSlotEnd },
+            slotEnd: { gt: newSlotStart },
+          },
+        });
+        if (staffOverlapping > 0) {
+          throw new AppException(
+            BookingErrorCode.STAFF_SLOT_UNAVAILABLE,
+            'This barber is already booked at the requested time. Please choose another time or barber.',
+            HttpStatus.CONFLICT,
+          );
+        }
+      }
+
       const result = await tx.booking.update({
         where: { id: bookingId },
         data: { slotStart: newSlotStart, slotEnd: newSlotEnd },
@@ -534,6 +585,10 @@ export class BookingsService {
       citySlug: booking.salon.city.slug,
       salonCountryCode: booking.salon.city.countryCode,
       salonAddress: booking.salon.addressLine,
+      salonTimeZone: resolveSalonTimeZone({
+        timezone: booking.salon.timezone,
+        countryCode: booking.salon.city.countryCode,
+      }),
       salonLat: booking.salon.lat,
       salonLng: booking.salon.lng,
       serviceName: booking.service.name,

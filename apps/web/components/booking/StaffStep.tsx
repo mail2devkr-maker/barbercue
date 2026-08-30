@@ -34,7 +34,8 @@ export function StaffStep({
         <span className={styles.stepNumber}>2</span> Choose a barber
       </h2>
       <p className={styles.stepHint}>
-        This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in.
+        Choosing a specific barber reserves that time with them — no one else can book them for the
+        same slot. Pick Any Staff if you&apos;d rather let the salon assign whoever&apos;s available.
       </p>
       {hasProfiles ? (
         <div className={styles.staffCardRow}>

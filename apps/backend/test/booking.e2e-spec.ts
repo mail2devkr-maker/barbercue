@@ -31,6 +31,7 @@ describe('Bookings (e2e, live database)', () => {
   let customerTokens: string[]; // 5 seeded demo customers
   let customerUserIds: string[];
   let staffToken: string;
+  let staffIdByName: Record<string, string>; // "Marcus"/"Devon"/"Ray" -> SalonStaff.id
   // Every booking this suite creates is tracked here and hard-deleted in afterAll. Without this,
   // re-running the suite on the same calendar day would accumulate real bookings against the
   // fixed dateAhead(N) slots used below, eventually exhausting capacity and making the suite
@@ -60,6 +61,29 @@ describe('Bookings (e2e, live database)', () => {
     return slot;
   }
 
+  /** Same as firstAvailableSlot, but guarantees at least 2 more available slots immediately
+   * before it (30 minutes of buffer at the 15-minute grid granularity) — for tests that need to
+   * probe an interval starting *before* the chosen slot without risking stepping outside the
+   * salon's operating hours for the day. */
+  async function bufferedAvailableSlot(
+    token: string,
+    date: string,
+  ): Promise<{ slotStart: string }> {
+    const res = await request(app.getHttpServer())
+      .get(
+        `/api/v1/salons/${salonId}/booking/availability?serviceId=${haircutServiceId}&date=${date}`,
+      )
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const slots = res.body as { slotStart: string; available: boolean }[];
+    for (let i = 2; i < slots.length; i++) {
+      if (slots[i].available && slots[i - 1].available && slots[i - 2].available) {
+        return slots[i];
+      }
+    }
+    throw new Error(`No buffered available slot found for ${date} in test setup`);
+  }
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -81,6 +105,11 @@ describe('Bookings (e2e, live database)', () => {
       where: { salonId, name: 'Haircut' },
     });
     haircutServiceId = haircut.id;
+
+    const staff = await prisma.salonStaff.findMany({ where: { salonId } });
+    staffIdByName = Object.fromEntries(
+      staff.map((s) => [s.displayName, s.id]),
+    );
 
     const customerRoles = await prisma.userRole.findMany({
       where: { role: Role.CUSTOMER },
@@ -387,6 +416,308 @@ describe('Bookings (e2e, live database)', () => {
         .expect(409);
       expect((res.body as { error: { code: string } }).error.code).toBe(
         'SLOT_FULL',
+      );
+    });
+  });
+
+  // Issue 1 (launch-fixes): a specific requested staff member is now a real exclusivity
+  // constraint, independent of salon-wide pool capacity — these use a dedicated far-future date
+  // (dateAhead(20)) never touched by the other describe blocks above, so results here can't be
+  // polluted by (or pollute) the pool-capacity suite's own bookings on the same day.
+  describe('staff exclusivity (Issue 1)', () => {
+    const staffDate = dateAhead(20);
+
+    async function fixtureBooking(
+      customerId: string,
+      preferredStaffId: string,
+      slotStart: Date,
+      slotEnd: Date,
+    ) {
+      const booking = await prisma.booking.create({
+        data: {
+          salonId,
+          customerId,
+          serviceId: haircutServiceId,
+          slotStart,
+          slotEnd,
+          status: 'CONFIRMED',
+          source: 'WEB',
+          preferredStaffId,
+          idempotencyKey: `e2e-staff-fixture-${randomUUID()}`,
+        },
+      });
+      createdBookingIds.push(booking.id);
+      return booking;
+    }
+
+    it('exact collision: rejects a second booking for the same staff at the identical interval', async () => {
+      const slot = await firstAvailableSlot(customerTokens[0], staffDate);
+      const dinesh = staffIdByName['Marcus'];
+      await fixtureBooking(
+        customerUserIds[0],
+        dinesh,
+        new Date(slot.slotStart),
+        new Date(new Date(slot.slotStart).getTime() + 30 * 60_000),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: slot.slotStart,
+          preferredStaffId: dinesh,
+        })
+        .expect(409);
+      expect((res.body as { error: { code: string } }).error.code).toBe(
+        'STAFF_SLOT_UNAVAILABLE',
+      );
+    });
+
+    it('partial overlap before/after and an enclosing interval are all rejected for the same staff', async () => {
+      const base = new Date(
+        (await bufferedAvailableSlot(customerTokens[0], dateAhead(21))).slotStart,
+      );
+      const dinesh = staffIdByName['Devon'];
+      // Existing: 10:15-10:45 (relative to `base`, used as a stand-in "10:15").
+      const existingStart = new Date(base.getTime());
+      const existingEnd = new Date(base.getTime() + 30 * 60_000);
+      await fixtureBooking(customerUserIds[0], dinesh, existingStart, existingEnd);
+
+      // Candidate 10:00-10:30 overlaps the first 15 minutes of the existing booking.
+      const beforeStart = new Date(existingStart.getTime() - 15 * 60_000);
+      const before = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: beforeStart.toISOString(),
+          preferredStaffId: dinesh,
+        });
+      expect(before.status).toBe(409);
+      expect((before.body as { error: { code: string } }).error.code).toBe(
+        'STAFF_SLOT_UNAVAILABLE',
+      );
+
+      // Candidate 10:30-11:00 overlaps the last 15 minutes of the existing booking.
+      const afterStart = new Date(existingStart.getTime() + 15 * 60_000);
+      const after = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[3]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: afterStart.toISOString(),
+          preferredStaffId: dinesh,
+        });
+      expect(after.status).toBe(409);
+      expect((after.body as { error: { code: string } }).error.code).toBe(
+        'STAFF_SLOT_UNAVAILABLE',
+      );
+    });
+
+    it('adjacent interval (starts exactly when the existing one ends) succeeds — no overlap', async () => {
+      const base = new Date(
+        (await firstAvailableSlot(customerTokens[0], dateAhead(22))).slotStart,
+      );
+      const dinesh = staffIdByName['Ray'];
+      const existingStart = new Date(base.getTime());
+      const existingEnd = new Date(base.getTime() + 30 * 60_000);
+      await fixtureBooking(customerUserIds[0], dinesh, existingStart, existingEnd);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: existingEnd.toISOString(),
+          preferredStaffId: dinesh,
+        });
+      expect(res.status).toBe(201);
+      createdBookingIds.push((res.body as { id: string }).id);
+    });
+
+    it('a different staff member remains available at the exact same time', async () => {
+      const slot = await firstAvailableSlot(customerTokens[0], dateAhead(23));
+      const dinesh = staffIdByName['Marcus'];
+      const ramesh = staffIdByName['Devon'];
+      await fixtureBooking(
+        customerUserIds[0],
+        dinesh,
+        new Date(slot.slotStart),
+        new Date(new Date(slot.slotStart).getTime() + 30 * 60_000),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: slot.slotStart,
+          preferredStaffId: ramesh,
+        });
+      expect(res.status).toBe(201);
+      createdBookingIds.push((res.body as { id: string }).id);
+    });
+
+    it('a cancelled booking releases that staff member\'s slot', async () => {
+      const slot = await firstAvailableSlot(customerTokens[0], dateAhead(24));
+      const dinesh = staffIdByName['Ray'];
+      const existing = await fixtureBooking(
+        customerUserIds[0],
+        dinesh,
+        new Date(slot.slotStart),
+        new Date(new Date(slot.slotStart).getTime() + 30 * 60_000),
+      );
+
+      const blocked = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: slot.slotStart,
+          preferredStaffId: dinesh,
+        });
+      expect(blocked.status).toBe(409);
+
+      await prisma.booking.update({
+        where: { id: existing.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+
+      const afterCancel = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: slot.slotStart,
+          preferredStaffId: dinesh,
+        });
+      expect(afterCancel.status).toBe(201);
+      createdBookingIds.push((afterCancel.body as { id: string }).id);
+    });
+
+    it('a stale availability screen still gets a deterministic 409 when the staff was booked in the meantime', async () => {
+      // Simulates a customer who loaded the slot grid, then someone else took that exact
+      // barber/slot before this customer tapped "Confirm" — the server-side check at creation
+      // time is authoritative regardless of what the client's now-stale grid still shows.
+      const slot = await firstAvailableSlot(customerTokens[0], dateAhead(25));
+      const dinesh = staffIdByName['Marcus'];
+      await fixtureBooking(
+        customerUserIds[0],
+        dinesh,
+        new Date(slot.slotStart),
+        new Date(new Date(slot.slotStart).getTime() + 30 * 60_000),
+      );
+      // customerTokens[1]'s client still believes this slot/staff combination is free (it fetched
+      // availability before the fixture booking above existed) and submits anyway.
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: slot.slotStart,
+          preferredStaffId: dinesh,
+        })
+        .expect(409);
+      expect((res.body as { error: { code: string } }).error.code).toBe(
+        'STAFF_SLOT_UNAVAILABLE',
+      );
+    });
+
+    it('concurrency: two customers racing for the same staff/slot — exactly one succeeds, the other gets a deterministic 409, and only one Booking row is ever created', async () => {
+      const slot = await firstAvailableSlot(customerTokens[0], dateAhead(26));
+      const dinesh = staffIdByName['Devon'];
+      const body = {
+        salonId,
+        serviceId: haircutServiceId,
+        slotStart: slot.slotStart,
+        preferredStaffId: dinesh,
+      };
+
+      // Genuinely concurrent — both requests fire before either resolves, exercising the real
+      // per-salon advisory-lock transaction under actual contention, not a simulated sequence.
+      const [a, b] = await Promise.all([
+        request(app.getHttpServer())
+          .post('/api/v1/bookings')
+          .set('Authorization', `Bearer ${customerTokens[1]}`)
+          .set('Idempotency-Key', randomUUID())
+          .send(body),
+        request(app.getHttpServer())
+          .post('/api/v1/bookings')
+          .set('Authorization', `Bearer ${customerTokens[3]}`)
+          .set('Idempotency-Key', randomUUID())
+          .send(body),
+      ]);
+
+      const statuses = [a.status, b.status].sort();
+      expect(statuses).toEqual([201, 409]);
+      const loser = a.status === 409 ? a : b;
+      expect((loser.body as { error: { code: string } }).error.code).toBe(
+        'STAFF_SLOT_UNAVAILABLE',
+      );
+      const winner = a.status === 201 ? a : b;
+      createdBookingIds.push((winner.body as { id: string }).id);
+
+      const rowCount = await prisma.booking.count({
+        where: {
+          salonId,
+          preferredStaffId: dinesh,
+          slotStart: new Date(slot.slotStart),
+          status: { in: ['CONFIRMED', 'PENDING_PAYMENT'] },
+        },
+      });
+      expect(rowCount).toBe(1);
+    });
+
+    it('reschedule into a slot the same preferred barber already holds elsewhere is rejected', async () => {
+      const takenSlot = await firstAvailableSlot(customerTokens[0], dateAhead(27));
+      const ownSlot = await firstAvailableSlot(customerTokens[1], dateAhead(28));
+      const dinesh = staffIdByName['Ray'];
+      await fixtureBooking(
+        customerUserIds[0],
+        dinesh,
+        new Date(takenSlot.slotStart),
+        new Date(new Date(takenSlot.slotStart).getTime() + 30 * 60_000),
+      );
+
+      const own = await request(app.getHttpServer())
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          salonId,
+          serviceId: haircutServiceId,
+          slotStart: ownSlot.slotStart,
+          preferredStaffId: dinesh,
+        })
+        .expect(201);
+      const ownId = (own.body as { id: string }).id;
+      createdBookingIds.push(ownId);
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/bookings/${ownId}/reschedule`)
+        .set('Authorization', `Bearer ${customerTokens[1]}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ slotStart: takenSlot.slotStart })
+        .expect(409);
+      expect((res.body as { error: { code: string } }).error.code).toBe(
+        'STAFF_SLOT_UNAVAILABLE',
       );
     });
   });

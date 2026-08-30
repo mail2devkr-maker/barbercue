@@ -66,7 +66,7 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
       <SectionHeader
         eyebrow="Booking"
         title="Choose a barber"
-        subtitle="This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in."
+        subtitle="Choosing a specific barber reserves that time with them. Pick Any Staff to let the salon assign whoever's available."
       />
       {loading && (
         <>

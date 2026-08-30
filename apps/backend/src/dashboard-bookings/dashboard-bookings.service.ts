@@ -32,6 +32,7 @@ const ownerBookingInclude = {
       addressLine: true,
       lat: true,
       lng: true,
+      timezone: true,
       city: { select: { slug: true, countryCode: true } },
     },
   },
@@ -255,6 +256,10 @@ export class DashboardBookingsService {
       citySlug: booking.salon.city.slug,
       salonCountryCode: booking.salon.city.countryCode,
       salonAddress: booking.salon.addressLine,
+      salonTimeZone: resolveSalonTimeZone({
+        timezone: booking.salon.timezone,
+        countryCode: booking.salon.city.countryCode,
+      }),
       salonLat: booking.salon.lat,
       salonLng: booking.salon.lng,
       serviceName: booking.service.name,

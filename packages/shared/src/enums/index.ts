@@ -254,6 +254,11 @@ export const BookingErrorCode = {
   SLOT_IN_PAST: 'SLOT_IN_PAST',
   OUTSIDE_OPERATING_HOURS: 'OUTSIDE_OPERATING_HOURS',
   SLOT_FULL: 'SLOT_FULL',
+  // A specific staff member was requested (Booking.preferredStaffId) and already has a
+  // confirmed/pending booking overlapping the requested interval — distinct from SLOT_FULL (pool
+  // capacity exhausted regardless of which staff), since here the salon may have plenty of pool
+  // capacity left; only that one named professional is unavailable at that time.
+  STAFF_SLOT_UNAVAILABLE: 'STAFF_SLOT_UNAVAILABLE',
   OUTSTANDING_BALANCE: 'OUTSTANDING_BALANCE',
   BOOKING_NOT_CANCELLABLE: 'BOOKING_NOT_CANCELLABLE',
   BOOKING_NOT_RESCHEDULABLE: 'BOOKING_NOT_RESCHEDULABLE',

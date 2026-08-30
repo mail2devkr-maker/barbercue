@@ -13,6 +13,7 @@ import type {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
+import { formatZonedDateTime, formatZonedTime, todayInZone, zonedDateStr, addZonedDays } from "../../../../lib/salon-time";
 import { CancelBookingDialog } from "../../../../components/booking/CancelBookingDialog";
 import { RescheduleBookingDialog } from "../../../../components/booking/RescheduleBookingDialog";
 import { BookingActionsBar } from "../../../../components/booking/BookingActionsBar";
@@ -49,17 +50,15 @@ function formatStatus(status: string): string {
     .join(" ");
 }
 
-function formatWhen(slotStart: string): string {
-  const date = new Date(slotStart);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  const isTomorrow = date.toDateString() === tomorrow.toDateString();
-  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  if (isToday) return `Today · ${time}`;
-  if (isTomorrow) return `Tomorrow · ${time}`;
-  return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) + ` · ${time}`;
+function formatWhen(slotStart: string, timeZone: string | null): string {
+  if (!timeZone) return new Date(slotStart).toLocaleString();
+  const dateStr = zonedDateStr(slotStart, timeZone);
+  const today = todayInZone(timeZone);
+  const tomorrow = addZonedDays(today, 1);
+  const time = formatZonedTime(slotStart, timeZone);
+  if (dateStr === today) return `Today · ${time}`;
+  if (dateStr === tomorrow) return `Tomorrow · ${time}`;
+  return `${formatZonedDateTime(slotStart, timeZone).split(", ").slice(0, 2).join(", ")} · ${time}`;
 }
 
 function BookingRow({
@@ -82,7 +81,10 @@ function BookingRow({
         </span>
       </div>
       <p className={styles.bookingRowSalon}>
-        {booking.salonName} — {new Date(booking.slotStart).toLocaleString()}
+        {booking.salonName} —{" "}
+        {booking.salonTimeZone
+          ? formatZonedDateTime(booking.slotStart, booking.salonTimeZone)
+          : new Date(booking.slotStart).toLocaleString()}
       </p>
       {booking.preferredStaffName && (
         <p className={styles.bookingRowMeta}>Preferred barber: {booking.preferredStaffName}</p>
@@ -231,7 +233,7 @@ export default function MyBookingsPage() {
         ) : nextBooking ? (
           <Card raised className={styles.nextChairCard}>
             <span className={styles.nextChairEyebrow}>Upcoming</span>
-            <span className={styles.nextChairWhen}>{formatWhen(nextBooking.slotStart)}</span>
+            <span className={styles.nextChairWhen}>{formatWhen(nextBooking.slotStart, nextBooking.salonTimeZone)}</span>
             <span className={styles.nextChairSalon}>{nextBooking.salonName}</span>
             <span className={styles.nextChairMeta}>{nextBooking.serviceName}</span>
             {nextBooking.preferredStaffName && (

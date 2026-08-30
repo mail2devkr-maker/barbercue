@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { OperatingHoursDto } from "@barbercue/shared";
+import { addZonedDays, todayInZone, zonedDayLabel, zonedDayOfWeek, zonedWeekdayLabel } from "../../lib/salon-time";
 import styles from "./booking.module.css";
 
 const DAYS_AHEAD = 30;
@@ -10,29 +11,37 @@ export function DateStep({
   operatingHours,
   selectedDate,
   onSelect,
+  timeZone,
 }: {
   operatingHours: OperatingHoursDto[];
   selectedDate: string | null;
   onSelect: (date: string) => void;
+  // The salon's own IANA zone — every generated date/label below is derived entirely from this
+  // (never the viewer's browser clock/timezone), so the value actually sent to the availability
+  // API always matches the label the customer clicked. Falls back to UTC-anchored generation only
+  // when the salon has no resolvable timezone (matches the backend's own honest-unknown handling).
+  timeZone: string | null;
 }) {
-  // Client-side convenience only (which days to grey out) — the server's availability endpoint
-  // is the sole authority on what's actually bookable, so day-boundary fuzziness here is cosmetic.
+  // The DATE VALUE (sent to the API) and its LABEL must come from the exact same zoned source —
+  // previously the value was UTC-sliced (`toISOString()`) while the label was browser-local
+  // (`toLocaleDateString(undefined, ...)`), which could silently disagree by a day depending on
+  // the viewer's own clock, making the button say one date while booking a different one.
   const days = useMemo(() => {
+    const zone = timeZone ?? "UTC";
     const result: { date: string; weekday: string; dayLabel: string; closed: boolean }[] = [];
+    const start = todayInZone(zone);
     for (let i = 0; i < DAYS_AHEAD; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
-      const hours = operatingHours.find((h) => h.dayOfWeek === d.getDay());
+      const date = addZonedDays(start, i);
+      const hours = operatingHours.find((h) => h.dayOfWeek === zonedDayOfWeek(date));
       result.push({
-        date: iso,
-        weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
-        dayLabel: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        date,
+        weekday: zonedWeekdayLabel(date),
+        dayLabel: zonedDayLabel(date),
         closed: !hours || hours.isClosed,
       });
     }
     return result;
-  }, [operatingHours]);
+  }, [operatingHours, timeZone]);
 
   return (
     <section className={styles.stepCard}>

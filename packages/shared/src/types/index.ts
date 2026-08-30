@@ -277,6 +277,11 @@ export interface SalonProfileDto extends SalonListItemDto {
   photos: PhotoDto[];
   reviews: ReviewSummaryDto[]; // most recent, capped server-side (see API.md)
   team: TeamMemberDto[]; // Phase 17 — "Meet the team", ACTIVE staff only
+  // Resolved IANA zone (see resolveSalonTimeZone) every date/time this salon shows must be
+  // formatted in — never the viewer's own browser timezone. Null when unresolvable (no explicit
+  // salon.timezone and not an India-fallback-eligible city); clients should fall back to a plain
+  // ISO/UTC display rather than guessing in that rare case.
+  salonTimeZone: string | null;
 }
 
 // Public "Meet the team" entry on a salon's discovery profile page (Phase 17). Deliberately never
@@ -392,6 +397,9 @@ export interface BookingDetailDto extends BookingDto {
   citySlug: string;
   salonCountryCode: string;
   salonAddress: string;
+  // Resolved IANA zone slotStart/slotEnd must be displayed in — see SalonProfileDto.salonTimeZone.
+  // Never derive a booking's displayed date/time from the viewer's own browser timezone.
+  salonTimeZone: string | null;
   // Null when the salon never captured GPS coordinates (see Salon.lat/lng's own nullability) —
   // "Get Directions" falls back to a text-address maps search in that case.
   salonLat: number | null;

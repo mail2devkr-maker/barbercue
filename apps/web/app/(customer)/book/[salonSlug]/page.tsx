@@ -55,6 +55,7 @@ export default async function BookPage({
         operatingHours={salon.operatingHours}
         currency={salon.currency}
         countryCode={salon.countryCode}
+        salonTimeZone={salon.salonTimeZone}
         selectedStyleName={style}
         initialServiceId={serviceId}
         // A prefilled service (rebook or style hand-off) always came with an explicit staff choice

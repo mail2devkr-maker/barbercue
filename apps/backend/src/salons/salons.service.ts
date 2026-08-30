@@ -280,6 +280,10 @@ export class SalonsService {
       distanceKm: null,
       isOpenNow: isOpenNow(salon.operatingHours, salon),
       verified: salon.verification?.status === VerificationStatus.APPROVED,
+      salonTimeZone: resolveSalonTimeZone({
+        timezone: salon.timezone,
+        countryCode: salon.city.countryCode,
+      }),
       description: salon.description,
       phone: salon.phone,
       services: salon.services.map((s) => ({

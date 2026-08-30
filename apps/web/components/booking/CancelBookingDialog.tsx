@@ -13,6 +13,7 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
+import { formatZonedDateTime } from "../../lib/salon-time";
 import { Button } from "../ui/Button";
 import styles from "./booking.module.css";
 
@@ -94,7 +95,10 @@ export function CancelBookingDialog({
       <div className={styles.dialogCard}>
         <h3 className={styles.dialogTitle}>Cancel booking?</h3>
         <p className={styles.summaryLine}>
-          {booking.serviceName} at {booking.salonName}, {new Date(booking.slotStart).toLocaleString()}
+          {booking.serviceName} at {booking.salonName},{" "}
+          {booking.salonTimeZone
+            ? formatZonedDateTime(booking.slotStart, booking.salonTimeZone)
+            : new Date(booking.slotStart).toLocaleString()}
         </p>
         {loading && <p className={styles.stepLoading}>Checking the cancellation policy…</p>}
         {!loading && preview !== null && preview > 0 && (
