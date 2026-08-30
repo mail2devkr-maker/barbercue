@@ -45,13 +45,21 @@ export default function DashboardPhotosPage({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [source, setSource] = useState<Source>("upload");
-  const [file, setFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Issue 11 — multiple files selected together (`multiple` on the input below) each get their
+  // own preview and their own upload request to the existing single-file endpoint below; nothing
+  // about the backend contract changes; the batch is just this array processed one at a time.
+  const [files, setFiles] = useState<{ file: File; previewUrl: string }[]>([]);
   const [url, setUrl] = useState("");
   const [altText, setAltText] = useState("");
   const [type, setType] = useState<PhotoType>(PhotoType.COVER);
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Mirrors `files` so the unmount-only cleanup effect below can revoke whatever is pending at
+  // the moment of unmount, not whatever `files` happened to be when the effect first ran.
+  const filesRef = useRef(files);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,30 +77,39 @@ export default function DashboardPhotosPage({
 
   // The preview is an object URL over the file already in memory — the image is never read into
   // a base64 data URL, which would copy the whole thing into a string a third larger again. The
-  // browser only holds it until it is revoked, and every revoke goes through clearFile below or
+  // browser only holds it until it is revoked, and every revoke goes through clearFiles below or
   // this unmount cleanup, so navigating away never leaks the buffer.
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      for (const f of filesRef.current) URL.revokeObjectURL(f.previewUrl);
     };
-  }, [previewUrl]);
+    // Only the unmount cleanup matters here — files themselves are revoked individually wherever
+    // they're removed (clearFiles, removePendingFile, or replaced in handleFileChange); reading
+    // through filesRef rather than depending on `files` directly means this never needs to re-run.
+  }, []);
 
-  function clearFile() {
-    setFile(null);
-    setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
+  function clearFiles() {
+    setFiles((prev) => {
+      for (const f of prev) URL.revokeObjectURL(f.previewUrl);
+      return [];
     });
-    // Without this the input keeps the old selection, and re-picking the SAME file fires no
+    // Without this the input keeps the old selection, and re-picking the SAME file(s) fires no
     // change event at all — the owner would click, choose, and see nothing happen.
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  function removePendingFile(index: number) {
+    setFiles((prev) => {
+      URL.revokeObjectURL(prev[index].previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const chosen = e.target.files?.[0];
+    const chosen = Array.from(e.target.files ?? []);
     setSuccess(null);
-    if (!chosen) {
-      clearFile();
+    if (chosen.length === 0) {
+      clearFiles();
       return;
     }
 
@@ -100,22 +117,26 @@ export default function DashboardPhotosPage({
     // instant answer. They are NOT the security boundary: file.type is whatever the OS guessed
     // from the extension, so the server re-decides by reading the file's magic bytes.
     const allowed = SALON_PHOTO_UPLOAD.allowedMimeTypes as readonly string[];
-    if (!allowed.includes(chosen.type)) {
-      clearFile();
-      setError("That file isn’t a supported image. Please choose a JPG, PNG or WebP.");
-      return;
-    }
-    if (chosen.size > SALON_PHOTO_UPLOAD.maxBytes) {
-      clearFile();
-      setError(`That photo is ${(chosen.size / (1024 * 1024)).toFixed(1)} MB. Please choose one under ${MAX_MB} MB.`);
-      return;
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const candidate of chosen) {
+      if (!allowed.includes(candidate.type)) {
+        rejected.push(`${candidate.name} (unsupported file type)`);
+      } else if (candidate.size > SALON_PHOTO_UPLOAD.maxBytes) {
+        rejected.push(`${candidate.name} (over ${MAX_MB} MB)`);
+      } else {
+        accepted.push(candidate);
+      }
     }
 
-    setError(null);
-    setFile(chosen);
-    setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(chosen);
+    setError(
+      rejected.length > 0
+        ? `Skipped ${rejected.length === 1 ? "1 file" : `${rejected.length} files`}: ${rejected.join(", ")}. Please use JPG, PNG or WebP under ${MAX_MB} MB.`
+        : null,
+    );
+    setFiles((prev) => {
+      for (const f of prev) URL.revokeObjectURL(f.previewUrl);
+      return accepted.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
     });
   }
 
@@ -125,7 +146,7 @@ export default function DashboardPhotosPage({
     setSuccess(null);
     // Whichever input is being left behind is emptied, so a stale value from the other route can
     // never be submitted by accident.
-    if (next === "link") clearFile();
+    if (next === "link") clearFiles();
     else setUrl("");
   }
 
@@ -149,29 +170,53 @@ export default function DashboardPhotosPage({
     setSuccess(null);
 
     if (source === "upload") {
-      if (!file) {
+      if (files.length === 0) {
         setError("Please choose a photo to upload.");
         return;
       }
       setError(null);
       setSubmitting(true);
-      try {
-        const form = new FormData();
-        form.append("image", file);
-        if (altText.trim()) form.append("altText", altText.trim());
-        form.append("type", type);
-        // No Content-Type header — apiFetch deliberately leaves FormData alone so the browser can
-        // set the multipart boundary itself.
-        const created = await apiFetch<PhotoDto>(`${base}/${DASHBOARD_PATHS.photoUpload}`, {
-          method: "POST",
-          body: form,
-        });
-        applyCreated(created);
-        clearFile();
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : "Could not upload that photo. Please try again.");
-      } finally {
-        setSubmitting(false);
+      // Captured once, before any upload starts — applyCreated below resets the altText field
+      // after each success, and re-reading the (by-then-cleared) state mid-batch would silently
+      // drop the description from every file after the first.
+      const sharedAltText = altText.trim();
+      // Uploaded one at a time against the existing single-file endpoint (Issue 11) rather than
+      // in parallel: sequential keeps upload order == the order the owner picked them in (matters
+      // for which one ends up as COVER — see applyCreated's own comment), and means a failure
+      // is attributed to exactly one named file rather than an ambiguous batch of settled promises.
+      const succeeded: PhotoDto[] = [];
+      const failed: string[] = [];
+      for (const { file } of files) {
+        try {
+          const form = new FormData();
+          form.append("image", file);
+          if (sharedAltText) form.append("altText", sharedAltText);
+          form.append("type", type);
+          // No Content-Type header — apiFetch deliberately leaves FormData alone so the browser
+          // can set the multipart boundary itself.
+          const created = await apiFetch<PhotoDto>(`${base}/${DASHBOARD_PATHS.photoUpload}`, {
+            method: "POST",
+            body: form,
+          });
+          applyCreated(created);
+          succeeded.push(created);
+        } catch (err) {
+          failed.push(`${file.name}: ${err instanceof ApiError ? err.message : "upload failed"}`);
+        }
+      }
+      setSubmitting(false);
+      clearFiles();
+      if (failed.length > 0) {
+        setError(
+          succeeded.length > 0
+            ? `Added ${succeeded.length} of ${files.length} photos. Failed: ${failed.join("; ")}`
+            : `Could not upload: ${failed.join("; ")}`,
+        );
+      } else if (succeeded.length > 1) {
+        // applyCreated's own per-file message ("Cover photo updated." / "Photo added to your
+        // gallery.") only reflects the LAST file in a successful batch — replaced with an accurate
+        // count here rather than leaving a message that silently undercounts what was added.
+        setSuccess(`Added ${succeeded.length} photos.`);
       }
       return;
     }
@@ -269,6 +314,7 @@ export default function DashboardPhotosPage({
               ref={fileInputRef}
               id="photo-file"
               type="file"
+              multiple
               accept={SALON_PHOTO_UPLOAD.accept}
               onChange={handleFileChange}
               style={{
@@ -299,26 +345,39 @@ export default function DashboardPhotosPage({
                 color: "var(--bc-ink)",
               }}
             >
-              {file ? "Choose a different photo" : "+ Choose photo"}
+              {files.length > 0 ? "Choose different photos" : "+ Choose photos"}
             </label>
-            <p className={styles.hint}>JPG, PNG or WebP, up to {MAX_MB} MB.</p>
+            <p className={styles.hint}>
+              JPG, PNG or WebP, up to {MAX_MB} MB each. Select several at once to upload them
+              together.
+            </p>
 
-            {file && previewUrl && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ maxWidth: 300 }}>
-                  {/* priority (eager) rather than the default lazy load: this is the image the
-                      owner just picked and is waiting to see, so deferring it until it scrolls
-                      into view would leave the preview blank at exactly the wrong moment. */}
-                  <SalonImage url={previewUrl} alt="Preview of the photo you selected" priority />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-                  <span className={styles.hint} style={{ marginTop: 0, wordBreak: "break-all" }}>
-                    {file.name} · {(file.size / (1024 * 1024)).toFixed(1)} MB
-                  </span>
-                  <Button type="button" variant="outline" onClick={clearFile}>
-                    Remove
-                  </Button>
-                </div>
+            {files.length > 0 && (
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+                  gap: 12,
+                }}
+              >
+                {files.map((entry, index) => (
+                  <div key={`${entry.file.name}-${index}`}>
+                    <div style={{ maxWidth: 140 }}>
+                      {/* priority (eager) rather than the default lazy load: these are the images
+                          the owner just picked and is waiting to see, so deferring them until they
+                          scroll into view would leave the preview blank at exactly the wrong
+                          moment. */}
+                      <SalonImage url={entry.previewUrl} alt={`Preview of ${entry.file.name}`} priority />
+                    </div>
+                    <p className={styles.hint} style={{ marginTop: 4, wordBreak: "break-all" }}>
+                      {entry.file.name} · {(entry.file.size / (1024 * 1024)).toFixed(1)} MB
+                    </p>
+                    <Button type="button" variant="outline" onClick={() => removePendingFile(index)}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
