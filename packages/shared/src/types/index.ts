@@ -552,6 +552,14 @@ export interface ChairOptionDto {
   label: string;
 }
 
+// A walk-in that joined without picking a service (QueueEntry.serviceId is null) needs one
+// specified before it can be assigned — QueueService.assign() rejects with SERVICE_REQUIRED
+// otherwise. This is what lets the assign form's service picker exist without its own round trip.
+export interface ServiceOptionDto {
+  id: string;
+  name: string;
+}
+
 // GET /dashboard/salons/:salonId/queue — embeds the roster/chairs read-only so the assign UI works
 // without needing the (out-of-scope in Phase 3C) staff/chair CRUD endpoints. staffRoster includes
 // BOTH ACTIVE and INACTIVE staff (with their current status) so the dashboard's clock-in/out
@@ -562,6 +570,7 @@ export interface DashboardQueueDto {
   entries: QueueEntryDetailDto[];
   staffRoster: StaffStatusDto[];
   chairs: ChairOptionDto[];
+  services: ServiceOptionDto[];
 }
 
 // GET /dashboard/salons/:salonId/capacity (Phase 6 — Owner Capacity Dashboard). "Busy" means

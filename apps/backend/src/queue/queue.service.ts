@@ -19,6 +19,7 @@ import {
   type ReassignQueueEntryInput,
   type CapacitySummaryDto,
   type ChairOptionDto,
+  type ServiceOptionDto,
   type DashboardQueueDto,
   type QueueEntryDetailDto,
   type QueueStatusDto,
@@ -294,7 +295,7 @@ export class QueueService {
     // Full roster (both statuses) — an ACTIVE-only filter would make an off-duty staff member
     // invisible here and unable to clock themselves back in via this same dashboard. The assign
     // action itself still separately re-validates ACTIVE + qualified via AvailabilityService.
-    const [staffRoster, chairs] = await Promise.all([
+    const [staffRoster, chairs, services] = await Promise.all([
       this.prisma.salonStaff.findMany({
         where: { salonId },
         orderBy: { displayName: 'asc' },
@@ -302,6 +303,13 @@ export class QueueService {
       this.prisma.chair.findMany({
         where: { salonId, status: ChairStatus.ACTIVE },
         orderBy: { label: 'asc' },
+      }),
+      // Lets the assign form offer a service picker for a walk-in that joined without choosing
+      // one — assign() rejects with SERVICE_REQUIRED in that case, and this is the only source
+      // the frontend has for "what services does this salon even offer."
+      this.prisma.service.findMany({
+        where: { salonId, isActive: true },
+        orderBy: { name: 'asc' },
       }),
     ]);
 
@@ -313,6 +321,10 @@ export class QueueService {
         status: s.status,
       })),
       chairs: chairs.map((c): ChairOptionDto => ({ id: c.id, label: c.label })),
+      services: services.map((s): ServiceOptionDto => ({
+        id: s.id,
+        name: s.name,
+      })),
     };
   }
 
@@ -377,7 +389,10 @@ export class QueueService {
       }),
       bounds
         ? this.prisma.booking.count({
-            where: { salonId, slotStart: { gte: bounds.start, lt: bounds.end } },
+            where: {
+              salonId,
+              slotStart: { gte: bounds.start, lt: bounds.end },
+            },
           })
         : Promise.resolve(null),
       bounds
@@ -1061,7 +1076,9 @@ export class QueueService {
       activeServiceSessionId: entry.serviceSessions[0]?.id ?? null,
       joinedAt: entry.joinedAt.toISOString(),
       calledAt: entry.calledAt?.toISOString() ?? null,
-      estimatedWaitRangeMinutes: estimateWaitRangeMinutes(entry.estimatedWaitMinutes),
+      estimatedWaitRangeMinutes: estimateWaitRangeMinutes(
+        entry.estimatedWaitMinutes,
+      ),
       turnApproaching:
         entry.estimatedWaitMinutes !== null &&
         entry.estimatedWaitMinutes <= TURN_APPROACHING_THRESHOLD_MINUTES,

@@ -11,6 +11,7 @@ import {
   type DashboardQueueDto,
   type QueueEntryDetailDto,
   type ReassignQueueEntryInput,
+  type ServiceOptionDto,
   type StaffStatusDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
@@ -40,25 +41,32 @@ function AssignForm({
   entry,
   staff,
   chairs,
+  services,
   onAssigned,
 }: {
   entry: QueueEntryDetailDto;
   staff: StaffStatusDto[];
   chairs: ChairOptionDto[];
+  services: ServiceOptionDto[];
   onAssigned: () => void;
 }) {
   const [staffId, setStaffId] = useState("");
   const [chairId, setChairId] = useState("");
+  const [serviceId, setServiceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeStaff = staff.filter((s) => s.status === StaffMemberStatus.ACTIVE);
+  // A walk-in that picked a service when joining already has one on the entry — QueueService.
+  // assign() only needs one supplied when it doesn't, and re-asking here would just be confusing
+  // ("didn't I already say Haircut?").
+  const needsService = !entry.serviceId;
 
   async function handleAssign() {
-    if (!staffId || !chairId) return;
+    if (!staffId || !chairId || (needsService && !serviceId)) return;
     setSubmitting(true);
     setError(null);
     try {
-      const input: AssignQueueEntryInput = { staffId, chairId };
+      const input: AssignQueueEntryInput = { staffId, chairId, ...(needsService ? { serviceId } : {}) };
       await apiFetch(QUEUE_ENTRY_PATH(entry.id, DASHBOARD_PATHS.assign), {
         method: "POST",
         headers: { "Idempotency-Key": newIdempotencyKey() },
@@ -74,6 +82,19 @@ function AssignForm({
 
   return (
     <div className={styles.assignRow}>
+      {needsService && (
+        <label className={styles.assignField}>
+          <span>Service</span>
+          <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className={styles.assignSelect}>
+            <option value="">Service…</option>
+            {services.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className={styles.assignField}>
         <span>Barber</span>
         <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={styles.assignSelect}>
@@ -96,7 +117,12 @@ function AssignForm({
         ))}
         </select>
       </label>
-      <Button type="button" variant="outline" onClick={() => void handleAssign()} disabled={submitting || !staffId || !chairId}>
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => void handleAssign()}
+        disabled={submitting || !staffId || !chairId || (needsService && !serviceId)}
+      >
         {submitting ? "Assigning…" : "Confirm assign"}
       </Button>
       {error && <span className={styles.errorText}>{error}</span>}
@@ -504,7 +530,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
                     void refetch();
                   }} />
                 ) : (
-                  <AssignForm entry={entry} staff={data.staffRoster} chairs={data.chairs} onAssigned={() => {
+                  <AssignForm entry={entry} staff={data.staffRoster} chairs={data.chairs} services={data.services} onAssigned={() => {
                     setAssigningId(null);
                     void refetch();
                   }} />

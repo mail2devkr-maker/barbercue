@@ -74,7 +74,10 @@ interface PrismaMock {
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
     findUnique: jest.Mock<Promise<unknown>, [unknown]>;
   };
-  service: { aggregate: jest.Mock<Promise<unknown>, [unknown]> };
+  service: {
+    aggregate: jest.Mock<Promise<unknown>, [unknown]>;
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+  };
   booking: {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
     update: jest.Mock<Promise<unknown>, [unknown]>;
@@ -152,6 +155,9 @@ describe('QueueService', () => {
         aggregate: jest
           .fn<Promise<unknown>, [unknown]>()
           .mockResolvedValue({ _avg: { durationMinutes: 30 } }),
+        findMany: jest
+          .fn<Promise<unknown[]>, [unknown]>()
+          .mockResolvedValue([]),
       },
       booking: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
@@ -643,6 +649,23 @@ describe('QueueService', () => {
         result.entries.map((e) => [e.id, e.position]),
       );
       expect(positions).toEqual({ q1: 1, q2: null, q3: 2 });
+    });
+
+    it('includes the salon\'s active services, for the assign form\'s "walk-in with no chosen service" picker', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]);
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]);
+      prisma.service.findMany.mockResolvedValueOnce([
+        { id: 'svc1', name: 'Haircut' },
+        { id: 'svc2', name: 'Beard Trim' },
+      ]);
+      const result = await service.getDashboardQueue('owner1', 's1');
+      expect(result.services).toEqual([
+        { id: 'svc1', name: 'Haircut' },
+        { id: 'svc2', name: 'Beard Trim' },
+      ]);
+      expect(prisma.service.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { salonId: 's1', isActive: true } }),
+      );
     });
   });
 
