@@ -13,6 +13,7 @@ import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../components/discove
 import { JsonLd } from "../../../../../components/discovery/JsonLd";
 import { SalonImage } from "../../../../../components/ui/SalonImage";
 import { LinkButton } from "../../../../../components/ui/Button";
+import { EditorialImage } from "../../../../../components/editorial/EditorialImage";
 import styles from "./profile.module.css";
 
 interface SalonPageParams {
@@ -196,23 +197,7 @@ export default async function SalonPage({
           <h1>
             {salon.name}
             {salon.verified && (
-              <span
-                title={VERIFICATION_BADGE_CAPTION}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                  marginLeft: 10,
-                  padding: "3px 10px",
-                  borderRadius: 999,
-                  fontSize: "0.7rem",
-                  fontWeight: 700,
-                  letterSpacing: "0.02em",
-                  color: "var(--bc-success)",
-                  background: "color-mix(in srgb, var(--bc-success) 12%, transparent)",
-                  verticalAlign: "middle",
-                }}
-              >
+              <span className={styles.verifiedBadge} title={VERIFICATION_BADGE_CAPTION}>
                 ✓ Verified
               </span>
             )}
@@ -260,9 +245,14 @@ export default async function SalonPage({
           </section>
 
           <section className={styles.sectionCard}>
-            <div className={styles.sectionHeading}>
-              <p className={styles.eyebrow}>Choose your cut</p>
-              <h2>Services & pricing</h2>
+            <div className={`${styles.sectionHeading} ${styles.sectionHeadingWithArt}`}>
+              <div>
+                <p className={styles.eyebrow}>Choose your cut</p>
+                <h2>Services & pricing</h2>
+              </div>
+              <span className={styles.sectionArt} aria-hidden="true">
+                <EditorialImage id="barber-equipment-tools" width={72} height={54} />
+              </span>
             </div>
             <ServiceList
               services={salon.services}

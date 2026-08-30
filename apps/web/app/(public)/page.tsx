@@ -79,9 +79,6 @@ export default async function HomePage() {
 
       <main>
       <section className={styles.hero}>
-        <div className={styles.heroEditorialBand} aria-hidden="true">
-          <EditorialImage id="hero-editorial-band" fill priority sizes="100vw" />
-        </div>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
             <p className={styles.heroEyebrow}>Book ahead · Walk in smarter</p>

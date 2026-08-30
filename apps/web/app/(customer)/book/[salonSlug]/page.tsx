@@ -4,6 +4,8 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { BookingFlow } from "../../../../components/booking/BookingFlow";
+import { EditorialImage } from "../../../../components/editorial/EditorialImage";
+import styles from "./book.module.css";
 
 interface BookPageParams {
   salonSlug: string;
@@ -34,11 +36,19 @@ export default async function BookPage({
   if (!salon) notFound();
 
   return (
-    <main style={{ padding: "2.5rem 1.5rem 3rem", maxWidth: 720, margin: "0 auto" }}>
-      <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "1.8rem", letterSpacing: "-0.01em", marginBottom: 4 }}>
-        Book at {salon.name}
-      </h1>
-      <p style={{ color: "var(--bc-muted)" }}>{salon.addressLine}</p>
+    <main className={styles.page}>
+      <div className={styles.banner} aria-hidden="true">
+        <EditorialImage id="process-haircut" fill priority sizes="(max-width: 760px) 100vw, 760px" />
+        <div className={styles.bannerScrim} />
+        <p className={styles.bannerCaption}>Precision, comfort, and a chair that&apos;s ready when you are.</p>
+      </div>
+
+      <div className={styles.header}>
+        <p className={styles.eyebrow}>Booking</p>
+        <h1>Book at {salon.name}</h1>
+        <p className={styles.address}>{salon.addressLine}</p>
+      </div>
+
       <BookingFlow
         salonId={salon.id}
         services={salon.services}

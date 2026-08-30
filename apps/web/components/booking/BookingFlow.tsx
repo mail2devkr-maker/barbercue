@@ -187,7 +187,7 @@ export function BookingFlow({
           ? styles.statusPending
           : styles.statusCancelled;
     return (
-      <section style={{ marginTop: 24 }}>
+      <section className={styles.confirmedWrap}>
         <div className={styles.confirmedCard}>
           <div className={styles.confirmedHead}>
             <span className={`${styles.confirmedIcon} ${cancelled ? styles.confirmedIconCancelled : styles.confirmedIconOk}`}>
@@ -263,7 +263,7 @@ export function BookingFlow({
   const currentStepIndex = progressSteps.findIndex((s) => !s.done);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 24 }}>
+    <div className={styles.flowRoot}>
       <div className={styles.progress}>
         {progressSteps.map((step, i) => (
           <Fragment key={step.key}>

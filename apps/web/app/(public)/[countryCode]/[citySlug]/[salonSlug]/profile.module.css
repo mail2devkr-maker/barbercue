@@ -66,6 +66,21 @@
   overflow-wrap: anywhere;
 }
 
+.verifiedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--bc-success);
+  background: color-mix(in srgb, var(--bc-success) 12%, transparent);
+  vertical-align: middle;
+}
+
 .ratingLine {
   min-height: 30px;
   margin-top: 18px;
@@ -167,6 +182,33 @@
 .sectionHeading h2 {
   margin: 0;
   font-size: clamp(1.7rem, 3vw, 2.3rem);
+}
+
+.sectionHeadingWithArt {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sectionArt {
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--bc-radius-sm);
+  border: 1px solid var(--bc-border);
+}
+
+.sectionArt :global(img) {
+  display: block;
+  width: 72px;
+  height: 54px;
+  object-fit: cover;
+}
+
+@media (max-width: 480px) {
+  .sectionArt {
+    display: none;
+  }
 }
 
 .sideColumn {

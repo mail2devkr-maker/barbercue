@@ -2,9 +2,10 @@
 
 The generation-ready backlog for BarberCue's full beauty/grooming editorial library. This file
 covers the **complete target taxonomy** the launch mission specified; `ASSET_PROVENANCE.md` records
-what is **actually shipped today** (8 flagship abstract category marks + hero + owner — see that
-file's honest status section). Nothing in this file is a production asset until it has a
-corresponding row in `ASSET_PROVENANCE.md` with `source: ai-generated`.
+what is **actually shipped today** — as of 2026-08-30, 16 real AI-generated photographs (hero, 8
+category flagships, bridal/event flagship, owner, 1 equipment still-life, 4 single process shots).
+Nothing in this file is a production asset until it has a corresponding row in
+`ASSET_PROVENANCE.md` with `source: ai-generated`.
 
 ## Shared art direction (prepend to every prompt below)
 
@@ -30,15 +31,18 @@ assets belong in `ASSET_PROVENANCE.md`.
 
 ## Status legend
 
-- ✅ Shipped as an abstract placeholder (see `ASSET_PROVENANCE.md`) — a flagship category mark only,
-  not the specific service variant.
+- ✅ Shipped as a real AI-generated photograph (see `ASSET_PROVENANCE.md`) — a flagship category
+  photo or general still-life only, not the specific service variant listed in the tables below.
+- 🟡 One representative photo shipped, but not the full item/sequence this row describes.
 - ⬜ Not started — no asset of any kind exists.
 
 ---
 
 ## 1. Barber / Men's grooming — category flagship ✅, 21 service variants ⬜
 
-Flagship shipped: `barber-flagship` (scissors + comb mark).
+Flagship shipped: `barber-flagship` — real photo, a barber giving a precision fade
+(`services/barber/precision-fade.webp`). Process shot also shipped: `process-haircut` 🟡 (single
+haircut moment, used on the booking page banner — not the full consultation→finish sequence below).
 
 | Service | Status | Prompt (append to shared art direction) |
 | --- | --- | --- |
@@ -67,7 +71,9 @@ Flagship shipped: `barber-flagship` (scissors + comb mark).
 
 ## 2. Hair salon — category flagship ✅, 21 service variants ⬜
 
-Flagship shipped: `hair-flagship` (flowing strand + round brush mark).
+Flagship shipped: `hair-flagship` — real photo, a stylist blow-drying a client's hair
+(`services/hair/hair-salon-flagship.webp`). Process shot also shipped: `process-hair-color` 🟡
+(single foil-application moment, not the full sequence below).
 
 | Service | Status | Prompt |
 | --- | --- | --- |
@@ -95,7 +101,9 @@ Flagship shipped: `hair-flagship` (flowing strand + round brush mark).
 
 ## 3. Nails — category flagship ✅, 12 service variants ⬜
 
-Flagship shipped: `nails-flagship` (polish bottle + painted-nail mark).
+Flagship shipped: `nails-flagship` — real photo, a technician filing a client's nails
+(`services/nails/manicure-flagship.webp`). Process shot also shipped: `process-manicure` 🟡 (single
+filing moment with henna detail, not the full sequence below).
 
 | Service | Status | Prompt |
 | --- | --- | --- |
@@ -114,8 +122,10 @@ Flagship shipped: `nails-flagship` (polish bottle + painted-nail mark).
 
 ## 4. Skincare / Facial (non-medical) — category flagship ✅, 9 service variants ⬜
 
-Flagship shipped: `skincare-flagship` (face oval + glow-arc mark). No diagnostic or clinical-outcome
-framing in any of these — see mission §6/§23 non-medical boundary.
+Flagship shipped: `skincare-flagship` — real photo, an esthetician applying a facial mask
+(`services/skincare/facial-flagship.webp`). Process shot also shipped: `process-facial` 🟡 (single
+finishing-cream moment, not the full sequence below). No diagnostic or clinical-outcome framing in
+any of these — see mission §6/§23 non-medical boundary.
 
 | Service | Status | Prompt |
 | --- | --- | --- |
@@ -131,7 +141,8 @@ framing in any of these — see mission §6/§23 non-medical boundary.
 
 ## 5. Waxing / Threading — category flagship ✅, 9 service variants ⬜
 
-Flagship shipped: `waxing-threading-flagship` (brow arch + thread spool mark). Keep tasteful,
+Flagship shipped: `waxing-threading-flagship` — real photo, eyebrow threading
+(`services/waxing-threading/threading-flagship.webp`). Keep tasteful,
 non-sexual, service-educational only — no explicit body waxing close-ups.
 
 | Service | Status | Prompt |
@@ -148,7 +159,8 @@ non-sexual, service-educational only — no explicit body waxing close-ups.
 
 ## 6. Makeup — category flagship ✅, 8 service variants ⬜
 
-Flagship shipped: `makeup-flagship` (lipstick + brush mark).
+Flagship shipped: `makeup-flagship` — real photo, a makeup artist applying blush at a vanity
+(`services/makeup/makeup-flagship.webp`).
 
 | Service | Status | Prompt |
 | --- | --- | --- |
@@ -163,7 +175,8 @@ Flagship shipped: `makeup-flagship` (lipstick + brush mark).
 
 ## 7. Spa / Wellness (non-medical) — category flagship ✅, 8 service variants ⬜
 
-Flagship shipped: `spa-massage-flagship` (leaf + ripple mark). No therapeutic/disease-treatment
+Flagship shipped: `spa-massage-flagship` — real photo, a back massage in a candlelit spa room
+(`services/spa-massage/spa-flagship.webp`). No therapeutic/disease-treatment
 claims — relaxation framing only, per mission §6/§23.
 
 | Service | Status | Prompt |
@@ -177,7 +190,11 @@ claims — relaxation framing only, per mission §6/§23.
 | Spa relaxation | ⬜ | Customer relaxing in a calm spa lounge area, eyes closed, warm ambient light, robe. |
 | Aromatherapy-style ambience | ⬜ | Still-life of an aromatherapy diffuser with soft steam, candles, and neutral spa linens — no people required. |
 
-## 8. Bridal / Event grooming — 6 service variants ⬜ (no dedicated flagship — shares makeup/barber marks)
+## 8. Bridal / Event grooming — category flagship ✅, 6 service variants ⬜
+
+Flagship shipped: `bridal-event-flagship` — real photo, a makeup artist finishing a bridal look
+(`services/bridal/bridal-event.webp`). Now a real 9th landing category card and search chip (query
+`bridal`), in addition to sharing rows with Makeup/Barber below.
 
 | Service | Status | Prompt |
 | --- | --- | --- |
@@ -190,10 +207,13 @@ claims — relaxation framing only, per mission §6/§23.
 
 ---
 
-## 9. Equipment library — 0 of ~45 items ⬜
+## 9. Equipment library — 1 of ~45 items ✅, ~44 ⬜
 
-Reuses the same shared art-direction block; frame each as a clean, well-lit still-life or
-in-context product shot on a workstation, never depicting unsafe handling.
+Shipped: `barber-equipment-tools` — real photo, a still-life of clippers/shears/comb/beard brush on
+a wooden tray (`equipment/barber-tools.webp`), used as a small generic accent on the salon profile's
+"Services & pricing" heading. Reuses the same shared art-direction block for the rest; frame each as
+a clean, well-lit still-life or in-context product shot on a workstation, never depicting unsafe
+handling.
 
 **Barber:** professional clipper · trimmer · scissors/shears · straight-razor setup · combs ·
 brushes · barber cape · neck duster · spray bottle · barber chair · mirror/workstation · hot-towel
@@ -216,21 +236,25 @@ magnifying lamp
 **Hygiene/safety:** sanitized tools · covered clean towels · workstation cleaning in progress ·
 salon sterilization/sanitization equipment
 
-## 10. Process sequences — 0 of 8 sequences ⬜
+## 10. Process sequences — 0 of 8 full sequences ⬜ (4 single representative shots ✅🟡)
 
-Each sequence below is 4–6 non-graphic process-moment shots, same shared art direction, dignified
-and realistic — not rigid medical instruction:
+Each sequence below is meant to be 4–6 non-graphic process-moment shots, same shared art direction,
+dignified and realistic — not rigid medical instruction. Four categories now have **one** real
+representative shot each (not the full sequence):
 
-- **Haircut:** consultation → sectioning → cutting → detailing → styling → finished look
-- **Fade:** consultation → guideline → blending → edge detailing → finished fade
-- **Beard:** consultation → trim → shape → detailing → finish
+- **Haircut:** consultation → sectioning → cutting → detailing → styling → finished look. 🟡 One
+  shot shipped — `process-haircut` (cutting stage), used on the booking page banner.
+- **Fade:** consultation → guideline → blending → edge detailing → finished fade. ⬜
+- **Beard:** consultation → trim → shape → detailing → finish. ⬜
 - **Hair color:** consultation → sectioning → controlled application → processing ambience →
-  rinse/style → result
-- **Manicure:** preparation → shaping → cuticle care → polish/gel application → finishing
-- **Facial:** cleansing → steam/prep → non-invasive treatment/mask → massage → finishing skincare
-- **Makeup:** preparation → complexion → eyes → detail → finishing look
+  rinse/style → result. 🟡 One shot shipped — `process-hair-color` (foil-application stage).
+- **Manicure:** preparation → shaping → cuticle care → polish/gel application → finishing. 🟡 One
+  shot shipped — `process-manicure` (filing stage).
+- **Facial:** cleansing → steam/prep → non-invasive treatment/mask → massage → finishing skincare.
+  🟡 One shot shipped — `process-facial` (finishing-cream stage).
+- **Makeup:** preparation → complexion → eyes → detail → finishing look. ⬜
 - **Waxing/threading:** clean professional setup → service application/action → soothing/finishing
-  stage
+  stage. ⬜
 
 ---
 
@@ -238,18 +262,21 @@ and realistic — not rigid medical instruction:
 
 | Category | Flagship shipped | Service variants shipped | Service variants pending |
 | --- | --- | --- | --- |
-| Barber / men's grooming | 1 (abstract) | 0 | 21 |
-| Hair salon | 1 (abstract) | 0 | 21 |
-| Nails | 1 (abstract) | 0 | 12 |
-| Skincare / facial | 1 (abstract) | 0 | 9 |
-| Waxing / threading | 1 (abstract) | 0 | 9 |
-| Makeup | 1 (abstract) | 0 | 8 |
-| Spa / wellness | 1 (abstract) | 0 | 8 |
-| Bridal / event grooming | 0 | 0 | 6 |
-| Equipment | 0 | 0 | ~45 |
-| Process sequences | 0 | 0 | 8 sequences (~40 shots) |
+| Barber / men's grooming | 1 (photo) | 0 (1 process shot 🟡) | 21 |
+| Hair salon | 1 (photo) | 0 (1 process shot 🟡) | 21 |
+| Nails | 1 (photo) | 0 (1 process shot 🟡) | 12 |
+| Skincare / facial | 1 (photo) | 0 (1 process shot 🟡) | 9 |
+| Waxing / threading | 1 (photo) | 0 | 9 |
+| Makeup | 1 (photo) | 0 | 8 |
+| Spa / wellness | 1 (photo) | 0 | 8 |
+| Bridal / event grooming | 1 (photo) | 0 | 6 |
+| Equipment | 1 of ~45 (photo) | — | ~44 |
+| Process sequences | 4 single shots 🟡 | — | 8 full sequences (~40 shots) |
 
-Total shipped this launch: **11 production assets** (8 category flagships + hero band + owner
-workstation + 1 generic fallback pattern), all `abstract-placeholder`. Zero `ai-generated` assets
-exist. This manifest is the ready-to-execute backlog for the moment a real image-generation
-capability is connected.
+Total shipped this launch: **16 production assets**, all `ai-generated` real photographs (hero, 8
+category flagships, bridal/event flagship, owner, 1 equipment still-life, 4 single process shots —
+see `ASSET_PROVENANCE.md`). The 10 hand-authored `abstract-placeholder` marks from the prior sprint
+remain on disk unused; 1 `abstract-placeholder` (`generic-editorial-pattern`) stays in active use as
+a truly generic fallback. Zero images were rejected on quality review. This manifest remains the
+ready-to-execute backlog for every service variant, equipment item, and full process sequence still
+pending.
