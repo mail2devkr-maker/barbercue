@@ -1,0 +1,20 @@
+<svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bc-nails-title">
+  <title id="bc-nails-title">BarberCue editorial mark for nail care services</title>
+  <rect width="400" height="300" rx="20" fill="#FBF4E7" />
+  <circle cx="90" cy="60" r="100" fill="#B0413E" fill-opacity="0.07" />
+  <circle cx="320" cy="240" r="110" fill="#A8791F" fill-opacity="0.08" />
+  <circle cx="200" cy="150" r="108" stroke="#1C1A17" stroke-opacity="0.16" stroke-width="1.5" />
+  <!-- Polish bottle -->
+  <g stroke="#1C1A17" stroke-width="3.5" stroke-linejoin="round">
+    <rect x="150" y="140" width="60" height="72" rx="10" fill="#FBF4E7" />
+    <path d="M164 140 V118 C164 112 168 108 174 108 H186 C192 108 196 112 196 118 V140" fill="#FBF4E7" />
+    <rect x="168" y="96" width="24" height="16" rx="3" fill="#B0413E" stroke="none" />
+  </g>
+  <rect x="156" y="152" width="48" height="48" rx="6" fill="#B0413E" fill-opacity="0.85" />
+  <!-- Painted nail accents -->
+  <g fill="#B0413E">
+    <path d="M250 130 C250 118 258 110 270 110 C282 110 290 118 290 130 V150 C290 158 282 164 270 164 C258 164 250 158 250 150 Z" />
+  </g>
+  <path d="M250 130 C250 118 258 110 270 110 C282 110 290 118 290 130" stroke="#1C1A17" stroke-width="2" opacity="0.3" fill="none" />
+  <circle cx="270" cy="192" r="4" fill="#A8791F" />
+</svg>

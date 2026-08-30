@@ -4,14 +4,16 @@ import { DISCOVERY_PATHS, HAIRSTYLE_CATALOG } from "@barbercue/shared";
 import type { CityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../lib/seo";
+import { SERVICE_CATEGORIES } from "../../lib/editorial/manifest";
 import { JsonLd } from "../../components/discovery/JsonLd";
 import { SalonCard } from "../../components/discovery/SalonCard";
 import { HeroVisual } from "../../components/landing/HeroVisual";
+import { EditorialImage } from "../../components/editorial/EditorialImage";
 import styles from "../../components/landing/landing.module.css";
 
-const TITLE = "Find a barbershop near you";
+const TITLE = "Find a barbershop, salon or spa near you";
 const DESCRIPTION =
-  "Find barbershops, book a barber, or join a live queue and follow your position in real time.";
+  "Discover barbers, hair salons, nail bars, spas and more. Book ahead or join a live queue and follow your position in real time.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -64,6 +66,7 @@ export default async function HomePage() {
           </Link>
           <nav className={styles.headerNav} aria-label="Primary">
             <Link href="/search">Find a barber</Link>
+            <Link href="#services">Services</Link>
             <Link href="#book-or-queue">How it works</Link>
             <Link href="#for-shops">For shops</Link>
           </nav>
@@ -76,13 +79,17 @@ export default async function HomePage() {
 
       <main>
       <section className={styles.hero}>
+        <div className={styles.heroEditorialBand} aria-hidden="true">
+          <EditorialImage id="hero-editorial-band" fill priority sizes="100vw" />
+        </div>
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
             <p className={styles.heroEyebrow}>Book ahead · Walk in smarter</p>
             <h1 className={styles.heroHeadline}>Your barber.<br /><em>Your time.</em></h1>
             <p className={styles.heroSub}>
-              Discover barbershops built around your day. Reserve a chair for later, or join a
-              live queue now and follow your place before you leave.
+              Discover barbers, hair salons, nail bars, spas and more — built around your day.
+              Reserve a chair for later, or join a live queue now and follow your place before
+              you leave.
             </p>
 
             <form className={styles.heroSearch} action="/search" method="get" aria-label="Find a barbershop">
@@ -153,6 +160,34 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <section id="services" className={styles.categorySection}>
+        <div className={styles.inner}>
+          <div className={styles.sectionIntro}>
+            <p className={styles.eyebrow}>Every kind of chair</p>
+            <h2 className={styles.sectionTitle}>Beyond the barber&apos;s chair.</h2>
+            <p className={styles.sectionLead}>
+              BarberCue covers the full grooming and beauty floor. Browse by category to search
+              real shops offering that service near you.
+            </p>
+          </div>
+
+          <div className={styles.categoryGrid}>
+            {SERVICE_CATEGORIES.map((category) => (
+              <Link
+                key={category.id}
+                href={`/search?service=${encodeURIComponent(category.query)}`}
+                className={styles.categoryCard}
+              >
+                <span className={styles.categoryArt}>
+                  <EditorialImage id={category.assetId} sizes="(max-width: 720px) 45vw, 220px" />
+                </span>
+                <span className={styles.categoryLabel}>{category.label}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="shops" className={styles.discoverySection}>
         <div className={styles.inner}>
           <div className={styles.discoveryHeader}>
@@ -204,6 +239,9 @@ export default async function HomePage() {
             <div className={styles.advisorArt} aria-hidden="true">
               <span className={styles.advisorHalo} />
               <span className={styles.advisorProfile} />
+              <span className={styles.advisorBadge}>
+                <EditorialImage id="hair-flagship" width={56} height={42} />
+              </span>
               <span className={`${styles.advisorSpark} ${styles.advisorSparkOne}`}>✦</span>
               <span className={`${styles.advisorSpark} ${styles.advisorSparkTwo}`}>✦</span>
               <span className={styles.advisorLabel}>AI Style Advisor</span>
@@ -229,6 +267,9 @@ export default async function HomePage() {
           <div>
             <p className={styles.ownerEyebrow}>For modern barbershops</p>
             <h2>Run the floor.<br /><em>Not the paperwork.</em></h2>
+            <div className={styles.ownerArt}>
+              <EditorialImage id="owner-workstation" sizes="(max-width: 980px) 90vw, 480px" />
+            </div>
           </div>
           <div className={styles.ownerPanel}>
             <p>

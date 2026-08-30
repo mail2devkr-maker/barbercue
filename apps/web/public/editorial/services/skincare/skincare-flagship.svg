@@ -1,0 +1,21 @@
+<svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bc-skincare-title">
+  <title id="bc-skincare-title">BarberCue editorial mark for facial &amp; skincare services</title>
+  <rect width="400" height="300" rx="20" fill="#FBF4E7" />
+  <circle cx="300" cy="70" r="110" fill="#A8791F" fill-opacity="0.08" />
+  <circle cx="80" cy="240" r="90" fill="#B0413E" fill-opacity="0.07" />
+  <circle cx="200" cy="150" r="108" stroke="#1C1A17" stroke-opacity="0.16" stroke-width="1.5" />
+  <!-- Face oval with soft glow arcs -->
+  <ellipse cx="200" cy="160" rx="52" ry="64" fill="#1C1A17" fill-opacity="0.9" />
+  <g stroke="#A8791F" stroke-width="2.5" stroke-linecap="round" fill="none" opacity="0.85">
+    <path d="M120 130 C110 150 110 175 120 195" />
+    <path d="M104 112 C86 145 86 185 104 218" />
+    <path d="M280 130 C290 150 290 175 280 195" />
+    <path d="M296 112 C314 145 314 185 296 218" />
+  </g>
+  <!-- Facial roller motif -->
+  <g stroke="#1C1A17" stroke-width="3" stroke-linecap="round">
+    <circle cx="160" cy="238" r="12" fill="#FBF4E7" />
+    <path d="M172 238 H210" />
+    <circle cx="220" cy="238" r="10" fill="#FBF4E7" />
+  </g>
+</svg>

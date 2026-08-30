@@ -1,0 +1,20 @@
+<svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bc-makeup-title">
+  <title id="bc-makeup-title">BarberCue editorial mark for makeup services</title>
+  <rect width="400" height="300" rx="20" fill="#FBF4E7" />
+  <circle cx="310" cy="90" r="110" fill="#B0413E" fill-opacity="0.07" />
+  <circle cx="80" cy="230" r="90" fill="#A8791F" fill-opacity="0.08" />
+  <circle cx="200" cy="150" r="108" stroke="#1C1A17" stroke-opacity="0.16" stroke-width="1.5" />
+  <!-- Lipstick -->
+  <g stroke="#1C1A17" stroke-width="3.5" stroke-linejoin="round">
+    <rect x="176" y="170" width="30" height="66" rx="6" fill="#FBF4E7" />
+    <rect x="180" y="150" width="22" height="24" rx="4" fill="#B0413E" stroke="none" />
+    <path d="M180 150 C180 138 202 138 202 150" fill="#B0413E" stroke="none" />
+    <path d="M180 150 C180 138 202 138 202 150" />
+  </g>
+  <!-- Makeup brush -->
+  <g stroke="#1C1A17" stroke-width="3.5" stroke-linecap="round">
+    <path d="M240 210 L280 150" />
+    <path d="M258 122 C270 112 284 118 280 132 C276 146 258 150 250 142 C242 134 246 132 258 122 Z" fill="#1C1A17" />
+  </g>
+  <circle cx="270" cy="165" r="3.5" fill="#A8791F" />
+</svg>

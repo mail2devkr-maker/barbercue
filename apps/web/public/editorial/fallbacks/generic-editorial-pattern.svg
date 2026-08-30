@@ -1,0 +1,9 @@
+<svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bc-fallback-title">
+  <title id="bc-fallback-title">BarberCue brand mark — decorative, not a photograph of any specific business</title>
+  <rect width="400" height="300" rx="20" fill="#FBF4E7" />
+  <circle cx="330" cy="60" r="100" fill="#A8791F" fill-opacity="0.07" />
+  <circle cx="60" cy="250" r="90" fill="#B0413E" fill-opacity="0.06" />
+  <circle cx="200" cy="150" r="70" stroke="#1C1A17" stroke-opacity="0.14" stroke-width="1.5" />
+  <circle cx="200" cy="150" r="34" fill="#1C1A17" />
+  <text x="200" y="158" text-anchor="middle" font-family="Georgia, serif" font-size="20" font-weight="700" fill="#FBF4E7" letter-spacing="1">BC</text>
+</svg>

@@ -10,6 +10,16 @@ const nextConfig: NextConfig = {
   // Monorepo: prevents Next.js from mis-inferring the workspace root when multiple
   // package-lock.json files exist in the tree (root + legacy-prototype/).
   outputFileTracingRoot: path.join(__dirname, "../../"),
+  images: {
+    // BarberCue's own editorial asset library (apps/web/public/editorial/**) is hand-authored,
+    // script-free SVG — next/image otherwise refuses to optimize any SVG at all (XSS protection,
+    // since an SVG can embed <script>). The CSP below is the same mitigation Next's own docs
+    // recommend when opting in: it strips any script capability from the optimizer's SVG response
+    // regardless of source, so this stays safe even if a future editorial asset were mistakenly
+    // less careful than these are.
+    dangerouslyAllowSVG: true,
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+  },
   async rewrites() {
     return [
       {

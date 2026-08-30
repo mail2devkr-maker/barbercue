@@ -1,0 +1,21 @@
+<svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bc-hair-title">
+  <title id="bc-hair-title">BarberCue editorial mark for hair salon services</title>
+  <rect width="400" height="300" rx="20" fill="#FBF4E7" />
+  <circle cx="60" cy="70" r="110" fill="#B0413E" fill-opacity="0.07" />
+  <circle cx="330" cy="230" r="100" fill="#A8791F" fill-opacity="0.08" />
+  <circle cx="200" cy="150" r="108" stroke="#1C1A17" stroke-opacity="0.16" stroke-width="1.5" />
+  <!-- Flowing hair strands -->
+  <g stroke="#1C1A17" stroke-width="4" stroke-linecap="round" fill="none">
+    <path d="M140 90 C170 120 130 150 160 180 C185 205 155 225 175 245" />
+    <path d="M175 85 C205 115 165 145 195 175 C220 200 190 220 210 240" opacity="0.75" />
+    <path d="M210 90 C240 120 200 150 230 180 C255 205 225 225 245 245" opacity="0.5" />
+  </g>
+  <!-- Round brush motif -->
+  <g stroke="#1C1A17" stroke-width="3.5" stroke-linecap="round">
+    <circle cx="284" cy="118" r="22" />
+    <path d="M284 96 V80" />
+    <path d="M284 140 V150" stroke-width="5" />
+    <path d="M266 118 H302" opacity="0.5" />
+  </g>
+  <circle cx="284" cy="118" r="4" fill="#A8791F" />
+</svg>

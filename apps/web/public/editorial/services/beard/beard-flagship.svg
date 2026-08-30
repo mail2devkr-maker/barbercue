@@ -1,0 +1,24 @@
+<svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bc-beard-title">
+  <title id="bc-beard-title">BarberCue editorial mark for beard grooming services</title>
+  <rect width="400" height="300" rx="20" fill="#FBF4E7" />
+  <circle cx="320" cy="80" r="110" fill="#A8791F" fill-opacity="0.08" />
+  <circle cx="70" cy="230" r="90" fill="#B0413E" fill-opacity="0.07" />
+  <circle cx="200" cy="150" r="108" stroke="#1C1A17" stroke-opacity="0.16" stroke-width="1.5" />
+  <!-- Jaw + beard silhouette -->
+  <path d="M150 100 C150 90 165 82 200 82 C235 82 250 90 250 100 L256 150 C256 190 232 225 200 232 C168 225 144 190 144 150 Z"
+    fill="#1C1A17" fill-opacity="0.9" />
+  <!-- Trim guide lines -->
+  <g stroke="#FBF4E7" stroke-width="2.5" stroke-linecap="round" opacity="0.85">
+    <path d="M162 150 C170 175 185 195 200 202" />
+    <path d="M180 145 C186 168 194 186 200 196" />
+    <path d="M238 150 C230 175 215 195 200 202" />
+    <path d="M220 145 C214 168 206 186 200 196" />
+  </g>
+  <!-- Trimmer motif -->
+  <g stroke="#1C1A17" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="86" y="150" width="26" height="60" rx="6" fill="#FBF4E7" />
+    <path d="M92 150 V138 H106 V150" />
+    <path d="M93 210 L99 224 H105 L99 210" fill="#1C1A17" />
+  </g>
+  <circle cx="99" cy="176" r="3.5" fill="#A8791F" />
+</svg>

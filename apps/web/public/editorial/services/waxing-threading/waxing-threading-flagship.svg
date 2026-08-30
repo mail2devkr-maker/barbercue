@@ -1,0 +1,18 @@
+<svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bc-waxing-title">
+  <title id="bc-waxing-title">BarberCue editorial mark for waxing &amp; threading services</title>
+  <rect width="400" height="300" rx="20" fill="#FBF4E7" />
+  <circle cx="90" cy="80" r="100" fill="#B0413E" fill-opacity="0.07" />
+  <circle cx="320" cy="220" r="100" fill="#A8791F" fill-opacity="0.08" />
+  <circle cx="200" cy="150" r="108" stroke="#1C1A17" stroke-opacity="0.16" stroke-width="1.5" />
+  <!-- Brow arch motif -->
+  <path d="M130 168 C150 128 190 118 220 132" stroke="#1C1A17" stroke-width="6" stroke-linecap="round" fill="none" />
+  <!-- Thread spool motif -->
+  <g stroke="#1C1A17" stroke-width="3.5" stroke-linecap="round">
+    <ellipse cx="260" cy="175" rx="34" ry="14" fill="#FBF4E7" />
+    <path d="M226 175 V205" />
+    <path d="M294 175 V205" />
+    <ellipse cx="260" cy="205" rx="34" ry="14" fill="#FBF4E7" />
+  </g>
+  <path d="M232 178 C250 195 270 195 288 178" stroke="#A8791F" stroke-width="2.5" fill="none" opacity="0.8" />
+  <path d="M232 190 C250 203 270 203 288 190" stroke="#A8791F" stroke-width="2.5" fill="none" opacity="0.6" />
+</svg>

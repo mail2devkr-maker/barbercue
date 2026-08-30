@@ -1,0 +1,66 @@
+<svg viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="bc-hero-title">
+  <title id="bc-hero-title">BarberCue editorial pattern — grooming and beauty service marks</title>
+  <defs>
+    <radialGradient id="heroGlowGold" cx="0.7" cy="0.25" r="0.6">
+      <stop offset="0" stop-color="#A8791F" stop-opacity="0.16" />
+      <stop offset="1" stop-color="#A8791F" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="heroGlowTerracotta" cx="0.25" cy="0.75" r="0.6">
+      <stop offset="0" stop-color="#B0413E" stop-opacity="0.14" />
+      <stop offset="1" stop-color="#B0413E" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="900" fill="#FBF4E7" />
+  <rect width="1200" height="900" fill="url(#heroGlowGold)" />
+  <rect width="1200" height="900" fill="url(#heroGlowTerracotta)" />
+
+  <!-- Fine concentric arcs, echoing the brand's circular frame motif -->
+  <circle cx="900" cy="220" r="260" stroke="#1C1A17" stroke-opacity="0.08" stroke-width="1.5" />
+  <circle cx="900" cy="220" r="340" stroke="#1C1A17" stroke-opacity="0.05" stroke-width="1.5" />
+  <circle cx="260" cy="700" r="220" stroke="#1C1A17" stroke-opacity="0.08" stroke-width="1.5" />
+
+  <!-- Scissors -->
+  <g stroke="#1C1A17" stroke-opacity="0.85" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" transform="translate(760,90) rotate(8)">
+    <path d="M0 0 L140 108" />
+    <path d="M0 108 L140 0" />
+    <circle cx="-14" cy="-8" r="19" fill="#FBF4E7" stroke="#1C1A17" stroke-opacity="0.85" stroke-width="7" />
+    <circle cx="-14" cy="116" r="19" fill="#FBF4E7" stroke="#1C1A17" stroke-opacity="0.85" stroke-width="7" />
+  </g>
+
+  <!-- Flowing hair strand -->
+  <path d="M120 260 C170 300 110 340 160 380 C205 415 155 450 190 485"
+    stroke="#1C1A17" stroke-opacity="0.55" stroke-width="6" stroke-linecap="round" fill="none" />
+  <path d="M165 250 C215 290 155 330 205 370 C250 405 200 440 235 475"
+    stroke="#1C1A17" stroke-opacity="0.3" stroke-width="6" stroke-linecap="round" fill="none" />
+
+  <!-- Leaf -->
+  <g transform="translate(980,560)">
+    <path d="M0 0 C60 14 76 74 30 128 C-16 74 -32 30 0 0 Z" fill="#1C1A17" fill-opacity="0.5" />
+  </g>
+
+  <!-- Lipstick mark -->
+  <g stroke="#1C1A17" stroke-opacity="0.55" stroke-width="5" stroke-linejoin="round" transform="translate(560,640)">
+    <rect x="0" y="30" width="46" height="100" rx="9" fill="none" />
+    <rect x="6" y="0" width="34" height="36" rx="6" fill="#B0413E" fill-opacity="0.55" stroke="none" />
+  </g>
+
+  <!-- Comb teeth -->
+  <g stroke="#1C1A17" stroke-opacity="0.45" stroke-width="5" stroke-linecap="round" transform="translate(300,120)">
+    <path d="M0 0 H120" />
+    <path d="M8 0 V28" />
+    <path d="M28 0 V28" />
+    <path d="M48 0 V28" />
+    <path d="M68 0 V28" />
+    <path d="M88 0 V28" />
+    <path d="M108 0 V28" />
+  </g>
+
+  <!-- Soft ripple -->
+  <g stroke="#A8791F" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round" fill="none" transform="translate(760,760)">
+    <path d="M0 0 C60 -16 180 -16 240 0" />
+    <path d="M-16 26 C50 6 190 6 256 26" opacity="0.6" />
+  </g>
+
+  <circle cx="874" cy="196" r="6" fill="#A8791F" />
+  <circle cx="150" cy="760" r="5" fill="#B0413E" fill-opacity="0.6" />
+</svg>
