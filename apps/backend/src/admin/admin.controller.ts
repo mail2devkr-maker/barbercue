@@ -29,7 +29,11 @@ export class AdminController {
   }
 
   @Get(ADMIN_PATHS.verification)
-  listVerification(@Query('status') status?: string, @Query('cursor') cursor?: string, @Query('limit') limit?: string) {
+  listVerification(
+    @Query('status') status?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
     return this.verification.list(status, cursor, limit);
   }
 
@@ -47,8 +51,14 @@ export class AdminController {
   decide(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(decideVerificationSchema)) body: DecideVerificationInput,
+    @Body(new ZodValidationPipe(decideVerificationSchema))
+    body: DecideVerificationInput,
   ) {
-    return this.verification.decide(user.id, id, body.decision, body.reviewNotes);
+    return this.verification.decide(
+      user.id,
+      id,
+      body.decision,
+      body.reviewNotes,
+    );
   }
 }

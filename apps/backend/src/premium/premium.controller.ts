@@ -61,7 +61,8 @@ export class PremiumController {
   @Post(PREMIUM_PATHS.devActivate)
   async devActivate(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(devActivatePremiumSchema)) body: DevActivatePremiumInput,
+    @Body(new ZodValidationPipe(devActivatePremiumSchema))
+    body: DevActivatePremiumInput,
   ) {
     if (process.env.NODE_ENV === 'production') {
       throw new AppException(

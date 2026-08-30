@@ -19,7 +19,10 @@ export class VerificationController {
   constructor(private readonly verification: VerificationService) {}
 
   @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.verification}`)
-  getForSalon(@CurrentUser() user: AuthenticatedUser, @Param('salonId') salonId: string) {
+  getForSalon(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
     return this.verification.getForSalon(user.id, salonId);
   }
 
@@ -27,12 +30,15 @@ export class VerificationController {
   submitForSalon(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
-    @Body(new ZodValidationPipe(submitVerificationSchema)) body: SubmitVerificationInput,
+    @Body(new ZodValidationPipe(submitVerificationSchema))
+    body: SubmitVerificationInput,
   ) {
     return this.verification.submitForSalon(user.id, salonId, body);
   }
 
-  @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.staff}/:staffId/${DASHBOARD_PATHS.verification}`)
+  @Get(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.staff}/:staffId/${DASHBOARD_PATHS.verification}`,
+  )
   getForStaff(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
@@ -41,12 +47,15 @@ export class VerificationController {
     return this.verification.getForStaff(user.id, salonId, staffId);
   }
 
-  @Post(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.staff}/:staffId/${DASHBOARD_PATHS.verification}`)
+  @Post(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.staff}/:staffId/${DASHBOARD_PATHS.verification}`,
+  )
   submitForStaff(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
     @Param('staffId') staffId: string,
-    @Body(new ZodValidationPipe(submitVerificationSchema)) body: SubmitVerificationInput,
+    @Body(new ZodValidationPipe(submitVerificationSchema))
+    body: SubmitVerificationInput,
   ) {
     return this.verification.submitForStaff(user.id, salonId, staffId, body);
   }

@@ -18,7 +18,10 @@ export class ReviewsController {
   constructor(private readonly reviews: ReviewsService) {}
 
   @Post()
-  create(@CurrentUser() user: AuthenticatedUser, @Body(new ZodValidationPipe(createReviewSchema)) body: CreateReviewInput) {
+  create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createReviewSchema)) body: CreateReviewInput,
+  ) {
     return this.reviews.create(user.id, body);
   }
 
@@ -32,7 +35,10 @@ export class ReviewsController {
   }
 
   @Get(`${REVIEW_PATHS.booking}/:bookingId`)
-  getForBooking(@CurrentUser() user: AuthenticatedUser, @Param('bookingId') bookingId: string) {
+  getForBooking(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('bookingId') bookingId: string,
+  ) {
     return this.reviews.getForBooking(user.id, bookingId);
   }
 }

@@ -28,12 +28,15 @@ export class DashboardReviewsController {
     return this.reviews.list(user.id, salonId, cursor, limit);
   }
 
-  @Put(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.reviews}/:reviewId/${DASHBOARD_PATHS.response}`)
+  @Put(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.reviews}/:reviewId/${DASHBOARD_PATHS.response}`,
+  )
   respond(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
     @Param('reviewId') reviewId: string,
-    @Body(new ZodValidationPipe(respondToReviewSchema)) body: RespondToReviewInput,
+    @Body(new ZodValidationPipe(respondToReviewSchema))
+    body: RespondToReviewInput,
   ) {
     return this.reviews.respond(user.id, salonId, reviewId, body.ownerResponse);
   }
