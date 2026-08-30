@@ -95,7 +95,8 @@ export class DashboardAnalyticsService {
         select: {
           customerId: true,
           serviceId: true,
-          service: { select: { name: true, price: true } },
+          effectiveServicePrice: true,
+          service: { select: { name: true } },
         },
       }),
       this.prisma.queueEntry.count({
@@ -167,8 +168,11 @@ export class DashboardAnalyticsService {
       ),
       ...this.hourDistribution(allBookingsInRange, timeZone),
       servicePopularity: this.servicePopularity(completedBookings),
+      // The price each booking actually snapshotted at creation — never a service's current live
+      // price, which silently overstates/understates revenue for any booking made before a later
+      // price edit.
       estimatedServiceValue: completedBookings.reduce(
-        (sum, b) => sum + (b.service ? Number(b.service.price) : 0),
+        (sum, b) => sum + Number(b.effectiveServicePrice),
         0,
       ),
     };
@@ -349,7 +353,7 @@ export class DashboardAnalyticsService {
   private servicePopularity(
     bookings: {
       serviceId: string;
-      service: { name: string; price: unknown } | null;
+      service: { name: string } | null;
     }[],
   ): ServicePopularityDto[] {
     const byService = new Map<string, ServicePopularityDto>();

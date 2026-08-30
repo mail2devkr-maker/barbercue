@@ -673,6 +673,11 @@ model SalonStaff {
   bio             String?
   photoUrl        String?
   yearsExperience Int?
+  // Launch-fixes: a purely DISPLAY commercial tier ("Standard"/"Premium"/"Elite" or whatever the
+  // owner types) — never used in any price/duration calculation. StaffService's per-service
+  // price/duration override is the sole source of truth for what a booking actually costs; this
+  // field only lets the customer-facing UI show a label next to a barber's name.
+  level           String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -680,6 +685,7 @@ model SalonStaff {
   serviceSessions      ServiceSession[]
   services             StaffService[]
   queueEntriesAssigned QueueEntry[]           @relation("AssignedStaff")
+  queueEntriesPreferred QueueEntry[]          @relation("QueueEntryPreferredStaff")
   preferredByBookings  Booking[]              @relation("BookingPreferredStaff")
   workingHours         StaffWorkingHours[]
   // Phase 18 — at most one row (VerificationRequest.staffId is @@unique).
@@ -749,6 +755,13 @@ model StaffService {
   staff     SalonStaff @relation(fields: [staffId], references: [id])
   serviceId String
   service   Service    @relation(fields: [serviceId], references: [id])
+  // Launch-fixes: optional per-staff commercial override. Null means "use Service.price /
+  // Service.durationMinutes as-is" — this is the common case and stays that way until an owner
+  // explicitly sets a different price/duration for this specific barber doing this specific
+  // service (see resolveEffectiveServicePricing in packages/shared/src/calc). Never derived from
+  // SalonStaff.level or any tier multiplier — this column, when set, is the sole authority.
+  priceOverride            Decimal? @db.Decimal(10, 2)
+  durationOverrideMinutes  Int?
 
   @@id([staffId, serviceId])
   @@map("staff_services")
@@ -771,6 +784,14 @@ model Booking {
   idempotencyKey           String        @unique
   // Snapshot of SalonPaymentPolicy x Service.price at creation time — see DATABASE.md.
   prepaymentRequiredAmount Decimal?      @db.Decimal(10, 2)
+  // Launch-fixes: the actual commercial price/duration this booking was made at — resolved once
+  // at creation (Service.price/durationMinutes, or the requested staff's StaffService override
+  // when one exists) and never re-read live from Service afterward. Without this, an owner editing
+  // a service's price later would silently rewrite every past booking's displayed price/duration.
+  // Not nullable: every booking created going forward always resolves and stores this; the
+  // backfill migration populates it for every pre-existing row from that row's own service price.
+  effectiveServicePrice           Decimal @db.Decimal(10, 2)
+  effectiveServiceDurationMinutes Int
   // Launch-fixes revision: a *specific* named staff member (non-null) is now a real per-staff
   // exclusivity constraint, enforced in BookingsService.create()/reschedule() inside the same
   // per-salon advisory-lock transaction that already guards pool capacity — no two
@@ -829,6 +850,14 @@ model QueueEntry {
   assignedStaff   SalonStaff? @relation("AssignedStaff", fields: [assignedStaffId], references: [id])
   assignedChairId String?
   assignedChair   Chair?      @relation("AssignedChair", fields: [assignedChairId], references: [id])
+  // Launch-fixes: the customer's requested barber at join time (walk-in queue's equivalent of
+  // Booking.preferredStaffId), distinct from assignedStaffId (who actually ends up serving them,
+  // set only once assign()/check-in runs). Null means "Any available professional". This is what
+  // lets a customer join a specific barber's individual waitlist rather than the salon-wide pool;
+  // owner-side dashboard views can group/filter WAITING entries by this field before assignment,
+  // same as they already can by assignedStaffId after it.
+  preferredStaffId String?
+  preferredStaff   SalonStaff? @relation("QueueEntryPreferredStaff", fields: [preferredStaffId], references: [id])
 
   joinedAt             DateTime  @default(now())
   calledAt             DateTime?

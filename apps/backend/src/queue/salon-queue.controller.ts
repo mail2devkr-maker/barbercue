@@ -40,6 +40,11 @@ export class SalonQueueController {
     @Param('salonId') salonId: string,
     @Body(new ZodValidationPipe(joinQueueSchema)) body: JoinQueueInput,
   ) {
-    return this.queueService.joinWalkIn(user.id, salonId, body.serviceId);
+    return this.queueService.joinWalkIn(
+      user.id,
+      salonId,
+      body.serviceId,
+      body.preferredStaffId,
+    );
   }
 }

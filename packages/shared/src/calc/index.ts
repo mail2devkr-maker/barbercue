@@ -51,6 +51,33 @@ export function computeCancellationCharge(
 }
 
 /**
+ * Launch-fixes (Issue 6): the price/duration a booking actually resolves to — the requested
+ * staff's StaffService override when one exists and a specific staff was requested, otherwise the
+ * service's own base price/duration. "Any Staff" (no staffService row, or no staff requested at
+ * all) always resolves to the plain service values. The override is the sole authority when
+ * present — never blended with, or derived from, a staff "level"/tier.
+ */
+export interface ServiceLike {
+  price: number;
+  durationMinutes: number;
+}
+
+export interface StaffServiceOverrideLike {
+  priceOverride: number | null;
+  durationOverrideMinutes: number | null;
+}
+
+export function resolveEffectiveServicePricing(
+  service: ServiceLike,
+  staffOverride?: StaffServiceOverrideLike | null,
+): { price: number; durationMinutes: number } {
+  return {
+    price: staffOverride?.priceOverride ?? service.price,
+    durationMinutes: staffOverride?.durationOverrideMinutes ?? service.durationMinutes,
+  };
+}
+
+/**
  * Service-level booking capacity per DATABASE.md: a service consumes one staff member and one
  * chair simultaneously, so the scarcer resource is the binding constraint. Correctly yields 2 for
  * both "3 barbers + 2 chairs" and "2 barbers + 3 chairs".

@@ -9,6 +9,7 @@ import { OperatingHoursTable } from "../../../../../components/discovery/Operati
 import { PhotoGallery } from "../../../../../components/discovery/PhotoGallery";
 import { ReviewList } from "../../../../../components/discovery/ReviewList";
 import { TeamSection } from "../../../../../components/discovery/TeamSection";
+import { LiveQueueBoard } from "../../../../../components/discovery/LiveQueueBoard";
 import { Breadcrumbs, breadcrumbJsonLd } from "../../../../../components/discovery/Breadcrumbs";
 import { JsonLd } from "../../../../../components/discovery/JsonLd";
 import { SalonImage } from "../../../../../components/ui/SalonImage";
@@ -288,6 +289,7 @@ export default async function SalonPage({
             </div>
             <OperatingHoursTable hours={salon.operatingHours} />
           </section>
+          <LiveQueueBoard salonId={salon.id} />
           <div className={styles.queueNote}>
             <strong>Prefer a walk-in?</strong>
             <p>Check the live queue path to see whether this shop is currently accepting joins.</p>

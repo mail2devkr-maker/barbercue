@@ -23,6 +23,7 @@ import {
   createSalonStaffSchema,
   setOperatingHoursSchema,
   setStaffWorkingHoursSchema,
+  staffServicePricingSchema,
   updateSalonChairSchema,
   updateSalonServiceSchema,
   updateSalonStaffSchema,
@@ -36,6 +37,7 @@ import {
   type CreateSalonStaffInput,
   type SetOperatingHoursInput,
   type SetStaffWorkingHoursInput,
+  type StaffServicePricingInput,
   type UpdateSalonChairInput,
   type UpdateSalonServiceInput,
   type UpdateSalonStaffInput,
@@ -288,6 +290,20 @@ export class SalonSetupController {
     body: UpdateSalonStaffInput,
   ) {
     return this.staff.update(user.id, salonId, staffId, body);
+  }
+
+  @Put(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.staff}/:staffId/${DASHBOARD_PATHS.services}/:serviceId/${DASHBOARD_PATHS.pricing}`,
+  )
+  setStaffServicePricing(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('staffId') staffId: string,
+    @Param('serviceId') serviceId: string,
+    @Body(new ZodValidationPipe(staffServicePricingSchema))
+    body: StaffServicePricingInput,
+  ) {
+    return this.staff.setServicePricing(user.id, salonId, staffId, serviceId, body);
   }
 
   @Post(

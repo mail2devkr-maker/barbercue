@@ -11,6 +11,7 @@ import {
 } from "@barbercue/shared";
 import type {
   PublicQueueInfoDto,
+  PublicQueueUnavailableReason,
   QueueEntryDetailDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
@@ -21,6 +22,40 @@ import { QueueStatusPanel } from "./QueueStatusPanel";
 import styles from "./queue.module.css";
 
 type Stage = "loading" | "invalid" | "unavailable" | "ready" | "joining" | "joined";
+
+// Distinct, truthful copy per reason (Issue 9) — replaces one generic "queue is currently
+// unavailable" message that gave a scanning customer no idea whether to wait five minutes or
+// give up entirely. Falls back to a generic message only for a reason this build doesn't
+// recognize yet (forward-compat with an older deployed frontend against a newer backend).
+const UNAVAILABLE_COPY: Record<
+  PublicQueueUnavailableReason,
+  { message: string; nextAction: string }
+> = {
+  NOT_YET_OPEN: {
+    message: "This shop hasn't opened for the queue yet.",
+    nextAction: "Please check back later, or contact the shop directly.",
+  },
+  PAUSED: {
+    message: "This shop has paused its queue for now.",
+    nextAction: "Please check back soon.",
+  },
+  NO_ACTIVE_STAFF: {
+    message: "No barbers are available to take the queue right now.",
+    nextAction: "Please check back soon or contact the shop directly.",
+  },
+  NO_ACTIVE_CHAIRS: {
+    message: "No chairs are available right now.",
+    nextAction: "Please check back soon.",
+  },
+  NO_ACTIVE_SERVICES: {
+    message: "This shop hasn't set up its services yet.",
+    nextAction: "Please contact the shop directly.",
+  },
+};
+const DEFAULT_UNAVAILABLE_COPY = {
+  message: "The queue is currently unavailable.",
+  nextAction: "Please check with the shop.",
+};
 
 /**
  * Scan-and-join: resolves a shop's public QR token, lets the customer pick a service and
@@ -188,12 +223,16 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
   if (!info) return null; // unreachable once past "loading", satisfies TS below
 
   if (stage === "unavailable") {
+    const copy = info.unavailableReason
+      ? (UNAVAILABLE_COPY[info.unavailableReason] ?? DEFAULT_UNAVAILABLE_COPY)
+      : DEFAULT_UNAVAILABLE_COPY;
     return (
       <div className={styles.publicWrap}>
         <div className={styles.publicCard}>
           <p className={styles.publicWordmark}>BarberCue</p>
           <h1 className={styles.publicTitle}>{info.salonName}</h1>
-          <p className={styles.publicIntro}>The queue is currently unavailable. Please check with the shop.</p>
+          <p className={styles.publicIntro}>{copy.message}</p>
+          <p className={styles.reassure}>{copy.nextAction}</p>
         </div>
       </div>
     );

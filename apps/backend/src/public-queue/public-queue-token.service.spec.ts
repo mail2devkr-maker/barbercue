@@ -103,11 +103,76 @@ describe('PublicQueueTokenService', () => {
     });
   });
 
-  describe('isQueueAvailable', () => {
-    it('is available only for an ACTIVE salon', () => {
-      expect(service.isQueueAvailable({ status: 'ACTIVE' as never })).toBe(true);
-      expect(service.isQueueAvailable({ status: 'PENDING' as never })).toBe(false);
-      expect(service.isQueueAvailable({ status: 'SUSPENDED' as never })).toBe(false);
+  describe('resolveQueueAvailability (Issue 9)', () => {
+    const READY = {
+      status: 'ACTIVE' as never,
+      activeStaffCount: 1,
+      activeChairCount: 1,
+      activeServiceCount: 1,
+    };
+
+    it('is available for an ACTIVE salon with at least one active staff, chair, and service', () => {
+      expect(service.resolveQueueAvailability(READY)).toEqual({
+        queueAvailable: true,
+        unavailableReason: null,
+      });
+    });
+
+    it('reports NOT_YET_OPEN for a PENDING salon', () => {
+      expect(
+        service.resolveQueueAvailability({ ...READY, status: 'PENDING' as never }),
+      ).toEqual({ queueAvailable: false, unavailableReason: 'NOT_YET_OPEN' });
+    });
+
+    it('reports PAUSED for a SUSPENDED salon', () => {
+      expect(
+        service.resolveQueueAvailability({ ...READY, status: 'SUSPENDED' as never }),
+      ).toEqual({ queueAvailable: false, unavailableReason: 'PAUSED' });
+    });
+
+    it('reports NO_ACTIVE_STAFF for an ACTIVE salon with zero active staff', () => {
+      expect(
+        service.resolveQueueAvailability({ ...READY, activeStaffCount: 0 }),
+      ).toEqual({ queueAvailable: false, unavailableReason: 'NO_ACTIVE_STAFF' });
+    });
+
+    it('reports NO_ACTIVE_CHAIRS for an ACTIVE salon with zero active chairs', () => {
+      expect(
+        service.resolveQueueAvailability({ ...READY, activeChairCount: 0 }),
+      ).toEqual({ queueAvailable: false, unavailableReason: 'NO_ACTIVE_CHAIRS' });
+    });
+
+    it('reports NO_ACTIVE_SERVICES for an ACTIVE salon with zero active services', () => {
+      expect(
+        service.resolveQueueAvailability({ ...READY, activeServiceCount: 0 }),
+      ).toEqual({ queueAvailable: false, unavailableReason: 'NO_ACTIVE_SERVICES' });
+    });
+
+    it('prioritizes status over staffing gaps, and staff over chairs over services, when several are true at once', () => {
+      expect(
+        service.resolveQueueAvailability({
+          status: 'PENDING' as never,
+          activeStaffCount: 0,
+          activeChairCount: 0,
+          activeServiceCount: 0,
+        }).unavailableReason,
+      ).toBe('NOT_YET_OPEN');
+      expect(
+        service.resolveQueueAvailability({
+          status: 'ACTIVE' as never,
+          activeStaffCount: 0,
+          activeChairCount: 0,
+          activeServiceCount: 0,
+        }).unavailableReason,
+      ).toBe('NO_ACTIVE_STAFF');
+      expect(
+        service.resolveQueueAvailability({
+          status: 'ACTIVE' as never,
+          activeStaffCount: 1,
+          activeChairCount: 0,
+          activeServiceCount: 0,
+        }).unavailableReason,
+      ).toBe('NO_ACTIVE_CHAIRS');
     });
   });
 });

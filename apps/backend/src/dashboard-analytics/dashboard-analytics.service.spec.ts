@@ -133,17 +133,19 @@ describe('DashboardAnalyticsService', () => {
     expect(result.noShowCount).toBe(1);
   });
 
-  it("sums estimated service value from completed bookings' service prices", async () => {
+  it("sums estimated service value from completed bookings' snapshotted prices", async () => {
     prisma.booking.findMany.mockResolvedValueOnce([
       {
         customerId: 'c1',
         serviceId: 'sv1',
-        service: { name: 'Haircut', price: decimal('300') },
+        effectiveServicePrice: decimal('300'),
+        service: { name: 'Haircut' },
       },
       {
         customerId: 'c2',
         serviceId: 'sv1',
-        service: { name: 'Haircut', price: decimal('300') },
+        effectiveServicePrice: decimal('300'),
+        service: { name: 'Haircut' },
       },
     ]);
     const result = await service.getAnalytics(
@@ -154,6 +156,21 @@ describe('DashboardAnalyticsService', () => {
       undefined,
     );
     expect(result.estimatedServiceValue).toBe(600);
+  });
+
+  it('uses each booking\'s snapshotted price, not the service\'s current live price, when they differ', async () => {
+    // The owner raised Haircut's price to 500 after this booking was made at 300 — revenue must
+    // still reflect what was actually charged, not the service's price today.
+    prisma.booking.findMany.mockResolvedValueOnce([
+      {
+        customerId: 'c1',
+        serviceId: 'sv1',
+        effectiveServicePrice: decimal('300'),
+        service: { name: 'Haircut' },
+      },
+    ]);
+    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    expect(result.estimatedServiceValue).toBe(300);
   });
 
   it('ranks service popularity by completed-booking count, descending', async () => {

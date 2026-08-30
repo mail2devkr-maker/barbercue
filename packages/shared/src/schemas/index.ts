@@ -53,6 +53,9 @@ export type StaffListQueryInput = z.infer<typeof staffListQuerySchema>;
 
 export const joinQueueSchema = z.object({
   serviceId: z.string().uuid().optional(),
+  // Launch-fixes (Issue 6) — the customer's requested barber for this walk-in visit; omitted
+  // means "Any available professional", exactly like Booking.preferredStaffId's own convention.
+  preferredStaffId: z.string().uuid().optional(),
 });
 export type JoinQueueInput = z.infer<typeof joinQueueSchema>;
 
@@ -481,9 +484,21 @@ export const updateSalonStaffSchema = z
     bio: z.string().trim().max(500).optional(),
     photoUrl: z.union([salonPhotoUrlSchema, z.literal('')]).optional(),
     yearsExperience: z.number().int().min(0).max(80).optional(),
+    // Launch-fixes (Issue 6) — display-only commercial tier ("Standard"/"Premium"/"Elite" or
+    // anything the owner types). '' clears it, same convention as bio/photoUrl above.
+    level: z.string().trim().max(40).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateSalonStaffInput = z.infer<typeof updateSalonStaffSchema>;
+
+// PUT dashboard/salons/:salonId/staff/:staffId/services/:serviceId/pricing — owner sets or clears
+// a per-staff price/duration override for one specific service. Both null clears any existing
+// override entirely (reverts to the service's own plain price/duration for this barber).
+export const staffServicePricingSchema = z.object({
+  priceOverride: z.number().min(0).max(1_000_000).nullable(),
+  durationOverrideMinutes: z.number().int().min(5).max(600).nullable(),
+});
+export type StaffServicePricingInput = z.infer<typeof staffServicePricingSchema>;
 
 // PATCH dashboard/salons/:salonId/status — owner self-activation. Deliberately restricted to
 // ACTIVE/SUSPENDED: an owner may open or pause their own shop, but cannot move it back to

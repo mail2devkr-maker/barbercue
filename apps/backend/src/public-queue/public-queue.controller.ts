@@ -2,10 +2,12 @@ import { Body, Controller, Get, HttpStatus, Param, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   BookingErrorCode,
+  ChairStatus,
   DASHBOARD_PATHS,
   PUBLIC_QUEUE_PATHS,
   QueueEntryStatus,
   Role,
+  StaffMemberStatus,
   joinQueueSchema,
   type AuthenticatedUser,
   type JoinQueueInput,
@@ -57,21 +59,36 @@ export class PublicQueueController {
       );
     }
 
-    const queueAvailable = this.tokenService.isQueueAvailable(salon);
-    const [services, waitingCount] = await Promise.all([
-      this.prisma.service.findMany({
-        where: { salonId: salon.id, isActive: true },
-        orderBy: { name: 'asc' },
-        select: { id: true, name: true, durationMinutes: true },
-      }),
-      this.prisma.queueEntry.count({
-        where: { salonId: salon.id, status: QueueEntryStatus.WAITING },
-      }),
-    ]);
+    const [services, waitingCount, activeChairCount, activeStaffCount] =
+      await Promise.all([
+        this.prisma.service.findMany({
+          where: { salonId: salon.id, isActive: true },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, durationMinutes: true },
+        }),
+        this.prisma.queueEntry.count({
+          where: { salonId: salon.id, status: QueueEntryStatus.WAITING },
+        }),
+        this.prisma.chair.count({
+          where: { salonId: salon.id, status: ChairStatus.ACTIVE },
+        }),
+        this.prisma.salonStaff.count({
+          where: { salonId: salon.id, status: StaffMemberStatus.ACTIVE },
+        }),
+      ]);
+
+    const { queueAvailable, unavailableReason } =
+      this.tokenService.resolveQueueAvailability({
+        status: salon.status,
+        activeStaffCount,
+        activeChairCount,
+        activeServiceCount: services.length,
+      });
 
     return {
       salonName: salon.name,
       queueAvailable,
+      unavailableReason,
       services,
       waitingCount,
       // Deliberately not the full estimateWaitMinutes algorithm here (that's QueueService's own,
@@ -106,7 +123,12 @@ export class PublicQueueController {
         HttpStatus.NOT_FOUND,
       );
     }
-    return this.queueService.joinWalkIn(user.id, salon.id, body.serviceId);
+    return this.queueService.joinWalkIn(
+      user.id,
+      salon.id,
+      body.serviceId,
+      body.preferredStaffId,
+    );
   }
 
   // Authenticated owner/staff endpoint — same authorization mechanism as every other dashboard

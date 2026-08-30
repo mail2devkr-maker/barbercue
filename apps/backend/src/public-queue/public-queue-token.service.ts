@@ -1,8 +1,24 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { BookingErrorCode, SalonStatus } from '@barbercue/shared';
+import {
+  BookingErrorCode,
+  PublicQueueUnavailableReason,
+  SalonStatus,
+} from '@barbercue/shared';
 import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
+
+export interface QueueAvailabilityInput {
+  status: SalonStatus;
+  activeStaffCount: number;
+  activeChairCount: number;
+  activeServiceCount: number;
+}
+
+export interface QueueAvailabilityResult {
+  queueAvailable: boolean;
+  unavailableReason: PublicQueueUnavailableReason | null;
+}
 
 /**
  * Owns Salon.publicQueueToken — the one, existing, already-migrated public identifier for the
@@ -72,7 +88,46 @@ export class PublicQueueTokenService {
     return `${webBaseUrl}/q/${token}`;
   }
 
-  isQueueAvailable(salon: { status: SalonStatus }): boolean {
-    return salon.status === SalonStatus.ACTIVE;
+  /**
+   * Distinct, truthful reasons a scanned QR/link isn't currently joinable (Issue 9) — replaces a
+   * single `status === ACTIVE` boolean, which collapsed "not yet open," "paused," and "open but
+   * nobody could ever actually serve you" into one generic message. Checked in the same priority
+   * order as the reasons are listed: a salon can be simultaneously PENDING and short-staffed, but
+   * only the most fundamental blocker is worth telling the customer about.
+   */
+  resolveQueueAvailability(
+    input: QueueAvailabilityInput,
+  ): QueueAvailabilityResult {
+    if (input.status === SalonStatus.PENDING) {
+      return {
+        queueAvailable: false,
+        unavailableReason: PublicQueueUnavailableReason.NOT_YET_OPEN,
+      };
+    }
+    if (input.status === SalonStatus.SUSPENDED) {
+      return {
+        queueAvailable: false,
+        unavailableReason: PublicQueueUnavailableReason.PAUSED,
+      };
+    }
+    if (input.activeStaffCount === 0) {
+      return {
+        queueAvailable: false,
+        unavailableReason: PublicQueueUnavailableReason.NO_ACTIVE_STAFF,
+      };
+    }
+    if (input.activeChairCount === 0) {
+      return {
+        queueAvailable: false,
+        unavailableReason: PublicQueueUnavailableReason.NO_ACTIVE_CHAIRS,
+      };
+    }
+    if (input.activeServiceCount === 0) {
+      return {
+        queueAvailable: false,
+        unavailableReason: PublicQueueUnavailableReason.NO_ACTIVE_SERVICES,
+      };
+    }
+    return { queueAvailable: true, unavailableReason: null };
   }
 }

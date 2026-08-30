@@ -31,6 +31,8 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     preferredStaffId: null,
     prepaymentRequiredAmount: null,
     cancellationChargeAmount: null,
+    effectiveServicePrice: decimal('300'),
+    effectiveServiceDurationMinutes: 30,
     salon: {
       name: 'BarberCue Demo Salon',
       slug: 'barbercue-demo',
@@ -53,6 +55,7 @@ interface PrismaMock {
     create: jest.Mock<Promise<unknown>, [unknown]>;
   };
   salonPaymentPolicy: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
+  staffService: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   booking: {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
@@ -96,6 +99,9 @@ describe('BookingsService', () => {
       },
       salonPaymentPolicy: {
         findUnique: jest.fn<Promise<unknown>, [unknown]>(),
+      },
+      staffService: {
+        findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(null),
       },
       booking: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
@@ -428,6 +434,83 @@ describe('BookingsService', () => {
       // callback against `prisma` itself, so this is really asserting call presence/order).
       expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
       expect(prisma.booking.count).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('create - staff price/duration override (Issue 6)', () => {
+    const futureSlot = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+
+    beforeEach(() => {
+      prisma.customerLedgerEntry.findFirst.mockResolvedValue(null);
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue(null);
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.booking.create.mockResolvedValue({ id: 'b1' });
+      prisma.booking.findFirst.mockResolvedValue(makeBookingRow());
+    });
+
+    it('snapshots the service\'s own price/duration onto the booking when the requested staff has no override', async () => {
+      prisma.staffService.findUnique.mockResolvedValue(null);
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh' },
+        BookingSource.WEB,
+        'key-1',
+      );
+      const data = lastCreateData(prisma.booking.create);
+      expect(data.effectiveServicePrice).toBe(300);
+      expect(data.effectiveServiceDurationMinutes).toBe(30);
+    });
+
+    it('snapshots the staff-specific override price/duration when one is configured, and blocks the slot for that longer duration', async () => {
+      prisma.staffService.findUnique.mockResolvedValue({
+        priceOverride: decimal('500'),
+        durationOverrideMinutes: 45,
+      });
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh-elite' },
+        BookingSource.WEB,
+        'key-1',
+      );
+      const data = lastCreateData(prisma.booking.create);
+      expect(data.effectiveServicePrice).toBe(500);
+      expect(data.effectiveServiceDurationMinutes).toBe(45);
+      // slotEnd must reflect the OVERRIDDEN 45-minute duration, not the service's plain 30.
+      const slotStart = data.slotStart as Date;
+      const slotEnd = data.slotEnd as Date;
+      expect((slotEnd.getTime() - slotStart.getTime()) / 60_000).toBe(45);
+    });
+
+    it('never queries a staff override for "Any Staff" — always snapshots the plain service price/duration', async () => {
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(prisma.staffService.findUnique).not.toHaveBeenCalled();
+      const data = lastCreateData(prisma.booking.create);
+      expect(data.effectiveServicePrice).toBe(300);
+      expect(data.effectiveServiceDurationMinutes).toBe(30);
+    });
+
+    it('bases a PARTIAL-prepayment amount on the staff-overridden price, not the plain service price', async () => {
+      prisma.staffService.findUnique.mockResolvedValue({
+        priceOverride: decimal('500'),
+        durationOverrideMinutes: null,
+      });
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+        prepaymentRequirement: 'PARTIAL',
+        prepaymentPercentage: 50,
+      });
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh-elite' },
+        BookingSource.WEB,
+        'key-1',
+      );
+      const data = lastCreateData(prisma.booking.create);
+      expect(data.prepaymentRequiredAmount).toBe(250); // 50% of the overridden 500, not of 300
     });
   });
 

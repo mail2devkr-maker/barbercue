@@ -7,9 +7,12 @@ import {
   SalonStaffRole,
   StaffMemberStatus,
   UserStatus,
+  resolveEffectiveServicePricing,
   type CreateSalonStaffInput,
   type SalonStaffDto,
   type StaffInviteResultDto,
+  type StaffServicePricingDto,
+  type StaffServicePricingInput,
   type UpdateSalonStaffInput,
 } from '@barbercue/shared';
 import { AppException } from '../common/exceptions/app.exception';
@@ -303,9 +306,104 @@ export class SalonStaffService {
         ...(input.yearsExperience !== undefined && {
           yearsExperience: input.yearsExperience,
         }),
+        ...(input.level !== undefined && { level: input.level || null }),
       },
     });
     return this.getDtoOrThrow(salonId, staffId);
+  }
+
+  /**
+   * Sets or clears (both fields null) a per-staff price/duration override for one specific
+   * service (Issue 6). Both null reverts this barber to the service's own plain price/duration.
+   *
+   * Safety note: AvailabilityService.qualifiedStaffWhere treats "zero StaffService rows exist for
+   * this service" as "every ACTIVE staff member is qualified," and "one or more rows exist" as
+   * "only staff WITH a row are qualified." Naively upserting only the target staff's row the first
+   * time a price is set for a service would therefore silently disqualify every other ACTIVE
+   * staff member who was implicitly qualified a moment ago — an owner setting Dinesh's price for
+   * Haircut must never accidentally make Ramesh unable to do Haircut bookings. So: if this is the
+   * very first StaffService row ever created for this service, plain (no-override) rows are
+   * backfilled for every other currently-ACTIVE staff member in the same transaction, preserving
+   * the exact qualified set that existed the instant before this call.
+   */
+  async setServicePricing(
+    userId: string,
+    salonId: string,
+    staffId: string,
+    serviceId: string,
+    input: StaffServicePricingInput,
+  ): Promise<StaffServicePricingDto> {
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
+
+    const staff = await this.prisma.salonStaff.findFirst({
+      where: { id: staffId, salonId },
+    });
+    if (!staff) {
+      throw new AppException(
+        BookingErrorCode.STAFF_NOT_FOUND,
+        'Staff member not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const service = await this.prisma.service.findFirst({
+      where: { id: serviceId, salonId },
+    });
+    if (!service) {
+      throw new AppException(
+        BookingErrorCode.SERVICE_NOT_FOUND,
+        'Service not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      const existingRowCount = await tx.staffService.count({
+        where: { serviceId },
+      });
+      const alreadyHasRow = await tx.staffService.findUnique({
+        where: { staffId_serviceId: { staffId, serviceId } },
+      });
+      if (existingRowCount === 0 && !alreadyHasRow) {
+        const otherActiveStaff = await tx.salonStaff.findMany({
+          where: { salonId, status: StaffMemberStatus.ACTIVE, id: { not: staffId } },
+          select: { id: true },
+        });
+        if (otherActiveStaff.length > 0) {
+          await tx.staffService.createMany({
+            data: otherActiveStaff.map((s) => ({ staffId: s.id, serviceId })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      return tx.staffService.upsert({
+        where: { staffId_serviceId: { staffId, serviceId } },
+        create: {
+          staffId,
+          serviceId,
+          priceOverride: input.priceOverride,
+          durationOverrideMinutes: input.durationOverrideMinutes,
+        },
+        update: {
+          priceOverride: input.priceOverride,
+          durationOverrideMinutes: input.durationOverrideMinutes,
+        },
+      });
+    });
+
+    const priceOverride = row.priceOverride !== null ? Number(row.priceOverride) : null;
+    const effective = resolveEffectiveServicePricing(
+      { price: Number(service.price), durationMinutes: service.durationMinutes },
+      { priceOverride, durationOverrideMinutes: row.durationOverrideMinutes },
+    );
+    return {
+      staffId,
+      serviceId,
+      priceOverride,
+      durationOverrideMinutes: row.durationOverrideMinutes,
+      effectivePrice: effective.price,
+      effectiveDurationMinutes: effective.durationMinutes,
+    };
   }
 
   private async getDtoOrThrow(
@@ -336,6 +434,7 @@ export class SalonStaffService {
     bio: string | null;
     photoUrl: string | null;
     yearsExperience: number | null;
+    level: string | null;
     user: {
       phone: string | null;
       email: string | null;
@@ -355,6 +454,7 @@ export class SalonStaffService {
       bio: staff.bio,
       photoUrl: staff.photoUrl,
       yearsExperience: staff.yearsExperience,
+      level: staff.level,
     };
   }
 }

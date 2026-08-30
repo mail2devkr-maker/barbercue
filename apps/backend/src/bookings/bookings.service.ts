@@ -9,6 +9,7 @@ import {
   PrepaymentRequirement,
   computeCancellationCharge,
   isSlotBookable,
+  resolveEffectiveServicePricing,
   type BookingDetailDto,
   type CancelBookingResponseDto,
   type CreateBookingInput,
@@ -90,8 +91,43 @@ export class BookingsService {
         HttpStatus.BAD_REQUEST,
       );
     }
+
+    // Resolved BEFORE slotEnd is computed — a staff-specific duration override changes how long
+    // the slot actually blocks, so operating-hours/staff-hours/overlap checks below must all see
+    // the real (possibly overridden) end time, not the service's plain default.
+    let staffOverride: { priceOverride: unknown; durationOverrideMinutes: number | null } | null =
+      null;
+    if (input.preferredStaffId) {
+      await this.availability.assertStaffQualified(
+        input.salonId,
+        input.serviceId,
+        input.preferredStaffId,
+      );
+      staffOverride = await this.prisma.staffService.findUnique({
+        where: {
+          staffId_serviceId: {
+            staffId: input.preferredStaffId,
+            serviceId: input.serviceId,
+          },
+        },
+        select: { priceOverride: true, durationOverrideMinutes: true },
+      });
+    }
+    const effective = resolveEffectiveServicePricing(
+      { price: Number(service.price), durationMinutes: service.durationMinutes },
+      staffOverride
+        ? {
+            priceOverride:
+              staffOverride.priceOverride !== null
+                ? Number(staffOverride.priceOverride)
+                : null,
+            durationOverrideMinutes: staffOverride.durationOverrideMinutes,
+          }
+        : null,
+    );
+
     const slotEnd = new Date(
-      slotStart.getTime() + service.durationMinutes * 60_000,
+      slotStart.getTime() + effective.durationMinutes * 60_000,
     );
     await this.availability.assertWithinOperatingHours(
       input.salonId,
@@ -100,11 +136,6 @@ export class BookingsService {
     );
 
     if (input.preferredStaffId) {
-      await this.availability.assertStaffQualified(
-        input.salonId,
-        input.serviceId,
-        input.preferredStaffId,
-      );
       await this.availability.assertStaffWithinWorkingHours(
         input.salonId,
         input.preferredStaffId,
@@ -149,7 +180,7 @@ export class BookingsService {
         ? 100
         : (paymentPolicy?.prepaymentPercentage ?? 100);
     const prepaymentRequiredAmount = requiresPrepayment
-      ? Number(service.price) * (prepaymentPercentage / 100)
+      ? effective.price * (prepaymentPercentage / 100)
       : null;
 
     const bookingId = await this.prisma.$transaction(async (tx) => {
@@ -227,6 +258,8 @@ export class BookingsService {
           preferredStaffId: input.preferredStaffId ?? null,
           prepaymentRequiredAmount,
           selectedStyleName: input.selectedStyleName ?? null,
+          effectiveServicePrice: effective.price,
+          effectiveServiceDurationMinutes: effective.durationMinutes,
         },
       });
       return created.id;
@@ -316,7 +349,10 @@ export class BookingsService {
     // false here: no-show detection is dashboard/system-triggered work, out of scope in this phase.
     const chargeAmount = computeCancellationCharge(
       policy,
-      Number(booking.service.price),
+      // The price this booking actually snapshotted at creation, not whatever the service's live
+      // price happens to be now — a cancellation charge must be a percentage of what the customer
+      // was actually going to pay, unaffected by a price change the owner made afterward.
+      Number(booking.effectiveServicePrice),
       minutesUntilSlot,
       false,
     );
@@ -436,12 +472,13 @@ export class BookingsService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    const service = await this.availability.getServiceOrThrow(
-      booking.salonId,
-      booking.serviceId,
-    );
+    // Confirms the service still exists/is active; the duration used below is deliberately the
+    // booking's OWN snapshotted duration (not this live read), so a reschedule keeps blocking the
+    // same length of time the original booking committed to, even if the service's or a staff
+    // override's duration changed since.
+    await this.availability.getServiceOrThrow(booking.salonId, booking.serviceId);
     const newSlotEnd = new Date(
-      newSlotStart.getTime() + service.durationMinutes * 60_000,
+      newSlotStart.getTime() + booking.effectiveServiceDurationMinutes * 60_000,
     );
     await this.availability.assertWithinOperatingHours(
       booking.salonId,
@@ -592,8 +629,10 @@ export class BookingsService {
       salonLat: booking.salon.lat,
       salonLng: booking.salon.lng,
       serviceName: booking.service.name,
-      serviceDurationMinutes: booking.service.durationMinutes,
-      servicePrice: Number(booking.service.price),
+      // The snapshot taken at booking creation (see effectiveServicePrice's schema comment) —
+      // never the service's current live price/duration, which may have changed since.
+      serviceDurationMinutes: booking.effectiveServiceDurationMinutes,
+      servicePrice: Number(booking.effectiveServicePrice),
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
       hasReview: booking.reviews.length > 0,
     };

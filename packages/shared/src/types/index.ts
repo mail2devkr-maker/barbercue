@@ -8,6 +8,7 @@ import type {
   NotificationChannel,
   PhotoType,
   PrepaymentRequirement,
+  PublicQueueUnavailableReason,
   QueueEntrySource,
   QueueEntryStatus,
   Role,
@@ -379,6 +380,13 @@ export interface StaffOptionDto {
   photoUrl: string | null;
   bio: string | null;
   yearsExperience: number | null;
+  // Launch-fixes (Issue 6) — display-only commercial tier label (never used in price math).
+  level: string | null;
+  // What THIS service actually costs/takes with THIS specific barber for the given service —
+  // already resolved (StaffService override if set, else the service's own price/duration), so
+  // the client never needs to re-implement resolveEffectiveServicePricing itself.
+  effectivePrice: number;
+  effectiveDurationMinutes: number;
 }
 
 export interface AvailabilitySlotDto {
@@ -530,6 +538,7 @@ export interface QueueEntryDto {
   tokenNumber: number;
   status: QueueEntryStatus;
   assignedStaffId: string | null;
+  preferredStaffId: string | null;
   assignedChairId: string | null;
   estimatedWaitMinutes: number | null;
 }
@@ -544,6 +553,7 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
   position: number | null; // 1-based rank among WAITING entries at this salon, null once past WAITING
   customerPhone: string | null;
   assignedStaffName: string | null;
+  preferredStaffName: string | null;
   assignedChairLabel: string | null;
   activeServiceSessionId: string | null; // target id for POST .../service-sessions/:id/complete
   joinedAt: string; // ISO 8601
@@ -670,6 +680,19 @@ export interface QueueStatusDto {
   estimatedWaitMinutes: number | null;
   // Smart Queue (Phase 5) — see QueueEntryDetailDto's own doc comment.
   estimatedWaitRangeMinutes: { min: number; max: number } | null;
+  // Issue 9's public-queue @Public() endpoint reuses this same DTO, so per-staff detail here must
+  // stay privacy-safe: only what's already shown on the "Meet the team" section
+  // (TeamMemberDto.displayName) plus busy/free and a waiting count — never a customer name, phone,
+  // email, or queue-entry id. staffId is already public (StaffOptionDto exposes the same ids for
+  // booking selection), so it's fine as a stable React key.
+  staffBreakdown: PublicStaffQueueStatusDto[];
+}
+
+export interface PublicStaffQueueStatusDto {
+  staffId: string;
+  displayName: string;
+  busy: boolean;
+  waitingForThisStaff: number;
 }
 
 // PATCH /dashboard/staff/:id/status response.
@@ -751,11 +774,14 @@ export interface PublicQueueServiceOptionDto {
 
 // GET public-queue/:token response. Never includes Salon.id, ownerUserId, or anything not needed
 // to render the public join page. queueAvailable distinguishes "token resolves but this shop
-// isn't currently accepting queue joins" (status !== ACTIVE) from an unknown/invalid token, which
-// the controller instead returns as a 404 — the frontend shows a different message for each.
+// isn't currently accepting queue joins" from an unknown/invalid token, which the controller
+// instead returns as a 404 — the frontend shows a different message for each. unavailableReason is
+// non-null exactly when queueAvailable is false, and lets the join page give a truthful, specific
+// reason (and, per reason, a useful next action) instead of one generic "unavailable" message.
 export interface PublicQueueInfoDto {
   salonName: string;
   queueAvailable: boolean;
+  unavailableReason: PublicQueueUnavailableReason | null;
   services: PublicQueueServiceOptionDto[];
   waitingCount: number;
   estimatedWaitMinutes: number | null;
@@ -807,6 +833,18 @@ export interface SalonStaffDto {
   bio: string | null;
   photoUrl: string | null;
   yearsExperience: number | null;
+  // Launch-fixes (Issue 6) — display-only commercial tier, never used in price calculations.
+  level: string | null;
+}
+
+// PUT dashboard/salons/:salonId/staff/:staffId/services/:serviceId/pricing response.
+export interface StaffServicePricingDto {
+  staffId: string;
+  serviceId: string;
+  priceOverride: number | null;
+  durationOverrideMinutes: number | null;
+  effectivePrice: number;
+  effectiveDurationMinutes: number;
 }
 
 // POST .../staff response. invitationSent stays truthful for email-less staff. `inviteUrl` is

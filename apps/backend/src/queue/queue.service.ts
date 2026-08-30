@@ -46,6 +46,7 @@ const queueEntryDetailInclude = {
   service: { select: { name: true } },
   customer: { select: { phone: true } },
   assignedStaff: { select: { displayName: true } },
+  preferredStaff: { select: { displayName: true } },
   assignedChair: { select: { label: true } },
   serviceSessions: {
     where: { status: ServiceSessionStatus.ACTIVE },
@@ -140,10 +141,21 @@ export class QueueService {
     customerId: string,
     salonId: string,
     serviceId?: string,
+    preferredStaffId?: string,
   ): Promise<QueueEntryDetailDto> {
     const salon = await this.availability.getSalonOrThrow(salonId);
     if (serviceId)
       await this.availability.getServiceOrThrow(salonId, serviceId);
+    // Only checked when both are given — qualification is service-scoped, so a specific-barber
+    // request with no service picked yet can't be validated against it (the customer picks a
+    // service once seen/assigned, same as an "Any Staff" walk-in already works today).
+    if (preferredStaffId && serviceId) {
+      await this.availability.assertStaffQualified(
+        salonId,
+        serviceId,
+        preferredStaffId,
+      );
+    }
     await this.assertNotAlreadyInQueue(customerId);
 
     const entryId = await this.prisma.$transaction(async (tx) => {
@@ -153,6 +165,7 @@ export class QueueService {
           salonId,
           customerId,
           serviceId: serviceId ?? null,
+          preferredStaffId: preferredStaffId ?? null,
           source: QueueEntrySource.WALK_IN,
           tokenNumber,
           status: QueueEntryStatus.WAITING,
@@ -216,10 +229,12 @@ export class QueueService {
     const waitingCount = await this.prisma.queueEntry.count({
       where: { salonId, status: QueueEntryStatus.WAITING },
     });
-    const [staffCount, chairCount, avgDuration, activeSessions] =
+    const [staff, chairCount, avgDuration, activeSessions, waitingByStaff] =
       await Promise.all([
-        this.prisma.salonStaff.count({
+        this.prisma.salonStaff.findMany({
           where: { salonId, status: StaffMemberStatus.ACTIVE },
+          select: { id: true, displayName: true },
+          orderBy: { displayName: 'asc' },
         }),
         this.prisma.chair.count({
           where: { salonId, status: ChairStatus.ACTIVE },
@@ -231,11 +246,25 @@ export class QueueService {
         this.prisma.serviceSession.findMany({
           where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
           select: {
+            staffId: true,
             startedAt: true,
             service: { select: { durationMinutes: true } },
           },
         }),
+        // Issue 6's individual waitlist — how many WAITING entries specifically asked for each
+        // staff member, so the public queue board can show a per-barber count alongside the
+        // salon-wide one instead of only ever exposing the aggregate.
+        this.prisma.queueEntry.groupBy({
+          by: ['preferredStaffId'],
+          where: {
+            salonId,
+            status: QueueEntryStatus.WAITING,
+            preferredStaffId: { not: null },
+          },
+          _count: { _all: true },
+        }),
       ]);
+    const staffCount = staff.length;
     const serverCount = computeSlotCapacity(staffCount, chairCount);
     const avgServiceDurationMinutes =
       avgDuration._avg.durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES;
@@ -246,11 +275,28 @@ export class QueueService {
       avgServiceDurationMinutes,
       activeRemaining,
     );
+    const busyStaffIds = new Set(
+      activeSessions
+        .map((s) => s.staffId)
+        .filter((id): id is string => id !== null),
+    );
+    const waitingCountByStaffId = new Map(
+      waitingByStaff.map((row) => [
+        row.preferredStaffId as string,
+        row._count._all,
+      ]),
+    );
     return {
       salonId,
       waitingCount,
       estimatedWaitMinutes,
       estimatedWaitRangeMinutes: estimateWaitRangeMinutes(estimatedWaitMinutes),
+      staffBreakdown: staff.map((s) => ({
+        staffId: s.id,
+        displayName: s.displayName,
+        busy: busyStaffIds.has(s.id),
+        waitingForThisStaff: waitingCountByStaffId.get(s.id) ?? 0,
+      })),
     };
   }
 
@@ -1065,6 +1111,7 @@ export class QueueService {
       tokenNumber: entry.tokenNumber,
       status: entry.status,
       assignedStaffId: entry.assignedStaffId,
+      preferredStaffId: entry.preferredStaffId,
       assignedChairId: entry.assignedChairId,
       estimatedWaitMinutes: entry.estimatedWaitMinutes,
       serviceId: entry.serviceId,
@@ -1072,6 +1119,7 @@ export class QueueService {
       position,
       customerPhone: entry.customer?.phone ?? null,
       assignedStaffName: entry.assignedStaff?.displayName ?? null,
+      preferredStaffName: entry.preferredStaff?.displayName ?? null,
       assignedChairLabel: entry.assignedChair?.label ?? null,
       activeServiceSessionId: entry.serviceSessions[0]?.id ?? null,
       joinedAt: entry.joinedAt.toISOString(),

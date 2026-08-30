@@ -272,6 +272,11 @@
   color: var(--bc-muted);
 }
 
+.staffCardLevel {
+  color: var(--bc-accent);
+  font-weight: 500;
+}
+
 .staffCardBio {
   font-size: 0.75rem;
   color: #6b6357;

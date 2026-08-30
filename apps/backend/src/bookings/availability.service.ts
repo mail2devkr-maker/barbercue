@@ -8,6 +8,7 @@ import {
   StaffMemberStatus,
   computeSlotCapacity,
   isSlotBookable,
+  resolveEffectiveServicePricing,
   type AvailabilitySlotDto,
   type StaffOptionDto,
 } from '@barbercue/shared';
@@ -133,7 +134,7 @@ export class AvailabilityService {
     salonId: string,
     serviceId: string,
   ): Promise<StaffOptionDto[]> {
-    await this.getServiceOrThrow(salonId, serviceId);
+    const service = await this.getServiceOrThrow(salonId, serviceId);
     const where = await this.qualifiedStaffWhere(
       this.prisma,
       salonId,
@@ -143,13 +144,37 @@ export class AvailabilityService {
       where,
       orderBy: { displayName: 'asc' },
     });
-    return staff.map((s) => ({
-      id: s.id,
-      displayName: s.displayName,
-      photoUrl: s.photoUrl,
-      bio: s.bio,
-      yearsExperience: s.yearsExperience,
-    }));
+    // Batched, not N+1: one query for every qualified staff member's override row (if any) for
+    // this exact service, rather than a per-staff round trip.
+    const overrides = await this.prisma.staffService.findMany({
+      where: { serviceId, staffId: { in: staff.map((s) => s.id) } },
+      select: { staffId: true, priceOverride: true, durationOverrideMinutes: true },
+    });
+    const overrideByStaffId = new Map(overrides.map((o) => [o.staffId, o]));
+
+    return staff.map((s) => {
+      const override = overrideByStaffId.get(s.id);
+      const effective = resolveEffectiveServicePricing(
+        { price: Number(service.price), durationMinutes: service.durationMinutes },
+        override
+          ? {
+              priceOverride:
+                override.priceOverride !== null ? Number(override.priceOverride) : null,
+              durationOverrideMinutes: override.durationOverrideMinutes,
+            }
+          : null,
+      );
+      return {
+        id: s.id,
+        displayName: s.displayName,
+        photoUrl: s.photoUrl,
+        bio: s.bio,
+        yearsExperience: s.yearsExperience,
+        level: s.level,
+        effectivePrice: effective.price,
+        effectiveDurationMinutes: effective.durationMinutes,
+      };
+    });
   }
 
   async assertStaffQualified(

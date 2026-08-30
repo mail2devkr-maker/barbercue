@@ -27,6 +27,7 @@ function makeRawEntry(overrides: Record<string, unknown> = {}) {
     tokenNumber: 1,
     status: QueueEntryStatus.WAITING,
     assignedStaffId: null,
+    preferredStaffId: null,
     assignedChairId: null,
     joinedAt: new Date(),
     calledAt: null,
@@ -40,6 +41,7 @@ function makeDetailEntry(overrides: Record<string, unknown> = {}) {
     service: { name: 'Haircut' },
     customer: { phone: '+919999999999' },
     assignedStaff: null,
+    preferredStaff: null,
     assignedChair: null,
     serviceSessions: [],
     ...overrides,
@@ -56,6 +58,7 @@ interface PrismaMock {
     create: jest.Mock<Promise<unknown>, [unknown]>;
     update: jest.Mock<Promise<unknown>, [unknown]>;
     updateMany: jest.Mock<Promise<{ count: number }>, [unknown]>;
+    groupBy: jest.Mock<Promise<unknown[]>, [unknown]>;
   };
   serviceSession: {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
@@ -123,6 +126,7 @@ describe('QueueService', () => {
         updateMany: jest
           .fn<Promise<{ count: number }>, [unknown]>()
           .mockResolvedValue({ count: 1 }),
+        groupBy: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
       },
       serviceSession: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
@@ -262,6 +266,70 @@ describe('QueueService', () => {
 
       const data = lastCallData(prisma.queueEntry.create);
       expect(data.tokenNumber).toBe(1);
+    });
+
+    describe('individual waitlist — preferredStaffId (Issue 6)', () => {
+      beforeEach(() => {
+        prisma.queueEntry.findFirst
+          .mockResolvedValueOnce(null) // assertNotAlreadyInQueue
+          .mockResolvedValueOnce(null); // nextTokenNumber
+        prisma.queueEntry.create.mockResolvedValue({ id: 'q4' });
+      });
+
+      it('checks staff qualification when both a service and a preferred staff member are given', async () => {
+        await service.joinWalkIn('c1', 's1', 'sv1', 'st1');
+
+        expect(availability.assertStaffQualified).toHaveBeenCalledWith(
+          's1',
+          'sv1',
+          'st1',
+        );
+        const data = lastCallData(prisma.queueEntry.create);
+        expect(data.preferredStaffId).toBe('st1');
+      });
+
+      it('rejects with the qualification error and never creates an entry when the staff member is not qualified', async () => {
+        availability.assertStaffQualified.mockRejectedValueOnce(
+          Object.assign(new Error('not qualified'), {
+            code: 'STAFF_NOT_QUALIFIED',
+          }),
+        );
+
+        await expect(
+          service.joinWalkIn('c1', 's1', 'sv1', 'st1'),
+        ).rejects.toMatchObject({ code: 'STAFF_NOT_QUALIFIED' });
+        expect(prisma.queueEntry.create).not.toHaveBeenCalled();
+      });
+
+      it('never checks qualification for an "Any Staff" walk-in (no preferredStaffId)', async () => {
+        await service.joinWalkIn('c1', 's1', 'sv1');
+
+        expect(availability.assertStaffQualified).not.toHaveBeenCalled();
+        const data = lastCallData(prisma.queueEntry.create);
+        expect(data.preferredStaffId).toBeNull();
+      });
+
+      it('does not check qualification when a preferred staff member is given but no service is picked yet', async () => {
+        await service.joinWalkIn('c1', 's1', undefined, 'st1');
+
+        expect(availability.assertStaffQualified).not.toHaveBeenCalled();
+        const data = lastCallData(prisma.queueEntry.create);
+        expect(data.preferredStaffId).toBe('st1');
+      });
+
+      it("exposes the preferred staff member's id and display name on the returned detail DTO", async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(
+          makeDetailEntry({
+            preferredStaffId: 'st1',
+            preferredStaff: { displayName: 'Marcus' },
+          }),
+        );
+
+        const result = await service.joinWalkIn('c1', 's1', 'sv1', 'st1');
+
+        expect(result.preferredStaffId).toBe('st1');
+        expect(result.preferredStaffName).toBe('Marcus');
+      });
     });
   });
 
@@ -671,7 +739,7 @@ describe('QueueService', () => {
 
   describe('getQueueStatus (public)', () => {
     it('returns null estimatedWaitMinutes when there are no active staff/chairs', async () => {
-      prisma.salonStaff.count.mockResolvedValueOnce(0);
+      prisma.salonStaff.findMany.mockResolvedValueOnce([]);
       prisma.chair.count.mockResolvedValueOnce(0);
       const result = await service.getQueueStatus('s1');
       expect(result.estimatedWaitMinutes).toBeNull();
@@ -679,13 +747,52 @@ describe('QueueService', () => {
     });
 
     it('includes a matching estimatedWaitRangeMinutes whenever a point estimate exists', async () => {
-      prisma.salonStaff.count.mockResolvedValueOnce(3);
+      prisma.salonStaff.findMany.mockResolvedValueOnce([
+        { id: 'st1', displayName: 'Marcus' },
+        { id: 'st2', displayName: 'Sam' },
+        { id: 'st3', displayName: 'Priya' },
+      ]);
       prisma.chair.count.mockResolvedValueOnce(4);
       const result = await service.getQueueStatus('s1');
       expect(result.estimatedWaitMinutes).not.toBeNull();
       expect(result.estimatedWaitRangeMinutes).not.toBeNull();
       expect(result.estimatedWaitRangeMinutes!.min).toBeLessThanOrEqual(result.estimatedWaitMinutes!);
       expect(result.estimatedWaitRangeMinutes!.max).toBeGreaterThanOrEqual(result.estimatedWaitMinutes!);
+    });
+
+    describe('staffBreakdown (Issue 5)', () => {
+      beforeEach(() => {
+        prisma.salonStaff.findMany.mockResolvedValueOnce([
+          { id: 'st1', displayName: 'Marcus' },
+          { id: 'st2', displayName: 'Sam' },
+        ]);
+      });
+
+      it('never exposes customer-identifying fields, only staffId/displayName/busy/waitingForThisStaff', async () => {
+        const result = await service.getQueueStatus('s1');
+        expect(result.staffBreakdown).toEqual([
+          { staffId: 'st1', displayName: 'Marcus', busy: false, waitingForThisStaff: 0 },
+          { staffId: 'st2', displayName: 'Sam', busy: false, waitingForThisStaff: 0 },
+        ]);
+      });
+
+      it('marks a staff member busy exactly when they have an ACTIVE service session', async () => {
+        prisma.serviceSession.findMany.mockResolvedValueOnce([
+          { staffId: 'st1', startedAt: new Date(), service: { durationMinutes: 30 } },
+        ]);
+        const result = await service.getQueueStatus('s1');
+        expect(result.staffBreakdown.find((s) => s.staffId === 'st1')?.busy).toBe(true);
+        expect(result.staffBreakdown.find((s) => s.staffId === 'st2')?.busy).toBe(false);
+      });
+
+      it("counts WAITING entries by preferredStaffId into each staff member's waitingForThisStaff", async () => {
+        prisma.queueEntry.groupBy.mockResolvedValueOnce([
+          { preferredStaffId: 'st2', _count: { _all: 3 } },
+        ]);
+        const result = await service.getQueueStatus('s1');
+        expect(result.staffBreakdown.find((s) => s.staffId === 'st1')?.waitingForThisStaff).toBe(0);
+        expect(result.staffBreakdown.find((s) => s.staffId === 'st2')?.waitingForThisStaff).toBe(3);
+      });
     });
   });
 

@@ -303,6 +303,8 @@ export function BookingFlow({
           selectedStaffId={selectedStaffId}
           onSelect={handleSelectStaff}
           loading={staffLoading}
+          currency={currency}
+          countryCode={countryCode}
         />
       )}
 

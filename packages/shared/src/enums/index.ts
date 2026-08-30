@@ -82,6 +82,21 @@ export const PhotoType = {
 } as const;
 export type PhotoType = (typeof PhotoType)[keyof typeof PhotoType];
 
+// Why a scanned public-queue QR/link isn't currently joinable — distinct, truthful reasons instead
+// of one generic "queue unavailable" (Issue 9). NOT_YET_OPEN/PAUSED read straight off Salon.status;
+// the NO_* reasons cover an ACTIVE salon that (per SalonActivationService's doc comment) is allowed
+// to drift below the one-service/one-chair/one-staff bar it needed to first open, which would
+// otherwise let a customer join a queue nobody can ever call them from.
+export const PublicQueueUnavailableReason = {
+  NOT_YET_OPEN: 'NOT_YET_OPEN',
+  PAUSED: 'PAUSED',
+  NO_ACTIVE_STAFF: 'NO_ACTIVE_STAFF',
+  NO_ACTIVE_CHAIRS: 'NO_ACTIVE_CHAIRS',
+  NO_ACTIVE_SERVICES: 'NO_ACTIVE_SERVICES',
+} as const;
+export type PublicQueueUnavailableReason =
+  (typeof PublicQueueUnavailableReason)[keyof typeof PublicQueueUnavailableReason];
+
 export const PrepaymentRequirement = {
   NONE: 'NONE',
   OPTIONAL: 'OPTIONAL',

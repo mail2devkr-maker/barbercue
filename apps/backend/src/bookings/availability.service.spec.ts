@@ -10,7 +10,10 @@ function futureDateString(daysAhead: number): string {
 interface PrismaMock {
   salon: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   service: { findFirst: jest.Mock<Promise<unknown>, [unknown]> };
-  staffService: { count: jest.Mock<Promise<number>, [unknown]> };
+  staffService: {
+    count: jest.Mock<Promise<number>, [unknown]>;
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+  };
   salonStaff: {
     count: jest.Mock<Promise<number>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
@@ -30,7 +33,10 @@ describe('AvailabilityService', () => {
     prisma = {
       salon: { findUnique: jest.fn<Promise<unknown>, [unknown]>() },
       service: { findFirst: jest.fn<Promise<unknown>, [unknown]>() },
-      staffService: { count: jest.fn<Promise<number>, [unknown]>() },
+      staffService: {
+        count: jest.fn<Promise<number>, [unknown]>(),
+        findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+      },
       salonStaff: {
         count: jest.fn<Promise<number>, [unknown]>(),
         findMany: jest.fn<Promise<unknown[]>, [unknown]>(),
@@ -121,8 +127,9 @@ describe('AvailabilityService', () => {
 
   describe('listQualifiedStaff (Phase 17 — Barber Professional Profile)', () => {
     it('includes photoUrl/bio/yearsExperience on each option', async () => {
-      prisma.service.findFirst.mockResolvedValue({ id: 'sv1' });
+      prisma.service.findFirst.mockResolvedValue({ id: 'sv1', price: { toString: () => '300' }, durationMinutes: 30 });
       prisma.staffService.count.mockResolvedValue(0);
+      prisma.staffService.findMany.mockResolvedValue([]);
       prisma.salonStaff.findMany.mockResolvedValue([
         {
           id: 'st1',
@@ -130,6 +137,7 @@ describe('AvailabilityService', () => {
           photoUrl: 'https://example.com/marcus.jpg',
           bio: 'Fades and tapers specialist.',
           yearsExperience: 8,
+          level: null,
         },
         {
           id: 'st2',
@@ -137,6 +145,7 @@ describe('AvailabilityService', () => {
           photoUrl: null,
           bio: null,
           yearsExperience: null,
+          level: null,
         },
       ]);
       const result = await service.listQualifiedStaff('s1', 'sv1');
@@ -147,6 +156,9 @@ describe('AvailabilityService', () => {
           photoUrl: 'https://example.com/marcus.jpg',
           bio: 'Fades and tapers specialist.',
           yearsExperience: 8,
+          level: null,
+          effectivePrice: 300,
+          effectiveDurationMinutes: 30,
         },
         {
           id: 'st2',
@@ -154,7 +166,28 @@ describe('AvailabilityService', () => {
           photoUrl: null,
           bio: null,
           yearsExperience: null,
+          level: null,
+          effectivePrice: 300,
+          effectiveDurationMinutes: 30,
         },
+      ]);
+    });
+
+    it('reflects a staff-specific price/duration override and each barber\'s level, independently per staff member (Issue 6)', async () => {
+      prisma.service.findFirst.mockResolvedValue({ id: 'sv1', price: { toString: () => '300' }, durationMinutes: 30 });
+      prisma.staffService.count.mockResolvedValue(2); // qualification rows exist
+      prisma.salonStaff.findMany.mockResolvedValue([
+        { id: 'dinesh', displayName: 'Dinesh', photoUrl: null, bio: null, yearsExperience: null, level: 'Elite' },
+        { id: 'ramesh', displayName: 'Ramesh', photoUrl: null, bio: null, yearsExperience: null, level: 'Premium' },
+      ]);
+      prisma.staffService.findMany.mockResolvedValue([
+        { staffId: 'dinesh', priceOverride: { toString: () => '500' }, durationOverrideMinutes: 45 },
+        // Ramesh has a qualification row but no override — falls back to the plain service price.
+      ]);
+      const result = await service.listQualifiedStaff('s1', 'sv1');
+      expect(result).toEqual([
+        expect.objectContaining({ id: 'dinesh', level: 'Elite', effectivePrice: 500, effectiveDurationMinutes: 45 }),
+        expect.objectContaining({ id: 'ramesh', level: 'Premium', effectivePrice: 300, effectiveDurationMinutes: 30 }),
       ]);
     });
   });

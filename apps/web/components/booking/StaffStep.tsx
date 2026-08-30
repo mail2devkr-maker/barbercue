@@ -1,6 +1,6 @@
 "use client";
 
-import type { StaffOptionDto } from "@barbercue/shared";
+import { formatMoney, type StaffOptionDto } from "@barbercue/shared";
 import { SalonImage } from "../ui/SalonImage";
 import styles from "./booking.module.css";
 
@@ -10,11 +10,15 @@ export function StaffStep({
   selectedStaffId,
   onSelect,
   loading,
+  currency,
+  countryCode,
 }: {
   options: StaffOptionDto[];
   selectedStaffId: string | null | undefined;
   onSelect: (staffId: string | null) => void;
   loading: boolean;
+  currency: string | null;
+  countryCode?: string | null;
 }) {
   if (loading)
     return (
@@ -56,12 +60,15 @@ export function StaffStep({
               <span className={styles.staffCardPhoto}>
                 <SalonImage url={staff.photoUrl} alt={staff.displayName} aspectRatio="1 / 1" rounded={10} />
               </span>
-              <span className={styles.staffCardName}>{staff.displayName}</span>
-              {staff.yearsExperience !== null && (
-                <span className={styles.staffCardMeta}>
-                  {staff.yearsExperience} yr{staff.yearsExperience === 1 ? "" : "s"} experience
-                </span>
-              )}
+              <span className={styles.staffCardName}>
+                {staff.displayName}
+                {staff.level && <span className={styles.staffCardLevel}> · {staff.level}</span>}
+              </span>
+              <span className={styles.staffCardMeta}>
+                {formatMoney(staff.effectivePrice, currency, countryCode)}
+                {staff.yearsExperience !== null &&
+                  ` · ${staff.yearsExperience} yr${staff.yearsExperience === 1 ? "" : "s"} experience`}
+              </span>
               {staff.bio && <span className={styles.staffCardBio}>{staff.bio}</span>}
             </button>
           ))}
@@ -83,6 +90,7 @@ export function StaffStep({
               className={`${styles.chip} ${staff.id === selectedStaffId ? styles.chipSelected : ""}`}
             >
               {staff.displayName}
+              {staff.level ? ` · ${staff.level}` : ""} · {formatMoney(staff.effectivePrice, currency, countryCode)}
             </button>
           ))}
         </div>

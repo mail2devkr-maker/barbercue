@@ -263,8 +263,9 @@ export class DashboardBookingsService {
       salonLat: booking.salon.lat,
       salonLng: booking.salon.lng,
       serviceName: booking.service.name,
-      serviceDurationMinutes: booking.service.durationMinutes,
-      servicePrice: Number(booking.service.price),
+      // Snapshot at creation — never the service's current live price/duration.
+      serviceDurationMinutes: booking.effectiveServiceDurationMinutes,
+      servicePrice: Number(booking.effectiveServicePrice),
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
       customerPhone: booking.customer.phone,
       customerEmail: booking.customer.email,

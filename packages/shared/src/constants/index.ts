@@ -219,6 +219,8 @@ export const DASHBOARD_PATHS = {
   // prefix keeps them from colliding.
   services: 'services',
   chairs: 'chairs',
+  // Launch-fixes (Issue 6): dashboard/salons/:salonId/staff/:staffId/services/:serviceId/pricing.
+  pricing: 'pricing',
   // Salon photos. URL-based for now — no object storage is configured, so an owner links an
   // image they already host rather than uploading a file.
   photos: 'photos',
