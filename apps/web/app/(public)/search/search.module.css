@@ -90,6 +90,47 @@
   white-space: nowrap;
 }
 
+.categoryChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 900px;
+  margin-top: 22px;
+}
+
+.categoryChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 8px;
+  color: var(--bc-ink);
+  background: #fff;
+  border: 1px solid var(--bc-border);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.categoryChip:hover,
+.categoryChip:focus-visible {
+  border-color: var(--bc-accent);
+  transform: translateY(-1px);
+}
+
+.categoryChipArt {
+  display: inline-flex;
+  overflow: hidden;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.categoryChipArt :global(img) {
+  width: 32px;
+  height: 24px;
+  object-fit: cover;
+}
+
 .styleNotice {
   display: flex;
   align-items: center;

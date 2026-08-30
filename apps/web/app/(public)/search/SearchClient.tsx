@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
+import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
+import { EditorialImage } from "../../../components/editorial/EditorialImage";
 import { SalonCard } from "../../../components/discovery/SalonCard";
 import { Button } from "../../../components/ui/Button";
 import styles from "./search.module.css";
@@ -155,6 +158,21 @@ export default function SearchClient() {
             Clear &ldquo;Near me&rdquo; and sort by name instead
           </button>
         )}
+
+        <nav className={styles.categoryChips} aria-label="Browse by category">
+          {SERVICE_CATEGORIES.map((category) => (
+            <Link
+              key={category.id}
+              href={`/search?service=${encodeURIComponent(category.query)}`}
+              className={styles.categoryChip}
+            >
+              <span className={styles.categoryChipArt}>
+                <EditorialImage id={category.assetId} width={32} height={24} />
+              </span>
+              {category.label}
+            </Link>
+          ))}
+        </nav>
       </section>
 
       {styleName && (
