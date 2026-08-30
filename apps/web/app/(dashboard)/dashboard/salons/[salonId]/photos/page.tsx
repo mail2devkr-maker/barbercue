@@ -4,11 +4,13 @@ import { use, useEffect, useRef, useState } from "react";
 import {
   DASHBOARD_PATHS,
   PhotoType,
+  Role,
   SALON_PHOTO_UPLOAD,
   createSalonPhotoSchema,
 } from "@barbercue/shared";
 import type { PhotoDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { SalonImage } from "../../../../../../components/ui/SalonImage";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
@@ -217,6 +219,7 @@ export default function DashboardPhotosPage({
   }).success ? url.trim() : null;
 
   return (
+    <RequireRole roles={[Role.SALON_OWNER]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Photos</h1>
       <p className={styles.pageSubtitle}>
@@ -400,5 +403,6 @@ export default function DashboardPhotosPage({
       )}
       <SetupNavigation salonId={salonId} currentStep="photos" section="actions" />
     </main>
+    </RequireRole>
   );
 }

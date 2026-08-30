@@ -2,9 +2,10 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DASHBOARD_PATHS, setOperatingHoursSchema } from "@barbercue/shared";
+import { DASHBOARD_PATHS, Role, setOperatingHoursSchema } from "@barbercue/shared";
 import type { OperatingHoursDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
@@ -99,6 +100,7 @@ export default function DashboardHoursPage({
   const openCount = (days ?? []).filter((d) => !d.isClosed).length;
 
   return (
+    <RequireRole roles={[Role.SALON_OWNER]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Opening hours</h1>
       <p className={styles.pageSubtitle}>
@@ -180,5 +182,6 @@ export default function DashboardHoursPage({
         nextAction={{ kind: "submit", formId: "opening-hours-form", disabled: saving || days === null }}
       />
     </main>
+    </RequireRole>
   );
 }

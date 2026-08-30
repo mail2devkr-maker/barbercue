@@ -1,9 +1,10 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { ChairStatus, DASHBOARD_PATHS } from "@barbercue/shared";
+import { ChairStatus, DASHBOARD_PATHS, Role } from "@barbercue/shared";
 import type { SalonChairDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
@@ -94,6 +95,7 @@ export default function DashboardChairsPage({
   const activeCount = (chairs ?? []).filter((c) => c.status === ChairStatus.ACTIVE).length;
 
   return (
+    <RequireRole roles={[Role.SALON_OWNER]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Chairs</h1>
       <p className={styles.pageSubtitle}>
@@ -167,5 +169,6 @@ export default function DashboardChairsPage({
       )}
       <SetupNavigation salonId={salonId} currentStep="chairs" section="actions" />
     </main>
+    </RequireRole>
   );
 }

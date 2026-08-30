@@ -1,9 +1,10 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { DASHBOARD_PATHS, formatMoney } from "@barbercue/shared";
+import { DASHBOARD_PATHS, Role, formatMoney } from "@barbercue/shared";
 import type { SalonServiceDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
+import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { ServiceCatalogPicker } from "../../../../../../components/dashboard/ServiceCatalogPicker";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { Button } from "../../../../../../components/ui/Button";
@@ -166,6 +167,7 @@ export default function DashboardServicesPage({
   }
 
   return (
+    <RequireRole roles={[Role.SALON_OWNER]} redirectTo="/dashboard/salons">
     <main className={styles.pageWide}>
       <h1 className={styles.pageTitle}>Services</h1>
       <p className={styles.pageSubtitle}>
@@ -278,5 +280,6 @@ export default function DashboardServicesPage({
 
       <SetupNavigation salonId={salonId} currentStep="services" section="actions" />
     </main>
+    </RequireRole>
   );
 }
