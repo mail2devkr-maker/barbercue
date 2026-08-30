@@ -50,6 +50,11 @@
   color: var(--bc-muted);
   font-size: var(--bc-text-sm);
   font-weight: 600;
+  /* Without this, the default flex-shrink lets this item's box get narrower than its own text,
+     which wraps "Visit public site" across two or three stacked lines instead of shrinking the
+     shop switcher or bell next to it — ugly at in-between widths even though nothing overflows. */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .publicLink:hover {
