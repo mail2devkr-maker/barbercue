@@ -3,13 +3,19 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { AuthErrorCode, adminGoogleLoginSchema, adminLoginSchema } from "@barbercue/shared";
-import { ApiError } from "../../../../lib/api";
+import { ApiError, apiFetch } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
 import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard";
 import authStyles from "../../../../components/auth/customer-auth.module.css";
 import { safeNextPath } from "../../../../lib/safe-next-path";
 import { GoogleIdentityButton } from "../../../../components/auth/GoogleIdentityButton";
+
+type TotpSetup = {
+  otpAuthUri: string;
+  manualKey: string;
+};
 
 function AdminLoginForm() {
   const { adminLogin, adminGoogleLogin } = useAuth();
@@ -21,6 +27,7 @@ function AdminLoginForm() {
   const [totpCode, setTotpCode] = useState("");
   const [needsTotp, setNeedsTotp] = useState(false);
   const [googleIdToken, setGoogleIdToken] = useState<string | null>(null);
+  const [totpSetup, setTotpSetup] = useState<TotpSetup | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -40,12 +47,25 @@ function AdminLoginForm() {
       if (err instanceof ApiError && err.code === AuthErrorCode.TOTP_REQUIRED) {
         setNeedsTotp(true);
         setError("Enter the 6-digit code from your authenticator app.");
+      } else if (err instanceof ApiError && err.code === AuthErrorCode.TOTP_SETUP_REQUIRED) {
+        setError("Authenticator setup is required. Use Continue with Google once to securely enroll this admin account.");
       } else {
         setError(err instanceof ApiError ? err.message : "Login failed. Please try again.");
       }
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function startTotpSetup(idToken: string) {
+    const setup = await apiFetch<TotpSetup>("auth/admin/totp/setup", {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
+    });
+    setGoogleIdToken(idToken);
+    setTotpSetup(setup);
+    setNeedsTotp(true);
+    setError(null);
   }
 
   async function handleGoogle(idToken: string) {
@@ -58,8 +78,15 @@ function AdminLoginForm() {
     } catch (err) {
       if (err instanceof ApiError && err.code === AuthErrorCode.TOTP_REQUIRED) {
         setGoogleIdToken(idToken);
+        setTotpSetup(null);
         setNeedsTotp(true);
         setError("Google was verified. Enter your authenticator code to finish signing in.");
+      } else if (err instanceof ApiError && err.code === AuthErrorCode.TOTP_SETUP_REQUIRED) {
+        try {
+          await startTotpSetup(idToken);
+        } catch (setupErr) {
+          setError(setupErr instanceof ApiError ? setupErr.message : "Authenticator setup could not be started. Please try again.");
+        }
       } else {
         setError(err instanceof ApiError ? err.message : "Google sign-in failed. Please try again.");
       }
@@ -79,6 +106,12 @@ function AdminLoginForm() {
     }
     setSubmitting(true);
     try {
+      if (totpSetup) {
+        await apiFetch<{ success: true }>("auth/admin/totp/confirm", {
+          method: "POST",
+          body: JSON.stringify({ idToken: googleIdToken, code: totpCode }),
+        });
+      }
       await adminGoogleLogin(parsed.data);
       router.replace(safeNextPath(searchParams.get("next")) ?? "/dashboard/admin");
     } catch (err) {
@@ -105,6 +138,26 @@ function AdminLoginForm() {
           />
         )}
         {!googleIdToken && <div className={authStyles.divider}>OR</div>}
+
+        {totpSetup && (
+          <div className={authStyles.field}>
+            <strong>Set up Google Authenticator</strong>
+            <p className={authStyles.formFootnote}>
+              Scan this QR code with Google Authenticator, Microsoft Authenticator, Authy, or another TOTP app. Then enter the 6-digit code below.
+            </p>
+            <div style={{ display: "flex", justifyContent: "center", padding: "12px", background: "#fff", borderRadius: "12px" }}>
+              <QRCodeSVG value={totpSetup.otpAuthUri} size={176} level="M" />
+            </div>
+            <p className={authStyles.formFootnote}>Can&apos;t scan it? Enter this setup key manually:</p>
+            <code style={{ display: "block", overflowWrap: "anywhere", padding: "10px", borderRadius: "8px", background: "rgba(0,0,0,0.05)", userSelect: "all" }}>
+              {totpSetup.manualKey}
+            </code>
+            <p className={authStyles.formFootnote}>
+              Keep this key private. After the first successful code, normal admin sign-in will always require your authenticator code.
+            </p>
+          </div>
+        )}
+
         <form onSubmit={googleIdToken ? handleGoogleTotp : handleSubmit} className={authStyles.form}>
         {!googleIdToken && (
           <>
@@ -149,7 +202,7 @@ function AdminLoginForm() {
               autoComplete="one-time-code"
               placeholder="6-digit code"
               value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value)}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               className={authStyles.input}
               autoFocus
             />
@@ -160,7 +213,7 @@ function AdminLoginForm() {
           className={authStyles.primaryButton}
           disabled={submitting}
         >
-          {submitting ? "Signing in…" : "Sign in securely"}
+          {submitting ? "Signing in…" : totpSetup ? "Verify authenticator & sign in" : "Sign in securely"}
         </button>
         </form>
         {googleIdToken && (
@@ -170,6 +223,7 @@ function AdminLoginForm() {
             onClick={() => {
               setGoogleIdToken(null);
               setNeedsTotp(false);
+              setTotpSetup(null);
               setTotpCode("");
               setError(null);
             }}
