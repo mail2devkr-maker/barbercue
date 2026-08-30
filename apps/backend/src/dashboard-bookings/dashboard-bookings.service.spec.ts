@@ -247,6 +247,86 @@ describe('DashboardBookingsService', () => {
     });
   });
 
+  describe('day scheduler (date param)', () => {
+    it('scopes slotStart to the requested calendar day in the salon\'s own timezone', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await service.list(
+        'owner1',
+        's1',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        '2026-06-15',
+      );
+      const call = prisma.booking.findMany.mock.calls[0][0] as {
+        where: { slotStart: { gte: Date; lt: Date } };
+        orderBy: { slotStart: string };
+      };
+      // Asia/Kolkata (this file's default fixture timezone) is UTC+5:30, so June 15th's local
+      // midnight-to-midnight is 2026-06-14T18:30:00Z through 2026-06-15T18:30:00Z in UTC.
+      expect(call.where.slotStart.gte.toISOString()).toBe('2026-06-14T18:30:00.000Z');
+      expect(call.where.slotStart.lt.toISOString()).toBe('2026-06-15T18:30:00.000Z');
+      // A schedule reads in chronological order regardless of the (omitted, here) filter.
+      expect(call.orderBy).toEqual({ slotStart: 'asc' });
+    });
+
+    it('rejects a malformed date instead of passing it through to Date()', async () => {
+      await expect(
+        service.list(
+          'owner1',
+          's1',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          '15-06-2026',
+        ),
+      ).rejects.toMatchObject({ code: 'INVALID_FILTER' });
+      expect(prisma.booking.findMany).not.toHaveBeenCalled();
+    });
+
+    it('date takes precedence over from/to when both are somehow supplied', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await service.list(
+        'owner1',
+        's1',
+        undefined,
+        undefined,
+        undefined,
+        '2020-01-01T00:00:00.000Z',
+        '2020-01-02T00:00:00.000Z',
+        '2026-06-15',
+      );
+      const call = prisma.booking.findMany.mock.calls[0][0] as {
+        where: { slotStart: { gte: Date } };
+      };
+      expect(call.where.slotStart.gte.toISOString()).toBe('2026-06-14T18:30:00.000Z');
+    });
+
+    it('throws SALON_TIMEZONE_REQUIRED for a date request when the salon has no resolvable zone', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        timezone: null,
+        city: { countryCode: 'US' },
+      });
+      await expect(
+        service.list(
+          'owner1',
+          's1',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          '2026-06-15',
+        ),
+      ).rejects.toMatchObject({ code: 'SALON_TIMEZONE_REQUIRED' });
+      expect(prisma.booking.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('pagination', () => {
     it('reports nextCursor only when more rows exist beyond the page limit', async () => {
       const rows = Array.from({ length: 3 }, (_, i) =>

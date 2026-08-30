@@ -1,5 +1,9 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { DASHBOARD_PATHS, Role, type AuthenticatedUser } from '@barbercue/shared';
+import {
+  DASHBOARD_PATHS,
+  Role,
+  type AuthenticatedUser,
+} from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { DashboardBookingsService } from './dashboard-bookings.service';
@@ -23,8 +27,18 @@ export class DashboardBookingsController {
     @Query('limit') limit?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('date') date?: string,
   ) {
-    return this.bookingsService.list(user.id, salonId, filter, cursor, limit, from, to);
+    return this.bookingsService.list(
+      user.id,
+      salonId,
+      filter,
+      cursor,
+      limit,
+      from,
+      to,
+      date,
+    );
   }
 
   @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.bookings}/:id`)

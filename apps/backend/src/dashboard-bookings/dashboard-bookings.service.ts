@@ -11,7 +11,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
-import { resolveSalonTimeZone, zonedDayBounds } from '../common/timezone/timezone';
+import {
+  resolveSalonTimeZone,
+  zonedDayBounds,
+} from '../common/timezone/timezone';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -66,17 +69,33 @@ export class DashboardBookingsService {
     limitRaw: string | undefined,
     from: string | undefined,
     to: string | undefined,
+    date?: string,
   ): Promise<PaginatedResult<OwnerBookingDetailDto>> {
     await this.salonAccess.assertOwnerAccess(userId, salonId);
 
     const filter = this.resolveFilter(filterRaw);
     const limit = this.resolveLimit(limitRaw);
+    if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new AppException(
+        BookingErrorCode.INVALID_FILTER,
+        'date must be in YYYY-MM-DD form.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
     const where: Prisma.BookingWhereInput = {
       salonId,
       ...(await this.filterWhere(filter, salonId)),
     };
-    if (from || to) {
+    // `date` (the day scheduler) takes precedence over raw from/to — both exist to scope
+    // slotStart, and a caller has no reason to send both. Reuses the exact same
+    // zonedDayBoundsForSalon the 'today' filter already trusts, generalized to an arbitrary day,
+    // so "what day is this in the salon's own timezone" is computed identically everywhere rather
+    // than reimplemented (and potentially drifting) in whichever caller needs a specific date.
+    if (date) {
+      const { start, end } = await this.zonedDayBoundsForSalon(salonId, date);
+      where.slotStart = { gte: start, lt: end };
+    } else if (from || to) {
       where.slotStart = {
         ...(typeof where.slotStart === 'object' ? where.slotStart : {}),
         ...(from ? { gte: new Date(from) } : {}),
@@ -84,9 +103,10 @@ export class DashboardBookingsService {
       };
     }
 
-    // Today/upcoming read soonest-first (operationally "what's next"); every outcome/history view
-    // reads most-recent-first, same convention as bookings.service.ts's own listMine.
-    const ascending = filter === 'today' || filter === 'upcoming';
+    // Today/upcoming/a specific date all read soonest-first (operationally "what's next" or "the
+    // day's own order"); every outcome/history view reads most-recent-first, same convention as
+    // bookings.service.ts's own listMine.
+    const ascending = filter === 'today' || filter === 'upcoming' || !!date;
 
     const bookings = await this.prisma.booking.findMany({
       where,
@@ -174,10 +194,15 @@ export class DashboardBookingsService {
     }
   }
 
-  /** Only queried for the 'today'/'upcoming' filters — every other filter needs no timezone at
-   * all, so this stays a separate lookup rather than something list() always pays for. */
+  /** Only queried for the 'today'/'upcoming' filters and the day scheduler's `date` param — every
+   * other filter needs no timezone at all, so this stays a separate lookup rather than something
+   * list() always pays for. `dateStr` (YYYY-MM-DD) picks an arbitrary day instead of today; noon
+   * UTC on that calendar date is always safely inside it regardless of the salon's own offset, so
+   * zonedDayBounds (which only uses the reference instant to derive which local date it falls on)
+   * resolves the *requested* day, not whatever day that instant happens to be in UTC. */
   private async zonedDayBoundsForSalon(
     salonId: string,
+    dateStr?: string,
   ): Promise<{ start: Date; end: Date }> {
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
@@ -189,7 +214,8 @@ export class DashboardBookingsService {
           countryCode: salon.city.countryCode,
         })
       : null;
-    const bounds = timeZone ? zonedDayBounds(new Date(), timeZone) : null;
+    const reference = dateStr ? new Date(`${dateStr}T12:00:00Z`) : new Date();
+    const bounds = timeZone ? zonedDayBounds(reference, timeZone) : null;
     if (!bounds) {
       throw new AppException(
         BookingErrorCode.SALON_TIMEZONE_REQUIRED,

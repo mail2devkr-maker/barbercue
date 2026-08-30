@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { OwnerBookingsView } from "../../../../../../components/bookings/OwnerBookingsView";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
+import scheduleStyles from "../../../../../../components/dashboard/schedule.module.css";
 
 // Owner-only salon bookings dashboard: today/upcoming/completed/cancelled/no-show/history, with
 // realtime "new booking"/"booking cancelled" alerts over the same /realtime socket the live queue
@@ -17,6 +19,12 @@ export default async function DashboardBookingsPage({
       <p className={styles.pageSubtitle}>
         Incoming appointments, today&apos;s schedule, and booking history for your shop.
       </p>
+      <nav className={scheduleStyles.viewToggle}>
+        <Link href={`/dashboard/salons/${salonId}/bookings`} className={scheduleStyles.viewToggleActive}>
+          List view
+        </Link>
+        <Link href={`/dashboard/salons/${salonId}/schedule`}>Day schedule</Link>
+      </nav>
       <OwnerBookingsView salonId={salonId} />
     </main>
   );

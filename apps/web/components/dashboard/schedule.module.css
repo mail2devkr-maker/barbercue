@@ -1,0 +1,204 @@
+/* Owner day scheduler — time vertically, staff horizontally. Same token language as
+   dashboard.module.css / bookings.module.css. */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--bc-space-3);
+  flex-wrap: wrap;
+  margin: 4px 0 var(--bc-space-4);
+}
+
+.dateLabel {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--bc-text-lg);
+  color: var(--bc-ink);
+  min-width: 220px;
+}
+
+.tzNote {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+}
+
+.scrollOuter {
+  overflow-x: auto;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+  background: #fff;
+}
+
+.grid {
+  display: flex;
+  min-width: fit-content;
+}
+
+.rulerColumn {
+  position: relative;
+  flex: 0 0 56px;
+  border-right: 1px solid var(--bc-border);
+  background: var(--bc-surface, #fffdf9);
+}
+
+.rulerLabel {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 0.68rem;
+  color: var(--bc-muted);
+  white-space: nowrap;
+}
+
+.staffColumn {
+  position: relative;
+  flex: 0 0 168px;
+  border-right: 1px solid var(--bc-border);
+}
+
+.staffColumn:last-child {
+  border-right: 0;
+}
+
+.staffHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 10px 8px;
+  font-size: var(--bc-text-sm);
+  font-weight: 700;
+  color: var(--bc-ink);
+  background: #fff;
+  border-bottom: 1px solid var(--bc-border);
+  text-align: center;
+}
+
+.staffHeaderMuted {
+  composes: staffHeader;
+  color: var(--bc-muted);
+  font-weight: 600;
+}
+
+.columnBody {
+  position: relative;
+}
+
+.hourLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--bc-border);
+}
+
+.halfHourLine {
+  composes: hourLine;
+  border-top-style: dashed;
+  opacity: 0.6;
+}
+
+.nowLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px solid var(--bc-accent);
+  z-index: 3;
+}
+
+.nowDot {
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bc-accent);
+}
+
+.block {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-align: left;
+}
+
+.block:focus-visible {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 1px;
+}
+
+.blockService {
+  font-weight: 700;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.blockMeta {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+.blockConfirmed {
+  background: color-mix(in srgb, var(--bc-warn) 16%, #fff);
+  border-color: color-mix(in srgb, var(--bc-warn) 40%, transparent);
+  color: #6b4a00;
+}
+
+.blockCompleted {
+  background: color-mix(in srgb, var(--bc-success) 16%, #fff);
+  border-color: color-mix(in srgb, var(--bc-success) 40%, transparent);
+  color: #1c4a2e;
+}
+
+.blockCancelled {
+  background: color-mix(in srgb, var(--bc-accent) 12%, #fff);
+  border-color: color-mix(in srgb, var(--bc-accent) 35%, transparent);
+  color: var(--bc-accent);
+  text-decoration: line-through;
+  opacity: 0.85;
+}
+
+.detailPanel {
+  margin-top: var(--bc-space-3);
+  padding: var(--bc-space-4);
+  background: #fff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-md);
+}
+
+.viewToggle {
+  display: flex;
+  gap: var(--bc-space-3);
+  margin: 4px 0 var(--bc-space-4);
+  font-size: var(--bc-text-sm);
+  font-weight: 600;
+}
+
+.viewToggle a {
+  color: var(--bc-muted);
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+}
+
+.viewToggleActive {
+  color: var(--bc-ink) !important;
+  border-bottom-color: var(--bc-ink) !important;
+}
+
+@media (max-width: 600px) {
+  .staffColumn {
+    flex: 0 0 140px;
+  }
+}

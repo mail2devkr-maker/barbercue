@@ -274,6 +274,7 @@ export default function DashboardSettingsPage({
         <Link href={`/dashboard/salons/${salonId}/staff`}>Barbers</Link>
         <Link href={`/dashboard/salons/${salonId}/queue`}>Live queue</Link>
         <Link href={`/dashboard/salons/${salonId}/bookings`}>Bookings</Link>
+        <Link href={`/dashboard/salons/${salonId}/schedule`}>Schedule</Link>
         <Link href={`/dashboard/salons/${salonId}/customers`}>Customers</Link>
         <Link href={`/dashboard/salons/${salonId}/analytics`}>Analytics</Link>
       </nav>
