@@ -66,9 +66,11 @@ export function BookingFlow({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<BookingDetailDto | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  // Only the charge-amount/ledger fields are read off this — the booking itself always comes from
+  // confirmedBooking (updated in place by both onCancelled and onRescheduled below) so the two
+  // actions can never race each other for which one's "latest" booking gets displayed.
   const [cancelResult, setCancelResult] = useState<CancelBookingResponseDto | null>(null);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
-  const [rescheduledBooking, setRescheduledBooking] = useState<BookingDetailDto | null>(null);
 
   // Stable across retries of the exact same attempt (same service/staff/date/slot); regenerates
   // the moment any earlier choice changes, since that's a materially different attempt. The deps
@@ -176,7 +178,7 @@ export function BookingFlow({
   }
 
   if (confirmedBooking) {
-    const booking = rescheduledBooking ?? cancelResult?.booking ?? confirmedBooking;
+    const booking = confirmedBooking;
     const cancelled = booking.status === "CANCELLED";
     const statusClass =
       booking.status === "CONFIRMED"
@@ -230,6 +232,7 @@ export function BookingFlow({
             onClose={() => setShowCancelDialog(false)}
             onCancelled={(result) => {
               setCancelResult(result);
+              setConfirmedBooking(result.booking);
               setShowCancelDialog(false);
             }}
           />
@@ -239,7 +242,7 @@ export function BookingFlow({
             booking={booking}
             onClose={() => setShowRescheduleDialog(false)}
             onRescheduled={(updated) => {
-              setRescheduledBooking(updated);
+              setConfirmedBooking(updated);
               setShowRescheduleDialog(false);
             }}
           />
