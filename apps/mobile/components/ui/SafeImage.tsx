@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import type { ImageStyle, StyleProp, ViewStyle } from 'react-native';
+import type { ImageStyle, ImageResizeMode, StyleProp, ViewStyle } from 'react-native';
 import { color, font } from '../../lib/theme';
 
 /**
@@ -18,10 +18,15 @@ export function SafeImage({
   url,
   alt,
   style,
+  resizeMode = 'cover',
 }: {
   url: string | null | undefined;
   alt: string;
   style?: StyleProp<ViewStyle & ImageStyle>;
+  // Defaults to 'cover' (fill the box, crop as needed) — every existing call site is a fixed-size
+  // card/thumbnail where that's correct. A full-screen lightbox is the one place the whole,
+  // un-cropped photo is the point, so it passes 'contain' instead.
+  resizeMode?: ImageResizeMode;
 }) {
   // Tracks the specific URL that failed, not just a boolean — if the `url` prop later changes to
   // a different (potentially working) address, this re-attempts it instead of staying stuck.
@@ -33,7 +38,7 @@ export function SafeImage({
       <Image
         source={{ uri: url }}
         style={style}
-        resizeMode="cover"
+        resizeMode={resizeMode}
         accessibilityLabel={alt}
         onError={() => setFailedUrl(url)}
       />

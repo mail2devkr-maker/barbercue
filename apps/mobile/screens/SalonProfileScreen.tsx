@@ -6,12 +6,18 @@ import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from '@barbe
 import type { SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Button, Skeleton, ErrorState, SafeImage } from '../components/ui';
+import { Screen, SectionHeader, Button, Skeleton, ErrorState, SafeImage, PhotoGalleryViewer } from '../components/ui';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonProfile'>;
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// A wider, taller tile than a cramped grid thumbnail — big enough to actually read the photo at a
+// glance in the horizontal strip, while still clearly implying "more to swipe to." 3:2 landscape,
+// the same ratio real salon interior/work photos are usually shot in.
+const PHOTO_TILE_WIDTH = 260;
+const PHOTO_TILE_HEIGHT = 174;
 
 // A per-person initial (not the generic "BC" mark components/ui/SafeImage falls back to) reads
 // better for a team member than a brand placeholder — kept as its own small component rather than
@@ -43,6 +49,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
 
   const load = useCallback(
     (isRefresh: boolean) => {
@@ -90,11 +97,37 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         showsVerticalScrollIndicator={false}
       >
         {salon.photos.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoStrip}>
-            {salon.photos.map((photo) => (
-              <SafeImage key={photo.id} url={photo.url} alt={photo.altText ?? salon.name} style={styles.photo} />
-            ))}
-          </ScrollView>
+          <>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.photoStrip}
+              snapToInterval={PHOTO_TILE_WIDTH + space[3]}
+              decelerationRate="fast"
+            >
+              {salon.photos.map((photo, i) => (
+                <Pressable
+                  key={photo.id}
+                  onPress={() => setGalleryIndex(i)}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel={photo.altText ?? `${salon.name} photo ${i + 1} of ${salon.photos.length}`}
+                  accessibilityHint="Opens full-screen photo gallery"
+                >
+                  <SafeImage url={photo.url} alt={photo.altText ?? salon.name} style={styles.photo} />
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Text style={styles.photoCount}>
+              {salon.photos.length} photo{salon.photos.length === 1 ? '' : 's'} · tap to view
+            </Text>
+            <PhotoGalleryViewer
+              photos={salon.photos}
+              initialIndex={galleryIndex ?? 0}
+              salonName={salon.name}
+              visible={galleryIndex !== null}
+              onClose={() => setGalleryIndex(null)}
+            />
+          </>
         )}
 
         <SectionHeader eyebrow="Salon" title={salon.name} subtitle={salon.addressLine} />
@@ -207,8 +240,9 @@ const styles = StyleSheet.create({
   heroSkeleton: { height: 180, borderRadius: radius.lg, marginBottom: space[4] },
   lineSkeleton: { height: 18, borderRadius: 6, marginBottom: space[2] },
 
-  photoStrip: { marginBottom: space[4] },
-  photo: { width: 220, height: 150, borderRadius: radius.lg, marginRight: space[3] },
+  photoStrip: { marginBottom: space[2] },
+  photo: { width: PHOTO_TILE_WIDTH, height: PHOTO_TILE_HEIGHT, borderRadius: radius.lg, marginRight: space[3] },
+  photoCount: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: space[4] },
 
   rating: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.gold, marginTop: -space[2], marginBottom: space[2] },
   verifiedBadge: {
