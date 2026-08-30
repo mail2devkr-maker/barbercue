@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Put, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
 import {
   DASHBOARD_PATHS,
   Role,
@@ -29,12 +29,11 @@ export class DashboardReviewsController {
   }
 
   @Put(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.reviews}/:reviewId/${DASHBOARD_PATHS.response}`)
-  @UsePipes(new ZodValidationPipe(respondToReviewSchema))
   respond(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
     @Param('reviewId') reviewId: string,
-    @Body() body: RespondToReviewInput,
+    @Body(new ZodValidationPipe(respondToReviewSchema)) body: RespondToReviewInput,
   ) {
     return this.reviews.respond(user.id, salonId, reviewId, body.ownerResponse);
   }

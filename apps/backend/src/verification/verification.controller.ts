@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import {
   DASHBOARD_PATHS,
   Role,
@@ -24,11 +24,10 @@ export class VerificationController {
   }
 
   @Post(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.verification}`)
-  @UsePipes(new ZodValidationPipe(submitVerificationSchema))
   submitForSalon(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
-    @Body() body: SubmitVerificationInput,
+    @Body(new ZodValidationPipe(submitVerificationSchema)) body: SubmitVerificationInput,
   ) {
     return this.verification.submitForSalon(user.id, salonId, body);
   }
@@ -43,12 +42,11 @@ export class VerificationController {
   }
 
   @Post(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.staff}/:staffId/${DASHBOARD_PATHS.verification}`)
-  @UsePipes(new ZodValidationPipe(submitVerificationSchema))
   submitForStaff(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
     @Param('staffId') staffId: string,
-    @Body() body: SubmitVerificationInput,
+    @Body(new ZodValidationPipe(submitVerificationSchema)) body: SubmitVerificationInput,
   ) {
     return this.verification.submitForStaff(user.id, salonId, staffId, body);
   }

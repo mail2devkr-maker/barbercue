@@ -322,10 +322,9 @@ export class AuthController {
   }
 
   @Patch(AUTH_PATHS.language)
-  @UsePipes(new ZodValidationPipe(setLanguageSchema))
   setLanguage(
     @CurrentUser() user: AuthenticatedUser,
-    @Body() body: SetLanguageInput,
+    @Body(new ZodValidationPipe(setLanguageSchema)) body: SetLanguageInput,
   ) {
     return this.authService.setLanguage(user.id, user.roles, body.language);
   }

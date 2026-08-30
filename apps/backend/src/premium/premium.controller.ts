@@ -5,7 +5,6 @@ import {
   HttpCode,
   HttpStatus,
   Post,
-  UsePipes,
 } from '@nestjs/common';
 import {
   PREMIUM_PATHS,
@@ -60,10 +59,9 @@ export class PremiumController {
   @Roles(Role.CUSTOMER)
   @HttpCode(HttpStatus.OK)
   @Post(PREMIUM_PATHS.devActivate)
-  @UsePipes(new ZodValidationPipe(devActivatePremiumSchema))
   async devActivate(
     @CurrentUser() user: AuthenticatedUser,
-    @Body() body: DevActivatePremiumInput,
+    @Body(new ZodValidationPipe(devActivatePremiumSchema)) body: DevActivatePremiumInput,
   ) {
     if (process.env.NODE_ENV === 'production') {
       throw new AppException(

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   ADMIN_PATHS,
   Role,
@@ -44,11 +44,10 @@ export class AdminController {
   }
 
   @Post(`${ADMIN_PATHS.verification}/:id/${ADMIN_PATHS.decide}`)
-  @UsePipes(new ZodValidationPipe(decideVerificationSchema))
   decide(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body() body: DecideVerificationInput,
+    @Body(new ZodValidationPipe(decideVerificationSchema)) body: DecideVerificationInput,
   ) {
     return this.verification.decide(user.id, id, body.decision, body.reviewNotes);
   }

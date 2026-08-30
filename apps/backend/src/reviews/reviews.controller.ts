@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import {
   REVIEW_PATHS,
   createReviewSchema,
@@ -18,17 +18,15 @@ export class ReviewsController {
   constructor(private readonly reviews: ReviewsService) {}
 
   @Post()
-  @UsePipes(new ZodValidationPipe(createReviewSchema))
-  create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateReviewInput) {
+  create(@CurrentUser() user: AuthenticatedUser, @Body(new ZodValidationPipe(createReviewSchema)) body: CreateReviewInput) {
     return this.reviews.create(user.id, body);
   }
 
   @Patch(':id')
-  @UsePipes(new ZodValidationPipe(updateReviewSchema))
   update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body() body: UpdateReviewInput,
+    @Body(new ZodValidationPipe(updateReviewSchema)) body: UpdateReviewInput,
   ) {
     return this.reviews.update(user.id, id, body);
   }
