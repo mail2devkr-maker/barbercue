@@ -3,9 +3,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   AUTH_PATHS,
+  type AdminGoogleLoginInput,
   type AdminLoginInput,
   type AuthTokens,
   type GoogleLoginInput,
+  type InitialPasswordInput,
   type MeResponse,
   type OtpVerifyInput,
   type StaffLoginInput,
@@ -22,6 +24,8 @@ interface AuthContextValue {
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
   staffGoogleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   adminLogin: (input: AdminLoginInput) => Promise<MeResponse>;
+  adminGoogleLogin: (input: AdminGoogleLoginInput) => Promise<MeResponse>;
+  setInitialPassword: (input: InitialPasswordInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   // Rotates the refresh token to mint a fresh access token, then reloads /auth/me — unlike
@@ -131,6 +135,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [handleAuthResult],
   );
 
+  const adminGoogleLogin = useCallback(
+    async (input: AdminGoogleLoginInput) => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.adminGoogle), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return handleAuthResult(result);
+    },
+    [handleAuthResult],
+  );
+
+  const setInitialPassword = useCallback(
+    async (input: InitialPasswordInput) => {
+      const me = await apiFetch<MeResponse>(authPath(AUTH_PATHS.initialPassword), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      setUser(me);
+      return me;
+    },
+    [],
+  );
+
   const refreshSession = useCallback(async () => {
     const tokens = await apiFetch<AuthTokens>(authPath(AUTH_PATHS.refresh), {
       method: "POST",
@@ -159,11 +186,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       staffLogin,
       staffGoogleLogin,
       adminLogin,
+      adminGoogleLogin,
+      setInitialPassword,
       logout,
       refreshMe,
       refreshSession,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, adminLogin, logout, refreshMe, refreshSession],
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, adminLogin, adminGoogleLogin, setInitialPassword, logout, refreshMe, refreshSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

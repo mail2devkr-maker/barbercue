@@ -1,6 +1,8 @@
 import {
+  adminGoogleLoginSchema,
   adminLoginSchema,
   forgotPasswordSchema,
+  initialPasswordSchema,
   otpRequestSchema,
   otpVerifySchema,
   resetPasswordSchema,
@@ -60,14 +62,30 @@ describe('adminLoginSchema', () => {
   });
 });
 
+describe('adminGoogleLoginSchema', () => {
+  it('accepts a credential before TOTP and validates TOTP when provided', () => {
+    expect(adminGoogleLoginSchema.safeParse({ idToken: 'credential' }).success).toBe(true);
+    expect(adminGoogleLoginSchema.safeParse({ idToken: 'credential', totpCode: '123456' }).success).toBe(true);
+    expect(adminGoogleLoginSchema.safeParse({ idToken: 'credential', totpCode: '12' }).success).toBe(false);
+  });
+});
+
 describe('forgotPasswordSchema / resetPasswordSchema', () => {
   it('requires a valid email for forgot-password', () => {
     expect(forgotPasswordSchema.safeParse({ email: 'nope' }).success).toBe(false);
   });
 
   it('requires both token and a valid new password for reset-password', () => {
-    expect(resetPasswordSchema.safeParse({ token: '', newPassword: 'longenough' }).success).toBe(false);
-    expect(resetPasswordSchema.safeParse({ token: 'abc', newPassword: 'short' }).success).toBe(false);
-    expect(resetPasswordSchema.safeParse({ token: 'abc', newPassword: 'longenough' }).success).toBe(true);
+    expect(resetPasswordSchema.safeParse({ token: '', newPassword: 'longenough', confirmPassword: 'longenough' }).success).toBe(false);
+    expect(resetPasswordSchema.safeParse({ token: 'abc', newPassword: 'short', confirmPassword: 'short' }).success).toBe(false);
+    expect(resetPasswordSchema.safeParse({ token: 'abc', newPassword: 'longenough', confirmPassword: 'different' }).success).toBe(false);
+    expect(resetPasswordSchema.safeParse({ token: 'abc', newPassword: 'longenough', confirmPassword: 'longenough' }).success).toBe(true);
+  });
+});
+
+describe('initialPasswordSchema', () => {
+  it('enforces the password policy and confirmation match', () => {
+    expect(initialPasswordSchema.safeParse({ password: 'longenough', confirmPassword: 'longenough' }).success).toBe(true);
+    expect(initialPasswordSchema.safeParse({ password: 'longenough', confirmPassword: 'notthesame' }).success).toBe(false);
   });
 });

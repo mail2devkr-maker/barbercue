@@ -1,11 +1,16 @@
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { mkdirSync } from 'node:fs';
 import { AppModule } from './app.module';
-import { LOCAL_STORAGE_URL_PREFIX } from './storage/local-disk-storage-driver';
+import {
+  inspectLocalStorageConfig,
+  LOCAL_STORAGE_URL_PREFIX,
+} from './storage/local-disk-storage-driver';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // API.md: base path /api/v1/...
@@ -28,6 +33,19 @@ async function bootstrap() {
     app.useStaticAssets(localStorageDir, {
       prefix: `${LOCAL_STORAGE_URL_PREFIX}/`,
     });
+    const storage = inspectLocalStorageConfig();
+    logger.log(
+      `Local photo static mount enabled: directory=${localStorageDir}; publicBaseConfigured=${storage.publicBaseConfigured}; salonsDirectoryPresent=${storage.salonsDirectoryExists}; salonDirectoryCount=${storage.salonDirectoryCount ?? 'unreadable'}.`,
+    );
+    if (!storage.publicBaseConfigured) {
+      logger.warn(
+        'LOCAL_STORAGE_DIR is set but LOCAL_STORAGE_PUBLIC_BASE_URL is missing; static reads are mounted but new uploads are disabled.',
+      );
+    }
+  } else if (process.env.LOCAL_STORAGE_PUBLIC_BASE_URL?.trim()) {
+    logger.warn(
+      'LOCAL_STORAGE_PUBLIC_BASE_URL is set but LOCAL_STORAGE_DIR is missing; local photo reads and uploads are disabled.',
+    );
   }
 
   // Needed to read the httpOnly refresh-token cookie (web clients) — see AuthController.

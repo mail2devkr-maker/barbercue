@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AUTH_PATHS, resetPasswordSchema } from "@barbercue/shared";
+import { AUTH_PATHS, passwordAudienceSchema, resetPasswordSchema } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../../lib/api";
 import { AuthCard, AuthPageFallback } from "../../../components/auth/AuthCard";
 import authStyles from "../../../components/auth/customer-auth.module.css";
@@ -11,8 +11,13 @@ function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
+  const audienceResult = passwordAudienceSchema.safeParse(searchParams.get("audience"));
+  const audience = audienceResult.success ? audienceResult.data : "staff";
+  const loginPath = audience === "owner" ? "/owner/login" : audience === "admin" ? "/admin/login" : "/staff/login";
 
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -20,7 +25,7 @@ function ResetPasswordForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const parsed = resetPasswordSchema.safeParse({ token, newPassword });
+    const parsed = resetPasswordSchema.safeParse({ token, newPassword, confirmPassword });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid input.");
       return;
@@ -29,7 +34,7 @@ function ResetPasswordForm() {
     try {
       await apiFetch(`auth/${AUTH_PATHS.resetPassword}`, { method: "POST", body: JSON.stringify(parsed.data) });
       setDone(true);
-      setTimeout(() => router.replace("/staff/login"), 2000);
+      setTimeout(() => router.replace(loginPath), 2000);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "This reset link is invalid or has expired.");
     } finally {
@@ -51,7 +56,7 @@ function ResetPasswordForm() {
     return (
       <AuthCard audience="recovery" title="Password updated" showAudienceLinks={false}>
         <p className={authStyles.successMessage} role="status">
-          You can now sign in with your new password. Taking you to staff sign-in…
+          You can now sign in with your new password. Taking you to {audience} sign-in…
         </p>
       </AuthCard>
     );
@@ -70,7 +75,7 @@ function ResetPasswordForm() {
           <label htmlFor="new-password">New password</label>
           <input
             id="new-password"
-            type="password"
+            type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             placeholder="Enter a new password"
             value={newPassword}
@@ -79,6 +84,27 @@ function ResetPasswordForm() {
             autoFocus
           />
         </div>
+        <div className={authStyles.field}>
+          <label htmlFor="confirm-password">Confirm new password</label>
+          <input
+            id="confirm-password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            placeholder="Repeat your new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className={authStyles.input}
+          />
+        </div>
+        <label className={authStyles.passwordToggle}>
+          <input
+            type="checkbox"
+            checked={showPassword}
+            onChange={(event) => setShowPassword(event.target.checked)}
+          />
+          Show passwords
+        </label>
+        <p className={authStyles.contextLine}>Use 8–72 characters. A successful reset signs out every existing session.</p>
         <button type="submit" className={authStyles.primaryButton} disabled={submitting}>
           {submitting ? "Updating…" : "Update password"}
         </button>

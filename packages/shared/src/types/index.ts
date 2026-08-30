@@ -39,6 +39,8 @@ export interface MeResponse extends AuthenticatedUser {
   // migration). Drives both the language switcher's initial state and which VoiceAnnouncements
   // dictionary realtime alert handlers speak from.
   preferredLanguage: Language;
+  // Safe capability only. The password hash itself is never returned.
+  passwordConfigured: boolean;
 }
 
 /**

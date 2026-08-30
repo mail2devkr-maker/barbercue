@@ -18,6 +18,7 @@ import {
   AUTH_PATHS,
   REFRESH_TOKEN_COOKIE_NAME,
   type AuthMethodsDto,
+  adminGoogleLoginSchema,
   adminLoginSchema,
   forgotPasswordSchema,
   googleLoginSchema,
@@ -26,12 +27,15 @@ import {
   otpVerifySchema,
   refreshRequestSchema,
   resetPasswordSchema,
+  initialPasswordSchema,
   setLanguageSchema,
   staffLoginSchema,
+  type AdminGoogleLoginInput,
   type AdminLoginInput,
   type AuthenticatedUser,
   type ForgotPasswordInput,
   type GoogleLoginInput,
+  type InitialPasswordInput,
   type LogoutRequestInput,
   type OtpRequestInput,
   type OtpVerifyInput,
@@ -235,6 +239,24 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.adminGoogle)
+  @UsePipes(new ZodValidationPipe(adminGoogleLoginSchema))
+  async adminGoogleLogin(
+    @Body() body: AdminGoogleLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.adminGoogleLogin(
+      body.idToken,
+      body.totpCode,
+      req.headers['user-agent'],
+    );
+    this.setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
   @Post(AUTH_PATHS.refresh)
   @UsePipes(new ZodValidationPipe(refreshRequestSchema))
   async refresh(
@@ -303,7 +325,7 @@ export class AuthController {
   @Post(AUTH_PATHS.forgotPassword)
   @UsePipes(new ZodValidationPipe(forgotPasswordSchema))
   forgotPassword(@Body() body: ForgotPasswordInput) {
-    return this.authService.forgotPassword(body.email);
+    return this.authService.forgotPassword(body.email, body.audience);
   }
 
   @Public()
@@ -314,6 +336,15 @@ export class AuthController {
   async resetPassword(@Body() body: ResetPasswordInput) {
     await this.authService.resetPassword(body.token, body.newPassword);
     return { success: true };
+  }
+
+  @Post(AUTH_PATHS.initialPassword)
+  @UsePipes(new ZodValidationPipe(initialPasswordSchema))
+  setInitialPassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: InitialPasswordInput,
+  ) {
+    return this.authService.setInitialPassword(user.id, body.password);
   }
 
   @Get(AUTH_PATHS.me)

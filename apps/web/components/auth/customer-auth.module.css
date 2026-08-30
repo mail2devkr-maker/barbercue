@@ -403,6 +403,29 @@
   line-height: 1.55;
 }
 
+.passwordToggle {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--bc-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.passwordToggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--bc-accent);
+}
+
+.passwordToggle:focus-within {
+  outline: 2px solid var(--bc-ink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
 .googleButton {
   width: 100%;
   min-height: 44px;

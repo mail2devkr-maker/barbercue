@@ -18,6 +18,7 @@ describe('AuthService', () => {
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
     authIdentity: {
       findUnique: jest.Mock;
@@ -30,7 +31,9 @@ describe('AuthService', () => {
       create: jest.Mock;
       findUnique: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
+    refreshToken: { updateMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let passwordService: { hash: jest.Mock; compare: jest.Mock };
@@ -44,7 +47,11 @@ describe('AuthService', () => {
   let totpService: { verifyToken: jest.Mock };
   let cryptoService: { decrypt: jest.Mock };
   let googleAuthService: { verifyIdToken: jest.Mock };
-  let emailSender: { sendPasswordReset: jest.Mock };
+  let emailSender: {
+    assertAvailable: jest.Mock;
+    sendPasswordReset: jest.Mock;
+    sendStaffInvitation: jest.Mock;
+  };
 
   const fakeTokens = {
     accessToken: 'access',
@@ -54,14 +61,21 @@ describe('AuthService', () => {
 
   beforeEach(async () => {
     prisma = {
-      user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      user: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
       authIdentity: { findUnique: jest.fn(), create: jest.fn() },
       userRole: { create: jest.fn() },
       passwordResetToken: {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       // Supports both call shapes AuthService actually uses: the array form
       // (resetPassword's batch of writes) and the interactive-callback form (googleLogin's
       // find-or-create) — same dual-mode mock pattern as the rest of this backend's test suite.
@@ -82,7 +96,11 @@ describe('AuthService', () => {
     totpService = { verifyToken: jest.fn() };
     cryptoService = { decrypt: jest.fn() };
     googleAuthService = { verifyIdToken: jest.fn() };
-    emailSender = { sendPasswordReset: jest.fn() };
+    emailSender = {
+      assertAvailable: jest.fn(),
+      sendPasswordReset: jest.fn(),
+      sendStaffInvitation: jest.fn(),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -601,6 +619,124 @@ describe('AuthService', () => {
     });
   });
 
+  describe('adminGoogleLogin', () => {
+    const verified = { sub: 'google-admin', email: 'admin@barbercue.app' };
+    const admin = {
+      id: 'admin1',
+      email: 'admin@barbercue.app',
+      phone: null,
+      passwordHash: 'hash',
+      preferredLanguage: Language.EN,
+      status: UserStatus.ACTIVE,
+      twoFactorEnabled: true,
+      totpSecret: 'encrypted-secret',
+      roles: [{ role: Role.PLATFORM_ADMIN }],
+    };
+
+    beforeEach(() => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verified);
+      cryptoService.decrypt.mockReturnValue('plain-secret');
+    });
+
+    it('never issues a session before the mandatory authenticator code', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue({ user: admin });
+      await expect(
+        service.adminGoogleLogin('id-token', undefined),
+      ).rejects.toMatchObject({ code: AuthErrorCode.TOTP_REQUIRED });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid authenticator code', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue({ user: admin });
+      totpService.verifyToken.mockResolvedValue(false);
+      await expect(
+        service.adminGoogleLogin('id-token', '000000'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.TOTP_INVALID });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('signs in a linked active admin only after valid TOTP', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue({ user: admin });
+      totpService.verifyToken.mockResolvedValue(true);
+      const result = await service.adminGoogleLogin('id-token', '123456');
+      expect(result.user.roles).toEqual([Role.PLATFORM_ADMIN]);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'admin1',
+        [Role.PLATFORM_ADMIN],
+        undefined,
+      );
+    });
+
+    it.each([
+      ['customer', Role.CUSTOMER],
+      ['owner', Role.SALON_OWNER],
+      ['staff', Role.SALON_STAFF],
+    ])('rejects a linked %s-only account after re-checking current roles', async (_label, role) => {
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        user: { ...admin, roles: [{ role }] },
+      });
+      await expect(
+        service.adminGoogleLogin('id-token', '123456'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown Google user without creating a User or role', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(
+        service.adminGoogleLogin('id-token', '123456'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN });
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+      expect(prisma.authIdentity.create).not.toHaveBeenCalled();
+    });
+
+    it('does not link or elevate an unlinked customer whose verified email matches', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        ...admin,
+        id: 'customer1',
+        roles: [{ role: Role.CUSTOMER }],
+      });
+      await expect(
+        service.adminGoogleLogin('id-token', '123456'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN });
+      expect(prisma.authIdentity.create).not.toHaveBeenCalled();
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+    });
+
+    it('links a verified matching email only when the existing user is already an admin', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(admin);
+      totpService.verifyToken.mockResolvedValue(true);
+      await service.adminGoogleLogin('id-token', '123456');
+      expect(prisma.authIdentity.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ userId: 'admin1' }),
+      });
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a suspended admin even when Google and TOTP are valid', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        user: { ...admin, status: UserStatus.SUSPENDED },
+      });
+      await expect(
+        service.adminGoogleLogin('id-token', '123456'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.ACCOUNT_SUSPENDED });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('rejects an admin without configured TOTP rather than bypassing MFA', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        user: { ...admin, twoFactorEnabled: false, totpSecret: null },
+      });
+      await expect(
+        service.adminGoogleLogin('id-token', '123456'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.TOTP_SETUP_REQUIRED });
+    });
+  });
+
   describe('forgotPassword / resetPassword', () => {
     it('returns no dev URL and sends no email for an email that has no password (e.g. customer or nonexistent)', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
@@ -614,6 +750,7 @@ describe('AuthService', () => {
         id: 'u1',
         email: 'owner@salon.com',
         passwordHash: 'hash',
+        roles: [{ role: Role.SALON_OWNER }],
       });
       prisma.passwordResetToken.create.mockResolvedValue({});
       const result = await service.forgotPassword('owner@salon.com');
@@ -655,7 +792,67 @@ describe('AuthService', () => {
       passwordService.hash.mockResolvedValue('new-hash');
       await service.resetPassword('good-token', 'newpassword123');
       expect(prisma.$transaction).toHaveBeenCalled();
-      expect(tokenService.revokeAllForUser).toHaveBeenCalledWith('u1');
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'u1', revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
+    });
+
+    it('allows only one concurrent consumer to claim a reset token', async () => {
+      prisma.passwordResetToken.findUnique.mockResolvedValue({
+        id: 'rt1',
+        userId: 'u1',
+        usedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.passwordResetToken.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
+      passwordService.hash.mockResolvedValue('new-hash');
+      const results = await Promise.allSettled([
+        service.resetPassword('good-token', 'newpassword123'),
+        service.resetPassword('good-token', 'newpassword123'),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    });
+  });
+
+  describe('setInitialPassword', () => {
+    it('sets the first password on the authenticated verified-email user only', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'google-owner',
+        email: 'owner@example.com',
+        emailVerifiedAt: new Date(),
+        phone: null,
+        passwordHash: null,
+        preferredLanguage: Language.EN,
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+      passwordService.hash.mockResolvedValue('new-hash');
+      prisma.user.updateMany.mockResolvedValue({ count: 1 });
+      const result = await service.setInitialPassword('google-owner', 'longenough');
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'google-owner', passwordHash: null },
+        data: { passwordHash: 'new-hash' },
+      });
+      expect(result.passwordConfigured).toBe(true);
+    });
+
+    it('does not overwrite an existing password', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'owner',
+        email: 'owner@example.com',
+        emailVerifiedAt: new Date(),
+        passwordHash: 'existing',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.SALON_OWNER }],
+      });
+      await expect(
+        service.setInitialPassword('owner', 'newpassword'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.PASSWORD_ALREADY_CONFIGURED });
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -689,6 +886,7 @@ describe('AuthService', () => {
         phone: '+919876543210',
         email: null,
         preferredLanguage: 'HI',
+        passwordConfigured: false,
       });
     });
   });
