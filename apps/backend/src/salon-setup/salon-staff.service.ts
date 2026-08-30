@@ -16,6 +16,10 @@ import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { EMAIL_SENDER, type EmailSender } from '../auth/services/email-sender';
+import {
+  buildPasswordLink,
+  passwordWebBaseUrl,
+} from '../auth/services/password-link';
 
 // Invitations are long-lived compared with a password reset (AuthService uses 15 minutes): an
 // owner may add a barber before their next shift, and the barber may not check email for days.
@@ -75,7 +79,13 @@ export class SalonStaffService {
 
     const phone = input.phone.trim();
     const email = input.email?.trim().toLowerCase() || null;
+    // Do not create a passwordless staff account and only then discover that its invitation
+    // cannot be delivered. Email-less roster members remain intentionally supported.
+    if (email) this.emailSender.assertAvailable();
     const rawToken = email ? randomBytes(32).toString('hex') : null;
+    const inviteUrl = rawToken
+      ? buildPasswordLink(passwordWebBaseUrl(), rawToken, 'staff', 'invite')
+      : null;
     const staffId = await this.prisma.$transaction(async (tx) => {
       const users = await tx.user.findMany({
         where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
@@ -190,9 +200,12 @@ export class SalonStaffService {
       return created.id;
     });
 
-    const inviteUrl = rawToken ? this.buildInviteUrl(rawToken) : null;
     if (email && inviteUrl)
-      await this.emailSender.sendPasswordReset(email, inviteUrl);
+      await this.emailSender.sendStaffInvitation(
+        email,
+        inviteUrl,
+        INVITE_TTL_DAYS,
+      );
 
     const staff = await this.getDtoOrThrow(salonId, staffId);
     if (!email || !inviteUrl) return { staff, invitationSent: false };
@@ -227,7 +240,15 @@ export class SalonStaffService {
       );
     }
 
+    this.emailSender.assertAvailable();
+
     const rawToken = randomBytes(32).toString('hex');
+    const inviteUrl = buildPasswordLink(
+      passwordWebBaseUrl(),
+      rawToken,
+      'staff',
+      'invite',
+    );
     await this.prisma.passwordResetToken.create({
       data: {
         userId: staff.user.id,
@@ -236,8 +257,11 @@ export class SalonStaffService {
       },
     });
 
-    const inviteUrl = this.buildInviteUrl(rawToken);
-    await this.emailSender.sendPasswordReset(staff.user.email, inviteUrl);
+    await this.emailSender.sendStaffInvitation(
+      staff.user.email,
+      inviteUrl,
+      INVITE_TTL_DAYS,
+    );
 
     const dto = await this.getDtoOrThrow(salonId, staffId);
     return process.env.NODE_ENV === 'production'
@@ -282,13 +306,6 @@ export class SalonStaffService {
       },
     });
     return this.getDtoOrThrow(salonId, staffId);
-  }
-
-  private buildInviteUrl(rawToken: string): string {
-    // Same reset-password page the forgot-password flow already uses — the barber sets their own
-    // password there, then signs in at /staff/login. No new page, no new token type.
-    const webBaseUrl = process.env.WEB_BASE_URL ?? 'http://localhost:3001';
-    return `${webBaseUrl}/reset-password?token=${rawToken}`;
   }
 
   private async getDtoOrThrow(

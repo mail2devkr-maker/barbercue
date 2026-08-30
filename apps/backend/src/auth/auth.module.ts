@@ -12,7 +12,11 @@ import { GoogleAuthService } from './services/google-auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { OTP_SENDER, ConsoleOtpSender } from './services/otp-sender';
 import { TwoFactorOtpSender } from './services/two-factor-otp-sender';
-import { EMAIL_SENDER, ConsoleEmailSender } from './services/email-sender';
+import {
+  EMAIL_SENDER,
+  ConsoleEmailSender,
+  UnavailableProductionEmailSender,
+} from './services/email-sender';
 
 @Module({
   imports: [
@@ -49,7 +53,19 @@ import { EMAIL_SENDER, ConsoleEmailSender } from './services/email-sender';
         process.env.NODE_ENV === 'production' ? twoFactorSender : consoleSender,
       inject: [ConsoleOtpSender, TwoFactorOtpSender],
     },
-    { provide: EMAIL_SENDER, useClass: ConsoleEmailSender },
+    ConsoleEmailSender,
+    UnavailableProductionEmailSender,
+    {
+      provide: EMAIL_SENDER,
+      useFactory: (
+        consoleSender: ConsoleEmailSender,
+        productionSender: UnavailableProductionEmailSender,
+      ) =>
+        process.env.NODE_ENV === 'production'
+          ? productionSender
+          : consoleSender,
+      inject: [ConsoleEmailSender, UnavailableProductionEmailSender],
+    },
   ],
   // EMAIL_SENDER is exported (Phase 11) so SalonSetupModule can deliver barber invitations
   // through the same transport the forgot-password flow already uses, rather than binding a

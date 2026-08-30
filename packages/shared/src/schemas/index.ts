@@ -214,6 +214,18 @@ export const adminLoginSchema = z.object({
 });
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 
+export const adminGoogleLoginSchema = z.object({
+  idToken: z.string().min(1),
+  // Google proves possession of the existing admin's identity; it never replaces the second
+  // factor. Keeping this optional lets the service return TOTP_REQUIRED before any session is
+  // issued, then verify the same Google credential together with the authenticator code.
+  totpCode: z
+    .string()
+    .regex(/^\d{6}$/, 'totpCode must be 6 digits')
+    .optional(),
+});
+export type AdminGoogleLoginInput = z.infer<typeof adminGoogleLoginSchema>;
+
 export const refreshRequestSchema = z.object({
   // Optional: web relies on the httpOnly refresh cookie instead of sending this in the body.
   refreshToken: z.string().optional(),
@@ -225,16 +237,39 @@ export const logoutRequestSchema = z.object({
 });
 export type LogoutRequestInput = z.infer<typeof logoutRequestSchema>;
 
+export const passwordAudienceSchema = z.enum(['owner', 'staff', 'admin']);
+export type PasswordAudience = z.infer<typeof passwordAudienceSchema>;
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email(),
+  // Navigation hint only. The backend still decides eligibility from stored roles and always
+  // returns the same public response, so this cannot be used to discover or elevate accounts.
+  audience: passwordAudienceSchema.optional(),
 });
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 
-export const resetPasswordSchema = z.object({
-  token: z.string().min(1),
-  newPassword: passwordSchema,
-});
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1),
+    newPassword: passwordSchema,
+    confirmPassword: passwordSchema,
+  })
+  .refine((value) => value.newPassword === value.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const initialPasswordSchema = z
+  .object({
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+export type InitialPasswordInput = z.infer<typeof initialPasswordSchema>;
 
 export const salonPaymentPolicySchema = z
   .object({

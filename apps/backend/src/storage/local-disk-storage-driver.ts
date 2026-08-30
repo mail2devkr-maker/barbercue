@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
 import { StorageDriver } from './storage-driver';
@@ -7,6 +8,38 @@ import { StorageDriver } from './storage-driver';
 // static-mount call — defined once here so the two can never drift apart. An operator only ever
 // sets LOCAL_STORAGE_PUBLIC_BASE_URL to a bare origin (no path); this is appended automatically.
 export const LOCAL_STORAGE_URL_PREFIX = '/uploads';
+
+export interface LocalStorageDiagnostics {
+  directoryConfigured: boolean;
+  publicBaseConfigured: boolean;
+  directoryExists: boolean;
+  salonsDirectoryExists: boolean;
+  salonDirectoryCount: number | null;
+}
+
+/** Safe startup facts only: no credentials, filenames, salon IDs or URLs are logged. */
+export function inspectLocalStorageConfig(): LocalStorageDiagnostics {
+  const dir = process.env.LOCAL_STORAGE_DIR?.trim();
+  const publicBase = process.env.LOCAL_STORAGE_PUBLIC_BASE_URL?.trim();
+  const salonsDir = dir ? join(dir, 'salons') : null;
+  let salonDirectoryCount: number | null = null;
+  if (salonsDir && existsSync(salonsDir)) {
+    try {
+      salonDirectoryCount = readdirSync(salonsDir, {
+        withFileTypes: true,
+      }).filter((entry) => entry.isDirectory()).length;
+    } catch {
+      salonDirectoryCount = null;
+    }
+  }
+  return {
+    directoryConfigured: Boolean(dir),
+    publicBaseConfigured: Boolean(publicBase),
+    directoryExists: Boolean(dir && existsSync(dir)),
+    salonsDirectoryExists: Boolean(salonsDir && existsSync(salonsDir)),
+    salonDirectoryCount,
+  };
+}
 
 interface LocalDiskDriverConfig {
   /** Filesystem directory bytes are written under — the Railway volume's mount path in production. */

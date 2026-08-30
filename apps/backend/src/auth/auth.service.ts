@@ -9,6 +9,7 @@ import {
   type AuthTokens,
   type Language,
   type MeResponse,
+  type PasswordAudience,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
@@ -19,6 +20,10 @@ import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
 import { GoogleAuthService } from './services/google-auth.service';
 import { EMAIL_SENDER, type EmailSender } from './services/email-sender';
+import {
+  buildPasswordLink,
+  passwordWebBaseUrl,
+} from './services/password-link';
 
 const PASSWORD_RESET_TTL_MINUTES = 15;
 
@@ -80,7 +85,14 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
+      user: this.toMeResponse(
+        user.id,
+        roles,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
       tokens,
     };
   }
@@ -172,7 +184,14 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
+      user: this.toMeResponse(
+        user.id,
+        roles,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
       tokens,
     };
   }
@@ -222,7 +241,14 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
+      user: this.toMeResponse(
+        user.id,
+        roles,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
       tokens,
       // Always false in V1 — no staff/owner account can have 2FA enabled yet (only the admin
       // seed script provisions a TOTP secret, and only for PLATFORM_ADMIN). Reserved per API.md
@@ -316,7 +342,85 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
+      user: this.toMeResponse(
+        user.id,
+        roles,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
+  // ---------- Platform admin: Google + mandatory TOTP ----------
+
+  async adminGoogleLogin(
+    idToken: string,
+    totpCode: string | undefined,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const identity = await this.googleAuthService.verifyIdToken(idToken);
+    const user = await this.prisma.$transaction(async (tx) => {
+      const linked = await tx.authIdentity.findUnique({
+        where: {
+          provider_providerSub: {
+            provider: AuthProvider.GOOGLE,
+            providerSub: identity.sub,
+          },
+        },
+        include: { user: { include: { roles: true } } },
+      });
+      if (linked) return linked.user;
+      if (!identity.email) return null;
+
+      const candidate = await tx.user.findUnique({
+        where: { email: identity.email },
+        include: { roles: true },
+      });
+      if (
+        !candidate ||
+        !candidate.roles.some((role) => role.role === Role.PLATFORM_ADMIN)
+      ) {
+        return null;
+      }
+      await tx.authIdentity.create({
+        data: {
+          userId: candidate.id,
+          provider: AuthProvider.GOOGLE,
+          providerSub: identity.sub,
+          email: identity.email,
+        },
+      });
+      return candidate;
+    });
+
+    const roles = user?.roles.map((role) => role.role) ?? [];
+    if (!user || !roles.includes(Role.PLATFORM_ADMIN)) {
+      throw new AppException(
+        AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
+        'This Google account is not registered as a platform administrator.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    this.assertActive(user.status);
+    await this.assertAdminTotp(user, totpCode);
+
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      roles,
+      deviceInfo,
+    );
+    return {
+      user: this.toMeResponse(
+        user.id,
+        roles,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
       tokens,
     };
   }
@@ -353,32 +457,7 @@ export class AuthService {
     }
     this.assertActive(user.status);
 
-    // Mandatory 2FA for admin per ARCHITECTURE.md §4 — never bypassable, and a clean, honest
-    // failure mode if an admin account was somehow created without a TOTP secret provisioned
-    // (the seed script always provisions one; see prisma/seed.ts).
-    if (!user.twoFactorEnabled || !user.totpSecret) {
-      throw new AppException(
-        AuthErrorCode.TOTP_SETUP_REQUIRED,
-        'Two-factor authentication is not set up for this account.',
-        HttpStatus.FORBIDDEN,
-      );
-    }
-    if (!totpCode) {
-      throw new AppException(
-        AuthErrorCode.TOTP_REQUIRED,
-        'A 6-digit authenticator code is required.',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
-    const secret = this.cryptoService.decrypt(user.totpSecret);
-    const totpValid = await this.totpService.verifyToken(secret, totpCode);
-    if (!totpValid) {
-      throw new AppException(
-        AuthErrorCode.TOTP_INVALID,
-        'Incorrect authenticator code.',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
+    await this.assertAdminTotp(user, totpCode);
 
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
@@ -386,7 +465,14 @@ export class AuthService {
       deviceInfo,
     );
     return {
-      user: this.toMeResponse(user.id, roles, user.phone, user.email, user.preferredLanguage),
+      user: this.toMeResponse(
+        user.id,
+        roles,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
       tokens,
     };
   }
@@ -425,26 +511,114 @@ export class AuthService {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    return this.toMeResponse(user.id, tokenRoles, user.phone, user.email, user.preferredLanguage);
+    return this.toMeResponse(
+      user.id,
+      tokenRoles,
+      user.phone,
+      user.email,
+      user.preferredLanguage,
+      user.passwordHash,
+    );
   }
 
   /** PATCH auth/language (Phase 14) — the caller's own tokenRoles are reused as-is; changing
    * language never affects role membership. */
-  async setLanguage(userId: string, tokenRoles: Role[], language: Language): Promise<MeResponse> {
+  async setLanguage(
+    userId: string,
+    tokenRoles: Role[],
+    language: Language,
+  ): Promise<MeResponse> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { preferredLanguage: language },
     });
-    return this.toMeResponse(user.id, tokenRoles, user.phone, user.email, user.preferredLanguage);
+    return this.toMeResponse(
+      user.id,
+      tokenRoles,
+      user.phone,
+      user.email,
+      user.preferredLanguage,
+      user.passwordHash,
+    );
+  }
+
+  async setInitialPassword(
+    userId: string,
+    password: string,
+  ): Promise<MeResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { roles: true },
+    });
+    if (!user) {
+      throw new AppException(
+        AuthErrorCode.UNAUTHENTICATED,
+        'User not found.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    this.assertActive(user.status);
+    if (!user.email || !user.emailVerifiedAt) {
+      throw new AppException(
+        AuthErrorCode.INVALID_CREDENTIALS,
+        'A verified email address is required before creating a password.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (user.passwordHash) {
+      throw new AppException(
+        AuthErrorCode.PASSWORD_ALREADY_CONFIGURED,
+        'A password is already configured. Use password recovery to change it.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const passwordHash = await this.passwordService.hash(password);
+    const updated = await this.prisma.user.updateMany({
+      where: { id: user.id, passwordHash: null },
+      data: { passwordHash },
+    });
+    if (updated.count !== 1) {
+      throw new AppException(
+        AuthErrorCode.PASSWORD_ALREADY_CONFIGURED,
+        'A password is already configured. Use password recovery to change it.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const roles = user.roles.map((role) => role.role);
+    return this.toMeResponse(
+      user.id,
+      roles,
+      user.phone,
+      user.email,
+      user.preferredLanguage,
+      passwordHash,
+    );
   }
 
   // ---------- Forgot / reset password (staff/owner/admin only — customers have no password) ----------
 
-  async forgotPassword(email: string): Promise<{ devResetUrl?: string }> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+  async forgotPassword(
+    email: string,
+    audience?: PasswordAudience,
+  ): Promise<{ devResetUrl?: string }> {
+    // Availability is checked before account lookup so configuration failures cannot become an
+    // account-enumeration oracle. Production never claims a message was sent via console.
+    this.emailSender.assertAvailable();
+    const webBaseUrl = passwordWebBaseUrl();
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { roles: true },
+    });
     // Always behave identically whether or not the email exists, so responses can't be used to
     // enumerate registered accounts.
-    if (!user || !user.passwordHash) {
+    const eligible = user?.roles.some(
+      ({ role }) =>
+        role === Role.SALON_OWNER ||
+        role === Role.SALON_STAFF ||
+        role === Role.PLATFORM_ADMIN,
+    );
+    if (!user || !eligible) {
       return {};
     }
 
@@ -457,9 +631,12 @@ export class AuthService {
       },
     });
 
-    const webBaseUrl = process.env.WEB_BASE_URL ?? 'http://localhost:3001';
-    const resetUrl = `${webBaseUrl}/reset-password?token=${rawToken}`;
-    await this.emailSender.sendPasswordReset(email, resetUrl);
+    const resetUrl = buildPasswordLink(webBaseUrl, rawToken, audience);
+    await this.emailSender.sendPasswordReset(
+      email,
+      resetUrl,
+      PASSWORD_RESET_TTL_MINUTES,
+    );
 
     // Dev-only convenience so the flow is testable with no email provider connected — never
     // included outside development (see PAYMENTS.md-style "external dependency" documentation
@@ -482,7 +659,7 @@ export class AuthService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    if (resetToken.expiresAt.getTime() < Date.now()) {
+    if (resetToken.expiresAt.getTime() <= Date.now()) {
       throw new AppException(
         AuthErrorCode.RESET_TOKEN_EXPIRED,
         'This reset link has expired.',
@@ -491,20 +668,60 @@ export class AuthService {
     }
 
     const passwordHash = await this.passwordService.hash(newPassword);
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: {
+          id: resetToken.id,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        throw new AppException(
+          AuthErrorCode.RESET_TOKEN_INVALID,
+          'This reset link is invalid.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      await tx.user.update({
         where: { id: resetToken.userId },
         data: { passwordHash },
-      }),
-      this.prisma.passwordResetToken.update({
-        where: { id: resetToken.id },
-        data: { usedAt: new Date() },
-      }),
-    ]);
+      });
+      await tx.refreshToken.updateMany({
+        where: { userId: resetToken.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+  }
 
-    // Force re-login everywhere — a password reset is exactly the moment an attacker's existing
-    // sessions (if any) should stop working.
-    await this.tokenService.revokeAllForUser(resetToken.userId);
+  private async assertAdminTotp(
+    user: { twoFactorEnabled: boolean; totpSecret: string | null },
+    totpCode: string | undefined,
+  ): Promise<void> {
+    if (!user.twoFactorEnabled || !user.totpSecret) {
+      throw new AppException(
+        AuthErrorCode.TOTP_SETUP_REQUIRED,
+        'Two-factor authentication is not set up for this account.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    if (!totpCode) {
+      throw new AppException(
+        AuthErrorCode.TOTP_REQUIRED,
+        'A 6-digit authenticator code is required.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    const secret = this.cryptoService.decrypt(user.totpSecret);
+    const valid = await this.totpService.verifyToken(secret, totpCode);
+    if (!valid) {
+      throw new AppException(
+        AuthErrorCode.TOTP_INVALID,
+        'Incorrect authenticator code.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
   }
 
   private assertActive(status: UserStatus): void {
@@ -523,7 +740,15 @@ export class AuthService {
     phone: string | null,
     email: string | null,
     preferredLanguage: Language,
+    passwordHash: string | null | undefined,
   ): MeResponse {
-    return { id, roles, phone, email, preferredLanguage };
+    return {
+      id,
+      roles,
+      phone,
+      email,
+      preferredLanguage,
+      passwordConfigured: Boolean(passwordHash),
+    };
   }
 }

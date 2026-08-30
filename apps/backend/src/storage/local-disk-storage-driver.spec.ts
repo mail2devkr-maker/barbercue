@@ -1,7 +1,11 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { LocalDiskStorageDriver, LOCAL_STORAGE_URL_PREFIX } from './local-disk-storage-driver';
+import {
+  inspectLocalStorageConfig,
+  LocalDiskStorageDriver,
+  LOCAL_STORAGE_URL_PREFIX,
+} from './local-disk-storage-driver';
 
 describe('LocalDiskStorageDriver', () => {
   let dir: string;
@@ -25,6 +29,18 @@ describe('LocalDiskStorageDriver', () => {
     process.env.LOCAL_STORAGE_DIR = dir;
     delete process.env.LOCAL_STORAGE_PUBLIC_BASE_URL;
     expect(LocalDiskStorageDriver.fromEnv()).toBeNull();
+  });
+
+  it('reports whether the configured volume contains salon directories without exposing names', async () => {
+    await mkdir(join(dir, 'salons', 'salon-a'), { recursive: true });
+    await mkdir(join(dir, 'salons', 'salon-b'), { recursive: true });
+    expect(inspectLocalStorageConfig()).toEqual({
+      directoryConfigured: true,
+      publicBaseConfigured: true,
+      directoryExists: true,
+      salonsDirectoryExists: true,
+      salonDirectoryCount: 2,
+    });
   });
 
   it('writes the file under the configured directory and returns a URL under the shared prefix', async () => {

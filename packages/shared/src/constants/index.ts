@@ -20,12 +20,14 @@ export const AUTH_PATHS = {
   // makes that difference impossible to blur by accident in either handler.
   staffGoogle: 'staff/google',
   adminLogin: 'admin/login',
+  adminGoogle: 'admin/google',
   refresh: 'refresh',
   logout: 'logout',
   logoutAll: 'logout-all',
   sessions: 'sessions',
   forgotPassword: 'forgot-password',
   resetPassword: 'reset-password',
+  initialPassword: 'password/initial',
   me: 'me',
   // auth/methods — which sign-in methods this deployment can actually complete right now.
   // Booleans only; never echoes any configuration value.

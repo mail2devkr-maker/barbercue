@@ -1,0 +1,38 @@
+.page {
+  width: min(660px, 100%);
+  margin: 0 auto;
+  padding: clamp(28px, 5vw, 54px) clamp(16px, 4vw, 32px) 64px;
+}
+
+.eyebrow {
+  margin-bottom: 10px;
+  color: var(--bc-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0 0 10px;
+  color: var(--bc-ink);
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 7vw, 3.8rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.intro {
+  margin-bottom: 28px;
+  color: var(--bc-muted);
+  line-height: 1.65;
+}
+
+.securityCard {
+  padding: clamp(22px, 5vw, 34px);
+  border: 1px solid var(--bc-border);
+  border-radius: 22px;
+  background: linear-gradient(145deg, #fffdf9, #f8f0e5);
+  box-shadow: var(--bc-shadow-sm);
+}

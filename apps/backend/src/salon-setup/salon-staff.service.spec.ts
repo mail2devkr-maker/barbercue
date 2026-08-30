@@ -32,7 +32,11 @@ describe('SalonStaffService', () => {
     $transaction: jest.Mock;
   };
   let salonAccess: { assertOwnerAccess: jest.Mock };
-  let emailSender: { sendPasswordReset: jest.Mock };
+  let emailSender: {
+    assertAvailable: jest.Mock;
+    sendPasswordReset: jest.Mock;
+    sendStaffInvitation: jest.Mock;
+  };
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
@@ -71,7 +75,11 @@ describe('SalonStaffService', () => {
       ),
     };
     salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
-    emailSender = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
+    emailSender = {
+      assertAvailable: jest.fn(),
+      sendPasswordReset: jest.fn().mockResolvedValue(undefined),
+      sendStaffInvitation: jest.fn().mockResolvedValue(undefined),
+    };
     process.env.NODE_ENV = 'test';
     process.env.WEB_BASE_URL = 'https://web.example.com';
     service = new SalonStaffService(
@@ -126,7 +134,7 @@ describe('SalonStaffService', () => {
       }),
     });
     expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
-    expect(emailSender.sendPasswordReset).not.toHaveBeenCalled();
+    expect(emailSender.sendStaffInvitation).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       invitationSent: false,
       staff: { phone: '+919876543210' },
@@ -151,11 +159,27 @@ describe('SalonStaffService', () => {
     expect(stored.tokenHash).toBe(
       createHash('sha256').update(rawToken).digest('hex'),
     );
-    expect(emailSender.sendPasswordReset).toHaveBeenCalledWith(
+    expect(emailSender.sendStaffInvitation).toHaveBeenCalledWith(
       'marcus@example.com',
       result.inviteUrl,
+      7,
     );
     expect(result.invitationSent).toBe(true);
+  });
+
+  it('does not create a passwordless staff account when invitation delivery is unavailable', async () => {
+    emailSender.assertAvailable.mockImplementation(() => {
+      throw new Error('transport unavailable');
+    });
+    await expect(
+      service.create('owner-1', 'salon-1', {
+        displayName: 'Marcus',
+        phone: '+919876543210',
+        email: 'marcus@example.com',
+      }),
+    ).rejects.toThrow('transport unavailable');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it('links an existing user by phone and fills an empty email', async () => {
@@ -307,7 +331,7 @@ describe('SalonStaffService', () => {
     await expect(
       service.resendInvite('owner-1', 'salon-1', 'staff-1'),
     ).rejects.toMatchObject({ code: 'STAFF_ACCOUNT_UNAVAILABLE' });
-    expect(emailSender.sendPasswordReset).not.toHaveBeenCalled();
+    expect(emailSender.sendStaffInvitation).not.toHaveBeenCalled();
   });
 
   it('resends an invitation only to a real email destination', async () => {
@@ -317,9 +341,10 @@ describe('SalonStaffService', () => {
     });
     const result = await service.resendInvite('owner-1', 'salon-1', 'staff-1');
     expect(result.invitationSent).toBe(true);
-    expect(emailSender.sendPasswordReset).toHaveBeenCalledWith(
+    expect(emailSender.sendStaffInvitation).toHaveBeenCalledWith(
       'm@example.com',
       result.inviteUrl,
+      7,
     );
   });
 

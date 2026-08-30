@@ -1,11 +1,13 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   AUTH_PATHS,
+  type AdminGoogleLoginInput,
   type AdminLoginInput,
   type AuthTokens,
   type GoogleLoginInput,
+  type InitialPasswordInput,
   type MeResponse,
   type OtpVerifyInput,
   type StaffLoginInput,
@@ -22,6 +24,8 @@ interface AuthContextValue {
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
   staffGoogleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   adminLogin: (input: AdminLoginInput) => Promise<MeResponse>;
+  adminGoogleLogin: (input: AdminGoogleLoginInput) => Promise<MeResponse>;
+  setInitialPassword: (input: InitialPasswordInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   // Rotates the refresh token to mint a fresh access token, then reloads /auth/me — unlike
@@ -41,6 +45,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<MeResponse | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
 
+  // Guards the initial session-restore request against racing with an explicit auth action.
+  // On a cold login page the mount-time /auth/me may still be completing its 401 -> refresh
+  // fallback when a Google/password/OTP login succeeds. Without a version check that stale
+  // bootstrap result can arrive last and overwrite the newly authenticated user with null,
+  // which looks exactly like an automatic logout on the next Home/BarberCue navigation.
+  const authMutationVersionRef = useRef(0);
+
   // fetchMe never touches state itself — the effect below and refreshMe() each apply the result
   // to state in their own `.then()`, which is what keeps the mount effect's setState calls
   // directly (textually) inside the effect body rather than hidden behind an external callback.
@@ -53,8 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // is "restore session on app restart" for web, with no separate code path needed.
   useEffect(() => {
     let cancelled = false;
+    const startedAtVersion = authMutationVersionRef.current;
     fetchMe().then((me) => {
-      if (cancelled) return;
+      if (cancelled || authMutationVersionRef.current !== startedAtVersion) return;
       setUser(me);
       setStatus(me ? "authenticated" : "unauthenticated");
     });
@@ -64,12 +76,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchMe]);
 
   const refreshMe = useCallback(async () => {
+    // An explicit refresh is authoritative over any still-pending mount bootstrap.
+    authMutationVersionRef.current += 1;
     const me = await fetchMe();
     setUser(me);
     setStatus(me ? "authenticated" : "unauthenticated");
   }, [fetchMe]);
 
   const handleAuthResult = useCallback((result: { user: MeResponse; tokens: AuthTokens }) => {
+    // Invalidate any stale mount-time /auth/me before publishing the successful login state.
+    authMutationVersionRef.current += 1;
     setAccessToken(result.tokens.accessToken);
     setUser(result.user);
     setStatus("authenticated");
@@ -131,7 +147,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [handleAuthResult],
   );
 
+  const adminGoogleLogin = useCallback(
+    async (input: AdminGoogleLoginInput) => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.adminGoogle), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return handleAuthResult(result);
+    },
+    [handleAuthResult],
+  );
+
+  const setInitialPassword = useCallback(
+    async (input: InitialPasswordInput) => {
+      const me = await apiFetch<MeResponse>(authPath(AUTH_PATHS.initialPassword), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      setUser(me);
+      return me;
+    },
+    [],
+  );
+
   const refreshSession = useCallback(async () => {
+    // Prevent a stale bootstrap response from winning while token rotation is in flight.
+    authMutationVersionRef.current += 1;
     const tokens = await apiFetch<AuthTokens>(authPath(AUTH_PATHS.refresh), {
       method: "POST",
       body: "{}",
@@ -141,6 +182,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshMe]);
 
   const logout = useCallback(async () => {
+    // Explicit logout is authoritative over every older session-restore request.
+    authMutationVersionRef.current += 1;
     try {
       await apiFetch(authPath(AUTH_PATHS.logout), { method: "POST", body: "{}" });
     } finally {
@@ -159,11 +202,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       staffLogin,
       staffGoogleLogin,
       adminLogin,
+      adminGoogleLogin,
+      setInitialPassword,
       logout,
       refreshMe,
       refreshSession,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, adminLogin, logout, refreshMe, refreshSession],
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, adminLogin, adminGoogleLogin, setInitialPassword, logout, refreshMe, refreshSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

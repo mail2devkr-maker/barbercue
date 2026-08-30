@@ -27,7 +27,7 @@ function OwnerLoginForm() {
         )}
       />
       <EmailPasswordLoginForm
-        forgotPasswordHref="/forgot-password"
+        forgotPasswordHref="/forgot-password?audience=owner"
         onSubmit={async (input) => {
           const user = await staffLogin(input);
           router.replace(safeNextPath(searchParams.get("next")) ?? workspaceLandingPath(user));

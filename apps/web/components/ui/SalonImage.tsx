@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import styles from "./salon-image.module.css";
 
 /**
  * The one place a salon photo is rendered, so discovery cards, the profile hero and the owner's
@@ -36,16 +37,10 @@ export function SalonImage({
 
   return (
     <div
+      className={styles.frame}
       style={{
         aspectRatio,
         borderRadius: rounded,
-        overflow: "hidden",
-        background: "var(--bc-surface, #FFFDF9)",
-        border: "1px solid var(--bc-border, #E7E0D3)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        position: "relative",
       }}
     >
       {showImage ? (
@@ -60,42 +55,17 @@ export function SalonImage({
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "auto"}
-          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          className={styles.image}
         />
       ) : (
         <span
           role="img"
           aria-label={alt}
-          style={{
-            color: "var(--bc-muted, #6B6357)",
-            fontSize: 13,
-            padding: "0 12px",
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 8,
-          }}
+          className={styles.fallback}
         >
-          <span
-            aria-hidden="true"
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: "50%",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "var(--bc-ink, #1C1A17)",
-              color: "#fff",
-              fontSize: 11,
-              fontWeight: 750,
-              letterSpacing: "0.08em",
-            }}
-          >
-            BC
-          </span>
-          {url ? "Photo unavailable" : "No photo yet"}
+          <span className={styles.mark} aria-hidden="true" />
+          <strong>{url ? "Photo unavailable" : "Shop photos coming soon"}</strong>
+          <span>BarberCue shop profile</span>
         </span>
       )}
     </div>

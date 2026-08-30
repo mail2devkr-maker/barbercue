@@ -28,6 +28,7 @@
 .cover > div {
   height: 100%;
   min-height: 510px;
+  aspect-ratio: auto !important;
   border: 0 !important;
 }
 
@@ -248,7 +249,9 @@
   }
 
   .cover > div {
+    height: auto;
     min-height: 0;
+    aspect-ratio: 16 / 10 !important;
   }
 
   .sideColumn {

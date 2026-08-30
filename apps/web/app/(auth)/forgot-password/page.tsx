@@ -1,13 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { AUTH_PATHS, forgotPasswordSchema } from "@barbercue/shared";
+import Link from "next/link";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { AUTH_PATHS, forgotPasswordSchema, passwordAudienceSchema } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../../lib/api";
-import { AuthCard } from "../../../components/auth/AuthCard";
+import { AuthCard, AuthPageFallback } from "../../../components/auth/AuthCard";
 import authStyles from "../../../components/auth/customer-auth.module.css";
 
 // Staff/owner/admin only — customers authenticate via OTP and have no password to reset.
-export default function ForgotPasswordPage() {
+const LOGIN_PATHS = { owner: "/owner/login", staff: "/staff/login", admin: "/admin/login" } as const;
+
+function ForgotPasswordForm() {
+  const searchParams = useSearchParams();
+  const audienceResult = passwordAudienceSchema.safeParse(searchParams.get("audience"));
+  const audience = audienceResult.success ? audienceResult.data : "staff";
+  const loginPath = LOGIN_PATHS[audience];
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -17,7 +25,7 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const parsed = forgotPasswordSchema.safeParse({ email });
+    const parsed = forgotPasswordSchema.safeParse({ email, audience });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid email.");
       return;
@@ -46,6 +54,9 @@ export default function ForgotPasswordPage() {
       >
         <p className={authStyles.successMessage} role="status">
           Your request has been processed. You can safely close this page after checking your inbox.
+        </p>
+        <p className={authStyles.formFootnote}>
+          <Link href={loginPath}>Return to {audience} sign in</Link>
         </p>
         {devResetUrl && (
           <p className={authStyles.devMessage}>
@@ -83,7 +94,18 @@ export default function ForgotPasswordPage() {
         <button type="submit" className={authStyles.primaryButton} disabled={submitting}>
           {submitting ? "Sending…" : "Send reset link"}
         </button>
+        <p className={authStyles.formFootnote}>
+          <Link href={loginPath}>Back to {audience} sign in</Link>
+        </p>
       </form>
     </AuthCard>
+  );
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense fallback={<AuthPageFallback audience="recovery" />}>
+      <ForgotPasswordForm />
+    </Suspense>
   );
 }
