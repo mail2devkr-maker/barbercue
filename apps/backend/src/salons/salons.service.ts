@@ -26,6 +26,34 @@ const DEFAULT_PAGE_SIZE = 20;
 const RECENT_REVIEWS_LIMIT = 10;
 // "Near Me" candidate pool before in-memory distance sort — see search()'s own doc comment.
 const NEAR_ME_CANDIDATE_CAP = 200;
+// Bounding-box prefilter radii tried in order until enough candidates are found (or the widest
+// box is reached) — see boundingBoxDegrees()'s own doc comment for why a box, not PostGIS.
+const NEAR_ME_RADII_KM = [25, 100, 400];
+const KM_PER_DEGREE_LAT = 111;
+
+// A cheap geographic prefilter for "Near Me", not a distance calculation: converts a radius into a
+// lat/lng rectangle so the DB can discard rows that are obviously nowhere near the query point
+// before the NEAR_ME_CANDIDATE_CAP applies, rather than capping an unfiltered (or merely
+// coordinate-not-null) global scan. Longitude degrees shrink toward the poles (cos(lat) narrows
+// them), so the box uses the query point's own latitude to size the longitude span correctly;
+// latitude degrees are a constant ~111km everywhere. This is deliberately approximate (a rectangle,
+// not a circle) — candidates inside it still get the exact Haversine distance and sort below, so
+// the approximation only affects which rows are considered, never how they're ordered once
+// considered.
+function boundingBoxDegrees(lat: number, lng: number, radiusKm: number) {
+  const latDelta = radiusKm / KM_PER_DEGREE_LAT;
+  const kmPerDegreeLng = KM_PER_DEGREE_LAT * Math.cos((lat * Math.PI) / 180);
+  // Guards the pole-adjacent case (cos ~ 0, so a degree of longitude is ~0km and the box would
+  // otherwise blow up to +/-Infinity) — no real salon is there, but the math shouldn't NaN/Infinity
+  // if it's ever asked to.
+  const lngDelta = radiusKm / Math.max(kmPerDegreeLng, 1);
+  return {
+    minLat: lat - latDelta,
+    maxLat: lat + latDelta,
+    minLng: lng - lngDelta,
+    maxLng: lng + lngDelta,
+  };
+}
 // A brand-new shop's slug never collides in practice (name + city is a very sparse space at this
 // scale), but the DB-level @@unique([cityId, slug]) constraint is the real guarantee — this cap
 // just bounds how many times we retry a P2002 before giving up with a clear error instead of an
@@ -47,7 +75,12 @@ const listInclude = {
 // guessed Open or Closed — when no trustworthy zone exists, same honest-unknown convention as
 // isOpenAt's own contract.
 function isOpenNow(
-  hours: { dayOfWeek: number; isClosed: boolean; openTime: string; closeTime: string }[],
+  hours: {
+    dayOfWeek: number;
+    isClosed: boolean;
+    openTime: string;
+    closeTime: string;
+  }[],
   salon: { timezone: string | null; city: { countryCode: string } },
 ): boolean | null {
   const timeZone = resolveSalonTimeZone({
@@ -108,23 +141,45 @@ export class SalonsService {
     // fake a stable cursor over an in-memory sort, distance mode fetches a capped batch, sorts it
     // in memory, and returns a single unpaginated page (nextCursor always null) — an honest
     // limitation for a foundation-phase, demo-scale salon count, not a hidden bug. Still bounded
-    // candidates + in-memory Haversine, never PostGIS/a real nearest-neighbour index.
+    // candidates + in-memory Haversine, never PostGIS/a real nearest-neighbour index. Within that
+    // architecture, candidates are now drawn from a geographic bounding box around the query point
+    // (see boundingBoxDegrees), not merely "coordinate-bearing" — at real scale, a query point in a
+    // dense city could otherwise have its 200-row cap filled entirely by coordinate-bearing salons
+    // hundreds of km away in a different city, silently crowding out the genuinely nearby ones the
+    // box now excludes them from competing with in the first place. The box widens (NEAR_ME_RADII_KM)
+    // if the tightest one doesn't turn up enough candidates to fill a page — a sparse/rural query
+    // point still gets a useful result instead of an artificially empty one — capped at the widest
+    // configured radius rather than widening indefinitely into an unbounded scan. This remains an
+    // honest limitation, not a claim of global correctness: with more than NEAR_ME_CANDIDATE_CAP
+    // salons inside whichever box is used, the cap still picks an arbitrary (id-ordered, so at least
+    // deterministic) subset of them rather than the exact nearest — the box only guarantees that
+    // subset is geographically relevant, not that it's the true top-200-nearest within itself.
     const nearMe = query.lat !== undefined && query.lng !== undefined;
     if (nearMe) {
       const from = { lat: query.lat!, lng: query.lng! };
       // A salon with no lat/lng can never get a distance and is always dropped by the
       // distanceKm-not-null filter below — fetching it into the capped candidate set would only
-      // ever waste one of the NEAR_ME_CANDIDATE_CAP slots. At scale this matters: if 200+ salons
-      // matching `where` have no coordinates, an unfiltered `take: 200` could fill the entire
-      // candidate set with rows that were always going to be discarded, silently returning zero
-      // results even when real coordinate-bearing salons exist and match. Filtering coordinates
-      // at the DB level spends every one of the capped rows on a salon that can actually appear
-      // in the sorted result.
-      const candidates = await this.prisma.salon.findMany({
-        where: { ...where, lat: { not: null }, lng: { not: null } },
-        take: NEAR_ME_CANDIDATE_CAP,
-        include: listInclude,
-      });
+      // ever waste one of the NEAR_ME_CANDIDATE_CAP slots. Filtering coordinates at the DB level
+      // (on top of the bounding box) spends every one of the capped rows on a salon that can
+      // actually appear in the sorted result.
+      let candidates: SalonWithListRelations[] = [];
+      for (const radiusKm of NEAR_ME_RADII_KM) {
+        const box = boundingBoxDegrees(from.lat, from.lng, radiusKm);
+        candidates = await this.prisma.salon.findMany({
+          where: {
+            ...where,
+            lat: { not: null, gte: box.minLat, lte: box.maxLat },
+            lng: { not: null, gte: box.minLng, lte: box.maxLng },
+          },
+          // Deterministic across widening attempts and repeated calls — Prisma/Postgres give no
+          // ordering guarantee without an explicit orderBy, which would otherwise make which 200
+          // rows survive the cap (when more than 200 match) merely "incidental," not reproducible.
+          orderBy: { id: 'asc' },
+          take: NEAR_ME_CANDIDATE_CAP,
+          include: listInclude,
+        });
+        if (candidates.length >= limit) break;
+      }
       const withDistance = await Promise.all(
         candidates.map((s) => this.toListItem(s, from)),
       );
@@ -135,7 +190,9 @@ export class SalonsService {
         // happened to return them in — never guaranteed, and not something a client can rely on
         // page-to-page. Sorting is stable (ES2019+), so this tiebreaker makes the full order
         // deterministic rather than merely "probably consistent."
-        .sort((a, b) => a.distanceKm! - b.distanceKm! || a.id.localeCompare(b.id))
+        .sort(
+          (a, b) => a.distanceKm! - b.distanceKm! || a.id.localeCompare(b.id),
+        )
         .slice(0, limit);
       return { items: sorted, nextCursor: null };
     }
@@ -252,17 +309,15 @@ export class SalonsService {
         comment: r.comment,
         createdAt: r.createdAt.toISOString(),
       })),
-      team: salon.staff.map(
-        (s): TeamMemberDto => ({
-          id: s.id,
-          displayName: s.displayName,
-          roleInSalon: s.roleInSalon,
-          photoUrl: s.photoUrl,
-          bio: s.bio,
-          yearsExperience: s.yearsExperience,
-          verified: s.verification?.status === VerificationStatus.APPROVED,
-        }),
-      ),
+      team: salon.staff.map((s): TeamMemberDto => ({
+        id: s.id,
+        displayName: s.displayName,
+        roleInSalon: s.roleInSalon,
+        photoUrl: s.photoUrl,
+        bio: s.bio,
+        yearsExperience: s.yearsExperience,
+        verified: s.verification?.status === VerificationStatus.APPROVED,
+      })),
     };
   }
 
@@ -485,7 +540,9 @@ export class SalonsService {
       await this.aggregate(salon.id);
     const distanceKm =
       from && salon.lat !== null && salon.lng !== null
-        ? Math.round(haversineDistanceKm(from.lat, from.lng, salon.lat, salon.lng) * 10) / 10
+        ? Math.round(
+            haversineDistanceKm(from.lat, from.lng, salon.lat, salon.lng) * 10,
+          ) / 10
         : null;
     return {
       id: salon.id,

@@ -204,11 +204,11 @@ describe('SalonsService', () => {
         prisma.salon.findMany.mockResolvedValue([]);
         await service.search({ lat: 12.9716, lng: 77.6412 });
         const call = prisma.salon.findMany.mock.calls[0][0] as unknown as {
-          where: { lat: { not: null }; lng: { not: null } };
+          where: { lat: { not: null; gte: number; lte: number }; lng: { not: null; gte: number; lte: number } };
           take: number;
         };
-        expect(call.where.lat).toEqual({ not: null });
-        expect(call.where.lng).toEqual({ not: null });
+        expect(call.where.lat.not).toBeNull();
+        expect(call.where.lng.not).toBeNull();
         // The full candidate cap is spent entirely on rows that can actually appear in the
         // distance-sorted result — this is what actually prevents the crowding-out bug once the
         // coordinate filter above is applied at the database level.
@@ -216,15 +216,67 @@ describe('SalonsService', () => {
       });
 
       it('still considers every coordinate-bearing salon even when many others in the same query have none', async () => {
-        // The mock can't simulate a real WHERE filter, so this proves the *other* half of the
-        // fix: every returned (coordinate-bearing, per the query above) candidate is still
-        // correctly distance-sorted and included, none silently dropped just for being one of many.
+        // The mock can't simulate a real WHERE filter (bounding box or coordinate-not-null), so
+        // this proves the *other* half of the fix: every candidate the DB actually returns is
+        // still correctly distance-sorted and included, none silently dropped just for being one
+        // of many. Real bounding-box exclusion of a truly distant salon is covered separately below.
         const far = makeSalon({ id: 'far', lat: 20.0, lng: 80.0 });
         const near = makeSalon({ id: 'near', lat: 12.9716, lng: 77.6412 });
         const mid = makeSalon({ id: 'mid', lat: 13.2, lng: 77.8 });
         prisma.salon.findMany.mockResolvedValue([far, near, mid]);
         const result = await service.search({ lat: 12.9716, lng: 77.6412 });
         expect(result.items.map((i) => i.id)).toEqual(['near', 'mid', 'far']);
+      });
+
+      it('sizes the initial bounding box from the query point, not a fixed offset', async () => {
+        prisma.salon.findMany.mockResolvedValue([makeSalon(), makeSalon(), makeSalon()]);
+        // Two query points far enough apart (different cities) that a fixed-size box bug (e.g.
+        // reusing one city's box for another) would produce identical bounds either way — this
+        // instead asserts the bounds are actually a function of each query's own lat/lng.
+        await service.search({ lat: 12.9716, lng: 77.6412 }); // Bengaluru
+        const bengaluruBox = prisma.salon.findMany.mock.calls[0][0] as unknown as {
+          where: { lat: { gte: number; lte: number }; lng: { gte: number; lte: number } };
+        };
+        prisma.salon.findMany.mockClear();
+        await service.search({ lat: 28.6139, lng: 77.209 }); // Delhi
+        const delhiBox = prisma.salon.findMany.mock.calls[0][0] as unknown as {
+          where: { lat: { gte: number; lte: number }; lng: { gte: number; lte: number } };
+        };
+        expect(bengaluruBox.where.lat.gte).not.toBeCloseTo(delhiBox.where.lat.gte, 1);
+        // Bengaluru (~13°N) and Delhi (~28°N) sit at different latitudes, so a correct box (which
+        // narrows longitude by cos(latitude)) gives them different-width longitude spans — a bug
+        // that used a fixed km-per-degree-longitude regardless of latitude would make these equal.
+        const bengaluruLngSpan = bengaluruBox.where.lng.lte - bengaluruBox.where.lng.gte;
+        const delhiLngSpan = delhiBox.where.lng.lte - delhiBox.where.lng.gte;
+        expect(bengaluruLngSpan).not.toBeCloseTo(delhiLngSpan, 3);
+      });
+
+      it('cannot let a salon outside the bounding box crowd out one inside it, even with 200+ distant coordinate-bearing rows', async () => {
+        // Simulates the real WHERE clause: only rows whose lat/lng actually fall inside the box
+        // this specific call requested are returned — exactly what Postgres would do, unlike the
+        // other tests here (which use a single fixed mock and so can't exercise this distinction).
+        const from = { lat: 12.9716, lng: 77.6412 }; // Bengaluru
+        const near = makeSalon({ id: 'near', lat: 12.98, lng: 77.65 }); // ~1.5km away
+        // 200 salons scattered around a totally different part of the world (Delhi), each with
+        // real, valid coordinates — under the pre-fix "coordinate-bearing only" filter these could
+        // fill the entire NEAR_ME_CANDIDATE_CAP before the query ever reached `near`.
+        const farAway = Array.from({ length: 200 }, (_, i) =>
+          makeSalon({ id: `far-${i}`, lat: 28.6139 + i * 0.001, lng: 77.209 }),
+        );
+        prisma.salon.findMany.mockImplementation((args: SalonFindManyArgs) => {
+          const latFilter = (args.where as unknown as { lat?: { gte: number; lte: number } }).lat;
+          const lngFilter = (args.where as unknown as { lng?: { gte: number; lte: number } }).lng;
+          const inBox = (s: ReturnType<typeof makeSalon>) =>
+            !!latFilter &&
+            !!lngFilter &&
+            s.lat >= latFilter.gte &&
+            s.lat <= latFilter.lte &&
+            s.lng >= lngFilter.gte &&
+            s.lng <= lngFilter.lte;
+          return Promise.resolve([...farAway, near].filter(inBox));
+        });
+        const result = await service.search({ lat: from.lat, lng: from.lng });
+        expect(result.items.map((i) => i.id)).toContain('near');
       });
 
       it('excludes a salon with only one of lat/lng set (malformed/partial coordinates), not just fully-null', async () => {
@@ -248,9 +300,12 @@ describe('SalonsService', () => {
         // Both salons are equidistant from the query point (same lat/lng as each other).
         const b = makeSalon({ id: 'b-salon', lat: 13.0, lng: 78.0 });
         const a = makeSalon({ id: 'a-salon', lat: 13.0, lng: 78.0 });
-        prisma.salon.findMany.mockResolvedValueOnce([b, a]);
+        // mockResolvedValue (not Once): fewer than `limit` candidates triggers the box-widening
+        // retry loop, which would call findMany again — a single queued Once-value would leave
+        // that retry with nothing mocked and throw on `.length` of undefined.
+        prisma.salon.findMany.mockResolvedValue([b, a]);
         const first = await service.search({ lat: 12.9716, lng: 77.6412 });
-        prisma.salon.findMany.mockResolvedValueOnce([a, b]);
+        prisma.salon.findMany.mockResolvedValue([a, b]);
         const second = await service.search({ lat: 12.9716, lng: 77.6412 });
         // Same tie-break result regardless of which order Prisma happened to return the rows in.
         expect(first.items.map((i) => i.id)).toEqual(['a-salon', 'b-salon']);
