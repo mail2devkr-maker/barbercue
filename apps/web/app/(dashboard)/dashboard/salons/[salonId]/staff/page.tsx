@@ -193,7 +193,7 @@ export default function DashboardStaffPage({
         </Button>
       </form>
 
-      {staff === null && <p className={styles.loadingText}>Loading…</p>}
+      {staff === null && !error && <p className={styles.loadingText}>Loading…</p>}
       {staff?.length === 0 && <p className={styles.emptyState}>No barbers yet. Add your first one above.</p>}
       {staff && staff.length > 0 && (
         <ul className={styles.rowList}>

@@ -115,7 +115,7 @@ export default function DashboardHoursPage({
         </p>
       )}
 
-      {days === null && <p className={styles.loadingText}>Loading…</p>}
+      {days === null && !error && <p className={styles.loadingText}>Loading…</p>}
 
       {days && (
         <form id="opening-hours-form" onSubmit={handleSave}>

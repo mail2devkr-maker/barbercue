@@ -83,7 +83,7 @@ export default function DashboardVerificationPage({
       <p className={styles.pageSubtitle}>{VERIFICATION_BADGE_CAPTION}</p>
 
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
-      {current === undefined && <p className={styles.loadingText}>Loading…</p>}
+      {current === undefined && !error && <p className={styles.loadingText}>Loading…</p>}
 
       {current !== undefined && current !== null && (
         <div className={`${styles.banner} ${current.status === "APPROVED" ? styles.bannerNotice : styles.bannerWarning}`} style={{ margin: "16px 0" }}>

@@ -377,7 +377,7 @@ export default function DashboardPhotosPage({
         </div>
       </form>
 
-      {photos === null && <p className={styles.loadingText}>Loading…</p>}
+      {photos === null && !error && <p className={styles.loadingText}>Loading…</p>}
       {photos?.length === 0 && (
         <p className={styles.emptyState}>No photos yet. Add your cover photo above.</p>
       )}

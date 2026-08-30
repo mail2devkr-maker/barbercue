@@ -128,7 +128,7 @@ export default function DashboardChairsPage({
         </Button>
       </form>
 
-      {chairs === null && <p className={styles.loadingText}>Loading…</p>}
+      {chairs === null && !error && <p className={styles.loadingText}>Loading…</p>}
       {chairs?.length === 0 && <p className={styles.emptyState}>No chairs yet. Add your first one above.</p>}
       {chairs && chairs.length > 0 && (
         <ul className={styles.rowList}>

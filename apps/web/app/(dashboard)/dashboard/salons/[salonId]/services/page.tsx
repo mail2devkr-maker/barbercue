@@ -176,7 +176,7 @@ export default function DashboardServicesPage({
 
       {error && <p className={`${styles.banner} ${styles.bannerError}`} role="alert">{error}</p>}
       {notice && <p className={`${styles.banner} ${styles.bannerNotice}`} role="status">{notice}</p>}
-      {services === null && <p className={styles.loadingText}>Loading services…</p>}
+      {services === null && !error && <p className={styles.loadingText}>Loading services…</p>}
 
       {services && (
         <ServiceCatalogPicker
