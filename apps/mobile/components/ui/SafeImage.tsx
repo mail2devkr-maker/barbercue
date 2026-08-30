@@ -41,7 +41,12 @@ export function SafeImage({
   }
 
   return (
-    <View style={[styles.placeholder, style]}>
+    <View
+      style={[styles.placeholder, style]}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`${alt}: ${url ? "photo unavailable" : "no photo yet"}`}
+    >
       <View style={styles.badge}>
         <Text style={styles.badgeText}>BC</Text>
       </View>
