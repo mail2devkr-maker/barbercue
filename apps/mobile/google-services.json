@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "871155185690",
+    "project_id": "barbercue",
+    "storage_bucket": "barbercue.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:871155185690:android:72ebf4ad085601294139a3",
+        "android_client_info": {
+          "package_name": "com.dcw.barbercue"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "871155185690-bcl6bu22nphvg85hklflag78sqfp7khv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD43892zAKpHUiurmtnxhvFJOLy8FPEB1o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "871155185690-bcl6bu22nphvg85hklflag78sqfp7khv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
