@@ -14,6 +14,7 @@ import { Role } from '@barbercue/shared';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { color } from './lib/theme';
 import { OfflineBanner } from './components/OfflineBanner';
+import { PushTransportProbe } from './components/PushTransportProbe';
 import AuthStack from './navigation/AuthStack';
 import RootNavigator from './navigation/RootNavigator';
 import OwnerNavigator from './navigation/OwnerNavigator';
@@ -47,6 +48,7 @@ function Root() {
     <NavigationContainer ref={navigationRef}>
       <OfflineBanner />
       <PushNotificationCoordinator />
+      <PushTransportProbe />
       {status === 'authenticated' && user ? <AuthenticatedNavigator roles={user.roles} /> : <AuthStack />}
     </NavigationContainer>
   );
