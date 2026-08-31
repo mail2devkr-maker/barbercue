@@ -261,6 +261,102 @@ describe('SearchService', () => {
           'Beear Studio',
         ]);
       });
+
+      // Independent review (fourth pass) — the SQL token-PRIORITY term (ORDER BY) must require
+      // ALL query tokens present (AND), not just any one of them (OR). OR is correct for WHERE-
+      // clause RECALL (cast a wide net), but wrong for ORDER BY PRIORITY: a row containing only
+      // one of several query tokens is not a genuine token-tier match at all (classifySearchMatch
+      // requires every token), so giving it the same priority as a true all-tokens match could let
+      // a flood of single-token rows crowd the real match out of the bounded candidate set before
+      // TypeScript ever sees it.
+      describe('AND-based token priority (independent review — round 4)', () => {
+        it('builds the SQL token-priority term with AND across per-token conditions, distinct from the OR used for WHERE recall', async () => {
+          await service.suggest({ q: 'beard fade' });
+          const [shopSql, serviceSql] = prisma.$queryRaw.mock.calls.map((call) => call[0]);
+
+          for (const sql of [shopSql.sql, serviceSql.sql]) {
+            const whereIndex = sql.indexOf('WHERE');
+            const orderByIndex = sql.indexOf('ORDER BY');
+            const whereClause = sql.slice(whereIndex, orderByIndex);
+            const orderByClause = sql.slice(orderByIndex);
+
+            // WHERE recall: the per-token conditions are OR'd (cast a wide net). [\s\S]* (not .*)
+            // because the generated SQL is a real multi-line string and `.` never matches a
+            // newline in JS regex without the dotAll flag.
+            expect(whereClause).toMatch(/ILIKE[\s\S]*ESCAPE '\\' OR [\s\S]*ILIKE[\s\S]*ESCAPE '\\'/);
+            expect(whereClause).not.toMatch(/ILIKE[\s\S]*ESCAPE '\\' AND [\s\S]*ILIKE[\s\S]*ESCAPE '\\'/);
+            // ORDER BY priority: the SAME shape of per-token conditions, but AND'd together —
+            // proven by finding an "ILIKE ... AND ... ILIKE" sequence within the ORDER BY clause
+            // specifically (not merely present anywhere in the whole query text).
+            expect(orderByClause).toMatch(/ILIKE[\s\S]*ESCAPE '\\' AND [\s\S]*ILIKE[\s\S]*ESCAPE '\\'/);
+            expect(orderByClause).not.toMatch(/ILIKE[\s\S]*ESCAPE '\\' OR [\s\S]*ILIKE[\s\S]*ESCAPE '\\'/);
+          }
+        });
+
+        it('derives SQL tokens via the same normalizeForMatch semantics as the TypeScript matcher, so hyphenation/punctuation agree', async () => {
+          await service.suggest({ q: 'hair-cut' });
+          const [shopSql] = prisma.$queryRaw.mock.calls.map((call) => call[0]);
+          // normalizeForMatch("hair-cut") -> "hair cut" -> tokens ["hair", "cut"] -- a naive
+          // whitespace-only split (a hyphen has no whitespace either side) would never have
+          // separated it into two tokens at all, so these two SEPARATE token patterns proves
+          // normalizeForMatch, not `.split(/\s+/)`, is what derives them. (`%hair-cut%` also
+          // legitimately appears among the values too -- that's the unrelated, unnormalized
+          // whole-query containsPattern/prefixPattern, out of this fix's scope and unchanged.)
+          expect(shopSql.values).toContain('%hair%');
+          expect(shopSql.values).toContain('%cut%');
+        });
+
+        it('boundary regression: a genuine all-tokens candidate survives and outranks candidateLimit-worth of single-token-only rows', async () => {
+          // 29 filler rows, each containing only ONE of the two query tokens ("beard" xor "fade")
+          // -- verified genuine FUZZY-tier matches (classifySearchMatch requires ALL tokens for
+          // the token tier, so a single-token row can never itself be token-tier) -- plus one
+          // genuine ALL-tokens candidate ("Fade and Beard Combo", scrambled word order) placed
+          // LAST, as if an unordered scan had returned it that way. With the OLD OR-based SQL
+          // priority this genuine match would have received no more priority than any of the 29
+          // weaker rows and could have been the one arbitrarily dropped by LIMIT in real Postgres;
+          // the AND-based priority (this fix) is what guarantees Postgres itself would rank it
+          // ahead of every single-token row before truncating. This test proves the CONSUMPTION
+          // side: even handed the worst-case row order, the service's own ranking still surfaces
+          // and correctly tiers it above every fuzzy filler.
+          const singleTokenFiller = Array.from({ length: 29 }, (_, i) =>
+            i % 2 === 0
+              ? { name: `Beard Studio ${i}`, category: null } // "beard" only
+              : { name: `Fade Studio ${i}`, category: null }, // "fade" only
+          );
+          prisma.$queryRaw
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([
+              ...singleTokenFiller,
+              { name: 'Fade and Beard Combo', category: 'Token' },
+            ]);
+          const result = await service.suggest({ q: 'beard fade' });
+          expect(result.services[0]).toEqual({ name: 'Fade and Beard Combo', category: 'Token' });
+        });
+
+        it('final TypeScript ordering within this same multi-token scenario still holds exact > prefix > token > fuzzy', async () => {
+          // Verified fixture set for query "beard fade": exact, prefix, a scrambled-order token
+          // match, and a single-token-only fuzzy filler -- no alias tier exists for this specific
+          // two-word query (resolveAliasCanonicalTerms only matches a whole registered phrase, and
+          // "beard fade" isn't one; alias-tier ordering is separately proven, for a query that DOES
+          // have one, by the single-tier-per-query "bear" test above).
+          prisma.$queryRaw
+            .mockResolvedValueOnce([])
+            .mockResolvedValueOnce([
+              // Deliberately scrambled DB order -- the service must re-rank into the required order.
+              { name: 'Beard Studio 0', category: null }, // fuzzy (single-token-only)
+              { name: 'Fade and Beard Combo', category: null }, // token (scrambled word order)
+              { name: 'Beard Fade Specialists', category: null }, // prefix
+              { name: 'Beard Fade', category: null }, // exact
+            ]);
+          const result = await service.suggest({ q: 'beard fade' });
+          expect(result.services.map((s) => s.name)).toEqual([
+            'Beard Fade',
+            'Beard Fade Specialists',
+            'Fade and Beard Combo',
+            'Beard Studio 0',
+          ]);
+        });
+      });
     });
   });
 });

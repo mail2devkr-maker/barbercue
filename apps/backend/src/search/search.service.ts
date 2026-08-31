@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  normalizeForMatch,
   rankSearchCandidates,
   resolveAliasCanonicalTerms,
   type SearchSuggestQueryInput,
@@ -55,18 +56,31 @@ function escapeIlike(value: string): string {
  * accelerate"; it is never itself the ranking authority, and the alias/token/exact/prefix tiers
  * exist and are checked regardless of what pg_trgm thinks of a given pair of strings.
  *
- * Two correctness properties the recall SQL itself must guarantee (independent-review fixes):
+ * Correctness properties the recall SQL itself must guarantee (independent-review fixes, most
+ * recent round first):
  *
+ * 0. The SQL token-PRIORITY term (used in ORDER BY, to decide what survives a bounded LIMIT) must
+ *    require ALL query tokens present (AND), not just ANY one of them (OR) -- OR is the right
+ *    shape for WHERE-clause RECALL (cast a wide net) but the wrong shape for ORDER BY PRIORITY: a
+ *    row containing only one of several query tokens is not a genuine token-tier match at all
+ *    (classifySearchMatch requires every token), so prioritizing it the same as a row containing
+ *    every token could let a flood of one-token-only rows crowd a true multi-token match out of
+ *    the bounded candidate set before TypeScript ever sees it. Recall (WHERE) and priority (ORDER
+ *    BY) are therefore built from the SAME per-token conditions but combined differently: OR for
+ *    recall, AND for priority. Token derivation also goes through the shared normalizeForMatch()
+ *    -- the exact function classifySearchMatch itself tokenizes with -- so a hyphenated/punctuated
+ *    query ("hair-cut") splits into SQL tokens identically to how TypeScript will later tokenize
+ *    it, rather than SQL's naive whitespace-only split disagreeing with what actually gets ranked.
  * 1. Bounded recall must not silently drop a strong candidate. `LIMIT candidateLimit` alone gives
  *    Postgres no ordering guarantee -- with more matching rows than the limit, an arbitrary subset
  *    could survive, including one made entirely of weak fuzzy matches while a genuine exact/
- *    prefix/alias/token candidate is dropped before the TypeScript ranker ever sees it. Both
- *    queries below carry an ORDER BY that mirrors the tier priority (exact-ish > prefix > alias >
- *    token > fuzzy similarity) BEFORE the LIMIT is applied, so truncation always sheds the weakest
- *    (fuzzy) candidates first. This ORDER BY is a cheap, index-blind heuristic over an
- *    already-index-filtered row set -- it does not need to (and cannot cheaply) reproduce
- *    classifySearchMatch's exact normalization; TypeScript remains the sole authority on the
- *    FINAL order returned to the caller.
+ *    prefix/alias/token candidate is dropped before the TypeScript ranker ever sees it. Every
+ *    query below carries an ORDER BY that mirrors the tier priority (exact-ish > prefix > alias >
+ *    all-tokens > fuzzy similarity) BEFORE the LIMIT is applied, so truncation always sheds the
+ *    weakest (fuzzy, or partial-token) candidates first. This ORDER BY is a cheap, index-blind
+ *    heuristic over an already-index-filtered row set -- it does not need to (and cannot cheaply)
+ *    reproduce classifySearchMatch's exact normalization; TypeScript remains the sole authority on
+ *    the FINAL order returned to the caller.
  * 2. A multi-word query's TOKEN-tier candidates (e.g. "beard fade" matching "Fade and Beard
  *    combo", where the words appear out of order / with other text between them, so the literal
  *    "beard fade" substring never appears) must not depend on pg_trgm happening to cross the
@@ -96,12 +110,15 @@ export class SearchService {
       MAX_CANDIDATE_FETCH,
     );
 
-    // Individual query words (e.g. "beard fade" -> ["beard", "fade"]) -- see the class doc's
-    // point 2. A single-word query yields exactly one token, identical to the whole-query
-    // containment pattern above (redundant but harmless, not worth special-casing away).
-    const queryTokens = rawQuery
-      .split(/\s+/)
-      .map((token) => token.trim())
+    // Individual query words, derived through the SAME normalizeForMatch() classifySearchMatch
+    // itself tokenizes with -- e.g. "beard fade" -> ["beard", "fade"], "hair-cut" -> ["hair",
+    // "cut"] -- so SQL recall/priority can never disagree with TypeScript about what a query's
+    // "tokens" are. A single-word query yields exactly one token (redundant with the whole-query
+    // patterns above, but harmless). Punctuation-only input normalizes to '' and yields zero
+    // tokens -- every token-derived condition below degrades gracefully to "not applicable" rather
+    // than calling Prisma.join([]), which throws on an empty array.
+    const queryTokens = normalizeForMatch(rawQuery)
+      .split(' ')
       .filter((token) => token.length > 0)
       .map(escapeIlike);
 
@@ -123,16 +140,33 @@ export class SearchService {
       (token) => Prisma.sql`s.name ILIKE ${`%${token}%`} ESCAPE '\\'`,
     );
     // Reused in both the WHERE (as an extra OR branch, when non-empty) and the ORDER BY (as a
-    // priority tier) -- Prisma.sql`false` is the "no canonical term for this query" fallback so
-    // interpolating it into a boolean-priority ORDER BY term is always valid SQL.
+    // priority tier). The "no canonical term for this query" fallback is `(1 = 0)`, NOT a bare
+    // `false` literal -- verified empirically against real Postgres: a bare (even parenthesized)
+    // boolean CONSTANT in an ORDER BY position is ambiguous with the SQL ordinal-position shortcut
+    // (`ORDER BY 1, 2`) and Postgres rejects it outright ("non-integer constant in ORDER BY"); a
+    // genuine boolean-valued EXPRESSION like `1 = 0` has no such ambiguity and always evaluates to
+    // false the same way.
     const shopAliasPriority =
       shopAliasConditions.length > 0
         ? Prisma.sql`(${Prisma.join(shopAliasConditions, ' OR ')})`
-        : Prisma.sql`false`;
+        : Prisma.sql`(1 = 0)`;
     const serviceAliasPriority =
       serviceAliasConditions.length > 0
         ? Prisma.sql`(${Prisma.join(serviceAliasConditions, ' OR ')})`
-        : Prisma.sql`false`;
+        : Prisma.sql`(1 = 0)`;
+    // ALL-tokens-present priority (AND) -- deliberately DIFFERENT from the per-token RECALL
+    // conditions above, which are OR'd into the WHERE for broad recall. A row containing only some
+    // query tokens is not a token-tier match (classifySearchMatch requires every token), so it
+    // must not receive the same ORDER BY priority as a row containing all of them -- see this
+    // class's own doc comment, point 0.
+    const shopAllTokensPriority =
+      shopTokenConditions.length > 0
+        ? Prisma.sql`(${Prisma.join(shopTokenConditions, ' AND ')})`
+        : Prisma.sql`(1 = 0)`;
+    const serviceAllTokensPriority =
+      serviceTokenConditions.length > 0
+        ? Prisma.sql`(${Prisma.join(serviceTokenConditions, ' AND ')})`
+        : Prisma.sql`(1 = 0)`;
 
     const [shopRows, serviceRows] = await Promise.all([
       this.prisma.$queryRaw<ShopSuggestRow[]>(Prisma.sql`
@@ -149,13 +183,13 @@ export class SearchService {
             sa.name ILIKE ${containsPattern} ESCAPE '\\'
             OR similarity(sa.name, ${rawQuery}) > ${FUZZY_SIMILARITY_THRESHOLD}
             ${shopAliasConditions.length > 0 ? Prisma.sql`OR ${Prisma.join(shopAliasConditions, ' OR ')}` : Prisma.empty}
-            OR ${Prisma.join(shopTokenConditions, ' OR ')}
+            ${shopTokenConditions.length > 0 ? Prisma.sql`OR ${Prisma.join(shopTokenConditions, ' OR ')}` : Prisma.empty}
           )
         ORDER BY
           (lower(sa.name) = lower(${rawQuery})) DESC,
           (sa.name ILIKE ${prefixPattern} ESCAPE '\\') DESC,
           ${shopAliasPriority} DESC,
-          (${Prisma.join(shopTokenConditions, ' OR ')}) DESC,
+          ${shopAllTokensPriority} DESC,
           similarity(sa.name, ${rawQuery}) DESC,
           sa.name ASC
         LIMIT ${candidateLimit}
@@ -175,14 +209,14 @@ export class SearchService {
             s.name ILIKE ${containsPattern} ESCAPE '\\'
             OR similarity(s.name, ${rawQuery}) > ${FUZZY_SIMILARITY_THRESHOLD}
             ${serviceAliasConditions.length > 0 ? Prisma.sql`OR ${Prisma.join(serviceAliasConditions, ' OR ')}` : Prisma.empty}
-            OR ${Prisma.join(serviceTokenConditions, ' OR ')}
+            ${serviceTokenConditions.length > 0 ? Prisma.sql`OR ${Prisma.join(serviceTokenConditions, ' OR ')}` : Prisma.empty}
           )
         GROUP BY lower(s.name)
         ORDER BY
           bool_or(lower(s.name) = lower(${rawQuery})) DESC,
           bool_or(s.name ILIKE ${prefixPattern} ESCAPE '\\') DESC,
           bool_or(${serviceAliasPriority}) DESC,
-          bool_or(${Prisma.join(serviceTokenConditions, ' OR ')}) DESC,
+          bool_or(${serviceAllTokensPriority}) DESC,
           MAX(similarity(s.name, ${rawQuery})) DESC,
           MIN(s.name) ASC
         LIMIT ${candidateLimit}
