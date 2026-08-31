@@ -51,7 +51,9 @@ const bookingDetailInclude = {
     },
   },
   service: { select: { name: true, durationMinutes: true, price: true } },
-  preferredStaff: { select: { displayName: true } },
+  // userId is owner/staff-facing only (push routing) — toDetailDto below never reads it, so the
+  // customer-facing BookingDetailDto shape is unaffected.
+  preferredStaff: { select: { displayName: true, userId: true } },
   // Phase 16 (Ratings & Reviews) — id only, just to derive hasReview below; the review's own
   // content is fetched separately by ReviewsService, never duplicated onto BookingDetailDto.
   reviews: { select: { id: true } },
@@ -271,6 +273,14 @@ export class BookingsService {
     const salonTimezone = await this.availability.getSalonTimeZone(
       input.salonId,
     );
+    // Named-staff push routing/display — resolved once here, not re-derived from the live
+    // Service, so it always matches the effective snapshot just written to the booking row.
+    const preferredStaff = input.preferredStaffId
+      ? await this.prisma.salonStaff.findUnique({
+          where: { id: input.preferredStaffId },
+          select: { userId: true, displayName: true },
+        })
+      : null;
     const pushPayload = {
       salonId: input.salonId,
       salonName: salon.name,
@@ -278,9 +288,12 @@ export class BookingsService {
       serviceName: service.name,
       slotStart: slotStart.toISOString(),
       salonTimezone: salonTimezone ?? undefined,
-      durationMinutes: service.durationMinutes,
-      servicePrice: Number(service.price),
+      // The effective (possibly staff-overridden) snapshot just committed to the booking row —
+      // never the Service's own live defaults, which a specific barber's override may differ from.
+      durationMinutes: effective.durationMinutes,
+      servicePrice: effective.price,
       currency: salon.currency,
+      staffDisplayName: preferredStaff?.displayName,
     };
     await this.notifications.notify(
       customerId,
@@ -296,6 +309,16 @@ export class BookingsService {
       pushPayload,
       `dashboard/salons/${input.salonId}/bookings`,
     );
+    // "Any Professional" (no preferredStaffId) never pushes to an arbitrary staff member — only a
+    // customer-selected barber gets notified of their own new appointment.
+    if (preferredStaff) {
+      await this.notifications.notify(
+        preferredStaff.userId,
+        'staff.booking.created',
+        pushPayload,
+        `dashboard/salons/${input.salonId}/bookings`,
+      );
+    }
 
     return this.getDetailOrThrow(bookingId, customerId);
   }
@@ -422,31 +445,35 @@ export class BookingsService {
     const cancelledSalonTimezone = await this.availability.getSalonTimeZone(
       updated.salonId,
     );
+    const cancelPushPayload = {
+      salonId: updated.salonId,
+      salonName: updated.salon.name,
+      bookingId,
+      serviceName: updated.service.name,
+      slotStart: updated.slotStart.toISOString(),
+      salonTimezone: cancelledSalonTimezone ?? undefined,
+      staffDisplayName: updated.preferredStaff?.displayName,
+    };
     await this.notifications.notify(
       customerId,
       'booking.cancelled',
-      {
-        salonId: updated.salonId,
-        salonName: updated.salon.name,
-        bookingId,
-        serviceName: updated.service.name,
-        slotStart: updated.slotStart.toISOString(),
-        salonTimezone: cancelledSalonTimezone ?? undefined,
-      },
+      cancelPushPayload,
       'account/bookings',
     );
     await this.notifications.notify(
       updated.salon.ownerUserId,
       'owner.booking.cancelled',
-      {
-        salonId: updated.salonId,
-        bookingId,
-        serviceName: updated.service.name,
-        slotStart: updated.slotStart.toISOString(),
-        salonTimezone: cancelledSalonTimezone ?? undefined,
-      },
+      cancelPushPayload,
       `dashboard/salons/${updated.salonId}/bookings`,
     );
+    if (updated.preferredStaff) {
+      await this.notifications.notify(
+        updated.preferredStaff.userId,
+        'staff.booking.cancelled',
+        cancelPushPayload,
+        `dashboard/salons/${updated.salonId}/bookings`,
+      );
+    }
 
     return {
       booking: this.toDetailDto(updated),
@@ -613,7 +640,11 @@ export class BookingsService {
       serviceName: updated.service.name,
       slotStart: updated.slotStart.toISOString(),
       salonTimezone: rescheduledSalonTimezone ?? undefined,
-      durationMinutes: updated.service.durationMinutes,
+      // The booking's own snapshotted duration (never recomputed by reschedule — see the comment
+      // above newSlotEnd), matching what actually blocks the calendar at the new time.
+      durationMinutes: updated.effectiveServiceDurationMinutes,
+      servicePrice: Number(updated.effectiveServicePrice),
+      staffDisplayName: updated.preferredStaff?.displayName,
     };
     await this.notifications.notify(
       customerId,
@@ -627,6 +658,14 @@ export class BookingsService {
       reschedulePayload,
       `dashboard/salons/${updated.salonId}/bookings`,
     );
+    if (updated.preferredStaff) {
+      await this.notifications.notify(
+        updated.preferredStaff.userId,
+        'staff.booking.rescheduled',
+        reschedulePayload,
+        `dashboard/salons/${updated.salonId}/bookings`,
+      );
+    }
 
     return this.toDetailDto(updated);
   }

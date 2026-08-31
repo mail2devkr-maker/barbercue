@@ -56,6 +56,7 @@ interface PrismaMock {
   };
   salonPaymentPolicy: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   staffService: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
+  salonStaff: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   booking: {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
@@ -103,6 +104,11 @@ describe('BookingsService', () => {
       },
       staffService: {
         findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(null),
+      },
+      salonStaff: {
+        findUnique: jest
+          .fn<Promise<unknown>, [unknown]>()
+          .mockResolvedValue({ userId: 'staff-user-1', displayName: 'Dinesh' }),
       },
       booking: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
@@ -518,6 +524,78 @@ describe('BookingsService', () => {
     });
   });
 
+  describe('create - booking push notifications (mobile push reconciliation)', () => {
+    const futureSlot = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+
+    beforeEach(() => {
+      prisma.customerLedgerEntry.findFirst.mockResolvedValue(null);
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue(null);
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.booking.create.mockResolvedValue({ id: 'b1' });
+      prisma.booking.findFirst.mockResolvedValue(makeBookingRow());
+    });
+
+    it('pushes the EFFECTIVE staff-overridden price/duration to the customer and owner, not the base Service defaults', async () => {
+      prisma.staffService.findUnique.mockResolvedValue({
+        priceOverride: decimal('500'),
+        durationOverrideMinutes: 45,
+      });
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh-elite' },
+        BookingSource.WEB,
+        'key-1',
+      );
+      const [customerCall, ownerCall] = notifications.notify.mock.calls;
+      expect(customerCall[0]).toBe('c1');
+      expect(customerCall[1]).toBe('booking.confirmed');
+      expect(customerCall[2]).toMatchObject({ durationMinutes: 45, servicePrice: 500 });
+      expect(ownerCall[0]).toBe('owner1');
+      expect(ownerCall[1]).toBe('owner.booking.created');
+      expect(ownerCall[2]).toMatchObject({ durationMinutes: 45, servicePrice: 500 });
+    });
+
+    it('pushes staff.booking.created to the named barber\'s own userId, carrying the same effective snapshot', async () => {
+      prisma.salonStaff.findUnique.mockResolvedValue({
+        userId: 'staff-user-9',
+        displayName: 'Dinesh',
+      });
+      prisma.staffService.findUnique.mockResolvedValue({
+        priceOverride: decimal('500'),
+        durationOverrideMinutes: 45,
+      });
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh-elite' },
+        BookingSource.WEB,
+        'key-1',
+      );
+      const staffCall = notifications.notify.mock.calls.find(
+        (call) => call[1] === 'staff.booking.created',
+      );
+      expect(staffCall).toBeDefined();
+      expect(staffCall?.[0]).toBe('staff-user-9');
+      expect(staffCall?.[2]).toMatchObject({
+        durationMinutes: 45,
+        servicePrice: 500,
+        staffDisplayName: 'Dinesh',
+      });
+    });
+
+    it('never pushes a staff.booking.created event for an "Any Professional" booking (no preferredStaffId)', async () => {
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(prisma.salonStaff.findUnique).not.toHaveBeenCalled();
+      expect(
+        notifications.notify.mock.calls.some((call) => call[1] === 'staff.booking.created'),
+      ).toBe(false);
+    });
+  });
+
   describe('listMine', () => {
     it('trims to the page size and sets nextCursor when there are more results', async () => {
       prisma.booking.findMany.mockResolvedValue([
@@ -605,6 +683,65 @@ describe('BookingsService', () => {
         reason: 'CANCELLATION_CHARGE',
         status: 'OUTSTANDING',
       });
+    });
+
+    it('pushes staff.booking.cancelled to the preferred barber\'s own userId when one was set on the booking', async () => {
+      const farSlot = new Date(Date.now() + 120 * 60_000);
+      prisma.booking.findFirst.mockResolvedValue(
+        makeBookingRow({
+          slotStart: farSlot,
+          preferredStaffId: 'dinesh',
+          preferredStaff: { displayName: 'Dinesh', userId: 'staff-user-9' },
+        }),
+      );
+      prisma.booking.update.mockResolvedValue(
+        makeBookingRow({
+          slotStart: farSlot,
+          status: 'CANCELLED',
+          preferredStaffId: 'dinesh',
+          preferredStaff: { displayName: 'Dinesh', userId: 'staff-user-9' },
+        }),
+      );
+      cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+        salonId: 's1',
+        freeCancellationWindowMinutes: 60,
+        lateCancellationChargeType: 'PERCENTAGE',
+        lateCancellationChargeValue: 50,
+        noShowChargeType: 'PERCENTAGE',
+        noShowChargeValue: 100,
+        appointmentArrivalGraceMinutes: 10,
+        queueCallResponseGraceMinutes: 3,
+      });
+
+      await service.cancel('c1', 'b1');
+      const staffCall = notifications.notify.mock.calls.find(
+        (call) => call[1] === 'staff.booking.cancelled',
+      );
+      expect(staffCall).toBeDefined();
+      expect(staffCall?.[0]).toBe('staff-user-9');
+    });
+
+    it('never pushes a staff.booking.cancelled event for an "Any Professional" booking', async () => {
+      const farSlot = new Date(Date.now() + 120 * 60_000);
+      prisma.booking.findFirst.mockResolvedValue(makeBookingRow({ slotStart: farSlot }));
+      prisma.booking.update.mockResolvedValue(
+        makeBookingRow({ slotStart: farSlot, status: 'CANCELLED' }),
+      );
+      cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+        salonId: 's1',
+        freeCancellationWindowMinutes: 60,
+        lateCancellationChargeType: 'PERCENTAGE',
+        lateCancellationChargeValue: 50,
+        noShowChargeType: 'PERCENTAGE',
+        noShowChargeValue: 100,
+        appointmentArrivalGraceMinutes: 10,
+        queueCallResponseGraceMinutes: 3,
+      });
+
+      await service.cancel('c1', 'b1');
+      expect(
+        notifications.notify.mock.calls.some((call) => call[1] === 'staff.booking.cancelled'),
+      ).toBe(false);
     });
   });
 
@@ -725,6 +862,60 @@ describe('BookingsService', () => {
     it('does not run a staff-exclusivity check at all when the booking has no preferred barber', async () => {
       await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
       expect(prisma.booking.count).toHaveBeenCalledTimes(1);
+    });
+
+    it('pushes the booking\'s OWN snapshotted duration, not the service\'s live current duration, in the reschedule notification', async () => {
+      // The live Service now reports a different duration than what this booking actually
+      // snapshotted at creation (e.g. the owner edited the service afterward) — the push must
+      // still reflect what the booking itself blocks, per reschedule()'s own snapshot comment.
+      availability.getServiceOrThrow.mockResolvedValue({
+        id: 'sv1',
+        salonId: 's1',
+        durationMinutes: 999,
+        price: decimal('999'),
+      });
+      prisma.booking.update.mockResolvedValue(
+        makeBookingRow({
+          slotStart: new Date(newFutureSlot),
+          effectiveServiceDurationMinutes: 45,
+          effectiveServicePrice: decimal('500'),
+        }),
+      );
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
+      const [customerCall, ownerCall] = notifications.notify.mock.calls;
+      expect(customerCall[2]).toMatchObject({ durationMinutes: 45, servicePrice: 500 });
+      expect(ownerCall[2]).toMatchObject({ durationMinutes: 45, servicePrice: 500 });
+    });
+
+    it('pushes staff.booking.rescheduled to the preferred barber\'s own userId when one is set', async () => {
+      prisma.booking.findFirst.mockResolvedValue(
+        makeBookingRow({
+          slotStart: futureSlot,
+          status: 'CONFIRMED',
+          preferredStaffId: 'dinesh',
+          preferredStaff: { displayName: 'Dinesh', userId: 'staff-user-9' },
+        }),
+      );
+      prisma.booking.update.mockResolvedValue(
+        makeBookingRow({
+          slotStart: new Date(newFutureSlot),
+          preferredStaffId: 'dinesh',
+          preferredStaff: { displayName: 'Dinesh', userId: 'staff-user-9' },
+        }),
+      );
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
+      const staffCall = notifications.notify.mock.calls.find(
+        (call) => call[1] === 'staff.booking.rescheduled',
+      );
+      expect(staffCall).toBeDefined();
+      expect(staffCall?.[0]).toBe('staff-user-9');
+    });
+
+    it('never pushes a staff.booking.rescheduled event when the booking has no preferred barber', async () => {
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
+      expect(
+        notifications.notify.mock.calls.some((call) => call[1] === 'staff.booking.rescheduled'),
+      ).toBe(false);
     });
   });
 });
