@@ -1,4 +1,4 @@
-name: Push Transport Debug APK
+name: Push Transport Standalone APK
 
 on:
   push:
@@ -16,11 +16,12 @@ permissions:
   contents: read
 
 jobs:
-  build-android-debug:
+  build-android-release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       CI: '1'
+      NODE_ENV: 'production'
       EXPO_PUBLIC_API_BASE_URL: 'https://barbercuebackend-production.up.railway.app/api/v1'
       EXPO_PUBLIC_WEB_ORIGIN: 'https://barbercueweb-production.up.railway.app'
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: '871155185690-bcl6bu22nphvg85hklflag78sqfp7khv.apps.googleusercontent.com'
@@ -55,14 +56,19 @@ jobs:
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --clean
 
-      - name: Build debug APK
+      - name: Build standalone release APK with embedded JS bundle
         working-directory: apps/mobile/android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Verify release APK exists
+        run: |
+          test -f apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          ls -lh apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload standalone APK
         uses: actions/upload-artifact@v4
         with:
-          name: barbercue-push-transport-debug-apk
-          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          name: barbercue-push-transport-standalone-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 2
