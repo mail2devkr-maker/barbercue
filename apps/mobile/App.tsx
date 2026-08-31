@@ -1,5 +1,7 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as Updates from 'expo-updates';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -20,6 +22,62 @@ import OwnerNavigator from './navigation/OwnerNavigator';
 import StaffNavigator from './navigation/StaffNavigator';
 import { PushNotificationCoordinator } from './components/PushNotificationCoordinator';
 import { navigationRef } from './navigation/navigation-ref';
+
+const FOREGROUND_UPDATE_MIN_BACKGROUND_MS = 30_000;
+
+/**
+ * `updates.checkAutomatically: ON_LOAD` handles cold starts natively. This hook adds an explicit
+ * check on JS launch (so an already-downloaded/newly-available update can be applied immediately)
+ * and after the app returns from a meaningful background period. Short system interruptions such
+ * as the Google account picker do not trigger another check, avoiding an auth flow being disturbed
+ * by an unrelated reload. Update failures are intentionally non-fatal: the embedded bundle remains
+ * the safe fallback and the next launch/foreground can retry.
+ */
+function useAppUpdates(): void {
+  const checkingRef = useRef(false);
+  const backgroundedAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAndApplyUpdate(): Promise<void> {
+      if (cancelled || checkingRef.current || __DEV__ || !Updates.isEnabled) return;
+      checkingRef.current = true;
+      try {
+        const result = await Updates.checkForUpdateAsync();
+        if (!result.isAvailable || cancelled) return;
+        await Updates.fetchUpdateAsync();
+        if (!cancelled) await Updates.reloadAsync();
+      } catch {
+        // Network/update-server failures must never block normal app startup or foregrounding.
+      } finally {
+        checkingRef.current = false;
+      }
+    }
+
+    void checkAndApplyUpdate();
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        if (backgroundedAtRef.current === null) backgroundedAtRef.current = Date.now();
+        return;
+      }
+
+      if (nextState === 'active') {
+        const backgroundedAt = backgroundedAtRef.current;
+        backgroundedAtRef.current = null;
+        if (backgroundedAt !== null && Date.now() - backgroundedAt >= FOREGROUND_UPDATE_MIN_BACKGROUND_MS) {
+          void checkAndApplyUpdate();
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, []);
+}
 
 // Routes by the account's ACTUAL roles (never by which login screen was used to sign in) — an
 // owner-role account routes to the Owner shell even if it somehow also carries CUSTOMER, and an
@@ -53,6 +111,8 @@ function Root() {
 }
 
 export default function App() {
+  useAppUpdates();
+
   // Loaded once for the whole app — Fraunces (display/headings) + Work Sans (body/UI), matching
   // apps/web's --font-display / --font-body. Gated behind the same loading view already used for
   // the auth-status check below, rather than a second splash/loading mechanism.
