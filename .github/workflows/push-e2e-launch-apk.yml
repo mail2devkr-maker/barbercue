@@ -1,0 +1,77 @@
+name: Push E2E Launch Candidate APK
+
+on:
+  push:
+    branches:
+      - test/push-e2e-launch-candidate
+    paths:
+      - '.github/workflows/push-e2e-launch-apk.yml'
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-android-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: '1'
+      NODE_ENV: 'production'
+      EXPO_PUBLIC_API_BASE_URL: 'https://barbercuebackend-production.up.railway.app/api/v1'
+      EXPO_PUBLIC_WEB_ORIGIN: 'https://barbercueweb-production.up.railway.app'
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: '871155185690-bcl6bu22nphvg85hklflag78sqfp7khv.apps.googleusercontent.com'
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: '871155185690-0256keu32669iup0b8vbi20junds6d0f.apps.googleusercontent.com'
+
+    steps:
+      - name: Checkout isolated E2E branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify shared TypeScript
+        run: npm run typecheck --workspace=@barbercue/shared
+
+      - name: Verify mobile TypeScript
+        run: npm run typecheck --workspace=@barbercue/mobile
+
+      - name: Generate native Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build launch-candidate arm64 release APK with embedded JS
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
+
+      - name: Verify release APK exists
+        run: |
+          test -f apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          ls -lh apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload launch-candidate APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: barbercue-launch-candidate-arm64-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 2
