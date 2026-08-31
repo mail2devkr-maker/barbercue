@@ -2,10 +2,18 @@
   "expo": {
     "name": "BarberCue",
     "slug": "devdutta-kumar-pandey",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/01998c87-126d-40e8-aac3-205891b74b08",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 2000
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dcw.barbercue",
