@@ -1,17 +1,15 @@
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { PushTransportProbe } from './components/PushTransportProbe';
 
 export default function App() {
   return (
     <SafeAreaView style={styles.screen}>
-      <StatusBar style="light" />
       <View style={styles.header}>
         <Text style={styles.kicker}>BARBERCUE</Text>
         <Text style={styles.title}>PHYSICAL PUSH TEST</Text>
         <Text style={styles.note}>
-          This temporary build only verifies Android notification permission, Firebase/FCM registration,
-          and Expo push-token delivery. The normal BarberCue UI is intentionally disabled in this test build.
+          Diagnostic build: this screen renders before push modules are loaded. If notification startup fails,
+          the exact error will appear below instead of replacing the whole app with a native stack trace.
         </Text>
       </View>
       <PushTransportProbe />
