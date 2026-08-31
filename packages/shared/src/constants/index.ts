@@ -281,4 +281,6 @@ export const NOTIFICATION_PATHS = {
   readAll: 'read-all',
   // GET/PUT notifications/preferences (Phase 13 — communication preferences).
   preferences: 'preferences',
+  devices: 'devices',
+  unregister: 'unregister',
 } as const;

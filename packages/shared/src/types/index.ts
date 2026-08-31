@@ -9,6 +9,8 @@ import type {
   PhotoType,
   PrepaymentRequirement,
   PublicQueueUnavailableReason,
+  PushPlatform,
+  PushProvider,
   QueueEntrySource,
   QueueEntryStatus,
   Role,
@@ -649,13 +651,18 @@ export interface CapacitySummaryDto {
 // icons/copy. Grows as new event sources wire in; never a catch-all "misc" bucket.
 export const NOTIFICATION_TYPES = [
   'booking.confirmed',
+  'booking.rescheduled',
   'booking.cancelled',
   'booking.reminder',
   'queue.turn_approaching',
   'owner.booking.created',
+  'owner.booking.rescheduled',
   'owner.booking.cancelled',
   'owner.walk_in.joined',
   'staff.assigned',
+  'staff.booking.created',
+  'staff.booking.rescheduled',
+  'staff.booking.cancelled',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -669,10 +676,9 @@ export interface NotificationDto {
 }
 
 // Phase 13 (Communication Preferences). `available` is server-computed truth about whether a real
-// provider is actually wired for that channel today — IN_APP is always true; PUSH/EMAIL/SMS/
-// WHATSAPP report false until this mission's explicitly-out-of-scope external providers are
-// configured (see Phase 45's blocker policy). The UI must never let a user "enable" an unavailable
-// channel and imply it will do anything.
+// provider is actually wired for that channel today — IN_APP is always true and PUSH becomes true
+// only when the backend's Expo transport is explicitly configured. Other external channels remain
+// unavailable. The UI must never let a user enable an unavailable channel and imply delivery.
 export interface NotificationChannelPreferenceDto {
   channel: NotificationChannel;
   enabled: boolean;
@@ -686,6 +692,36 @@ export interface NotificationCategoryPreferenceDto {
 
 export interface NotificationPreferencesDto {
   categories: NotificationCategoryPreferenceDto[];
+}
+
+export type PushNotificationScreen =
+  | 'CUSTOMER_BOOKING'
+  | 'CUSTOMER_QUEUE'
+  | 'OWNER_BOOKINGS'
+  | 'OWNER_QUEUE'
+  | 'STAFF_TODAY'
+  | 'NOTIFICATIONS';
+
+/** IDs are navigation-only data (never rendered on the lock screen); no token, phone, email or
+ * authentication material belongs in this contract. Timestamps are canonical UTC ISO values and
+ * salonTimezone is the authoritative IANA zone used to render notification text server-side. */
+export interface PushNotificationData {
+  type: NotificationType;
+  screen: PushNotificationScreen;
+  bookingId?: string;
+  salonId?: string;
+  queueEntryId?: string;
+  slotStart?: string;
+  salonTimezone?: string;
+}
+
+export interface PushDeviceDto {
+  id: string;
+  platform: PushPlatform;
+  provider: PushProvider;
+  installationId: string;
+  enabled: boolean;
+  lastSeenAt: string;
 }
 
 // GET dashboard/overview (Phase 10 — multi-branch experience). Aggregate-only across every salon

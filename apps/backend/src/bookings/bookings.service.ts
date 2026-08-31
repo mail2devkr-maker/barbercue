@@ -268,10 +268,24 @@ export class BookingsService {
     // Only after the transaction has actually committed — never on a rolled-back create (e.g.
     // SLOT_FULL), since that never reaches this line.
     this.realtime.emitBookingCreated(input.salonId, bookingId);
+    const salonTimezone = await this.availability.getSalonTimeZone(
+      input.salonId,
+    );
+    const pushPayload = {
+      salonId: input.salonId,
+      salonName: salon.name,
+      bookingId,
+      serviceName: service.name,
+      slotStart: slotStart.toISOString(),
+      salonTimezone: salonTimezone ?? undefined,
+      durationMinutes: service.durationMinutes,
+      servicePrice: Number(service.price),
+      currency: salon.currency,
+    };
     await this.notifications.notify(
       customerId,
       'booking.confirmed',
-      { salonId: input.salonId, salonName: salon.name, serviceName: service.name },
+      pushPayload,
       // No per-booking detail route exists on web yet (the list at account/bookings is the whole
       // surface) — the deep link must point at a route that actually exists, not an imagined one.
       'account/bookings',
@@ -279,7 +293,7 @@ export class BookingsService {
     await this.notifications.notify(
       salon.ownerUserId,
       'owner.booking.created',
-      { salonId: input.salonId, bookingId, serviceName: service.name },
+      pushPayload,
       `dashboard/salons/${input.salonId}/bookings`,
     );
 
@@ -405,16 +419,32 @@ export class BookingsService {
     }, TRANSACTION_OPTIONS);
 
     this.realtime.emitBookingCancelled(updated.salonId, bookingId);
+    const cancelledSalonTimezone = await this.availability.getSalonTimeZone(
+      updated.salonId,
+    );
     await this.notifications.notify(
       customerId,
       'booking.cancelled',
-      { salonId: updated.salonId, salonName: updated.salon.name },
+      {
+        salonId: updated.salonId,
+        salonName: updated.salon.name,
+        bookingId,
+        serviceName: updated.service.name,
+        slotStart: updated.slotStart.toISOString(),
+        salonTimezone: cancelledSalonTimezone ?? undefined,
+      },
       'account/bookings',
     );
     await this.notifications.notify(
       updated.salon.ownerUserId,
       'owner.booking.cancelled',
-      { salonId: updated.salonId, bookingId },
+      {
+        salonId: updated.salonId,
+        bookingId,
+        serviceName: updated.service.name,
+        slotStart: updated.slotStart.toISOString(),
+        salonTimezone: cancelledSalonTimezone ?? undefined,
+      },
       `dashboard/salons/${updated.salonId}/bookings`,
     );
 
@@ -573,6 +603,30 @@ export class BookingsService {
     }, TRANSACTION_OPTIONS);
 
     this.realtime.emitBookingRescheduled(booking.salonId, bookingId);
+    const rescheduledSalonTimezone = await this.availability.getSalonTimeZone(
+      updated.salonId,
+    );
+    const reschedulePayload = {
+      salonId: updated.salonId,
+      salonName: updated.salon.name,
+      bookingId,
+      serviceName: updated.service.name,
+      slotStart: updated.slotStart.toISOString(),
+      salonTimezone: rescheduledSalonTimezone ?? undefined,
+      durationMinutes: updated.service.durationMinutes,
+    };
+    await this.notifications.notify(
+      customerId,
+      'booking.rescheduled',
+      reschedulePayload,
+      'account/bookings',
+    );
+    await this.notifications.notify(
+      updated.salon.ownerUserId,
+      'owner.booking.rescheduled',
+      reschedulePayload,
+      `dashboard/salons/${updated.salonId}/bookings`,
+    );
 
     return this.toDetailDto(updated);
   }

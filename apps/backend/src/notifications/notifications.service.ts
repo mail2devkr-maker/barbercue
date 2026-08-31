@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   NotificationCategory,
@@ -11,6 +11,7 @@ import {
   type PaginatedResult,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushDeliveryService } from './push-delivery.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -19,13 +20,18 @@ const DEFAULT_PAGE_SIZE = 20;
 // TYPE_CATEGORY is declared as Record<NotificationType, ...>).
 const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'booking.confirmed': NotificationCategory.BOOKING_UPDATES,
+  'booking.rescheduled': NotificationCategory.BOOKING_UPDATES,
   'booking.cancelled': NotificationCategory.BOOKING_UPDATES,
   'booking.reminder': NotificationCategory.REMINDERS,
   'queue.turn_approaching': NotificationCategory.QUEUE_UPDATES,
   'owner.booking.created': NotificationCategory.BOOKING_UPDATES,
+  'owner.booking.rescheduled': NotificationCategory.BOOKING_UPDATES,
   'owner.booking.cancelled': NotificationCategory.BOOKING_UPDATES,
   'owner.walk_in.joined': NotificationCategory.QUEUE_UPDATES,
   'staff.assigned': NotificationCategory.QUEUE_UPDATES,
+  'staff.booking.created': NotificationCategory.BOOKING_UPDATES,
+  'staff.booking.rescheduled': NotificationCategory.BOOKING_UPDATES,
+  'staff.booking.cancelled': NotificationCategory.BOOKING_UPDATES,
 };
 
 const ALL_CATEGORIES: NotificationCategory[] = [
@@ -44,9 +50,6 @@ const ALL_CHANNELS: NotificationChannel[] = [
 // The only channel with a real, configured provider today — see EmailSender/ConsoleEmailSender's
 // own doc comment for why EMAIL isn't in this set (no production email provider is wired either).
 // Single source of truth for both notify()'s gating and getPreferences()'s `available` field.
-const AVAILABLE_CHANNELS = new Set<NotificationChannel>([
-  NotificationChannel.IN_APP,
-]);
 
 /**
  * Notification Center (Phase 11) — reuses the existing Notification model (channel/type/payload/
@@ -60,7 +63,12 @@ const AVAILABLE_CHANNELS = new Set<NotificationChannel>([
  */
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(NotificationsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pushDelivery: PushDeliveryService,
+  ) {}
 
   async notify(
     userId: string,
@@ -68,7 +76,24 @@ export class NotificationsService {
     payload?: Record<string, unknown>,
     deepLink?: string,
   ): Promise<boolean> {
-    return this.notifyWithDb(this.prisma, userId, type, payload, deepLink);
+    const result = await this.notifyWithDb(
+      this.prisma,
+      userId,
+      type,
+      payload,
+      deepLink,
+      false,
+    );
+    if (result.pushIds.length > 0) {
+      void this.pushDelivery
+        .dispatchPending(result.pushIds)
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `Immediate push dispatch deferred: ${error instanceof Error ? error.message : 'unknown error'}`,
+          );
+        });
+    }
+    return result.created;
   }
 
   /** Used when the event marker and notification must commit together (appointment reminders).
@@ -81,7 +106,8 @@ export class NotificationsService {
     payload?: Record<string, unknown>,
     deepLink?: string,
   ): Promise<boolean> {
-    return this.notifyWithDb(tx, userId, type, payload, deepLink);
+    return (await this.notifyWithDb(tx, userId, type, payload, deepLink, true))
+      .created;
   }
 
   private async notifyWithDb(
@@ -90,28 +116,78 @@ export class NotificationsService {
     type: NotificationType,
     payload?: Record<string, unknown>,
     deepLink?: string,
-  ): Promise<boolean> {
+    strictPushPersistence = false,
+  ): Promise<{ created: boolean; pushIds: string[] }> {
     const category = TYPE_CATEGORY[type];
-    const enabled = await this.isEnabled(
+    const inAppEnabled = await this.isEnabled(
       db,
       userId,
       category,
       NotificationChannel.IN_APP,
     );
-    if (!enabled) return false;
+    let pushEnabled = false;
+    if (this.pushDelivery.configured) {
+      try {
+        pushEnabled = await this.isEnabled(
+          db,
+          userId,
+          category,
+          NotificationChannel.PUSH,
+        );
+      } catch (error) {
+        if (strictPushPersistence) throw error;
+        this.logger.warn(
+          `Push preference lookup skipped: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      }
+    }
+    let created = false;
+    if (inAppEnabled) {
+      await db.notification.create({
+        data: {
+          userId,
+          channel: NotificationChannel.IN_APP,
+          type,
+          payload: payload as Prisma.InputJsonValue | undefined,
+          status: NotificationStatus.SENT,
+          sentAt: new Date(),
+          deepLink: deepLink ?? null,
+        },
+      });
+      created = true;
+    }
 
-    await db.notification.create({
-      data: {
-        userId,
-        channel: NotificationChannel.IN_APP,
-        type,
-        payload: payload as Prisma.InputJsonValue | undefined,
-        status: NotificationStatus.SENT,
-        sentAt: new Date(),
-        deepLink: deepLink ?? null,
-      },
-    });
-    return true;
+    const pushIds: string[] = [];
+    if (pushEnabled) {
+      try {
+        const devices = await db.pushDevice.findMany({
+          where: { userId, enabled: true },
+          select: { id: true },
+        });
+        for (const device of devices) {
+          const push = await db.notification.create({
+            data: {
+              userId,
+              pushDeviceId: device.id,
+              channel: NotificationChannel.PUSH,
+              type,
+              payload: payload as Prisma.InputJsonValue | undefined,
+              status: NotificationStatus.PENDING,
+              deepLink: deepLink ?? null,
+            },
+            select: { id: true },
+          });
+          pushIds.push(push.id);
+        }
+      } catch (error) {
+        if (strictPushPersistence) throw error;
+        this.logger.warn(
+          `Push outbox persistence skipped: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      }
+      created ||= pushIds.length > 0;
+    }
+    return { created, pushIds };
   }
 
   async listMine(
@@ -172,7 +248,13 @@ export class NotificationsService {
     const row = await db.notificationPreference.findUnique({
       where: { userId_category_channel: { userId, category, channel } },
     });
-    return row?.enabled ?? true;
+    if (row) return row.enabled;
+    // Marketing push is opt-in. Operational booking, queue and reminder channels remain on by
+    // default, while the provider's configured flag still prevents unusable PUSH rows.
+    return !(
+      category === NotificationCategory.PROMOTIONAL &&
+      channel === NotificationChannel.PUSH
+    );
   }
 
   async getPreferences(userId: string): Promise<NotificationPreferencesDto> {
@@ -189,8 +271,16 @@ export class NotificationsService {
         channels: ALL_CHANNELS.map(
           (channel): NotificationChannelPreferenceDto => ({
             channel,
-            enabled: byKey.get(`${category}:${channel}`) ?? true,
-            available: AVAILABLE_CHANNELS.has(channel),
+            enabled:
+              byKey.get(`${category}:${channel}`) ??
+              !(
+                category === NotificationCategory.PROMOTIONAL &&
+                channel === NotificationChannel.PUSH
+              ),
+            available:
+              channel === NotificationChannel.IN_APP ||
+              (channel === NotificationChannel.PUSH &&
+                this.pushDelivery.configured),
           }),
         ),
       })),

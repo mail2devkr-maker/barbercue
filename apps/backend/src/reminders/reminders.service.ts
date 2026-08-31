@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { BookingStatus } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { resolveSalonTimeZone } from '../common/timezone/timezone';
 
 // How far ahead of a booking's slotStart the reminder fires. A single fixed window for V1 — no
 // per-user configurable window UI exists yet (that's Phase 13's communication-preferences job) —
@@ -20,10 +21,9 @@ const REMINDER_MIN_LEAD_MINUTES = 5;
  * gets exactly one in-app notification, tracked via Booking.reminderSentAt so the sweep never
  * double-reminds even if it overlaps its own previous run.
  *
- * This is in-app/foreground only — see BARBERCUE_NON_PAYMENT_FEATURE_STATUS.md for the explicit
- * BLOCKED status on true Android background push (no FCM V1 credentials configured). A customer
- * only sees this reminder if the app/site is open when NotificationBell polls, or the next time
- * they open it — never a system-tray push while the app is closed.
+ * NotificationsService persists both IN_APP and one PUSH outbox row per eligible native device.
+ * The claim and all rows commit together; provider delivery happens after commit so a temporary
+ * Expo/FCM outage cannot lose the durable reminder or hold this transaction open on network I/O.
  */
 @Injectable()
 export class RemindersService {
@@ -64,7 +64,13 @@ export class RemindersService {
         customerId: true,
         salonId: true,
         slotStart: true,
-        salon: { select: { name: true } },
+        salon: {
+          select: {
+            name: true,
+            timezone: true,
+            city: { select: { countryCode: true } },
+          },
+        },
         service: { select: { name: true } },
       },
     });
@@ -97,6 +103,12 @@ export class RemindersService {
             salonName: booking.salon.name,
             serviceName: booking.service.name,
             slotStart: booking.slotStart.toISOString(),
+            salonTimezone:
+              resolveSalonTimeZone({
+                timezone: booking.salon.timezone,
+                countryCode: booking.salon.city.countryCode,
+              }) ?? undefined,
+            bookingId: booking.id,
           },
           'account/bookings',
         );

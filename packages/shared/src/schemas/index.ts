@@ -422,6 +422,39 @@ export type SetNotificationPreferenceInput = z.infer<
   typeof setNotificationPreferenceSchema
 >;
 
+const expoPushTokenSchema = z
+  .string()
+  .trim()
+  .regex(/^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$/, 'Invalid Expo push token');
+
+export const registerPushDeviceSchema = z
+  .object({
+    platform: z.enum(['ANDROID', 'IOS']),
+    provider: z.literal('EXPO'),
+    pushToken: expoPushTokenSchema,
+    installationId: z
+      .string()
+      .trim()
+      .min(8)
+      .max(128)
+      .regex(/^[A-Za-z0-9._:-]+$/),
+  })
+  .strict();
+export type RegisterPushDeviceInput = z.infer<typeof registerPushDeviceSchema>;
+
+export const unregisterPushDeviceSchema = z
+  .object({
+    installationId: z
+      .string()
+      .trim()
+      .min(8)
+      .max(128)
+      .regex(/^[A-Za-z0-9._:-]+$/),
+    provider: z.literal('EXPO'),
+  })
+  .strict();
+export type UnregisterPushDeviceInput = z.infer<typeof unregisterPushDeviceSchema>;
+
 // PATCH auth/language (Phase 14).
 export const setLanguageSchema = z.object({
   language: z.nativeEnum(Language),
