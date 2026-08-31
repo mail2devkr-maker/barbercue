@@ -56,9 +56,9 @@ jobs:
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --clean
 
-      - name: Build standalone release APK with embedded JS bundle
+      - name: Build standalone arm64 release APK with embedded JS bundle
         working-directory: apps/mobile/android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        run: ./gradlew assembleRelease --no-daemon --stacktrace -PreactNativeArchitectures=arm64-v8a
 
       - name: Verify release APK exists
         run: |
