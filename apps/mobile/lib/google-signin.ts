@@ -59,10 +59,16 @@ export async function getGoogleIdToken(): Promise<GoogleSignInResult> {
   let response;
   try {
     response = await GoogleOneTapSignIn.signIn();
-    // No saved credential is the expected "first time on this device" case, not a failure — fall
-    // back to the full account picker, same as createAccount() would offer during OTP sign-up.
+    // No saved credential is the expected "first time on this device" case, not a failure. The
+    // library's documented Android Credential Manager flow has two interactive fallbacks:
+    // createAccount() first, then presentExplicitSignIn() if Credential Manager still reports no
+    // saved credential. Without the second fallback, first-time/cleared-credential users fall
+    // through to the generic TOKEN error even though Google sign-in is actually available.
     if (isNoSavedCredentialFoundResponse(response)) {
       response = await GoogleOneTapSignIn.createAccount();
+    }
+    if (isNoSavedCredentialFoundResponse(response)) {
+      response = await GoogleOneTapSignIn.presentExplicitSignIn();
     }
   } catch (err) {
     if (isErrorWithCode(err) && err.code === statusCodes.SIGN_IN_CANCELLED) return { type: 'cancelled' };
