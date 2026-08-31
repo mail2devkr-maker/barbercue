@@ -315,6 +315,36 @@ export class AvailabilityService {
     if (staffId) await this.assertStaffQualified(salonId, serviceId, staffId);
     const timeZone = await this.resolveTimeZoneOrThrow(salonId);
 
+    // Issue 6 — a specific staff member's own StaffService.durationOverrideMinutes (if any)
+    // governs how long this exact slot actually blocks. Resolved the same way
+    // BookingsService.create() resolves it, so the day-grid a customer sees here agrees with what
+    // booking creation will actually enforce a moment later — a mismatch here would let the
+    // customer pick a slot that then fails (or silently overlaps a neighbour) at create time.
+    // "Any Staff" (no staffId) always uses the plain service duration, matching the pool-capacity
+    // math below, which is likewise never staff-specific.
+    let effectiveDurationMinutes = service.durationMinutes;
+    if (staffId) {
+      const staffOverride = await this.prisma.staffService.findUnique({
+        where: { staffId_serviceId: { staffId, serviceId } },
+        select: { priceOverride: true, durationOverrideMinutes: true },
+      });
+      effectiveDurationMinutes = resolveEffectiveServicePricing(
+        {
+          price: Number(service.price),
+          durationMinutes: service.durationMinutes,
+        },
+        staffOverride
+          ? {
+              priceOverride:
+                staffOverride.priceOverride !== null
+                  ? Number(staffOverride.priceOverride)
+                  : null,
+              durationOverrideMinutes: staffOverride.durationOverrideMinutes,
+            }
+          : null,
+      ).durationMinutes;
+    }
+
     const now = new Date();
     const maxAdvance = new Date(
       now.getTime() + MAX_BOOKING_DAYS_AHEAD * 24 * 60 * 60_000,
@@ -350,7 +380,7 @@ export class AvailabilityService {
       }
     }
 
-    const durationMs = service.durationMinutes * 60_000;
+    const durationMs = effectiveDurationMinutes * 60_000;
     const slotCapacity = await this.getSlotCapacity(
       this.prisma,
       salonId,

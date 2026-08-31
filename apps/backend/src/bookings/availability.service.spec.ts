@@ -13,6 +13,7 @@ interface PrismaMock {
   staffService: {
     count: jest.Mock<Promise<number>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+    findUnique: jest.Mock<Promise<unknown>, [unknown]>;
   };
   salonStaff: {
     count: jest.Mock<Promise<number>, [unknown]>;
@@ -36,6 +37,7 @@ describe('AvailabilityService', () => {
       staffService: {
         count: jest.fn<Promise<number>, [unknown]>(),
         findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+        findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(null),
       },
       salonStaff: {
         count: jest.fn<Promise<number>, [unknown]>(),
@@ -380,6 +382,122 @@ describe('AvailabilityService', () => {
           'st1',
         );
         expect(slots).toEqual([]);
+      });
+    });
+
+    // Independent review — Issue 6: getAvailability() previously always used the plain service
+    // duration (service.durationMinutes) even when a specific staffId with its own
+    // StaffService.durationOverrideMinutes was requested, so the day-grid a customer saw could
+    // disagree with what BookingsService.create() would actually enforce a moment later. Base
+    // service duration is 30 min (see the outer beforeEach); every test below overrides it to 45.
+    describe('staff-specific duration override (Issue 6)', () => {
+      beforeEach(() => {
+        prisma.salonStaff.findFirst.mockResolvedValue({ id: 'st1' });
+        prisma.staffWorkingHours.findUnique.mockResolvedValue(null);
+        prisma.staffService.findUnique.mockResolvedValue({
+          priceOverride: null,
+          durationOverrideMinutes: 45,
+        });
+      });
+
+      it('generates slotEnd 45 minutes (not the base 30) after slotStart for every returned slot', async () => {
+        prisma.operatingHours.findUnique.mockResolvedValue({
+          openTime: '09:00',
+          closeTime: '11:00',
+          isClosed: false,
+        });
+        const slots = await service.getAvailability(
+          's1',
+          'sv1',
+          futureDateString(2),
+          'st1',
+        );
+        expect(slots.length).toBeGreaterThan(0);
+        for (const slot of slots) {
+          const durationMinutes =
+            (new Date(slot.slotEnd).getTime() - new Date(slot.slotStart).getTime()) / 60_000;
+          expect(durationMinutes).toBe(45);
+        }
+      });
+
+      it('close-of-day: fits fewer/different slots under the 45-minute override than the 30-minute base would', async () => {
+        // 09:00-10:00 IST window. Base 30 min (see the plain "generates 15-minute-granularity
+        // slots" test above, same window) fits 3 slots: 09:00, 09:15, 09:30. Under the 45-minute
+        // override, 09:00 (ends 09:45) and 09:15 (ends exactly 10:00 — the boundary itself, still
+        // included since the check is <=) fit; 09:30 (would end 10:15) does not.
+        prisma.operatingHours.findUnique.mockResolvedValue({
+          openTime: '09:00',
+          closeTime: '10:00',
+          isClosed: false,
+        });
+        const slots = await service.getAvailability(
+          's1',
+          'sv1',
+          futureDateString(2),
+          'st1',
+        );
+        expect(slots).toHaveLength(2);
+        expect(slots[0].slotStart).toContain('T03:30'); // 09:00 IST
+        expect(slots[1].slotStart).toContain('T03:45'); // 09:15 IST
+        // The second (last) slot's end lands exactly on the shop's closing time.
+        expect(slots[1].slotEnd).toContain('T04:30'); // 10:00 IST = 04:30 UTC
+      });
+
+      it('overlap: a booking that only conflicts within the 45-minute override window marks the slot unavailable', async () => {
+        prisma.operatingHours.findUnique.mockResolvedValue({
+          openTime: '09:00',
+          closeTime: '11:00',
+          isClosed: false,
+        });
+        const day = futureDateString(2);
+        const [y, m, d] = day.split('-').map(Number);
+        // 09:40-10:10 IST = 04:10-04:40 UTC, booked specifically against this same barber. The
+        // 09:00 IST candidate ends at 09:30 under the (wrong) base 30-min duration — no overlap
+        // with a booking starting at 09:40 — but ends at 09:45 under the correct 45-min override,
+        // which DOES overlap it.
+        prisma.booking.findMany.mockResolvedValue([
+          {
+            slotStart: new Date(Date.UTC(y, m - 1, d, 4, 10)),
+            slotEnd: new Date(Date.UTC(y, m - 1, d, 4, 40)),
+            preferredStaffId: 'st1',
+          },
+        ]);
+        const slots = await service.getAvailability(
+          's1',
+          'sv1',
+          day,
+          'st1',
+        );
+        const nineAm = slots.find((s) => s.slotStart.includes('T03:30'));
+        expect(nineAm).toBeDefined();
+        expect(nineAm?.available).toBe(false);
+      });
+
+      it('a DIFFERENT staff member remains available for the exact same overlapping slot (pool capacity, not staff-specific)', async () => {
+        prisma.operatingHours.findUnique.mockResolvedValue({
+          openTime: '09:00',
+          closeTime: '11:00',
+          isClosed: false,
+        });
+        prisma.salonStaff.findFirst.mockResolvedValue({ id: 'st2' });
+        const day = futureDateString(2);
+        const [y, m, d] = day.split('-').map(Number);
+        prisma.booking.findMany.mockResolvedValue([
+          {
+            slotStart: new Date(Date.UTC(y, m - 1, d, 4, 10)),
+            slotEnd: new Date(Date.UTC(y, m - 1, d, 4, 40)),
+            preferredStaffId: 'st1', // booked against st1, not the st2 being queried here
+          },
+        ]);
+        const slots = await service.getAvailability(
+          's1',
+          'sv1',
+          day,
+          'st2',
+        );
+        const nineAm = slots.find((s) => s.slotStart.includes('T03:30'));
+        expect(nineAm).toBeDefined();
+        expect(nineAm?.available).toBe(true);
       });
     });
   });

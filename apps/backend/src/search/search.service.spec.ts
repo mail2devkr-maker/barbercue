@@ -33,20 +33,61 @@ describe('SearchService', () => {
       expect(prisma.$queryRaw).not.toHaveBeenCalled();
     });
 
-    it('queries both shops and services in parallel and maps each result set', async () => {
+    it('queries both shops and services in parallel and maps each ranked result set', async () => {
       prisma.$queryRaw
         .mockResolvedValueOnce([
-          { id: 's1', name: 'Fresh Cuts', slug: 'fresh-cuts', citySlug: 'bengaluru', countryCode: 'IN' },
+          { id: 's1', name: "Bear's Barbershop", slug: 'bears-barbershop', citySlug: 'bengaluru', countryCode: 'IN' },
         ])
+        // "Beard Trim" is a genuine PREFIX match for "bear" ("beard" itself starts with "bear").
         .mockResolvedValueOnce([{ name: 'Beard Trim', category: 'Beard & Shaving' }]);
 
       const result = await service.suggest({ q: 'bear' });
 
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
       expect(result).toEqual({
-        shops: [{ id: 's1', name: 'Fresh Cuts', slug: 'fresh-cuts', citySlug: 'bengaluru', countryCode: 'IN' }],
+        shops: [{ id: 's1', name: "Bear's Barbershop", slug: 'bears-barbershop', citySlug: 'bengaluru', countryCode: 'IN' }],
         services: [{ name: 'Beard Trim', category: 'Beard & Shaving' }],
       });
+    });
+
+    it('drops a DB candidate that does not actually classify under exact/prefix/alias/token/fuzzy', async () => {
+      // The SQL WHERE is a deliberately wide recall net (Issue 3) -- the pure ranker afterwards is
+      // what actually decides whether something counts as a match at all.
+      prisma.$queryRaw
+        .mockResolvedValueOnce([
+          { id: 's1', name: 'Totally Unrelated Salon Name', slug: 'x', citySlug: 'bengaluru', countryCode: 'IN' },
+        ])
+        .mockResolvedValueOnce([]);
+      const result = await service.suggest({ q: 'bear' });
+      expect(result.shops).toEqual([]);
+    });
+
+    it('ranks a service candidate reached only via alias resolution correctly (Issue 3 — "bear" -> Beard)', async () => {
+      // Mid-string "Beard" so this can only be found via alias resolution, not a literal prefix.
+      prisma.$queryRaw
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ name: 'Head Massage with Beard Oil', category: 'Spa / Body Care' }]);
+      const result = await service.suggest({ q: 'bear' });
+      expect(result.services).toEqual([
+        { name: 'Head Massage with Beard Oil', category: 'Spa / Body Care' },
+      ]);
+    });
+
+    it('orders ranked results exact > prefix > alias > token > fuzzy, not DB row order', async () => {
+      prisma.$queryRaw
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          // Deliberately returned from the "DB" in the WRONG order — the service must re-rank.
+          { name: 'Head Massage with Beard Oil', category: null }, // alias
+          { name: 'Bear Grooming Co', category: null }, // prefix
+          { name: 'bear', category: null }, // exact
+        ]);
+      const result = await service.suggest({ q: 'bear' });
+      expect(result.services.map((s) => s.name)).toEqual([
+        'bear',
+        'Bear Grooming Co',
+        'Head Massage with Beard Oil',
+      ]);
     });
 
     it('includes the trigram similarity clause for both shop and service queries (typo tolerance, not just substring)', async () => {
@@ -72,17 +113,28 @@ describe('SearchService', () => {
       expect(serviceSql.sql).toContain('GROUP BY lower(s.name)');
     });
 
-    it('clamps a limit above the maximum to 20 rather than passing it through unbounded', async () => {
-      await service.suggest({ q: 'fade', limit: 500 });
+    it('clamps a limit above the maximum to 20, and truncates the final ranked result to it', async () => {
+      // 25 genuine prefix-match rows returned from the "DB" -- the service must still only return
+      // 20 after ranking, proving the cap is enforced on the final list, not merely passed to SQL.
+      const candidates = Array.from({ length: 25 }, (_, i) => ({
+        name: `fade ${i}`,
+        category: null,
+      }));
+      prisma.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce(candidates);
+      const result = await service.suggest({ q: 'fade', limit: 500 });
+      expect(result.services.length).toBe(20);
       const [shopSql] = prisma.$queryRaw.mock.calls.map((call) => call[0]);
-      expect(shopSql.values).toContain(20);
+      // The SQL fetch itself is capped at MAX_CANDIDATE_FETCH (100), never at the raw 500.
+      expect(shopSql.values).toContain(100);
       expect(shopSql.values).not.toContain(500);
     });
 
-    it('defaults to the standard suggestion size when no limit is given', async () => {
+    it('widens the SQL candidate fetch well beyond the final limit, since ranking happens afterwards', async () => {
       await service.suggest({ q: 'fade' });
       const [shopSql] = prisma.$queryRaw.mock.calls.map((call) => call[0]);
-      expect(shopSql.values).toContain(5);
+      // Default limit is 5; the candidate fetch multiplies it (5 * 6 = 30) rather than fetching
+      // only 5 rows and hoping they happen to already be the best-ranked ones.
+      expect(shopSql.values).toContain(30);
     });
   });
 });
