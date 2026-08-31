@@ -9,7 +9,11 @@ function makeDueBooking(overrides: Record<string, unknown> = {}) {
     customerId: 'c1',
     salonId: 's1',
     slotStart: new Date(Date.now() + 30 * 60_000),
-    salon: { name: 'Demo Salon' },
+    salon: {
+      name: 'Demo Salon',
+      timezone: 'Asia/Kolkata',
+      city: { countryCode: 'IN' },
+    },
     service: { name: 'Haircut' },
     ...overrides,
   };

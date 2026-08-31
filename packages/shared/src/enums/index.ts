@@ -229,6 +229,17 @@ export const NotificationStatus = {
 } as const;
 export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus];
 
+export const PushPlatform = {
+  ANDROID: 'ANDROID',
+  IOS: 'IOS',
+} as const;
+export type PushPlatform = (typeof PushPlatform)[keyof typeof PushPlatform];
+
+export const PushProvider = {
+  EXPO: 'EXPO',
+} as const;
+export type PushProvider = (typeof PushProvider)[keyof typeof PushProvider];
+
 // Phase 13 (Communication Preferences) — see NotificationPreference's own schema.prisma doc
 // comment for what "no row" (the default) means for each category.
 export const NotificationCategory = {

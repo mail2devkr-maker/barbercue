@@ -166,7 +166,14 @@ export class QueueService {
     await this.notifications.notify(
       salon.ownerUserId,
       'owner.walk_in.joined',
-      { salonId },
+      {
+        salonId,
+        salonName: salon.name,
+        queueEntryId: entryId,
+        serviceName: serviceId
+          ? (await this.availability.getServiceOrThrow(salonId, serviceId)).name
+          : undefined,
+      },
       `dashboard/salons/${salonId}/queue`,
     );
     return this.getDetailOrThrow(entryId);
@@ -594,10 +601,18 @@ export class QueueService {
       select: { userId: true },
     });
     if (assignedStaff) {
+      const assignedService = await this.availability.getServiceOrThrow(
+        entry.salonId,
+        serviceId,
+      );
       await this.notifications.notify(
         assignedStaff.userId,
         'staff.assigned',
-        { salonId: entry.salonId, queueEntryId: entryId },
+        {
+          salonId: entry.salonId,
+          queueEntryId: entryId,
+          serviceName: assignedService.name,
+        },
         `dashboard/salons/${entry.salonId}/queue`,
       );
     }
@@ -740,6 +755,28 @@ export class QueueService {
 
     this.realtime.emitQueueEntryReassigned(entry.salonId, entryId);
     this.realtime.emitQueueUpdated(entry.salonId);
+    if (staffId !== session.staffId) {
+      const assignedStaff = await this.prisma.salonStaff.findUnique({
+        where: { id: staffId },
+        select: { userId: true },
+      });
+      if (assignedStaff) {
+        const assignedService = await this.availability.getServiceOrThrow(
+          entry.salonId,
+          session.serviceId,
+        );
+        await this.notifications.notify(
+          assignedStaff.userId,
+          'staff.assigned',
+          {
+            salonId: entry.salonId,
+            queueEntryId: entryId,
+            serviceName: assignedService.name,
+          },
+          `dashboard/salons/${entry.salonId}/queue`,
+        );
+      }
+    }
     return this.getDetailOrThrow(entryId);
   }
 
@@ -976,6 +1013,7 @@ export class QueueService {
         entry.customerId &&
         isWaitAlertWorthy(entry.estimatedWaitMinutes, eta)
       ) {
+        const alertSalon = await this.availability.getSalonOrThrow(salonId);
         this.realtime.emitQueueEntryWaitAlert(
           salonId,
           entry.customerId,
@@ -984,7 +1022,14 @@ export class QueueService {
         await this.notifications.notify(
           entry.customerId,
           'queue.turn_approaching',
-          { salonId, queueEntryId: entry.id, estimatedWaitMinutes: eta },
+          {
+            salonId,
+            salonName: alertSalon.name,
+            queueEntryId: entry.id,
+            estimatedWaitMinutes: eta,
+            peopleAhead: i,
+          },
+          'queue',
         );
       }
     }

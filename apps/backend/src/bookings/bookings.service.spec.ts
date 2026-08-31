@@ -67,6 +67,7 @@ interface PrismaMock {
 
 interface AvailabilityMock {
   getSalonOrThrow: jest.Mock<Promise<unknown>, [string]>;
+  getSalonTimeZone: jest.Mock<Promise<string | null>, [string]>;
   getServiceOrThrow: jest.Mock<Promise<unknown>, [string, string]>;
   assertWithinOperatingHours: jest.Mock<Promise<void>, [string, Date, Date]>;
   assertStaffQualified: jest.Mock<Promise<void>, [string, string, string]>;
@@ -124,6 +125,9 @@ describe('BookingsService', () => {
           name: 'BarberCue Demo Salon',
           ownerUserId: 'owner1',
         }),
+      getSalonTimeZone: jest
+        .fn<Promise<string | null>, [string]>()
+        .mockResolvedValue('Asia/Kolkata'),
       getServiceOrThrow: jest
         .fn<Promise<unknown>, [string, string]>()
         .mockResolvedValue({

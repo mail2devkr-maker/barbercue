@@ -181,8 +181,8 @@ enum NotificationChannel {
   EMAIL
   // Phase 11 (Notification Center) — the only channel with no external provider to configure;
   // every in-app notification is this channel, always immediately SENT (there is nothing to fail
-  // to deliver). SMS/PUSH/EMAIL stay reserved for when a real provider is actually wired
-  // (Phase 13's communication-preferences architecture) — this mission does not add one.
+  // to deliver). PUSH uses the durable per-device outbox below; SMS/EMAIL remain reserved until
+  // their own production providers are wired.
   IN_APP
   // Phase 13 — architecture-only, same as SMS/PUSH/EMAIL: manual/deep-link WhatsApp sharing
   // already exists (Phase 3's share flow), but proactive WhatsApp Business API delivery is
@@ -194,6 +194,15 @@ enum NotificationStatus {
   PENDING
   SENT
   FAILED
+}
+
+enum PushPlatform {
+  ANDROID
+  IOS
+}
+
+enum PushProvider {
+  EXPO
 }
 
 // Phase 13 (Communication Preferences) — every NotificationType (packages/shared) maps to exactly
@@ -255,6 +264,7 @@ model User {
   reviews             Review[]
   notifications       Notification[]
   notificationPreferences NotificationPreference[]
+  pushDevices         PushDevice[]
   ledgerEntries       CustomerLedgerEntry[]
   auditLogs           AuditLog[]
   premiumSubscriptions CustomerSubscription[]
@@ -1027,7 +1037,45 @@ model Notification {
   readAt    DateTime?
   deepLink  String?
 
+  // PUSH rows double as the durable delivery outbox. One row is created per enabled device so
+  // token-specific failures can be handled without affecting another device or the IN_APP row.
+  pushDeviceId             String?
+  pushDevice               PushDevice? @relation(fields: [pushDeviceId], references: [id])
+  providerMessageId        String?
+  providerReceiptCheckedAt DateTime?
+  deliveryClaimedAt        DateTime?
+  nextDeliveryAttemptAt    DateTime?
+  deliveryAttempts         Int         @default(0)
+  failureCode              String?
+  failedAt                 DateTime?
+
+  @@index([channel, status, nextDeliveryAttemptAt])
+  @@index([providerMessageId])
   @@map("notifications")
+}
+
+// Authenticated native installations. Tokens are never accepted for an arbitrary target user:
+// the controller always derives userId from the access token. A unique installation can move
+// safely between accounts on logout/login, and an Expo token can be refreshed without creating
+// duplicate fan-out rows.
+model PushDevice {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  platform       PushPlatform
+  provider       PushProvider @default(EXPO)
+  pushToken      String       @unique
+  installationId String
+  enabled        Boolean      @default(true)
+  lastSeenAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  notifications Notification[]
+
+  @@unique([provider, installationId])
+  @@index([userId, enabled])
+  @@map("push_devices")
 }
 
 // ---------- Audit ----------

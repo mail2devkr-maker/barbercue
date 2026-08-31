@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { NotificationsService } from './notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushDeliveryService } from './push-delivery.service';
 
 function makeRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -28,7 +29,9 @@ describe('NotificationsService', () => {
       findMany: jest.Mock;
       upsert: jest.Mock;
     };
+    pushDevice: { findMany: jest.Mock };
   };
+  let pushDelivery: { configured: boolean; dispatchPending: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -43,11 +46,17 @@ describe('NotificationsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         upsert: jest.fn().mockResolvedValue({}),
       },
+      pushDevice: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    pushDelivery = {
+      configured: false,
+      dispatchPending: jest.fn().mockResolvedValue(0),
     };
     const moduleRef = await Test.createTestingModule({
       providers: [
         NotificationsService,
         { provide: PrismaService, useValue: prisma },
+        { provide: PushDeliveryService, useValue: pushDelivery },
       ],
     }).compile();
     service = moduleRef.get(NotificationsService);
@@ -179,6 +188,94 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('PUSH fan-out', () => {
+    it.each([
+      'booking.confirmed',
+      'owner.booking.created',
+      'booking.reminder',
+      'queue.turn_approaching',
+      'staff.assigned',
+    ] as const)(
+      'fans %s out to every enabled device while preserving IN_APP',
+      async (type) => {
+        pushDelivery.configured = true;
+        prisma.pushDevice.findMany.mockResolvedValueOnce([
+          { id: 'd1' },
+          { id: 'd2' },
+        ]);
+        prisma.notification.create
+          .mockResolvedValueOnce({ id: 'in-app' })
+          .mockResolvedValueOnce({ id: 'push-1' })
+          .mockResolvedValueOnce({ id: 'push-2' });
+
+        await service.notify('user1', type, { salonId: 's1' });
+
+        expect(prisma.notification.create).toHaveBeenCalledTimes(3);
+        expect(prisma.notification.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              channel: 'IN_APP',
+              status: 'SENT',
+            }),
+          }),
+        );
+        expect(prisma.notification.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              channel: 'PUSH',
+              pushDeviceId: 'd1',
+              status: 'PENDING',
+            }),
+          }),
+        );
+        expect(pushDelivery.dispatchPending).toHaveBeenCalledWith([
+          'push-1',
+          'push-2',
+        ]);
+      },
+    );
+
+    it('does not create PUSH when that category preference is disabled', async () => {
+      pushDelivery.configured = true;
+      prisma.notificationPreference.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ enabled: false });
+      await service.notify('user1', 'booking.confirmed');
+      expect(prisma.pushDevice.findMany).not.toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('never fails the originating operation when immediate provider dispatch rejects', async () => {
+      pushDelivery.configured = true;
+      pushDelivery.dispatchPending.mockRejectedValueOnce(
+        new Error('provider down'),
+      );
+      prisma.pushDevice.findMany.mockResolvedValueOnce([{ id: 'd1' }]);
+      prisma.notification.create
+        .mockResolvedValueOnce({ id: 'in-app' })
+        .mockResolvedValueOnce({ id: 'push-1' });
+      await expect(service.notify('user1', 'booking.confirmed')).resolves.toBe(
+        true,
+      );
+      await Promise.resolve();
+    });
+
+    it('preserves the originating operation and IN_APP row when PUSH outbox persistence fails', async () => {
+      pushDelivery.configured = true;
+      prisma.pushDevice.findMany.mockRejectedValueOnce(
+        new Error('push table unavailable'),
+      );
+      await expect(
+        service.notify('user1', 'owner.booking.created'),
+      ).resolves.toBe(true);
+      expect(prisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ channel: 'IN_APP' }),
+        }),
+      );
+    });
+  });
+
   describe('notifyInTransaction', () => {
     it('uses the supplied transaction for both preference gating and notification creation', async () => {
       const tx = {
@@ -207,12 +304,16 @@ describe('NotificationsService', () => {
   });
 
   describe('getPreferences', () => {
-    it('returns every category x channel combination, defaulting to enabled', async () => {
+    it('returns every category x channel combination with operational defaults enabled', async () => {
       const result = await service.getPreferences('user1');
       expect(result.categories).toHaveLength(4);
       for (const cat of result.categories) {
         expect(cat.channels).toHaveLength(5);
-        expect(cat.channels.every((c) => c.enabled)).toBe(true);
+        for (const channel of cat.channels) {
+          expect(channel.enabled).toBe(
+            !(cat.category === 'PROMOTIONAL' && channel.channel === 'PUSH'),
+          );
+        }
       }
     });
 
