@@ -18,6 +18,8 @@ import AuthStack from './navigation/AuthStack';
 import RootNavigator from './navigation/RootNavigator';
 import OwnerNavigator from './navigation/OwnerNavigator';
 import StaffNavigator from './navigation/StaffNavigator';
+import { PushNotificationCoordinator } from './components/PushNotificationCoordinator';
+import { navigationRef } from './navigation/navigation-ref';
 
 // Routes by the account's ACTUAL roles (never by which login screen was used to sign in) — an
 // owner-role account routes to the Owner shell even if it somehow also carries CUSTOMER, and an
@@ -42,8 +44,9 @@ function Root() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <OfflineBanner />
+      <PushNotificationCoordinator />
       {status === 'authenticated' && user ? <AuthenticatedNavigator roles={user.roles} /> : <AuthStack />}
     </NavigationContainer>
   );

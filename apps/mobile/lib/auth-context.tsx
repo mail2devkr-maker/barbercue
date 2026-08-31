@@ -14,6 +14,7 @@ import {
   persistRefreshToken,
   setAccessToken,
 } from './api';
+import { unregisterPushDevice } from './push-notifications';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -136,6 +137,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     const refreshToken = await getPersistedRefreshToken();
     try {
+      await unregisterPushDevice().catch(() => {
+        // Best effort only: logout/session revocation remains authoritative even while offline.
+      });
       await apiFetch(authPath(AUTH_PATHS.logout), { method: 'POST', body: JSON.stringify({ refreshToken }) });
     } finally {
       setAccessToken(null);
