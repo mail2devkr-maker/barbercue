@@ -1,0 +1,123 @@
+.card {
+  border: 1px solid var(--bc-border, #e5ded2);
+  border-radius: 24px;
+  background: var(--bc-cream, #f7f2ea);
+  padding: 24px;
+  margin: 24px 0;
+}
+
+.compact {
+  margin: 0 0 24px;
+  padding: 20px;
+}
+
+.headingRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--bc-terracotta, #a85c43);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.headingRow h2 {
+  margin: 0;
+  color: var(--bc-ink, #211d1a);
+  font-family: var(--font-fraunces, Georgia, serif);
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.08;
+}
+
+.chairCount {
+  flex: none;
+  border: 1px solid var(--bc-gold, #b78d50);
+  border-radius: 999px;
+  color: var(--bc-ink, #211d1a);
+  padding: 8px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.chairCount strong {
+  font-size: 16px;
+}
+
+.professionalList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.professional {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--bc-border, #e5ded2) 75%, transparent);
+  padding: 10px 0;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--bc-terracotta, #a85c43);
+}
+
+.name {
+  overflow: hidden;
+  color: var(--bc-ink, #211d1a);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queueCount {
+  margin-left: auto;
+  color: var(--bc-muted, #716960);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.empty, .note {
+  color: var(--bc-muted, #716960);
+  font-size: 13px;
+}
+
+.empty {
+  margin: 20px 0 0;
+}
+
+.note {
+  margin: 16px 0 0;
+}
+
+@media (max-width: 520px) {
+  .card, .compact {
+    border-radius: 18px;
+    padding: 18px;
+  }
+
+  .headingRow {
+    display: block;
+  }
+
+  .chairCount {
+    display: inline-block;
+    margin-top: 14px;
+  }
+
+  .professionalList {
+    grid-template-columns: 1fr;
+  }
+}

@@ -85,6 +85,7 @@ export const DISCOVERY_PATHS = {
   // `mine`, which is owner-only and keyed on Salon.ownerUserId: a barber owns nothing, so that
   // route returns an empty list and leaves them with no way to reach the salon they work at.
   workplaces: 'workplaces',
+  status: 'status',
 } as const;
 
 // New top-level `countries` controller (Phase 6A) — separate resource from DISCOVERY_PATHS'

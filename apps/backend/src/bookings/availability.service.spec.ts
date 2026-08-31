@@ -254,6 +254,7 @@ describe('AvailabilityService', () => {
       // 09:00-10:00 window, 30 min service, 15 min granularity: 09:00, 09:15, 09:30 fit (09:45+30=10:15 doesn't).
       expect(slots).toHaveLength(3);
       expect(slots.every((s) => s.available)).toBe(true);
+      expect(slots.every((s) => s.state === 'AVAILABLE')).toBe(true);
     });
 
     it('marks a slot unavailable once consumed capacity reaches the computed capacity', async () => {
@@ -276,6 +277,60 @@ describe('AvailabilityService', () => {
         (s) => s.slotStart === slotStartUtc.toISOString(),
       );
       expect(firstSlot?.available).toBe(false);
+      expect(firstSlot?.state).toBe('OCCUPIED');
+    });
+
+    it('marks every candidate that overlaps a longer appointment as occupied', async () => {
+      prisma.service.findFirst.mockResolvedValue({
+        id: 'sv1',
+        salonId: 's1',
+        durationMinutes: 45,
+        isActive: true,
+      });
+      prisma.salonStaff.count.mockResolvedValue(1);
+      prisma.chair.count.mockResolvedValue(1);
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '10:00',
+        closeTime: '12:00',
+        isClosed: false,
+      });
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      // 10:00–10:45 IST. A 45-minute service starting at 10:00, 10:15, or 10:30
+      // intersects this appointment and must be unavailable for the one-chair salon.
+      const bookedStart = new Date(Date.UTC(y, m - 1, d, 4, 30));
+      const bookedEnd = new Date(Date.UTC(y, m - 1, d, 5, 15));
+      prisma.booking.findMany.mockResolvedValue([
+        { slotStart: bookedStart, slotEnd: bookedEnd },
+      ]);
+
+      const slots = await service.getAvailability('s1', 'sv1', day);
+      expect(
+        slots.find((slot) => slot.slotStart === bookedStart.toISOString()),
+      ).toMatchObject({
+        available: false,
+        state: 'OCCUPIED',
+      });
+      expect(
+        slots.find(
+          (slot) =>
+            slot.slotStart ===
+            new Date(bookedStart.getTime() + 15 * 60_000).toISOString(),
+        ),
+      ).toMatchObject({
+        available: false,
+        state: 'OCCUPIED',
+      });
+      expect(
+        slots.find(
+          (slot) =>
+            slot.slotStart ===
+            new Date(bookedStart.getTime() + 30 * 60_000).toISOString(),
+        ),
+      ).toMatchObject({
+        available: false,
+        state: 'OCCUPIED',
+      });
     });
 
     describe('with a specific staffId (Phase 7 — barber working hours)', () => {
@@ -301,7 +356,7 @@ describe('AvailabilityService', () => {
         expect(slots[0].slotStart).toContain('T03:30'); // 09:00 IST = 03:30 UTC
       });
 
-      it('clips the slot window to the intersection of shop hours and the barber\'s configured hours', async () => {
+      it("clips the slot window to the intersection of shop hours and the barber's configured hours", async () => {
         prisma.staffWorkingHours.findUnique.mockResolvedValue({
           openTime: '11:00',
           closeTime: '13:00',
@@ -316,7 +371,9 @@ describe('AvailabilityService', () => {
         expect(slots.length).toBeGreaterThan(0);
         // 11:00 IST = 05:30 UTC — the barber's own (narrower) window, not the shop's 09:00.
         expect(slots[0].slotStart).toContain('T05:30');
-        expect(slots.every((s) => s.slotStart < `${futureDateString(2)}T07:31`)).toBe(true);
+        expect(
+          slots.every((s) => s.slotStart < `${futureDateString(2)}T07:31`),
+        ).toBe(true);
       });
 
       it('returns no slots when the barber is explicitly off that day', async () => {
@@ -334,7 +391,7 @@ describe('AvailabilityService', () => {
         expect(slots).toEqual([]);
       });
 
-      it('returns no slots when the barber\'s configured hours fall entirely outside shop hours', async () => {
+      it("returns no slots when the barber's configured hours fall entirely outside shop hours", async () => {
         prisma.staffWorkingHours.findUnique.mockResolvedValue({
           openTime: '19:00',
           closeTime: '20:00',
@@ -373,7 +430,7 @@ describe('AvailabilityService', () => {
       ).resolves.toBeUndefined();
     });
 
-    it('throws OUTSIDE_OPERATING_HOURS when the slot falls outside the barber\'s configured hours', async () => {
+    it("throws OUTSIDE_OPERATING_HOURS when the slot falls outside the barber's configured hours", async () => {
       prisma.staffWorkingHours.findUnique.mockResolvedValue({
         openTime: '11:00',
         closeTime: '13:00',
@@ -410,7 +467,7 @@ describe('AvailabilityService', () => {
       ).rejects.toMatchObject({ code: 'OUTSIDE_OPERATING_HOURS' });
     });
 
-    it('resolves when the slot falls within the barber\'s configured hours', async () => {
+    it("resolves when the slot falls within the barber's configured hours", async () => {
       prisma.staffWorkingHours.findUnique.mockResolvedValue({
         openTime: '09:00',
         closeTime: '18:00',

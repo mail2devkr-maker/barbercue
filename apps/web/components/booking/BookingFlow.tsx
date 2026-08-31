@@ -153,6 +153,16 @@ export function BookingFlow({
     };
   }, [selectedServiceId, selectedDate, selectedStaffId, salonId]);
 
+  async function refreshCurrentAvailability() {
+    if (!selectedServiceId || !selectedDate) return;
+    const params = new URLSearchParams({ serviceId: selectedServiceId, date: selectedDate });
+    if (selectedStaffId) params.set("staffId", selectedStaffId);
+    const result = await apiFetch<AvailabilitySlotDto[]>(
+      `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
+    );
+    setSlots(result);
+  }
+
   async function handleConfirmBooking() {
     if (!selectedServiceId || !selectedSlot) return;
     setSubmitting(true);
@@ -169,8 +179,20 @@ export function BookingFlow({
           ...(selectedStyleName ? { selectedStyleName } : {}),
         }),
       });
+      void refreshCurrentAvailability().catch(() => undefined);
       setConfirmedBooking(booking);
     } catch (err) {
+      // The availability grid is advisory; the booking transaction is authoritative. If another
+      // customer won the last capacity concurrently, clear the stale selection and immediately
+      // reload the grid so the occupied state is visible without a page refresh.
+      if (err instanceof ApiError && err.code === "SLOT_FULL" && selectedDate) {
+        setSelectedSlot(null);
+        const params = new URLSearchParams({ serviceId: selectedServiceId, date: selectedDate });
+        if (selectedStaffId) params.set("staffId", selectedStaffId);
+        void apiFetch<AvailabilitySlotDto[]>(
+          `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
+        ).then(setSlots).catch(() => undefined);
+      }
       setSubmitError(err instanceof ApiError ? err.message : "Could not create the booking. Please try again.");
     } finally {
       setSubmitting(false);
