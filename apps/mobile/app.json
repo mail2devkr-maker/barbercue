@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.dcw.barbercue",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#1C1A17",
         "foregroundImage": "./assets/android-icon-foreground.png"
