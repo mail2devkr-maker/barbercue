@@ -16,11 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      TAG: push-e2e-launch-candidate-20260901
-      SOURCE_RUN_ID: "33443008231"
+      TAG: barbercue-google-ota-fix-20260901
+      SOURCE_RUN_ID: "33448710346"
       ARTIFACT_NAME: barbercue-launch-candidate-arm64-apk
     steps:
-      - name: Download exact successful launch-candidate APK artifact
+      - name: Confirm final launch-candidate build succeeded
+        run: gh run watch "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
+
+      - name: Download exact final APK artifact
         run: |
           mkdir -p dist
           gh run download "$SOURCE_RUN_ID" \
@@ -28,15 +31,15 @@ jobs:
             --name "$ARTIFACT_NAME" \
             --dir dist
           test -f dist/app-release.apk
-          mv dist/app-release.apk dist/barbercue-launch-candidate-e2e-arm64.apk
+          mv dist/app-release.apk dist/barbercue-google-ota-fix-arm64.apk
 
-      - name: Publish temporary launch-candidate prerelease
+      - name: Publish Google sign-in and OTA fixed prerelease
         run: |
           gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
           gh release create "$TAG" \
-            dist/barbercue-launch-candidate-e2e-arm64.apk \
+            dist/barbercue-google-ota-fix-arm64.apk \
             --repo "$GITHUB_REPOSITORY" \
             --target test/push-e2e-launch-candidate \
             --prerelease \
-            --title "BarberCue Launch Candidate — Push E2E Test" \
-            --notes "Temporary arm64 RELEASE APK built from the isolated push E2E launch-candidate branch. Includes the real BarberCue app, Firebase config, and foreground notification handler. Not a production release."
+            --title "BarberCue — Google Sign-In + OTA Update Fix" \
+            --notes "Android arm64 launch candidate. Fixes the Google Credential Manager fallback flow, adds the Android Google audience on the production backend, enables Expo OTA updates on the preview channel, checks/applies updates on app launch and after meaningful foreground returns, and bumps Android versionCode to 2 so this candidate can upgrade the earlier test APK."
