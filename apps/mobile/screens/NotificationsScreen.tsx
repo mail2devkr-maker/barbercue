@@ -6,16 +6,24 @@ import type { NotificationDto } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton } from '../components/ui';
+import { useAuth } from '../lib/auth-context';
+import { notificationDtoData } from '../lib/push-notifications';
+import { navigateFromPush } from '../navigation/navigation-ref';
 
 const TYPE_LABEL: Record<string, string> = {
   'booking.confirmed': 'Booking confirmed',
+  'booking.rescheduled': 'Booking rescheduled',
   'booking.cancelled': 'Booking cancelled',
   'booking.reminder': 'Upcoming appointment',
   'queue.turn_approaching': 'Your turn is approaching',
   'owner.booking.created': 'New booking',
+  'owner.booking.rescheduled': 'Booking rescheduled',
   'owner.booking.cancelled': 'Booking cancelled',
   'owner.walk_in.joined': 'New walk-in',
   'staff.assigned': 'You were assigned a customer',
+  'staff.booking.created': 'New appointment',
+  'staff.booking.rescheduled': 'Appointment rescheduled',
+  'staff.booking.cancelled': 'Appointment cancelled',
 };
 
 function timeAgo(iso: string): string {
@@ -30,11 +38,12 @@ function timeAgo(iso: string): string {
 
 /**
  * Notification Center (Phase 11/12) — the primary customer-facing notification surface on mobile.
- * Reuses the exact same backend contract as the web NotificationBell; deepLink is web-route-shaped
- * (e.g. "account/bookings") since no mobile route-mapping exists yet, so this screen shows the
- * notification content itself rather than attempting to navigate anywhere on tap.
+ * Reuses the exact same backend contract as the web NotificationBell. Taps translate the event's
+ * typed payload into the correct customer/owner/staff native destination; web deepLink remains
+ * intact for web consumers and is never treated as a native route string.
  */
 export default function NotificationsScreen() {
+  const { user } = useAuth();
   const [items, setItems] = useState<NotificationDto[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -66,10 +75,12 @@ export default function NotificationsScreen() {
     }, []),
   );
 
-  function markRead(n: NotificationDto) {
-    if (n.readAt) return;
-    apiFetch(`${NOTIFICATION_PATHS.notifications}/${n.id}/${NOTIFICATION_PATHS.read}`, { method: 'POST' }).catch(() => {});
-    setItems((prev) => (prev ?? []).map((it) => (it.id === n.id ? { ...it, readAt: new Date().toISOString() } : it)));
+  function openNotification(n: NotificationDto) {
+    if (!n.readAt) {
+      apiFetch(`${NOTIFICATION_PATHS.notifications}/${n.id}/${NOTIFICATION_PATHS.read}`, { method: 'POST' }).catch(() => {});
+      setItems((prev) => (prev ?? []).map((it) => (it.id === n.id ? { ...it, readAt: new Date().toISOString() } : it)));
+    }
+    if (user) navigateFromPush(notificationDtoData(n), user);
   }
 
   function markAllRead() {
@@ -111,7 +122,7 @@ export default function NotificationsScreen() {
             <EmptyState title="No notifications" message="You're all caught up." />
           ) : (
             items.map((n) => (
-              <Pressable key={n.id} onPress={() => markRead(n)} style={[styles.row, !n.readAt && styles.rowUnread]}>
+              <Pressable key={n.id} onPress={() => openNotification(n)} style={[styles.row, !n.readAt && styles.rowUnread]}>
                 <View style={styles.rowHead}>
                   {!n.readAt && <View style={styles.dot} />}
                   <Text style={[styles.title, !n.readAt && styles.titleUnread]}>

@@ -1,13 +1,15 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import StaffTodayScreen from '../screens/staff/StaffTodayScreen';
-import DashboardAccountScreen from '../screens/dashboard/DashboardAccountScreen';
+import DashboardAccountStack from './DashboardAccountStack';
 import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
+import type { DashboardAccountStackParamList } from './types';
 
 export type StaffTabParamList = {
   StaffTodayTab: undefined;
-  StaffAccountTab: undefined;
+  StaffAccountTab: NavigatorScreenParams<DashboardAccountStackParamList>;
 };
 
 const Tab = createBottomTabNavigator<StaffTabParamList>();
@@ -24,14 +26,21 @@ export default function StaffNavigator() {
           headerShown: false,
           tabBarActiveTintColor: color.ink,
           tabBarInactiveTintColor: color.muted,
-          tabBarStyle: { backgroundColor: color.surface, borderTopColor: color.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },
+          tabBarStyle: {
+            backgroundColor: color.surface,
+            borderTopColor: color.border,
+            borderTopWidth: 1,
+            height: 60,
+            paddingBottom: 8,
+            paddingTop: 8,
+          },
           tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11 },
         }}
       >
         <Tab.Screen name="StaffTodayTab" component={StaffTodayScreen} options={{ tabBarLabel: 'Today' }} />
         <Tab.Screen
           name="StaffAccountTab"
-          component={DashboardAccountScreen}
+          component={DashboardAccountStack}
           options={{
             tabBarLabel: 'Account',
             tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,

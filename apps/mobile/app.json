@@ -33,6 +33,13 @@
     "plugins": [
       "expo-secure-store",
       [
+        "expo-notifications",
+        {
+          "color": "#B85C38",
+          "defaultChannel": "barbercue-operations"
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "BarberCue needs access to your photos so you can try the AI Style Advisor."

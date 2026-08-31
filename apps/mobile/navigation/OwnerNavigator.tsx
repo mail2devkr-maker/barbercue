@@ -1,13 +1,15 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { OwnerBookingFilter } from '@barbercue/shared';
 import OwnerDashboardScreen from '../screens/owner/OwnerDashboardScreen';
 import OwnerQueueScreen from '../screens/owner/OwnerQueueScreen';
 import OwnerBookingsScreen from '../screens/owner/OwnerBookingsScreen';
 import OwnerShopScreen from '../screens/owner/OwnerShopScreen';
-import DashboardAccountScreen from '../screens/dashboard/DashboardAccountScreen';
+import DashboardAccountStack from './DashboardAccountStack';
 import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
+import type { DashboardAccountStackParamList } from './types';
 
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
@@ -16,7 +18,7 @@ export type OwnerTabParamList = {
   // into e.g. "Today" or "Cancelled" instead of always landing on the tab's own default.
   OwnerBookingsTab: { filter?: OwnerBookingFilter } | undefined;
   OwnerShopTab: undefined;
-  OwnerAccountTab: undefined;
+  OwnerAccountTab: NavigatorScreenParams<DashboardAccountStackParamList>;
 };
 
 const Tab = createBottomTabNavigator<OwnerTabParamList>();
@@ -33,7 +35,14 @@ export default function OwnerNavigator() {
           headerShown: false,
           tabBarActiveTintColor: color.ink,
           tabBarInactiveTintColor: color.muted,
-          tabBarStyle: { backgroundColor: color.surface, borderTopColor: color.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },
+          tabBarStyle: {
+            backgroundColor: color.surface,
+            borderTopColor: color.border,
+            borderTopWidth: 1,
+            height: 60,
+            paddingBottom: 8,
+            paddingTop: 8,
+          },
           tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11 },
         }}
       >
@@ -43,7 +52,7 @@ export default function OwnerNavigator() {
         <Tab.Screen name="OwnerShopTab" component={OwnerShopScreen} options={{ tabBarLabel: 'Shop' }} />
         <Tab.Screen
           name="OwnerAccountTab"
-          component={DashboardAccountScreen}
+          component={DashboardAccountStack}
           options={{
             tabBarLabel: 'Account',
             tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,

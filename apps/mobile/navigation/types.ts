@@ -79,6 +79,11 @@ export type AccountStackParamList = {
   Notifications: undefined;
 };
 
+export type DashboardAccountStackParamList = {
+  DashboardAccount: undefined;
+  Notifications: undefined;
+};
+
 // Bottom-tab level — each tab owns its own native stack. NavigatorScreenParams lets a caller
 // jump into a specific screen of another tab's stack (e.g. Home's "Find a salon" CTA opening
 // SearchTab directly at SalonSearch) with full type-checking on the nested params.

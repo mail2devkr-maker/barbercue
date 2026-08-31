@@ -1,11 +1,14 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { AUTH_PATHS, Role, type AuthSession } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError } from '../../components/ui';
+import { getVoiceBookingAnnouncementsEnabled, setVoiceBookingAnnouncementsEnabled } from '../../lib/push-notifications';
+import type { DashboardAccountStackParamList } from '../../navigation/types';
 
 const ROLE_LABELS: Record<string, string> = {
   [Role.CUSTOMER]: 'Customer',
@@ -17,11 +20,13 @@ const ROLE_LABELS: Record<string, string> = {
 // Same read-only auth/me + auth/sessions pattern as the customer AccountScreen — MeResponse and
 // the sessions endpoints are role-agnostic, so this is genuinely the same account underneath.
 export default function DashboardAccountScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<DashboardAccountStackParamList, 'DashboardAccount'>>();
   const { user, logout } = useAuth();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [voiceAnnouncements, setVoiceAnnouncements] = useState(false);
 
   const load = useCallback(() => {
     setError(null);
@@ -34,6 +39,7 @@ export default function DashboardAccountScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
+      void getVoiceBookingAnnouncementsEnabled().then(setVoiceAnnouncements);
     }, [load]),
   );
 
@@ -69,6 +75,32 @@ export default function DashboardAccountScreen() {
       </Card>
 
       <Card style={styles.card}>
+        <Pressable style={styles.actionRow} onPress={() => navigation.navigate('Notifications')} accessibilityRole="button">
+          <View style={styles.actionText}>
+            <Text style={styles.cardTitle}>Notifications</Text>
+            <Text style={styles.fieldLabel}>Booking, appointment and live queue updates</Text>
+          </View>
+          <Text style={styles.actionArrow}>›</Text>
+        </Pressable>
+        <View style={styles.voiceRow}>
+          <View style={styles.actionText}>
+            <Text style={styles.fieldValue}>Voice booking announcements</Text>
+            <Text style={styles.fieldLabel}>Foreground only; never reads customer details aloud.</Text>
+          </View>
+          <Switch
+            value={voiceAnnouncements}
+            onValueChange={(enabled) => {
+              setVoiceAnnouncements(enabled);
+              void setVoiceBookingAnnouncementsEnabled(enabled);
+            }}
+            trackColor={{ false: color.border, true: color.accentSoft }}
+            thumbColor={voiceAnnouncements ? color.accent : color.muted}
+            accessibilityLabel="Voice booking announcements"
+          />
+        </View>
+      </Card>
+
+      <Card style={styles.card}>
         <Text style={styles.cardTitle}>Signed-in devices</Text>
         {loading && <ActivityIndicator color={color.muted} style={styles.spinner} />}
         {!loading &&
@@ -98,6 +130,10 @@ export default function DashboardAccountScreen() {
 const styles = StyleSheet.create({
   card: { marginBottom: space[4] },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginBottom: space[3] },
+  actionRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  actionText: { flex: 1, paddingRight: space[3] },
+  actionArrow: { fontFamily: font.bodyRegular, fontSize: 28, color: color.accent },
+  voiceRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: color.border, paddingTop: space[3], marginTop: space[3] },
   fieldRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: color.border },
   fieldRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
   fieldLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.muted },

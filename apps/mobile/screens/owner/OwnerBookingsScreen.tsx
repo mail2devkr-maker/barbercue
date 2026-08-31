@@ -14,6 +14,7 @@ import {
   type PaginatedResult,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
+import { getVoiceBookingAnnouncementsEnabled } from '../../lib/push-notifications';
 import { useAuth } from '../../lib/auth-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
@@ -90,9 +91,8 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
 /**
  * Owner-only salon bookings: today/upcoming/completed/cancelled/no-show/history over the same
  * dashboard-bookings API the web owner dashboard uses, with realtime "new booking"/"cancelled"
- * alerts (toast + spoken notice) over the same /realtime socket the live-queue tab already joins.
- * No sound-enable gate like the web version needs — React Native has no browser autoplay policy to
- * work around, so a new booking speaks immediately while this screen is mounted.
+ * alerts over the same /realtime socket the live-queue tab already joins. Spoken notices respect
+ * the conservative device-local opt-in also used by foreground native push handling.
  */
 export default function OwnerBookingsScreen({ route }: Props) {
   const { selectedSalonId } = useSalon();
@@ -165,15 +165,17 @@ export default function OwnerBookingsScreen({ route }: Props) {
       notifiedIdsRef.current.add(payload.bookingId);
       setNewIds((current) => [...current, payload.bookingId]);
       apiFetch<OwnerBookingDetailDto>(`${bookingsPath(selectedSalonId)}/${payload.bookingId}`)
-        .then((detail) => {
+        .then(async (detail) => {
           setNewNotice(detail);
-          Speech.speak(
-            voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
-              detail.serviceName ?? null,
-              detail.slotStart ? formatTime(detail.slotStart) : null,
-            ),
-            { language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN] },
-          );
+          if (await getVoiceBookingAnnouncementsEnabled()) {
+            Speech.speak(
+              voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
+                detail.serviceName ?? null,
+                detail.slotStart ? formatTime(detail.slotStart) : null,
+              ),
+              { language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN] },
+            );
+          }
         })
         .catch(() => {
           /* toast just won't have rich details — the list refresh above still shows it */
@@ -184,9 +186,6 @@ export default function OwnerBookingsScreen({ route }: Props) {
       if (payload.salonId !== selectedSalonId) return;
       void loadPage(filterRef.current, undefined, false);
       setCancelNotice(true);
-      Speech.speak(voiceAnnouncementsFor(preferredLanguageRef.current).bookingCancelled(), {
-        language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN],
-      });
     }
 
     socket.on('booking.created', onCreated);
