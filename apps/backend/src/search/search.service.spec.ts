@@ -136,5 +136,131 @@ describe('SearchService', () => {
       // only 5 rows and hoping they happen to already be the best-ranked ones.
       expect(shopSql.values).toContain(30);
     });
+
+    // Independent review (second pass) — the SQL recall phase itself must guarantee two things a
+    // bare `LIMIT candidateLimit` cannot: (1) a bounded fetch preferentially retains
+    // exact/prefix/alias/token candidates over fuzzy ones, so truncation never arbitrarily drops a
+    // strong match while a database has more matching rows than the limit; (2) a genuine
+    // token-tier candidate (query words present, but not as one contiguous substring) is recalled
+    // at all, rather than depending on pg_trgm happening to cross 0.3. Both properties live in the
+    // actual SQL text sent to Postgres — asserted directly below — plus the consumption side (this
+    // service must not re-introduce a truncation bug on top of whatever Postgres returns).
+    describe('recall guarantees (independent review — SQL ORDER BY + token-wise recall)', () => {
+      it('orders the SQL query itself exact > prefix > alias > token > fuzzy, before LIMIT, for both shops and services', async () => {
+        await service.suggest({ q: 'bear' });
+        const [shopSql, serviceSql] = prisma.$queryRaw.mock.calls.map((call) => call[0]);
+
+        for (const sql of [shopSql.sql, serviceSql.sql]) {
+          const orderByIndex = sql.indexOf('ORDER BY');
+          const limitIndex = sql.indexOf('LIMIT', orderByIndex);
+          expect(orderByIndex).toBeGreaterThan(-1);
+          expect(limitIndex).toBeGreaterThan(orderByIndex);
+
+          const exactIndex = sql.indexOf('= lower(', orderByIndex);
+          const prefixIndex = sql.indexOf('ILIKE', exactIndex);
+          // The alias-priority term and the token-priority term are both built from the same
+          // `Prisma.join(...)`-generated OR chains as the WHERE clause's own alias/token
+          // conditions, so it's the RELATIVE POSITION within ORDER BY (exact, then prefix, then
+          // the next two boolean-priority terms, then similarity) that proves the tier sequence
+          // — not distinguishing alias from token by SQL text alone.
+          const similarityIndex = sql.indexOf('similarity(', orderByIndex);
+
+          expect(exactIndex).toBeGreaterThan(orderByIndex);
+          expect(exactIndex).toBeLessThan(limitIndex);
+          expect(prefixIndex).toBeGreaterThan(exactIndex);
+          expect(prefixIndex).toBeLessThan(limitIndex);
+          expect(similarityIndex).toBeGreaterThan(prefixIndex);
+          expect(similarityIndex).toBeLessThan(limitIndex);
+        }
+      });
+
+      it('includes a parameterized per-token ILIKE condition in the WHERE clause for a multi-word query', async () => {
+        await service.suggest({ q: 'beard fade' });
+        const [shopSql, serviceSql] = prisma.$queryRaw.mock.calls.map((call) => call[0]);
+
+        for (const sql of [shopSql, serviceSql]) {
+          const whereIndex = sql.sql.indexOf('WHERE');
+          const orderByIndex = sql.sql.indexOf('ORDER BY');
+          const whereClause = sql.sql.slice(whereIndex, orderByIndex);
+          // Two separate ILIKE conditions -- one per query word -- not merely the single
+          // whole-query containsPattern condition that was already there before this fix.
+          expect((whereClause.match(/ILIKE/g) ?? []).length).toBeGreaterThanOrEqual(3);
+          expect(sql.values).toContain('%beard%');
+          expect(sql.values).toContain('%fade%');
+        }
+      });
+
+      it('recalls a multi-token candidate whose words appear out of order, where literal full-query containment would not match', async () => {
+        // "Fade and Beard Combo" never contains the literal substring "beard fade" -- only the
+        // per-token WHERE conditions (added by this fix) would have found it; the whole-query
+        // containsPattern/similarity conditions alone could easily miss it.
+        prisma.$queryRaw
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ name: 'Fade and Beard Combo', category: null }]);
+        const result = await service.suggest({ q: 'beard fade' });
+        expect(result.services).toEqual([{ name: 'Fade and Beard Combo', category: null }]);
+      });
+
+      it('does not lose the exact match even when the DB returns it last among many genuine fuzzy candidates at the candidateLimit boundary', async () => {
+        // Simulates the worst case this fix defends against: candidateLimit (30, for the default
+        // limit of 5) worth of rows where the one EXACT match is positioned last, as if an
+        // unordered/arbitrarily-ordered scan had returned it that way. Each filler name is a
+        // verified genuine FUZZY-tier match for "fade" (typo "faade", score > the 0.3 threshold)
+        // -- not merely unrelated junk that the ranker would drop for an unrelated reason -- so
+        // this really does exercise "more fuzzy candidates than fit" rather than "noise ignored".
+        const fuzzyFiller = Array.from({ length: 29 }, (_, i) => ({
+          name: `Faade Studio ${i}`,
+          category: null,
+        }));
+        prisma.$queryRaw
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([...fuzzyFiller, { name: 'fade', category: 'Exact' }]);
+        const result = await service.suggest({ q: 'fade' });
+        expect(result.services[0]).toEqual({ name: 'fade', category: 'Exact' });
+      });
+
+      it('does not lose an alias-only match even when the DB returns it last among many genuine fuzzy candidates at the candidateLimit boundary', async () => {
+        // Each filler name is a verified genuine FUZZY-tier match for "bear" (typo "beear").
+        const fuzzyFiller = Array.from({ length: 29 }, (_, i) => ({
+          name: `Beear Salon ${i}`,
+          category: null,
+        }));
+        prisma.$queryRaw
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            ...fuzzyFiller,
+            { name: 'Haircut + Beard', category: 'Alias' }, // "bear" -> "beard" alias, mid-string, never a prefix
+          ]);
+        const result = await service.suggest({ q: 'bear' });
+        // No exact/prefix candidate in this fixture, so alias must rank ahead of every fuzzy one.
+        expect(result.services[0]).toEqual({ name: 'Haircut + Beard', category: 'Alias' });
+      });
+
+      it('final order across every tier at once: exact > prefix > alias > token > fuzzy', async () => {
+        // A single query ("bear") with one verified, unambiguous example of each tier -- see this
+        // describe block's own investigation: "bear" (exact), "Bear Grooming Co" (prefix, starts
+        // with "bear"), "Haircut + Beard" (alias -- "beard" appears mid-string, never a prefix),
+        // "Grylls Bear Barbershop" (token -- "bear" is a later whole word, not the first), "Beear
+        // Studio" (fuzzy typo, scores 0.375 -- below every higher tier, above the 0.3 threshold).
+        prisma.$queryRaw
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            // Deliberately scrambled DB order -- the service must re-rank into the required order.
+            { name: 'Beear Studio', category: null },
+            { name: 'Grylls Bear Barbershop', category: null },
+            { name: 'Haircut + Beard', category: null },
+            { name: 'Bear Grooming Co', category: null },
+            { name: 'bear', category: null },
+          ]);
+        const result = await service.suggest({ q: 'bear' });
+        expect(result.services.map((s) => s.name)).toEqual([
+          'bear',
+          'Bear Grooming Co',
+          'Haircut + Beard',
+          'Grylls Bear Barbershop',
+          'Beear Studio',
+        ]);
+      });
+    });
   });
 });

@@ -37,19 +37,43 @@ interface ServiceSuggestRow {
   category: string | null;
 }
 
+function escapeIlike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
 /**
  * GET search/suggest (Issue 3) -- typo-tolerant autosuggest for the search page's "Shop or
  * service" field.
  *
  * Two-phase design, deliberately NOT "let pg_trgm decide": SQL pulls a bounded CANDIDATE set out
- * of a potentially large table using ILIKE containment, alias-term containment, and pg_trgm
- * similarity() as three independent, index-accelerated ways to cast a wide enough net (recall) --
- * then packages/shared/src/search/ranking.ts's classifySearchMatch/rankSearchCandidates decide,
- * in pure TypeScript, the actual required deterministic order (exact > prefix > alias > token >
- * fuzzy) and which candidates actually qualify. pg_trgm's role is reduced to "helps the WHERE
- * clause find rows an index can accelerate"; it is never itself the ranking authority, and the
- * alias/token/exact/prefix tiers exist and are checked regardless of what pg_trgm thinks of a
- * given pair of strings.
+ * of a potentially large table using ILIKE containment (whole-query AND per-token -- see below),
+ * alias-term containment, and pg_trgm similarity() as independent, index-accelerated ways to cast
+ * a wide enough net (recall) -- then packages/shared/src/search/ranking.ts's
+ * classifySearchMatch/rankSearchCandidates decide, in pure TypeScript, the actual required
+ * deterministic order (exact > prefix > alias > token > fuzzy) and which candidates actually
+ * qualify. pg_trgm's role is reduced to "helps the WHERE clause find rows an index can
+ * accelerate"; it is never itself the ranking authority, and the alias/token/exact/prefix tiers
+ * exist and are checked regardless of what pg_trgm thinks of a given pair of strings.
+ *
+ * Two correctness properties the recall SQL itself must guarantee (independent-review fixes):
+ *
+ * 1. Bounded recall must not silently drop a strong candidate. `LIMIT candidateLimit` alone gives
+ *    Postgres no ordering guarantee -- with more matching rows than the limit, an arbitrary subset
+ *    could survive, including one made entirely of weak fuzzy matches while a genuine exact/
+ *    prefix/alias/token candidate is dropped before the TypeScript ranker ever sees it. Both
+ *    queries below carry an ORDER BY that mirrors the tier priority (exact-ish > prefix > alias >
+ *    token > fuzzy similarity) BEFORE the LIMIT is applied, so truncation always sheds the weakest
+ *    (fuzzy) candidates first. This ORDER BY is a cheap, index-blind heuristic over an
+ *    already-index-filtered row set -- it does not need to (and cannot cheaply) reproduce
+ *    classifySearchMatch's exact normalization; TypeScript remains the sole authority on the
+ *    FINAL order returned to the caller.
+ * 2. A multi-word query's TOKEN-tier candidates (e.g. "beard fade" matching "Fade and Beard
+ *    combo", where the words appear out of order / with other text between them, so the literal
+ *    "beard fade" substring never appears) must not depend on pg_trgm happening to cross the
+ *    fuzzy threshold. Each individual query word gets its own parameterized ILIKE containment
+ *    condition, OR'd into the WHERE -- a strict superset of "every token present" (what the
+ *    TypeScript token tier actually requires), so nothing the token tier could match is ever
+ *    excluded from recall.
  */
 @Injectable()
 export class SearchService {
@@ -61,8 +85,8 @@ export class SearchService {
     const rawQuery = (query.q ?? '').trim();
     if (rawQuery.length < MIN_QUERY_LENGTH) return { shops: [], services: [] };
 
-    const escaped = rawQuery.replace(/[\\%_]/g, '\\$&');
-    const containsPattern = `%${escaped}%`;
+    const containsPattern = `%${escapeIlike(rawQuery)}%`;
+    const prefixPattern = `${escapeIlike(rawQuery)}%`;
     const limit = Math.min(
       Math.max(query.limit ?? DEFAULT_SUGGEST_LIMIT, 1),
       20,
@@ -71,6 +95,15 @@ export class SearchService {
       limit * CANDIDATE_FETCH_MULTIPLIER,
       MAX_CANDIDATE_FETCH,
     );
+
+    // Individual query words (e.g. "beard fade" -> ["beard", "fade"]) -- see the class doc's
+    // point 2. A single-word query yields exactly one token, identical to the whole-query
+    // containment pattern above (redundant but harmless, not worth special-casing away).
+    const queryTokens = rawQuery
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0)
+      .map(escapeIlike);
 
     // Alias/typo resolution (Issue 3) -- e.g. "bear" -> "beard" -- so a candidate whose name only
     // contains the CANONICAL term is still fetched even though it never contained the literal,
@@ -83,6 +116,23 @@ export class SearchService {
     const serviceAliasConditions = canonicalTerms.map(
       (term) => Prisma.sql`s.name ILIKE ${`%${term}%`}`,
     );
+    const shopTokenConditions = queryTokens.map(
+      (token) => Prisma.sql`sa.name ILIKE ${`%${token}%`} ESCAPE '\\'`,
+    );
+    const serviceTokenConditions = queryTokens.map(
+      (token) => Prisma.sql`s.name ILIKE ${`%${token}%`} ESCAPE '\\'`,
+    );
+    // Reused in both the WHERE (as an extra OR branch, when non-empty) and the ORDER BY (as a
+    // priority tier) -- Prisma.sql`false` is the "no canonical term for this query" fallback so
+    // interpolating it into a boolean-priority ORDER BY term is always valid SQL.
+    const shopAliasPriority =
+      shopAliasConditions.length > 0
+        ? Prisma.sql`(${Prisma.join(shopAliasConditions, ' OR ')})`
+        : Prisma.sql`false`;
+    const serviceAliasPriority =
+      serviceAliasConditions.length > 0
+        ? Prisma.sql`(${Prisma.join(serviceAliasConditions, ' OR ')})`
+        : Prisma.sql`false`;
 
     const [shopRows, serviceRows] = await Promise.all([
       this.prisma.$queryRaw<ShopSuggestRow[]>(Prisma.sql`
@@ -99,7 +149,15 @@ export class SearchService {
             sa.name ILIKE ${containsPattern} ESCAPE '\\'
             OR similarity(sa.name, ${rawQuery}) > ${FUZZY_SIMILARITY_THRESHOLD}
             ${shopAliasConditions.length > 0 ? Prisma.sql`OR ${Prisma.join(shopAliasConditions, ' OR ')}` : Prisma.empty}
+            OR ${Prisma.join(shopTokenConditions, ' OR ')}
           )
+        ORDER BY
+          (lower(sa.name) = lower(${rawQuery})) DESC,
+          (sa.name ILIKE ${prefixPattern} ESCAPE '\\') DESC,
+          ${shopAliasPriority} DESC,
+          (${Prisma.join(shopTokenConditions, ' OR ')}) DESC,
+          similarity(sa.name, ${rawQuery}) DESC,
+          sa.name ASC
         LIMIT ${candidateLimit}
       `),
       // Grouped by lower(name) -- a suggestion is a service CONCEPT ("Beard Trim"), not one row
@@ -117,8 +175,16 @@ export class SearchService {
             s.name ILIKE ${containsPattern} ESCAPE '\\'
             OR similarity(s.name, ${rawQuery}) > ${FUZZY_SIMILARITY_THRESHOLD}
             ${serviceAliasConditions.length > 0 ? Prisma.sql`OR ${Prisma.join(serviceAliasConditions, ' OR ')}` : Prisma.empty}
+            OR ${Prisma.join(serviceTokenConditions, ' OR ')}
           )
         GROUP BY lower(s.name)
+        ORDER BY
+          bool_or(lower(s.name) = lower(${rawQuery})) DESC,
+          bool_or(s.name ILIKE ${prefixPattern} ESCAPE '\\') DESC,
+          bool_or(${serviceAliasPriority}) DESC,
+          bool_or(${Prisma.join(serviceTokenConditions, ' OR ')}) DESC,
+          MAX(similarity(s.name, ${rawQuery})) DESC,
+          MIN(s.name) ASC
         LIMIT ${candidateLimit}
       `),
     ]);
