@@ -1,0 +1,42 @@
+name: Publish Push E2E Launch APK
+
+on:
+  push:
+    branches:
+      - test/push-e2e-launch-candidate
+    paths:
+      - .github/workflows/publish-push-e2e-launch-apk.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: push-e2e-launch-candidate-20260901
+      SOURCE_RUN_ID: "33443008231"
+      ARTIFACT_NAME: barbercue-launch-candidate-arm64-apk
+    steps:
+      - name: Download exact successful launch-candidate APK artifact
+        run: |
+          mkdir -p dist
+          gh run download "$SOURCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$ARTIFACT_NAME" \
+            --dir dist
+          test -f dist/app-release.apk
+          mv dist/app-release.apk dist/barbercue-launch-candidate-e2e-arm64.apk
+
+      - name: Publish temporary launch-candidate prerelease
+        run: |
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            dist/barbercue-launch-candidate-e2e-arm64.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target test/push-e2e-launch-candidate \
+            --prerelease \
+            --title "BarberCue Launch Candidate — Push E2E Test" \
+            --notes "Temporary arm64 RELEASE APK built from the isolated push E2E launch-candidate branch. Includes the real BarberCue app, Firebase config, and foreground notification handler. Not a production release."
