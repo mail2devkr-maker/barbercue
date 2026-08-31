@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 
 const CHANNEL_ID = 'barbercue-operations';
-
-function projectId(): string | undefined {
-  return Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-}
+const EAS_PROJECT_ID = '01998c87-126d-40e8-aac3-205891b74b08';
 
 export function PushTransportProbe() {
-  const [status, setStatus] = useState('Preparing physical push probe…');
+  const [status, setStatus] = useState('UI READY — loading notification module…');
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,41 +13,44 @@ export function PushTransportProbe() {
 
     void (async () => {
       try {
+        const Notifications = await import('expo-notifications');
+        if (!active) return;
+        setStatus('Notification module loaded. Preparing Android channel…');
+
         if (Platform.OS === 'android') {
           await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
             name: 'Bookings and live queue',
             importance: Notifications.AndroidImportance.HIGH,
             vibrationPattern: [0, 250, 120, 250],
             sound: 'default',
-            lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
           });
         }
+
+        if (!active) return;
+        setStatus('Channel ready. Checking notification permission…');
 
         const current = await Notifications.getPermissionsAsync();
         const permission =
           current.status === 'granted'
             ? current
             : await Notifications.requestPermissionsAsync();
+
         if (!active) return;
         if (permission.status !== 'granted') {
           setStatus('PERMISSION DENIED — enable BarberCue notifications in Android Settings, then reopen this test app.');
           return;
         }
 
-        const easProjectId = projectId();
-        if (!easProjectId) {
-          setStatus('ERROR — EAS project ID missing.');
-          return;
-        }
-
         setStatus('Permission granted. Requesting Expo push token…');
-        const result = await Notifications.getExpoPushTokenAsync({ projectId: easProjectId });
+        const result = await Notifications.getExpoPushTokenAsync({ projectId: EAS_PROJECT_ID });
         if (!active) return;
+
         setToken(result.data);
         setStatus('READY — Firebase/FCM registration succeeded. Send the token below to Boss.');
       } catch (error) {
         if (!active) return;
-        setStatus(`PUSH PROBE ERROR — ${error instanceof Error ? error.message : String(error)}`);
+        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        setStatus(`PUSH DIAGNOSTIC ERROR — ${message}`);
       }
     })();
 
