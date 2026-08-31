@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.dcw.barbercue",
+      "versionCode": 2,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#1C1A17",
