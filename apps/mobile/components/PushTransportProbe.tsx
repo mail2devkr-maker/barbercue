@@ -35,24 +35,24 @@ export function PushTransportProbe() {
             : await Notifications.requestPermissionsAsync();
         if (!active) return;
         if (permission.status !== 'granted') {
-          setStatus('Notification permission denied. Enable it in Android Settings and reopen the app.');
+          setStatus('PERMISSION DENIED — enable BarberCue notifications in Android Settings, then reopen this test app.');
           return;
         }
 
         const easProjectId = projectId();
         if (!easProjectId) {
-          setStatus('EAS project ID missing.');
+          setStatus('ERROR — EAS project ID missing.');
           return;
         }
 
-        setStatus('Requesting Expo push token…');
+        setStatus('Permission granted. Requesting Expo push token…');
         const result = await Notifications.getExpoPushTokenAsync({ projectId: easProjectId });
         if (!active) return;
         setToken(result.data);
-        setStatus('READY — send this Expo token to Boss for the transport test.');
+        setStatus('READY — Firebase/FCM registration succeeded. Send the token below to Boss.');
       } catch (error) {
         if (!active) return;
-        setStatus(`Push probe error: ${error instanceof Error ? error.message : String(error)}`);
+        setStatus(`PUSH PROBE ERROR — ${error instanceof Error ? error.message : String(error)}`);
       }
     })();
 
@@ -62,14 +62,17 @@ export function PushTransportProbe() {
   }, []);
 
   return (
-    <View pointerEvents="box-none" style={styles.wrap}>
+    <View style={styles.wrap}>
       <View style={styles.card}>
-        <Text style={styles.title}>BARBERCUE PUSH TEST</Text>
+        <Text style={styles.title}>LIVE PUSH STATUS</Text>
         <Text style={styles.status}>{status}</Text>
         {token ? (
-          <Text selectable style={styles.token}>
-            {token}
-          </Text>
+          <View style={styles.tokenBox}>
+            <Text style={styles.tokenLabel}>EXPO PUSH TOKEN</Text>
+            <Text selectable style={styles.token}>
+              {token}
+            </Text>
+          </View>
         ) : null}
       </View>
     </View>
@@ -78,37 +81,49 @@ export function PushTransportProbe() {
 
 const styles = StyleSheet.create({
   wrap: {
-    position: 'absolute',
-    zIndex: 9999,
-    left: 8,
-    right: 8,
-    top: 38,
-    alignItems: 'center',
+    width: '100%',
+    marginTop: 28,
   },
   card: {
     width: '100%',
-    maxWidth: 520,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
     backgroundColor: '#FFF8F2',
-    borderWidth: 1,
-    borderColor: '#8A3F28',
+    borderWidth: 2,
+    borderColor: '#D47A4A',
   },
   title: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '900',
     color: '#512719',
+    letterSpacing: 1,
   },
   status: {
-    marginTop: 4,
-    fontSize: 11,
+    marginTop: 10,
+    fontSize: 16,
+    lineHeight: 23,
+    fontWeight: '700',
     color: '#512719',
   },
+  tokenBox: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8C6B8',
+  },
+  tokenLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7B5A49',
+    letterSpacing: 1,
+  },
   token: {
-    marginTop: 6,
-    fontSize: 9,
-    lineHeight: 12,
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 19,
     color: '#111111',
   },
 });
