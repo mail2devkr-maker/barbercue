@@ -79,8 +79,13 @@ describe('SalonsService', () => {
           .mockResolvedValue({ _min: { price: null }, _max: { price: null } }),
       },
       locality: { findUnique: jest.fn() },
-      userRole: { upsert: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
-      $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) => fn(prisma)),
+      userRole: {
+        upsert: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) =>
+        fn(prisma),
+      ),
     };
     citiesService = {
       findCityBySlugOrThrow: jest.fn(),
@@ -189,8 +194,13 @@ describe('SalonsService', () => {
 
       it('does not send a cursor/orderBy to Prisma in near-me mode (in-memory sort instead)', async () => {
         prisma.salon.findMany.mockResolvedValue([]);
-        await service.search({ lat: 12.9716, lng: 77.6412, cursor: 'ignored-in-near-me-mode' });
-        const call = prisma.salon.findMany.mock.calls[0][0] as unknown as Record<string, unknown>;
+        await service.search({
+          lat: 12.9716,
+          lng: 77.6412,
+          cursor: 'ignored-in-near-me-mode',
+        });
+        const call = prisma.salon.findMany.mock
+          .calls[0][0] as unknown as Record<string, unknown>;
         expect(call.cursor).toBeUndefined();
       });
 
@@ -204,7 +214,10 @@ describe('SalonsService', () => {
         prisma.salon.findMany.mockResolvedValue([]);
         await service.search({ lat: 12.9716, lng: 77.6412 });
         const call = prisma.salon.findMany.mock.calls[0][0] as unknown as {
-          where: { lat: { not: null; gte: number; lte: number }; lng: { not: null; gte: number; lte: number } };
+          where: {
+            lat: { not: null; gte: number; lte: number };
+            lng: { not: null; gte: number; lte: number };
+          };
           take: number;
         };
         expect(call.where.lat.not).toBeNull();
@@ -229,24 +242,39 @@ describe('SalonsService', () => {
       });
 
       it('sizes the initial bounding box from the query point, not a fixed offset', async () => {
-        prisma.salon.findMany.mockResolvedValue([makeSalon(), makeSalon(), makeSalon()]);
+        prisma.salon.findMany.mockResolvedValue([
+          makeSalon(),
+          makeSalon(),
+          makeSalon(),
+        ]);
         // Two query points far enough apart (different cities) that a fixed-size box bug (e.g.
         // reusing one city's box for another) would produce identical bounds either way — this
         // instead asserts the bounds are actually a function of each query's own lat/lng.
         await service.search({ lat: 12.9716, lng: 77.6412 }); // Bengaluru
-        const bengaluruBox = prisma.salon.findMany.mock.calls[0][0] as unknown as {
-          where: { lat: { gte: number; lte: number }; lng: { gte: number; lte: number } };
+        const bengaluruBox = prisma.salon.findMany.mock
+          .calls[0][0] as unknown as {
+          where: {
+            lat: { gte: number; lte: number };
+            lng: { gte: number; lte: number };
+          };
         };
         prisma.salon.findMany.mockClear();
         await service.search({ lat: 28.6139, lng: 77.209 }); // Delhi
         const delhiBox = prisma.salon.findMany.mock.calls[0][0] as unknown as {
-          where: { lat: { gte: number; lte: number }; lng: { gte: number; lte: number } };
+          where: {
+            lat: { gte: number; lte: number };
+            lng: { gte: number; lte: number };
+          };
         };
-        expect(bengaluruBox.where.lat.gte).not.toBeCloseTo(delhiBox.where.lat.gte, 1);
+        expect(bengaluruBox.where.lat.gte).not.toBeCloseTo(
+          delhiBox.where.lat.gte,
+          1,
+        );
         // Bengaluru (~13°N) and Delhi (~28°N) sit at different latitudes, so a correct box (which
         // narrows longitude by cos(latitude)) gives them different-width longitude spans — a bug
         // that used a fixed km-per-degree-longitude regardless of latitude would make these equal.
-        const bengaluruLngSpan = bengaluruBox.where.lng.lte - bengaluruBox.where.lng.gte;
+        const bengaluruLngSpan =
+          bengaluruBox.where.lng.lte - bengaluruBox.where.lng.gte;
         const delhiLngSpan = delhiBox.where.lng.lte - delhiBox.where.lng.gte;
         expect(bengaluruLngSpan).not.toBeCloseTo(delhiLngSpan, 3);
       });
@@ -264,8 +292,12 @@ describe('SalonsService', () => {
           makeSalon({ id: `far-${i}`, lat: 28.6139 + i * 0.001, lng: 77.209 }),
         );
         prisma.salon.findMany.mockImplementation((args: SalonFindManyArgs) => {
-          const latFilter = (args.where as unknown as { lat?: { gte: number; lte: number } }).lat;
-          const lngFilter = (args.where as unknown as { lng?: { gte: number; lte: number } }).lng;
+          const latFilter = (
+            args.where as unknown as { lat?: { gte: number; lte: number } }
+          ).lat;
+          const lngFilter = (
+            args.where as unknown as { lng?: { gte: number; lte: number } }
+          ).lng;
           const inBox = (s: ReturnType<typeof makeSalon>) =>
             !!latFilter &&
             !!lngFilter &&
@@ -310,6 +342,70 @@ describe('SalonsService', () => {
         // Same tie-break result regardless of which order Prisma happened to return the rows in.
         expect(first.items.map((i) => i.id)).toEqual(['a-salon', 'b-salon']);
         expect(second.items.map((i) => i.id)).toEqual(['a-salon', 'b-salon']);
+      });
+    });
+  });
+
+  describe('getPublicStatus', () => {
+    it('returns active chair and aggregate queue counts without customer data', async () => {
+      citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
+        id: 'city-1',
+      });
+      prisma.salon.findFirst.mockResolvedValue({
+        chairs: [{ id: 'chair-1' }, { id: 'chair-2' }],
+        staff: [
+          { displayName: 'Ravi', _count: { queueEntriesAssigned: 2 } },
+          { displayName: 'Aman', _count: { queueEntriesAssigned: 0 } },
+        ],
+      });
+
+      await expect(
+        service.getPublicStatus('IN', 'bengaluru', 'demo'),
+      ).resolves.toEqual({
+        activeChairCount: 2,
+        professionals: [
+          { displayName: 'Ravi', activeQueueCount: 2 },
+          { displayName: 'Aman', activeQueueCount: 0 },
+        ],
+      });
+      const query = prisma.salon.findFirst.mock.calls[0][0];
+      expect(query.select.staff.select).not.toHaveProperty('user');
+      expect(query.select.staff.select).not.toHaveProperty(
+        'queueEntriesAssigned',
+      );
+      expect(
+        query.select.staff.select._count.select.queueEntriesAssigned.where
+          .status.in,
+      ).toEqual(['WAITING', 'CALLED', 'IN_SERVICE']);
+    });
+
+    it('does not expose non-active chairs or staff', async () => {
+      citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
+        id: 'city-1',
+      });
+      prisma.salon.findFirst.mockResolvedValue({ chairs: [], staff: [] });
+
+      await expect(
+        service.getPublicStatus('IN', 'bengaluru', 'demo'),
+      ).resolves.toEqual({
+        activeChairCount: 0,
+        professionals: [],
+      });
+      const query = prisma.salon.findFirst.mock.calls[0][0];
+      expect(query.select.chairs.where).toEqual({ status: 'ACTIVE' });
+      expect(query.select.staff.where).toEqual({ status: 'ACTIVE' });
+    });
+
+    it('returns not found for a non-active or unknown salon', async () => {
+      citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
+        id: 'city-1',
+      });
+      prisma.salon.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.getPublicStatus('IN', 'bengaluru', 'missing'),
+      ).rejects.toMatchObject({
+        code: 'SALON_NOT_FOUND',
       });
     });
   });
@@ -379,7 +475,11 @@ describe('SalonsService', () => {
         _count: { rating: 1 },
       });
 
-      const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
+      const profile = await service.getProfile(
+        'IN',
+        'bengaluru',
+        'barbercue-demo',
+      );
 
       expect(profile.services).toEqual([
         {
@@ -432,7 +532,11 @@ describe('SalonsService', () => {
           reviews: [],
         }),
       );
-      const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
+      const profile = await service.getProfile(
+        'IN',
+        'bengaluru',
+        'barbercue-demo',
+      );
       expect(profile.services[0].category).toBe('');
     });
 
@@ -460,7 +564,11 @@ describe('SalonsService', () => {
           ],
         }),
       );
-      const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
+      const profile = await service.getProfile(
+        'IN',
+        'bengaluru',
+        'barbercue-demo',
+      );
       expect(profile.team).toEqual([
         {
           id: 'st1',
@@ -478,7 +586,12 @@ describe('SalonsService', () => {
     // of where it actually is — these prove it now resolves each salon's OWN timezone instead.
     describe('isOpenNow (global timezone correctness)', () => {
       const mondayHours = [
-        { dayOfWeek: 1, isClosed: false, openTime: '09:00', closeTime: '18:00' },
+        {
+          dayOfWeek: 1,
+          isClosed: false,
+          openTime: '09:00',
+          closeTime: '18:00',
+        },
       ];
 
       afterEach(() => {
@@ -504,7 +617,7 @@ describe('SalonsService', () => {
         expect(profile.isOpenNow).toBe(true);
       });
 
-      it('is open using London\'s real +01:00 BST offset, at an instant the old fixed +05:30 IST assumption would have wrongly called closed', async () => {
+      it("is open using London's real +01:00 BST offset, at an instant the old fixed +05:30 IST assumption would have wrongly called closed", async () => {
         // 2026-06-01T16:30:00Z: correct London local time is 17:30 (BST, +01:00) — inside
         // 09:00-18:00, so open. The old fixed +05:30 offset would have computed "23:30" for this
         // same UTC instant — outside 09:00-18:00 — and wrongly reported closed.
@@ -522,7 +635,7 @@ describe('SalonsService', () => {
         expect(profile.isOpenNow).toBe(true);
       });
 
-      it('is closed using London\'s real offset, at an instant the old fixed +05:30 IST assumption would have wrongly called open', async () => {
+      it("is closed using London's real offset, at an instant the old fixed +05:30 IST assumption would have wrongly called open", async () => {
         // 2026-06-01T06:00:00Z: correct London local time is 07:00 (BST) — before this salon's
         // 09:00 open, so closed. The old fixed +05:30 offset would have computed "11:30" for this
         // same UTC instant — inside 09:00-18:00 — and wrongly reported open.
@@ -730,7 +843,10 @@ describe('SalonsService', () => {
     it('throws LOCALITY_NOT_FOUND when localitySlug is given but does not exist in the city', async () => {
       prisma.locality.findUnique.mockResolvedValue(null);
       await expect(
-        service.registerSalon('owner-1', { ...input, localitySlug: 'no-such-place' }),
+        service.registerSalon('owner-1', {
+          ...input,
+          localitySlug: 'no-such-place',
+        }),
       ).rejects.toMatchObject({ code: 'LOCALITY_NOT_FOUND' });
       expect(prisma.salon.create).not.toHaveBeenCalled();
     });
@@ -764,7 +880,9 @@ describe('SalonsService', () => {
     it('propagates a non-collision error immediately without retrying', async () => {
       const dbError = new Error('connection lost');
       prisma.salon.create.mockRejectedValueOnce(dbError);
-      await expect(service.registerSalon('owner-1', input)).rejects.toBe(dbError);
+      await expect(service.registerSalon('owner-1', input)).rejects.toBe(
+        dbError,
+      );
       expect(prisma.salon.create).toHaveBeenCalledTimes(1);
     });
   });
@@ -772,14 +890,26 @@ describe('SalonsService', () => {
   describe('listOwned', () => {
     it('scopes to salons owned by the given user', async () => {
       prisma.salon.findMany.mockResolvedValue([
-        { id: 's1', publicId: 'BC-SHOP-000001', slug: 'a', name: 'A', status: 'PENDING' },
+        {
+          id: 's1',
+          publicId: 'BC-SHOP-000001',
+          slug: 'a',
+          name: 'A',
+          status: 'PENDING',
+        },
       ]);
       const result = await service.listOwned('owner-1');
       expect(prisma.salon.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { ownerUserId: 'owner-1' } }),
       );
       expect(result).toEqual([
-        { id: 's1', publicId: 'BC-SHOP-000001', slug: 'a', name: 'A', status: 'PENDING' },
+        {
+          id: 's1',
+          publicId: 'BC-SHOP-000001',
+          slug: 'a',
+          name: 'A',
+          status: 'PENDING',
+        },
       ]);
     });
   });
@@ -800,9 +930,11 @@ describe('SalonsService', () => {
 
     it('throws SALON_NOT_FOUND when access is granted but the salon no longer exists', async () => {
       prisma.salon.findUnique.mockResolvedValue(null);
-      await expect(service.getOwnedSalon('user-1', 's1')).rejects.toMatchObject({
-        code: 'SALON_NOT_FOUND',
-      });
+      await expect(service.getOwnedSalon('user-1', 's1')).rejects.toMatchObject(
+        {
+          code: 'SALON_NOT_FOUND',
+        },
+      );
     });
 
     it('propagates the access-denied error without reaching the DB lookup', async () => {
@@ -895,11 +1027,13 @@ describe('SalonsService', () => {
     it('sorts by salon name', async () => {
       prisma.userRole.findMany.mockResolvedValue([
         { role: 'SALON_STAFF', salon: salonRow({ id: 'b', name: 'Zen Cuts' }) },
-        { role: 'SALON_STAFF', salon: salonRow({ id: 'a', name: 'Ace Salon' }) },
+        {
+          role: 'SALON_STAFF',
+          salon: salonRow({ id: 'a', name: 'Ace Salon' }),
+        },
       ]);
       const result = await service.listWorkplaces('barber-1');
       expect(result.map((r) => r.name)).toEqual(['Ace Salon', 'Zen Cuts']);
     });
   });
-
 });

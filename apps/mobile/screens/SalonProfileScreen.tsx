@@ -3,10 +3,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from '@barbercue/shared';
-import type { SalonProfileDto } from '@barbercue/shared';
+import type { PublicSalonStatusDto, SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, Skeleton, ErrorState, SafeImage, PhotoGalleryViewer } from '../components/ui';
+import { PublicSalonStatus } from '../components/PublicSalonStatus';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonProfile'>;
@@ -46,6 +47,7 @@ function TeamPhoto({ url, displayName }: { url: string | null; displayName: stri
 export default function SalonProfileScreen({ route, navigation }: Props) {
   const { countryCode, citySlug, salonSlug, selectedStyleName } = route.params;
   const [salon, setSalon] = useState<SalonProfileDto | null>(null);
+  const [publicStatus, setPublicStatus] = useState<PublicSalonStatusDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,8 +57,15 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
     (isRefresh: boolean) => {
       isRefresh ? setRefreshing(true) : setLoading(true);
       setError(null);
-      return apiFetch<SalonProfileDto>(`${DISCOVERY_PATHS.salons}/${countryCode}/${citySlug}/${salonSlug}`)
-        .then((result) => setSalon(result))
+      const profileRequest = apiFetch<SalonProfileDto>(`${DISCOVERY_PATHS.salons}/${countryCode}/${citySlug}/${salonSlug}`);
+      const statusRequest = apiFetch<PublicSalonStatusDto>(
+        `${DISCOVERY_PATHS.salons}/${countryCode}/${citySlug}/${salonSlug}/${DISCOVERY_PATHS.status}`,
+      ).catch(() => null);
+      return Promise.all([profileRequest, statusRequest])
+        .then(([result, status]) => {
+          setSalon(result);
+          setPublicStatus(status);
+        })
         .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load this salon.'))
         .finally(() => {
           setLoading(false);
@@ -142,6 +151,8 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
           </Text>
         )}
         {salon.description && <Text style={styles.description}>{salon.description}</Text>}
+
+        {publicStatus && <PublicSalonStatus status={publicStatus} />}
 
         <Button
           title="Join queue now"

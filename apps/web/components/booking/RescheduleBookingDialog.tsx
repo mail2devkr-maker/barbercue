@@ -130,19 +130,29 @@ export function RescheduleBookingDialog({
             {slotsLoading && <p className={styles.stepLoading}>Loading times…</p>}
             {!slotsLoading && slots.length === 0 && <p className={styles.stepLoading}>No slots on this day.</p>}
             {!slotsLoading && slots.length > 0 && (
-              <div className={styles.slotGrid}>
-                {slots.map((slot) => (
-                  <button
-                    key={slot.slotStart}
-                    type="button"
-                    disabled={!slot.available}
-                    onClick={() => setSelectedSlot(slot)}
-                    className={`${styles.slotChip} ${selectedSlot?.slotStart === slot.slotStart ? styles.slotChipSelected : ""}`}
-                  >
-                    {new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className={styles.slotLegend} aria-label="Time availability legend">
+                  <span><i className={`${styles.legendSwatch} ${styles.legendAvailable}`} aria-hidden="true" /> Available</span>
+                  <span><i className={`${styles.legendSwatch} ${styles.legendSelected}`} aria-hidden="true" /> Your selection</span>
+                  <span><i className={`${styles.legendSwatch} ${styles.legendOccupied}`} aria-hidden="true" /> Occupied</span>
+                </div>
+                <div className={styles.slotGrid}>
+                  {slots.map((slot) => {
+                    const occupied = slot.state === "OCCUPIED" || !slot.available;
+                    return (
+                      <button
+                        key={slot.slotStart}
+                        type="button"
+                        disabled={occupied}
+                        onClick={() => setSelectedSlot(slot)}
+                        className={`${styles.slotChip} ${occupied ? styles.slotChipOccupied : ""} ${selectedSlot?.slotStart === slot.slotStart ? styles.slotChipSelected : ""}`}
+                      >
+                        {new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </>
         )}

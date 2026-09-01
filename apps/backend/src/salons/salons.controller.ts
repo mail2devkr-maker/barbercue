@@ -76,6 +76,16 @@ export class SalonsController {
     return this.salonsService.getOwnedSalon(user.id, salonId);
   }
 
+  @Public()
+  @Get(':countryCode/:citySlug/:salonSlug/status')
+  getPublicStatus(
+    @Param('countryCode') countryCode: string,
+    @Param('citySlug') citySlug: string,
+    @Param('salonSlug') salonSlug: string,
+  ) {
+    return this.salonsService.getPublicStatus(countryCode, citySlug, salonSlug);
+  }
+
   // B9: country-scoped public salon URL (/{countryCode}/{citySlug}/{salonSlug}). Resolves through
   // CitiesService.findCityByCountryAndSlugOrThrow, an exact (countryCode, slug) lookup, so a
   // salon in "Springfield, US" can never be confused with one in "Springfield, GB" even if both

@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import {
   Role,
   SalonStatus,
+  ChairStatus,
+  QueueEntryStatus,
   currencyForCountry,
   haversineDistanceKm,
   type PaginatedResult,
@@ -12,6 +14,7 @@ import {
   VerificationStatus,
   type SalonListItemDto,
   type SalonProfileDto,
+  type PublicSalonStatusDto,
   type SalonSearchQueryInput,
   type SalonWorkplaceDto,
   type TeamMemberDto,
@@ -317,6 +320,68 @@ export class SalonsService {
         bio: s.bio,
         yearsExperience: s.yearsExperience,
         verified: s.verification?.status === VerificationStatus.APPROVED,
+      })),
+    };
+  }
+
+  /**
+   * Public live operating snapshot for a salon profile/booking page. Only active chairs, active
+   * professionals, and aggregate active queue counts are selected. In particular, queue-entry
+   * IDs and customer relations are never selected or serialized across this public boundary.
+   */
+  async getPublicStatus(
+    countryCode: string,
+    citySlug: string,
+    salonSlug: string,
+  ): Promise<PublicSalonStatusDto> {
+    const city = await this.citiesService.findCityByCountryAndSlugOrThrow(
+      countryCode,
+      citySlug,
+    );
+    const salon = await this.prisma.salon.findFirst({
+      where: { slug: salonSlug, cityId: city.id, status: SalonStatus.ACTIVE },
+      select: {
+        chairs: {
+          where: { status: ChairStatus.ACTIVE },
+          select: { id: true },
+        },
+        staff: {
+          where: { status: StaffMemberStatus.ACTIVE },
+          orderBy: { displayName: 'asc' },
+          select: {
+            displayName: true,
+            _count: {
+              select: {
+                queueEntriesAssigned: {
+                  where: {
+                    status: {
+                      in: [
+                        QueueEntryStatus.WAITING,
+                        QueueEntryStatus.CALLED,
+                        QueueEntryStatus.IN_SERVICE,
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!salon) {
+      throw new AppException(
+        'SALON_NOT_FOUND',
+        'Salon not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return {
+      activeChairCount: salon.chairs.length,
+      professionals: salon.staff.map((staff) => ({
+        displayName: staff.displayName,
+        activeQueueCount: staff._count.queueEntriesAssigned,
       })),
     };
   }
