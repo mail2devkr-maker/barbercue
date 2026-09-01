@@ -1,0 +1,163 @@
+name: Integrate Live Booking Fixes
+
+on:
+  push:
+    branches:
+      - integrate/launch-plus-live-booking-fixes
+    paths:
+      - .github/workflows/integrate-live-booking-fixes.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: integrate/launch-plus-live-booking-fixes
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Cherry-pick Codex fix commit with controlled conflict merge
+        env:
+          CODEX_COMMIT: e836bb41a5f8a5f6f4caef0d0c9835e89c75674c
+        run: |
+          set -euo pipefail
+          set +e
+          git cherry-pick "$CODEX_COMMIT"
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            mapfile -t conflicts < <(git diff --name-only --diff-filter=U | sort)
+            printf 'Conflicts:\n%s\n' "${conflicts[*]}"
+            expected=(
+              "apps/mobile/lib/auth-context.tsx"
+              "packages/shared/src/constants/index.ts"
+              "packages/shared/src/types/index.ts"
+            )
+            mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+            if [ "$(printf '%s\n' "${conflicts[@]}")" != "$(printf '%s\n' "${expected_sorted[@]}")" ]; then
+              echo "Unexpected conflict set; aborting without pushing."
+              git cherry-pick --abort
+              exit 1
+            fi
+
+            # Preserve launch-candidate versions (which include push work), then layer the Codex
+            # additive changes onto them deterministically.
+            git checkout --ours -- apps/mobile/lib/auth-context.tsx packages/shared/src/constants/index.ts packages/shared/src/types/index.ts
+
+            python3 - <<'PY'
+            from pathlib import Path
+
+            # auth-context: preserve push-device unregister logic and add stale-restore race guard.
+            p = Path('apps/mobile/lib/auth-context.tsx')
+            s = p.read_text()
+            s = s.replace(
+                "import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';",
+                "import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';",
+                1,
+            )
+            s = s.replace(
+                "  const [status, setStatus] = useState<AuthStatus>('loading');\n",
+                "  const [status, setStatus] = useState<AuthStatus>('loading');\n  // Prevent a stale mount-time auth restore from overwriting a newer login/logout mutation.\n  const authMutationVersionRef = useRef(0);\n",
+                1,
+            )
+            s = s.replace(
+                "    let cancelled = false;\n    fetchMe().then((me) => {\n      if (cancelled) return;",
+                "    let cancelled = false;\n    const startedAtVersion = authMutationVersionRef.current;\n    fetchMe().then((me) => {\n      if (cancelled || authMutationVersionRef.current !== startedAtVersion) return;",
+                1,
+            )
+            s = s.replace(
+                "  const refreshMe = useCallback(async () => {\n    const me = await fetchMe();\n    setUser(me);",
+                "  const refreshMe = useCallback(async () => {\n    const startedAtVersion = ++authMutationVersionRef.current;\n    const me = await fetchMe();\n    if (authMutationVersionRef.current !== startedAtVersion) return;\n    setUser(me);",
+                1,
+            )
+            s = s.replace(
+                "  const applyAuthResult = useCallback(async (result: { user: MeResponse; tokens: AuthTokens }) => {\n    setAccessToken",
+                "  const applyAuthResult = useCallback(async (result: { user: MeResponse; tokens: AuthTokens }) => {\n    authMutationVersionRef.current += 1;\n    setAccessToken",
+                1,
+            )
+            s = s.replace(
+                "  const logout = useCallback(async () => {\n    const refreshToken",
+                "  const logout = useCallback(async () => {\n    authMutationVersionRef.current += 1;\n    const refreshToken",
+                1,
+            )
+            p.write_text(s)
+
+            # shared constants: public salon status endpoint.
+            p = Path('packages/shared/src/constants/index.ts')
+            s = p.read_text()
+            needle = "  workplaces: 'workplaces',\n"
+            if "  status: 'status',\n" not in s[s.find('export const DISCOVERY_PATHS'):s.find('export const SEARCH_PATHS')]:
+                s = s.replace(needle, needle + "  status: 'status',\n", 1)
+            p.write_text(s)
+
+            # shared types: aggregate-only public status + explicit availability state.
+            p = Path('packages/shared/src/types/index.ts')
+            s = p.read_text()
+            marker = "// Public \"Meet the team\" entry on a salon's discovery profile page"
+            insert = """/** Public aggregate salon operations snapshot; intentionally contains no customer PII or internal ids. */
+            export interface PublicSalonStatusDto {
+              activeChairCount: number;
+              professionals: PublicSalonProfessionalStatusDto[];
+            }
+
+            export interface PublicSalonProfessionalStatusDto {
+              displayName: string;
+              activeQueueCount: number;
+            }
+
+            """
+            if 'export interface PublicSalonStatusDto' not in s:
+                s = s.replace(marker, insert + marker, 1)
+            old = "  available: boolean;\n}"
+            new = "  available: boolean;\n  // Selected is client-local; API returns only AVAILABLE or OCCUPIED.\n  state: AvailabilitySlotState;\n}\n\nexport type AvailabilitySlotState = 'AVAILABLE' | 'OCCUPIED';"
+            if 'export type AvailabilitySlotState' not in s:
+                availability_pos = s.find('export interface AvailabilitySlotDto')
+                if availability_pos < 0:
+                    raise SystemExit('AvailabilitySlotDto marker missing')
+                prefix, tail = s[:availability_pos], s[availability_pos:]
+                tail = tail.replace(old, new, 1)
+                s = prefix + tail
+            p.write_text(s)
+            PY
+
+            git add apps/mobile/lib/auth-context.tsx packages/shared/src/constants/index.ts packages/shared/src/types/index.ts
+            GIT_EDITOR=true git cherry-pick --continue
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate shared package
+        run: |
+          npm run typecheck -w @barbercue/shared
+          npm test -w @barbercue/shared -- --runInBand
+
+      - name: Validate backend
+        run: |
+          npm run typecheck -w apps/backend
+          npm test -w apps/backend -- --runInBand availability.service.spec.ts salons.service.spec.ts
+
+      - name: Validate web
+        run: |
+          npm run typecheck -w apps/web
+
+      - name: Validate mobile
+        run: npm run typecheck -w apps/mobile
+
+      - name: Verify integration delta
+        run: |
+          git status --short
+          test -z "$(git status --porcelain)"
+          git log --oneline -3
+
+      - name: Push validated integration commit
+        run: git push origin HEAD:integrate/launch-plus-live-booking-fixes
