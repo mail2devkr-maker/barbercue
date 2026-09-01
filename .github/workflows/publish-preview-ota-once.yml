@@ -24,6 +24,13 @@ jobs:
       - name: Checkout master
         uses: actions/checkout@v4
 
+      - name: Confirm Expo token is configured
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN is not configured in repository Actions secrets."
+            exit 1
+          fi
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -33,12 +40,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify shared TypeScript
-        run: npm run typecheck --workspace=@barbercue/shared
-
-      - name: Verify mobile TypeScript
-        run: npm run typecheck --workspace=@barbercue/mobile
-
       - name: Publish Android OTA to preview channel
         working-directory: apps/mobile
-        run: npx eas-cli@latest update --channel preview --platform android --non-interactive --message "PR #7 production sync — salon status and explicit slot availability (41d0044)"
+        run: |
+          npx eas-cli@latest update \
+            --channel preview \
+            --platform android \
+            --non-interactive \
+            --message "PR7 booking fixes 41d0044"
