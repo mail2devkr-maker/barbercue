@@ -429,6 +429,7 @@ export class AvailabilityService {
         slotStart: slotStart.toISOString(),
         slotEnd: slotEnd.toISOString(),
         available,
+        state: available ? 'AVAILABLE' : 'OCCUPIED',
       });
     }
     return slots;
