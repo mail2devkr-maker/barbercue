@@ -20,7 +20,12 @@ describe('AdminController authorization', () => {
       startReview: jest.fn(),
       decide: jest.fn(),
     };
-    const controller = new AdminController(monitoring as never, verification as never);
+    const salonManagement = { deleteSalon: jest.fn() };
+    const controller = new AdminController(
+      monitoring as never,
+      verification as never,
+      salonManagement as never,
+    );
     await expect(controller.overview()).resolves.toBe(overview);
   });
 
@@ -34,7 +39,12 @@ describe('AdminController authorization', () => {
       startReview: jest.fn().mockResolvedValue({ id: 'vr-1', status: 'UNDER_REVIEW' }),
       decide: jest.fn().mockResolvedValue({ id: 'vr-1', status: 'APPROVED' }),
     };
-    const controller = new AdminController(monitoring as never, verification as never);
+    const salonManagement = { deleteSalon: jest.fn() };
+    const controller = new AdminController(
+      monitoring as never,
+      verification as never,
+      salonManagement as never,
+    );
 
     await controller.listVerification('SUBMITTED', undefined, undefined);
     expect(verification.list).toHaveBeenCalledWith('SUBMITTED', undefined, undefined);
@@ -50,5 +60,26 @@ describe('AdminController authorization', () => {
       reviewNotes: undefined,
     } as never);
     expect(verification.decide).toHaveBeenCalledWith('admin-1', 'vr-1', 'APPROVED', undefined);
+  });
+
+  it('delegates shop deletion to AdminSalonManagementService', async () => {
+    const monitoring = { getOverview: jest.fn() };
+    const verification = {
+      list: jest.fn(),
+      getOne: jest.fn(),
+      startReview: jest.fn(),
+      decide: jest.fn(),
+    };
+    const salonManagement = {
+      deleteSalon: jest.fn().mockResolvedValue({ deleted: true }),
+    };
+    const controller = new AdminController(
+      monitoring as never,
+      verification as never,
+      salonManagement as never,
+    );
+
+    await controller.deleteShop({ id: 'admin-1' } as never, 'salon-1');
+    expect(salonManagement.deleteSalon).toHaveBeenCalledWith('admin-1', 'salon-1');
   });
 });

@@ -21,6 +21,24 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [shopStatus, setShopStatus] = useState<"ALL" | SalonStatus>("ALL");
+  const [deletingShopId, setDeletingShopId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDeleteShop(shopId: string, shopName: string) {
+    if (!window.confirm(`Delete "${shopName}"? This cannot be undone. Only a shop with no staff, bookings, queue, review, or ledger activity can be deleted.`)) {
+      return;
+    }
+    setDeleteError(null);
+    setDeletingShopId(shopId);
+    try {
+      await apiFetch(`${ADMIN_PATHS.admin}/${ADMIN_PATHS.shops}/${shopId}`, { method: "DELETE" });
+      setData((current) => current ? { ...current, shops: current.shops.filter((shop) => shop.id !== shopId), counts: { ...current.counts, shops: current.counts.shops - 1 } } : current);
+    } catch (requestError) {
+      setDeleteError(requestError instanceof ApiError ? requestError.message : "Could not delete this shop.");
+    } finally {
+      setDeletingShopId(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -97,14 +115,20 @@ export default function AdminDashboardPage() {
 
           <section className={styles.section}>
             <div className={styles.sectionHeader}><h2>Shops</h2><span>{shops.length} shown · latest 100</span></div>
+            {deleteError && <p className={styles.error} role="alert">{deleteError}</p>}
             <div className={styles.tableWrap}>
-              <table><thead><tr><th>Shop</th><th>Status</th><th>Owner</th><th>Operations</th><th>Plan</th></tr></thead>
+              <table><thead><tr><th>Shop</th><th>Status</th><th>Owner</th><th>Operations</th><th>Plan</th><th>Actions</th></tr></thead>
                 <tbody>{shops.map((shop) => <tr key={shop.id}>
                   <td><strong>{shop.name}</strong><small>{shop.publicId}</small></td>
                   <td><span className={styles.status}>{shop.status}</span></td>
                   <td>{contact(shop.ownerEmail, shop.ownerPhone)}</td>
                   <td>{shop.staffCount} staff · {shop.bookingCount} bookings · {shop.liveQueueCount} live</td>
                   <td>{shop.subscriptionStatus}</td>
+                  <td>
+                    <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleDeleteShop(shop.id, shop.name)}>
+                      {deletingShopId === shop.id ? "Deleting…" : "Delete"}
+                    </Button>
+                  </td>
                 </tr>)}</tbody>
               </table>
             </div>

@@ -43,6 +43,9 @@ export const ADMIN_PATHS = {
   verification: 'verification',
   startReview: 'start-review',
   decide: 'decide',
+  // admin/shops/:id (DELETE) — platform-admin shop removal, guarded server-side to only ever
+  // succeed against a shop with zero bookings/staff/queue/reviews/ledger activity.
+  shops: 'shops',
 } as const;
 
 // The ONLY place this wording is allowed to live — every surface that shows a Verified badge
