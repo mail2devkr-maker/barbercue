@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AUTH_PATHS,
   type AuthTokens,
@@ -50,6 +50,10 @@ function authPath(p: string): string {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<MeResponse | null>(null);
   const [status, setStatus] = useState<AuthStatus>('loading');
+  // A mount-time auth/me restore can finish after a login succeeds. Without a mutation version,
+  // that stale null result can overwrite the authenticated state and make ordinary navigation
+  // (including returning Home) look like a logout.
+  const authMutationVersionRef = useRef(0);
 
   // fetchMe never touches state itself — callers apply the result, mirroring apps/web/lib/auth-context.tsx.
   const fetchMe = useCallback(async (): Promise<MeResponse | null> => {
@@ -63,8 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // persisted refresh token — no separate restore code path needed.
   useEffect(() => {
     let cancelled = false;
+    const startedAtVersion = authMutationVersionRef.current;
     fetchMe().then((me) => {
-      if (cancelled) return;
+      if (cancelled || authMutationVersionRef.current !== startedAtVersion) return;
       setUser(me);
       setStatus(me ? 'authenticated' : 'unauthenticated');
     });
@@ -74,12 +79,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchMe]);
 
   const refreshMe = useCallback(async () => {
+    const startedAtVersion = ++authMutationVersionRef.current;
     const me = await fetchMe();
+    if (authMutationVersionRef.current !== startedAtVersion) return;
     setUser(me);
     setStatus(me ? 'authenticated' : 'unauthenticated');
   }, [fetchMe]);
 
   const applyAuthResult = useCallback(async (result: { user: MeResponse; tokens: AuthTokens }) => {
+    authMutationVersionRef.current += 1;
     setAccessToken(result.tokens.accessToken);
     await persistRefreshToken(result.tokens.refreshToken);
     setUser(result.user);
@@ -135,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    authMutationVersionRef.current += 1;
     const refreshToken = await getPersistedRefreshToken();
     try {
       await unregisterPushDevice().catch(() => {

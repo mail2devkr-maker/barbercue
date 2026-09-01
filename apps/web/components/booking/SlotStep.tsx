@@ -35,16 +35,23 @@ export function SlotStep({
       <h2 className={styles.stepHeading}>
         <span className={styles.stepNumber}>4</span> Choose a time
       </h2>
+      <div className={styles.slotLegend} aria-label="Time availability legend">
+        <span><i className={`${styles.legendSwatch} ${styles.legendAvailable}`} aria-hidden="true" /> Available</span>
+        <span><i className={`${styles.legendSwatch} ${styles.legendSelected}`} aria-hidden="true" /> Your selection</span>
+        <span><i className={`${styles.legendSwatch} ${styles.legendOccupied}`} aria-hidden="true" /> Occupied</span>
+      </div>
       <div className={styles.slotGrid}>
         {slots.map((slot) => {
           const selected = selectedSlot?.slotStart === slot.slotStart;
+          const occupied = slot.state === "OCCUPIED" || !slot.available;
           return (
             <button
               key={slot.slotStart}
               type="button"
-              disabled={!slot.available}
+              disabled={occupied}
               onClick={() => onSelect(slot)}
-              className={`${styles.slotChip} ${selected ? styles.slotChipSelected : ""}`}
+              className={`${styles.slotChip} ${occupied ? styles.slotChipOccupied : ""} ${selected ? styles.slotChipSelected : ""}`}
+              aria-label={`${new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}, ${selected ? "your selection" : occupied ? "occupied" : "available"}`}
             >
               {timeZone ? formatZonedTime(slot.slotStart, timeZone) : new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
             </button>

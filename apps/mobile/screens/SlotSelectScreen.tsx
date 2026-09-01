@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
@@ -16,8 +17,10 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadSlots = useCallback(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     const params = new URLSearchParams({ serviceId, date });
     if (preferredStaffId) params.set('staffId', preferredStaffId);
     apiFetch<AvailabilitySlotDto[]>(
@@ -37,6 +40,10 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
     };
   }, [salonId, serviceId, preferredStaffId, date]);
 
+  // Re-fetch when returning from confirmation. A successful booking or a competing customer
+  // winning the last slot must not leave the previous grid looking selectable.
+  useFocusEffect(useCallback(() => loadSlots(), [loadSlots]));
+
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
       <SectionHeader eyebrow="Booking" title="Choose a time" />
@@ -49,32 +56,44 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
       {error && <InlineError message={error} />}
       {!loading && !error && slots.length === 0 && <EmptyState title="No slots on this day" message="Try a different date." />}
       {!loading && !error && slots.length > 0 && (
-        <FlatList
-          data={slots}
-          keyExtractor={(item) => item.slotStart}
-          numColumns={3}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <Pressable
-              style={[styles.slot, !item.available && styles.slotDisabled]}
-              disabled={!item.available}
-              onPress={() =>
-                navigation.navigate('ConfirmBooking', {
-                  salonId,
-                  serviceId,
-                  preferredStaffId,
-                  ...rest,
-                  slotStart: item.slotStart,
-                  slotEnd: item.slotEnd,
-                })
-              }
-            >
-              <Text style={[styles.slotText, !item.available && styles.slotTextDisabled]}>
-                {new Date(item.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            </Pressable>
-          )}
-        />
+        <>
+          <Text style={styles.legend} accessibilityLabel="Time availability legend">
+            <Text style={styles.legendAvailable}>● Available</Text>{'  '}
+            <Text style={styles.legendOccupied}>● Occupied</Text>
+          </Text>
+          <FlatList
+            data={slots}
+            keyExtractor={(item) => item.slotStart}
+            numColumns={3}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => {
+              const occupied = item.state === 'OCCUPIED' || !item.available;
+              return (
+                <Pressable
+                  style={[styles.slot, occupied ? styles.slotOccupied : styles.slotAvailable]}
+                  disabled={occupied}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: occupied }}
+                  accessibilityLabel={`${new Date(item.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}, ${occupied ? 'occupied' : 'available'}`}
+                  onPress={() =>
+                    navigation.navigate('ConfirmBooking', {
+                      salonId,
+                      serviceId,
+                      preferredStaffId,
+                      ...rest,
+                      slotStart: item.slotStart,
+                      slotEnd: item.slotEnd,
+                    })
+                  }
+                >
+                  <Text style={[styles.slotText, occupied && styles.slotTextOccupied]}>
+                    {new Date(item.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </Pressable>
+              );
+            }}
+          />
+        </>
       )}
     </Screen>
   );
@@ -85,7 +104,6 @@ const styles = StyleSheet.create({
   skeletonRow: { height: 44, borderRadius: radius.sm, marginBottom: space[2] },
   listContent: { paddingTop: space[2] },
   slot: {
-    backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.sm,
@@ -94,7 +112,11 @@ const styles = StyleSheet.create({
     flex: 1,
     margin: space[1],
   },
-  slotDisabled: { opacity: 0.35 },
+  slotAvailable: { backgroundColor: color.surface },
+  slotOccupied: { backgroundColor: color.ink, borderColor: color.ink },
   slotText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
-  slotTextDisabled: { color: color.muted },
+  slotTextOccupied: { color: '#ffffff' },
+  legend: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
+  legendAvailable: { color: color.muted },
+  legendOccupied: { color: color.ink },
 });

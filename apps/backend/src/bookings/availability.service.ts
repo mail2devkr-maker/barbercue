@@ -229,14 +229,12 @@ export class AvailabilityService {
       where: { staffId_dayOfWeek: { staffId, dayOfWeek } },
     });
     if (!staffHours) return;
-    const openAt =
-      !staffHours.isClosed
-        ? zonedWallTimeToUtc(dateStr, staffHours.openTime, timeZone)
-        : null;
-    const closeAt =
-      !staffHours.isClosed
-        ? zonedWallTimeToUtc(dateStr, staffHours.closeTime, timeZone)
-        : null;
+    const openAt = !staffHours.isClosed
+      ? zonedWallTimeToUtc(dateStr, staffHours.openTime, timeZone)
+      : null;
+    const closeAt = !staffHours.isClosed
+      ? zonedWallTimeToUtc(dateStr, staffHours.closeTime, timeZone)
+      : null;
     if (!openAt || !closeAt || slotStart < openAt || slotEnd > closeAt) {
       throw new AppException(
         BookingErrorCode.OUTSIDE_OPERATING_HOURS,
@@ -371,8 +369,16 @@ export class AvailabilityService {
       });
       if (staffHours) {
         if (staffHours.isClosed) return [];
-        const staffOpenAt = zonedWallTimeToUtc(date, staffHours.openTime, timeZone);
-        const staffCloseAt = zonedWallTimeToUtc(date, staffHours.closeTime, timeZone);
+        const staffOpenAt = zonedWallTimeToUtc(
+          date,
+          staffHours.openTime,
+          timeZone,
+        );
+        const staffCloseAt = zonedWallTimeToUtc(
+          date,
+          staffHours.closeTime,
+          timeZone,
+        );
         if (!staffOpenAt || !staffCloseAt) return [];
         openAt = openAt > staffOpenAt ? openAt : staffOpenAt;
         closeAt = closeAt < staffCloseAt ? closeAt : staffCloseAt;

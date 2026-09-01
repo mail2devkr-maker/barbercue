@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from "@barbercue/shared";
-import type { CityDto, LocalityDto, SalonProfileDto } from "@barbercue/shared";
+import type { CityDto, LocalityDto, PublicSalonStatusDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../lib/seo";
 import { ServiceList } from "../../../../../components/discovery/ServiceList";
@@ -15,6 +15,7 @@ import { JsonLd } from "../../../../../components/discovery/JsonLd";
 import { SalonImage } from "../../../../../components/ui/SalonImage";
 import { LinkButton } from "../../../../../components/ui/Button";
 import { EditorialImage } from "../../../../../components/editorial/EditorialImage";
+import { PublicSalonStatus } from "../../../../../components/discovery/PublicSalonStatus";
 import styles from "./profile.module.css";
 
 interface SalonPageParams {
@@ -30,6 +31,13 @@ async function loadSalon(countryCode: string, citySlug: string, salonSlug: strin
     `${DISCOVERY_PATHS.salons}/${countryCode}/${citySlug}/${salonSlug}`,
     DISCOVERY_REVALIDATE_SECONDS,
   );
+}
+
+async function loadPublicStatus(countryCode: string, citySlug: string, salonSlug: string) {
+  return fetchDiscoveryOrNull<PublicSalonStatusDto>(
+    `${DISCOVERY_PATHS.salons}/${countryCode}/${citySlug}/${salonSlug}/${DISCOVERY_PATHS.status}`,
+    0,
+  ).catch(() => null);
 }
 
 /** `/{countryCode}/{citySlug}/{salonSlug}` — B9's canonical public salon URL. */
@@ -138,6 +146,7 @@ export default async function SalonPage({
   const { style } = await searchParams;
   const salon = await loadSalon(countryCode, citySlug, salonSlug);
   if (!salon) notFound();
+  const publicStatus = await loadPublicStatus(countryCode, citySlug, salonSlug);
 
   // Query params carried into the (unindexed, ?robots: noindex?) booking/queue flows so those
   // pages can re-resolve the exact same salon: Salon.slug is unique only within one city, and
@@ -234,6 +243,8 @@ export default async function SalonPage({
           <p className={styles.assurance}>Availability and queue details are confirmed in the next step.</p>
         </div>
       </section>
+
+      {publicStatus && <PublicSalonStatus status={publicStatus} />}
 
       <div className={styles.contentGrid}>
         <div className={styles.mainColumn}>

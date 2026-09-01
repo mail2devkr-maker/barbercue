@@ -314,6 +314,20 @@ export interface SalonProfileDto extends SalonListItemDto {
   salonTimeZone: string | null;
 }
 
+/**
+ * Public salon operations snapshot. This is intentionally aggregate-only: no customer, booking,
+ * queue-entry, phone, email, or internal-resource identifiers cross the public API boundary.
+ */
+export interface PublicSalonStatusDto {
+  activeChairCount: number;
+  professionals: PublicSalonProfessionalStatusDto[];
+}
+
+export interface PublicSalonProfessionalStatusDto {
+  displayName: string;
+  activeQueueCount: number;
+}
+
 // Public "Meet the team" entry on a salon's discovery profile page (Phase 17). Deliberately never
 // exposes phone/email (those are SalonStaffDto's owner-only fields) — this is what a customer
 // browsing the shop gets to see, nothing account-related.
@@ -422,7 +436,12 @@ export interface AvailabilitySlotDto {
   slotStart: string; // ISO 8601
   slotEnd: string;
   available: boolean;
+  // Additive state for cinema-style clients. `available` remains for backwards compatibility;
+  // selected is always a local client state and is never sent by the API.
+  state: AvailabilitySlotState;
 }
+
+export type AvailabilitySlotState = 'AVAILABLE' | 'OCCUPIED';
 
 // Adds display fields a UI needs (booking confirmation, list, detail) without extra round-trips —
 // same pattern as SalonListItemDto extending SalonSummary in Phase 3A.

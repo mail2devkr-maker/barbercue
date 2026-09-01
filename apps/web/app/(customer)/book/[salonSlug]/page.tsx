@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
-import type { SalonProfileDto } from "@barbercue/shared";
+import type { PublicSalonStatusDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { BookingFlow } from "../../../../components/booking/BookingFlow";
 import { EditorialImage } from "../../../../components/editorial/EditorialImage";
+import { PublicSalonStatus } from "../../../../components/discovery/PublicSalonStatus";
 import styles from "./book.module.css";
 
 interface BookPageParams {
@@ -34,6 +35,10 @@ export default async function BookPage({
     0,
   );
   if (!salon) notFound();
+  const publicStatus = await fetchDiscoveryOrNull<PublicSalonStatusDto>(
+    `${DISCOVERY_PATHS.salons}/${country}/${city}/${salonSlug}/${DISCOVERY_PATHS.status}`,
+    0,
+  ).catch(() => null);
 
   return (
     <main className={styles.page}>
@@ -48,6 +53,8 @@ export default async function BookPage({
         <h1>Book at {salon.name}</h1>
         <p className={styles.address}>{salon.addressLine}</p>
       </div>
+
+      {publicStatus && <PublicSalonStatus status={publicStatus} compact />}
 
       <BookingFlow
         salonId={salon.id}

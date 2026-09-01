@@ -361,14 +361,45 @@
 
 .slotChipSelected {
   border-color: var(--bc-accent);
-  background: var(--bc-gold-soft);
+  background: #2f7d4a;
+  color: #ffffff;
 }
 
+.slotChipOccupied,
 .slotChip:disabled {
   cursor: not-allowed;
-  color: #b4ac9c;
-  background: var(--bc-surface);
+  color: #ffffff;
+  background: var(--bc-ink);
+  border-color: var(--bc-ink);
 }
+
+.slotLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 14px;
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+}
+
+.slotLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendSwatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: #ffffff;
+  border: 1px solid var(--bc-border);
+}
+
+.legendAvailable { background: #ffffff; }
+.legendSelected { background: #2f7d4a; border-color: #2f7d4a; }
+.legendOccupied { background: var(--bc-ink); border-color: var(--bc-ink); }
 
 /* ---------- Confirm / summary ---------- */
 
