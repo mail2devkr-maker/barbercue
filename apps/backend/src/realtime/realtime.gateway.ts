@@ -12,6 +12,7 @@ import type { Server, Socket } from 'socket.io';
 import { UserStatus, type AuthenticatedUser } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JwtPayload } from '../auth/services/token.service';
+import { resolveCorsOrigins } from '../common/cors-origins';
 
 /**
  * API.md's `/realtime` namespace. JWT verified at handshake (`client.handshake.auth.token`),
@@ -25,7 +26,13 @@ import type { JwtPayload } from '../auth/services/token.service';
  */
 @WebSocketGateway({
   namespace: '/realtime',
-  cors: { origin: true, credentials: true },
+  // Same explicit allowlist as the HTTP API (main.ts) — this previously had its own independent
+  // `origin: true`, missed when the HTTP CORS fix landed. The socket handshake here is
+  // JWT-in-payload authenticated, not cookie-authenticated, so this is defense-in-depth (no
+  // browser-CORS-bypassable cookie to protect) rather than the same direct exposure the HTTP fix
+  // closed — but there is no reason for this gateway to accept connection attempts from an
+  // arbitrary origin either.
+  cors: { origin: resolveCorsOrigins(), credentials: true },
 })
 export class RealtimeGateway implements OnGatewayConnection {
   private readonly logger = new Logger(RealtimeGateway.name);
