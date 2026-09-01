@@ -38,9 +38,8 @@ jobs:
             mapfile -t conflicts < <(git diff --name-only --diff-filter=U | sort)
             printf 'Conflicts:\n%s\n' "${conflicts[*]}"
             expected=(
-              "apps/mobile/lib/auth-context.tsx"
-              "packages/shared/src/constants/index.ts"
-              "packages/shared/src/types/index.ts"
+              "apps/backend/src/bookings/availability.service.ts"
+              "apps/web/components/booking/RescheduleBookingDialog.tsx"
             )
             mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
             if [ "$(printf '%s\n' "${conflicts[@]}")" != "$(printf '%s\n' "${expected_sorted[@]}")" ]; then
@@ -49,87 +48,86 @@ jobs:
               exit 1
             fi
 
-            # Preserve launch-candidate versions (which include push work), then layer the Codex
-            # additive changes onto them deterministically.
-            git checkout --ours -- apps/mobile/lib/auth-context.tsx packages/shared/src/constants/index.ts packages/shared/src/types/index.ts
+            # Keep the launch-candidate semantics in the two conflicting files, then layer in
+            # Codex's additive occupied-state UX. All non-conflicting Codex changes remain staged.
+            git checkout --ours -- apps/backend/src/bookings/availability.service.ts apps/web/components/booking/RescheduleBookingDialog.tsx
 
             python3 - <<'PY'
-            from pathlib import Path
+from pathlib import Path
 
-            # auth-context: preserve push-device unregister logic and add stale-restore race guard.
-            p = Path('apps/mobile/lib/auth-context.tsx')
-            s = p.read_text()
-            s = s.replace(
-                "import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';",
-                "import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';",
-                1,
-            )
-            s = s.replace(
-                "  const [status, setStatus] = useState<AuthStatus>('loading');\n",
-                "  const [status, setStatus] = useState<AuthStatus>('loading');\n  // Prevent a stale mount-time auth restore from overwriting a newer login/logout mutation.\n  const authMutationVersionRef = useRef(0);\n",
-                1,
-            )
-            s = s.replace(
-                "    let cancelled = false;\n    fetchMe().then((me) => {\n      if (cancelled) return;",
-                "    let cancelled = false;\n    const startedAtVersion = authMutationVersionRef.current;\n    fetchMe().then((me) => {\n      if (cancelled || authMutationVersionRef.current !== startedAtVersion) return;",
-                1,
-            )
-            s = s.replace(
-                "  const refreshMe = useCallback(async () => {\n    const me = await fetchMe();\n    setUser(me);",
-                "  const refreshMe = useCallback(async () => {\n    const startedAtVersion = ++authMutationVersionRef.current;\n    const me = await fetchMe();\n    if (authMutationVersionRef.current !== startedAtVersion) return;\n    setUser(me);",
-                1,
-            )
-            s = s.replace(
-                "  const applyAuthResult = useCallback(async (result: { user: MeResponse; tokens: AuthTokens }) => {\n    setAccessToken",
-                "  const applyAuthResult = useCallback(async (result: { user: MeResponse; tokens: AuthTokens }) => {\n    authMutationVersionRef.current += 1;\n    setAccessToken",
-                1,
-            )
-            s = s.replace(
-                "  const logout = useCallback(async () => {\n    const refreshToken",
-                "  const logout = useCallback(async () => {\n    authMutationVersionRef.current += 1;\n    const refreshToken",
-                1,
-            )
-            p.write_text(s)
+# Backend: preserve launch candidate's staff-specific availability guard and add explicit state.
+p = Path('apps/backend/src/bookings/availability.service.ts')
+s = p.read_text()
+old = """      slots.push({
+        slotStart: slotStart.toISOString(),
+        slotEnd: slotEnd.toISOString(),
+        available,
+      });"""
+new = """      slots.push({
+        slotStart: slotStart.toISOString(),
+        slotEnd: slotEnd.toISOString(),
+        available,
+        state: available ? 'AVAILABLE' : 'OCCUPIED',
+      });"""
+if old not in s:
+    raise SystemExit('availability merge marker missing')
+s = s.replace(old, new, 1)
+p.write_text(s)
 
-            # shared constants: public salon status endpoint.
-            p = Path('packages/shared/src/constants/index.ts')
-            s = p.read_text()
-            needle = "  workplaces: 'workplaces',\n"
-            if "  status: 'status',\n" not in s[s.find('export const DISCOVERY_PATHS'):s.find('export const SEARCH_PATHS')]:
-                s = s.replace(needle, needle + "  status: 'status',\n", 1)
-            p.write_text(s)
+# Web reschedule: preserve salon-timezone formatting and add cinema-style occupied/selected states.
+p = Path('apps/web/components/booking/RescheduleBookingDialog.tsx')
+s = p.read_text()
+old = """            {!slotsLoading && slots.length > 0 && (
+              <div className={styles.slotGrid}>
+                {slots.map((slot) => (
+                  <button
+                    key={slot.slotStart}
+                    type=\"button\"
+                    disabled={!slot.available}
+                    onClick={() => setSelectedSlot(slot)}
+                    className={`${styles.slotChip} ${selectedSlot?.slotStart === slot.slotStart ? styles.slotChipSelected : \"\"}`}
+                  >
+                    {booking.salonTimeZone
+                      ? formatZonedTime(slot.slotStart, booking.salonTimeZone)
+                      : new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: \"2-digit\", minute: \"2-digit\" })}
+                  </button>
+                ))}
+              </div>
+            )}"""
+new = """            {!slotsLoading && slots.length > 0 && (
+              <>
+                <div className={styles.slotLegend} aria-label=\"Time availability legend\">
+                  <span><i className={`${styles.legendSwatch} ${styles.legendAvailable}`} aria-hidden=\"true\" /> Available</span>
+                  <span><i className={`${styles.legendSwatch} ${styles.legendSelected}`} aria-hidden=\"true\" /> Your selection</span>
+                  <span><i className={`${styles.legendSwatch} ${styles.legendOccupied}`} aria-hidden=\"true\" /> Occupied</span>
+                </div>
+                <div className={styles.slotGrid}>
+                  {slots.map((slot) => {
+                    const occupied = slot.state === \"OCCUPIED\" || !slot.available;
+                    return (
+                      <button
+                        key={slot.slotStart}
+                        type=\"button\"
+                        disabled={occupied}
+                        onClick={() => setSelectedSlot(slot)}
+                        className={`${styles.slotChip} ${occupied ? styles.slotChipOccupied : \"\"} ${selectedSlot?.slotStart === slot.slotStart ? styles.slotChipSelected : \"\"}`}
+                      >
+                        {booking.salonTimeZone
+                          ? formatZonedTime(slot.slotStart, booking.salonTimeZone)
+                          : new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: \"2-digit\", minute: \"2-digit\" })}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}"""
+if old not in s:
+    raise SystemExit('reschedule merge marker missing')
+s = s.replace(old, new, 1)
+p.write_text(s)
+PY
 
-            # shared types: aggregate-only public status + explicit availability state.
-            p = Path('packages/shared/src/types/index.ts')
-            s = p.read_text()
-            marker = "// Public \"Meet the team\" entry on a salon's discovery profile page"
-            insert = """/** Public aggregate salon operations snapshot; intentionally contains no customer PII or internal ids. */
-            export interface PublicSalonStatusDto {
-              activeChairCount: number;
-              professionals: PublicSalonProfessionalStatusDto[];
-            }
-
-            export interface PublicSalonProfessionalStatusDto {
-              displayName: string;
-              activeQueueCount: number;
-            }
-
-            """
-            if 'export interface PublicSalonStatusDto' not in s:
-                s = s.replace(marker, insert + marker, 1)
-            old = "  available: boolean;\n}"
-            new = "  available: boolean;\n  // Selected is client-local; API returns only AVAILABLE or OCCUPIED.\n  state: AvailabilitySlotState;\n}\n\nexport type AvailabilitySlotState = 'AVAILABLE' | 'OCCUPIED';"
-            if 'export type AvailabilitySlotState' not in s:
-                availability_pos = s.find('export interface AvailabilitySlotDto')
-                if availability_pos < 0:
-                    raise SystemExit('AvailabilitySlotDto marker missing')
-                prefix, tail = s[:availability_pos], s[availability_pos:]
-                tail = tail.replace(old, new, 1)
-                s = prefix + tail
-            p.write_text(s)
-            PY
-
-            git add apps/mobile/lib/auth-context.tsx packages/shared/src/constants/index.ts packages/shared/src/types/index.ts
+            git add apps/backend/src/bookings/availability.service.ts apps/web/components/booking/RescheduleBookingDialog.tsx
             GIT_EDITOR=true git cherry-pick --continue
           fi
 
@@ -147,8 +145,7 @@ jobs:
           npm test -w apps/backend -- --runInBand availability.service.spec.ts salons.service.spec.ts
 
       - name: Validate web
-        run: |
-          npm run typecheck -w apps/web
+        run: npm run typecheck -w apps/web
 
       - name: Validate mobile
         run: npm run typecheck -w apps/mobile
@@ -157,7 +154,7 @@ jobs:
         run: |
           git status --short
           test -z "$(git status --porcelain)"
-          git log --oneline -3
+          git log --oneline -4
 
       - name: Push validated integration commit
         run: git push origin HEAD:integrate/launch-plus-live-booking-fixes
