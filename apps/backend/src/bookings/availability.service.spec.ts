@@ -528,6 +528,7 @@ describe('AvailabilityService', () => {
         const nineAm = slots.find((s) => s.slotStart.includes('T03:30'));
         expect(nineAm).toBeDefined();
         expect(nineAm?.available).toBe(false);
+        expect(nineAm?.state).toBe('OCCUPIED');
       });
 
       it('a DIFFERENT staff member remains available for the exact same overlapping slot (pool capacity, not staff-specific)', async () => {
@@ -555,6 +556,7 @@ describe('AvailabilityService', () => {
         const nineAm = slots.find((s) => s.slotStart.includes('T03:30'));
         expect(nineAm).toBeDefined();
         expect(nineAm?.available).toBe(true);
+        expect(nineAm?.state).toBe('AVAILABLE');
       });
     });
   });
