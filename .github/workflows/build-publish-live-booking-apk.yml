@@ -1,6 +1,7 @@
 name: Build Publish Live Booking APK
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - reconcile/launch-plus-live-booking
