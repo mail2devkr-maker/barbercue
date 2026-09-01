@@ -1,0 +1,31 @@
+name: Reconcile Codex Live Booking Fixes
+
+on:
+  push:
+    branches:
+      - reconcile/launch-plus-live-booking
+    paths:
+      - .github/workflows/reconcile-codex-live-booking.yml
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated reconcile branch
+        uses: actions/checkout@v4
+        with:
+          ref: reconcile/launch-plus-live-booking
+          fetch-depth: 0
+
+      - name: Merge exact reviewed Codex commit, preserving launch candidate on conflicts
+        env:
+          CODEX_SHA: e836bb41a5f8a5f6f4caef0d0c9835e89c75674c
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$CODEX_SHA"
+          git merge --no-ff -X ours "$CODEX_SHA" -m "reconcile: integrate Codex public live booking fixes"
+          git push origin HEAD:reconcile/launch-plus-live-booking
