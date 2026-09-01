@@ -1,0 +1,81 @@
+name: Build Publish Live Booking APK
+
+on:
+  push:
+    branches:
+      - reconcile/launch-plus-live-booking
+    paths:
+      - .github/workflows/build-publish-live-booking-apk.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: '1'
+      NODE_ENV: 'production'
+      EXPO_PUBLIC_API_BASE_URL: 'https://barbercuebackend-production.up.railway.app/api/v1'
+      EXPO_PUBLIC_WEB_ORIGIN: 'https://barbercueweb-production.up.railway.app'
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: '871155185690-bcl6bu22nphvg85hklflag78sqfp7khv.apps.googleusercontent.com'
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: '871155185690-0256keu32669iup0b8vbi20junds6d0f.apps.googleusercontent.com'
+      GH_TOKEN: ${{ github.token }}
+      TAG: barbercue-live-booking-e2e-20260901
+
+    steps:
+      - name: Checkout reconciled launch candidate
+        uses: actions/checkout@v4
+        with:
+          ref: reconcile/launch-plus-live-booking
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify shared TypeScript
+        run: npm run typecheck --workspace=@barbercue/shared
+
+      - name: Verify mobile TypeScript
+        run: npm run typecheck --workspace=@barbercue/mobile
+
+      - name: Generate native Android project
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --clean
+
+      - name: Build reconciled arm64 release APK with embedded JS
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon --stacktrace
+
+      - name: Verify release APK exists
+        run: |
+          test -f apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          mkdir -p dist
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk dist/barbercue-live-booking-e2e-arm64.apk
+          ls -lh dist/barbercue-live-booking-e2e-arm64.apk
+
+      - name: Publish temporary E2E prerelease
+        run: |
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            dist/barbercue-live-booking-e2e-arm64.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target reconcile/launch-plus-live-booking \
+            --prerelease \
+            --title "BarberCue Live Booking + Push E2E" \
+            --notes "Temporary arm64 release APK from the reconciled launch candidate. Includes original launch fixes, Firebase push integration, public chair/professional queue snapshot, explicit occupied slot states, cinema-style slot selection, availability refresh, and mobile auth-race fix. Not a production release."
