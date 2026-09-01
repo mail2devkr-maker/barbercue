@@ -18,6 +18,7 @@ import {
   ConsoleEmailSender,
   UnavailableProductionEmailSender,
 } from './services/email-sender';
+import { ResendEmailSender } from './services/resend-email-sender';
 
 @Module({
   imports: [
@@ -56,16 +57,28 @@ import {
     },
     ConsoleEmailSender,
     UnavailableProductionEmailSender,
+    ResendEmailSender,
     {
       provide: EMAIL_SENDER,
+      // Same fail-closed shape as OTP_SENDER above: production only ever gets a real transport
+      // when it's actually configured (RESEND_API_KEY + EMAIL_FROM_ADDRESS both present) —
+      // otherwise it keeps failing closed via UnavailableProductionEmailSender exactly as
+      // before, rather than silently downgrading to the console capture.
       useFactory: (
         consoleSender: ConsoleEmailSender,
-        productionSender: UnavailableProductionEmailSender,
-      ) =>
-        process.env.NODE_ENV === 'production'
-          ? productionSender
-          : consoleSender,
-      inject: [ConsoleEmailSender, UnavailableProductionEmailSender],
+        unavailableSender: UnavailableProductionEmailSender,
+        resendSender: ResendEmailSender,
+      ) => {
+        if (process.env.NODE_ENV !== 'production') return consoleSender;
+        return process.env.RESEND_API_KEY && process.env.EMAIL_FROM_ADDRESS
+          ? resendSender
+          : unavailableSender;
+      },
+      inject: [
+        ConsoleEmailSender,
+        UnavailableProductionEmailSender,
+        ResendEmailSender,
+      ],
     },
   ],
   // EMAIL_SENDER is exported (Phase 11) so SalonSetupModule can deliver barber invitations

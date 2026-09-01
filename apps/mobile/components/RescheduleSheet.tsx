@@ -85,6 +85,19 @@ export function RescheduleSheet({
       );
       onRescheduled(updated);
     } catch (err) {
+      // Same race the web dialog guards against: the slot grid is advisory, the reschedule
+      // transaction is authoritative. Drop the stale selection and reload the grid so a
+      // concurrently-taken slot shows disabled instead of staying selectable.
+      if (err instanceof ApiError && err.code === 'SLOT_FULL' && selectedDate) {
+        setSelectedSlot(null);
+        const params = new URLSearchParams({ serviceId: booking.serviceId, date: selectedDate });
+        if (booking.preferredStaffId) params.set('staffId', booking.preferredStaffId);
+        void apiFetch<AvailabilitySlotDto[]>(
+          `${DISCOVERY_PATHS.salons}/${booking.salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params}`,
+        )
+          .then(setSlots)
+          .catch(() => undefined);
+      }
       setError(err instanceof ApiError ? err.message : 'Could not reschedule this booking.');
     } finally {
       setSubmitting(false);

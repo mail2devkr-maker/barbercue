@@ -94,6 +94,19 @@ export function RescheduleBookingDialog({
       );
       onRescheduled(updated);
     } catch (err) {
+      // The slot grid is advisory; the reschedule transaction is authoritative. If another
+      // booking took this slot concurrently, drop the stale selection and reload the grid so the
+      // now-occupied time shows disabled instead of staying selectable.
+      if (err instanceof ApiError && err.code === "SLOT_FULL" && selectedDate) {
+        setSelectedSlot(null);
+        const params = new URLSearchParams({ serviceId: booking.serviceId, date: selectedDate });
+        if (booking.preferredStaffId) params.set("staffId", booking.preferredStaffId);
+        void apiFetch<AvailabilitySlotDto[]>(
+          `${DISCOVERY_PATHS.salons}/${booking.salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params}`,
+        )
+          .then(setSlots)
+          .catch(() => undefined);
+      }
       setError(err instanceof ApiError ? err.message : "Could not reschedule this booking. Please try again.");
     } finally {
       setSubmitting(false);

@@ -254,6 +254,10 @@ export const BookingErrorCode = {
   SLOT_IN_PAST: 'SLOT_IN_PAST',
   OUTSIDE_OPERATING_HOURS: 'OUTSIDE_OPERATING_HOURS',
   SLOT_FULL: 'SLOT_FULL',
+  // A specific customer-selected barber (Booking.preferredStaffId) already has a conflicting
+  // booking at this time — distinct from SLOT_FULL, which is about salon-wide pool capacity.
+  // Pool capacity can have room while this one named barber is still unavailable, and vice versa.
+  STAFF_SLOT_UNAVAILABLE: 'STAFF_SLOT_UNAVAILABLE',
   OUTSTANDING_BALANCE: 'OUTSTANDING_BALANCE',
   BOOKING_NOT_CANCELLABLE: 'BOOKING_NOT_CANCELLABLE',
   BOOKING_NOT_RESCHEDULABLE: 'BOOKING_NOT_RESCHEDULABLE',

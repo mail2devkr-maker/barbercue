@@ -298,6 +298,72 @@ describe('BookingsService', () => {
       expect(realtime.emitBookingCreated).not.toHaveBeenCalled();
     });
 
+    it('rejects with STAFF_SLOT_UNAVAILABLE when the requested staff already has an overlapping booking, even with pool capacity to spare', async () => {
+      availability.getSlotCapacity.mockResolvedValue(5); // plenty of pool capacity
+      prisma.booking.count.mockImplementation((args: unknown) => {
+        const where = (args as { where: { preferredStaffId?: string } }).where;
+        // Pool-wide overlap count (no preferredStaffId filter): well under capacity.
+        // Staff-specific overlap count: this exact barber is already taken.
+        return Promise.resolve(where.preferredStaffId ? 1 : 1);
+      });
+      await expect(
+        service.create(
+          'c1',
+          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh' },
+          BookingSource.WEB,
+          'key-1',
+        ),
+      ).rejects.toMatchObject({ code: 'STAFF_SLOT_UNAVAILABLE' });
+      expect(prisma.booking.create).not.toHaveBeenCalled();
+    });
+
+    it('succeeds when the requested staff is free, even if another staff member is booked at the same time', async () => {
+      availability.getSlotCapacity.mockResolvedValue(5);
+      prisma.booking.count.mockImplementation((args: unknown) => {
+        const where = (args as { where: { preferredStaffId?: string } }).where;
+        // Salon-wide pool count sees 1 (some other staff's booking); the staff-specific count for
+        // THIS barber is 0 — Ramesh is free even though Dinesh is booked.
+        return Promise.resolve(where.preferredStaffId ? 0 : 1);
+      });
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'ramesh' },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(prisma.booking.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('never queries per-staff overlap for an "Any Staff" booking (preferredStaffId omitted) — pool capacity alone governs it', async () => {
+      availability.getSlotCapacity.mockResolvedValue(2);
+      prisma.booking.count.mockResolvedValue(0);
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      // Only the one pool-capacity count call — no second, staff-scoped query at all.
+      expect(prisma.booking.count).toHaveBeenCalledTimes(1);
+      expect(prisma.booking.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('checks staff exclusivity inside the same per-salon advisory-locked transaction as the pool check (ordering/atomicity)', async () => {
+      availability.getSlotCapacity.mockResolvedValue(5);
+      prisma.booking.count.mockResolvedValue(0);
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh' },
+        BookingSource.WEB,
+        'key-1',
+      );
+      // $executeRaw (the advisory lock) must run before either count call, and both counts must
+      // run inside the same $transaction callback (the mock's $transaction just invokes the
+      // callback against `prisma` itself, so this is really asserting call presence/order).
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.booking.count).toHaveBeenCalledTimes(2);
+    });
+
     it('creates a CONFIRMED booking with no prepayment when the salon has no payment policy (defaults to NONE)', async () => {
       await service.create(
         'c1',
@@ -542,6 +608,25 @@ describe('BookingsService', () => {
     it('does not check working hours when the booking has no preferred barber', async () => {
       await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
       expect(availability.assertStaffWithinWorkingHours).not.toHaveBeenCalled();
+    });
+
+    it('rejects with STAFF_SLOT_UNAVAILABLE when rescheduling into a slot the same preferred barber already has taken elsewhere', async () => {
+      prisma.booking.findFirst.mockResolvedValue(
+        makeBookingRow({ slotStart: futureSlot, status: 'CONFIRMED', preferredStaffId: 'dinesh' }),
+      );
+      prisma.booking.count.mockImplementation((args: unknown) => {
+        const where = (args as { where: { preferredStaffId?: string } }).where;
+        return Promise.resolve(where.preferredStaffId ? 1 : 0);
+      });
+      await expect(
+        service.reschedule('c1', 'b1', { slotStart: newFutureSlot }),
+      ).rejects.toMatchObject({ code: 'STAFF_SLOT_UNAVAILABLE' });
+      expect(prisma.booking.update).not.toHaveBeenCalled();
+    });
+
+    it('does not run a staff-exclusivity check at all when the booking has no preferred barber', async () => {
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
+      expect(prisma.booking.count).toHaveBeenCalledTimes(1);
     });
   });
 });

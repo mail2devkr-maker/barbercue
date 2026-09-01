@@ -268,14 +268,16 @@ export class AvailabilityService {
   /**
    * Candidate slots at a fixed 15-minute granularity across the day's OperatingHours window,
    * skipping isClosed days entirely and any slot whose end would cross closing time. `staffId` is
-   * optional; per the soft-preference decision (DATABASE.md) it never changes the *pool capacity*
-   * math (that stays min(qualifiedStaffCount, activeChairCount) regardless of which specific staff
-   * are scheduled) — but Phase 7 narrows the window itself when a specific barber is requested:
-   * qualification/active status is checked as before, and if that barber has configured personal
-   * working hours (StaffWorkingHours) for this day, the returned slots are additionally clipped to
-   * the intersection of shop hours and that barber's hours (or emptied entirely if they're off).
-   * A barber with no configured hours is unaffected — same "0 rows = unrestricted" fallback
-   * qualifiedStaffWhere already uses for StaffService.
+   * optional; when supplied it narrows the window (qualification/active status checked as before,
+   * and if that barber has configured personal working hours (StaffWorkingHours) for this day, the
+   * returned slots are additionally clipped to the intersection of shop hours and that barber's
+   * hours, or emptied entirely if they're off — a barber with no configured hours is unaffected,
+   * same "0 rows = unrestricted" fallback qualifiedStaffWhere already uses for StaffService) AND
+   * makes that specific barber's own exclusivity authoritative: a slot where the pool has spare
+   * capacity is still marked unavailable if this exact barber already holds a conflicting booking.
+   * "Any Staff" (no staffId) is unaffected by this and continues to reflect pool capacity alone —
+   * see BookingsService.create()/reschedule(), which enforce the identical rule at write time so
+   * the grid a customer sees here can never disagree with what booking actually allows.
    */
   async getAvailability(
     salonId: string,
@@ -347,7 +349,7 @@ export class AvailabilityService {
         slotStart: { lt: closeAt },
         slotEnd: { gt: openAt },
       },
-      select: { slotStart: true, slotEnd: true },
+      select: { slotStart: true, slotEnd: true, preferredStaffId: true },
     });
 
     const slots: AvailabilitySlotDto[] = [];
@@ -360,10 +362,17 @@ export class AvailabilityService {
     ) {
       if (slotStart <= now) continue;
       const slotEnd = new Date(slotStart.getTime() + durationMs);
-      const consumed = overlapCandidates.filter(
+      const overlappingHere = overlapCandidates.filter(
         (b) => b.slotStart < slotEnd && b.slotEnd > slotStart,
-      ).length;
-      const available = isSlotBookable(slotCapacity, consumed);
+      );
+      // Pool capacity governs "Any Staff" bookability regardless of who holds each overlapping
+      // slot. A specific requested staffId additionally needs that exact professional free — the
+      // pool could have room while that one named barber is already taken, and vice versa.
+      const staffTaken =
+        !!staffId &&
+        overlappingHere.some((b) => b.preferredStaffId === staffId);
+      const available =
+        isSlotBookable(slotCapacity, overlappingHere.length) && !staffTaken;
       slots.push({
         slotStart: slotStart.toISOString(),
         slotEnd: slotEnd.toISOString(),

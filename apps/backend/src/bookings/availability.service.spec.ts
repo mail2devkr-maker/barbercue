@@ -405,6 +405,59 @@ describe('AvailabilityService', () => {
         );
         expect(slots).toEqual([]);
       });
+
+      it('marks a slot occupied for this specific barber even though the salon-wide pool has spare capacity', async () => {
+        prisma.staffWorkingHours.findUnique.mockResolvedValue(null);
+        prisma.salonStaff.count.mockResolvedValue(5); // plenty of pool capacity
+        prisma.chair.count.mockResolvedValue(5);
+        const day = futureDateString(2);
+        const [y, m, d] = day.split('-').map(Number);
+        const slotStartUtc = new Date(Date.UTC(y, m - 1, d, 3, 30)); // 09:00 IST
+        const slotEndUtc = new Date(Date.UTC(y, m - 1, d, 4, 0));
+        prisma.booking.findMany.mockResolvedValue([
+          { slotStart: slotStartUtc, slotEnd: slotEndUtc, preferredStaffId: 'st1' },
+        ]);
+        const slots = await service.getAvailability('s1', 'sv1', day, 'st1');
+        const slot = slots.find((s) => s.slotStart === slotStartUtc.toISOString());
+        expect(slot).toMatchObject({ available: false, state: 'OCCUPIED' });
+      });
+
+      it('a DIFFERENT staff member remains available for the exact same overlapping slot (pool capacity, not staff-specific)', async () => {
+        prisma.staffWorkingHours.findUnique.mockResolvedValue(null);
+        prisma.salonStaff.findFirst.mockResolvedValue({ id: 'st2' });
+        prisma.salonStaff.count.mockResolvedValue(5);
+        prisma.chair.count.mockResolvedValue(5);
+        const day = futureDateString(2);
+        const [y, m, d] = day.split('-').map(Number);
+        const slotStartUtc = new Date(Date.UTC(y, m - 1, d, 3, 30));
+        const slotEndUtc = new Date(Date.UTC(y, m - 1, d, 4, 0));
+        prisma.booking.findMany.mockResolvedValue([
+          { slotStart: slotStartUtc, slotEnd: slotEndUtc, preferredStaffId: 'st1' },
+        ]);
+        const slots = await service.getAvailability('s1', 'sv1', day, 'st2');
+        const slot = slots.find((s) => s.slotStart === slotStartUtc.toISOString());
+        expect(slot).toMatchObject({ available: true, state: 'AVAILABLE' });
+      });
+
+      it('"Any Staff" (no staffId) is unaffected by a specific barber being taken — pool capacity alone governs it', async () => {
+        prisma.salonStaff.count.mockResolvedValue(5);
+        prisma.chair.count.mockResolvedValue(5);
+        prisma.operatingHours.findUnique.mockResolvedValue({
+          openTime: '09:00',
+          closeTime: '18:00',
+          isClosed: false,
+        });
+        const day = futureDateString(2);
+        const [y, m, d] = day.split('-').map(Number);
+        const slotStartUtc = new Date(Date.UTC(y, m - 1, d, 3, 30));
+        const slotEndUtc = new Date(Date.UTC(y, m - 1, d, 4, 0));
+        prisma.booking.findMany.mockResolvedValue([
+          { slotStart: slotStartUtc, slotEnd: slotEndUtc, preferredStaffId: 'st1' },
+        ]);
+        const slots = await service.getAvailability('s1', 'sv1', day);
+        const slot = slots.find((s) => s.slotStart === slotStartUtc.toISOString());
+        expect(slot).toMatchObject({ available: true, state: 'AVAILABLE' });
+      });
     });
   });
 

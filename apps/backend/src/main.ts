@@ -8,6 +8,7 @@ import {
   inspectLocalStorageConfig,
   LOCAL_STORAGE_URL_PREFIX,
 } from './storage/local-disk-storage-driver';
+import { resolveCorsOrigins } from './common/cors-origins';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -51,9 +52,13 @@ async function bootstrap() {
   // Needed to read the httpOnly refresh-token cookie (web clients) — see AuthController.
   app.use(cookieParser());
 
-  // Web and mobile are separate origins in dev; tightened per-environment in a later phase.
-  // credentials:true is required for the browser to send/receive the httpOnly refresh cookie.
-  app.enableCors({ origin: true, credentials: true });
+  // Explicit allowlist, not reflect-any-origin — see cors-origins.ts for why that mattered
+  // (credentials:true + origin:true previously let any website make cookie-bearing requests).
+  // credentials:true is still required for the browser to send/receive the httpOnly refresh
+  // cookie; native mobile clients are unaffected — they are never subject to browser CORS.
+  const corsOrigins = resolveCorsOrigins();
+  logger.log(`CORS allowed origins: ${corsOrigins.join(', ')}`);
+  app.enableCors({ origin: corsOrigins, credentials: true });
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

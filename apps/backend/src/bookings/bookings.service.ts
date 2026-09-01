@@ -187,6 +187,31 @@ export class BookingsService {
         );
       }
 
+      // A specific staff member is a real exclusivity constraint (not the salon-wide pool check
+      // above): that one professional cannot be double-booked, even if the salon otherwise has
+      // spare pool capacity. Checked inside the same per-salon advisory-locked transaction, so
+      // this is race-safe against a second concurrent request for the same staff/interval.
+      if (input.preferredStaffId) {
+        const staffOverlapping = await tx.booking.count({
+          where: {
+            salonId: input.salonId,
+            preferredStaffId: input.preferredStaffId,
+            status: {
+              in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+            },
+            slotStart: { lt: slotEnd },
+            slotEnd: { gt: slotStart },
+          },
+        });
+        if (staffOverlapping > 0) {
+          throw new AppException(
+            BookingErrorCode.STAFF_SLOT_UNAVAILABLE,
+            'This barber is already booked at the requested time. Please choose another time or barber.',
+            HttpStatus.CONFLICT,
+          );
+        }
+      }
+
       const created = await tx.booking.create({
         data: {
           salonId: input.salonId,
@@ -460,6 +485,30 @@ export class BookingsService {
           'This time slot is fully booked. Please choose another time.',
           HttpStatus.CONFLICT,
         );
+      }
+
+      // Same per-staff exclusivity constraint create() enforces — a reschedule to a new time
+      // competes for that specific staff member exactly like a new booking would.
+      if (booking.preferredStaffId) {
+        const staffOverlapping = await tx.booking.count({
+          where: {
+            id: { not: bookingId },
+            salonId: booking.salonId,
+            preferredStaffId: booking.preferredStaffId,
+            status: {
+              in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+            },
+            slotStart: { lt: newSlotEnd },
+            slotEnd: { gt: newSlotStart },
+          },
+        });
+        if (staffOverlapping > 0) {
+          throw new AppException(
+            BookingErrorCode.STAFF_SLOT_UNAVAILABLE,
+            'This barber is already booked at the requested time. Please choose another time or barber.',
+            HttpStatus.CONFLICT,
+          );
+        }
       }
 
       const result = await tx.booking.update({
