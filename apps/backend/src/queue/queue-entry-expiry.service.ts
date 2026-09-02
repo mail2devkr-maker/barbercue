@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { QueueEntryStatus, type CancellationPolicyDto } from '@barbercue/shared';
+import {
+  QueueEntryStatus,
+  type CancellationPolicyDto,
+} from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CancellationPolicyService } from '../bookings/cancellation-policy.service';
+import { AvailabilityService } from '../bookings/availability.service';
+import { zonedDayBounds } from '../common/timezone/timezone';
 import { QueueService } from './queue.service';
 
 /**
@@ -32,6 +37,22 @@ import { QueueService } from './queue.service';
  * updateMany re-checks status inside its own where clause as the durable claim, so a staff member
  * manually resolving the entry between the initial read and the write is silently skipped rather
  * than incorrectly overwritten.
+ *
+ * markStaleWaitingExpired() closes a second, independent gap in the same "stale token stays
+ * active" bug class: STATE_MACHINES.md's diagram has no WAITING --> EXPIRED transition at all, and
+ * no query anywhere (getDashboardQueue, getCapacitySummary, assertNotAlreadyInQueue, etc.) filters
+ * WAITING entries by day — so a walk-in that joins and is never called, assigned, or cancelled
+ * stays WAITING forever: visible and fully actionable (Call/Assign/Cancel) in the owner Live Queue
+ * indefinitely, inflating other real customers' ETA/position, and — via assertNotAlreadyInQueue's
+ * cross-salon WAITING/CALLED/IN_SERVICE check — permanently locking that customer out of ever
+ * joining any queue again. Confirmed live in production (Issue #13): two stale "Head Massages"
+ * WAITING entries on Handsome Center, `GET .../queue/status` publicly reporting waitingCount: 2.
+ *
+ * The boundary chosen is the salon's own local calendar day the entry joined on (via
+ * zonedDayBounds, the same IANA-timezone helper nextTokenNumber() already uses to reset daily
+ * token numbers) — once that day has ended, the entry is stale by the same "day" concept the
+ * product already uses elsewhere, not an invented arbitrary timeout. A salon with no timezone set
+ * is skipped rather than guessed at, consistent with getSalonTimeZone's null-degrades contract.
  */
 @Injectable()
 export class QueueEntryExpiryService {
@@ -40,14 +61,21 @@ export class QueueEntryExpiryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cancellationPolicy: CancellationPolicyService,
+    private readonly availability: AvailabilityService,
     private readonly realtime: RealtimeGateway,
     private readonly queueService: QueueService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async sweep(): Promise<void> {
-    const count = await this.markOverdueNoShows();
-    if (count > 0) this.logger.log(`Marked ${count} queue entr(y/ies) as no-show.`);
+    const noShowCount = await this.markOverdueNoShows();
+    if (noShowCount > 0) {
+      this.logger.log(`Marked ${noShowCount} queue entr(y/ies) as no-show.`);
+    }
+    const expiredCount = await this.markStaleWaitingExpired();
+    if (expiredCount > 0) {
+      this.logger.log(`Marked ${expiredCount} queue entr(y/ies) as expired.`);
+    }
   }
 
   async markOverdueNoShows(): Promise<number> {
@@ -96,7 +124,8 @@ export class QueueEntryExpiryService {
             entityType: 'QueueEntry',
             entityId: entry.id,
             metadata: {
-              queueCallResponseGraceMinutes: policy.queueCallResponseGraceMinutes,
+              queueCallResponseGraceMinutes:
+                policy.queueCallResponseGraceMinutes,
             },
           },
         });
@@ -107,6 +136,75 @@ export class QueueEntryExpiryService {
         markedCount += 1;
         affectedSalons.add(entry.salonId);
         this.realtime.emitQueueEntryNoShow(entry.salonId, entry.id);
+      }
+    }
+
+    for (const salonId of affectedSalons) {
+      await this.queueService.recomputeEtas(salonId);
+      this.realtime.emitQueueUpdated(salonId);
+    }
+
+    return markedCount;
+  }
+
+  async markStaleWaitingExpired(): Promise<number> {
+    const now = Date.now();
+
+    // Broad candidate read: any WAITING entry, any salon, any age — the salon-local day-boundary
+    // check happens per candidate below since it depends on that salon's own timezone.
+    const candidates = await this.prisma.queueEntry.findMany({
+      where: { status: QueueEntryStatus.WAITING },
+      select: { id: true, salonId: true, joinedAt: true },
+    });
+
+    if (candidates.length === 0) return 0;
+
+    const timeZoneCache = new Map<string, string | null>();
+    async function timeZoneFor(
+      this: QueueEntryExpiryService,
+      salonId: string,
+    ): Promise<string | null> {
+      if (timeZoneCache.has(salonId)) return timeZoneCache.get(salonId) ?? null;
+      const zone = await this.availability.getSalonTimeZone(salonId);
+      timeZoneCache.set(salonId, zone);
+      return zone;
+    }
+
+    let markedCount = 0;
+    const affectedSalons = new Set<string>();
+    for (const entry of candidates) {
+      const timeZone = await timeZoneFor.call(this, entry.salonId);
+      if (!timeZone) continue;
+
+      const bounds = zonedDayBounds(entry.joinedAt, timeZone);
+      if (!bounds || now < bounds.end.getTime()) continue;
+
+      const result = await this.prisma.$transaction(async (tx) => {
+        const claim = await tx.queueEntry.updateMany({
+          where: { id: entry.id, status: QueueEntryStatus.WAITING },
+          data: { status: QueueEntryStatus.EXPIRED },
+        });
+        if (claim.count === 0) return false;
+
+        await tx.auditLog.create({
+          data: {
+            actorUserId: null,
+            action: 'QUEUE_ENTRY_EXPIRED',
+            entityType: 'QueueEntry',
+            entityId: entry.id,
+            metadata: {
+              joinedAt: entry.joinedAt.toISOString(),
+              joinLocalDayEnd: bounds.end.toISOString(),
+            },
+          },
+        });
+        return true;
+      });
+
+      if (result) {
+        markedCount += 1;
+        affectedSalons.add(entry.salonId);
+        this.realtime.emitQueueEntryExpired(entry.salonId, entry.id);
       }
     }
 

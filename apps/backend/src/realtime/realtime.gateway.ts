@@ -129,26 +129,36 @@ export class RealtimeGateway implements OnGatewayConnection {
   // authoritative booking data via the existing owner bookings API rather than trusting a payload
   // shape here, so this event can never leak customer details by itself.
   emitBookingCreated(salonId: string, bookingId: string): void {
-    this.server.to(`salon:${salonId}`).emit('booking.created', { salonId, bookingId });
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('booking.created', { salonId, bookingId });
   }
 
   emitBookingCancelled(salonId: string, bookingId: string): void {
-    this.server.to(`salon:${salonId}`).emit('booking.cancelled', { salonId, bookingId });
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('booking.cancelled', { salonId, bookingId });
   }
 
   emitBookingRescheduled(salonId: string, bookingId: string): void {
-    this.server.to(`salon:${salonId}`).emit('booking.rescheduled', { salonId, bookingId });
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('booking.rescheduled', { salonId, bookingId });
   }
 
   // System-triggered sweeps (BookingExpiryService/BookingNoShowService) — same ids-only shape as
   // every other booking emit, so the owner dashboard and the customer's own bookings page refetch
   // exactly like they already do for a customer-initiated cancellation.
   emitBookingNoShow(salonId: string, bookingId: string): void {
-    this.server.to(`salon:${salonId}`).emit('booking.no_show', { salonId, bookingId });
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('booking.no_show', { salonId, bookingId });
   }
 
   emitBookingExpired(salonId: string, bookingId: string): void {
-    this.server.to(`salon:${salonId}`).emit('booking.expired', { salonId, bookingId });
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('booking.expired', { salonId, bookingId });
   }
 
   // QueueEntryExpiryService's automatic CALLED->NO_SHOW sweep — same shape as emitEntryCalled,
@@ -160,5 +170,12 @@ export class RealtimeGateway implements OnGatewayConnection {
     this.server
       .to(`salon:${salonId}`)
       .emit('queue.entry.no_show', { salonId, queueEntryId });
+  }
+
+  // Same rationale as emitQueueEntryNoShow above, for the WAITING-day-rollover sweep.
+  emitQueueEntryExpired(salonId: string, queueEntryId: string): void {
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('queue.entry.expired', { salonId, queueEntryId });
   }
 }

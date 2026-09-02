@@ -118,6 +118,10 @@ enum QueueEntryStatus {
   COMPLETED
   NO_SHOW
   CANCELLED
+  // Added for the WAITING-day-rollover sweep (see QueueEntryExpiryService.markStaleWaitingExpired):
+  // a WAITING entry never called/assigned/cancelled by the end of its salon-local join day. Distinct
+  // from NO_SHOW, which only applies after a customer was actually CALLED and didn't respond.
+  EXPIRED
 }
 
 enum ServiceSessionStatus {

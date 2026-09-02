@@ -120,6 +120,7 @@ export const QueueEntryStatus = {
   COMPLETED: 'COMPLETED',
   NO_SHOW: 'NO_SHOW',
   CANCELLED: 'CANCELLED',
+  EXPIRED: 'EXPIRED',
 } as const;
 export type QueueEntryStatus = (typeof QueueEntryStatus)[keyof typeof QueueEntryStatus];
 

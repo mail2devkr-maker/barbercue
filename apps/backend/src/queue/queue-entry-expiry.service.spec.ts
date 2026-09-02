@@ -3,6 +3,7 @@ import { QueueEntryExpiryService } from './queue-entry-expiry.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CancellationPolicyService } from '../bookings/cancellation-policy.service';
+import { AvailabilityService } from '../bookings/availability.service';
 import { QueueService } from './queue.service';
 
 const POLICY = {
@@ -27,7 +28,12 @@ describe('QueueEntryExpiryService', () => {
     $transaction: jest.Mock;
   };
   let cancellationPolicy: { getEffectivePolicy: jest.Mock };
-  let realtime: { emitQueueEntryNoShow: jest.Mock; emitQueueUpdated: jest.Mock };
+  let availability: { getSalonTimeZone: jest.Mock };
+  let realtime: {
+    emitQueueEntryNoShow: jest.Mock;
+    emitQueueEntryExpired: jest.Mock;
+    emitQueueUpdated: jest.Mock;
+  };
   let queueService: { recomputeEtas: jest.Mock };
 
   function candidate(overrides: Partial<Record<string, unknown>> = {}) {
@@ -35,6 +41,15 @@ describe('QueueEntryExpiryService', () => {
       id: 'q1',
       salonId: 's1',
       calledAt: new Date(Date.now() - 5 * 60_000), // called 5 minutes ago
+      ...overrides,
+    };
+  }
+
+  function waitingCandidate(overrides: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: 'q1',
+      salonId: 's1',
+      joinedAt: new Date(),
       ...overrides,
     };
   }
@@ -50,14 +65,24 @@ describe('QueueEntryExpiryService', () => {
         callback(tx),
       ),
     };
-    cancellationPolicy = { getEffectivePolicy: jest.fn().mockResolvedValue(POLICY) };
-    realtime = { emitQueueEntryNoShow: jest.fn(), emitQueueUpdated: jest.fn() };
+    cancellationPolicy = {
+      getEffectivePolicy: jest.fn().mockResolvedValue(POLICY),
+    };
+    availability = {
+      getSalonTimeZone: jest.fn().mockResolvedValue('Asia/Kolkata'),
+    };
+    realtime = {
+      emitQueueEntryNoShow: jest.fn(),
+      emitQueueEntryExpired: jest.fn(),
+      emitQueueUpdated: jest.fn(),
+    };
     queueService = { recomputeEtas: jest.fn().mockResolvedValue(undefined) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         QueueEntryExpiryService,
         { provide: PrismaService, useValue: prisma },
         { provide: CancellationPolicyService, useValue: cancellationPolicy },
+        { provide: AvailabilityService, useValue: availability },
         { provide: RealtimeGateway, useValue: realtime },
         { provide: QueueService, useValue: queueService },
       ],
@@ -137,5 +162,114 @@ describe('QueueEntryExpiryService', () => {
     expect(count).toBe(0);
     expect(tx.queueEntry.updateMany).not.toHaveBeenCalled();
     expect(queueService.recomputeEtas).not.toHaveBeenCalled();
+  });
+
+  describe('markStaleWaitingExpired', () => {
+    it('queries only WAITING entries', async () => {
+      await service.markStaleWaitingExpired();
+      const call = prisma.queueEntry.findMany.mock.calls[0][0] as {
+        where: { status: string };
+      };
+      expect(call.where.status).toBe('WAITING');
+    });
+
+    it('skips a WAITING entry that joined earlier today (still within its salon-local join day)', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([
+        waitingCandidate({ joinedAt: new Date() }),
+      ]);
+      const count = await service.markStaleWaitingExpired();
+      expect(count).toBe(0);
+      expect(tx.queueEntry.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('skips a candidate whose salon has no resolvable timezone rather than guessing', async () => {
+      availability.getSalonTimeZone.mockResolvedValue(null);
+      prisma.queueEntry.findMany.mockResolvedValue([
+        waitingCandidate({ joinedAt: new Date(Date.now() - 48 * 60 * 60_000) }),
+      ]);
+      const count = await service.markStaleWaitingExpired();
+      expect(count).toBe(0);
+      expect(tx.queueEntry.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('marks a WAITING entry whose salon-local join day has ended EXPIRED via a conditional claim, writes an AuditLog entry, emits the specific event, then recomputes ETAs and emits a general queue-updated refresh', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([
+        waitingCandidate({ joinedAt: new Date(Date.now() - 48 * 60 * 60_000) }),
+      ]);
+      const count = await service.markStaleWaitingExpired();
+      expect(count).toBe(1);
+      expect(tx.queueEntry.updateMany).toHaveBeenCalledWith({
+        where: { id: 'q1', status: 'WAITING' },
+        data: { status: 'EXPIRED' },
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: null,
+          action: 'QUEUE_ENTRY_EXPIRED',
+          entityType: 'QueueEntry',
+          entityId: 'q1',
+        }),
+      });
+      expect(realtime.emitQueueEntryExpired).toHaveBeenCalledWith('s1', 'q1');
+      expect(queueService.recomputeEtas).toHaveBeenCalledWith('s1');
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+
+    it('looks up the salon timezone once per salon, not once per entry', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([
+        waitingCandidate({
+          id: 'q1',
+          joinedAt: new Date(Date.now() - 48 * 60 * 60_000),
+        }),
+        waitingCandidate({
+          id: 'q2',
+          joinedAt: new Date(Date.now() - 48 * 60 * 60_000),
+        }),
+      ]);
+      await service.markStaleWaitingExpired();
+      expect(availability.getSalonTimeZone).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-checks status inside the claim, so a staff member manually resolving it between read and write is silently skipped, not overwritten', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([
+        waitingCandidate({
+          id: 'q1',
+          joinedAt: new Date(Date.now() - 48 * 60 * 60_000),
+        }),
+        waitingCandidate({
+          id: 'q2',
+          joinedAt: new Date(Date.now() - 48 * 60 * 60_000),
+        }),
+      ]);
+      tx.queueEntry.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
+      const count = await service.markStaleWaitingExpired();
+      expect(count).toBe(1);
+      expect(realtime.emitQueueEntryExpired).toHaveBeenCalledTimes(1);
+    });
+
+    it('does nothing when there are no WAITING entries', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([]);
+      const count = await service.markStaleWaitingExpired();
+      expect(count).toBe(0);
+      expect(tx.queueEntry.updateMany).not.toHaveBeenCalled();
+      expect(queueService.recomputeEtas).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sweep', () => {
+    it('runs both the no-show and stale-waiting sweeps', async () => {
+      prisma.queueEntry.findMany
+        .mockResolvedValueOnce([candidate()])
+        .mockResolvedValueOnce([
+          waitingCandidate({
+            joinedAt: new Date(Date.now() - 48 * 60 * 60_000),
+          }),
+        ]);
+      await service.sweep();
+      expect(realtime.emitQueueEntryNoShow).toHaveBeenCalledWith('s1', 'q1');
+      expect(realtime.emitQueueEntryExpired).toHaveBeenCalledWith('s1', 'q1');
+    });
   });
 });
