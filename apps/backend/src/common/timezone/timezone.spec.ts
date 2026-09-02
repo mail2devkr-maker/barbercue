@@ -49,6 +49,22 @@ describe('timezone helpers', () => {
     ).toBeNull();
   });
 
+  it('pins down the deterministic (but unflagged) instant chosen during a DST fall-back, unlike the spring-forward gap above', () => {
+    // 2026-11-01 is America/New_York's fall-back date (02:00 EDT -> 01:00 EST at 06:00 UTC), so
+    // "01:30" is a real, valid local time that occurs twice: 05:30Z (EDT) and 06:30Z (EST). This
+    // does NOT return null the way the spring-forward gap does — see this function's own doc
+    // comment for why an ambiguous-but-valid local time is treated differently from a
+    // nonexistent one. Pinned here so a future change to the iterative correction can't silently
+    // flip which of the two valid instants gets returned without a test catching it.
+    expect(
+      zonedWallTimeToUtc(
+        '2026-11-01',
+        '01:30',
+        'America/New_York',
+      )?.toISOString(),
+    ).toBe('2026-11-01T05:30:00.000Z');
+  });
+
   it('builds 23-hour and 25-hour local-day bounds across DST changes', () => {
     const spring = zonedDayBounds(
       new Date('2026-03-29T12:00:00.000Z'),

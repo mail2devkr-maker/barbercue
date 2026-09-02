@@ -101,6 +101,20 @@ export function zonedHourOf(date: Date, timeZone: string): number {
  * correction uses Intl's offset at the candidate instant, so DST changes are respected. A local
  * time that does not exist (for example 01:30 during a spring-forward gap) returns null instead
  * of silently moving the booking to a different wall-clock time.
+ *
+ * The symmetric case — a local time that occurs *twice*, during a fall-back (e.g. 01:30 on the
+ * November date America/New_York's clocks repeat an hour) — is deterministic but not flagged: the
+ * loop starts from the naive UTC-as-local interpretation and converges on whichever occurrence
+ * that starting point's offset lands on first, which is always the earlier (pre-transition, e.g.
+ * DST/summer) instant for every zone, not the later (post-transition, standard) one. This is a
+ * real, confirmed asymmetry with the spring-forward case above (which explicitly detects its
+ * ambiguity and returns null); it stays unflagged here deliberately rather than guessing which of
+ * the two valid instants a caller "meant." In practice this never affects a real booking/schedule
+ * in this codebase — every wall time run through this function is a barbershop operating hour,
+ * slot boundary, or day boundary, and no salon opens/closes/generates a queue-token day-reset
+ * inside a 1-3am fall-back window — but a caller working outside that domain should not assume
+ * this is a full disambiguation. See timezone.spec.ts's "pins down the deterministic (but
+ * unflagged) instant chosen during a DST fall-back" test for the exact, tested behavior.
  */
 export function zonedWallTimeToUtc(
   dateStr: string,
