@@ -8,6 +8,7 @@ import { SERVICE_CATEGORIES } from "../../lib/editorial/manifest";
 import { JsonLd } from "../../components/discovery/JsonLd";
 import { SalonCard } from "../../components/discovery/SalonCard";
 import { HeroVisual } from "../../components/landing/HeroVisual";
+import { LandingHeaderActions } from "../../components/landing/LandingHeaderActions";
 import { EditorialImage } from "../../components/editorial/EditorialImage";
 import styles from "../../components/landing/landing.module.css";
 
@@ -70,10 +71,7 @@ export default async function HomePage() {
             <Link href="#book-or-queue">How it works</Link>
             <Link href="#for-shops">For shops</Link>
           </nav>
-          <div className={styles.headerActions}>
-            <Link href="/login" className={styles.headerSignIn}>Sign in</Link>
-            <Link href="/search" className={styles.headerPrimary}>Find a barber</Link>
-          </div>
+          <LandingHeaderActions />
         </div>
       </header>
 
