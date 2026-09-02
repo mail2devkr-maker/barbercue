@@ -55,9 +55,17 @@ const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, matches 
 // AppModule's ThrottlerModule config) — brute-force/OTP-spam surface, not ordinary traffic.
 const AUTH_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
-// Production runs web and backend on separate registrable domains, making every browser->API
-// call cross-site; see setRefreshCookie for why that forces SameSite=None + Secure together.
-const CROSS_SITE_COOKIES = process.env.NODE_ENV === 'production';
+// Previously assumed production always put web and backend on separate registrable domains
+// (forcing SameSite=None). That was never actually true: apps/web/next.config.ts reverse-proxies
+// /api/v1/* to the backend's private *.railway.internal address, and NEXT_PUBLIC_API_BASE_URL is
+// the relative path "/api/v1" — every browser->API call is same-origin to fastque.com. `None`
+// cookies carry restrictions `Lax` doesn't need and don't get the same reliability guarantees
+// browsers give same-site cookies across a top-level navigation, which is the proven root cause of
+// a live bug where this cookie failed to survive an owner clicking Home after logging in (confirmed
+// via production HTTP logs: a successful /auth/refresh immediately followed by one arriving with no
+// cookie at all). Only the web client relies on this cookie — mobile sends its refresh token in the
+// request body instead (see extractRefreshToken below) — so this cannot affect mobile auth.
+const CROSS_SITE_COOKIES = false;
 
 @Controller('auth')
 export class AuthController {
