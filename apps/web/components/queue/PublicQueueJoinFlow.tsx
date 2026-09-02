@@ -10,6 +10,7 @@ import {
   otpVerifySchema,
 } from "@barbercue/shared";
 import type {
+  AuthMethodsDto,
   PublicQueueInfoDto,
   QueueEntryDetailDto,
 } from "@barbercue/shared";
@@ -17,6 +18,8 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { Button } from "../ui/Button";
+import { GoogleIdentityButton } from "../auth/GoogleIdentityButton";
+import authStyles from "../auth/customer-auth.module.css";
 import { QueueStatusPanel } from "./QueueStatusPanel";
 import styles from "./queue.module.css";
 
@@ -31,7 +34,7 @@ type Stage = "loading" | "invalid" | "unavailable" | "ready" | "joining" | "join
  * the exact same components an authenticated customer's own queue page already uses.
  */
 export function PublicQueueJoinFlow({ token }: { token: string }) {
-  const { status: authStatus, verifyCustomerOtp } = useAuth();
+  const { status: authStatus, verifyCustomerOtp, googleLogin } = useAuth();
   const [stage, setStage] = useState<Stage>("loading");
   const [info, setInfo] = useState<PublicQueueInfoDto | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState("");
@@ -46,12 +49,43 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
   const [otpSubmitting, setOtpSubmitting] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Same capability probe as the customer login page (CustomerLoginForm) — this embedded flow
+  // must not offer a phone form guaranteed to 502 when no SMS provider is configured, and unlike
+  // the login page this one had no Google fallback at all until this fix.
+  const [phoneOtpAvailable, setPhoneOtpAvailable] = useState<boolean | null>(null);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   useEffect(() => {
     if (otpStep !== "otp" || resendCooldown <= 0) return undefined;
     const timer = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(timer);
   }, [otpStep, resendCooldown]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<AuthMethodsDto>(`auth/${AUTH_PATHS.methods}`)
+      .then((m) => {
+        if (!cancelled) setPhoneOtpAvailable(m.phoneOtp);
+      })
+      .catch(() => {
+        if (!cancelled) setPhoneOtpAvailable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleGoogleCredential(idToken: string) {
+    setOtpError(null);
+    setGoogleSubmitting(true);
+    try {
+      await googleLogin({ idToken });
+    } catch (err) {
+      setOtpError(err instanceof ApiError ? err.message : "Could not sign in with Google. Please try again.");
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -251,21 +285,42 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
           <>
             {otpError && <p className={styles.errorText}>{otpError}</p>}
             {otpStep === "phone" ? (
-              <form onSubmit={requestOtp}>
-                <p className={styles.pageSubtitle} style={{ fontSize: 13, marginBottom: 10 }}>
-                  Enter your phone number to join the queue.
-                </p>
-                <input
-                  type="tel"
-                  placeholder="+919876543210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className={styles.textInput}
+              <>
+                <GoogleIdentityButton
+                  audienceLabel="customer"
+                  onCredential={(idToken) => void handleGoogleCredential(idToken)}
+                  disabled={googleSubmitting}
                 />
-                <Button type="submit" variant="secondary" fullWidth disabled={otpSubmitting}>
-                  {otpSubmitting ? "Sending…" : "Send OTP"}
-                </Button>
-              </form>
+                {phoneOtpAvailable === false ? (
+                  <p className={authStyles.noticeMessage}>
+                    Phone sign-in is temporarily unavailable. Please continue with Google above —
+                    it&apos;s the same account either way.
+                  </p>
+                ) : phoneOtpAvailable === null ? (
+                  <p className={styles.pageSubtitle} style={{ fontSize: 13 }} role="status">
+                    Checking sign-in options…
+                  </p>
+                ) : (
+                  <>
+                    <div className={authStyles.divider} aria-hidden="true">OR</div>
+                    <form onSubmit={requestOtp}>
+                      <p className={styles.pageSubtitle} style={{ fontSize: 13, marginBottom: 10 }}>
+                        Enter your phone number to join the queue.
+                      </p>
+                      <input
+                        type="tel"
+                        placeholder="+919876543210"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className={styles.textInput}
+                      />
+                      <Button type="submit" variant="secondary" fullWidth disabled={otpSubmitting}>
+                        {otpSubmitting ? "Sending…" : "Send OTP"}
+                      </Button>
+                    </form>
+                  </>
+                )}
+              </>
             ) : (
               <form onSubmit={verifyOtp}>
                 <p className={styles.pageSubtitle} style={{ fontSize: 13, marginBottom: 10 }}>
