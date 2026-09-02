@@ -20,10 +20,14 @@ const DEFAULT_PAGE_SIZE = 20;
 const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'booking.confirmed': NotificationCategory.BOOKING_UPDATES,
   'booking.cancelled': NotificationCategory.BOOKING_UPDATES,
+  'booking.no_show': NotificationCategory.BOOKING_UPDATES,
+  'booking.expired': NotificationCategory.BOOKING_UPDATES,
   'booking.reminder': NotificationCategory.REMINDERS,
   'queue.turn_approaching': NotificationCategory.QUEUE_UPDATES,
   'owner.booking.created': NotificationCategory.BOOKING_UPDATES,
   'owner.booking.cancelled': NotificationCategory.BOOKING_UPDATES,
+  'owner.booking.no_show': NotificationCategory.BOOKING_UPDATES,
+  'owner.booking.expired': NotificationCategory.BOOKING_UPDATES,
   'owner.walk_in.joined': NotificationCategory.QUEUE_UPDATES,
   'staff.assigned': NotificationCategory.QUEUE_UPDATES,
 };

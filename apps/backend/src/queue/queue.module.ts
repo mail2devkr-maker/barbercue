@@ -8,6 +8,7 @@ import { BookingCheckInController } from './booking-check-in.controller';
 import { DashboardQueueController } from './dashboard-queue.controller';
 import { QueueService } from './queue.service';
 import { StaffStatusService } from './staff-status.service';
+import { QueueEntryExpiryService } from './queue-entry-expiry.service';
 
 @Module({
   imports: [BookingsModule, RealtimeModule, NotificationsModule],
@@ -17,7 +18,7 @@ import { StaffStatusService } from './staff-status.service';
     BookingCheckInController,
     DashboardQueueController,
   ],
-  providers: [QueueService, StaffStatusService],
+  providers: [QueueService, StaffStatusService, QueueEntryExpiryService],
   // Phase 9: PublicQueueModule reuses this exact QueueService (joinWalkIn) for the QR flow rather
   // than duplicating queue logic — no other change to this module.
   exports: [QueueService],

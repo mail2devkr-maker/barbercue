@@ -11,9 +11,13 @@ const POLL_INTERVAL_MS = 60_000;
 const TYPE_LABEL: Record<string, string> = {
   "booking.confirmed": "Booking confirmed",
   "booking.cancelled": "Booking cancelled",
+  "booking.no_show": "Booking marked as no-show",
+  "booking.expired": "Booking hold expired",
   "queue.turn_approaching": "Your turn is approaching",
   "owner.booking.created": "New booking",
   "owner.booking.cancelled": "Booking cancelled",
+  "owner.booking.no_show": "Customer no-show",
+  "owner.booking.expired": "Unpaid booking expired",
   "owner.walk_in.joined": "New walk-in",
   "staff.assigned": "You were assigned a customer",
 };

@@ -624,10 +624,14 @@ export interface CapacitySummaryDto {
 export const NOTIFICATION_TYPES = [
   'booking.confirmed',
   'booking.cancelled',
+  'booking.no_show',
+  'booking.expired',
   'booking.reminder',
   'queue.turn_approaching',
   'owner.booking.created',
   'owner.booking.cancelled',
+  'owner.booking.no_show',
+  'owner.booking.expired',
   'owner.walk_in.joined',
   'staff.assigned',
 ] as const;

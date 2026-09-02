@@ -139,4 +139,26 @@ export class RealtimeGateway implements OnGatewayConnection {
   emitBookingRescheduled(salonId: string, bookingId: string): void {
     this.server.to(`salon:${salonId}`).emit('booking.rescheduled', { salonId, bookingId });
   }
+
+  // System-triggered sweeps (BookingExpiryService/BookingNoShowService) — same ids-only shape as
+  // every other booking emit, so the owner dashboard and the customer's own bookings page refetch
+  // exactly like they already do for a customer-initiated cancellation.
+  emitBookingNoShow(salonId: string, bookingId: string): void {
+    this.server.to(`salon:${salonId}`).emit('booking.no_show', { salonId, bookingId });
+  }
+
+  emitBookingExpired(salonId: string, bookingId: string): void {
+    this.server.to(`salon:${salonId}`).emit('booking.expired', { salonId, bookingId });
+  }
+
+  // QueueEntryExpiryService's automatic CALLED->NO_SHOW sweep — same shape as emitEntryCalled,
+  // ids-only, client refetches. Not the customer-room too: unlike emitEntryCalled (which needs to
+  // wake a specific customer's device), a no-show is something the OWNER dashboard needs to see
+  // update live; the affected customer's own "my active queue entry" view already stops showing it
+  // on their next poll/refetch since the entry is no longer WAITING/CALLED/IN_SERVICE.
+  emitQueueEntryNoShow(salonId: string, queueEntryId: string): void {
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('queue.entry.no_show', { salonId, queueEntryId });
+  }
 }
