@@ -2,7 +2,13 @@ import { AUTH_PATHS } from '@barbercue/shared';
 import { deleteItem, getItem, setItem } from './secure-storage';
 import { reportNetworkFailure, reportNetworkSuccess } from './network-status';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000/api/v1';
+// A release binary must never silently point at localhost when an EAS public variable is absent.
+// EAS environments still provide EXPO_PUBLIC_API_BASE_URL for preview/production builds; this
+// fallback protects the customer-facing binary from a misconfigured environment while retaining
+// the convenient local backend default for Metro development.
+const DEVELOPMENT_API_BASE_URL = 'http://localhost:3000/api/v1';
+const PRODUCTION_API_BASE_URL = 'https://barbercuebackend-production.up.railway.app/api/v1';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? (__DEV__ ? DEVELOPMENT_API_BASE_URL : PRODUCTION_API_BASE_URL);
 const REFRESH_TOKEN_KEY = 'barbercue_refresh_token';
 const REFRESH_PATH = `auth/${AUTH_PATHS.refresh}`;
 
