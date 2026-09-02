@@ -190,6 +190,10 @@ export const SALON_PHOTO_UPLOAD = {
   // For the file picker's `accept` attribute. Extensions are a UI hint only — the server decides
   // by sniffing the file's magic bytes, never by trusting this or the browser's declared type.
   accept: 'image/jpeg,image/png,image/webp',
+  // How many gallery photos the owner UI queues in one multi-select/camera batch before requiring
+  // a separate session — a client-side UX cap (keeps one screen reviewable and one "Upload All"
+  // click bounded), not a total-photos-per-salon limit enforced anywhere server-side.
+  maxBatchCount: 10,
 } as const;
 
 export const DASHBOARD_PATHS = {
