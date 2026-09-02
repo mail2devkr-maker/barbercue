@@ -14,6 +14,24 @@ interface S3DriverConfig {
   publicBaseUrl: string;
 }
 
+const REQUIRED_ENV_VARS = [
+  'OBJECT_STORAGE_BUCKET',
+  'OBJECT_STORAGE_KEY',
+  'OBJECT_STORAGE_SECRET',
+  'OBJECT_STORAGE_ENDPOINT',
+  'OBJECT_STORAGE_PUBLIC_BASE_URL',
+] as const;
+
+/**
+ * Which of the five required OBJECT_STORAGE_* variables are absent or blank — names only, never
+ * values. Used by ObjectStorageService to report a precise, actionable diagnostic when
+ * STORAGE_DRIVER=r2 is explicitly requested but not fully configured, rather than the generic
+ * "not configured" message that fits the implicit/unset-selector case.
+ */
+export function missingS3EnvVars(): string[] {
+  return REQUIRED_ENV_VARS.filter((name) => !process.env[name]?.trim());
+}
+
 /**
  * S3-compatible object storage — Cloudflare R2, AWS S3, or Backblaze B2, since all three speak
  * the same PutObject/DeleteObject API and only the endpoint differs. Not the launch driver (see
