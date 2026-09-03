@@ -57,8 +57,8 @@ export function CustomerHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.headerInner}>
-        <Link href="/" className={styles.wordmark} aria-label="BarberCue home">
-          BarberCue
+        <Link href="/" className={styles.wordmark} aria-label="FastQue home">
+          FastQue
         </Link>
 
         <nav className={styles.nav} aria-label="Primary">
@@ -84,7 +84,7 @@ export function CustomerHeader() {
                 aria-expanded={accountMenuOpen}
                 aria-haspopup="true"
               >
-                <span className={styles.accountDot} aria-hidden="true">BC</span>
+                <span className={styles.accountDot} aria-hidden="true">FQ</span>
                 My account <span aria-hidden="true">⌄</span>
               </button>
               {accountMenuOpen && (
