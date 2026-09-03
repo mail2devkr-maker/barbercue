@@ -124,7 +124,7 @@ export default function DashboardCustomerDetailPage({
   if (error || !summary) {
     return (
       <main className={styles.page}>
-        <Link href={`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.customers}`} className={styles.backLink}>
+        <Link href={`/${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.customers}`} className={styles.backLink}>
           ← Back to customers
         </Link>
         <p className={`${styles.banner} ${styles.bannerError}`}>{error ?? "Customer not found."}</p>
@@ -139,7 +139,7 @@ export default function DashboardCustomerDetailPage({
 
   return (
     <main className={styles.page}>
-      <Link href={`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.customers}`} className={styles.backLink}>
+      <Link href={`/${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.customers}`} className={styles.backLink}>
         ← Back to customers
       </Link>
       <h1 className={styles.pageTitle}>{summary.phone ?? summary.email ?? "No contact on file"}</h1>
