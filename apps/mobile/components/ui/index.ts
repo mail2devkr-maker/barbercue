@@ -7,5 +7,6 @@ export { ErrorState, InlineError } from './ErrorState';
 export { Skeleton } from './Skeleton';
 export { SafeImage } from './SafeImage';
 export { NotificationBell } from './NotificationBell';
+export { LanguageSwitcher } from './LanguageSwitcher';
 export { PhotoGalleryViewer } from './PhotoGalleryViewer';
 export type { GalleryPhoto } from './PhotoGalleryViewer';

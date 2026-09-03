@@ -7,6 +7,7 @@ import { BOOKING_PATHS, DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbe
 import type { BookingDetailDto, CancellationPolicyDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError } from '../components/ui';
 import type { SearchStackParamList, TabParamList } from '../navigation/types';
@@ -42,6 +43,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     let cancelled = false;
@@ -133,7 +135,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           Deliberately not react-native's Alert.alert here: it renders nothing on React Native
           Web (found while verifying this screen through the web target), which would silently
           make this button do nothing. */}
-      <Button title="Confirm booking" onPress={() => void handleConfirm()} loading={submitting} style={styles.actionButton} />
+      <Button title={t.confirm} onPress={() => void handleConfirm()} loading={submitting} style={styles.actionButton} />
     </Screen>
   );
 }

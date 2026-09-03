@@ -1,5 +1,5 @@
 import { Language } from '../enums';
-import { formatVoiceDateTime, ordinalDay, voiceAnnouncementsFor } from '../i18n';
+import { UI_STRINGS, formatVoiceDateTime, ordinalDay, uiStringsFor, voiceAnnouncementsFor } from '../i18n';
 
 describe('ordinalDay', () => {
   it.each([
@@ -75,5 +75,23 @@ describe('voiceAnnouncementsFor(HI).newBookingReceived', () => {
   it('appends the not-assigned-yet notice instead of inventing a barber', () => {
     const sentence = hi.newBookingReceived('Haircut', null, 'Handsome Center', '5th September', '10 AM');
     expect(sentence).toContain('अभी तक बार्बर तय नहीं हुआ है');
+  });
+});
+
+describe('uiStringsFor', () => {
+  it('every language has a complete, distinct set of UI strings', () => {
+    expect(Object.keys(UI_STRINGS[Language.EN]).sort()).toEqual(Object.keys(UI_STRINGS[Language.HI]).sort());
+    // Spot-check a few keys actually differ between languages — catches an accidental EN copy-paste.
+    expect(UI_STRINGS[Language.EN].book).not.toBe(UI_STRINGS[Language.HI].book);
+    expect(UI_STRINGS[Language.EN].waiting).not.toBe(UI_STRINGS[Language.HI].waiting);
+  });
+
+  it('falls back to English for an unrecognised/unset language', () => {
+    expect(uiStringsFor(undefined)).toBe(UI_STRINGS[Language.EN]);
+    expect(uiStringsFor(null)).toBe(UI_STRINGS[Language.EN]);
+  });
+
+  it('resolves Hindi when requested', () => {
+    expect(uiStringsFor(Language.HI)).toBe(UI_STRINGS[Language.HI]);
   });
 });

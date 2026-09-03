@@ -14,6 +14,7 @@ import {
 } from '@expo-google-fonts/work-sans';
 import { Role } from '@barbercue/shared';
 import { AuthProvider, useAuth } from './lib/auth-context';
+import { LanguageProvider } from './lib/language-context';
 import { color } from './lib/theme';
 import { OfflineBanner } from './components/OfflineBanner';
 import AuthStack from './navigation/AuthStack';
@@ -128,9 +129,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <PushNotificationCoordinator />
-        <Root />
-        <StatusBar style="dark" />
+        <LanguageProvider>
+          <PushNotificationCoordinator />
+          <Root />
+          <StatusBar style="dark" />
+        </LanguageProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

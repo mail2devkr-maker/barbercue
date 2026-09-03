@@ -11,11 +11,11 @@ import {
   PREMIUM_PATHS,
   Role,
   type AuthSession,
-  type MeResponse,
   type PremiumEntitlementDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button } from '../components/ui';
 import { InlineError } from '../components/ui/ErrorState';
@@ -40,32 +40,20 @@ type Nav = CompositeNavigationProp<
 export default function AccountScreen() {
   const navigation = useNavigation<Nav>();
   const { user, logout, refreshMe } = useAuth();
+  // Issue 9 (mobile launch mission) — this pill row and the direct pre-auth/Home switcher
+  // (components/ui/LanguageSwitcher) both read/write the exact same LanguageProvider state now,
+  // so a change here is also what a signed-out visitor's earlier choice already set, and vice
+  // versa; setLanguage still calls the identical PATCH auth/language this used to call inline.
+  const { language, setLanguage } = useLanguage();
 
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingOthers, setRevokingOthers] = useState(false);
-  const [savingLanguage, setSavingLanguage] = useState(false);
 
   const [premium, setPremium] = useState<PremiumEntitlementDto | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-
-  async function changeLanguage(language: Language) {
-    if (language === user?.preferredLanguage || savingLanguage) return;
-    setSavingLanguage(true);
-    try {
-      await apiFetch<MeResponse>(`auth/${AUTH_PATHS.language}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ language }),
-      });
-      await refreshMe();
-    } catch {
-      /* the buttons below just keep reflecting whatever preferredLanguage actually saved */
-    } finally {
-      setSavingLanguage(false);
-    }
-  }
 
   const loadSessions = useCallback(async () => {
     setSessionsError(null);
@@ -155,11 +143,10 @@ export default function AccountScreen() {
           {Object.values(Language).map((lang) => (
             <Pressable
               key={lang}
-              onPress={() => void changeLanguage(lang)}
-              disabled={savingLanguage}
-              style={[styles.languagePill, user?.preferredLanguage === lang && styles.languagePillActive]}
+              onPress={() => setLanguage(lang)}
+              style={[styles.languagePill, language === lang && styles.languagePillActive]}
             >
-              <Text style={[styles.languagePillText, user?.preferredLanguage === lang && styles.languagePillTextActive]}>
+              <Text style={[styles.languagePillText, language === lang && styles.languagePillTextActive]}>
                 {LANGUAGE_LABELS[lang]}
               </Text>
             </Pressable>

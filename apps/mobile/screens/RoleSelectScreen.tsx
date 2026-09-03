@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader } from '../components/ui';
+import { Screen, SectionHeader, LanguageSwitcher } from '../components/ui';
 import type { AuthStackParamList } from '../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'RoleSelect'>;
@@ -26,6 +26,9 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
   return (
     <Screen contentStyle={styles.screenContent}>
+      <View style={styles.languageRow}>
+        <LanguageSwitcher />
+      </View>
       <View style={styles.brandRow}>
         <View style={styles.badgeHalo}>
           <View style={styles.badge}>
@@ -51,6 +54,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screenContent: { padding: space[5], justifyContent: 'center' },
+  languageRow: { position: 'absolute', top: space[4], right: space[4] },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: space[6] },
   badgeHalo: {
     width: 52,

@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { NOTIFICATION_PATHS } from '@barbercue/shared';
 import type { NotificationDto } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton } from '../components/ui';
 
@@ -35,6 +36,7 @@ function timeAgo(iso: string): string {
  * notification content itself rather than attempting to navigate anywhere on tap.
  */
 export default function NotificationsScreen() {
+  const { t } = useLanguage();
   const [items, setItems] = useState<NotificationDto[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -82,9 +84,9 @@ export default function NotificationsScreen() {
 
   return (
     <Screen scroll={false}>
-      <SectionHeader eyebrow="Account" title="Notifications" />
+      <SectionHeader eyebrow="Account" title={t.notifications} />
       {hasUnread && (
-        <Button title="Mark all read" variant="outline" onPress={markAllRead} style={styles.markAllButton} />
+        <Button title={t.markAllRead} variant="outline" onPress={markAllRead} style={styles.markAllButton} />
       )}
 
       {items === null ? (
@@ -108,7 +110,7 @@ export default function NotificationsScreen() {
           }
         >
           {items.length === 0 ? (
-            <EmptyState title="No notifications" message="You're all caught up." />
+            <EmptyState title={t.notifications} message={t.noNotifications} />
           ) : (
             items.map((n) => (
               <Pressable key={n.id} onPress={() => markRead(n)} style={[styles.row, !n.readAt && styles.rowUnread]}>

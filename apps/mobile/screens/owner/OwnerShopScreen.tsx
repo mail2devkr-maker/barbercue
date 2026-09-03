@@ -1,11 +1,18 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   ChairStatus,
   DASHBOARD_PATHS,
+  PhotoType,
+  SALON_PHOTO_UPLOAD,
+  TIME_OF_DAY_REGEX,
+  e164PhoneSchema,
   formatMoney,
   type OperatingHoursDto,
+  type PhotoDto,
   type SalonChairDto,
   type SalonStaffDto,
   type ServiceDto,
@@ -13,7 +20,8 @@ import {
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
-import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
+import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError, SafeImage } from '../../components/ui';
+import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -219,14 +227,264 @@ function AddChairForm({ salonId, onAdded }: { salonId: string; onAdded: () => vo
   );
 }
 
+// ---------- Photos ----------
+
+function PhotoTile({ salonId, photo, onChanged }: { salonId: string; photo: PhotoDto; onChanged: () => void }) {
+  const [removing, setRemoving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    setRemoving(true);
+    setError(null);
+    try {
+      await apiFetch(`${scope(salonId, DASHBOARD_PATHS.photos)}/${photo.id}`, { method: 'DELETE' });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not remove this photo.');
+      setRemoving(false);
+    }
+  }
+
+  return (
+    <View style={styles.photoTile}>
+      <SafeImage url={photo.url} alt={photo.altText ?? 'Shop photo'} style={styles.photoImage} />
+      <View style={styles.photoTileFoot}>
+        <Text style={styles.photoTypeLabel}>{photo.type === PhotoType.COVER ? 'Cover' : 'Gallery'}</Text>
+        <Pressable onPress={() => void remove()} disabled={removing}>
+          <Text style={styles.rowAction}>{removing ? 'Removing…' : 'Remove'}</Text>
+        </Pressable>
+      </View>
+      {error && <InlineError message={error} />}
+    </View>
+  );
+}
+
+function AddPhotoButton({
+  salonId,
+  type,
+  label,
+  onAdded,
+}: {
+  salonId: string;
+  type: PhotoType;
+  label: string;
+  onAdded: () => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function pickAndUpload() {
+    setError(null);
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError('Photo library access is needed to add shop photos.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    if (result.canceled || result.assets.length === 0) return;
+    const asset = result.assets[0];
+    if (asset.fileSize && asset.fileSize > SALON_PHOTO_UPLOAD.maxBytes) {
+      setError(`That photo is over the ${Math.floor(SALON_PHOTO_UPLOAD.maxBytes / (1024 * 1024))} MB limit.`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const form = new FormData();
+      // Same {uri, name, type} shape StyleAdvisorScreen already uses for a native multipart part.
+      form.append('image', {
+        uri: asset.uri,
+        name: asset.fileName ?? 'photo.jpg',
+        type: asset.mimeType ?? 'image/jpeg',
+      } as unknown as Blob);
+      form.append('type', type);
+      await apiFetch(`${scope(salonId, DASHBOARD_PATHS.photos)}/${DASHBOARD_PATHS.photoUpload}`, {
+        method: 'POST',
+        body: form,
+      });
+      onAdded();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not upload that photo.');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <View>
+      <Button title={uploading ? 'Uploading…' : label} variant="outline" onPress={() => void pickAndUpload()} loading={uploading} style={styles.addButton} />
+      {error && <InlineError message={error} />}
+    </View>
+  );
+}
+
+function PhotosSection({ salonId, photos, onChanged }: { salonId: string; photos: PhotoDto[]; onChanged: () => void }) {
+  const cover = photos.find((p) => p.type === PhotoType.COVER) ?? null;
+  const gallery = photos.filter((p) => p.type === PhotoType.GALLERY);
+
+  return (
+    <>
+      <Text style={styles.sectionTitle}>Photos</Text>
+      <Text style={styles.hint}>Your cover photo is what customers see first when they find you.</Text>
+      <View style={styles.photoGrid}>
+        {cover && <PhotoTile salonId={salonId} photo={cover} onChanged={onChanged} />}
+        {gallery.map((p) => (
+          <PhotoTile key={p.id} salonId={salonId} photo={p} onChanged={onChanged} />
+        ))}
+      </View>
+      {photos.length === 0 && <Text style={styles.emptyText}>No photos yet.</Text>}
+      <AddPhotoButton
+        salonId={salonId}
+        type={PhotoType.COVER}
+        label={cover ? 'Replace cover photo' : 'Add cover photo'}
+        onAdded={onChanged}
+      />
+      <AddPhotoButton salonId={salonId} type={PhotoType.GALLERY} label="Add gallery photo" onAdded={onChanged} />
+    </>
+  );
+}
+
+// ---------- Hours ----------
+
+function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: OperatingHoursDto[]; onSaved: (h: OperatingHoursDto[]) => void }) {
+  const [days, setDays] = useState(() =>
+    Array.from({ length: 7 }, (_, dayOfWeek) => {
+      const existing = hours.find((h) => h.dayOfWeek === dayOfWeek);
+      return existing ?? { dayOfWeek, openTime: '09:00', closeTime: '21:00', isClosed: dayOfWeek === 0 };
+    }),
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function updateDay(dayOfWeek: number, patch: Partial<OperatingHoursDto>) {
+    setDays((prev) => prev.map((d) => (d.dayOfWeek === dayOfWeek ? { ...d, ...patch } : d)));
+  }
+
+  const invalidDay = days.find(
+    (d) => !d.isClosed && (!TIME_OF_DAY_REGEX.test(d.openTime) || !TIME_OF_DAY_REGEX.test(d.closeTime) || d.closeTime <= d.openTime),
+  );
+
+  async function save() {
+    setError(null);
+    if (invalidDay) {
+      setError(`Check ${DAY_LABELS[invalidDay.dayOfWeek]}'s hours — use a time like 09:00, with closing after opening.`);
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await apiFetch<OperatingHoursDto[]>(scope(salonId, DASHBOARD_PATHS.operatingHours), {
+        method: 'PUT',
+        body: JSON.stringify({ days }),
+      });
+      onSaved(saved);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save your hours.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <View>
+      {error && <InlineError message={error} />}
+      {days.map((d) => (
+        <View key={d.dayOfWeek} style={styles.hoursEditRow}>
+          <Text style={styles.hoursDay}>{DAY_LABELS[d.dayOfWeek]}</Text>
+          <Pressable
+            style={[styles.dayToggle, !d.isClosed && styles.dayToggleOpen]}
+            onPress={() => updateDay(d.dayOfWeek, { isClosed: !d.isClosed })}
+          >
+            <Text style={[styles.dayToggleText, !d.isClosed && styles.dayToggleTextOpen]}>{d.isClosed ? 'Closed' : 'Open'}</Text>
+          </Pressable>
+          {!d.isClosed && (
+            <>
+              <TextInput
+                style={styles.timeInput}
+                value={d.openTime}
+                onChangeText={(v) => updateDay(d.dayOfWeek, { openTime: v })}
+                placeholder="09:00"
+                placeholderTextColor={color.muted}
+                maxLength={5}
+              />
+              <Text style={styles.hoursDash}>–</Text>
+              <TextInput
+                style={styles.timeInput}
+                value={d.closeTime}
+                onChangeText={(v) => updateDay(d.dayOfWeek, { closeTime: v })}
+                placeholder="21:00"
+                placeholderTextColor={color.muted}
+                maxLength={5}
+              />
+            </>
+          )}
+        </View>
+      ))}
+      <Button title="Save hours" onPress={() => void save()} loading={saving} style={styles.addButton} />
+    </View>
+  );
+}
+
+// ---------- Staff ----------
+
+function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const phoneValid = e164PhoneSchema.safeParse(phone).success;
+
+  async function submit() {
+    setError(null);
+    if (!phoneValid) {
+      setError('Use international format, e.g. +919876543210');
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(scope(salonId, DASHBOARD_PATHS.staff), {
+        method: 'POST',
+        body: JSON.stringify({ displayName, phone, ...(email.trim() ? { email: email.trim() } : {}) }),
+      });
+      setDisplayName('');
+      setPhone('');
+      setEmail('');
+      setOpen(false);
+      onAdded();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not add this barber.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) return <Button title="Add barber" variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
+
+  return (
+    <View style={styles.editPanel}>
+      {error && <InlineError message={error} />}
+      <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder="Barber name" placeholderTextColor={color.muted} />
+      <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="+919876543210" placeholderTextColor={color.muted} keyboardType="phone-pad" />
+      <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email (optional, for account invite)" placeholderTextColor={color.muted} keyboardType="email-address" autoCapitalize="none" />
+      <View style={styles.actionRow}>
+        <Button title="Add" onPress={() => void submit()} loading={saving} disabled={!displayName || !phone} style={styles.actionButton} />
+        <Button title="Cancel" variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
+      </View>
+    </View>
+  );
+}
+
 // ---------- Screen ----------
 
 export default function OwnerShopScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<OwnerShopStackParamList>>();
   const { selectedSalonId, selectedSalon } = useSalon();
   const [services, setServices] = useState<ServiceDto[]>([]);
   const [chairs, setChairs] = useState<SalonChairDto[]>([]);
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
   const [hours, setHours] = useState<OperatingHoursDto[]>([]);
+  const [photos, setPhotos] = useState<PhotoDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -241,12 +499,14 @@ export default function OwnerShopScreen() {
       apiFetch<SalonChairDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.chairs)),
       apiFetch<SalonStaffDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.staff)),
       apiFetch<OperatingHoursDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.operatingHours)),
+      apiFetch<PhotoDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.photos)),
     ])
-      .then(([s, c, st, h]) => {
+      .then(([s, c, st, h, p]) => {
         setServices(s);
         setChairs(c);
         setStaff(st);
         setHours(h);
+        setPhotos(p);
       })
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load your shop.'))
       .finally(() => {
@@ -311,7 +571,7 @@ export default function OwnerShopScreen() {
       <Text style={styles.sectionTitle}>Staff</Text>
       <Card style={styles.card}>
         {staff.length === 0 ? (
-          <Text style={styles.emptyText}>No barbers added yet. Invite staff from the BarberCue web dashboard.</Text>
+          <Text style={styles.emptyText}>No barbers added yet.</Text>
         ) : (
           staff.map((member) => (
             <View key={member.id} style={styles.row}>
@@ -325,23 +585,18 @@ export default function OwnerShopScreen() {
           ))
         )}
       </Card>
+      <AddStaffForm salonId={selectedSalonId} onAdded={() => void load()} />
 
       <Text style={styles.sectionTitle}>Hours</Text>
       <Card style={styles.card}>
-        {hours.length === 0 ? (
-          <Text style={styles.emptyText}>Hours not set yet — set them on the BarberCue web dashboard so customers can book ahead.</Text>
-        ) : (
-          hours
-            .slice()
-            .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-            .map((h) => (
-              <View key={h.dayOfWeek} style={styles.hoursRow}>
-                <Text style={styles.hoursDay}>{DAY_LABELS[h.dayOfWeek]}</Text>
-                <Text style={styles.hoursValue}>{h.isClosed ? 'Closed' : `${h.openTime} – ${h.closeTime}`}</Text>
-              </View>
-            ))
-        )}
+        <HoursEditor salonId={selectedSalonId} hours={hours} onSaved={setHours} />
       </Card>
+
+      <PhotosSection salonId={selectedSalonId} photos={photos} onChanged={() => void load()} />
+
+      <Text style={styles.sectionTitle}>Customers</Text>
+      <Text style={styles.hint}>Visit history, dues, and no-show waivers for everyone who has booked at your shop.</Text>
+      <Button title="View customers" variant="outline" onPress={() => navigation.navigate('OwnerCustomers')} style={styles.addButton} />
     </Screen>
   );
 }
@@ -376,7 +631,33 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: space[2], marginTop: space[1] },
   actionButton: { flex: 1 },
   addButton: { marginBottom: space[2] },
-  hoursRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: space[1] },
-  hoursDay: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
-  hoursValue: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted },
+  hint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: space[3] },
+
+  // Hours
+  hoursEditRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[2], borderBottomWidth: 1, borderBottomColor: color.border },
+  hoursDay: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink, width: 34 },
+  dayToggle: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: color.border },
+  dayToggleOpen: { borderColor: color.accent, backgroundColor: color.accentSoft },
+  dayToggleText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted },
+  dayToggleTextOpen: { color: color.accent },
+  timeInput: {
+    flex: 1,
+    minHeight: 40,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.sm,
+    color: color.ink,
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+  },
+  hoursDash: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted },
+
+  // Photos
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3], marginBottom: space[3] },
+  photoTile: { width: '47%' },
+  photoImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: radius.sm },
+  photoTileFoot: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: space[1] },
+  photoTypeLabel: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', color: color.muted },
 });

@@ -4,7 +4,7 @@ import type { OwnerBookingFilter } from '@barbercue/shared';
 import OwnerDashboardScreen from '../screens/owner/OwnerDashboardScreen';
 import OwnerQueueScreen from '../screens/owner/OwnerQueueScreen';
 import OwnerBookingsScreen from '../screens/owner/OwnerBookingsScreen';
-import OwnerShopScreen from '../screens/owner/OwnerShopScreen';
+import OwnerShopStack, { type OwnerShopStackParamList } from './OwnerShopStack';
 import DashboardAccountStack, { type DashboardAccountStackParamList } from './DashboardAccountStack';
 import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
@@ -21,7 +21,7 @@ export type OwnerTabParamList = {
   // Optional initial filter so the Dashboard tab's booking summary cards can deep-link straight
   // into e.g. "Today" or "Cancelled" instead of always landing on the tab's own default.
   OwnerBookingsTab: { filter?: OwnerBookingFilter } | undefined;
-  OwnerShopTab: undefined;
+  OwnerShopTab: NavigatorScreenParams<OwnerShopStackParamList> | undefined;
   OwnerAccountTab: NavigatorScreenParams<DashboardAccountStackParamList> | undefined;
 };
 
@@ -60,7 +60,11 @@ export default function OwnerNavigator() {
             lazy: false,
           }}
         />
-        <Tab.Screen name="OwnerShopTab" component={OwnerShopScreen} options={tabOptions('Shop', 'shop')} />
+        <Tab.Screen
+          name="OwnerShopTab"
+          component={OwnerShopStack}
+          options={{ ...tabOptions('Shop', 'shop'), popToTopOnBlur: true }}
+        />
         <Tab.Screen
           name="OwnerAccountTab"
           component={DashboardAccountStack}

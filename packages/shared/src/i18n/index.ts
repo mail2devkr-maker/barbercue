@@ -1,16 +1,15 @@
-// Phase 14 (Localization & Voice Operations).
-//
-// Scope is deliberately narrow: the short, high-value phrases actually spoken aloud by
-// Speech.speak() / speechSynthesis on realtime queue and booking alerts (apps/mobile's
-// QueueStatusPanel/OwnerBookingsScreen, apps/web's DashboardQueueView/OwnerBookingsView), plus the
-// language switcher's own labels. This is NOT a general UI-string translation layer — the rest of
-// the product stays English-only in this phase, same "real slice, honestly scoped" pattern as
-// every other phase (see BARBERCUE_NON_PAYMENT_FEATURE_STATUS.md).
+// Phase 14 (Localization & Voice Operations), extended for Issue 9 (mobile launch mission) to
+// also cover the core customer-journey UI strings (UiStrings/UI_STRINGS/uiStringsFor below) — city,
+// service, search, book, join queue, confirm, cancel, waiting/your-turn, sign-in, notifications,
+// key errors, retry, open/closed. Deliberately still not a general full-app translation layer:
+// everything outside that explicit list (owner/staff surfaces, secondary screens, long-form
+// copy) stays English-only, same "real slice, honestly scoped" pattern as every other phase (see
+// BARBERCUE_NON_PAYMENT_FEATURE_STATUS.md).
 //
 // Extensibility contract: adding a language means adding one Language enum value (../enums) plus
-// one complete VoiceAnnouncements object + one SPEECH_LOCALE entry + one LANGUAGE_LABELS entry
-// below — TypeScript's Record<Language, VoiceAnnouncements> makes an incomplete addition a compile
-// error, not a silent English fallback for the new language.
+// one complete VoiceAnnouncements object, one complete UiStrings object, one SPEECH_LOCALE entry
+// and one LANGUAGE_LABELS entry below — TypeScript's Record<Language, ...> makes an incomplete
+// addition a compile error, not a silent English fallback for the new language.
 
 import { Language } from '../enums';
 
@@ -161,4 +160,130 @@ export function formatVoiceDateTime(isoUtc: string, timeZone: string): { date: s
   const time = hour ? `${hour}${Number(minute) !== 0 ? `:${minute.padStart(2, '0')}` : ''} ${dayPeriod}`.trim() : '';
 
   return { date, time };
+}
+
+/**
+ * Issue 9 (mobile launch mission) — the customer-journey strings a direct, pre-auth-reachable
+ * language switcher actually needs. Deliberately a flat, keyed dictionary (not a template/ICU
+ * system) — every value here is a short label or a fixed short sentence, never one built from
+ * interpolated user data (booking/salon/service names stay in their own source language
+ * regardless of UI language, same as the voice announcements above).
+ */
+export interface UiStrings {
+  city: string;
+  service: string;
+  search: string;
+  searchPlaceholder: string;
+  nearMe: string;
+  book: string;
+  joinQueue: string;
+  confirm: string;
+  cancel: string;
+  keepBooking: string;
+  waiting: string;
+  yourTurn: string;
+  called: string;
+  inService: string;
+  signIn: string;
+  signInWithGoogle: string;
+  notifications: string;
+  noNotifications: string;
+  markAllRead: string;
+  retry: string;
+  open: string;
+  closed: string;
+  noResults: string;
+  loading: string;
+  outstandingDue: string;
+  freeCancellation: string;
+  statusConfirmed: string;
+  statusPendingPayment: string;
+  statusCancelled: string;
+  statusCompleted: string;
+  statusNoShow: string;
+  genericError: string;
+  offline: string;
+}
+
+const enUi: UiStrings = {
+  city: 'City',
+  service: 'Service',
+  search: 'Search',
+  searchPlaceholder: 'Search shops or services…',
+  nearMe: 'Near me',
+  book: 'Book an appointment',
+  joinQueue: 'Join live queue',
+  confirm: 'Confirm booking',
+  cancel: 'Cancel booking',
+  keepBooking: 'Keep booking',
+  waiting: 'Waiting',
+  yourTurn: "It's your turn",
+  called: "You're being called",
+  inService: 'In service',
+  signIn: 'Sign in',
+  signInWithGoogle: 'Sign in with Google',
+  notifications: 'Notifications',
+  noNotifications: "You're all caught up",
+  markAllRead: 'Mark all read',
+  retry: 'Try again',
+  open: 'Open now',
+  closed: 'Closed',
+  noResults: 'No results found',
+  loading: 'Loading…',
+  outstandingDue: 'Outstanding due',
+  freeCancellation: 'Free cancellation',
+  statusConfirmed: 'Confirmed',
+  statusPendingPayment: 'Payment pending',
+  statusCancelled: 'Cancelled',
+  statusCompleted: 'Completed',
+  statusNoShow: 'No-show',
+  genericError: 'Something went wrong. Please try again.',
+  offline: "You appear to be offline.",
+};
+
+const hiUi: UiStrings = {
+  city: 'शहर',
+  service: 'सेवा',
+  search: 'खोजें',
+  searchPlaceholder: 'दुकान या सेवा खोजें…',
+  nearMe: 'मेरे पास',
+  book: 'अपॉइंटमेंट बुक करें',
+  joinQueue: 'लाइव कतार में शामिल हों',
+  confirm: 'बुकिंग की पुष्टि करें',
+  cancel: 'बुकिंग रद्द करें',
+  keepBooking: 'बुकिंग रखें',
+  waiting: 'प्रतीक्षा में',
+  yourTurn: 'आपकी बारी आ गई है',
+  called: 'आपको बुलाया जा रहा है',
+  inService: 'सेवा जारी है',
+  signIn: 'साइन इन करें',
+  signInWithGoogle: 'Google से साइन इन करें',
+  notifications: 'सूचनाएं',
+  noNotifications: 'आप पूरी तरह अपडेट हैं',
+  markAllRead: 'सभी को पढ़ा हुआ चिह्नित करें',
+  retry: 'फिर कोशिश करें',
+  open: 'अभी खुला है',
+  closed: 'बंद है',
+  noResults: 'कोई परिणाम नहीं मिला',
+  loading: 'लोड हो रहा है…',
+  outstandingDue: 'बकाया राशि',
+  freeCancellation: 'मुफ़्त रद्दीकरण',
+  statusConfirmed: 'पुष्टि हो गई',
+  statusPendingPayment: 'भुगतान लंबित',
+  statusCancelled: 'रद्द',
+  statusCompleted: 'पूर्ण',
+  statusNoShow: 'नो-शो',
+  genericError: 'कुछ गड़बड़ हो गई। कृपया फिर कोशिश करें।',
+  offline: 'लगता है आप ऑफ़लाइन हैं।',
+};
+
+export const UI_STRINGS: Readonly<Record<Language, UiStrings>> = {
+  [Language.EN]: enUi,
+  [Language.HI]: hiUi,
+};
+
+/** Never throws on an unrecognised value — same "unknown/unset -> English" default as
+ * voiceAnnouncementsFor, so a fresh/anonymous session always renders something correct. */
+export function uiStringsFor(language: Language | null | undefined): UiStrings {
+  return (language && UI_STRINGS[language]) || UI_STRINGS[Language.EN];
 }

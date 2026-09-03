@@ -14,8 +14,9 @@ import {
 } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useUnreadNotificationCount } from '../lib/notifications';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Card, Button, Skeleton, NotificationBell } from '../components/ui';
+import { Screen, SectionHeader, Card, Button, Skeleton, NotificationBell, LanguageSwitcher } from '../components/ui';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
 
 type Props = CompositeScreenProps<
@@ -41,6 +42,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [activeQueueEntry, setActiveQueueEntry] = useState<QueueEntryDetailDto | null>(null);
   const [upcomingBooking, setUpcomingBooking] = useState<BookingDetailDto | null>(null);
   const unreadCount = useUnreadNotificationCount();
+  const { t } = useLanguage();
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
@@ -78,14 +80,17 @@ export default function HomeScreen({ navigation }: Props) {
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
       <View style={styles.headerRow}>
         <SectionHeader eyebrow="BarberCue" title="Welcome back" subtitle="Book ahead, or join a live queue near you." />
-        <NotificationBell
-          unreadCount={unreadCount}
-          onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications' })}
-        />
+        <View style={styles.headerActions}>
+          <LanguageSwitcher />
+          <NotificationBell
+            unreadCount={unreadCount}
+            onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications' })}
+          />
+        </View>
       </View>
 
       <Pressable style={styles.searchEntry} onPress={goFindSalon}>
-        <Text style={styles.searchEntryText}>Search shops or services…</Text>
+        <Text style={styles.searchEntryText}>{t.searchPlaceholder}</Text>
       </Pressable>
 
       {loading ? (
@@ -163,6 +168,7 @@ export default function HomeScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   searchEntry: {
     minHeight: 50,
     justifyContent: 'center',
