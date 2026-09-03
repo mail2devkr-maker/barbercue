@@ -38,6 +38,11 @@ export default function StaffNavigator() {
           options={{
             ...tabOptions('Account', 'account'),
             tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
+            // See the matching comment in RootNavigator.tsx — resets the nested Account stack
+            // (which the notification bell navigates into via {screen: 'Notifications'}) back to
+            // its root the moment this tab loses focus, so Account never silently reopens on
+            // Notifications.
+            popToTopOnBlur: true,
           }}
         />
       </Tab.Navigator>

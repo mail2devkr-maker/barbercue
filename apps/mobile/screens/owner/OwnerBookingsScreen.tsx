@@ -8,10 +8,12 @@ import {
   Language,
   OWNER_BOOKING_FILTERS,
   SPEECH_LOCALE,
+  formatVoiceDateTime,
   voiceAnnouncementsFor,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
+  type SalonTimezoneResultDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
@@ -55,10 +57,6 @@ function formatSlot(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
 function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
@@ -113,6 +111,24 @@ export default function OwnerBookingsScreen({ route }: Props) {
   filterRef.current = filter;
   const preferredLanguageRef = useRef(user?.preferredLanguage);
   preferredLanguageRef.current = user?.preferredLanguage;
+  // Voice announcements must speak this salon's own local date/time (Part 7/28 of the mobile
+  // launch mission), never the listening device's timezone. Fetched once per salon rather than
+  // per announcement — a booking event needs this instantly, not after a network round-trip.
+  const salonTimeZoneRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    salonTimeZoneRef.current = null;
+    if (!selectedSalonId) return;
+    apiFetch<SalonTimezoneResultDto>(
+      `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${selectedSalonId}/${DASHBOARD_PATHS.timezone}`,
+    )
+      .then((result) => {
+        salonTimeZoneRef.current = result.timezone ?? null;
+      })
+      .catch(() => {
+        /* voice announcement degrades to no date/time below rather than blocking on this */
+      });
+  }, [selectedSalonId]);
 
   const loadPage = useCallback(
     (targetFilter: OwnerBookingFilter, cursor: string | undefined, append: boolean) => {
@@ -167,10 +183,23 @@ export default function OwnerBookingsScreen({ route }: Props) {
       apiFetch<OwnerBookingDetailDto>(`${bookingsPath(selectedSalonId)}/${payload.bookingId}`)
         .then((detail) => {
           setNewNotice(detail);
+          // Real assigned barber wins over the customer's soft preference (Part 6 of the mobile
+          // launch mission); at booking.created neither can be a stale/wrong value yet — assignment
+          // only ever happens later, at queue check-in. Never invented when both are null (the
+          // customer picked "Any staff" and no one is assigned yet) — the announcement itself says
+          // so instead ("Barber not assigned yet."), see packages/shared/src/i18n.
+          const barberName = detail.assignedStaffName ?? detail.preferredStaffName ?? null;
+          const timeZone = salonTimeZoneRef.current;
+          const { date, time } = detail.slotStart && timeZone
+            ? formatVoiceDateTime(detail.slotStart, timeZone)
+            : { date: null, time: null };
           Speech.speak(
             voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
               detail.serviceName ?? null,
-              detail.slotStart ? formatTime(detail.slotStart) : null,
+              barberName,
+              detail.salonName ?? null,
+              date,
+              time,
             ),
             { language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN] },
           );

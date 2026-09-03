@@ -46,6 +46,16 @@ export default function RootNavigator() {
         options={{
             ...tabOptions('Account', 'account'),
           tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
+          // Regression fix: the notification bell navigates into this tab's nested stack via
+          // navigate('AccountTab', { screen: 'Notifications' }), which leaves that nested stack's
+          // state pointed at Notifications. Bottom-tabs' default tab-press behavior only resets a
+          // tab's stack to its first screen when that tab is ALREADY focused (re-tapping the
+          // active tab) — it does NOT reset when switching TO this tab from a different one, so
+          // without this the Account tab would silently reopen on Notifications instead of Account
+          // every time. popToTopOnBlur resets the nested stack the moment this tab loses focus
+          // (i.e. the instant the owner/customer taps away to another tab), so the next visit to
+          // Account always lands on its root screen.
+          popToTopOnBlur: true,
         }}
       />
     </Tab.Navigator>

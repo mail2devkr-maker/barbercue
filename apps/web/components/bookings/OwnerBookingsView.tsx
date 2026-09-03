@@ -5,10 +5,12 @@ import {
   DASHBOARD_PATHS,
   OWNER_BOOKING_FILTERS,
   SPEECH_LOCALE,
+  formatVoiceDateTime,
   voiceAnnouncementsFor,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
+  type SalonTimezoneResultDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
@@ -58,9 +60,6 @@ function formatSlot(iso: string): string {
   });
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-}
 
 function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
   const [open, setOpen] = useState(false);
@@ -189,6 +188,21 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
   useEffect(() => {
     preferredLanguageRef.current = user?.preferredLanguage;
   }, [user?.preferredLanguage]);
+  // Voice announcements must speak this salon's own local date/time, never the browser's —
+  // fetched once per salon rather than per announcement (matches apps/mobile's OwnerBookingsScreen).
+  const salonTimeZoneRef = useRef<string | null>(null);
+  useEffect(() => {
+    salonTimeZoneRef.current = null;
+    apiFetch<SalonTimezoneResultDto>(
+      `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.timezone}`,
+    )
+      .then((result) => {
+        salonTimeZoneRef.current = result.timezone ?? null;
+      })
+      .catch(() => {
+        /* voice announcement degrades to no date/time below rather than blocking on this */
+      });
+  }, [salonId]);
 
   const playChime = useCallback(() => {
     const context = audioContextRef.current;
@@ -294,10 +308,22 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
           setNewNotice(detail);
           if (alertsEnabledRef.current) {
             playChime();
+            // Real assigned barber wins over the customer's soft preference; at booking.created
+            // neither can be stale yet (assignment only happens later, at queue check-in). Never
+            // invented when both are null — the announcement itself says so instead.
+            const barberName = detail.assignedStaffName ?? detail.preferredStaffName ?? null;
+            const timeZone = salonTimeZoneRef.current;
+            const { date, time } =
+              detail.slotStart && timeZone
+                ? formatVoiceDateTime(detail.slotStart, timeZone)
+                : { date: null, time: null };
             speak(
               voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
                 detail.serviceName ?? null,
-                detail.slotStart ? formatTime(detail.slotStart) : null,
+                barberName,
+                detail.salonName ?? null,
+                date,
+                time,
               ),
             );
           }
