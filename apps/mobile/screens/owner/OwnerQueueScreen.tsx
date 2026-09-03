@@ -1,9 +1,12 @@
+import { useRef, useState } from 'react';
 import { useSalon } from '../../lib/salon-context';
 import { Screen, SectionHeader, EmptyState } from '../../components/ui';
-import { LiveQueuePanel } from '../../components/dashboard/LiveQueuePanel';
+import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
 
 export default function OwnerQueueScreen() {
   const { selectedSalonId, selectedSalon } = useSalon();
+  const panelRef = useRef<LiveQueuePanelHandle>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   if (!selectedSalonId) {
     return (
@@ -13,10 +16,16 @@ export default function OwnerQueueScreen() {
     );
   }
 
+  async function handleRefresh() {
+    setRefreshing(true);
+    await panelRef.current?.refresh();
+    setRefreshing(false);
+  }
+
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <SectionHeader eyebrow="Live queue" title={selectedSalon?.name ?? 'Queue'} />
-      <LiveQueuePanel salonId={selectedSalonId} />
+      <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} />
     </Screen>
   );
 }

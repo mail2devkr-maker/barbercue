@@ -20,15 +20,20 @@ export default function DashboardAccountScreen() {
   const { user, logout } = useAuth();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback((isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
     setError(null);
     return apiFetch<AuthSession[]>(`auth/${AUTH_PATHS.sessions}`)
       .then(setSessions)
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load your sessions.'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
   }, []);
 
   useFocusEffect(
@@ -50,7 +55,7 @@ export default function DashboardAccountScreen() {
   }
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
       <SectionHeader eyebrow="Account" title="Your account" />
 
       <Card style={styles.card}>

@@ -82,6 +82,7 @@ export default function OwnerDashboardScreen() {
   const [readiness, setReadiness] = useState<SalonSetupReadinessDto | null>(null);
   const [summary, setSummary] = useState<BookingSummary | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const summaryRequestIdRef = useRef(0);
 
   const loadSummary = useCallback(async () => {
@@ -141,6 +142,16 @@ export default function OwnerDashboardScreen() {
       void loadSummary();
     }, [loadSummary]),
   );
+
+  // Issue 4 (mobile stabilization mission) — reload() (useSalon) refetches workplaces/status,
+  // loadSummary() refetches today's counts; the spinner tracks loadSummary since it's the slower,
+  // more failure-prone of the two (reload() is effectively instant local-state from a cached list).
+  async function handleRefresh() {
+    setRefreshing(true);
+    reload();
+    await loadSummary();
+    setRefreshing(false);
+  }
 
   useEffect(() => {
     if (!selectedSalonId) return undefined;
@@ -206,7 +217,7 @@ export default function OwnerDashboardScreen() {
   }
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <SectionHeader eyebrow="Owner" title="Dashboard" />
 
       {workplaces.length > 1 && (

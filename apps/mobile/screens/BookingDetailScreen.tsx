@@ -69,6 +69,7 @@ export default function BookingDetailScreen({ route }: Props) {
   // after the resulting QueueEntry reaches a terminal state.
   const [queueEntry, setQueueEntry] = useState<QueueEntryDetailDto | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   function loadBooking() {
     let cancelled = false;
@@ -93,6 +94,21 @@ export default function BookingDetailScreen({ route }: Props) {
     return loadBooking();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
+
+  // Issue 4 (mobile stabilization mission) — a silent refetch (no full-screen skeleton) for pull-
+  // to-refresh, reusing the same GET as loadBooking() rather than a second fetch implementation.
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const result = await apiFetch<BookingDetailDto>(`${BOOKING_PATHS.bookings}/${bookingId}`);
+      setBooking(result);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not load this booking.');
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleShare() {
     if (!booking) return;
@@ -175,7 +191,7 @@ export default function BookingDetailScreen({ route }: Props) {
   if (!booking) return null;
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <SectionHeader eyebrow="Booking" title={booking.serviceName} subtitle={booking.salonName} />
 
       <Card style={styles.card}>

@@ -49,6 +49,7 @@ export default function AccountScreen() {
   const [savingLanguage, setSavingLanguage] = useState(false);
 
   const [premium, setPremium] = useState<PremiumEntitlementDto | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function changeLanguage(language: Language) {
     if (language === user?.preferredLanguage || savingLanguage) return;
@@ -78,14 +79,24 @@ export default function AccountScreen() {
     }
   }, []);
 
+  const loadPremium = useCallback(() => {
+    return apiFetch<PremiumEntitlementDto>(`${PREMIUM_PATHS.premium}/${PREMIUM_PATHS.me}`)
+      .then(setPremium)
+      .catch(() => setPremium(null));
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       void loadSessions();
-      apiFetch<PremiumEntitlementDto>(`${PREMIUM_PATHS.premium}/${PREMIUM_PATHS.me}`)
-        .then(setPremium)
-        .catch(() => setPremium(null));
-    }, [loadSessions]),
+      void loadPremium();
+    }, [loadSessions, loadPremium]),
   );
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await Promise.all([loadSessions(), loadPremium(), refreshMe().catch(() => undefined)]);
+    setRefreshing(false);
+  }
 
   async function revokeSession(id: string) {
     setRevokingId(id);
@@ -118,7 +129,7 @@ export default function AccountScreen() {
   const otherSessionCount = sessions.filter((s) => !s.current).length;
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <SectionHeader eyebrow="Account" title="Your account" subtitle="Contact details, security, and shortcuts." />
 
       <Card style={styles.card}>

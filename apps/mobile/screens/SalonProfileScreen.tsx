@@ -105,6 +105,12 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={color.accent} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* Issue 8 (mobile stabilization mission) — SalonProfileDto.coverPhotoUrl (inherited from
+            SalonListItemDto, already used correctly by SalonSearchScreen's cards) was never read
+            or rendered anywhere in this screen, unlike apps/web's own profile page hero. SafeImage
+            degrades to the same neutral placeholder as everywhere else when there's no cover. */}
+        <SafeImage url={salon.coverPhotoUrl} alt={`${salon.name} cover photo`} style={styles.coverPhoto} />
+
         {salon.photos.length > 0 && (
           <>
             <ScrollView
@@ -249,6 +255,7 @@ const styles = StyleSheet.create({
   screenContent: { paddingHorizontal: space[5], paddingTop: space[5] },
   scrollContent: { paddingBottom: space[8] },
   heroSkeleton: { height: 180, borderRadius: radius.lg, marginBottom: space[4] },
+  coverPhoto: { width: '100%', height: 180, borderRadius: radius.lg, marginBottom: space[4] },
   lineSkeleton: { height: 18, borderRadius: 6, marginBottom: space[2] },
 
   photoStrip: { marginBottom: space[2] },

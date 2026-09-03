@@ -228,11 +228,13 @@ export default function OwnerShopScreen() {
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
   const [hours, setHours] = useState<OperatingHoursDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback((isRefresh = false) => {
     if (!selectedSalonId) return Promise.resolve();
-    setLoading(true);
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     return Promise.all([
       apiFetch<ServiceDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.services)),
@@ -247,7 +249,10 @@ export default function OwnerShopScreen() {
         setHours(h);
       })
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load your shop.'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
   }, [selectedSalonId]);
 
   useFocusEffect(
@@ -280,7 +285,7 @@ export default function OwnerShopScreen() {
   }
 
   return (
-    <Screen contentStyle={styles.screenContent}>
+    <Screen contentStyle={styles.screenContent} refreshing={refreshing} onRefresh={() => void load(true)}>
       <SectionHeader eyebrow="Owner" title={selectedSalon?.name ?? 'Shop'} subtitle="Services, chairs, staff, and hours" />
 
       <Text style={styles.sectionTitle}>Services</Text>

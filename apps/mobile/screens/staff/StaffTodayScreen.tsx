@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { DASHBOARD_PATHS, type StaffStatusDto } from '@barbercue/shared';
@@ -6,7 +6,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
-import { LiveQueuePanel } from '../../components/dashboard/LiveQueuePanel';
+import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
 
 function meePath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.staff}/${DASHBOARD_PATHS.me}`;
@@ -90,6 +90,14 @@ function SelfStatusCard({ salonId }: { salonId: string }) {
 // stay owner-only by simply not existing in StaffNavigator's tab set.
 export default function StaffTodayScreen() {
   const { workplaces, loading, error, selectedSalonId, selectedSalon, selectSalon } = useSalon();
+  const panelRef = useRef<LiveQueuePanelHandle>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await panelRef.current?.refresh();
+    setRefreshing(false);
+  }
 
   if (loading) {
     return (
@@ -114,7 +122,7 @@ export default function StaffTodayScreen() {
   }
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <SectionHeader eyebrow="Today" title={selectedSalon?.name ?? "Today's queue"} />
 
       {workplaces.length > 1 && (
@@ -132,7 +140,7 @@ export default function StaffTodayScreen() {
       )}
 
       {selectedSalonId && <SelfStatusCard salonId={selectedSalonId} />}
-      {selectedSalonId && <LiveQueuePanel salonId={selectedSalonId} />}
+      {selectedSalonId && <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} />}
     </Screen>
   );
 }

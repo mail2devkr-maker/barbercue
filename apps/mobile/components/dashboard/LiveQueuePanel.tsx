@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { DASHBOARD_PATHS, type ChairOptionDto, type DashboardQueueDto, type QueueEntryDetailDto, type StaffStatusDto } from '@barbercue/shared';
@@ -145,6 +145,13 @@ function EntryRow({
   );
 }
 
+export interface LiveQueuePanelHandle {
+  /** Issue 4 (mobile stabilization mission) — lets an ancestor's pull-to-refresh (a plain
+   * <Screen refreshing/onRefresh>, which this panel does not render itself) trigger the same
+   * refetch as focus/realtime already do, without duplicating this panel's own load logic. */
+  refresh: () => Promise<void>;
+}
+
 /**
  * The live-queue list + operational actions (call/assign/no-show/complete), shared by Owner's
  * Queue tab and Staff's Today tab — the backend permits both roles identically
@@ -153,7 +160,10 @@ function EntryRow({
  * tabs exist around this one (Owner also gets Dashboard/Shop; Staff does not) — enforced by each
  * navigator's own tab set, not by anything in this component.
  */
-export function LiveQueuePanel({ salonId }: { salonId: string }) {
+export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string }>(function LiveQueuePanel(
+  { salonId },
+  ref,
+) {
   const [data, setData] = useState<DashboardQueueDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +176,8 @@ export function LiveQueuePanel({ salonId }: { salonId: string }) {
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load the queue.'))
       .finally(() => setLoading(false));
   }, [salonId]);
+
+  useImperativeHandle(ref, () => ({ refresh: load }), [load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -215,7 +227,7 @@ export function LiveQueuePanel({ salonId }: { salonId: string }) {
       ))}
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },

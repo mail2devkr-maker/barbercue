@@ -72,20 +72,58 @@ async function registerExpoPushToken(user: MeResponse, expoPushToken: string): P
  * Best-effort registration only. A denied permission, unsupported runtime, offline call or missing
  * EAS project identity never interferes with the authenticated product flow; the coordinator
  * retries on the next eligible app start and on Expo token refresh.
+ *
+ * Issue 6 (mobile stabilization mission) — a real device reported voice announcements working but
+ * Android OS push never arriving, and production had zero PushDevice rows despite an actively-used
+ * owner app, meaning this function's own try/catch was silently swallowing the real failure at some
+ * step. Each step now logs a distinct, token-free reason on failure — this is diagnostic-only (a
+ * console.warn, visible via `adb logcat` / Metro), never changes control flow or return values, so
+ * it cannot itself regress the best-effort behavior above.
  */
 export async function registerPushDeviceForUser(user: MeResponse | null): Promise<boolean> {
   if (!isPushEligibleUser(user) || !isNativePlatform()) return false;
 
   try {
     await ensureBookingNotificationChannel();
-    if (!(await getGrantedPermission())) return false;
-    const projectId = getEasProjectId();
-    if (!projectId) return false;
+  } catch (err) {
+    console.warn('[push] could not create the Android notification channel', err);
+    // Non-fatal: getExpoPushTokenAsync can still succeed without a channel pre-created.
+  }
+
+  const granted = await getGrantedPermission().catch((err: unknown) => {
+    console.warn('[push] permission check/request threw', err);
+    return false;
+  });
+  if (!granted) {
+    console.warn('[push] registration skipped: notification permission not granted');
+    return false;
+  }
+
+  const projectId = getEasProjectId();
+  if (!projectId) {
+    console.warn('[push] registration skipped: no EAS projectId resolved from app config at runtime');
+    return false;
+  }
+
+  let expoPushToken: string;
+  try {
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    await registerExpoPushToken(user, token.data);
+    expoPushToken = token.data;
+  } catch (err) {
+    // The single most common real-device cause: Notifications.getExpoPushTokenAsync throws when
+    // the EAS project has no configured Android push (FCM) credential, or when Google Play
+    // Services is unavailable/out of date on the device.
+    console.warn('[push] getExpoPushTokenAsync threw — check EAS Android push (FCM) credentials and Google Play Services', err);
+    return false;
+  }
+
+  try {
+    await registerExpoPushToken(user, expoPushToken);
     return true;
-  } catch {
-    // Do not log a raw Expo token or make notification setup block sign-in.
+  } catch (err) {
+    // Never log the raw token — registerExpoPushToken's own request body already carries it;
+    // logging the error object here is safe as long as callers don't stringify request bodies.
+    console.warn('[push] backend registration call failed', err);
     return false;
   }
 }
