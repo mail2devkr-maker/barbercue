@@ -267,6 +267,7 @@ model User {
   // practice, and keeping them distinct makes that impossible to blur by accident).
   submittedVerifications VerificationRequest[] @relation("VerificationSubmitter")
   reviewedVerifications  VerificationRequest[] @relation("VerificationReviewer")
+  pushDevices            PushDevice[]
 
   @@map("users")
 }
@@ -1169,4 +1170,23 @@ model AiCreditTransaction {
 
   @@index([subscriptionId, createdAt])
   @@map("ai_credit_transactions")
+}
+
+// Issue #13 Mission L (cross-agent handoff with Codex, Issue #10 comment 5522610801): the minimal
+// device-registration half of a real OS push pipeline. One row per installed app instance
+// (identified by its Expo push token, not by device hardware id — a reinstall gets a new token
+// and a new row). expoPushToken is unique and reassignable: if a different user later logs into
+// the same physical device/app-install, PushDeviceService.register() reassigns the SAME token row
+// to the new userId rather than leaving a stale registration pointing at the previous account.
+model PushDevice {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  expoPushToken String   @unique
+  platform      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_devices")
 }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { BookingInfoController } from './booking-info.controller';
 import { BookingsController } from './bookings.controller';
 import { AvailabilityService } from './availability.service';
@@ -10,7 +11,7 @@ import { BookingExpiryService } from './booking-expiry.service';
 import { BookingNoShowService } from './booking-no-show.service';
 
 @Module({
-  imports: [RealtimeModule, NotificationsModule],
+  imports: [RealtimeModule, NotificationsModule, PushNotificationsModule],
   controllers: [BookingInfoController, BookingsController],
   providers: [
     AvailabilityService,

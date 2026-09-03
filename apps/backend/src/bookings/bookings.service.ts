@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 
@@ -66,6 +67,7 @@ export class BookingsService {
     private readonly cancellationPolicy: CancellationPolicyService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
+    private readonly pushDispatch: PushDispatchService,
   ) {}
 
   async create(
@@ -236,7 +238,11 @@ export class BookingsService {
     await this.notifications.notify(
       customerId,
       'booking.confirmed',
-      { salonId: input.salonId, salonName: salon.name, serviceName: service.name },
+      {
+        salonId: input.salonId,
+        salonName: salon.name,
+        serviceName: service.name,
+      },
       // No per-booking detail route exists on web yet (the list at account/bookings is the whole
       // surface) — the deep link must point at a route that actually exists, not an imagined one.
       'account/bookings',
@@ -247,6 +253,17 @@ export class BookingsService {
       { salonId: input.salonId, bookingId, serviceName: service.name },
       `dashboard/salons/${input.salonId}/bookings`,
     );
+    // Real OS push, distinct from the in-app Notification row above and the websocket emit —
+    // reaches the owner's device even backgrounded/terminated, IF they've registered one (Issue
+    // #13 Mission L). Fire-and-forget: PushDispatchService never throws, so this can never turn a
+    // successful booking into a failed request, and this call site only runs once per genuine
+    // creation (the controller's @Idempotent() replays a retried request's cached response
+    // without re-invoking this method at all).
+    void this.pushDispatch.dispatchToUser(salon.ownerUserId, {
+      title: 'New booking',
+      body: `${service.name} booked for your shop.`,
+      data: { type: 'booking.created', salonId: input.salonId, bookingId },
+    });
 
     return this.getDetailOrThrow(bookingId, customerId);
   }

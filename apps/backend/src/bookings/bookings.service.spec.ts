@@ -6,6 +6,7 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 
 function decimal(value: string) {
   return { toString: () => value } as unknown as number;
@@ -70,7 +71,10 @@ interface AvailabilityMock {
   getServiceOrThrow: jest.Mock<Promise<unknown>, [string, string]>;
   assertWithinOperatingHours: jest.Mock<Promise<void>, [string, Date, Date]>;
   assertStaffQualified: jest.Mock<Promise<void>, [string, string, string]>;
-  assertStaffWithinWorkingHours: jest.Mock<Promise<void>, [string, string, Date, Date]>;
+  assertStaffWithinWorkingHours: jest.Mock<
+    Promise<void>,
+    [string, string, Date, Date]
+  >;
   getSlotCapacity: jest.Mock<Promise<number>, [unknown, string, string]>;
 }
 
@@ -86,7 +90,12 @@ describe('BookingsService', () => {
     emitBookingCancelled: jest.Mock<void, [string, string]>;
     emitBookingRescheduled: jest.Mock<void, [string, string]>;
   };
-  let notifications: { notify: jest.Mock<Promise<void>, [string, string, unknown?, string?]> };
+  let notifications: {
+    notify: jest.Mock<Promise<void>, [string, string, unknown?, string?]>;
+  };
+  let pushDispatch: {
+    dispatchToUser: jest.Mock<Promise<void>, [string, unknown]>;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -116,14 +125,12 @@ describe('BookingsService', () => {
     );
 
     availability = {
-      getSalonOrThrow: jest
-        .fn<Promise<unknown>, [string]>()
-        .mockResolvedValue({
-          id: 's1',
-          status: 'ACTIVE',
-          name: 'BarberCue Demo Salon',
-          ownerUserId: 'owner1',
-        }),
+      getSalonOrThrow: jest.fn<Promise<unknown>, [string]>().mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        name: 'BarberCue Demo Salon',
+        ownerUserId: 'owner1',
+      }),
       getServiceOrThrow: jest
         .fn<Promise<unknown>, [string, string]>()
         .mockResolvedValue({
@@ -154,6 +161,7 @@ describe('BookingsService', () => {
       emitBookingRescheduled: jest.fn(),
     };
     notifications = { notify: jest.fn().mockResolvedValue(undefined) };
+    pushDispatch = { dispatchToUser: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -163,6 +171,7 @@ describe('BookingsService', () => {
         { provide: CancellationPolicyService, useValue: cancellationPolicy },
         { provide: RealtimeGateway, useValue: realtime },
         { provide: NotificationsService, useValue: notifications },
+        { provide: PushDispatchService, useValue: pushDispatch },
       ],
     }).compile();
     service = moduleRef.get(BookingsService);
@@ -230,7 +239,7 @@ describe('BookingsService', () => {
       expect(prisma.booking.create).not.toHaveBeenCalled();
     });
 
-    it('also checks the preferred barber\'s working hours (Phase 7), not just qualification', async () => {
+    it("also checks the preferred barber's working hours (Phase 7), not just qualification", async () => {
       await service.create(
         'c1',
         {
@@ -309,7 +318,12 @@ describe('BookingsService', () => {
       await expect(
         service.create(
           'c1',
-          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh' },
+          {
+            salonId: 's1',
+            serviceId: 'sv1',
+            slotStart: futureSlot,
+            preferredStaffId: 'dinesh',
+          },
           BookingSource.WEB,
           'key-1',
         ),
@@ -327,7 +341,12 @@ describe('BookingsService', () => {
       });
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'ramesh' },
+        {
+          salonId: 's1',
+          serviceId: 'sv1',
+          slotStart: futureSlot,
+          preferredStaffId: 'ramesh',
+        },
         BookingSource.WEB,
         'key-1',
       );
@@ -353,7 +372,12 @@ describe('BookingsService', () => {
       prisma.booking.count.mockResolvedValue(0);
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot, preferredStaffId: 'dinesh' },
+        {
+          salonId: 's1',
+          serviceId: 'sv1',
+          slotStart: futureSlot,
+          preferredStaffId: 'dinesh',
+        },
         BookingSource.WEB,
         'key-1',
       );
@@ -386,6 +410,29 @@ describe('BookingsService', () => {
       );
       expect(realtime.emitBookingCreated).toHaveBeenCalledTimes(1);
       expect(realtime.emitBookingCreated).toHaveBeenCalledWith('s1', 'b1');
+    });
+
+    it('dispatches a push to the salon owner exactly once after a successful create, with an ids-only payload (no customer PII)', async () => {
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(pushDispatch.dispatchToUser).toHaveBeenCalledTimes(1);
+      const [userId, payload] = pushDispatch.dispatchToUser.mock.calls[0] as [
+        string,
+        { title: string; body: string; data?: Record<string, unknown> },
+      ];
+      expect(userId).toBe('owner1');
+      expect(payload.title).toBeTruthy();
+      expect(payload.body).toContain('booked for your shop');
+      expect(JSON.stringify(payload)).not.toMatch(/c1|customer|phone|email/i);
+      expect(payload.data).toEqual({
+        type: 'booking.created',
+        salonId: 's1',
+        bookingId: 'b1',
+      });
     });
 
     it('creates a PENDING_PAYMENT booking with a snapshotted amount when the policy requires PARTIAL prepayment', async () => {
@@ -549,7 +596,10 @@ describe('BookingsService', () => {
 
     it('throws BOOKING_NOT_RESCHEDULABLE when the current slot has already passed', async () => {
       prisma.booking.findFirst.mockResolvedValue(
-        makeBookingRow({ slotStart: new Date(Date.now() - 60_000), status: 'CONFIRMED' }),
+        makeBookingRow({
+          slotStart: new Date(Date.now() - 60_000),
+          status: 'CONFIRMED',
+        }),
       );
       await expect(
         service.reschedule('c1', 'b1', { slotStart: newFutureSlot }),
@@ -573,10 +623,12 @@ describe('BookingsService', () => {
       expect(realtime.emitBookingRescheduled).not.toHaveBeenCalled();
     });
 
-    it('excludes the booking\'s own current slot from the overlap count', async () => {
+    it("excludes the booking's own current slot from the overlap count", async () => {
       await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
       const [call] = prisma.booking.count.mock.calls;
-      expect((call[0] as { where: { id: { not: string } } }).where.id).toEqual({ not: 'b1' });
+      expect((call[0] as { where: { id: { not: string } } }).where.id).toEqual({
+        not: 'b1',
+      });
     });
 
     it('moves the same booking row and writes a BOOKING_RESCHEDULED audit entry', async () => {
@@ -584,17 +636,27 @@ describe('BookingsService', () => {
       expect(prisma.booking.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'b1' },
-          data: { slotStart: new Date(newFutureSlot), slotEnd: expect.any(Date) },
+          data: {
+            slotStart: new Date(newFutureSlot),
+            slotEnd: expect.any(Date),
+          },
         }),
       );
       const auditData = lastCreateData(prisma.auditLog.create);
-      expect(auditData).toMatchObject({ action: 'BOOKING_RESCHEDULED', entityId: 'b1' });
+      expect(auditData).toMatchObject({
+        action: 'BOOKING_RESCHEDULED',
+        entityId: 'b1',
+      });
       expect(realtime.emitBookingRescheduled).toHaveBeenCalledWith('s1', 'b1');
     });
 
-    it('re-checks the existing preferred barber\'s working hours against the new slot (Phase 7)', async () => {
+    it("re-checks the existing preferred barber's working hours against the new slot (Phase 7)", async () => {
       prisma.booking.findFirst.mockResolvedValue(
-        makeBookingRow({ slotStart: futureSlot, status: 'CONFIRMED', preferredStaffId: 'st1' }),
+        makeBookingRow({
+          slotStart: futureSlot,
+          status: 'CONFIRMED',
+          preferredStaffId: 'st1',
+        }),
       );
       await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
       expect(availability.assertStaffWithinWorkingHours).toHaveBeenCalledWith(
@@ -612,7 +674,11 @@ describe('BookingsService', () => {
 
     it('rejects with STAFF_SLOT_UNAVAILABLE when rescheduling into a slot the same preferred barber already has taken elsewhere', async () => {
       prisma.booking.findFirst.mockResolvedValue(
-        makeBookingRow({ slotStart: futureSlot, status: 'CONFIRMED', preferredStaffId: 'dinesh' }),
+        makeBookingRow({
+          slotStart: futureSlot,
+          status: 'CONFIRMED',
+          preferredStaffId: 'dinesh',
+        }),
       );
       prisma.booking.count.mockImplementation((args: unknown) => {
         const where = (args as { where: { preferredStaffId?: string } }).where;

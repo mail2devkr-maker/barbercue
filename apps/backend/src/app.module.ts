@@ -25,6 +25,7 @@ import { DashboardCustomersModule } from './dashboard-customers/dashboard-custom
 import { DashboardAnalyticsModule } from './dashboard-analytics/dashboard-analytics.module';
 import { DashboardOverviewModule } from './dashboard-overview/dashboard-overview.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { DashboardReviewsModule } from './dashboard-reviews/dashboard-reviews.module';
@@ -63,6 +64,7 @@ import { VerificationModule } from './verification/verification.module';
     DashboardAnalyticsModule,
     DashboardOverviewModule,
     NotificationsModule,
+    PushNotificationsModule,
     RemindersModule,
     ReviewsModule,
     DashboardReviewsModule,
