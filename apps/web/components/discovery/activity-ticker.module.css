@@ -5,11 +5,20 @@
    that layout, whereas a plain DOM sibling would only land "below image, above name" once the
    grid collapses to one column on mobile. */
 
+/* height/min-height/!important overrides below: the salon profile page's own .cover > div rule
+   (profile.module.css) targets EVERY plain <div> child of .cover — including this one, since
+   ActivityTicker renders as a sibling <div> next to the cover photo — forcing height:100% (and
+   !important on aspect-ratio/border) onto it too. That rule's cross-file selector is more specific
+   than a single .ticker class, so matching its own !important use here is what actually wins,
+   not a style preference. */
 .ticker {
   position: absolute;
+  top: auto;
   left: 0;
   right: 0;
   bottom: 0;
+  height: auto !important;
+  min-height: 0 !important;
   overflow: hidden;
   background: linear-gradient(0deg, rgba(20, 16, 12, 0.72), rgba(20, 16, 12, 0));
   padding: 22px 14px 10px;
