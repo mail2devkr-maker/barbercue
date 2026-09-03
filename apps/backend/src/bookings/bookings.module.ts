@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
+import { QueueModule } from '../queue/queue.module';
 import { BookingInfoController } from './booking-info.controller';
 import { BookingsController } from './bookings.controller';
 import { AvailabilityService } from './availability.service';
@@ -11,7 +12,15 @@ import { BookingExpiryService } from './booking-expiry.service';
 import { BookingNoShowService } from './booking-no-show.service';
 
 @Module({
-  imports: [RealtimeModule, NotificationsModule, PushNotificationsModule],
+  // forwardRef: QueueModule already imports BookingsModule (for AvailabilityService/
+  // CancellationPolicyService); this is the other direction of that same genuine circular
+  // relationship — see the matching comment in queue.module.ts.
+  imports: [
+    RealtimeModule,
+    NotificationsModule,
+    PushNotificationsModule,
+    forwardRef(() => QueueModule),
+  ],
   controllers: [BookingInfoController, BookingsController],
   providers: [
     AvailabilityService,

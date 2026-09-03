@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
+import { QueueService } from '../queue/queue.service';
 
 function decimal(value: string) {
   return { toString: () => value } as unknown as number;
@@ -61,6 +62,7 @@ interface PrismaMock {
     create: jest.Mock<Promise<unknown>, [unknown]>;
     update: jest.Mock<Promise<unknown>, [unknown]>;
   };
+  queueEntry: { updateMany: jest.Mock<Promise<{ count: number }>, [unknown]> };
   auditLog: { create: jest.Mock<Promise<unknown>, [unknown]> };
   $executeRaw: jest.Mock<Promise<unknown>, [unknown]>;
   $transaction: jest.Mock;
@@ -89,12 +91,16 @@ describe('BookingsService', () => {
     emitBookingCreated: jest.Mock<void, [string, string]>;
     emitBookingCancelled: jest.Mock<void, [string, string]>;
     emitBookingRescheduled: jest.Mock<void, [string, string]>;
+    emitQueueUpdated: jest.Mock<void, [string]>;
   };
   let notifications: {
     notify: jest.Mock<Promise<void>, [string, string, unknown?, string?]>;
   };
   let pushDispatch: {
     dispatchToUser: jest.Mock<Promise<void>, [string, unknown]>;
+  };
+  let queueService: {
+    recomputeEtas: jest.Mock<Promise<void>, [string]>;
   };
 
   beforeEach(async () => {
@@ -112,6 +118,9 @@ describe('BookingsService', () => {
         count: jest.fn<Promise<number>, [unknown]>(),
         create: jest.fn<Promise<unknown>, [unknown]>(),
         update: jest.fn<Promise<unknown>, [unknown]>(),
+      },
+      queueEntry: {
+        updateMany: jest.fn<Promise<{ count: number }>, [unknown]>().mockResolvedValue({ count: 0 }),
       },
       auditLog: { create: jest.fn<Promise<unknown>, [unknown]>() },
       $executeRaw: jest.fn<Promise<unknown>, [unknown]>(),
@@ -160,9 +169,11 @@ describe('BookingsService', () => {
       emitBookingCreated: jest.fn(),
       emitBookingCancelled: jest.fn(),
       emitBookingRescheduled: jest.fn(),
+      emitQueueUpdated: jest.fn(),
     };
     notifications = { notify: jest.fn().mockResolvedValue(undefined) };
     pushDispatch = { dispatchToUser: jest.fn().mockResolvedValue(undefined) };
+    queueService = { recomputeEtas: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -173,6 +184,7 @@ describe('BookingsService', () => {
         { provide: RealtimeGateway, useValue: realtime },
         { provide: NotificationsService, useValue: notifications },
         { provide: PushDispatchService, useValue: pushDispatch },
+        { provide: QueueService, useValue: queueService },
       ],
     }).compile();
     service = moduleRef.get(BookingsService);
@@ -580,6 +592,75 @@ describe('BookingsService', () => {
         amount: 150,
         reason: 'CANCELLATION_CHARGE',
         status: 'OUTSTANDING',
+      });
+    });
+
+    // Issue 3 (mobile stabilization mission) — a checked-in booking has a linked QueueEntry that
+    // must not outlive the booking's own cancellation.
+    describe('linked queue entry cleanup', () => {
+      beforeEach(() => {
+        const farSlot = new Date(Date.now() + 120 * 60_000);
+        prisma.booking.findFirst.mockResolvedValue(makeBookingRow({ slotStart: farSlot }));
+        prisma.booking.update.mockResolvedValue(makeBookingRow({ slotStart: farSlot, status: 'CANCELLED' }));
+        cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+          salonId: 's1',
+          freeCancellationWindowMinutes: 60,
+          lateCancellationChargeType: 'PERCENTAGE',
+          lateCancellationChargeValue: 50,
+          noShowChargeType: 'PERCENTAGE',
+          noShowChargeValue: 100,
+          appointmentArrivalGraceMinutes: 10,
+          queueCallResponseGraceMinutes: 3,
+        });
+      });
+
+      it('1. cancels a linked WAITING queue entry and recomputes ETAs', async () => {
+        prisma.queueEntry.updateMany.mockResolvedValue({ count: 1 });
+        await service.cancel('c1', 'b1');
+        expect(prisma.queueEntry.updateMany).toHaveBeenCalledWith({
+          where: { bookingId: 'b1', status: { in: ['WAITING', 'CALLED'] } },
+          data: { status: 'CANCELLED' },
+        });
+        expect(queueService.recomputeEtas).toHaveBeenCalledWith('s1');
+        expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+      });
+
+      it('2. cancels a linked CALLED (not-yet-started) queue entry', async () => {
+        // The where clause itself is the eligibility check — a CALLED row matches the same
+        // `status: { in: ['WAITING', 'CALLED'] }` filter regardless of which of the two it is.
+        prisma.queueEntry.updateMany.mockResolvedValue({ count: 1 });
+        await service.cancel('c1', 'b1');
+        expect(queueService.recomputeEtas).toHaveBeenCalledWith('s1');
+      });
+
+      it('4. does not touch an IN_SERVICE linked queue entry: the where clause excludes it, so 0 rows match and no recompute fires', async () => {
+        // updateMany's own WHERE (status IN WAITING/CALLED) is what protects an IN_SERVICE row —
+        // simulated here by the claim finding nothing to update, exactly what Postgres would do.
+        prisma.queueEntry.updateMany.mockResolvedValue({ count: 0 });
+        await service.cancel('c1', 'b1');
+        expect(queueService.recomputeEtas).not.toHaveBeenCalled();
+        expect(realtime.emitQueueUpdated).not.toHaveBeenCalled();
+      });
+
+      it('5. an unrelated WALK_IN entry can never match: the query is scoped to this exact bookingId', async () => {
+        await service.cancel('c1', 'b1');
+        const call = prisma.queueEntry.updateMany.mock.calls[0][0] as { where: { bookingId: string } };
+        expect(call.where.bookingId).toBe('b1');
+      });
+
+      it('6. a retried cancel is idempotent: the second call finds nothing left to claim and skips the recompute', async () => {
+        prisma.queueEntry.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+        await service.cancel('c1', 'b1');
+        expect(queueService.recomputeEtas).toHaveBeenCalledTimes(1);
+        await service.cancel('c1', 'b1');
+        expect(queueService.recomputeEtas).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not recompute ETAs or emit queue.updated when the booking had no linked queue entry at all', async () => {
+        prisma.queueEntry.updateMany.mockResolvedValue({ count: 0 });
+        await service.cancel('c1', 'b1');
+        expect(queueService.recomputeEtas).not.toHaveBeenCalled();
+        expect(realtime.emitQueueUpdated).not.toHaveBeenCalled();
       });
     });
   });

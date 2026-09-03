@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { forwardRef, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   BookingErrorCode,
@@ -7,6 +7,7 @@ import {
   LedgerReason,
   LedgerStatus,
   PrepaymentRequirement,
+  QueueEntryStatus,
   computeCancellationCharge,
   formatMoney,
   isSlotBookable,
@@ -22,8 +23,20 @@ import { AppException } from '../common/exceptions/app.exception';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
+import { QueueService } from '../queue/queue.service';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
+
+// A booking-triggered cancellation may only auto-cancel a linked queue entry that has not yet
+// genuinely started service — WAITING (never called) or CALLED (called but not yet assigned a
+// chair/session). An IN_SERVICE entry is deliberately excluded: the customer is physically in the
+// chair, and STATE_MACHINES.md's queue engine — not a booking-side effect — owns that transition
+// (see queue.service.ts's own cancelByStaff, a distinct manual owner action that CAN end an
+// IN_SERVICE session, unlike this automatic one).
+const QUEUE_ENTRY_STATUSES_CANCELLABLE_FROM_BOOKING: QueueEntryStatus[] = [
+  QueueEntryStatus.WAITING,
+  QueueEntryStatus.CALLED,
+];
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -70,6 +83,8 @@ export class BookingsService {
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
     private readonly pushDispatch: PushDispatchService,
+    @Inject(forwardRef(() => QueueService))
+    private readonly queue: QueueService,
   ) {}
 
   async create(
@@ -363,7 +378,7 @@ export class BookingsService {
     // Only the reachable branch of STATE_MACHINES.md's cancellation flowchart is implemented: no
     // eligible Payment can exist in V1 data (the Payments module isn't built), so a charge always
     // becomes a CustomerLedgerEntry(OUTSTANDING), never a refund — see the plan's explicit scoping.
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const { booking: updated, linkedQueueEntryCancelled } = await this.prisma.$transaction(async (tx) => {
       const result = await tx.booking.update({
         where: { id: bookingId },
         data: {
@@ -373,6 +388,20 @@ export class BookingsService {
           cancellationChargeAmount: chargeAmount,
         },
         include: bookingDetailInclude,
+      });
+
+      // Issue 3 (mobile stabilization mission) — a booking checked in before it was cancelled has
+      // a linked QueueEntry (source=APPOINTMENT, see queue.service.ts checkIn()) that would
+      // otherwise stay WAITING/CALLED forever, inflating the live queue and its waiting count/ETA.
+      // Only a WAITING or CALLED entry is touched here — never IN_SERVICE (the customer is
+      // physically in the chair; that stays the queue engine's own concern), and the `bookingId`
+      // match means an unrelated WALK_IN entry (bookingId always null) can never be affected.
+      const queueClaim = await tx.queueEntry.updateMany({
+        where: {
+          bookingId,
+          status: { in: QUEUE_ENTRY_STATUSES_CANCELLABLE_FROM_BOOKING },
+        },
+        data: { status: QueueEntryStatus.CANCELLED },
       });
 
       if (chargeAmount > 0) {
@@ -404,10 +433,19 @@ export class BookingsService {
         },
       });
 
-      return result;
+      return { booking: result, linkedQueueEntryCancelled: queueClaim.count > 0 };
     }, TRANSACTION_OPTIONS);
 
     this.realtime.emitBookingCancelled(updated.salonId, bookingId);
+    if (linkedQueueEntryCancelled) {
+      // Reuses QueueService's own recompute rather than re-implementing the ETA/position formula
+      // here — every other queue-state-changing action in the app (join/call/assign/complete/
+      // no-show/cancel) already goes through this same call, so a booking-triggered cancellation
+      // now produces identical downstream effects (remaining WAITING entries' positions/ETAs
+      // shift, salon.updated realtime fires) instead of a second, drifting implementation.
+      await this.queue.recomputeEtas(updated.salonId);
+      this.realtime.emitQueueUpdated(updated.salonId);
+    }
     await this.notifications.notify(
       customerId,
       'booking.cancelled',
