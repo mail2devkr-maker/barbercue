@@ -214,6 +214,12 @@ export default function AccountScreen() {
         )}
       </Card>
 
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>About FastQue</Text>
+        <Text style={styles.aboutBrand}>FastQue v1.0.2</Text>
+        <Text style={styles.aboutCredit}>Created by Devdutta Kumar Pandey</Text>
+      </Card>
+
       <Button title="Log out of this device" variant="secondary" onPress={() => void logout()} style={styles.logoutButton} />
     </Screen>
   );
@@ -280,5 +286,7 @@ const styles = StyleSheet.create({
   noteText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted },
   revokeAllButton: { marginTop: space[3] },
 
+  aboutBrand: { fontFamily: font.displaySemiBold, fontSize: fontSize.md, color: color.ink },
+  aboutCredit: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: space[1] },
   logoutButton: { marginTop: space[2] },
 });
