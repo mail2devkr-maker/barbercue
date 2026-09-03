@@ -84,7 +84,7 @@ export function CustomerHeader() {
                 aria-expanded={accountMenuOpen}
                 aria-haspopup="true"
               >
-                <span className={styles.accountDot} aria-hidden="true">BC</span>
+                <span className={styles.accountDot} aria-hidden="true">FQ</span>
                 My account <span aria-hidden="true">⌄</span>
               </button>
               {accountMenuOpen && (

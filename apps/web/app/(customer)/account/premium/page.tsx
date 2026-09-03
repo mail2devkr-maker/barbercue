@@ -48,7 +48,7 @@ export default function PremiumPlansPage() {
     <div className={styles.page}>
       <header className={styles.hero}>
         <div>
-          <p className={styles.eyebrow}>BARBERCUE PREMIUM</p>
+          <p className={styles.eyebrow}>FASTQUE PREMIUM</p>
           <h1 className={styles.pageTitle}>Plan the look before the chair.</h1>
           <p className={styles.pageSubtitle}>
             Premium plans include AI Style Advisor credits. Preview generation remains subject to the current image-service availability.

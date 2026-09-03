@@ -210,7 +210,7 @@ export default function PhoneOtpLoginScreen() {
           <View style={styles.brandRow}>
             <View style={styles.badgeHalo}>
               <View style={styles.badge}>
-                <Text style={styles.badgeText}>BC</Text>
+                <Text style={styles.badgeText}>FQ</Text>
               </View>
             </View>
             <Text style={styles.wordmark}>FastQue</Text>

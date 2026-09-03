@@ -20,7 +20,7 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const PHOTO_TILE_WIDTH = 260;
 const PHOTO_TILE_HEIGHT = 174;
 
-// A per-person initial (not the generic "BC" mark components/ui/SafeImage falls back to) reads
+// A per-person initial (not the generic "FQ" mark components/ui/SafeImage falls back to) reads
 // better for a team member than a brand placeholder — kept as its own small component rather than
 // SafeImage so a broken photoUrl degrades to the same initial-letter placeholder shown when there
 // was never a photo at all, not a generic mark.

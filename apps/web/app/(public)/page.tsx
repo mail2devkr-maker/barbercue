@@ -53,9 +53,6 @@ export default async function HomePage() {
       `${DISCOVERY_PATHS.salons}?limit=3`,
       DISCOVERY_REVALIDATE_SECONDS,
     ).catch(() => null),
-    // Issue #13 Mission G — real backend-driven counts, not fake "live" numbers. Failing closed
-    // to null (never a fabricated fallback) if the request errors; the strip below simply doesn't
-    // render in that case.
     fetchDiscoveryOrNull<LiveStatsDto>(
       `${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.liveStats}`,
       DISCOVERY_REVALIDATE_SECONDS,
@@ -69,7 +66,7 @@ export default async function HomePage() {
       <header className={styles.landingHeader}>
         <div className={styles.headerInner}>
           <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-            <span className={styles.wordmarkMark} aria-hidden="true">BC</span>
+            <span className={styles.wordmarkMark} aria-hidden="true">FQ</span>
             <span>FastQue</span>
           </Link>
           <nav className={styles.headerNav} aria-label="Primary">
@@ -94,11 +91,6 @@ export default async function HomePage() {
               you leave.
             </p>
 
-            {/* Issue #13 Mission F: the two real actions BarberCue offers, front and center under
-                the headline — both route through shop discovery first (there's no "the" shop to
-                book/queue at yet), same as the choice cards further down the page, just promoted
-                to where a first-time visitor actually looks. "Find a barber" (the search form
-                below) stays as the supporting, open-ended discovery action. */}
             <div className={styles.heroCtaRow}>
               <Link href="/search" className={styles.primaryLink}>
                 Book an appointment <span aria-hidden="true">→</span>
@@ -127,9 +119,6 @@ export default async function HomePage() {
               <span>Book or join live</span>
               <span>Real-time queue position</span>
             </div>
-            {/* Issue #13 Mission G — real backend-driven counts (LiveStatsDto), never fabricated.
-                Hidden entirely rather than showing a misleading "0" when there's nothing real to
-                report — see LiveStatsDto's own doc comment. */}
             {liveStats && (liveStats.activeShopCount > 0 || liveStats.liveWaitingCount > 0) && (
               <p className={styles.liveStats} role="status">
                 {liveStats.activeShopCount > 0 && (

@@ -18,11 +18,6 @@ const STATUS_COPY: Record<string, string> = {
   REJECTED: "Not approved. Review the notes below, then resubmit with clearer evidence.",
 };
 
-/**
- * Owner-side per-barber Verification (Phase 18 foundation) — same shape as the shop-level page,
- * scoped to one SalonStaff row. Mirrors StaffHoursEditor/StaffProfileEditor's own toggle pattern
- * on the staff roster page.
- */
 export function StaffVerificationPanel({ salonId, staffId }: { salonId: string; staffId: string }) {
   const [current, setCurrent] = useState<VerificationRequestDto | null | undefined>(undefined);
   const [evidenceNotes, setEvidenceNotes] = useState("");

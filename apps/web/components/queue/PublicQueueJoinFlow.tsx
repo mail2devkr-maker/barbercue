@@ -41,17 +41,12 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
   const [entry, setEntry] = useState<QueueEntryDetailDto | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  // Phone-OTP sub-state — same fields/flow as the customer login page, just embedded here so a
-  // walk-in never has to leave this page.
   const [otpStep, setOtpStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [otpSubmitting, setOtpSubmitting] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
-  // Same capability probe as the customer login page (CustomerLoginForm) — this embedded flow
-  // must not offer a phone form guaranteed to 502 when no SMS provider is configured, and unlike
-  // the login page this one had no Google fallback at all until this fix.
   const [phoneOtpAvailable, setPhoneOtpAvailable] = useState<boolean | null>(null);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
@@ -103,8 +98,6 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
     };
   }, [token]);
 
-  // Once authenticated, check for an already-active queue token (any salon) — same "don't attempt
-  // a doomed join" check WalkInJoinFlow already does — and show it directly instead of the join UI.
   useEffect(() => {
     if (authStatus !== "authenticated" || stage !== "ready") return;
     let cancelled = false;
@@ -191,8 +184,6 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
     }
     setOtpSubmitting(true);
     try {
-      // Establishes the same JWT session as the regular login page — the customer can now join
-      // the queue exactly like any other authenticated customer.
       await verifyCustomerOtp(parsed.data);
     } catch (err) {
       setOtpError(err instanceof ApiError ? err.message : "Could not verify OTP. Please try again.");
@@ -219,7 +210,7 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
     );
   }
 
-  if (!info) return null; // unreachable once past "loading", satisfies TS below
+  if (!info) return null;
 
   if (stage === "unavailable") {
     return (

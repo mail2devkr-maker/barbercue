@@ -52,7 +52,7 @@ export function DashboardHeader() {
     <header className={styles.header}>
       <div className={styles.inner}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-          <span className={styles.mark} aria-hidden="true">BC</span>
+          <span className={styles.mark} aria-hidden="true">FQ</span>
           <span>FastQue</span>
         </Link>
 

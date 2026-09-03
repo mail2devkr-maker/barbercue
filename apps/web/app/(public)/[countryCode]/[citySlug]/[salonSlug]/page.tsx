@@ -19,8 +19,6 @@ import { ActivityTicker } from "../../../../../components/discovery/ActivityTick
 import styles from "./profile.module.css";
 
 interface SalonPageParams {
-  // ISO-3166-1 alpha-2, lowercase in the URL — the backend uppercases it before the (countryCode,
-  // slug) city lookup, so either case resolves identically.
   countryCode: string;
   citySlug: string;
   salonSlug: string;
@@ -40,7 +38,6 @@ async function loadPublicStatus(countryCode: string, citySlug: string, salonSlug
   ).catch(() => null);
 }
 
-/** `/{countryCode}/{citySlug}/{salonSlug}` — B9's canonical public salon URL. */
 function salonPath(salon: SalonProfileDto): string {
   return `/${salon.countryCode.toLowerCase()}/${salon.citySlug}/${salon.slug}`;
 }
@@ -69,9 +66,6 @@ export async function generateMetadata({ params }: { params: Promise<SalonPagePa
   };
 }
 
-// HairSalon (schema.org LocalBusiness subtype) — see PROJECT_STRUCTURE.md "SEO details".
-// aggregateRating is omitted entirely when there are zero reviews (Schema.org discourages a
-// fabricated 0/5), matching the API's own null-when-empty convention.
 function buildHairSalonJsonLd(salon: SalonProfileDto) {
   return {
     "@context": "https://schema.org",
@@ -84,13 +78,8 @@ function buildHairSalonJsonLd(salon: SalonProfileDto) {
       streetAddress: salon.addressLine,
       addressLocality: salon.localitySlug ?? salon.citySlug,
       postalCode: salon.postalCode ?? undefined,
-      // From the salon's own city, never a hardcoded country: emitting "IN" for a business
-      // outside India is false structured data that search engines act on.
       addressCountry: salon.countryCode,
     },
-    // Omitted entirely when the owner registered without GPS — same rule as aggregateRating
-    // above. A GeoCoordinates with null lat/lng is invalid structured data, and emitting one
-    // is worse for search engines than emitting no geo block at all.
     geo:
       salon.lat !== null && salon.lng !== null
         ? {
@@ -148,16 +137,8 @@ export default async function SalonPage({
   if (!salon) notFound();
   const publicStatus = await loadPublicStatus(countryCode, citySlug, salonSlug);
 
-  // Query params carried into the (unindexed, ?robots: noindex?) booking/queue flows so those
-  // pages can re-resolve the exact same salon: Salon.slug is unique only within one city, and
-  // City.slug is unique only within one country, so both are needed to disambiguate.
   const cityQuery = `city=${citySlug}&country=${salon.countryCode}`;
-
-  // AI Style Advisor hand-off (major-upgrade phase): "Try This Look" carries the chosen style
-  // name through search -> this profile page -> the booking form via this one query param, so the
-  // final POST /bookings body can include it (Booking.selectedStyleName).
   const bookHref = `/book/${salon.slug}?${cityQuery}${style ? `&style=${encodeURIComponent(style)}` : ""}`;
-
   const cityPath = `/${salon.countryCode.toLowerCase()}/${citySlug}`;
 
   const [city, locality] = await Promise.all([

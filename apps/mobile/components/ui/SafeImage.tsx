@@ -6,7 +6,7 @@ import { color, font } from '../../lib/theme';
 /**
  * The one place a remote (owner-supplied) photo is rendered on mobile, mirroring
  * apps/web/components/ui/SalonImage.tsx's contract exactly: a URL that 404s or is
- * hotlink-blocked degrades to a neutral "BC" placeholder rather than React Native's default
+ * hotlink-blocked degrades to a neutral "FQ" placeholder rather than React Native's default
  * broken-image glyph. `style` is applied to whichever of the two (Image or placeholder View) is
  * actually rendered, so every call site's existing width/height/borderRadius sizing carries over
  * unchanged — this only ever swaps what fills that box, never the box itself.
@@ -53,7 +53,7 @@ export function SafeImage({
       accessibilityLabel={`${alt}: ${url ? "photo unavailable" : "no photo yet"}`}
     >
       <View style={styles.badge}>
-        <Text style={styles.badgeText}>BC</Text>
+        <Text style={styles.badgeText}>FQ</Text>
       </View>
     </View>
   );

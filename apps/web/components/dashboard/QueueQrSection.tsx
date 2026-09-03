@@ -80,7 +80,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${salonName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "barbercue"}-queue-qr.svg`;
+    link.download = `${salonName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "fastque"}-queue-qr.svg`;
     link.click();
     URL.revokeObjectURL(url);
   }
