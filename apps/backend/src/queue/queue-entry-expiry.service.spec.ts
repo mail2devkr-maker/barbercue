@@ -5,6 +5,25 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CancellationPolicyService } from '../bookings/cancellation-policy.service';
 import { AvailabilityService } from '../bookings/availability.service';
 import { QueueService } from './queue.service';
+import {
+  utcToZonedDateStr,
+  zonedDateToDayOfWeek,
+} from '../common/timezone/timezone';
+
+// HH:MM in Asia/Kolkata for a given instant — used to build OperatingHours rows whose close time
+// is deterministically before/after "now" regardless of when this suite actually runs.
+function kolkataTimeStr(date: Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
+}
+
+function kolkataDayOfWeek(date: Date): number {
+  return zonedDateToDayOfWeek(utcToZonedDateStr(date, 'Asia/Kolkata'));
+}
 
 const POLICY = {
   salonId: 's1',
@@ -25,6 +44,7 @@ describe('QueueEntryExpiryService', () => {
   };
   let prisma: {
     queueEntry: { findMany: jest.Mock };
+    operatingHours: { findMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let cancellationPolicy: { getEffectivePolicy: jest.Mock };
@@ -61,6 +81,7 @@ describe('QueueEntryExpiryService', () => {
     };
     prisma = {
       queueEntry: { findMany: jest.fn().mockResolvedValue([]) },
+      operatingHours: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
         callback(tx),
       ),
@@ -255,6 +276,103 @@ describe('QueueEntryExpiryService', () => {
       expect(count).toBe(0);
       expect(tx.queueEntry.updateMany).not.toHaveBeenCalled();
       expect(queueService.recomputeEtas).not.toHaveBeenCalled();
+    });
+
+    // Issue #13 Mission J: a real 06:16 IST walk-in at a 09:00-21:00 shop stayed WAITING and
+    // fully actionable all the way to midnight under the old calendar-day-end-only boundary. These
+    // pin the shop's own posted close time as the real, earlier boundary when one is configured.
+    describe('salon close-time boundary (Mission J)', () => {
+      it("does NOT expire a WAITING entry that joined earlier today when today's posted close time has not passed yet", async () => {
+        const now = new Date();
+        const joinedAt = new Date(now.getTime() - 60_000); // joined 1 minute ago
+        const futureClose = kolkataTimeStr(
+          new Date(now.getTime() + 60 * 60_000),
+        ); // closes in 1h
+        prisma.operatingHours.findMany.mockResolvedValue([
+          {
+            dayOfWeek: kolkataDayOfWeek(now),
+            openTime: '09:00',
+            closeTime: futureClose,
+            isClosed: false,
+          },
+        ]);
+        prisma.queueEntry.findMany.mockResolvedValue([
+          waitingCandidate({ joinedAt }),
+        ]);
+        const count = await service.markStaleWaitingExpired();
+        expect(count).toBe(0);
+        expect(tx.queueEntry.updateMany).not.toHaveBeenCalled();
+      });
+
+      it("expires a WAITING entry that joined earlier today once today's posted close time has passed, even though the calendar day has not ended", async () => {
+        const now = new Date();
+        const joinedAt = new Date(now.getTime() - 60 * 60_000); // joined 1 hour ago
+        const pastClose = kolkataTimeStr(new Date(now.getTime() - 5 * 60_000)); // closed 5 min ago
+        prisma.operatingHours.findMany.mockResolvedValue([
+          {
+            dayOfWeek: kolkataDayOfWeek(now),
+            openTime: '09:00',
+            closeTime: pastClose,
+            isClosed: false,
+          },
+        ]);
+        prisma.queueEntry.findMany.mockResolvedValue([
+          waitingCandidate({ joinedAt }),
+        ]);
+        const count = await service.markStaleWaitingExpired();
+        expect(count).toBe(1);
+        expect(tx.queueEntry.updateMany).toHaveBeenCalledWith({
+          where: { id: 'q1', status: 'WAITING' },
+          data: { status: 'EXPIRED' },
+        });
+      });
+
+      it('falls back to the calendar-day-end boundary when no OperatingHours row exists for the join day', async () => {
+        const now = new Date();
+        prisma.operatingHours.findMany.mockResolvedValue([]);
+        prisma.queueEntry.findMany.mockResolvedValue([
+          waitingCandidate({ joinedAt: new Date(now.getTime() - 60_000) }),
+        ]);
+        const count = await service.markStaleWaitingExpired();
+        // Same-day join, no configured hours: falls back to day-end, which hasn't passed yet.
+        expect(count).toBe(0);
+      });
+
+      it('falls back to the calendar-day-end boundary when the join day is marked isClosed', async () => {
+        const now = new Date();
+        prisma.operatingHours.findMany.mockResolvedValue([
+          {
+            dayOfWeek: kolkataDayOfWeek(now),
+            openTime: '09:00',
+            closeTime: '21:00',
+            isClosed: true,
+          },
+        ]);
+        prisma.queueEntry.findMany.mockResolvedValue([
+          waitingCandidate({
+            joinedAt: new Date(now.getTime() - 48 * 60 * 60_000),
+          }),
+        ]);
+        const count = await service.markStaleWaitingExpired();
+        // 48h-old join: even the isClosed row's day has long since ended, so day-end fallback
+        // still expires it (proves isClosed doesn't short-circuit to "always active").
+        expect(count).toBe(1);
+      });
+
+      it('looks up operating hours once per salon, not once per entry', async () => {
+        prisma.queueEntry.findMany.mockResolvedValue([
+          waitingCandidate({
+            id: 'q1',
+            joinedAt: new Date(Date.now() - 48 * 60 * 60_000),
+          }),
+          waitingCandidate({
+            id: 'q2',
+            joinedAt: new Date(Date.now() - 48 * 60 * 60_000),
+          }),
+        ]);
+        await service.markStaleWaitingExpired();
+        expect(prisma.operatingHours.findMany).toHaveBeenCalledTimes(1);
+      });
     });
   });
 

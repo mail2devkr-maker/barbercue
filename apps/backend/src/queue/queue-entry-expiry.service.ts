@@ -8,8 +8,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CancellationPolicyService } from '../bookings/cancellation-policy.service';
 import { AvailabilityService } from '../bookings/availability.service';
-import { zonedDayBounds } from '../common/timezone/timezone';
+import {
+  utcToZonedDateStr,
+  zonedDateToDayOfWeek,
+  zonedDayBounds,
+  zonedWallTimeToUtc,
+} from '../common/timezone/timezone';
 import { QueueService } from './queue.service';
+
+interface OperatingHoursRow {
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  isClosed: boolean;
+}
 
 /**
  * STATE_MACHINES.md: "CALLED --> NO_SHOW: customer doesn't respond within
@@ -48,11 +60,18 @@ import { QueueService } from './queue.service';
  * joining any queue again. Confirmed live in production (Issue #13): two stale "Head Massages"
  * WAITING entries on Handsome Center, `GET .../queue/status` publicly reporting waitingCount: 2.
  *
- * The boundary chosen is the salon's own local calendar day the entry joined on (via
- * zonedDayBounds, the same IANA-timezone helper nextTokenNumber() already uses to reset daily
- * token numbers) — once that day has ended, the entry is stale by the same "day" concept the
- * product already uses elsewhere, not an invented arbitrary timeout. A salon with no timezone set
- * is skipped rather than guessed at, consistent with getSalonTimeZone's null-degrades contract.
+ * The boundary (see expiryBoundaryFor) is the salon's own posted CLOSE TIME for the day the entry
+ * joined, not a flat calendar-day-end — found live in production (Issue #13): a walk-in that
+ * joined Handsome Center at ~06:16 IST stayed WAITING, visible and actionable, for the entire rest
+ * of a 09:00-21:00 business day under the original calendar-day-end boundary. A shop that's closed
+ * cannot still be serving someone, so once "now" is past that day's OperatingHours.closeTime (in
+ * the salon's own timezone), an entry that joined that day and was never called/assigned/cancelled
+ * is stale — this is not an invented arbitrary timeout, it reuses the same open/close data
+ * isOpenAt() already trusts elsewhere. A day with no OperatingHours row configured (never set up)
+ * or an isClosed day falls back to the existing calendar-day-end boundary (zonedDayBounds, the same
+ * IANA-timezone helper nextTokenNumber() already uses for daily token resets) — never a fabricated
+ * close time. A salon with no timezone set is skipped rather than guessed at, consistent with
+ * getSalonTimeZone's null-degrades contract.
  */
 @Injectable()
 export class QueueEntryExpiryService {
@@ -150,8 +169,9 @@ export class QueueEntryExpiryService {
   async markStaleWaitingExpired(): Promise<number> {
     const now = Date.now();
 
-    // Broad candidate read: any WAITING entry, any salon, any age — the salon-local day-boundary
-    // check happens per candidate below since it depends on that salon's own timezone.
+    // Broad candidate read: any WAITING entry, any salon, any age — the salon-local
+    // close-time/day-boundary check happens per candidate below since it depends on that salon's
+    // own timezone and posted hours.
     const candidates = await this.prisma.queueEntry.findMany({
       where: { status: QueueEntryStatus.WAITING },
       select: { id: true, salonId: true, joinedAt: true },
@@ -170,14 +190,57 @@ export class QueueEntryExpiryService {
       return zone;
     }
 
+    const hoursCache = new Map<string, OperatingHoursRow[]>();
+    const hoursFor = async (salonId: string): Promise<OperatingHoursRow[]> => {
+      const cached = hoursCache.get(salonId);
+      if (cached) return cached;
+      const rows = await this.prisma.operatingHours.findMany({
+        where: { salonId },
+        select: {
+          dayOfWeek: true,
+          openTime: true,
+          closeTime: true,
+          isClosed: true,
+        },
+      });
+      hoursCache.set(salonId, rows);
+      return rows;
+    };
+
+    // The boundary an entry is stale past: the salon's posted close time for the local day it
+    // joined, when a real (open) OperatingHours row exists for that day — otherwise the calendar
+    // day-end fallback (see this class's own doc comment for the full reasoning).
+    const expiryBoundaryFor = async (
+      salonId: string,
+      timeZone: string,
+      joinedAt: Date,
+    ): Promise<Date | null> => {
+      const dayEnd = zonedDayBounds(joinedAt, timeZone)?.end ?? null;
+      const joinDateStr = utcToZonedDateStr(joinedAt, timeZone);
+      const dayOfWeek = zonedDateToDayOfWeek(joinDateStr);
+      const hours = await hoursFor(salonId);
+      const today = hours.find((h) => h.dayOfWeek === dayOfWeek);
+      if (!today || today.isClosed) return dayEnd;
+      const closeBoundary = zonedWallTimeToUtc(
+        joinDateStr,
+        today.closeTime,
+        timeZone,
+      );
+      return closeBoundary ?? dayEnd;
+    };
+
     let markedCount = 0;
     const affectedSalons = new Set<string>();
     for (const entry of candidates) {
       const timeZone = await timeZoneFor.call(this, entry.salonId);
       if (!timeZone) continue;
 
-      const bounds = zonedDayBounds(entry.joinedAt, timeZone);
-      if (!bounds || now < bounds.end.getTime()) continue;
+      const boundary = await expiryBoundaryFor(
+        entry.salonId,
+        timeZone,
+        entry.joinedAt,
+      );
+      if (!boundary || now < boundary.getTime()) continue;
 
       const result = await this.prisma.$transaction(async (tx) => {
         const claim = await tx.queueEntry.updateMany({
@@ -194,7 +257,7 @@ export class QueueEntryExpiryService {
             entityId: entry.id,
             metadata: {
               joinedAt: entry.joinedAt.toISOString(),
-              joinLocalDayEnd: bounds.end.toISOString(),
+              expiryBoundary: boundary.toISOString(),
             },
           },
         });
