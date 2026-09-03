@@ -3,29 +3,35 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { PaginatedResult, SalonListItemDto } from "@barbercue/shared";
-import { DISCOVERY_PATHS } from "@barbercue/shared";
+import type {
+  CitySearchResultDto,
+  CountryDto,
+  PaginatedResult,
+  SalonListItemDto,
+} from "@barbercue/shared";
+import { COUNTRY_PATHS, DISCOVERY_PATHS } from "@barbercue/shared";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
 import { EditorialImage } from "../../../components/editorial/EditorialImage";
 import { SalonCard } from "../../../components/discovery/SalonCard";
+import { ShopServiceSearchField } from "../../../components/discovery/ShopServiceSearchField";
+import { CitySearchField } from "../../../components/salons/CitySearchField";
 import { Button } from "../../../components/ui/Button";
+import { apiFetch } from "../../../lib/api";
 import styles from "./search.module.css";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
-
-function cityNameToSlug(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
 
 export default function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [q, setQ] = useState(searchParams.get("q") ?? "");
-  const [city, setCity] = useState(searchParams.get("city") ?? "");
+  // Issue #13 Mission D: real city autocomplete needs a country to scope the search to (the
+  // backend's cities/search endpoint is deliberately country-scoped — see CitySearchField's own
+  // doc comment on why an unscoped ~100K-row global search isn't safe to ship). This product's
+  // real data is India-only today, so that's the working default; a genuine multi-country
+  // catalog would need an actual country selector here, not a silent guess at that point.
+  const [defaultCountryId, setDefaultCountryId] = useState("");
+  const [selectedCity, setSelectedCity] = useState<CitySearchResultDto | null>(null);
   const [results, setResults] = useState<SalonListItemDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,10 +42,23 @@ export default function SearchClient() {
   const nearMeActive = searchParams.has("lat") && searchParams.has("lng");
 
   useEffect(() => {
+    apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
+      .then((countries) => {
+        const india = countries.find((c) => c.isoCode2 === "IN");
+        if (india) setDefaultCountryId(india.id);
+      })
+      .catch(() => {
+        /* City autocomplete just stays disabled — "Shop or service" search and Near Me still work */
+      });
+  }, []);
+
+  useEffect(() => {
     const params = new URLSearchParams();
+    // city/countryCode already arrive as real slugs/codes here (from CitySearchField's own
+    // selection, or a shared/bookmarked URL) — no client-side normalization needed or safe to do.
     for (const key of ["q", "city", "countryCode", "locality", "service", "lat", "lng"]) {
       const value = searchParams.get(key);
-      if (value) params.set(key, key === "city" ? cityNameToSlug(value) : value);
+      if (value) params.set(key, value);
     }
 
     let cancelled = false;
@@ -70,12 +89,14 @@ export default function SearchClient() {
     };
   }, [retryKey, searchParams]);
 
-  function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  function handleSubmit(event?: React.FormEvent) {
+    event?.preventDefault();
     const params = new URLSearchParams();
-    const normalizedCity = cityNameToSlug(city);
     if (q.trim()) params.set("q", q.trim());
-    if (normalizedCity) params.set("city", normalizedCity);
+    if (selectedCity) {
+      params.set("city", selectedCity.slug);
+      params.set("countryCode", selectedCity.countryCode);
+    }
     if (styleName) params.set("style", styleName);
     router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
   }
@@ -127,24 +148,24 @@ export default function SearchClient() {
         </p>
 
         <form className={styles.searchForm} onSubmit={handleSubmit} role="search">
-          <label className={styles.field}>
-            <span>Shop or service</span>
-            <input
-              type="search"
-              placeholder="Fade, beard trim, shop name…"
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-            />
-          </label>
-          <label className={styles.field}>
-            <span>City</span>
-            <input
-              type="search"
-              placeholder="For example, Bengaluru"
-              value={city}
-              onChange={(event) => setCity(event.target.value)}
-            />
-          </label>
+          <div className={styles.field}>
+            <span id="search-q-label">Shop or service</span>
+            <ShopServiceSearchField value={q} onChange={setQ} onSubmit={() => handleSubmit()} />
+          </div>
+          <div className={styles.field}>
+            <span id="search-city-label">City</span>
+            {defaultCountryId ? (
+              <CitySearchField
+                countryId={defaultCountryId}
+                regionId=""
+                selectedCity={selectedCity}
+                onSelect={setSelectedCity}
+                labelledBy="search-city-label"
+              />
+            ) : (
+              <input type="search" placeholder="Loading cities…" disabled />
+            )}
+          </div>
           <Button type="submit" variant="primary">
             Find shops
           </Button>
@@ -233,7 +254,7 @@ export default function SearchClient() {
               variant="secondary"
               onClick={() => {
                 setQ("");
-                setCity("");
+                setSelectedCity(null);
                 router.push("/search");
               }}
             >

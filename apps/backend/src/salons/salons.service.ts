@@ -132,10 +132,26 @@ export class SalonsService {
         },
       };
     }
+    // Issue #13 Mission D: the web search form's field is genuinely labeled "Shop or service" —
+    // typing "bear" (or "beard") for a real shop's real "Beard" service returned zero results,
+    // because this only ever matched salon name/description, never a service. Now mirrors the
+    // same name-or-category match query.service already uses above, so the field actually
+    // searches what it claims to.
     if (query.q) {
       where.OR = [
         { name: { contains: query.q, mode: 'insensitive' } },
         { description: { contains: query.q, mode: 'insensitive' } },
+        {
+          services: {
+            some: {
+              isActive: true,
+              OR: [
+                { name: { contains: query.q, mode: 'insensitive' } },
+                { category: { contains: query.q, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
       ];
     }
 

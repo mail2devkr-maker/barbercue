@@ -138,6 +138,34 @@ describe('SalonsService', () => {
       expect(where.city).toEqual({ slug: 'bengaluru' });
     });
 
+    // Issue #13 Mission D: the "Shop or service" field previously only matched salon
+    // name/description, so typing a real service name (e.g. "beard") for a shop that genuinely
+    // offers it returned zero results.
+    it('matches q against service name/category, not just salon name/description', async () => {
+      prisma.salon.findMany.mockResolvedValue([]);
+      await service.search({ q: 'bear' });
+      const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+        where: { OR?: Record<string, unknown>[] };
+      };
+      expect(where.OR).toEqual(
+        expect.arrayContaining([
+          { name: { contains: 'bear', mode: 'insensitive' } },
+          { description: { contains: 'bear', mode: 'insensitive' } },
+          {
+            services: {
+              some: {
+                isActive: true,
+                OR: [
+                  { name: { contains: 'bear', mode: 'insensitive' } },
+                  { category: { contains: 'bear', mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        ]),
+      );
+    });
+
     it('returns no nextCursor when results fit within the limit', async () => {
       prisma.salon.findMany.mockResolvedValue([makeSalon()]);
       const result = await service.search({ limit: 20 });
