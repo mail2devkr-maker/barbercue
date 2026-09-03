@@ -16,7 +16,9 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
+import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
+import { GoogleIdentityButton } from "../auth/GoogleIdentityButton";
 import { ServiceStep } from "./ServiceStep";
 import { StaffStep } from "./StaffStep";
 import { DateStep } from "./DateStep";
@@ -52,10 +54,12 @@ export function BookingFlow({
   initialServiceId?: string;
   initialStaffId?: string | null;
 }) {
+  const { status: authStatus, googleLogin } = useAuth();
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(initialServiceId ?? null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | undefined>(initialStaffId);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
   const [staffOptions, setStaffOptions] = useState<StaffOptionDto[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
@@ -196,6 +200,22 @@ export function BookingFlow({
       setSubmitError(err instanceof ApiError ? err.message : "Could not create the booking. Please try again.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  // Issue #13 Mission E: Google Identity Services renders as an in-page button/overlay, never a
+  // full-page redirect, so every selection above (service/staff/date/slot) is still exactly what
+  // it was the moment authStatus flips to "authenticated" — no restart, no re-pick, no need to
+  // serialize state across a navigation that never happens.
+  async function handleGoogleCredential(idToken: string) {
+    setSubmitError(null);
+    setGoogleSubmitting(true);
+    try {
+      await googleLogin({ idToken });
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Could not sign in with Google. Please try again.");
+    } finally {
+      setGoogleSubmitting(false);
     }
   }
 
@@ -340,9 +360,22 @@ export function BookingFlow({
           {selectedStyleName && <p className={styles.summaryLine}>Style: {selectedStyleName}</p>}
           {submitError && <p className={styles.errorText}>{submitError}</p>}
           <div className={styles.confirmActions}>
-            <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting}>
-              {submitting ? "Booking…" : "Confirm booking"}
-            </Button>
+            {authStatus === "authenticated" ? (
+              <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting}>
+                {submitting ? "Booking…" : "Confirm booking"}
+              </Button>
+            ) : authStatus === "loading" ? (
+              <p className={styles.summaryLine}>Loading…</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+                <p className={styles.summaryLine}>Sign in to confirm this booking</p>
+                <GoogleIdentityButton
+                  audienceLabel="customer"
+                  onCredential={(idToken) => void handleGoogleCredential(idToken)}
+                  disabled={googleSubmitting}
+                />
+              </div>
+            )}
           </div>
         </section>
       )}

@@ -1,15 +1,11 @@
 "use client";
 
-import { Role } from "@barbercue/shared";
-import { RequireRole } from "../../../components/auth/RequireRole";
 import { CustomerShell } from "../../../components/layout/CustomerShell";
 
-// Walk-in queue join is authenticated per API.md's "Queue (customer, authenticated)" grouping —
-// same whole-subtree gating pattern as book/layout.tsx.
+// Issue #13 Mission E: no longer gated behind RequireRole — service selection must be visible and
+// usable with no login wall at all. WalkInJoinFlow (the only page under this route) now handles
+// authentication itself, requiring sign-in only for the actual "Join the queue" action, exactly
+// like PublicQueueJoinFlow (the QR entry point) already did.
 export default function QueueLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <RequireRole roles={[Role.CUSTOMER]} redirectTo="/login">
-      <CustomerShell>{children}</CustomerShell>
-    </RequireRole>
-  );
+  return <CustomerShell>{children}</CustomerShell>;
 }

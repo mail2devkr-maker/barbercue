@@ -1,12 +1,11 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
-  Role,
   availabilityQuerySchema,
   staffListQuerySchema,
   type AvailabilityQueryInput,
   type StaffListQueryInput,
 } from '@barbercue/shared';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
@@ -24,6 +23,12 @@ import { CancellationPolicyService } from './cancellation-policy.service';
  * BookingsModule is now imported before SalonsModule in app.module.ts specifically so these routes
  * are tried first — see the comment there. If you add another `salons/:salonId/...` sub-resource,
  * either keep it behind a module imported before SalonsModule, or give it a different arity.
+ *
+ * Issue #13 Mission E: all three endpoints below are @Public() — browsing staff/availability/
+ * cancellation terms is exactly the "see price + availability" step the desired customer journey
+ * wants reachable before sign-in, and none of them return anything customer-specific (staff
+ * names/working hours, open slots, policy terms — no booking, no PII). Only the actual booking
+ * CREATE (BookingsController) still requires an authenticated customer.
  */
 @Controller('salons/:salonId/booking')
 export class BookingInfoController {
@@ -36,7 +41,7 @@ export class BookingInfoController {
   // @UsePipes() — a method-level pipe runs against EVERY parameter, including @Param('salonId')
   // (a plain string), which fails these object-shaped query schemas with a confusing "Expected
   // object, received string" error.
-  @Roles(Role.CUSTOMER)
+  @Public()
   @Get('staff')
   listStaff(
     @Param('salonId') salonId: string,
@@ -46,7 +51,7 @@ export class BookingInfoController {
     return this.availability.listQualifiedStaff(salonId, query.serviceId);
   }
 
-  @Roles(Role.CUSTOMER)
+  @Public()
   @Get('availability')
   getAvailability(
     @Param('salonId') salonId: string,
@@ -61,7 +66,7 @@ export class BookingInfoController {
     );
   }
 
-  @Roles(Role.CUSTOMER)
+  @Public()
   @Get('cancellation-policy')
   getCancellationPolicy(@Param('salonId') salonId: string) {
     return this.cancellationPolicyService.getEffectivePolicy(salonId);
