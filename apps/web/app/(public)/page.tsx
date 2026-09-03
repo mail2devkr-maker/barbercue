@@ -333,7 +333,7 @@ export default async function HomePage() {
             <div><span>Shops</span><Link href="/dashboard/register-shop">Register your shop</Link><Link href="/owner/login">Owner login</Link><Link href="/staff/login">Staff login</Link></div>
             <div><span>FastQue</span><Link href="/login">Customer login</Link></div>
           </nav>
-          <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue.</p>
+          <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue. · Created by Devdutta Kumar Pandey</p>
         </div>
       </footer>
     </div>
