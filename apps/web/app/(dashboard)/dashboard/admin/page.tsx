@@ -70,7 +70,7 @@ export default function AdminDashboardPage() {
         <div>
           <p className={styles.eyebrow}>Role-protected operations</p>
           <h1>Platform monitoring</h1>
-          <p>Read-only visibility across BarberCue. Signed in as {user?.email ?? "platform admin"}.</p>
+          <p>Read-only visibility across FastQue. Signed in as {user?.email ?? "platform admin"}.</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
