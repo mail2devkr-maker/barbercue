@@ -13,7 +13,7 @@ export function CustomerFooter() {
           <Link href="/style-advisor">Style Advisor</Link>
           <Link href="/account/profile">Account</Link>
         </nav>
-        <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue.</p>
+        <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue. · Created by Devdutta Kumar Pandey</p>
       </div>
     </footer>
   );
