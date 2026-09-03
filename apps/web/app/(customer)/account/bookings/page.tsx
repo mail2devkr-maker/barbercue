@@ -24,8 +24,6 @@ import { Button, LinkButton } from "../../../../components/ui/Button";
 import styles from "./bookings.module.css";
 
 const CANCELLABLE_STATUSES = new Set(["CONFIRMED", "PENDING_PAYMENT"]);
-// A booking is "upcoming" while it's still an active reservation, regardless of exact time —
-// mirrors CANCELLABLE_STATUSES above (the same two statuses are, by definition, not yet resolved).
 const UPCOMING_STATUSES = new Set(["CONFIRMED", "PENDING_PAYMENT"]);
 
 function loadPage(cursor?: string): Promise<PaginatedResult<BookingDetailDto>> {
@@ -105,10 +103,6 @@ function BookingRow({
   );
 }
 
-// Customer account — home/hub. Auth-gated + shell-wrapped by app/(customer)/account/layout.tsx.
-// Booking fetch/cancel/check-in logic below is unchanged from before this redesign; only the
-// presentation around it changed, plus one new read (active queue entry) using an endpoint
-// WalkInJoinFlow/CheckInPanel already call elsewhere — no new backend functionality.
 export default function MyBookingsPage() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<BookingDetailDto[]>([]);
@@ -145,17 +139,13 @@ export default function MyBookingsPage() {
     };
   }, []);
 
-  // Same endpoint WalkInJoinFlow/CheckInPanel already call — surfaced here too so an active queue
-  // token is visible from the customer's home page, not only from the salon page it was joined on.
   useEffect(() => {
     let cancelled = false;
     apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`)
       .then((entry) => {
         if (!cancelled) setActiveQueueEntry(entry);
       })
-      .catch(() => {
-        /* no active entry, or a transient error — simply don't show the section */
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -201,7 +191,7 @@ export default function MyBookingsPage() {
     <div className={styles.page}>
       <header className={styles.hero}>
         <div>
-          <p className={styles.heroEyebrow}>YOUR BARBERCUE</p>
+          <p className={styles.heroEyebrow}>YOUR FASTQUE</p>
           <h1 className={styles.welcome}>Good to see you.</h1>
           <p className={styles.welcomeSub}>Your next chair, active queue and booking history—organised around your day.</p>
         </div>
@@ -220,7 +210,6 @@ export default function MyBookingsPage() {
         </div>
       )}
 
-      {/* ---------- Your next chair ---------- */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Your next chair</h2>
         {loading ? (
@@ -277,7 +266,6 @@ export default function MyBookingsPage() {
         )}
       </section>
 
-      {/* ---------- Quick actions ---------- */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Quick actions</h2>
         <div className={styles.quickActions}>
@@ -294,7 +282,6 @@ export default function MyBookingsPage() {
         </div>
       </section>
 
-      {/* ---------- Active queue ---------- */}
       {activeQueueEntry && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Active queue</h2>
@@ -302,7 +289,6 @@ export default function MyBookingsPage() {
         </section>
       )}
 
-      {/* ---------- My bookings ---------- */}
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Upcoming bookings</h2>
         {!loading && upcoming.length === 0 && <p className={styles.emptyListNote}>No upcoming bookings.</p>}
@@ -322,12 +308,12 @@ export default function MyBookingsPage() {
           <h2 className={styles.sectionTitle}>Past bookings</h2>
           {past.map((booking) => (
             <BookingRow
-            key={booking.id}
-            booking={booking}
-            onCancel={setCancelTarget}
-            onReschedule={setRescheduleTarget}
-            onReviewed={handleReviewed}
-          />
+              key={booking.id}
+              booking={booking}
+              onCancel={setCancelTarget}
+              onReschedule={setRescheduleTarget}
+              onReviewed={handleReviewed}
+            />
           ))}
         </section>
       )}
