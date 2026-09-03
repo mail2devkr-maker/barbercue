@@ -54,7 +54,7 @@ export const ADMIN_PATHS = {
 // mobile, and any future surface. Never replace with "Identity Verified" without an actual
 // identity-verification/KYC process behind it.
 export const VERIFICATION_BADGE_CAPTION =
-  'Business/profile evidence reviewed by BarberCue. Verification is not a guarantee of service quality.';
+  'Business/profile evidence reviewed by FastQue. Verification is not a guarantee of service quality.';
 
 // Name of the httpOnly cookie the backend sets/reads for web refresh-token delivery. Shared so
 // the web app's fetch wrapper knows to send credentials, without needing to know the token value.

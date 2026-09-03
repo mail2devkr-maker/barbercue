@@ -25,6 +25,6 @@ export class TotpService {
   }
 
   buildOtpAuthUri(accountLabel: string, secret: string): string {
-    return generateURI({ issuer: 'BarberCue', label: accountLabel, secret });
+    return generateURI({ issuer: 'FastQue', label: accountLabel, secret });
   }
 }

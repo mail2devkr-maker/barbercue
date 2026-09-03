@@ -213,7 +213,7 @@ export default function OwnerDashboardScreen() {
   if (workplaces.length === 0) {
     return (
       <Screen scroll={false}>
-        <EmptyState title="No shops yet" message="Register a shop on the BarberCue web dashboard to manage it here." />
+        <EmptyState title="No shops yet" message="Register a shop on the FastQue web dashboard to manage it here." />
       </Screen>
     );
   }

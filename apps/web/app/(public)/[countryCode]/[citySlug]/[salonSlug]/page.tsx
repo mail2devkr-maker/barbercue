@@ -222,7 +222,7 @@ export default async function SalonPage({
                 </small>
               </span>
             ) : (
-              <span className={styles.newShop}>New on BarberCue</span>
+              <span className={styles.newShop}>New on FastQue</span>
             )}
           </div>
           <address>{salon.addressLine}</address>

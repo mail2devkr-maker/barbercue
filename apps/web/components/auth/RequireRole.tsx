@@ -51,7 +51,7 @@ export function RequireRole({
         <div className={styles.loadingCard} role="status">
           <span className={styles.loadingMark} aria-hidden="true">BC</span>
           <div>
-            <strong>Preparing your BarberCue</strong>
+            <strong>Preparing your FastQue</strong>
             <p>Restoring your secure session…</p>
           </div>
         </div>

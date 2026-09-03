@@ -38,7 +38,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
             <Text style={styles.badgeText}>BC</Text>
           </View>
         </View>
-        <Text style={styles.wordmark}>BarberCue</Text>
+        <Text style={styles.wordmark}>FastQue</Text>
       </View>
 
       {/* Issue 2 (mobile launch mission) — browse-first, auth-last: the prominent, primary action

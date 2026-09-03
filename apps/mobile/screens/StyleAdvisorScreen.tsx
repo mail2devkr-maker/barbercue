@@ -131,7 +131,7 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
   if (premiumStatus === 'locked') {
     return (
       <Screen scroll={false} contentStyle={styles.screenContent}>
-        <SectionHeader eyebrow="Premium" title="AI Style Advisor is a Premium feature" subtitle="Upgrade to Premium on the BarberCue web app to preview hairstyles on your photo." />
+        <SectionHeader eyebrow="Premium" title="AI Style Advisor is a Premium feature" subtitle="Upgrade to Premium on the FastQue web app to preview hairstyles on your photo." />
       </Screen>
     );
   }

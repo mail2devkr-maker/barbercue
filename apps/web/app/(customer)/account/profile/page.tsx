@@ -147,14 +147,14 @@ export default function ProfilePage() {
         <p className={styles.eyebrow}>PROFILE & SECURITY</p>
         <h1 className={styles.pageTitle}>Your account, kept simple.</h1>
         <p className={styles.pageSubtitle}>
-          Review the contact details connected to BarberCue and manage where your account is signed in.
+          Review the contact details connected to FastQue and manage where your account is signed in.
         </p>
       </header>
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Account details</h2>
-          <p>These details come from your current authenticated BarberCue account.</p>
+          <p>These details come from your current authenticated FastQue account.</p>
         </div>
         <Card className={styles.profileCard}>
           <dl>
@@ -258,7 +258,7 @@ export default function ProfilePage() {
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Notification preferences</h2>
           <p>
-            Choose what you hear from BarberCue. In-app is the only channel available today — SMS,
+            Choose what you hear from FastQue. In-app is the only channel available today — SMS,
             email and WhatsApp aren&apos;t connected yet.
           </p>
         </div>

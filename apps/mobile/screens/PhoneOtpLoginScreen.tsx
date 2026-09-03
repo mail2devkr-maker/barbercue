@@ -213,7 +213,7 @@ export default function PhoneOtpLoginScreen() {
                 <Text style={styles.badgeText}>BC</Text>
               </View>
             </View>
-            <Text style={styles.wordmark}>BarberCue</Text>
+            <Text style={styles.wordmark}>FastQue</Text>
           </View>
 
           <Text style={styles.eyebrow}>Sign in</Text>

@@ -121,7 +121,7 @@ export default function StaffTodayScreen() {
   if (workplaces.length === 0) {
     return (
       <Screen scroll={false}>
-        <EmptyState title="No shop yet" message="Ask your shop owner to add you as staff on the BarberCue web dashboard." />
+        <EmptyState title="No shop yet" message="Ask your shop owner to add you as staff on the FastQue web dashboard." />
       </Screen>
     );
   }

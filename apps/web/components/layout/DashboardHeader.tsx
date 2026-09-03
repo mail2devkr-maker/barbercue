@@ -51,9 +51,9 @@ export function DashboardHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        <Link href="/" className={styles.wordmark} aria-label="BarberCue home">
+        <Link href="/" className={styles.wordmark} aria-label="FastQue home">
           <span className={styles.mark} aria-hidden="true">BC</span>
-          <span>BarberCue</span>
+          <span>FastQue</span>
         </Link>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

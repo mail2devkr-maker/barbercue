@@ -8,7 +8,7 @@ import styles from "./landing.module.css";
  */
 export function HeroVisual() {
   return (
-    <div className={styles.heroVisual} aria-label="Book appointments or follow a live barber queue with BarberCue">
+    <div className={styles.heroVisual} aria-label="Book appointments or follow a live barber queue with FastQue">
       <div className={styles.heroPhoto} aria-hidden="true">
         <EditorialImage id="hero-editorial-band" fill priority sizes="(max-width: 980px) 100vw, 560px" />
       </div>

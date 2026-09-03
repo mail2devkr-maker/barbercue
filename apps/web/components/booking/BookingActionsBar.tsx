@@ -23,7 +23,7 @@ export function BookingActionsBar({
   async function handleShare() {
     const result = await shareOrCopy({
       title: booking.salonName,
-      text: `Book at ${booking.salonName} on BarberCue`,
+      text: `Book at ${booking.salonName} on FastQue`,
       url: salonPageUrl(booking),
     });
     if (result === "shared") setShareStatus(null);
@@ -41,7 +41,7 @@ export function BookingActionsBar({
         Share
       </button>
       <a
-        href={whatsappShareUrl(`Check out ${booking.salonName} on BarberCue: ${salonPageUrl(booking)}`)}
+        href={whatsappShareUrl(`Check out ${booking.salonName} on FastQue: ${salonPageUrl(booking)}`)}
         target="_blank"
         rel="noopener noreferrer"
         className={styles.actionLink}

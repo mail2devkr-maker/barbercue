@@ -12,8 +12,8 @@ function verificationPath(salonId: string): string {
 }
 
 const STATUS_COPY: Record<string, string> = {
-  SUBMITTED: "Submitted — waiting for a BarberCue admin to review it.",
-  UNDER_REVIEW: "Currently under review by a BarberCue admin.",
+  SUBMITTED: "Submitted — waiting for a FastQue admin to review it.",
+  UNDER_REVIEW: "Currently under review by a FastQue admin.",
   APPROVED: "Approved. The Verified badge now shows on your shop's public profile.",
   REJECTED: "Not approved. Review the notes below, then resubmit with clearer evidence.",
 };

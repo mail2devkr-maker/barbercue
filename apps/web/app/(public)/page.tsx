@@ -27,7 +27,7 @@ function organizationJsonLd() {
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "BarberCue",
+    name: "FastQue",
     url: SITE_URL,
     potentialAction: {
       "@type": "SearchAction",
@@ -43,7 +43,7 @@ const QUEUE_STEPS = ["Join the live queue", "See your position", "Follow the lin
 const OWNER_POINTS = [
   "Run the live queue from one floor dashboard",
   "Manage services, barbers, chairs and hours",
-  "Get a permanent, shareable BarberCue Shop ID",
+  "Get a permanent, shareable FastQue Shop ID",
 ];
 
 export default async function HomePage() {
@@ -68,9 +68,9 @@ export default async function HomePage() {
 
       <header className={styles.landingHeader}>
         <div className={styles.headerInner}>
-          <Link href="/" className={styles.wordmark} aria-label="BarberCue home">
+          <Link href="/" className={styles.wordmark} aria-label="FastQue home">
             <span className={styles.wordmarkMark} aria-hidden="true">BC</span>
-            <span>BarberCue</span>
+            <span>FastQue</span>
           </Link>
           <nav className={styles.headerNav} aria-label="Primary">
             <Link href="/search">Find a barber</Link>
@@ -111,7 +111,7 @@ export default async function HomePage() {
             <form className={styles.heroSearch} action="/search" method="get" aria-label="Find a barbershop">
               <label className={styles.heroField}>
                 <span>Shop or service</span>
-                <input name="q" type="search" placeholder="Haircut, fade, BarberCue…" />
+                <input name="q" type="search" placeholder="Haircut, fade, FastQue…" />
               </label>
               <label className={styles.heroField}>
                 <span>City</span>
@@ -122,7 +122,7 @@ export default async function HomePage() {
               </button>
             </form>
 
-            <div className={styles.heroMeta} aria-label="BarberCue benefits">
+            <div className={styles.heroMeta} aria-label="FastQue benefits">
               <span>No app required</span>
               <span>Book or join live</span>
               <span>Real-time queue position</span>
@@ -135,7 +135,7 @@ export default async function HomePage() {
                 {liveStats.activeShopCount > 0 && (
                   <span>
                     {liveStats.activeShopCount} {liveStats.activeShopCount === 1 ? "shop" : "shops"} on
-                    BarberCue right now
+                    FastQue right now
                   </span>
                 )}
                 {liveStats.liveWaitingCount > 0 && (
@@ -160,7 +160,7 @@ export default async function HomePage() {
             <p className={styles.eyebrow}>Two ways to the chair</p>
             <h2 className={styles.sectionTitle}>Plan the cut—or skip the waiting room.</h2>
             <p className={styles.sectionLead}>
-              BarberCue is designed around how barbershops actually work: scheduled appointments
+              FastQue is designed around how barbershops actually work: scheduled appointments
               when you want certainty, and a live queue when today works better.
             </p>
           </div>
@@ -201,7 +201,7 @@ export default async function HomePage() {
             <p className={styles.eyebrow}>Every kind of chair</p>
             <h2 className={styles.sectionTitle}>Beyond the barber&apos;s chair.</h2>
             <p className={styles.sectionLead}>
-              BarberCue covers the full grooming and beauty floor. Browse by category to search
+              FastQue covers the full grooming and beauty floor. Browse by category to search
               real shops offering that service near you.
             </p>
           </div>
@@ -240,10 +240,10 @@ export default async function HomePage() {
           ) : (
             <div className={styles.marketplaceEmpty}>
               <div>
-                <strong>BarberCue is opening up shop by shop.</strong>
-                <p>Use search to see what is available near you, or bring your own barber onto BarberCue.</p>
+                <strong>FastQue is opening up shop by shop.</strong>
+                <p>Use search to see what is available near you, or bring your own barber onto FastQue.</p>
               </div>
-              <Link href="/search" className={styles.textLink}>Search BarberCue <span aria-hidden="true">→</span></Link>
+              <Link href="/search" className={styles.textLink}>Search FastQue <span aria-hidden="true">→</span></Link>
             </div>
           )}
 
@@ -262,7 +262,7 @@ export default async function HomePage() {
                 ))}
               </nav>
             ) : (
-              <p className={styles.cityEmpty}>City guides appear as shops open their BarberCue profiles.</p>
+              <p className={styles.cityEmpty}>City guides appear as shops open their FastQue profiles.</p>
             )}
           </div>
         </div>
@@ -336,15 +336,15 @@ export default async function HomePage() {
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerBrand}>
-            <strong>BarberCue</strong>
+            <strong>FastQue</strong>
             <p>Purpose-built for modern barbershops.</p>
           </div>
           <nav className={styles.footerLinks} aria-label="Footer">
             <div><span>Customers</span><Link href="/search">Find a barber</Link><Link href="/account/bookings">My bookings</Link><Link href="/style-advisor">Style Advisor</Link></div>
             <div><span>Shops</span><Link href="/dashboard/register-shop">Register your shop</Link><Link href="/owner/login">Owner login</Link><Link href="/staff/login">Staff login</Link></div>
-            <div><span>BarberCue</span><Link href="/login">Customer login</Link></div>
+            <div><span>FastQue</span><Link href="/login">Customer login</Link></div>
           </nav>
-          <p className={styles.footerNote}>© {new Date().getFullYear()} BarberCue.</p>
+          <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue.</p>
         </div>
       </footer>
     </div>

@@ -224,7 +224,7 @@ export default function BookingDetailScreen({ route }: Props) {
         <Button
           title="Share on WhatsApp"
           variant="outline"
-          onPress={() => void openWhatsappShare(`Check out ${booking.salonName} on BarberCue: ${salonPageUrl(booking)}`)}
+          onPress={() => void openWhatsappShare(`Check out ${booking.salonName} on FastQue: ${salonPageUrl(booking)}`)}
           style={styles.linkButton}
         />
         <Button

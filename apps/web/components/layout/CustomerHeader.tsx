@@ -57,8 +57,8 @@ export function CustomerHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.headerInner}>
-        <Link href="/" className={styles.wordmark} aria-label="BarberCue home">
-          BarberCue
+        <Link href="/" className={styles.wordmark} aria-label="FastQue home">
+          FastQue
         </Link>
 
         <nav className={styles.nav} aria-label="Primary">

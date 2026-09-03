@@ -12,7 +12,7 @@ const STORIES: Record<AuthAudience, { eyebrow: string; title: string; copy: stri
   owner: {
     eyebrow: "SHOP OWNER WORKSPACE",
     title: "Keep the shop in rhythm.",
-    copy: "Return to your shop dashboard, team setup and day-to-day BarberCue tools.",
+    copy: "Return to your shop dashboard, team setup and day-to-day FastQue tools.",
   },
   staff: {
     eyebrow: "BARBER & STAFF WORKSPACE",
@@ -21,7 +21,7 @@ const STORIES: Record<AuthAudience, { eyebrow: string; title: string; copy: stri
   },
   admin: {
     eyebrow: "PLATFORM ACCESS",
-    title: "BarberCue operations.",
+    title: "FastQue operations.",
     copy: "Restricted access for authorised platform administrators.",
   },
   recovery: {
@@ -55,15 +55,15 @@ export function AuthCard({
   return (
     <main className={styles.page}>
       <header className={styles.topBar}>
-        <Link href="/" className={styles.wordmark} aria-label="BarberCue home">
+        <Link href="/" className={styles.wordmark} aria-label="FastQue home">
           <span className={styles.wordmarkMark} aria-hidden="true">BC</span>
-          <span>BarberCue</span>
+          <span>FastQue</span>
         </Link>
         <Link href="/" className={styles.homeLink}>Home</Link>
       </header>
 
       <div className={styles.shell}>
-        <aside className={`${styles.storyPanel} ${styles[`story-${audience}`]}`} aria-label="About BarberCue">
+        <aside className={`${styles.storyPanel} ${styles[`story-${audience}`]}`} aria-label="About FastQue">
           <div className={styles.storyContent}>
             <p className={styles.storyEyebrow}>{story.eyebrow}</p>
             <p className={styles.storyTitle}>{story.title}</p>
@@ -118,7 +118,7 @@ export function AuthPageFallback({ audience }: { audience: AuthAudience }) {
     <AuthCard
       audience={audience}
       title="Preparing sign in…"
-      subtitle="BarberCue is getting this secure sign-in route ready."
+      subtitle="FastQue is getting this secure sign-in route ready."
       showAudienceLinks={false}
     >
       <div className={styles.authLoading} role="status" aria-label="Preparing sign in">

@@ -38,7 +38,7 @@ export function InitialPasswordSetup({ onComplete }: { onComplete: () => void })
       <p className={styles.audienceLabel}>Secure your owner access</p>
       <h2 id="owner-password-title" className={styles.formTitle}>Create your password</h2>
       <p className={styles.formSubtitle}>
-        Keep Google sign-in and add email-and-password access to this same BarberCue account.
+        Keep Google sign-in and add email-and-password access to this same FastQue account.
       </p>
       <form className={styles.form} onSubmit={submit}>
         {error && <p className={styles.errorMessage} role="alert">{error}</p>}

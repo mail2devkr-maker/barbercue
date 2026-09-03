@@ -79,7 +79,7 @@ export default function PremiumPlansPage() {
 
       <div className={styles.sectionHeader}>
         <h2>Choose what fits</h2>
-        <p>Plan availability and prices below come directly from BarberCue.</p>
+        <p>Plan availability and prices below come directly from FastQue.</p>
       </div>
 
       {loading && (
@@ -103,7 +103,7 @@ export default function PremiumPlansPage() {
               <ul className={styles.planFeatures}>
                 <li>{plan.aiCreditsPerYear} AI Style Credits/year</li>
                 <li>AI Style Advisor</li>
-                <li>Standard BarberCue features</li>
+                <li>Standard FastQue features</li>
               </ul>
               <div className={styles.planAction}>
                 {entitlement?.planId === plan.id ? (
@@ -117,7 +117,7 @@ export default function PremiumPlansPage() {
           {plans.length === 0 && (
             <Card className={styles.emptyCard}>
               <h3>No Premium plans are available right now.</h3>
-              <p>Please check again later. Your current BarberCue account remains unchanged.</p>
+              <p>Please check again later. Your current FastQue account remains unchanged.</p>
             </Card>
           )}
         </div>

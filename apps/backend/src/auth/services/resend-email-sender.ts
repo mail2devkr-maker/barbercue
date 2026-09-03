@@ -42,7 +42,7 @@ export class ResendEmailSender implements EmailSender {
   ): Promise<void> {
     await this.send(
       email,
-      'Reset your BarberCue password',
+      'Reset your FastQue password',
       `<p>Click the link below to reset your password. This link expires in ${expiresInMinutes} minutes and can only be used once.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
     );
   }
@@ -54,7 +54,7 @@ export class ResendEmailSender implements EmailSender {
   ): Promise<void> {
     await this.send(
       email,
-      "You've been invited to BarberCue",
+      "You've been invited to FastQue",
       `<p>Click the link below to set your password and finish joining your team. This link expires in ${expiresInDays} day${expiresInDays === 1 ? '' : 's'}.</p><p><a href="${setupUrl}">${setupUrl}</a></p>`,
     );
   }

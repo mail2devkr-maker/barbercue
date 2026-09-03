@@ -18,7 +18,7 @@ function OwnerLoginForm() {
     <AuthCard
       audience="owner"
       title="Shop owner sign in"
-      subtitle="Use the owner account connected to your BarberCue shop. You’ll return to your shop dashboard after sign-in."
+      subtitle="Use the owner account connected to your FastQue shop. You’ll return to your shop dashboard after sign-in."
     >
       <WorkspaceGoogleLogin
         audienceLabel="shop owner"

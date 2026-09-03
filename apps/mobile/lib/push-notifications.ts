@@ -42,7 +42,7 @@ export async function ensureBookingNotificationChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(ANDROID_BOOKING_CHANNEL_ID, {
     name: 'Booking updates',
-    description: 'New bookings and operational BarberCue updates.',
+    description: 'New bookings and operational FastQue updates.',
     importance: Notifications.AndroidImportance.HIGH,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     sound: 'default',

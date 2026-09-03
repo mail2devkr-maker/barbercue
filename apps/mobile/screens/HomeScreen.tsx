@@ -79,7 +79,7 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
       <View style={styles.headerRow}>
-        <SectionHeader eyebrow="BarberCue" title="Welcome back" subtitle="Book ahead, or join a live queue near you." />
+        <SectionHeader eyebrow="FastQue" title="Welcome back" subtitle="Book ahead, or join a live queue near you." />
         <View style={styles.headerActions}>
           <LanguageSwitcher />
           <NotificationBell

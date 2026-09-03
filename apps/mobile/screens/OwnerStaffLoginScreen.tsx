@@ -73,7 +73,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
   return (
     <Screen contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle="Use your BarberCue dashboard account." />
+      <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle="Use your FastQue dashboard account." />
 
       {error && <InlineError message={error} />}
 

@@ -41,7 +41,7 @@ export async function shareSalon(
 ): Promise<'shared' | 'dismissed'> {
   const url = salonPageUrl(booking);
   const result = await Share.share({
-    message: `Book at ${booking.salonName} on BarberCue: ${url}`,
+    message: `Book at ${booking.salonName} on FastQue: ${url}`,
     url, // iOS uses this as the shared URL; Android folds it into `message` above.
   });
   return result.action === Share.dismissedAction ? 'dismissed' : 'shared';

@@ -69,7 +69,7 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
         <div className={styles.metaRow}>
           <span>
             {salon.ratingAverage === null
-              ? "New on BarberCue"
+              ? "New on FastQue"
               : `${salon.ratingCount} ${salon.ratingCount === 1 ? "review" : "reviews"}`}
           </span>
           {salon.priceMin !== null && (

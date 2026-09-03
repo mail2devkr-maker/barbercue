@@ -65,7 +65,7 @@ export function SalonImage({
         >
           <span className={styles.mark} aria-hidden="true" />
           <strong>{url ? "Photo unavailable" : "Shop photos coming soon"}</strong>
-          <span>BarberCue shop profile</span>
+          <span>FastQue shop profile</span>
         </span>
       )}
     </div>

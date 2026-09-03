@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "BarberCue",
+    "name": "FastQue",
     "slug": "devdutta-kumar-pandey",
     "version": "1.0.2",
     "orientation": "portrait",
@@ -49,13 +49,13 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "BarberCue needs access to your photos so you can try the AI Style Advisor."
+          "photosPermission": "FastQue needs access to your photos so you can try the AI Style Advisor."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "BarberCue uses your location to show nearby barbershops."
+          "locationWhenInUsePermission": "FastQue uses your location to show nearby barbershops."
         }
       ]
     ]
