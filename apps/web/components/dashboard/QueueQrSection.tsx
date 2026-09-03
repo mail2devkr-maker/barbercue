@@ -73,14 +73,14 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
         <text x="130" y="34" text-anchor="middle" font-family="Arial, sans-serif" font-size="${nameFontSize}" font-weight="700" fill="#1C1A17">${safeName}</text>
         <text x="130" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#6B6257">Scan to join the queue</text>
         <g transform="translate(30 72)">${svg.outerHTML}</g>
-        <text x="130" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#a8791f">BarberCue</text>
+        <text x="130" y="300" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#a8791f">FastQue</text>
       </svg>`;
 
     const blob = new Blob([posterSvg], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${salonName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "barbercue"}-queue-qr.svg`;
+    link.download = `${salonName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "fastque"}-queue-qr.svg`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -117,7 +117,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
             </p>
             <QRCodeSVG value={qr.publicQueueUrl} size={200} level="M" fgColor="#a8791f" bgColor="#ffffff" />
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#a8791f", textAlign: "center" }}>
-              BarberCue
+              FastQue
             </p>
           </div>
 
