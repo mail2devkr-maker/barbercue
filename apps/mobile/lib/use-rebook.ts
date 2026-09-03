@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS } from '@barbercue/shared';
 import type { BookingDetailDto, SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from './api';
-import type { TabParamList } from '../navigation/types';
+import type { BookingsStackParamList, TabParamList } from '../navigation/types';
 
 /**
  * "Book again" hand-off shared by MyBookingsScreen (the list) and BookingDetailScreen — the
@@ -15,7 +16,10 @@ import type { TabParamList } from '../navigation/types';
  * assuming the old slot is still available.
  */
 export function useRebook() {
-  const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
+  // MyBookings and BookingDetail live inside BookingsStack, so useNavigation() returns that native
+  // stack at runtime. Resolve the actual parent bottom-tab navigator before crossing into SearchTab;
+  // casting the child navigator to a tab navigator only hid the unhandled action from TypeScript.
+  const navigation = useNavigation<NativeStackNavigationProp<BookingsStackParamList>>();
   const [rebookingId, setRebookingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +30,12 @@ export function useRebook() {
       const salon = await apiFetch<SalonProfileDto>(
         `${DISCOVERY_PATHS.salons}/${booking.salonCountryCode}/${booking.citySlug}/${booking.salonSlug}`,
       );
-      navigation.navigate('SearchTab', {
+      const tabNavigation = navigation.getParent<BottomTabNavigationProp<TabParamList>>();
+      if (!tabNavigation) {
+        setError('Could not open the booking flow. Please try again.');
+        return;
+      }
+      tabNavigation.navigate('SearchTab', {
         screen: 'DateSelect',
         params: {
           salonId: booking.salonId,
