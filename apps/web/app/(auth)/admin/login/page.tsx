@@ -125,7 +125,7 @@ function AdminLoginForm() {
     <AuthCard
       audience="admin"
       title="Platform admin sign in"
-      subtitle="Restricted to existing BarberCue platform administrators. Google or password confirms your identity; your authenticator code is always required."
+      subtitle="Restricted to existing FastQue platform administrators. Google or password confirms your identity; your authenticator code is always required."
       showAudienceLinks={false}
     >
       <div className={authStyles.form}>
