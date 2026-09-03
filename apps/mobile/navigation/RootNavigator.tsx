@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import HomeStack from './HomeStack';
 import SearchStack from './SearchStack';
@@ -5,11 +6,34 @@ import BookingsStack from './BookingsStack';
 import QueueStack from './QueueStack';
 import AccountStack from './AccountStack';
 import { useUnreadNotificationCount } from '../lib/notifications';
+import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
+import { navigationRef } from './navigation-ref';
 import { color, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import type { TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
+
+/**
+ * Issue 2 (mobile launch mission) — replays a guest's in-progress booking/queue-join selection
+ * once the authenticated customer tabs actually exist. RootNavigator only ever mounts fresh right
+ * after App.tsx's status-driven swap (there is no other way to reach it), so "this component just
+ * mounted" is itself the exact right signal — same reasoning as OwnerNavigator's own
+ * OwnerPushNavigationBridge. navigationRef is already ready at this point: NavigationContainer
+ * itself never unmounts across the swap, only its child does (see App.tsx).
+ */
+function GuestBookingHandoffBridge() {
+  useEffect(() => {
+    const intent = takePendingGuestIntent();
+    if (!intent || !navigationRef.isReady()) return;
+    if (intent.kind === 'booking') {
+      navigationRef.navigate('SearchTab', { screen: 'ConfirmBooking', params: intent.params });
+    } else {
+      navigationRef.navigate('SearchTab', { screen: 'WalkInJoin', params: intent.params });
+    }
+  }, []);
+  return null;
+}
 
 // Mounted only when authenticated (see App.tsx) — every screen here assumes a logged-in
 // customer, matching the web app's book/layout.tsx + account/layout.tsx RequireRole gates.
@@ -19,8 +43,10 @@ export default function RootNavigator() {
   const unreadCount = useUnreadNotificationCount();
 
   return (
-    <Tab.Navigator
-      screenOptions={{
+    <>
+      <GuestBookingHandoffBridge />
+      <Tab.Navigator
+        screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: color.ink,
         tabBarInactiveTintColor: color.muted,
@@ -57,8 +83,9 @@ export default function RootNavigator() {
           // Account always lands on its root screen.
           popToTopOnBlur: true,
         }}
-      />
-    </Tab.Navigator>
+        />
+      </Tab.Navigator>
+    </>
   );
 }
 

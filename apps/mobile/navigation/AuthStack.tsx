@@ -1,15 +1,20 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import RoleSelectScreen from '../screens/RoleSelectScreen';
 import PhoneOtpLoginScreen from '../screens/PhoneOtpLoginScreen';
 import OwnerStaffLoginScreen from '../screens/OwnerStaffLoginScreen';
 import OwnerStaffPasswordRecoveryScreen from '../screens/OwnerStaffPasswordRecoveryScreen';
+import GuestSearchStack from './GuestSearchStack';
 import { lightStackOptions } from './screenOptions';
+import type { SearchStackParamList } from './types';
 
 export type AuthStackParamList = {
   RoleSelect: undefined;
   CustomerLogin: undefined;
   OwnerStaffLogin: { role: 'OWNER' | 'STAFF' };
   PasswordRecovery: { audience: 'owner' | 'staff' };
+  // Issue 2 (mobile launch mission) — browse-first, auth-last. See GuestSearchStack's own comment.
+  GuestBrowse: NavigatorScreenParams<SearchStackParamList> | undefined;
 };
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -25,6 +30,7 @@ export default function AuthStack() {
       <Stack.Screen name="CustomerLogin" component={PhoneOtpLoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="OwnerStaffLogin" component={OwnerStaffLoginScreen} options={{ title: 'Sign in' }} />
       <Stack.Screen name="PasswordRecovery" component={OwnerStaffPasswordRecoveryScreen} options={{ title: 'Password recovery' }} />
+      <Stack.Screen name="GuestBrowse" component={GuestSearchStack} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

@@ -7,7 +7,10 @@ import { BOOKING_PATHS, DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbe
 import type { BookingDetailDto, CancellationPolicyDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
+import { stashPendingGuestIntent } from '../lib/guest-booking-handoff';
+import { GoogleSignInGate } from '../components/auth/GoogleSignInGate';
 import { color, font, fontSize, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError } from '../components/ui';
 import type { SearchStackParamList, TabParamList } from '../navigation/types';
@@ -44,6 +47,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
   const { t } = useLanguage();
+  const { status } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -135,7 +139,21 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           Deliberately not react-native's Alert.alert here: it renders nothing on React Native
           Web (found while verifying this screen through the web target), which would silently
           make this button do nothing. */}
-      <Button title={t.confirm} onPress={() => void handleConfirm()} loading={submitting} style={styles.actionButton} />
+      {status === 'authenticated' ? (
+        <Button title={t.confirm} onPress={() => void handleConfirm()} loading={submitting} style={styles.actionButton} />
+      ) : (
+        // Issue 2 (mobile launch mission) — browse-first, auth-last: a guest reaches this exact
+        // screen with a real slot already chosen. Signing in here (not earlier) is what makes
+        // "browse before you commit to an account" genuinely true. App.tsx swaps the whole
+        // navigator tree the instant auth status flips, so the in-progress params are stashed
+        // first and replayed once the authenticated customer tabs exist (see
+        // lib/guest-booking-handoff.ts + RootNavigator's own replay effect) — the guest taps
+        // Confirm one more time there rather than losing this screen's state outright.
+        <GoogleSignInGate
+          label={t.signInWithGoogle}
+          onBeforeSignIn={() => stashPendingGuestIntent({ kind: 'booking', params: route.params })}
+        />
+      )}
     </Screen>
   );
 }

@@ -4,6 +4,10 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { QUEUE_ENTRIES_PATH, SALON_QUEUE_PATHS, type QueueEntryDetailDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import { useAuth } from '../lib/auth-context';
+import { useLanguage } from '../lib/language-context';
+import { stashPendingGuestIntent } from '../lib/guest-booking-handoff';
+import { GoogleSignInGate } from '../components/auth/GoogleSignInGate';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, Skeleton, InlineError } from '../components/ui';
@@ -13,15 +17,25 @@ type Props = NativeStackScreenProps<SearchStackParamList, 'WalkInJoin'>;
 
 export default function WalkInJoinScreen({ route }: Props) {
   const { salonId, services } = route.params;
+  const { status } = useAuth();
+  const { t } = useLanguage();
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // A guest has no "mine" to check yet — skip straight past the loading state instead of firing
+  // a request that would only 401.
+  const [loading, setLoading] = useState(status === 'authenticated');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entry, setEntry] = useState<QueueEntryDetailDto | null>(null);
 
   // A customer can only hold one active token anywhere — check for one on mount so a repeat
-  // visit to this screen shows live status instead of a doomed join attempt.
+  // visit to this screen shows live status instead of a doomed join attempt. Guest visitors have
+  // no active entry to find by definition (queue.service.ts's join endpoint requires auth), so
+  // this is skipped entirely rather than firing a request that would only 401.
   useEffect(() => {
+    if (status !== 'authenticated') {
+      setLoading(false);
+      return undefined;
+    }
     let cancelled = false;
     apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`)
       .then((active) => {
@@ -36,7 +50,7 @@ export default function WalkInJoinScreen({ route }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [status]);
 
   async function handleJoin() {
     setSubmitting(true);
@@ -108,7 +122,16 @@ export default function WalkInJoinScreen({ route }: Props) {
 
       {error && <InlineError message={error} />}
 
-      <Button title="Join the queue" onPress={() => void handleJoin()} loading={submitting} style={styles.actionButton} />
+      {status === 'authenticated' ? (
+        <Button title={t.joinQueue} onPress={() => void handleJoin()} loading={submitting} style={styles.actionButton} />
+      ) : (
+        // Issue 2 (mobile launch mission) — same deferred-auth gate as ConfirmBookingScreen; see
+        // its own comment and lib/guest-booking-handoff.ts for why the params are stashed here.
+        <GoogleSignInGate
+          label={t.signInWithGoogle}
+          onBeforeSignIn={() => stashPendingGuestIntent({ kind: 'walkIn', params: route.params })}
+        />
+      )}
     </Screen>
   );
 }

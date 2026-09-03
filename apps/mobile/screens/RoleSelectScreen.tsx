@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, LanguageSwitcher } from '../components/ui';
 import type { AuthStackParamList } from '../navigation/AuthStack';
@@ -16,6 +17,8 @@ const OPTIONS: { role: 'CUSTOMER' | 'OWNER' | 'STAFF'; title: string; subtitle: 
 // Owner/Staff share one email+password screen (same backend endpoint, different copy) — see
 // AuthStack.tsx for why there is no separate "owner auth" concept on the backend.
 export default function RoleSelectScreen({ navigation }: Props) {
+  const { t } = useLanguage();
+
   function choose(role: 'CUSTOMER' | 'OWNER' | 'STAFF') {
     if (role === 'CUSTOMER') {
       navigation.navigate('CustomerLogin');
@@ -38,7 +41,16 @@ export default function RoleSelectScreen({ navigation }: Props) {
         <Text style={styles.wordmark}>BarberCue</Text>
       </View>
 
-      <SectionHeader eyebrow="Continue as" title="Who's signing in?" subtitle="Choose the way you use BarberCue." />
+      {/* Issue 2 (mobile launch mission) — browse-first, auth-last: the prominent, primary action
+          on first launch is finding a shop, not signing in. Google sign-in only appears later, at
+          the actual booking/queue confirm step (see ConfirmBookingScreen/WalkInJoinScreen). */}
+      <Pressable style={styles.browseCard} onPress={() => navigation.navigate('GuestBrowse')}>
+        <Text style={styles.browseKicker}>{t.city} · {t.service}</Text>
+        <Text style={styles.browseTitle}>Find a shop</Text>
+        <Text style={styles.browseSubtitle}>{t.book} or {t.joinQueue.toLowerCase()} — no sign-in needed to look around.</Text>
+      </Pressable>
+
+      <SectionHeader eyebrow="Or continue as" title="Already know your account?" />
 
       <View style={styles.optionList}>
         {OPTIONS.map((option) => (
@@ -80,4 +92,21 @@ const styles = StyleSheet.create({
   },
   optionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
   optionSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: space[1] },
+
+  browseCard: {
+    backgroundColor: color.ink,
+    borderRadius: radius.lg,
+    padding: space[5],
+    marginBottom: space[6],
+  },
+  browseKicker: {
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: color.gold,
+    marginBottom: space[1],
+  },
+  browseTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.surface },
+  browseSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: 'rgba(255,255,255,0.72)', marginTop: space[1] },
 });
