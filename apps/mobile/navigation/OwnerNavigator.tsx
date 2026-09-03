@@ -8,6 +8,7 @@ import DashboardAccountScreen from '../screens/dashboard/DashboardAccountScreen'
 import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
+import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
@@ -35,21 +36,30 @@ export default function OwnerNavigator() {
           tabBarInactiveTintColor: color.muted,
           tabBarStyle: { backgroundColor: color.surface, borderTopColor: color.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },
           tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11 },
+          tabBarIconStyle: { marginTop: 2 },
         }}
       >
-        <Tab.Screen name="OwnerDashboardTab" component={OwnerDashboardScreen} options={{ tabBarLabel: 'Dashboard' }} />
-        <Tab.Screen name="OwnerQueueTab" component={OwnerQueueScreen} options={{ tabBarLabel: 'Queue' }} />
-        <Tab.Screen name="OwnerBookingsTab" component={OwnerBookingsScreen} options={{ tabBarLabel: 'Bookings' }} />
-        <Tab.Screen name="OwnerShopTab" component={OwnerShopScreen} options={{ tabBarLabel: 'Shop' }} />
+        <Tab.Screen name="OwnerDashboardTab" component={OwnerDashboardScreen} options={tabOptions('Dashboard', 'home')} />
+        <Tab.Screen name="OwnerQueueTab" component={OwnerQueueScreen} options={tabOptions('Queue', 'queue')} />
+        <Tab.Screen name="OwnerBookingsTab" component={OwnerBookingsScreen} options={tabOptions('Bookings', 'bookings')} />
+        <Tab.Screen name="OwnerShopTab" component={OwnerShopScreen} options={tabOptions('Shop', 'shop')} />
         <Tab.Screen
           name="OwnerAccountTab"
           component={DashboardAccountScreen}
           options={{
-            tabBarLabel: 'Account',
+            ...tabOptions('Account', 'account'),
             tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
           }}
         />
       </Tab.Navigator>
     </SalonProvider>
   );
+}
+
+function tabOptions(label: string, icon: TabIconName) {
+  return {
+    tabBarLabel: label,
+    tabBarAccessibilityLabel: label,
+    tabBarIcon: ({ color, size }: { color: string; size: number }) => <TabIcon name={icon} color={color} size={size} />,
+  };
 }

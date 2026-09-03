@@ -2,12 +2,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import RoleSelectScreen from '../screens/RoleSelectScreen';
 import PhoneOtpLoginScreen from '../screens/PhoneOtpLoginScreen';
 import OwnerStaffLoginScreen from '../screens/OwnerStaffLoginScreen';
+import OwnerStaffPasswordRecoveryScreen from '../screens/OwnerStaffPasswordRecoveryScreen';
 import { lightStackOptions } from './screenOptions';
 
 export type AuthStackParamList = {
   RoleSelect: undefined;
   CustomerLogin: undefined;
   OwnerStaffLogin: { role: 'OWNER' | 'STAFF' };
+  PasswordRecovery: { audience: 'owner' | 'staff' };
 };
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -22,6 +24,7 @@ export default function AuthStack() {
       <Stack.Screen name="RoleSelect" component={RoleSelectScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerLogin" component={PhoneOtpLoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="OwnerStaffLogin" component={OwnerStaffLoginScreen} options={{ title: 'Sign in' }} />
+      <Stack.Screen name="PasswordRecovery" component={OwnerStaffPasswordRecoveryScreen} options={{ title: 'Password recovery' }} />
     </Stack.Navigator>
   );
 }

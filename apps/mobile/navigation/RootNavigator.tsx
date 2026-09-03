@@ -6,6 +6,7 @@ import QueueStack from './QueueStack';
 import AccountStack from './AccountStack';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
+import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import type { TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -32,20 +33,29 @@ export default function RootNavigator() {
           paddingTop: 8,
         },
         tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11 },
+        tabBarIconStyle: { marginTop: 2 },
       }}
     >
-      <Tab.Screen name="HomeTab" component={HomeStack} options={{ tabBarLabel: 'Home' }} />
-      <Tab.Screen name="SearchTab" component={SearchStack} options={{ tabBarLabel: 'Search' }} />
-      <Tab.Screen name="BookingsTab" component={BookingsStack} options={{ tabBarLabel: 'Bookings' }} />
-      <Tab.Screen name="QueueTab" component={QueueStack} options={{ tabBarLabel: 'Queue' }} />
+      <Tab.Screen name="HomeTab" component={HomeStack} options={tabOptions('Home', 'home')} />
+      <Tab.Screen name="SearchTab" component={SearchStack} options={tabOptions('Search', 'search')} />
+      <Tab.Screen name="BookingsTab" component={BookingsStack} options={tabOptions('Bookings', 'bookings')} />
+      <Tab.Screen name="QueueTab" component={QueueStack} options={tabOptions('Queue', 'queue')} />
       <Tab.Screen
         name="AccountTab"
         component={AccountStack}
         options={{
-          tabBarLabel: 'Account',
+            ...tabOptions('Account', 'account'),
           tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
         }}
       />
     </Tab.Navigator>
   );
+}
+
+function tabOptions(label: string, icon: TabIconName) {
+  return {
+    tabBarLabel: label,
+    tabBarAccessibilityLabel: label,
+    tabBarIcon: ({ color, size }: { color: string; size: number }) => <TabIcon name={icon} color={color} size={size} />,
+  };
 }

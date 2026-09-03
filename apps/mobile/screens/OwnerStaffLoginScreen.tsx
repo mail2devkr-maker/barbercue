@@ -20,7 +20,7 @@ const COPY: Record<'OWNER' | 'STAFF', { eyebrow: string; title: string }> = {
 // actual roles (not which button was tapped here) determine what the app shows after sign-in.
 // This screen never invents a password-reset or 2FA step the backend doesn't have; forgot-password
 // exists (auth/forgot-password) and could be wired in later the same way web's page does it.
-export default function OwnerStaffLoginScreen({ route }: Props) {
+export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
   const { role } = route.params;
   const { staffLogin, staffGoogleLogin } = useAuth();
   const [email, setEmail] = useState('');
@@ -120,6 +120,14 @@ export default function OwnerStaffLoginScreen({ route }: Props) {
           value={password}
           onChangeText={setPassword}
         />
+        <Pressable
+          style={styles.recoveryLink}
+          onPress={() => navigation.navigate('PasswordRecovery', { audience: role === 'OWNER' ? 'owner' : 'staff' })}
+          accessibilityRole="button"
+          accessibilityLabel="Forgot password"
+        >
+          <Text style={styles.recoveryLinkText}>Forgot password?</Text>
+        </Pressable>
       </View>
 
       <Button title="Sign in" onPress={() => void handleSubmit()} loading={submitting} style={styles.submitButton} />
@@ -130,6 +138,8 @@ export default function OwnerStaffLoginScreen({ route }: Props) {
 const styles = StyleSheet.create({
   screenContent: { padding: space[5] },
   field: { marginBottom: space[4] },
+  recoveryLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[1] },
+  recoveryLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent },
   label: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink, marginBottom: space[2] },
   input: {
     minHeight: 50,

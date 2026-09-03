@@ -229,7 +229,14 @@ export default function OwnerBookingsScreen({ route }: Props) {
         </Pressable>
       )}
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterRow}
+        accessibilityLabel="Booking filters"
+        accessibilityHint="Swipe left or right to reach every booking filter"
+      >
         {OWNER_BOOKING_FILTERS.map((f) => (
           <Pressable
             key={f}

@@ -4,6 +4,7 @@ import DashboardAccountScreen from '../screens/dashboard/DashboardAccountScreen'
 import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
+import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 
 export type StaffTabParamList = {
   StaffTodayTab: undefined;
@@ -26,18 +27,27 @@ export default function StaffNavigator() {
           tabBarInactiveTintColor: color.muted,
           tabBarStyle: { backgroundColor: color.surface, borderTopColor: color.border, borderTopWidth: 1, height: 60, paddingBottom: 8, paddingTop: 8 },
           tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11 },
+          tabBarIconStyle: { marginTop: 2 },
         }}
       >
-        <Tab.Screen name="StaffTodayTab" component={StaffTodayScreen} options={{ tabBarLabel: 'Today' }} />
+        <Tab.Screen name="StaffTodayTab" component={StaffTodayScreen} options={tabOptions('Today', 'today')} />
         <Tab.Screen
           name="StaffAccountTab"
           component={DashboardAccountScreen}
           options={{
-            tabBarLabel: 'Account',
+            ...tabOptions('Account', 'account'),
             tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
           }}
         />
       </Tab.Navigator>
     </SalonProvider>
   );
+}
+
+function tabOptions(label: string, icon: TabIconName) {
+  return {
+    tabBarLabel: label,
+    tabBarAccessibilityLabel: label,
+    tabBarIcon: ({ color, size }: { color: string; size: number }) => <TabIcon name={icon} color={color} size={size} />,
+  };
 }

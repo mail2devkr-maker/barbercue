@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -11,8 +11,10 @@ import {
   type PaginatedResult,
   type SalonStatusResultDto,
   type SalonSetupReadinessDto,
+  type SalonTimezoneResultDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
@@ -25,15 +27,23 @@ function bookingsPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
 }
 
-// No dedicated "counts" endpoint exists — reuses the same paginated list endpoint the Bookings tab
-// uses and reports items.length, "50+" once the page limit is hit rather than pretending to know
-// the true total. today's UTC window covers the whole IST calendar day either side, which the
-// backend then narrows precisely — see dashboard-bookings.service.ts's istDayBounds.
-function todayIsoRange(): { from: string; to: string } {
-  const now = new Date();
-  const from = new Date(now.getTime() - 24 * 60 * 60_000).toISOString();
-  const to = new Date(now.getTime() + 24 * 60 * 60_000).toISOString();
-  return { from, to };
+// The dashboard-bookings API resolves `date` using the salon's IANA timezone. A rolling client
+// UTC range was previously wrong around midnight and could count an adjacent day's cancellation.
+// Fetching the existing owner-only timezone resource lets mobile request the exact salon day
+// without making any country/device-timezone assumption.
+function salonCalendarDate(timeZone: string, now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
+  const year = value('year');
+  const month = value('month');
+  const day = value('day');
+  if (!year || !month || !day) throw new Error('Could not format salon date.');
+  return `${year}-${month}-${day}`;
 }
 
 interface BookingSummary {
@@ -46,13 +56,10 @@ interface BookingSummary {
 async function fetchCount(
   salonId: string,
   filter: OwnerBookingFilter,
-  range?: { from: string; to: string },
+  date?: string,
 ): Promise<{ count: number; capped: boolean }> {
   const params = new URLSearchParams({ filter, limit: String(SUMMARY_COUNT_LIMIT) });
-  if (range) {
-    params.set('from', range.from);
-    params.set('to', range.to);
-  }
+  if (date) params.set('date', date);
   const result = await apiFetch<PaginatedResult<OwnerBookingDetailDto>>(
     `${bookingsPath(salonId)}?${params}`,
   );
@@ -74,6 +81,52 @@ export default function OwnerDashboardScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<SalonSetupReadinessDto | null>(null);
   const [summary, setSummary] = useState<BookingSummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const summaryRequestIdRef = useRef(0);
+
+  const loadSummary = useCallback(async () => {
+    const requestId = ++summaryRequestIdRef.current;
+    if (!selectedSalonId) {
+      setSummary(null);
+      setSummaryError(null);
+      return;
+    }
+
+    setSummaryError(null);
+    try {
+      const timezone = await apiFetch<SalonTimezoneResultDto>(
+        `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${selectedSalonId}/${DASHBOARD_PATHS.timezone}`,
+      );
+      if (requestId !== summaryRequestIdRef.current) return;
+      if (!timezone.timezone) {
+        setSummary(null);
+        setSummaryError('Set your shop timezone to show accurate daily booking counts.');
+        return;
+      }
+      const date = salonCalendarDate(timezone.timezone);
+      const [today, upcoming, completed, cancelled_, noShow] = await Promise.all([
+        fetchCount(selectedSalonId, 'today'),
+        fetchCount(selectedSalonId, 'upcoming'),
+        fetchCount(selectedSalonId, 'completed', date),
+        fetchCount(selectedSalonId, 'cancelled', date),
+        fetchCount(selectedSalonId, 'no_show', date),
+      ]);
+      if (requestId !== summaryRequestIdRef.current) return;
+      setSummary({
+        today: formatCount(today.count, today.capped),
+        upcoming: formatCount(upcoming.count, upcoming.capped),
+        completedToday: formatCount(completed.count, completed.capped),
+        cancelledNoShowToday: formatCount(
+          cancelled_.count + noShow.count,
+          cancelled_.capped || noShow.capped,
+        ),
+      });
+    } catch {
+      if (requestId !== summaryRequestIdRef.current) return;
+      setSummary(null);
+      setSummaryError('Could not load today’s booking counts.');
+    }
+  }, [selectedSalonId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,39 +138,26 @@ export default function OwnerDashboardScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!selectedSalonId) {
-        setSummary(null);
-        return;
-      }
-      let cancelled = false;
-      const { from, to } = todayIsoRange();
-      Promise.all([
-        fetchCount(selectedSalonId, 'today'),
-        fetchCount(selectedSalonId, 'upcoming'),
-        fetchCount(selectedSalonId, 'completed', { from, to }),
-        fetchCount(selectedSalonId, 'cancelled', { from, to }),
-        fetchCount(selectedSalonId, 'no_show', { from, to }),
-      ])
-        .then(([today, upcoming, completed, cancelled_, noShow]) => {
-          if (cancelled) return;
-          setSummary({
-            today: formatCount(today.count, today.capped),
-            upcoming: formatCount(upcoming.count, upcoming.capped),
-            completedToday: formatCount(completed.count, completed.capped),
-            cancelledNoShowToday: formatCount(
-              cancelled_.count + noShow.count,
-              cancelled_.capped || noShow.capped,
-            ),
-          });
-        })
-        .catch(() => {
-          if (!cancelled) setSummary(null);
-        });
-      return () => {
-        cancelled = true;
-      };
-    }, [selectedSalonId]),
+      void loadSummary();
+    }, [loadSummary]),
   );
+
+  useEffect(() => {
+    if (!selectedSalonId) return undefined;
+    const socket = getRealtimeSocket();
+    joinSalonRoom(selectedSalonId);
+    const refresh = (payload: { salonId: string }) => {
+      if (payload.salonId === selectedSalonId) void loadSummary();
+    };
+    socket.on('booking.created', refresh);
+    socket.on('booking.cancelled', refresh);
+    const unsubscribeReconnect = onReconnect(() => void loadSummary());
+    return () => {
+      socket.off('booking.created', refresh);
+      socket.off('booking.cancelled', refresh);
+      unsubscribeReconnect();
+    };
+  }, [selectedSalonId, loadSummary]);
 
   async function toggleStatus(next: 'ACTIVE' | 'SUSPENDED') {
     if (!selectedSalonId) return;
@@ -206,6 +246,8 @@ export default function OwnerDashboardScreen() {
       )}
 
       {selectedSalonId && <CapacitySummaryPanel salonId={selectedSalonId} />}
+
+      {summaryError && <InlineError message={summaryError} />}
 
       {summary && (
         <View style={styles.summaryGrid}>
