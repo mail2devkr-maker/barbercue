@@ -60,11 +60,7 @@ export default function OwnerNavigator() {
             lazy: false,
           }}
         />
-        <Tab.Screen
-          name="OwnerShopTab"
-          component={OwnerShopStack}
-          options={{ ...tabOptions('Shop', 'shop'), popToTopOnBlur: true }}
-        />
+        <Tab.Screen name="OwnerShopTab" component={OwnerShopStack} options={tabOptions('Shop', 'shop')} />
         <Tab.Screen
           name="OwnerAccountTab"
           component={DashboardAccountStack}
