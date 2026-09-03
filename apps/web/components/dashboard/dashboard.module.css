@@ -494,6 +494,61 @@
   font-weight: 600;
 }
 
+/* ---------- Persistent owner shop navigation (Issue #13 Mission B) ----------
+   Standing nav across every shop-management section, so entering any one section (e.g.
+   Customers) never dead-ends — same horizontally-scrollable-pill-rail language as .setupNav
+   above, minus the numbered wizard-step framing, since this isn't a linear setup flow. */
+
+.shopNav {
+  margin: 0 0 20px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--bc-border);
+  background: var(--bc-surface);
+}
+
+.shopNavRail {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0 4px 4px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.shopNavRail li {
+  flex: 0 0 auto;
+}
+
+.shopNavItem {
+  min-height: 44px;
+  padding: 9px 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--bc-border);
+  border-radius: 999px;
+  color: var(--bc-muted);
+  background: #ffffff;
+  font-size: var(--bc-text-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.shopNavItemCurrent {
+  border-color: var(--bc-ink);
+  background: var(--bc-ink);
+  color: #ffffff;
+}
+
+@media (max-width: 520px) {
+  .shopNav {
+    margin-inline: -16px;
+    padding-inline: 12px;
+  }
+}
+
 /* ---------- Predefined service catalog ---------- */
 
 .catalogSection {
