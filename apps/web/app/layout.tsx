@@ -27,8 +27,8 @@ const workSans = Work_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: "BarberCue",
-    template: "%s | BarberCue",
+    default: "FastQue",
+    template: "%s | FastQue",
   },
   description: "Find nearby barbershops, check the wait, and book your chair.",
 };
