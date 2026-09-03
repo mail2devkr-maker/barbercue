@@ -47,7 +47,19 @@ export default function OwnerNavigator() {
       >
         <Tab.Screen name="OwnerDashboardTab" component={OwnerDashboardScreen} options={tabOptions('Dashboard', 'home')} />
         <Tab.Screen name="OwnerQueueTab" component={OwnerQueueScreen} options={tabOptions('Queue', 'queue')} />
-        <Tab.Screen name="OwnerBookingsTab" component={OwnerBookingsScreen} options={tabOptions('Bookings', 'bookings')} />
+        <Tab.Screen
+          name="OwnerBookingsTab"
+          component={OwnerBookingsScreen}
+          options={{
+            ...tabOptions('Bookings', 'bookings'),
+            // PROTECTED FEATURE — VOICE NOTIFICATIONS. OwnerBookingsScreen owns the proven
+            // booking.created -> fetch detail -> Speech.speak listener. Bottom tabs are lazy by
+            // default, which meant a fresh owner session received no spoken booking alert until
+            // the owner manually opened Bookings once. Eagerly mount this one tab only; do not
+            // duplicate or rewrite the TTS path, and keep all other tabs lazy.
+            lazy: false,
+          }}
+        />
         <Tab.Screen name="OwnerShopTab" component={OwnerShopScreen} options={tabOptions('Shop', 'shop')} />
         <Tab.Screen
           name="OwnerAccountTab"
