@@ -6,3 +6,4 @@ export * from './constants';
 export * from './locale';
 export * from './i18n';
 export * from './catalog/service-catalog';
+export * from './cancellation-courtesy';

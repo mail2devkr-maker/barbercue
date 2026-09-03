@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  CANCELLATION_COURTESY_WAIVER_LIMIT,
   DASHBOARD_PATHS,
   NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT,
   formatMoney,
@@ -36,18 +37,22 @@ function customerPath(salonId: string, customerId: string): string {
 function ledgerActionPath(
   salonId: string,
   customerId: string,
-  ledgerEntryId: string,
+  entry: CustomerLedgerEntryDto,
   action: "waive" | "restore",
 ): string {
+  const base = `${customerPath(salonId, customerId)}/${DASHBOARD_PATHS.ledger}/${entry.id}`;
+  if (entry.reason === "CANCELLATION_CHARGE") {
+    return `${base}/cancellation-courtesy/${action}`;
+  }
   const verb = action === "waive" ? DASHBOARD_PATHS.waive : DASHBOARD_PATHS.restore;
-  return `${customerPath(salonId, customerId)}/${DASHBOARD_PATHS.ledger}/${ledgerEntryId}/${verb}`;
+  return `${base}/${verb}`;
 }
 
 /**
- * Owner customer detail (Customer Dues + Cancellation Policy mission, Part E) — the same
- * DashboardCustomersService.getOne() summary the list page already fetches, plus the New Customer
- * No-Show Grace waive/restore actions. Both mutations require an explicit inline confirmation
- * (Part E: "Both actions require confirmation") before the request fires.
+ * Owner customer detail — keeps the two retention policies deliberately separate:
+ * - New Customer No-Show Grace: fewer than 3 completed visits.
+ * - Cancellation Courtesy: up to 5 currently-waived late-cancellation charges per customer/salon.
+ * Both are explicit owner actions and both preserve the original ledger row for auditability.
  */
 export default function DashboardCustomerDetailPage({
   params,
@@ -100,7 +105,7 @@ export default function DashboardCustomerDetailPage({
     setActionError(null);
     try {
       const result = await apiFetch<LedgerActionResultDto>(
-        ledgerActionPath(salonId, customerId, pendingAction.entry.id, pendingAction.action),
+        ledgerActionPath(salonId, customerId, pendingAction.entry, pendingAction.action),
         { method: "POST" },
       );
       applyLedgerResult(result);
@@ -136,6 +141,13 @@ export default function DashboardCustomerDetailPage({
   const graceStatus = summary.newCustomerGraceEligible
     ? `New customer grace · ${summary.completedCount} of ${NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT} completed visits`
     : `New customer grace completed · ${summary.completedCount}+ visits`;
+  const cancellationWaiversUsed = summary.ledgerEntries.filter(
+    (entry) => entry.reason === "CANCELLATION_CHARGE" && entry.status === "WAIVED",
+  ).length;
+  const cancellationWaiversRemaining = Math.max(
+    0,
+    CANCELLATION_COURTESY_WAIVER_LIMIT - cancellationWaiversUsed,
+  );
 
   return (
     <main className={styles.page}>
@@ -144,6 +156,9 @@ export default function DashboardCustomerDetailPage({
       </Link>
       <h1 className={styles.pageTitle}>{summary.phone ?? summary.email ?? "No contact on file"}</h1>
       <p className={styles.pageSubtitle}>{graceStatus}</p>
+      <p className={styles.pageSubtitle}>
+        Cancellation courtesy · {cancellationWaiversUsed} of {CANCELLATION_COURTESY_WAIVER_LIMIT} used · {cancellationWaiversRemaining} remaining
+      </p>
 
       <div className={styles.rowMeta} style={{ margin: "4px 0 20px" }}>
         {summary.completedCount} completed · {summary.cancelledCount} cancelled · {summary.noShowCount} no-show
@@ -163,8 +178,12 @@ export default function DashboardCustomerDetailPage({
       {summary.ledgerEntries.length > 0 && (
         <ul className={styles.rowList}>
           {summary.ledgerEntries.map((entry) => {
-            const eligibleToWaive =
+            const eligibleNoShowWaiver =
               entry.status === "OUTSTANDING" && entry.reason === "NO_SHOW_CHARGE" && summary.newCustomerGraceEligible;
+            const eligibleCancellationWaiver =
+              entry.status === "OUTSTANDING" &&
+              entry.reason === "CANCELLATION_CHARGE" &&
+              cancellationWaiversRemaining > 0;
             return (
               <li key={entry.id} className={styles.row}>
                 <div style={{ minWidth: 0, flex: "1 1 260px" }}>
@@ -176,6 +195,11 @@ export default function DashboardCustomerDetailPage({
                     {entry.bookingSlotStart ? formatDate(entry.bookingSlotStart) : "No related booking"}
                   </div>
                   <div className={styles.rowMeta}>Recorded {formatDate(entry.createdAt)}</div>
+                  {entry.reason === "CANCELLATION_CHARGE" && (
+                    <div className={styles.rowMeta}>
+                      Courtesy waiver · {cancellationWaiversRemaining} of {CANCELLATION_COURTESY_WAIVER_LIMIT} remaining
+                    </div>
+                  )}
                 </div>
                 <span
                   className={`${styles.statusBadge} ${
@@ -189,14 +213,32 @@ export default function DashboardCustomerDetailPage({
                     <Button
                       type="button"
                       variant="outline"
-                      disabled={!eligibleToWaive}
-                      title={eligibleToWaive ? undefined : "This customer has completed 3 or more visits."}
+                      disabled={!eligibleNoShowWaiver}
+                      title={eligibleNoShowWaiver ? undefined : "This customer has completed 3 or more visits."}
                       onClick={() => {
                         setActionError(null);
                         setPendingAction({ entry, action: "waive" });
                       }}
                     >
                       Waive no-show due
+                    </Button>
+                  )}
+                  {entry.status === "OUTSTANDING" && entry.reason === "CANCELLATION_CHARGE" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!eligibleCancellationWaiver}
+                      title={
+                        eligibleCancellationWaiver
+                          ? undefined
+                          : `All ${CANCELLATION_COURTESY_WAIVER_LIMIT} cancellation courtesy waivers are already in use.`
+                      }
+                      onClick={() => {
+                        setActionError(null);
+                        setPendingAction({ entry, action: "waive" });
+                      }}
+                    >
+                      Waive cancellation charge
                     </Button>
                   )}
                   {entry.status === "WAIVED" && (
@@ -222,9 +264,13 @@ export default function DashboardCustomerDetailPage({
         <div style={{ position: "fixed", inset: 0, background: "rgba(20,16,12,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: "#fff", borderRadius: "var(--bc-radius-md)", padding: 24, maxWidth: 420, width: "90%", boxShadow: "var(--bc-shadow-lg)" }}>
             <p className={styles.rowTitle} style={{ marginBottom: 12 }}>
-              {pendingAction.action === "waive"
-                ? `Waive ${formatMoney(pendingAction.entry.amount, currency)} no-show due for this customer?`
-                : `Restore the ${formatMoney(pendingAction.entry.amount, currency)} no-show due? The customer will be blocked from new bookings again until it is settled or waived.`}
+              {pendingAction.entry.reason === "CANCELLATION_CHARGE"
+                ? pendingAction.action === "waive"
+                  ? `Waive ${formatMoney(pendingAction.entry.amount, currency)} cancellation charge as a courtesy? This customer currently has ${cancellationWaiversRemaining} of ${CANCELLATION_COURTESY_WAIVER_LIMIT} courtesy waivers remaining.`
+                  : `Restore the ${formatMoney(pendingAction.entry.amount, currency)} cancellation charge? The customer will be blocked from new bookings again if any outstanding due remains.`
+                : pendingAction.action === "waive"
+                  ? `Waive ${formatMoney(pendingAction.entry.amount, currency)} no-show due for this customer?`
+                  : `Restore the ${formatMoney(pendingAction.entry.amount, currency)} no-show due? The customer will be blocked from new bookings again until it is settled or waived.`}
             </p>
             {actionError && <p className={`${styles.banner} ${styles.bannerError}`}>{actionError}</p>}
             <div className={styles.rowActions} style={{ marginTop: 16, justifyContent: "flex-end" }}>
