@@ -385,7 +385,17 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     }
   }
 
-  async function enableSound() {
+  // Real bidirectional toggles, not one-way "enable" buttons — a `disabled` button once ON made a
+  // fully-working control look stuck/broken (Issue #13 Mission C). Turning sound OFF suspends the
+  // AudioContext (not closes it), so turning back ON later in the same page load can resume it
+  // without needing a fresh user gesture from scratch.
+  async function toggleSound() {
+    if (soundEnabledRef.current) {
+      soundEnabledRef.current = false;
+      setSoundEnabled(false);
+      void audioContextRef.current?.suspend();
+      return;
+    }
     const AudioContextClass = window.AudioContext;
     const context = audioContextRef.current ?? new AudioContextClass();
     audioContextRef.current = context;
@@ -395,7 +405,13 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     playChime();
   }
 
-  function enableVoice() {
+  function toggleVoice() {
+    if (voiceEnabledRef.current) {
+      voiceEnabledRef.current = false;
+      setVoiceEnabled(false);
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+      return;
+    }
     voiceEnabledRef.current = true;
     setVoiceEnabled(true);
     speak(voiceAnnouncementsFor(preferredLanguageRef.current).voiceAnnouncementsOn());
@@ -410,11 +426,21 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
       {error && <p className={styles.errorText}>{error}</p>}
       <div className={styles.queueTools}>
         <p>Realtime updates are on.</p>
-        <Button type="button" variant="outline" onClick={() => void enableSound()} disabled={soundEnabled}>
-          {soundEnabled ? "Queue chime enabled" : "Enable queue chime"}
+        <Button
+          type="button"
+          variant={soundEnabled ? "primary" : "outline"}
+          onClick={() => void toggleSound()}
+          aria-pressed={soundEnabled}
+        >
+          {soundEnabled ? "Queue chime: ON" : "Queue chime: OFF"}
         </Button>
-        <Button type="button" variant="outline" onClick={enableVoice} disabled={voiceEnabled}>
-          {voiceEnabled ? "Voice announcements enabled" : "Enable voice announcements"}
+        <Button
+          type="button"
+          variant={voiceEnabled ? "primary" : "outline"}
+          onClick={toggleVoice}
+          aria-pressed={voiceEnabled}
+        >
+          {voiceEnabled ? "Voice announcements: ON" : "Voice announcements: OFF"}
         </Button>
       </div>
 

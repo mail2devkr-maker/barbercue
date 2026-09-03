@@ -219,7 +219,17 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
     window.speechSynthesis.speak(utterance);
   }, []);
 
-  async function enableAlerts() {
+  // A real bidirectional toggle, not a one-way "enable" — the button previously stayed
+  // `disabled` once ON, which made a fully-working control look stuck/broken (Issue #13 Mission
+  // C). Turning OFF suspends the AudioContext rather than closing it, so turning back ON later in
+  // the same page load can resume it without needing a fresh user gesture from scratch.
+  async function toggleAlerts() {
+    if (alertsEnabledRef.current) {
+      alertsEnabledRef.current = false;
+      setAlertsEnabled(false);
+      void audioContextRef.current?.suspend();
+      return;
+    }
     try {
       const AudioContextClass = window.AudioContext;
       const context = audioContextRef.current ?? new AudioContextClass();
@@ -320,7 +330,12 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
     <div>
       <div className={styles.tools}>
         <p>Realtime updates are on.</p>
-        <Button type="button" variant="outline" onClick={() => void enableAlerts()} disabled={alertsEnabled}>
+        <Button
+          type="button"
+          variant={alertsEnabled ? "primary" : "outline"}
+          onClick={() => void toggleAlerts()}
+          aria-pressed={alertsEnabled}
+        >
           {alertsEnabled ? "Booking alerts: Sound ON" : "Booking alerts: Sound OFF"}
         </Button>
       </div>

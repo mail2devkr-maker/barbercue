@@ -302,7 +302,7 @@ export default async function HomePage() {
           <nav className={styles.footerLinks} aria-label="Footer">
             <div><span>Customers</span><Link href="/search">Find a barber</Link><Link href="/account/bookings">My bookings</Link><Link href="/style-advisor">Style Advisor</Link></div>
             <div><span>Shops</span><Link href="/dashboard/register-shop">Register your shop</Link><Link href="/owner/login">Owner login</Link><Link href="/staff/login">Staff login</Link></div>
-            <div><span>BarberCue</span><Link href="/login">Customer login</Link><Link href="/admin/login">Admin login</Link></div>
+            <div><span>BarberCue</span><Link href="/login">Customer login</Link></div>
           </nav>
           <p className={styles.footerNote}>© {new Date().getFullYear()} BarberCue.</p>
         </div>
