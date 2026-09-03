@@ -35,7 +35,11 @@ export class SalonTimezoneService {
     await this.salonAccess.assertOwnerAccess(userId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { id: true, timezone: true },
+      select: {
+        id: true,
+        timezone: true,
+        city: { select: { countryCode: true } },
+      },
     });
     if (!salon) {
       throw new AppException(
@@ -44,7 +48,11 @@ export class SalonTimezoneService {
         HttpStatus.NOT_FOUND,
       );
     }
-    return salon;
+    return {
+      id: salon.id,
+      timezone: salon.timezone,
+      countryCode: salon.city.countryCode,
+    };
   }
 
   async updateTimezone(
@@ -55,6 +63,7 @@ export class SalonTimezoneService {
     await this.salonAccess.assertOwnerAccess(userId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
+      include: { city: { select: { countryCode: true } } },
     });
     if (!salon) {
       throw new AppException(
@@ -83,6 +92,6 @@ export class SalonTimezoneService {
       data: { timezone: input.timezone },
       select: { id: true, timezone: true },
     });
-    return updated;
+    return { ...updated, countryCode: salon.city.countryCode };
   }
 }

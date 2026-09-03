@@ -88,6 +88,17 @@ function supportedTimeZones(current: string | null): string[] {
   return withKolkata;
 }
 
+// Issue #13: a real production salon (Handsome Center, Hajipur, Bihar) ended up with its timezone
+// explicitly set to "Indian/Christmas" — a real IANA zone (Christmas Island, UTC+7), not the
+// intended "Asia/Kolkata" (UTC+5:30). Root cause: the picker below is every ICU timezone name
+// (400+), unfiltered and un-suggested, and "Indian/Christmas" sits alphabetically close to what
+// someone searching for "India" would look for. Deliberately NOT a big hardcoded country->zone
+// table (that would mislead any multi-zone country — US, Russia, Brazil, Australia — into a wrong
+// single guess); only add an entry here for a country with one unambiguous, genuinely common zone.
+const SUGGESTED_ZONE_FOR_COUNTRY: Record<string, string> = {
+  IN: "Asia/Kolkata",
+};
+
 // Owner-facing counterpart to Global timezone correctness (booking/analytics/isOpenNow all need a
 // real IANA zone, and throw SALON_TIMEZONE_REQUIRED for a booking-critical path when none is set).
 // India shops keep working unchanged with no zone set at all (resolveSalonTimeZone's own
@@ -95,6 +106,7 @@ function supportedTimeZones(current: string | null): string[] {
 // wants to set one explicitly anyway.
 function TimezoneSection({ salonId }: { salonId: string }) {
   const [current, setCurrent] = useState<string | null | undefined>(undefined);
+  const [countryCode, setCountryCode] = useState<string | null>(null);
   const [selected, setSelected] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +125,7 @@ function TimezoneSection({ salonId }: { salonId: string }) {
         if (cancelled) return;
         setCurrent(result.timezone);
         setSelected(result.timezone ?? "");
+        setCountryCode(result.countryCode);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Could not load your time zone.");
@@ -156,6 +169,41 @@ function TimezoneSection({ salonId }: { salonId: string }) {
           <p style={{ fontSize: 14, marginBottom: 8 }}>
             Current: <strong>{current ?? "Not set"}</strong>
           </p>
+          {countryCode &&
+            SUGGESTED_ZONE_FOR_COUNTRY[countryCode] &&
+            current !== SUGGESTED_ZONE_FOR_COUNTRY[countryCode] && (
+              <p
+                style={{
+                  fontSize: 13,
+                  marginBottom: 10,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: "var(--bc-gold-soft)",
+                  color: "var(--bc-ink)",
+                }}
+              >
+                This shop&apos;s city is in {countryCode} — the correct time zone is usually{" "}
+                <strong>{SUGGESTED_ZONE_FOR_COUNTRY[countryCode]}</strong>.{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected(SUGGESTED_ZONE_FOR_COUNTRY[countryCode]);
+                    setSaved(false);
+                  }}
+                  style={{
+                    color: "var(--bc-accent)",
+                    textDecoration: "underline",
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    font: "inherit",
+                  }}
+                >
+                  Use {SUGGESTED_ZONE_FOR_COUNTRY[countryCode]}
+                </button>
+              </p>
+            )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={selected}

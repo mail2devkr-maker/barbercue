@@ -11,9 +11,11 @@ describe('SalonTimezoneService', () => {
   beforeEach(() => {
     prisma = {
       salon: {
-        findUnique: jest
-          .fn()
-          .mockResolvedValue({ id: 'salon-1', timezone: null }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'salon-1',
+          timezone: null,
+          city: { countryCode: 'IN' },
+        }),
         update: jest
           .fn()
           .mockResolvedValue({ id: 'salon-1', timezone: 'Asia/Kolkata' }),
@@ -30,7 +32,11 @@ describe('SalonTimezoneService', () => {
         'owner-1',
         'salon-1',
       );
-      expect(result).toEqual({ id: 'salon-1', timezone: null });
+      expect(result).toEqual({
+        id: 'salon-1',
+        timezone: null,
+        countryCode: 'IN',
+      });
     });
 
     it('throws SALON_NOT_FOUND for a salon that does not exist', async () => {
@@ -51,7 +57,11 @@ describe('SalonTimezoneService', () => {
         data: { timezone: 'Asia/Kolkata' },
         select: { id: true, timezone: true },
       });
-      expect(result).toEqual({ id: 'salon-1', timezone: 'Asia/Kolkata' });
+      expect(result).toEqual({
+        id: 'salon-1',
+        timezone: 'Asia/Kolkata',
+        countryCode: 'IN',
+      });
     });
 
     it('saves a real non-India zone just as validly — never assumes India', async () => {

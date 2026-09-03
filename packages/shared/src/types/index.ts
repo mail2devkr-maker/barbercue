@@ -840,9 +840,14 @@ export interface SalonStatusResultDto {
 }
 
 // PATCH dashboard/salons/:salonId/timezone response, and GET .../timezone's current-value shape.
+// countryCode (added for Issue #13's timezone-picker safety fix) is the salon's city's own ISO
+// alpha-2 code, always present for a real salon — it drives an owner-facing "suggested zone" hint
+// in web's TimezoneSection, never a silent default; the raw picker still works exactly as before
+// for every country this doesn't have a confident single-zone suggestion for.
 export interface SalonTimezoneResultDto {
   id: string;
   timezone: string | null;
+  countryCode: string;
 }
 
 /**
