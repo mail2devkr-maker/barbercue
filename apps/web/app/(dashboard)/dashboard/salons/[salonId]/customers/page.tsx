@@ -88,7 +88,7 @@ export default function DashboardCustomersPage({
           {items.map((c) => (
             <li key={c.customerId} className={styles.row}>
               <Link
-                href={`${customersPath(salonId)}/${c.customerId}`}
+                href={`/${customersPath(salonId)}/${c.customerId}`}
                 style={{ minWidth: 0, flex: "1 1 220px", textDecoration: "none", color: "inherit" }}
               >
                 <span className={styles.rowTitle}>{c.phone ?? c.email ?? "No contact on file"}</span>
