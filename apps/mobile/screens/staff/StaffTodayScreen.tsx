@@ -1,12 +1,15 @@
 import { useCallback, useRef, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { DASHBOARD_PATHS, type StaffStatusDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
+import { useUnreadNotificationCount } from '../../lib/notifications';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
-import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
+import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
+import type { StaffTabParamList } from '../../navigation/StaffNavigator';
 
 function meePath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.staff}/${DASHBOARD_PATHS.me}`;
@@ -89,9 +92,11 @@ function SelfStatusCard({ salonId }: { salonId: string }) {
 // Dashboard tab (shop open/close) or a Shop tab (services/chairs/staff/hours management) — those
 // stay owner-only by simply not existing in StaffNavigator's tab set.
 export default function StaffTodayScreen() {
+  const navigation = useNavigation<BottomTabNavigationProp<StaffTabParamList>>();
   const { workplaces, loading, error, selectedSalonId, selectedSalon, selectSalon } = useSalon();
   const panelRef = useRef<LiveQueuePanelHandle>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const unreadCount = useUnreadNotificationCount();
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -123,7 +128,13 @@ export default function StaffTodayScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
-      <SectionHeader eyebrow="Today" title={selectedSalon?.name ?? "Today's queue"} />
+      <View style={styles.headerRow}>
+        <SectionHeader eyebrow="Today" title={selectedSalon?.name ?? "Today's queue"} />
+        <NotificationBell
+          unreadCount={unreadCount}
+          onPress={() => navigation.navigate('StaffAccountTab', { screen: 'Notifications' })}
+        />
+      </View>
 
       {workplaces.length > 1 && (
         <View style={styles.pickerRow}>
@@ -146,6 +157,7 @@ export default function StaffTodayScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   skeleton: { height: 140, borderRadius: radius.lg },
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
   pickerChip: { paddingVertical: space[2], paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: color.border },

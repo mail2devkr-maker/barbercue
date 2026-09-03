@@ -16,8 +16,9 @@ import {
 import { apiFetch, ApiError } from '../../lib/api';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
+import { useUnreadNotificationCount } from '../../lib/notifications';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
-import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
+import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 
@@ -84,6 +85,7 @@ export default function OwnerDashboardScreen() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const summaryRequestIdRef = useRef(0);
+  const unreadCount = useUnreadNotificationCount();
 
   const loadSummary = useCallback(async () => {
     const requestId = ++summaryRequestIdRef.current;
@@ -218,7 +220,13 @@ export default function OwnerDashboardScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
-      <SectionHeader eyebrow="Owner" title="Dashboard" />
+      <View style={styles.headerRow}>
+        <SectionHeader eyebrow="Owner" title="Dashboard" />
+        <NotificationBell
+          unreadCount={unreadCount}
+          onPress={() => navigation.navigate('OwnerAccountTab', { screen: 'Notifications' })}
+        />
+      </View>
 
       {workplaces.length > 1 && (
         <View style={styles.pickerRow}>
@@ -309,6 +317,7 @@ export default function OwnerDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   skeleton: { height: 140, borderRadius: radius.lg },
   summaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
   summaryTile: {

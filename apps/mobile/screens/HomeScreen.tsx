@@ -13,8 +13,9 @@ import {
   type QueueEntryDetailDto,
 } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
+import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Card, Button, Skeleton } from '../components/ui';
+import { Screen, SectionHeader, Card, Button, Skeleton, NotificationBell } from '../components/ui';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
 
 type Props = CompositeScreenProps<
@@ -39,6 +40,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeQueueEntry, setActiveQueueEntry] = useState<QueueEntryDetailDto | null>(null);
   const [upcomingBooking, setUpcomingBooking] = useState<BookingDetailDto | null>(null);
+  const unreadCount = useUnreadNotificationCount();
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
@@ -74,7 +76,13 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <SectionHeader eyebrow="BarberCue" title="Welcome back" subtitle="Book ahead, or join a live queue near you." />
+      <View style={styles.headerRow}>
+        <SectionHeader eyebrow="BarberCue" title="Welcome back" subtitle="Book ahead, or join a live queue near you." />
+        <NotificationBell
+          unreadCount={unreadCount}
+          onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications' })}
+        />
+      </View>
 
       <Pressable style={styles.searchEntry} onPress={goFindSalon}>
         <Text style={styles.searchEntryText}>Search shops or services…</Text>
@@ -154,6 +162,7 @@ export default function HomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   searchEntry: {
     minHeight: 50,
     justifyContent: 'center',

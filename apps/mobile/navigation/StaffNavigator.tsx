@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import StaffTodayScreen from '../screens/staff/StaffTodayScreen';
-import DashboardAccountScreen from '../screens/dashboard/DashboardAccountScreen';
+import DashboardAccountStack, { type DashboardAccountStackParamList } from './DashboardAccountStack';
 import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
@@ -8,7 +9,7 @@ import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 
 export type StaffTabParamList = {
   StaffTodayTab: undefined;
-  StaffAccountTab: undefined;
+  StaffAccountTab: NavigatorScreenParams<DashboardAccountStackParamList> | undefined;
 };
 
 const Tab = createBottomTabNavigator<StaffTabParamList>();
@@ -33,7 +34,7 @@ export default function StaffNavigator() {
         <Tab.Screen name="StaffTodayTab" component={StaffTodayScreen} options={tabOptions('Today', 'today')} />
         <Tab.Screen
           name="StaffAccountTab"
-          component={DashboardAccountScreen}
+          component={DashboardAccountStack}
           options={{
             ...tabOptions('Account', 'account'),
             tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
