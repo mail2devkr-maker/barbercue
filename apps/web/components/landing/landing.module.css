@@ -183,6 +183,13 @@
   line-height: 1.7;
 }
 
+.heroCtaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 22px 0 26px;
+}
+
 .heroSearch {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(150px, 0.75fr) auto;
@@ -1087,6 +1094,15 @@
 
   .hero { padding: 54px 16px 70px; }
   .heroHeadline { font-size: clamp(3.15rem, 15vw, 4rem); }
+
+  .heroCtaRow {
+    flex-direction: column;
+  }
+
+  .heroCtaRow .primaryLink,
+  .heroCtaRow .outlineLink {
+    width: 100%;
+  }
 
   .heroSearch {
     grid-template-columns: 1fr;

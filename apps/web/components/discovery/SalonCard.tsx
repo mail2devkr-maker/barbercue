@@ -79,7 +79,7 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
           )}
         </div>
 
-        {(salon.isOpenNow !== null || salon.distanceKm !== null) && (
+        {(salon.isOpenNow !== null || salon.distanceKm !== null || salon.waitingCount > 0) && (
           <div className={styles.statusRow}>
             {salon.isOpenNow !== null && (
               <span className={salon.isOpenNow ? styles.openBadge : styles.closedBadge}>
@@ -87,6 +87,13 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
               </span>
             )}
             {salon.distanceKm !== null && <span className={styles.distanceText}>{salon.distanceKm} km away</span>}
+            {/* Real live signal (Issue #13 Mission F) — only shown when genuinely > 0, never a
+                fabricated "0 waiting" placeholder. */}
+            {salon.waitingCount > 0 && (
+              <span className={styles.distanceText}>
+                {salon.waitingCount} {salon.waitingCount === 1 ? "person" : "people"} waiting
+              </span>
+            )}
           </div>
         )}
 

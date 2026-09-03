@@ -50,6 +50,7 @@ describe('SalonsService', () => {
     };
     review: { aggregate: jest.Mock };
     service: { aggregate: jest.Mock };
+    queueEntry: { count: jest.Mock };
     locality: { findUnique: jest.Mock };
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
     $transaction: jest.Mock;
@@ -78,6 +79,7 @@ describe('SalonsService', () => {
           .fn()
           .mockResolvedValue({ _min: { price: null }, _max: { price: null } }),
       },
+      queueEntry: { count: jest.fn().mockResolvedValue(0) },
       locality: { findUnique: jest.fn() },
       userRole: {
         upsert: jest.fn(),
@@ -200,6 +202,20 @@ describe('SalonsService', () => {
       prisma.salon.findMany.mockResolvedValue([makeSalon()]);
       const result = await service.search({});
       expect(result.items[0].distanceKm).toBeNull();
+    });
+
+    // Issue #13 Mission F: a real live signal on the search card, never a fabricated one.
+    it('includes the real live waitingCount, scoped to WAITING/CALLED/IN_SERVICE for that salon', async () => {
+      prisma.salon.findMany.mockResolvedValue([makeSalon()]);
+      prisma.queueEntry.count.mockResolvedValue(3);
+      const result = await service.search({});
+      expect(result.items[0].waitingCount).toBe(3);
+      expect(prisma.queueEntry.count).toHaveBeenCalledWith({
+        where: {
+          salonId: 's1',
+          status: { in: ['WAITING', 'CALLED', 'IN_SERVICE'] },
+        },
+      });
     });
 
     describe('"near me" (lat/lng supplied)', () => {

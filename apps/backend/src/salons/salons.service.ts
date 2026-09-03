@@ -299,6 +299,18 @@ export class SalonsService {
       distanceKm: null,
       isOpenNow: isOpenNow(salon.operatingHours, salon),
       verified: salon.verification?.status === VerificationStatus.APPROVED,
+      waitingCount: await this.prisma.queueEntry.count({
+        where: {
+          salonId: salon.id,
+          status: {
+            in: [
+              QueueEntryStatus.WAITING,
+              QueueEntryStatus.CALLED,
+              QueueEntryStatus.IN_SERVICE,
+            ],
+          },
+        },
+      }),
       description: salon.description,
       phone: salon.phone,
       services: salon.services.map((s) => ({
@@ -619,6 +631,22 @@ export class SalonsService {
   ): Promise<SalonListItemDto> {
     const { ratingAverage, ratingCount, priceMin, priceMax } =
       await this.aggregate(salon.id);
+    // Issue #13 Mission F — same per-salon-query convention as aggregate() above (see its own
+    // comment: fine at this data volume). Same WAITING/CALLED/IN_SERVICE whitelist
+    // getDashboardQueue/getCapacitySummary already use elsewhere, so an EXPIRED/terminal entry is
+    // never counted here either.
+    const waitingCount = await this.prisma.queueEntry.count({
+      where: {
+        salonId: salon.id,
+        status: {
+          in: [
+            QueueEntryStatus.WAITING,
+            QueueEntryStatus.CALLED,
+            QueueEntryStatus.IN_SERVICE,
+          ],
+        },
+      },
+    });
     const distanceKm =
       from && salon.lat !== null && salon.lng !== null
         ? Math.round(
@@ -646,6 +674,7 @@ export class SalonsService {
       distanceKm,
       isOpenNow: isOpenNow(salon.operatingHours, salon),
       verified: salon.verification?.status === VerificationStatus.APPROVED,
+      waitingCount,
     };
   }
 

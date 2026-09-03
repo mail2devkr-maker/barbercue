@@ -266,6 +266,10 @@ export interface SalonListItemDto extends SalonSummary {
   // Phase 18 — true only once an admin has APPROVED a VerificationRequest for this salon. Clients
   // must pair any badge with VERIFICATION_BADGE_CAPTION's exact wording, never invent their own.
   verified: boolean;
+  // Issue #13 Mission F — real live signal, not a fabricated one: count of QueueEntry rows
+  // currently WAITING/CALLED/IN_SERVICE at this salon. Clients should only surface this when > 0
+  // (a real "3 waiting" beats a meaningless "0 waiting" on every card).
+  waitingCount: number;
 }
 
 // Full profile page shape — everything a listing card has, plus the detail-page content.

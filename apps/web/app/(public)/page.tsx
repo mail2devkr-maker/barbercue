@@ -87,6 +87,20 @@ export default async function HomePage() {
               you leave.
             </p>
 
+            {/* Issue #13 Mission F: the two real actions BarberCue offers, front and center under
+                the headline — both route through shop discovery first (there's no "the" shop to
+                book/queue at yet), same as the choice cards further down the page, just promoted
+                to where a first-time visitor actually looks. "Find a barber" (the search form
+                below) stays as the supporting, open-ended discovery action. */}
+            <div className={styles.heroCtaRow}>
+              <Link href="/search" className={styles.primaryLink}>
+                Book an appointment <span aria-hidden="true">→</span>
+              </Link>
+              <Link href="/search" className={styles.outlineLink}>
+                Join a live queue <span aria-hidden="true">→</span>
+              </Link>
+            </div>
+
             <form className={styles.heroSearch} action="/search" method="get" aria-label="Find a barbershop">
               <label className={styles.heroField}>
                 <span>Shop or service</span>
