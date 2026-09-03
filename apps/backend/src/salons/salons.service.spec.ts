@@ -47,6 +47,7 @@ describe('SalonsService', () => {
       findFirst: jest.Mock;
       findUnique: jest.Mock;
       create: jest.Mock;
+      count: jest.Mock;
     };
     review: { aggregate: jest.Mock };
     service: { aggregate: jest.Mock };
@@ -68,6 +69,7 @@ describe('SalonsService', () => {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
         create: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
       },
       review: {
         aggregate: jest
@@ -104,6 +106,28 @@ describe('SalonsService', () => {
       ],
     }).compile();
     service = moduleRef.get(SalonsService);
+  });
+
+  describe('getLiveStats', () => {
+    it('returns real platform-wide counts, scoped to ACTIVE salons and live queue statuses', async () => {
+      prisma.salon.count.mockResolvedValue(2);
+      prisma.queueEntry.count.mockResolvedValue(5);
+      const result = await service.getLiveStats();
+      expect(result).toEqual({ activeShopCount: 2, liveWaitingCount: 5 });
+      expect(prisma.salon.count).toHaveBeenCalledWith({
+        where: { status: 'ACTIVE' },
+      });
+      expect(prisma.queueEntry.count).toHaveBeenCalledWith({
+        where: { status: { in: ['WAITING', 'CALLED', 'IN_SERVICE'] } },
+      });
+    });
+
+    it('returns real zeros on a genuinely empty platform, never a fabricated placeholder', async () => {
+      prisma.salon.count.mockResolvedValue(0);
+      prisma.queueEntry.count.mockResolvedValue(0);
+      const result = await service.getLiveStats();
+      expect(result).toEqual({ activeShopCount: 0, liveWaitingCount: 0 });
+    });
   });
 
   describe('search', () => {

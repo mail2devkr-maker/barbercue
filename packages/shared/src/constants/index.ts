@@ -81,6 +81,10 @@ export const DISCOVERY_PATHS = {
   // :countryCode/:citySlug (B9) routes regardless of declaration order.
   citySearch: 'search',
   salons: 'salons',
+  // salons/live-stats — Issue #13 Mission G. Single literal segment, same arity argument as
+  // `mine`/`workplaces` below: registered before the three-segment :countryCode/:citySlug/
+  // :salonSlug wildcard (B9) so it can never be shadowed by it regardless of declaration order.
+  liveStats: 'live-stats',
   // Owner-scoped reads under salons/mine[/...] — literal 'mine' segment, registered before the
   // :citySlug/:salonSlug wildcard route in SalonsController so it can never be shadowed by it.
   mine: 'mine',

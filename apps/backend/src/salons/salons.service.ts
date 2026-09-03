@@ -12,6 +12,7 @@ import {
   type RegisterSalonResultDto,
   StaffMemberStatus,
   VerificationStatus,
+  type LiveStatsDto,
   type SalonListItemDto,
   type SalonProfileDto,
   type PublicSalonStatusDto,
@@ -104,6 +105,27 @@ export class SalonsService {
     private readonly citiesService: CitiesService,
     private readonly salonAccess: SalonAccessService,
   ) {}
+
+  // Issue #13 Mission G — two cheap, independent count queries, no joins. Real zeros on a genuinely
+  // empty platform, never a fabricated placeholder; the homepage hides a stat rather than render a
+  // misleading "0" (see LiveStatsDto's own doc comment).
+  async getLiveStats(): Promise<LiveStatsDto> {
+    const [activeShopCount, liveWaitingCount] = await Promise.all([
+      this.prisma.salon.count({ where: { status: SalonStatus.ACTIVE } }),
+      this.prisma.queueEntry.count({
+        where: {
+          status: {
+            in: [
+              QueueEntryStatus.WAITING,
+              QueueEntryStatus.CALLED,
+              QueueEntryStatus.IN_SERVICE,
+            ],
+          },
+        },
+      }),
+    ]);
+    return { activeShopCount, liveWaitingCount };
+  }
 
   async search(
     query: SalonSearchQueryInput,

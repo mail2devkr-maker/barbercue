@@ -272,6 +272,30 @@ export interface SalonListItemDto extends SalonSummary {
   waitingCount: number;
 }
 
+// GET salons/:salonId/booking/recent-activity — Issue #13 Mission H, the per-shop "last 30
+// minutes" ticker. Deliberately name-free: this schema has no customer display-name field
+// anywhere (User only ever stores phone/email — Google's own name claim is verified but not
+// persisted), so "first name only" as literally described could only be satisfied by inventing a
+// value. Anonymized ("Someone booked X") is strictly more private than a first name would have
+// been anyway, and still delivers the real "this shop is active" signal without fabricating
+// anything. serviceName is null for a walk-in queue join with no service chosen.
+export interface RecentActivityItemDto {
+  type: 'booking' | 'queue';
+  serviceName: string | null;
+  occurredAt: string; // ISO 8601
+}
+
+// GET salons/live-stats — Issue #13 Mission G. Platform-wide, privacy-safe aggregate counts only
+// (no per-salon or per-customer identity), for the homepage's "this is a live product" signals.
+// Every field is a plain count; a genuinely empty platform returns real zeros, never a fabricated
+// placeholder — clients should hide a stat rather than render a misleading "0".
+export interface LiveStatsDto {
+  // Salons with status ACTIVE, platform-wide.
+  activeShopCount: number;
+  // Sum of QueueEntry rows currently WAITING/CALLED/IN_SERVICE, across every salon.
+  liveWaitingCount: number;
+}
+
 // Full profile page shape — everything a listing card has, plus the detail-page content.
 export interface SalonProfileDto extends SalonListItemDto {
   description: string | null;

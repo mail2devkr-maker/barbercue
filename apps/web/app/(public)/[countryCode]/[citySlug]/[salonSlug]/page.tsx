@@ -15,6 +15,7 @@ import { SalonImage } from "../../../../../components/ui/SalonImage";
 import { LinkButton } from "../../../../../components/ui/Button";
 import { EditorialImage } from "../../../../../components/editorial/EditorialImage";
 import { PublicSalonStatus } from "../../../../../components/discovery/PublicSalonStatus";
+import { ActivityTicker } from "../../../../../components/discovery/ActivityTicker";
 import styles from "./profile.module.css";
 
 interface SalonPageParams {
@@ -199,6 +200,7 @@ export default async function SalonPage({
             rounded={0}
             priority
           />
+          <ActivityTicker salonId={salon.id} />
         </div>
 
         <div className={styles.identity}>

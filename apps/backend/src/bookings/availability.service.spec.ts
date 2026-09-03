@@ -20,6 +20,7 @@ interface PrismaMock {
   operatingHours: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   staffWorkingHours: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   booking: { findMany: jest.Mock<Promise<unknown[]>, [unknown]> };
+  queueEntry: { findMany: jest.Mock<Promise<unknown[]>, [unknown]> };
 }
 
 describe('AvailabilityService', () => {
@@ -42,6 +43,7 @@ describe('AvailabilityService', () => {
         findUnique: jest.fn<Promise<unknown>, [unknown]>(),
       },
       booking: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
+      queueEntry: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
     };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -75,6 +77,69 @@ describe('AvailabilityService', () => {
       await expect(service.getSalonOrThrow('s1')).resolves.toMatchObject({
         id: 's1',
       });
+    });
+  });
+
+  describe('getRecentActivity', () => {
+    beforeEach(() => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      prisma.queueEntry.findMany.mockResolvedValue([]);
+    });
+
+    it('queries only CONFIRMED bookings created within the last 30 minutes for this salon', async () => {
+      await service.getRecentActivity('s1');
+      const call = prisma.booking.findMany.mock.calls[0][0] as {
+        where: { salonId: string; status: string; createdAt: { gte: Date } };
+      };
+      expect(call.where.salonId).toBe('s1');
+      expect(call.where.status).toBe('CONFIRMED');
+      expect(Date.now() - call.where.createdAt.gte.getTime()).toBeCloseTo(
+        30 * 60_000,
+        -3,
+      );
+    });
+
+    it('merges bookings and queue joins, most recent first, anonymized (no name field anywhere)', async () => {
+      const now = Date.now();
+      prisma.booking.findMany.mockResolvedValue([
+        {
+          createdAt: new Date(now - 5 * 60_000),
+          service: { name: 'Haircut' },
+        },
+      ]);
+      prisma.queueEntry.findMany.mockResolvedValue([
+        {
+          joinedAt: new Date(now - 2 * 60_000),
+          service: { name: 'Beard' },
+        },
+      ]);
+      const result = await service.getRecentActivity('s1');
+      expect(result).toEqual([
+        {
+          type: 'queue',
+          serviceName: 'Beard',
+          occurredAt: new Date(now - 2 * 60_000).toISOString(),
+        },
+        {
+          type: 'booking',
+          serviceName: 'Haircut',
+          occurredAt: new Date(now - 5 * 60_000).toISOString(),
+        },
+      ]);
+      // toEqual above already pins the exact shape (type/serviceName/occurredAt only) — no
+      // customer name, phone, or email field exists on this DTO at all.
+    });
+
+    it('handles a walk-in queue join with no service chosen (serviceName null, not a crash)', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([
+        { joinedAt: new Date(), service: null },
+      ]);
+      const result = await service.getRecentActivity('s1');
+      expect(result[0].serviceName).toBeNull();
+    });
+
+    it('returns an empty list — not an error — when there is genuinely no recent activity', async () => {
+      await expect(service.getRecentActivity('s1')).resolves.toEqual([]);
     });
   });
 
@@ -415,10 +480,16 @@ describe('AvailabilityService', () => {
         const slotStartUtc = new Date(Date.UTC(y, m - 1, d, 3, 30)); // 09:00 IST
         const slotEndUtc = new Date(Date.UTC(y, m - 1, d, 4, 0));
         prisma.booking.findMany.mockResolvedValue([
-          { slotStart: slotStartUtc, slotEnd: slotEndUtc, preferredStaffId: 'st1' },
+          {
+            slotStart: slotStartUtc,
+            slotEnd: slotEndUtc,
+            preferredStaffId: 'st1',
+          },
         ]);
         const slots = await service.getAvailability('s1', 'sv1', day, 'st1');
-        const slot = slots.find((s) => s.slotStart === slotStartUtc.toISOString());
+        const slot = slots.find(
+          (s) => s.slotStart === slotStartUtc.toISOString(),
+        );
         expect(slot).toMatchObject({ available: false, state: 'OCCUPIED' });
       });
 
@@ -432,10 +503,16 @@ describe('AvailabilityService', () => {
         const slotStartUtc = new Date(Date.UTC(y, m - 1, d, 3, 30));
         const slotEndUtc = new Date(Date.UTC(y, m - 1, d, 4, 0));
         prisma.booking.findMany.mockResolvedValue([
-          { slotStart: slotStartUtc, slotEnd: slotEndUtc, preferredStaffId: 'st1' },
+          {
+            slotStart: slotStartUtc,
+            slotEnd: slotEndUtc,
+            preferredStaffId: 'st1',
+          },
         ]);
         const slots = await service.getAvailability('s1', 'sv1', day, 'st2');
-        const slot = slots.find((s) => s.slotStart === slotStartUtc.toISOString());
+        const slot = slots.find(
+          (s) => s.slotStart === slotStartUtc.toISOString(),
+        );
         expect(slot).toMatchObject({ available: true, state: 'AVAILABLE' });
       });
 
@@ -452,10 +529,16 @@ describe('AvailabilityService', () => {
         const slotStartUtc = new Date(Date.UTC(y, m - 1, d, 3, 30));
         const slotEndUtc = new Date(Date.UTC(y, m - 1, d, 4, 0));
         prisma.booking.findMany.mockResolvedValue([
-          { slotStart: slotStartUtc, slotEnd: slotEndUtc, preferredStaffId: 'st1' },
+          {
+            slotStart: slotStartUtc,
+            slotEnd: slotEndUtc,
+            preferredStaffId: 'st1',
+          },
         ]);
         const slots = await service.getAvailability('s1', 'sv1', day);
-        const slot = slots.find((s) => s.slotStart === slotStartUtc.toISOString());
+        const slot = slots.find(
+          (s) => s.slotStart === slotStartUtc.toISOString(),
+        );
         expect(slot).toMatchObject({ available: true, state: 'AVAILABLE' });
       });
     });

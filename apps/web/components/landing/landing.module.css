@@ -283,6 +283,24 @@
   color: var(--bc-success);
 }
 
+.liveStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 10px 0 0;
+  color: var(--landing-rust);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.liveStats span::before {
+  content: "●";
+  margin-right: 6px;
+  font-size: 0.6rem;
+  vertical-align: middle;
+  color: var(--bc-success);
+}
+
 .ownerPrompt {
   margin: 16px 0 0;
   color: var(--landing-muted);

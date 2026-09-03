@@ -71,4 +71,11 @@ export class BookingInfoController {
   getCancellationPolicy(@Param('salonId') salonId: string) {
     return this.cancellationPolicyService.getEffectivePolicy(salonId);
   }
+
+  // Issue #13 Mission H — the public salon profile's "last 30 minutes" activity ticker.
+  @Public()
+  @Get('recent-activity')
+  getRecentActivity(@Param('salonId') salonId: string) {
+    return this.availability.getRecentActivity(salonId);
+  }
 }

@@ -76,6 +76,14 @@ export class SalonsController {
     return this.salonsService.getOwnedSalon(user.id, salonId);
   }
 
+  // Issue #13 Mission G — single literal segment, same arity argument as `mine`/`workplaces`
+  // above. Platform-wide aggregate counts only; see LiveStatsDto's own doc comment.
+  @Public()
+  @Get(DISCOVERY_PATHS.liveStats)
+  getLiveStats() {
+    return this.salonsService.getLiveStats();
+  }
+
   @Public()
   @Get(':countryCode/:citySlug/:salonSlug/status')
   getPublicStatus(

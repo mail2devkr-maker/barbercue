@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DISCOVERY_PATHS, HAIRSTYLE_CATALOG } from "@barbercue/shared";
-import type { CityDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
+import type { CityDto, LiveStatsDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../lib/seo";
 import { SERVICE_CATEGORIES } from "../../lib/editorial/manifest";
@@ -47,10 +47,17 @@ const OWNER_POINTS = [
 ];
 
 export default async function HomePage() {
-  const [cities, featured] = await Promise.all([
+  const [cities, featured, liveStats] = await Promise.all([
     fetchDiscoveryOrNull<CityDto[]>(DISCOVERY_PATHS.cities, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
     fetchDiscoveryOrNull<PaginatedResult<SalonListItemDto>>(
       `${DISCOVERY_PATHS.salons}?limit=3`,
+      DISCOVERY_REVALIDATE_SECONDS,
+    ).catch(() => null),
+    // Issue #13 Mission G — real backend-driven counts, not fake "live" numbers. Failing closed
+    // to null (never a fabricated fallback) if the request errors; the strip below simply doesn't
+    // render in that case.
+    fetchDiscoveryOrNull<LiveStatsDto>(
+      `${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.liveStats}`,
       DISCOVERY_REVALIDATE_SECONDS,
     ).catch(() => null),
   ]);
@@ -120,6 +127,25 @@ export default async function HomePage() {
               <span>Book or join live</span>
               <span>Real-time queue position</span>
             </div>
+            {/* Issue #13 Mission G — real backend-driven counts (LiveStatsDto), never fabricated.
+                Hidden entirely rather than showing a misleading "0" when there's nothing real to
+                report — see LiveStatsDto's own doc comment. */}
+            {liveStats && (liveStats.activeShopCount > 0 || liveStats.liveWaitingCount > 0) && (
+              <p className={styles.liveStats} role="status">
+                {liveStats.activeShopCount > 0 && (
+                  <span>
+                    {liveStats.activeShopCount} {liveStats.activeShopCount === 1 ? "shop" : "shops"} on
+                    BarberCue right now
+                  </span>
+                )}
+                {liveStats.liveWaitingCount > 0 && (
+                  <span>
+                    {liveStats.liveWaitingCount} {liveStats.liveWaitingCount === 1 ? "person" : "people"}{" "}
+                    in live queues right now
+                  </span>
+                )}
+              </p>
+            )}
             <p className={styles.ownerPrompt}>
               Run a barbershop? <Link href="/dashboard/register-shop">Register your shop</Link>
             </p>

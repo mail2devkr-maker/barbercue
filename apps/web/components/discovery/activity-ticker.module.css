@@ -1,0 +1,69 @@
+/* Issue #13 Mission H — overlay strip anchored to the bottom of the cover photo (the salon page's
+   .cover element gets position:relative to anchor this; see profile.module.css). Positioned this
+   way rather than as a grid sibling because .hero is a 2-column grid on desktop (cover | identity
+   side by side) — an overlay is "directly below the image" on every viewport without fighting
+   that layout, whereas a plain DOM sibling would only land "below image, above name" once the
+   grid collapses to one column on mobile. */
+
+.ticker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  background: linear-gradient(0deg, rgba(20, 16, 12, 0.72), rgba(20, 16, 12, 0));
+  padding: 22px 14px 10px;
+}
+
+.idleLabel {
+  display: block;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.85;
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: bc-ticker-scroll 28s linear infinite;
+}
+
+.trackInner {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.item {
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  padding-right: 40px;
+}
+
+.item::before {
+  content: "●";
+  margin-right: 8px;
+  font-size: 0.55rem;
+  vertical-align: middle;
+  color: #8fe0a8;
+}
+
+@keyframes bc-ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* Mission H's own explicit accessibility requirement. */
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    animation: none;
+  }
+  .trackInner:last-child {
+    display: none;
+  }
+}

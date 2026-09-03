@@ -21,6 +21,7 @@
 }
 
 .cover {
+  position: relative;
   min-width: 0;
   background: #eee8dd;
 }

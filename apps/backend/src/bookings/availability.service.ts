@@ -9,6 +9,7 @@ import {
   computeSlotCapacity,
   isSlotBookable,
   type AvailabilitySlotDto,
+  type RecentActivityItemDto,
   type StaffOptionDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,6 +29,9 @@ import {
 // guessing IST for a shop that might not even be in that zone.
 const SLOT_GRANULARITY_MINUTES = 15;
 const MAX_BOOKING_DAYS_AHEAD = 30;
+// Issue #13 Mission H — the ticker's own "last 30 minutes" window.
+const RECENT_ACTIVITY_WINDOW_MINUTES = 30;
+const RECENT_ACTIVITY_LIMIT = 8;
 
 // Exported so queue.service.ts (Phase 3C) can pass its own transaction client into the reused
 // qualifiedStaffWhere/getSlotCapacity helpers below.
@@ -36,6 +40,49 @@ export type Db = PrismaService | Prisma.TransactionClient;
 @Injectable()
 export class AvailabilityService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Issue #13 Mission H — real, privacy-safe recent-activity signal for a salon's public profile
+  // page. Deliberately anonymized (see RecentActivityItemDto's own doc comment for why: this
+  // schema has no customer display-name field at all). Two independent, cheap, indexed-by-salonId
+  // queries, merged and re-sorted in memory — no join, no per-row N+1.
+  async getRecentActivity(salonId: string): Promise<RecentActivityItemDto[]> {
+    const since = new Date(
+      Date.now() - RECENT_ACTIVITY_WINDOW_MINUTES * 60_000,
+    );
+    const [bookings, queueEntries] = await Promise.all([
+      this.prisma.booking.findMany({
+        where: {
+          salonId,
+          status: BookingStatus.CONFIRMED,
+          createdAt: { gte: since },
+        },
+        select: { createdAt: true, service: { select: { name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+      }),
+      this.prisma.queueEntry.findMany({
+        where: { salonId, joinedAt: { gte: since } },
+        select: { joinedAt: true, service: { select: { name: true } } },
+        orderBy: { joinedAt: 'desc' },
+        take: RECENT_ACTIVITY_LIMIT,
+      }),
+    ]);
+
+    const items: RecentActivityItemDto[] = [
+      ...bookings.map((b) => ({
+        type: 'booking' as const,
+        serviceName: b.service.name,
+        occurredAt: b.createdAt.toISOString(),
+      })),
+      ...queueEntries.map((q) => ({
+        type: 'queue' as const,
+        serviceName: q.service?.name ?? null,
+        occurredAt: q.joinedAt.toISOString(),
+      })),
+    ];
+    items.sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
+    return items.slice(0, RECENT_ACTIVITY_LIMIT);
+  }
 
   async getSalonOrThrow(salonId: string) {
     const salon = await this.prisma.salon.findUnique({
