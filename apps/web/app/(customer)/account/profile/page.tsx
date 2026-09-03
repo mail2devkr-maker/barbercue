@@ -29,10 +29,6 @@ const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
   PROMOTIONAL: { title: "Offers & promotions", description: "Deals from shops you've visited." },
 };
 
-// New page (previously no customer profile UI existed) built entirely against endpoints that
-// already existed and were already used elsewhere: GET auth/me (via useAuth()'s already-loaded
-// `user`), GET/DELETE auth/sessions. Only fields that actually exist on MeResponse/AuthSession are
-// shown — no fabricated profile data.
 export default function ProfilePage() {
   const { user, logout, refreshMe } = useAuth();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
@@ -66,9 +62,7 @@ export default function ProfilePage() {
       .then((result) => {
         if (!cancelled) setPreferences(result);
       })
-      .catch(() => {
-        /* non-critical section — the rest of the page still works */
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -83,7 +77,7 @@ export default function ProfilePage() {
       );
       setPreferences(result);
     } catch {
-      /* leave the previous state in place — the toggle below reflects what was actually saved */
+      /* leave the previous state in place */
     } finally {
       setSavingKey(null);
     }
@@ -119,11 +113,6 @@ export default function ProfilePage() {
     }
   }
 
-  // Deliberately NOT using POST auth/logout-all here: that endpoint revokes every session
-  // including the caller's own current one (and clears the refresh cookie) — it's a full
-  // "log out everywhere" action, not "sign out my other devices". This calls the same
-  // single-session DELETE auth/sessions/:id the per-row button uses, once per non-current
-  // session, which is what "sign out of other sessions" actually means.
   async function revokeOtherSessions() {
     const others = sessions.filter((s) => !s.current);
     if (others.length === 0) return;
@@ -147,14 +136,14 @@ export default function ProfilePage() {
         <p className={styles.eyebrow}>PROFILE & SECURITY</p>
         <h1 className={styles.pageTitle}>Your account, kept simple.</h1>
         <p className={styles.pageSubtitle}>
-          Review the contact details connected to BarberCue and manage where your account is signed in.
+          Review the contact details connected to FastQue and manage where your account is signed in.
         </p>
       </header>
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Account details</h2>
-          <p>These details come from your current authenticated BarberCue account.</p>
+          <p>These details come from your current authenticated FastQue account.</p>
         </div>
         <Card className={styles.profileCard}>
           <dl>
@@ -258,7 +247,7 @@ export default function ProfilePage() {
         <div className={styles.sectionHeader}>
           <h2 className={styles.sectionTitle}>Notification preferences</h2>
           <p>
-            Choose what you hear from BarberCue. In-app is the only channel available today — SMS,
+            Choose what you hear from FastQue. In-app is the only channel available today — SMS,
             email and WhatsApp aren&apos;t connected yet.
           </p>
         </div>
