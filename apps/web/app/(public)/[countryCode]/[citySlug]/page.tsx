@@ -115,7 +115,7 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
           <div className={styles.empty}>
             <span aria-hidden="true">⌖</span>
             <h2>No shops are listed in {city.name} yet</h2>
-            <p>Try another nearby city or invite your local barbershop to BarberCue.</p>
+            <p>Try another nearby city or invite your local barbershop to FastQue.</p>
             <div>
               <Link href="/search">Search another city</Link>
               <Link href="/register/salon">List a barbershop</Link>
