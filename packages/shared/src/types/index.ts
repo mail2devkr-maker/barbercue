@@ -4,6 +4,8 @@ import type {
   ChairStatus,
   ChargeType,
   Language,
+  LedgerReason,
+  LedgerStatus,
   NotificationCategory,
   NotificationChannel,
   PhotoType,
@@ -503,6 +505,9 @@ export interface OwnerCustomerSummaryDto {
   customerId: string;
   phone: string | null;
   email: string | null;
+  // This salon's currency (Salon.currency), for formatting ledgerEntries/outstandingTotalAmount —
+  // Part E's confirmation copy ("Waive ₹150 no-show due...") needs a real currency, not a guess.
+  currency: string | null;
   totalBookings: number;
   completedCount: number;
   cancelledCount: number;
@@ -512,6 +517,29 @@ export interface OwnerCustomerSummaryDto {
   preferredServiceName: string | null; // most-completed service at this salon, if any
   preferredStaffName: string | null; // most-frequent assigned barber at this salon, if derivable
   segment: CustomerSegment | null;
+  // Customer Dues + Cancellation Policy mission — Part E's "New customer grace · N of 3 completed
+  // visits" line and Part D's waive eligibility gate. Derived from completedCount, exposed
+  // directly so no client re-implements the < NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT rule.
+  newCustomerGraceEligible: boolean;
+  // OUTSTANDING + WAIVED ledger entries at this salon (never SETTLED-only filtered out — Part E
+  // asks for "outstanding/waived dues"), newest first.
+  ledgerEntries: CustomerLedgerEntryDto[];
+  // Sum of this customer's OUTSTANDING entries at this salon — 0 when none. Matches the total the
+  // OUTSTANDING_BALANCE booking-block error reports to the customer (Part I).
+  outstandingTotalAmount: number;
+}
+
+// POST dashboard/.../ledger/:ledgerEntryId/waive|restore response.
+export interface LedgerActionResultDto {
+  ledgerEntry: CustomerLedgerEntryDto;
+}
+
+// AppException.details shape for BookingErrorCode.OUTSTANDING_BALANCE (Part I) — lets the client
+// render the real reason/amount instead of a generic message, without exposing ledger entry ids.
+export interface OutstandingBalanceDetailsDto {
+  totalOutstandingAmount: number;
+  currency: string;
+  entries: Array<{ reason: LedgerReason; amount: number }>;
 }
 
 // ---------- Owner analytics & reporting (Phase 9) ----------
@@ -730,7 +758,14 @@ export interface SalonPaymentPolicyDto {
 
 export interface CancellationPolicyDto {
   salonId: string | null;
+  // Raw configured value from CancellationPolicy — kept for backward compatibility. Charge
+  // computation and any "free cancellation up to N minutes" customer-facing copy must use
+  // effectiveFreeCancellationWindowMinutes below instead, never this field directly: a salon may
+  // configure less than the platform's 60-minute floor, and this field alone would understate it.
   freeCancellationWindowMinutes: number;
+  // packages/shared/src/calc effectiveFreeCancellationWindowMinutes(freeCancellationWindowMinutes)
+  // — max(60, configured). Authoritative for both charge eligibility and customer-facing display.
+  effectiveFreeCancellationWindowMinutes: number;
   lateCancellationChargeType: ChargeType;
   lateCancellationChargeValue: number;
   noShowChargeType: ChargeType;
@@ -745,9 +780,21 @@ export interface CustomerLedgerEntryDto {
   salonId: string;
   bookingId: string | null;
   amount: number;
-  reason: string;
-  status: string;
+  reason: LedgerReason;
+  status: LedgerStatus;
+  createdAt: string; // ISO 8601
+  settledAt: string | null; // ISO 8601 — set only when status transitions to SETTLED
+  // Denormalized display fields — null when the related booking/service was deleted or the entry
+  // has no booking (should not normally happen, but the ledger row must never fail to render).
+  bookingServiceName: string | null;
+  bookingSlotStart: string | null; // ISO 8601
 }
+
+// Customer Dues + Cancellation Policy mission — Part D's strict eligibility rule for the owner's
+// "waive no-show due" action: true while the customer has fewer than 3 COMPLETED bookings at this
+// salon. Does NOT mean 3 free waivers are granted automatically — it only gates whether the owner
+// is *permitted* to use the grace waiver at all; the owner still decides per-entry.
+export const NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT = 3;
 
 // ---------- Premium plans & AI credits (Premium phase) ----------
 

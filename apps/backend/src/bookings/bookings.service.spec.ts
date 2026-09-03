@@ -50,7 +50,7 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
 
 interface PrismaMock {
   customerLedgerEntry: {
-    findFirst: jest.Mock<Promise<unknown>, [unknown]>;
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
     create: jest.Mock<Promise<unknown>, [unknown]>;
   };
   salonPaymentPolicy: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
@@ -100,7 +100,7 @@ describe('BookingsService', () => {
   beforeEach(async () => {
     prisma = {
       customerLedgerEntry: {
-        findFirst: jest.fn<Promise<unknown>, [unknown]>(),
+        findMany: jest.fn<Promise<unknown[]>, [unknown]>(),
         create: jest.fn<Promise<unknown>, [unknown]>(),
       },
       salonPaymentPolicy: {
@@ -130,6 +130,7 @@ describe('BookingsService', () => {
         status: 'ACTIVE',
         name: 'BarberCue Demo Salon',
         ownerUserId: 'owner1',
+        currency: 'INR',
       }),
       getServiceOrThrow: jest
         .fn<Promise<unknown>, [string, string]>()
@@ -181,7 +182,7 @@ describe('BookingsService', () => {
     const futureSlot = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
 
     beforeEach(() => {
-      prisma.customerLedgerEntry.findFirst.mockResolvedValue(null);
+      prisma.customerLedgerEntry.findMany.mockResolvedValue([]);
       prisma.salonPaymentPolicy.findUnique.mockResolvedValue(null);
       prisma.booking.count.mockResolvedValue(0);
       prisma.booking.create.mockResolvedValue({ id: 'b1' });
@@ -201,11 +202,10 @@ describe('BookingsService', () => {
       expect(prisma.booking.create).not.toHaveBeenCalled();
     });
 
-    it('rejects with OUTSTANDING_BALANCE when the customer has an unsettled ledger entry at the salon', async () => {
-      prisma.customerLedgerEntry.findFirst.mockResolvedValue({
-        id: 'l1',
-        status: 'OUTSTANDING',
-      });
+    it('rejects with OUTSTANDING_BALANCE and a real amount/reason when the customer has a single unsettled ledger entry at the salon', async () => {
+      prisma.customerLedgerEntry.findMany.mockResolvedValue([
+        { amount: decimal('150'), reason: 'NO_SHOW_CHARGE' },
+      ]);
       await expect(
         service.create(
           'c1',
@@ -213,7 +213,34 @@ describe('BookingsService', () => {
           BookingSource.WEB,
           'key-1',
         ),
-      ).rejects.toMatchObject({ code: 'OUTSTANDING_BALANCE' });
+      ).rejects.toMatchObject({
+        code: 'OUTSTANDING_BALANCE',
+        message: expect.stringContaining('no-show due'),
+        details: {
+          totalOutstandingAmount: 150,
+          entries: [{ reason: 'NO_SHOW_CHARGE', amount: 150 }],
+        },
+      });
+      expect(prisma.booking.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects with OUTSTANDING_BALANCE using the total amount when the customer has multiple unsettled ledger entries', async () => {
+      prisma.customerLedgerEntry.findMany.mockResolvedValue([
+        { amount: decimal('150'), reason: 'NO_SHOW_CHARGE' },
+        { amount: decimal('75'), reason: 'CANCELLATION_CHARGE' },
+      ]);
+      await expect(
+        service.create(
+          'c1',
+          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+          BookingSource.WEB,
+          'key-1',
+        ),
+      ).rejects.toMatchObject({
+        code: 'OUTSTANDING_BALANCE',
+        message: expect.stringContaining('225'),
+        details: { totalOutstandingAmount: 225 },
+      });
       expect(prisma.booking.create).not.toHaveBeenCalled();
     });
 

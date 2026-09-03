@@ -2,6 +2,7 @@ import { ChargeType } from '../enums';
 import {
   computeCancellationCharge,
   computeSlotCapacity,
+  effectiveFreeCancellationWindowMinutes,
   estimateWaitMinutes,
   estimateWaitRangeMinutes,
   haversineDistanceKm,
@@ -34,6 +35,53 @@ describe('computeCancellationCharge', () => {
   it('never exceeds the service price', () => {
     const flatOver = { ...policy, lateCancellationChargeType: ChargeType.FLAT, lateCancellationChargeValue: 9999 };
     expect(computeCancellationCharge(flatOver, 500, 10, false)).toBe(500);
+  });
+
+  describe('platform-minimum 60-minute free cancellation window', () => {
+    it('is free at exactly 60 minutes before the slot, even if the salon configured less', () => {
+      const stingyPolicy = { ...policy, freeCancellationWindowMinutes: 30 };
+      expect(computeCancellationCharge(stingyPolicy, 500, 60, false)).toBe(0);
+    });
+
+    it('is free at 61 minutes before the slot', () => {
+      const stingyPolicy = { ...policy, freeCancellationWindowMinutes: 30 };
+      expect(computeCancellationCharge(stingyPolicy, 500, 61, false)).toBe(0);
+    });
+
+    it('applies the late policy just under 60 minutes even if the salon configured less', () => {
+      const stingyPolicy = { ...policy, freeCancellationWindowMinutes: 30 };
+      // 59m59s -> 59.983... minutes, strictly less than the 60-minute platform floor.
+      expect(computeCancellationCharge(stingyPolicy, 500, 59 + 59 / 60, false)).toBe(250);
+    });
+
+    it('applies the late policy at 30 minutes before the slot under a 30-minute salon policy (still below the 60-minute floor)', () => {
+      const stingyPolicy = { ...policy, freeCancellationWindowMinutes: 30 };
+      expect(computeCancellationCharge(stingyPolicy, 500, 30, false)).toBe(250);
+    });
+
+    it('honors a more generous salon policy: 119 minutes is late under a 120-minute window', () => {
+      const generousPolicy = { ...policy, freeCancellationWindowMinutes: 120 };
+      expect(computeCancellationCharge(generousPolicy, 500, 119, false)).toBe(250);
+    });
+
+    it('honors a more generous salon policy: exactly 120 minutes is free under a 120-minute window', () => {
+      const generousPolicy = { ...policy, freeCancellationWindowMinutes: 120 };
+      expect(computeCancellationCharge(generousPolicy, 500, 120, false)).toBe(0);
+    });
+  });
+});
+
+describe('effectiveFreeCancellationWindowMinutes', () => {
+  it('floors a stingier-than-platform salon policy at 60', () => {
+    expect(effectiveFreeCancellationWindowMinutes(30)).toBe(60);
+  });
+
+  it('leaves the platform-exact 60 unchanged', () => {
+    expect(effectiveFreeCancellationWindowMinutes(60)).toBe(60);
+  });
+
+  it('honors a more generous salon policy unchanged', () => {
+    expect(effectiveFreeCancellationWindowMinutes(120)).toBe(120);
   });
 });
 

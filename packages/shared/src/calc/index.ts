@@ -27,6 +27,22 @@ export interface CancellationPolicyLike {
   noShowChargeValue: number;
 }
 
+// Customer Dues + Cancellation Policy mission — a salon can be more generous than this, but never
+// stingier: no salon policy may ever require less than 60 minutes' notice for a free cancellation.
+export const PLATFORM_MINIMUM_FREE_CANCELLATION_WINDOW_MINUTES = 60;
+
+/**
+ * The free-cancellation window actually enforced for a salon: whichever is more generous of the
+ * platform-wide floor and the salon's own configured value. Single source of truth for this floor
+ * — computeCancellationCharge below and every display-facing "free cancellation up to N" surface
+ * (web/mobile) must derive the effective window through this function, never re-implement the
+ * max(60, ...) rule themselves, so the charge computed and the number shown to a customer before
+ * they cancel can never silently disagree.
+ */
+export function effectiveFreeCancellationWindowMinutes(configuredMinutes: number): number {
+  return Math.max(PLATFORM_MINIMUM_FREE_CANCELLATION_WINDOW_MINUTES, configuredMinutes);
+}
+
 /**
  * Resolved cancellation-charge computation from STATE_MACHINES.md's cancellation flow. Does not
  * decide *how* the charge is collected (refund-netting vs. CustomerLedgerEntry) — that depends on
@@ -41,7 +57,7 @@ export function computeCancellationCharge(
   if (isNoShow) {
     return computeChargeAmount({ type: policy.noShowChargeType, value: policy.noShowChargeValue }, servicePrice);
   }
-  if (minutesUntilSlot >= policy.freeCancellationWindowMinutes) {
+  if (minutesUntilSlot >= effectiveFreeCancellationWindowMinutes(policy.freeCancellationWindowMinutes)) {
     return 0;
   }
   return computeChargeAmount(

@@ -8,10 +8,12 @@ import {
   LedgerStatus,
   PrepaymentRequirement,
   computeCancellationCharge,
+  formatMoney,
   isSlotBookable,
   type BookingDetailDto,
   type CancelBookingResponseDto,
   type CreateBookingInput,
+  type OutstandingBalanceDetailsDto,
   type PaginatedResult,
   type RescheduleBookingInput,
 } from '@barbercue/shared';
@@ -114,19 +116,41 @@ export class BookingsService {
     }
 
     // API.md's documented default policy: block new bookings at the same salon until an
-    // outstanding balance is settled.
-    const outstanding = await this.prisma.customerLedgerEntry.findFirst({
+    // outstanding balance is settled. Part H (Customer Dues + Cancellation Policy mission): checks
+    // whether ANY qualifying OUTSTANDING row exists — a customer with one WAIVED entry and one
+    // still-OUTSTANDING entry must remain blocked, so this can never collapse to "most recent row"
+    // logic; findMany + a non-empty result is what keeps that correct by construction.
+    const outstandingEntries = await this.prisma.customerLedgerEntry.findMany({
       where: {
         customerId,
         salonId: input.salonId,
         status: LedgerStatus.OUTSTANDING,
       },
+      select: { amount: true, reason: true },
     });
-    if (outstanding) {
+    if (outstandingEntries.length > 0) {
+      const totalOutstandingAmount = outstandingEntries.reduce(
+        (sum, e) => sum + Number(e.amount),
+        0,
+      );
+      // Part I: a real actionable message instead of a generic one — the exact reason/amount only
+      // when there's a single unambiguous entry, otherwise the total (never just "the first one").
+      const message =
+        outstandingEntries.length === 1
+          ? `${formatMoney(totalOutstandingAmount, salon.currency)} ${
+              outstandingEntries[0].reason === LedgerReason.NO_SHOW_CHARGE ? 'no-show due' : 'cancellation charge'
+            } at ${salon.name}. Please settle it before booking again.`
+          : `You have ${formatMoney(totalOutstandingAmount, salon.currency)} in outstanding dues at ${salon.name}. Please settle it before booking again.`;
+      const details: OutstandingBalanceDetailsDto = {
+        totalOutstandingAmount,
+        currency: salon.currency ?? 'INR',
+        entries: outstandingEntries.map((e) => ({ reason: e.reason, amount: Number(e.amount) })),
+      };
       throw new AppException(
         BookingErrorCode.OUTSTANDING_BALANCE,
-        'You have an outstanding balance at this salon. Please settle it before booking again.',
+        message,
         HttpStatus.CONFLICT,
+        { ...details },
       );
     }
 

@@ -250,6 +250,11 @@ export const DASHBOARD_PATHS = {
   workingHours: 'working-hours',
   // GET dashboard/salons/:salonId/customers[/:customerId] (Phase 8 — owner customer CRM).
   customers: 'customers',
+  // POST dashboard/salons/:salonId/customers/:customerId/ledger/:ledgerEntryId/waive|restore —
+  // Customer Dues + Cancellation Policy mission (New Customer No-Show Grace).
+  ledger: 'ledger',
+  waive: 'waive',
+  restore: 'restore',
   // GET dashboard/salons/:salonId/analytics (Phase 9 — owner analytics/reporting).
   analytics: 'analytics',
   // GET dashboard/overview (Phase 10 — multi-branch aggregate overview, no :salonId).

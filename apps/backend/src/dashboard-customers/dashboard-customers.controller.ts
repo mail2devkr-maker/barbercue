@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { DASHBOARD_PATHS, Role, type AuthenticatedUser } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -29,5 +29,30 @@ export class DashboardCustomersController {
     @Param('customerId') customerId: string,
   ) {
     return this.customers.getOne(user.id, salonId, customerId);
+  }
+
+  // Customer Dues + Cancellation Policy mission — reversible New Customer No-Show Grace waiver.
+  @Post(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}/:customerId/${DASHBOARD_PATHS.ledger}/:ledgerEntryId/${DASHBOARD_PATHS.waive}`,
+  )
+  waiveNoShowDue(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('customerId') customerId: string,
+    @Param('ledgerEntryId') ledgerEntryId: string,
+  ) {
+    return this.customers.waiveNoShowDue(user.id, salonId, customerId, ledgerEntryId);
+  }
+
+  @Post(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}/:customerId/${DASHBOARD_PATHS.ledger}/:ledgerEntryId/${DASHBOARD_PATHS.restore}`,
+  )
+  restoreNoShowDue(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('customerId') customerId: string,
+    @Param('ledgerEntryId') ledgerEntryId: string,
+  ) {
+    return this.customers.restoreNoShowDue(user.id, salonId, customerId, ledgerEntryId);
   }
 }

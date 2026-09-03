@@ -2,8 +2,13 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   BookingErrorCode,
   BookingStatus,
+  LedgerReason,
+  LedgerStatus,
+  NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT,
   QueueEntryStatus,
+  type CustomerLedgerEntryDto,
   type CustomerSegment,
+  type LedgerActionResultDto,
   type OwnerCustomerSummaryDto,
   type PaginatedResult,
 } from '@barbercue/shared';
@@ -28,6 +33,54 @@ interface CustomerAggregates {
   lastVisitAt: Date | null;
   preferredServiceId: string | null;
   preferredStaffId: string | null;
+}
+
+// Prisma.CustomerLedgerEntryGetPayload-shaped row from the `ledger` query in buildSummaries below
+// — kept local rather than imported from @prisma/client so this file's Prisma coupling stays
+// confined to inline query shapes, matching the rest of this service.
+interface LedgerRow {
+  id: string;
+  customerId: string;
+  salonId: string;
+  bookingId: string | null;
+  amount: { toString(): string } | number;
+  reason: string;
+  status: string;
+  createdAt: Date;
+  settledAt: Date | null;
+  booking: { slotStart: Date; service: { name: string } } | null;
+}
+
+// Reused by every query that must return a full LedgerRow (buildSummaries, getOwnedLedgerEntry,
+// and the post-mutation re-read in waiveNoShowDue/restoreNoShowDue) so none of them can silently
+// drift and return a partial row missing the booking/service join.
+const ledgerRowSelect = {
+  id: true,
+  customerId: true,
+  salonId: true,
+  bookingId: true,
+  amount: true,
+  reason: true,
+  status: true,
+  createdAt: true,
+  settledAt: true,
+  booking: { select: { slotStart: true, service: { select: { name: true } } } },
+} as const;
+
+function toLedgerEntryDto(row: LedgerRow): CustomerLedgerEntryDto {
+  return {
+    id: row.id,
+    customerId: row.customerId,
+    salonId: row.salonId,
+    bookingId: row.bookingId,
+    amount: Number(row.amount),
+    reason: row.reason as LedgerReason,
+    status: row.status as LedgerStatus,
+    createdAt: row.createdAt.toISOString(),
+    settledAt: row.settledAt ? row.settledAt.toISOString() : null,
+    bookingServiceName: row.booking?.service.name ?? null,
+    bookingSlotStart: row.booking?.slotStart.toISOString() ?? null,
+  };
 }
 
 function segmentFor(completedCount: number): CustomerSegment | null {
@@ -145,6 +198,7 @@ export class DashboardCustomersService {
     customerIds: string[],
   ): Promise<OwnerCustomerSummaryDto[]> {
     const [
+      salon,
       users,
       totalGrouped,
       completedGrouped,
@@ -152,7 +206,9 @@ export class DashboardCustomersService {
       noShowGrouped,
       serviceGrouped,
       staffGrouped,
+      ledgerRows,
     ] = await Promise.all([
+      this.prisma.salon.findUnique({ where: { id: salonId }, select: { currency: true } }),
       this.prisma.user.findMany({
         where: { id: { in: customerIds } },
         select: { id: true, phone: true, email: true },
@@ -209,6 +265,18 @@ export class DashboardCustomersService {
           status: QueueEntryStatus.COMPLETED,
         },
         _count: { _all: true },
+      }),
+      // Part E: outstanding/waived dues shown on the customer detail screen. SETTLED entries are
+      // deliberately excluded — those are resolved history the owner doesn't need surfaced as an
+      // actionable due, unlike OUTSTANDING/WAIVED.
+      this.prisma.customerLedgerEntry.findMany({
+        where: {
+          salonId,
+          customerId: { in: customerIds },
+          status: { in: [LedgerStatus.OUTSTANDING, LedgerStatus.WAIVED] },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: ledgerRowSelect,
       }),
     ]);
 
@@ -307,6 +375,14 @@ export class DashboardCustomersService {
     for (const s of staff) staffNameById.set(s.id, s.displayName);
     const userById = new Map(users.map((u) => [u.id, u] as const));
 
+    const ledgerByCustomer = new Map<string, CustomerLedgerEntryDto[]>();
+    for (const row of ledgerRows as LedgerRow[]) {
+      const dto = toLedgerEntryDto(row);
+      const list = ledgerByCustomer.get(row.customerId) ?? [];
+      list.push(dto);
+      ledgerByCustomer.set(row.customerId, list);
+    }
+
     return customerIds
       .map((customerId) => {
         const agg = aggregates.get(customerId)!;
@@ -314,10 +390,15 @@ export class DashboardCustomersService {
         // with an arbitrary id, and this must fail closed (BOOKING_NOT_FOUND), not return zeros.
         if (agg.total === 0) return null;
         const user = userById.get(customerId);
+        const ledgerEntries = ledgerByCustomer.get(customerId) ?? [];
+        const outstandingTotalAmount = ledgerEntries
+          .filter((e) => e.status === LedgerStatus.OUTSTANDING)
+          .reduce((sum, e) => sum + e.amount, 0);
         const dto: OwnerCustomerSummaryDto = {
           customerId,
           phone: user?.phone ?? null,
           email: user?.email ?? null,
+          currency: salon?.currency ?? null,
           totalBookings: agg.total,
           completedCount: agg.completed,
           cancelledCount: agg.cancelled,
@@ -333,9 +414,189 @@ export class DashboardCustomersService {
             ? (staffNameById.get(agg.preferredStaffId) ?? null)
             : null,
           segment: segmentFor(agg.completed),
+          newCustomerGraceEligible: agg.completed < NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT,
+          ledgerEntries,
+          outstandingTotalAmount,
         };
         return dto;
       })
       .filter((dto): dto is OwnerCustomerSummaryDto => dto !== null);
+  }
+
+  /**
+   * Part C/D/F/G — owner-authenticated reversible New Customer No-Show Grace waiver.
+   * OUTSTANDING -> WAIVED, only for a NO_SHOW_CHARGE entry belonging to THIS salon and THIS
+   * customer, and only while the customer has fewer than NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT
+   * COMPLETED bookings at this salon. CANCELLATION_CHARGE entries are never eligible (Part D).
+   */
+  async waiveNoShowDue(
+    userId: string,
+    salonId: string,
+    customerId: string,
+    ledgerEntryId: string,
+  ): Promise<LedgerActionResultDto> {
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const entry = await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId);
+
+    if (entry.reason !== LedgerReason.NO_SHOW_CHARGE) {
+      throw new AppException(
+        BookingErrorCode.LEDGER_ENTRY_NOT_WAIVABLE,
+        'Only a no-show charge is eligible for the New Customer Grace waiver.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    // Idempotent no-op: a retried request against an entry this exact action already succeeded on
+    // returns the current (already-WAIVED) state rather than erroring or double-auditing.
+    if (entry.status === LedgerStatus.WAIVED) {
+      return { ledgerEntry: entry };
+    }
+    if (entry.status !== LedgerStatus.OUTSTANDING) {
+      throw new AppException(
+        BookingErrorCode.LEDGER_ENTRY_NOT_WAIVABLE,
+        'This due is not outstanding and cannot be waived.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const completedVisitCount = await this.prisma.booking.count({
+      where: { salonId, customerId, status: BookingStatus.COMPLETED },
+    });
+    if (completedVisitCount >= NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT) {
+      throw new AppException(
+        BookingErrorCode.LEDGER_ENTRY_NOT_WAIVABLE,
+        'This customer has completed 3 or more visits and is no longer eligible for the New Customer Grace waiver.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Claim-based conditional update — same pattern as booking-no-show.service.ts /
+      // queue-entry-expiry.service.ts: the where clause re-checks status, so a second concurrent
+      // waive request (double-click) can never transition twice or write two audit rows.
+      const claim = await tx.customerLedgerEntry.updateMany({
+        where: {
+          id: ledgerEntryId,
+          salonId,
+          customerId,
+          reason: LedgerReason.NO_SHOW_CHARGE,
+          status: LedgerStatus.OUTSTANDING,
+        },
+        data: { status: LedgerStatus.WAIVED },
+      });
+      if (claim.count === 0) return null;
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'NO_SHOW_DUE_WAIVED',
+          entityType: 'CustomerLedgerEntry',
+          entityId: ledgerEntryId,
+          metadata: {
+            ledgerEntryId,
+            customerId,
+            salonId,
+            bookingId: entry.bookingId,
+            amount: entry.amount,
+            actorUserId: userId,
+            completedVisitCount,
+            previousStatus: LedgerStatus.OUTSTANDING,
+            newStatus: LedgerStatus.WAIVED,
+          },
+        },
+      });
+
+      return tx.customerLedgerEntry.findUniqueOrThrow({ where: { id: ledgerEntryId }, select: ledgerRowSelect });
+    });
+
+    if (!result) {
+      // Lost the race to a concurrent waive/restore between the read above and this transaction —
+      // re-read and return the current state rather than a confusing generic error.
+      return { ledgerEntry: await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId) };
+    }
+    return { ledgerEntry: toLedgerEntryDto(result as unknown as LedgerRow) };
+  }
+
+  /** Part C — the same waiver, reversed. WAIVED -> OUTSTANDING. Never touches SETTLED entries. */
+  async restoreNoShowDue(
+    userId: string,
+    salonId: string,
+    customerId: string,
+    ledgerEntryId: string,
+  ): Promise<LedgerActionResultDto> {
+    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const entry = await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId);
+
+    if (entry.status === LedgerStatus.OUTSTANDING) {
+      // Idempotent no-op — mirrors waiveNoShowDue's own retry handling.
+      return { ledgerEntry: entry };
+    }
+    if (entry.status !== LedgerStatus.WAIVED) {
+      throw new AppException(
+        BookingErrorCode.LEDGER_ENTRY_NOT_RESTORABLE,
+        'This due is not waived and cannot be restored.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.customerLedgerEntry.updateMany({
+        where: { id: ledgerEntryId, salonId, customerId, status: LedgerStatus.WAIVED },
+        data: { status: LedgerStatus.OUTSTANDING },
+      });
+      if (claim.count === 0) return null;
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'NO_SHOW_DUE_RESTORED',
+          entityType: 'CustomerLedgerEntry',
+          entityId: ledgerEntryId,
+          metadata: {
+            ledgerEntryId,
+            customerId,
+            salonId,
+            bookingId: entry.bookingId,
+            amount: entry.amount,
+            actorUserId: userId,
+            previousStatus: LedgerStatus.WAIVED,
+            newStatus: LedgerStatus.OUTSTANDING,
+          },
+        },
+      });
+
+      return tx.customerLedgerEntry.findUniqueOrThrow({ where: { id: ledgerEntryId }, select: ledgerRowSelect });
+    });
+
+    if (!result) {
+      return { ledgerEntry: await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId) };
+    }
+    return { ledgerEntry: toLedgerEntryDto(result as unknown as LedgerRow) };
+  }
+
+  /**
+   * Fetches a ledger entry and proves — before any mutation — that it belongs to both THIS salon
+   * and THIS customer (Part F: "Do not accept arbitrary customerId/salonId combinations that could
+   * allow another salon's financial records to be modified"). Looked up by id alone and then
+   * checked, rather than folding salonId/customerId into the WHERE, so a mismatch reports the
+   * correct 404 instead of leaking whether some other salon's ledgerEntryId exists at all.
+   */
+  private async getOwnedLedgerEntry(
+    salonId: string,
+    customerId: string,
+    ledgerEntryId: string,
+  ): Promise<CustomerLedgerEntryDto> {
+    const row = await this.prisma.customerLedgerEntry.findUnique({
+      where: { id: ledgerEntryId },
+      select: ledgerRowSelect,
+    });
+    if (!row || row.salonId !== salonId || row.customerId !== customerId) {
+      throw new AppException(
+        BookingErrorCode.LEDGER_ENTRY_NOT_FOUND,
+        'This due was not found for this customer at this salon.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return toLedgerEntryDto(row as LedgerRow);
   }
 }

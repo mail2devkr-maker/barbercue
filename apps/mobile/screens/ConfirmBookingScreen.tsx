@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { BOOKING_PATHS } from '@barbercue/shared';
-import type { BookingDetailDto } from '@barbercue/shared';
+import { BOOKING_PATHS, DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
+import type { BookingDetailDto, CancellationPolicyDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { color, font, fontSize, space } from '../lib/theme';
@@ -15,6 +15,16 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<SearchStackParamList, 'ConfirmBooking'>,
   BottomTabScreenProps<TabParamList>
 >;
+
+// Part O (Customer Dues + Cancellation Policy mission) — same formatting rule as apps/web's
+// BookingFlow.tsx: only the real effective window, never a hard-coded "1 hour".
+function formatFreeCancellationWindow(minutes: number): string {
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+  return `${minutes} minutes`;
+}
 
 export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const {
@@ -31,6 +41,21 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
+  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<CancellationPolicyDto>(
+      `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.cancellationPolicy}`,
+    )
+      .then((policy) => {
+        if (!cancelled) setCancellationPolicy(policy);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [salonId]);
 
   async function handleConfirm() {
     setSubmitting(true);
@@ -95,6 +120,12 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
         </Text>
         {preferredStaffName && <Text style={styles.line}>Preferred barber: {preferredStaffName}</Text>}
         {selectedStyleName && <Text style={styles.line}>Style: {selectedStyleName}</Text>}
+        {cancellationPolicy && (
+          <Text style={styles.policyLine}>
+            Free cancellation up to {formatFreeCancellationWindow(cancellationPolicy.effectiveFreeCancellationWindowMinutes)}{' '}
+            before your appointment.
+          </Text>
+        )}
       </Card>
       {error && <InlineError message={error} />}
       {/* The summary above (service/salon/time) already functions as the confirmation step —
@@ -111,6 +142,7 @@ const styles = StyleSheet.create({
   centeredContent: { justifyContent: 'center' },
   card: { marginBottom: space[4] },
   line: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginBottom: space[1] },
+  policyLine: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
   status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent, marginTop: space[2] },
   actionButton: { marginTop: space[2] },
 });

@@ -268,6 +268,13 @@ export const BookingErrorCode = {
   REQUEST_IN_PROGRESS: 'REQUEST_IN_PROGRESS',
   // Owner booking dashboard: an unrecognized `filter` query value was supplied.
   INVALID_FILTER: 'INVALID_FILTER',
+  // Customer dues + cancellation policy mission — owner ledger waive/restore mutations.
+  LEDGER_ENTRY_NOT_FOUND: 'LEDGER_ENTRY_NOT_FOUND',
+  // Attempted to waive a ledger entry that isn't an OUTSTANDING NO_SHOW_CHARGE, or whose customer
+  // no longer qualifies for the New Customer Grace waiver (3+ COMPLETED bookings at this salon).
+  LEDGER_ENTRY_NOT_WAIVABLE: 'LEDGER_ENTRY_NOT_WAIVABLE',
+  // Attempted to restore a ledger entry that isn't currently WAIVED.
+  LEDGER_ENTRY_NOT_RESTORABLE: 'LEDGER_ENTRY_NOT_RESTORABLE',
 } as const;
 export type BookingErrorCode = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
 

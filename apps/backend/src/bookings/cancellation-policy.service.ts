@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   BookingErrorCode,
+  effectiveFreeCancellationWindowMinutes,
   type CancellationPolicyDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -36,6 +37,9 @@ export class CancellationPolicyService {
     return {
       salonId,
       freeCancellationWindowMinutes: policy.freeCancellationWindowMinutes,
+      effectiveFreeCancellationWindowMinutes: effectiveFreeCancellationWindowMinutes(
+        policy.freeCancellationWindowMinutes,
+      ),
       lateCancellationChargeType: policy.lateCancellationChargeType,
       lateCancellationChargeValue: Number(policy.lateCancellationChargeValue),
       noShowChargeType: policy.noShowChargeType,

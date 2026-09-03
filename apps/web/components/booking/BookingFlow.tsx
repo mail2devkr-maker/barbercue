@@ -8,6 +8,7 @@ import {
   SALON_BOOKING_INFO_PATHS,
   type AvailabilitySlotDto,
   type BookingDetailDto,
+  type CancellationPolicyDto,
   type CancelBookingResponseDto,
   type OperatingHoursDto,
   type ServiceDto,
@@ -28,6 +29,18 @@ import { RescheduleBookingDialog } from "./RescheduleBookingDialog";
 import { BookingActionsBar } from "./BookingActionsBar";
 import { CheckInPanel, canCheckIn } from "../queue/CheckInPanel";
 import styles from "./booking.module.css";
+
+// Part O (Customer Dues + Cancellation Policy mission): "Free cancellation up to 1 hour before
+// your appointment" — but only ever the real effective window, never a hard-coded "1 hour" when a
+// salon's own policy is more generous. 60/120/etc render as whole hours; anything else falls back
+// to a plain minute count rather than an awkward "1 hour 30 minutes".
+function formatFreeCancellationWindow(minutes: number): string {
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  return `${minutes} minutes`;
+}
 
 export function BookingFlow({
   salonId,
@@ -75,6 +88,24 @@ export function BookingFlow({
   // actions can never race each other for which one's "latest" booking gets displayed.
   const [cancelResult, setCancelResult] = useState<CancelBookingResponseDto | null>(null);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
+
+  // Part O — fetched once per salon, shown alongside the Confirm step so the customer knows the
+  // real policy before they book, not just at cancel time (CancelBookingDialog fetches it again
+  // itself for the live charge preview, deliberately not shared state — see that component).
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<CancellationPolicyDto>(
+      `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.cancellationPolicy}`,
+    )
+      .then((policy) => {
+        if (!cancelled) setCancellationPolicy(policy);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [salonId]);
 
   // Stable across retries of the exact same attempt (same service/staff/date/slot); regenerates
   // the moment any earlier choice changes, since that's a materially different attempt. The deps
@@ -358,6 +389,13 @@ export function BookingFlow({
             {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
           </p>
           {selectedStyleName && <p className={styles.summaryLine}>Style: {selectedStyleName}</p>}
+          {cancellationPolicy && (
+            <p className={styles.summaryLine}>
+              Free cancellation up to{" "}
+              {formatFreeCancellationWindow(cancellationPolicy.effectiveFreeCancellationWindowMinutes)} before your
+              appointment.
+            </p>
+          )}
           {submitError && <p className={styles.errorText}>{submitError}</p>}
           <div className={styles.confirmActions}>
             {authStatus === "authenticated" ? (

@@ -45,7 +45,23 @@ describe('CancellationPolicyService', () => {
     });
     const policy = await service.getEffectivePolicy('s1');
     expect(policy.freeCancellationWindowMinutes).toBe(120);
+    expect(policy.effectiveFreeCancellationWindowMinutes).toBe(120);
     expect(prisma.cancellationPolicy.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('floors effectiveFreeCancellationWindowMinutes at the 60-minute platform minimum when the salon configured less', async () => {
+    prisma.cancellationPolicy.findUnique.mockResolvedValue({
+      freeCancellationWindowMinutes: 30,
+      lateCancellationChargeType: 'FLAT',
+      lateCancellationChargeValue: decimal('50'),
+      noShowChargeType: 'FLAT',
+      noShowChargeValue: decimal('100'),
+      appointmentArrivalGraceMinutes: 15,
+      queueCallResponseGraceMinutes: 5,
+    });
+    const policy = await service.getEffectivePolicy('s1');
+    expect(policy.freeCancellationWindowMinutes).toBe(30);
+    expect(policy.effectiveFreeCancellationWindowMinutes).toBe(60);
   });
 
   it('falls back to the platform-default row (salonId: null) when the salon has none', async () => {

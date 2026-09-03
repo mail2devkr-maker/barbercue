@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { OwnerCustomerSummaryDto, PaginatedResult } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
@@ -86,17 +87,21 @@ export default function DashboardCustomersPage({
         <ul className={styles.rowList} style={{ margin: "16px 0" }}>
           {items.map((c) => (
             <li key={c.customerId} className={styles.row}>
-              <div style={{ minWidth: 0, flex: "1 1 220px" }}>
+              <Link
+                href={`${customersPath(salonId)}/${c.customerId}`}
+                style={{ minWidth: 0, flex: "1 1 220px", textDecoration: "none", color: "inherit" }}
+              >
                 <span className={styles.rowTitle}>{c.phone ?? c.email ?? "No contact on file"}</span>
                 <div className={styles.rowMeta}>
                   {c.completedCount} completed · {c.cancelledCount} cancelled · {c.noShowCount} no-show
                   {c.preferredServiceName && ` · Usually books ${c.preferredServiceName}`}
                   {c.preferredStaffName && ` · With ${c.preferredStaffName}`}
+                  {c.outstandingTotalAmount > 0 && ` · ${c.outstandingTotalAmount} outstanding`}
                 </div>
                 <div className={styles.rowMeta}>
                   First visit {formatDate(c.firstVisitAt)} · Last visit {formatDate(c.lastVisitAt)}
                 </div>
-              </div>
+              </Link>
               {c.segment && (
                 <span
                   style={{
