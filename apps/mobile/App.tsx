@@ -20,6 +20,9 @@ import AuthStack from './navigation/AuthStack';
 import RootNavigator from './navigation/RootNavigator';
 import OwnerNavigator from './navigation/OwnerNavigator';
 import StaffNavigator from './navigation/StaffNavigator';
+import { navigationRef } from './navigation/navigation-ref';
+import { replayPendingOwnerBookingPushNavigation } from './lib/push-navigation';
+import { PushNotificationCoordinator } from './components/PushNotificationCoordinator';
 
 const FOREGROUND_UPDATE_MIN_BACKGROUND_MS = 30_000;
 
@@ -92,7 +95,7 @@ function Root() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={replayPendingOwnerBookingPushNavigation}>
       <OfflineBanner />
       {status === 'authenticated' && user ? <AuthenticatedNavigator roles={user.roles} /> : <AuthStack />}
     </NavigationContainer>
@@ -125,6 +128,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
+        <PushNotificationCoordinator />
         <Root />
         <StatusBar style="dark" />
       </AuthProvider>

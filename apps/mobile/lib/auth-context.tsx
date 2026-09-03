@@ -14,6 +14,7 @@ import {
   persistRefreshToken,
   setAccessToken,
 } from './api';
+import { unregisterCurrentPushDevice } from './push-notifications';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -145,6 +146,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authMutationVersionRef.current += 1;
     const refreshToken = await getPersistedRefreshToken();
     try {
+      // Push-device removal is deliberately best effort and caller-scoped. It happens while the
+      // access token still exists, then never prevents an explicit logout from completing.
+      await unregisterCurrentPushDevice();
       await apiFetch(authPath(AUTH_PATHS.logout), { method: 'POST', body: JSON.stringify({ refreshToken }) });
     } finally {
       setAccessToken(null);

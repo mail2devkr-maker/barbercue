@@ -2,7 +2,7 @@
   "expo": {
     "name": "BarberCue",
     "slug": "devdutta-kumar-pandey",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -40,6 +40,12 @@
     "owner": "dcw-team",
     "plugins": [
       "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "booking-updates"
+        }
+      ],
       [
         "expo-image-picker",
         {

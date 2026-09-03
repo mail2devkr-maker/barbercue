@@ -9,6 +9,10 @@ import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { color, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
+import { useEffect } from 'react';
+import { useSalon } from '../lib/salon-context';
+import { navigationRef } from './navigation-ref';
+import { subscribeToOwnerBookingPushNavigation } from '../lib/push-navigation';
 
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
@@ -29,6 +33,7 @@ export default function OwnerNavigator() {
   const unreadCount = useUnreadNotificationCount();
   return (
     <SalonProvider>
+      <OwnerPushNavigationBridge />
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
@@ -54,6 +59,30 @@ export default function OwnerNavigator() {
       </Tab.Navigator>
     </SalonProvider>
   );
+}
+
+/**
+ * Notification taps can arrive before this role-specific navigator has mounted. The global queue
+ * is replayed here only after the booking's salon is confirmed to be one of the signed-in owner's
+ * workplaces, then the exact salon is selected before opening the existing bookings surface.
+ */
+function OwnerPushNavigationBridge() {
+  const { workplaces, selectSalon } = useSalon();
+
+  useEffect(
+    () =>
+      subscribeToOwnerBookingPushNavigation((payload) => {
+        if (workplaces.length === 0) return false;
+        if (!workplaces.some((workplace) => workplace.id === payload.salonId)) return true;
+        if (!navigationRef.isReady()) return false;
+        selectSalon(payload.salonId);
+        navigationRef.navigate('OwnerBookingsTab');
+        return true;
+      }),
+    [workplaces, selectSalon],
+  );
+
+  return null;
 }
 
 function tabOptions(label: string, icon: TabIconName) {
