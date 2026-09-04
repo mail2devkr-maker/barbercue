@@ -1111,7 +1111,11 @@
   }
 
   .hero { padding: 54px 16px 70px; }
-  .heroHeadline { font-size: clamp(3.15rem, 15vw, 4rem); }
+  /* Build 11 physical retest: "extremely oversized headings on mobile" — 15vw mid-term put this
+     at ~56px on a 375px phone (desktop-scale type squeezed onto a phone, not composed for one).
+     Brought down to a still-bold-but-actually-phone-scaled range; still the display face, still
+     the brand's editorial voice, just sized for the viewport it's rendering in. */
+  .heroHeadline { font-size: clamp(2.5rem, 11vw, 3.4rem); }
 
   .heroCtaRow {
     flex-direction: column;
@@ -1148,12 +1152,18 @@
   .categorySection,
   .advisorSection { padding: 72px 0; }
 
-  .choiceGrid,
   .shopGrid,
   .categoryGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
+  /* Build 11 physical retest: at 2 columns, each .choiceCard got ~160px of a 343px-wide inner
+     container — nowhere near enough for its clamp(2rem,3.2vw,2.75rem) heading or its own 2-column
+     .flowList sub-grid, so headings wrapped one word per line and clipped past the viewport edge
+     (confirmed: choiceGrid's own scrollWidth exceeded its container by 22px, propagating all the
+     way up to document.body). Each card needs its full container width on a phone. */
+  .choiceGrid { grid-template-columns: 1fr; }
+
   .choiceCard {
-    min-height: 500px;
+    min-height: 0;
     border-radius: 22px;
   }
 
@@ -1164,9 +1174,37 @@
     flex-direction: column;
   }
 
-  .advisorArt { min-height: 420px; }
+  /* Build 11 physical retest: this decorative arch composition (halo ring, silhouette, sparkle
+     marks) was sized in fixed pixels for its ~450-520px desktop/tablet width. At a ~340px phone
+     width the fixed 240px top border-radius became a near-full-width arch, the 320px halo ring
+     and 160px silhouette dwarfed the box, and the fixed-offset sparkles drifted out of place —
+     together reading as an oversized abstract shape rather than the intended photo card. Scaled
+     the whole composition down proportionally rather than removing the decoration. */
+  .advisorArt {
+    min-height: 340px;
+    border-radius: 120px 120px 24px 24px;
+  }
+  .advisorHalo {
+    width: 200px;
+    height: 200px;
+    top: 40px;
+  }
+  .advisorProfile {
+    width: 110px;
+    height: 165px;
+    border-radius: 55px 55px 12px 12px;
+  }
+  .advisorSparkOne { top: 50px; right: 30px; font-size: 1.4rem; }
+  .advisorSparkTwo { top: 120px; left: 26px; font-size: 0.95rem; }
+  .advisorBadge { top: 14px; right: 14px; }
+  .advisorLabel { left: 16px; bottom: 16px; }
+
   .ownerSection { padding: 78px 16px; }
+  /* Both headings clamped to a 3rem/2.8rem floor with no mobile override at all — full desktop
+     scale on the narrowest phones. */
+  .ownerSection h2 { font-size: clamp(2.1rem, 9vw, 2.6rem); }
   .finalCta { padding: 76px 16px; }
+  .finalCta h2 { font-size: clamp(2rem, 9vw, 2.6rem); }
 
   .footerInner,
   .footerLinks { grid-template-columns: 1fr; }
@@ -1181,7 +1219,7 @@
   }
 
   .headerPrimary { padding: 0 11px; }
-  .heroHeadline { font-size: 3rem; }
+  .heroHeadline { font-size: clamp(2.2rem, 11vw, 3rem); }
   .heroSub { font-size: 1rem; }
   .heroMeta { display: grid; }
   .heroVisual { min-height: 470px; }
