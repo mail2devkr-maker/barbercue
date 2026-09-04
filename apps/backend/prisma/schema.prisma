@@ -215,13 +215,13 @@ enum NotificationCategory {
 // One row per (user, category, channel) the user has explicitly changed from its default. No row
 // = default (enabled), same "absence means default" convention as StaffWorkingHours (Phase 7).
 model NotificationPreference {
-  id        String                @id @default(uuid())
+  id        String               @id @default(uuid())
   userId    String
-  user      User                  @relation(fields: [userId], references: [id])
+  user      User                 @relation(fields: [userId], references: [id])
   category  NotificationCategory
   channel   NotificationChannel
   enabled   Boolean
-  updatedAt DateTime              @updatedAt
+  updatedAt DateTime             @updatedAt
 
   @@unique([userId, category, channel])
   @@map("notification_preferences")
@@ -230,44 +230,45 @@ model NotificationPreference {
 // ---------- Identity & access ----------
 
 model User {
-  id               String     @id @default(uuid())
-  phone            String?    @unique
-  email            String?    @unique
-  passwordHash     String?
-  phoneVerifiedAt  DateTime?
-  emailVerifiedAt  DateTime?
-  status           UserStatus @default(ACTIVE)
-  twoFactorEnabled Boolean    @default(false)
-  totpSecret       String?
+  id                String     @id @default(uuid())
+  phone             String?    @unique
+  email             String?    @unique
+  passwordHash      String?
+  phoneVerifiedAt   DateTime?
+  emailVerifiedAt   DateTime?
+  status            UserStatus @default(ACTIVE)
+  twoFactorEnabled  Boolean    @default(false)
+  totpSecret        String?
   // Phase 14 (Localization & Voice Operations) — drives which packages/shared/src/i18n
   // VoiceAnnouncements dictionary realtime alert handlers speak from, plus the language switcher's
   // initial state. Defaults to EN, so every existing/new user behaves exactly as before this field
   // existed until they explicitly change it.
-  preferredLanguage Language  @default(EN)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  preferredLanguage Language   @default(EN)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
-  roles               UserRole[]
-  authIdentities      AuthIdentity[]
-  refreshTokens       RefreshToken[]
-  passwordResetTokens PasswordResetToken[]
-  ownedSalons         Salon[]               @relation("SalonOwner")
-  staffMemberships    SalonStaff[]
-  bookings            Booking[]             @relation("BookingCustomer")
-  cancelledBookings   Booking[]             @relation("BookingCancelledBy")
-  queueEntries        QueueEntry[]
-  reviews             Review[]
-  notifications       Notification[]
+  roles                   UserRole[]
+  authIdentities          AuthIdentity[]
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
+  ownedSalons             Salon[]                  @relation("SalonOwner")
+  staffMemberships        SalonStaff[]
+  bookings                Booking[]                @relation("BookingCustomer")
+  cancelledBookings       Booking[]                @relation("BookingCancelledBy")
+  queueEntries            QueueEntry[]
+  reviews                 Review[]
+  notifications           Notification[]
   notificationPreferences NotificationPreference[]
-  ledgerEntries       CustomerLedgerEntry[]
-  auditLogs           AuditLog[]
-  premiumSubscriptions CustomerSubscription[]
+  ledgerEntries           CustomerLedgerEntry[]
+  auditLogs               AuditLog[]
+  premiumSubscriptions    CustomerSubscription[]
   // Phase 18 (Shop / Barber Verification Foundation) — an owner submitting evidence, and a
   // PLATFORM_ADMIN reviewing it, are deliberately separate relations (never the same person in
   // practice, and keeping them distinct makes that impossible to blur by accident).
-  submittedVerifications VerificationRequest[] @relation("VerificationSubmitter")
-  reviewedVerifications  VerificationRequest[] @relation("VerificationReviewer")
-  pushDevices            PushDevice[]
+  submittedVerifications  VerificationRequest[]    @relation("VerificationSubmitter")
+  reviewedVerifications   VerificationRequest[]    @relation("VerificationReviewer")
+  pushDevices             PushDevice[]
+  creditAccount           CustomerCreditAccount?
 
   @@map("users")
 }
@@ -394,9 +395,9 @@ model Country {
 // hierarchy of subtypes. `code` is ISO-3166-2 where the source dataset provides one; never
 // invented for a region that doesn't have one.
 model Region {
-  id            String   @id @default(uuid())
+  id            String  @id @default(uuid())
   countryId     String
-  country       Country  @relation(fields: [countryId], references: [id])
+  country       Country @relation(fields: [countryId], references: [id])
   code          String?
   name          String
   nativeName    String?
@@ -437,11 +438,11 @@ model CityAlias {
 }
 
 model City {
-  id   String @id @default(uuid())
-  name String
+  id          String     @id @default(uuid())
+  name        String
   // No longer globally unique: two countries legitimately share a city name (London GB vs
   // London CA, Birmingham GB vs Birmingham US), so uniqueness is scoped by country below.
-  slug String
+  slug        String
   // ISO-3166-1 alpha-2. The field logic keys on — `country` below stays as free-text display
   // data. Required: a city with no country cannot be validated, priced, or routed.
   countryCode String
@@ -457,9 +458,9 @@ model City {
   // Nullable and unpopulated until the separate, explicitly-approved global import phase.
   // countryCode/regionCode/state/country above remain the only fields anything reads today.
   countryId     String?
-  countryRef    Country? @relation(fields: [countryId], references: [id])
+  countryRef    Country?    @relation(fields: [countryId], references: [id])
   regionId      String?
-  regionRef     Region?  @relation(fields: [regionId], references: [id])
+  regionRef     Region?     @relation(fields: [regionId], references: [id])
   nativeName    String?
   latitude      Float?
   longitude     Float?
@@ -471,15 +472,15 @@ model City {
   aliases       CityAlias[]
 
   @@unique([countryCode, slug])
+  // Phase 1 addition, parallel to the constraint above during the deprecation period. Safe with
+  // countryId nullable: Postgres does not compare NULLs against each other for uniqueness, so
+  // every existing City row (countryId = NULL) is unaffected until backfilled.
+  @@unique([countryId, slug])
   @@index([countryCode])
   // Serves the interim CitiesService.findFirst({ slug }) lookup. The composite above cannot:
   // `slug` is not its leading column. Remove once B9's country-scoped routes make every city
   // lookup carry a countryCode.
   @@index([slug])
-  // Phase 1 addition, parallel to the constraint above during the deprecation period. Safe with
-  // countryId nullable: Postgres does not compare NULLs against each other for uniqueness, so
-  // every existing City row (countryId = NULL) is unaffected until backfilled.
-  @@unique([countryId, slug])
   @@index([countryId])
   @@index([regionId])
   @@map("cities")
@@ -498,7 +499,7 @@ model Locality {
 }
 
 model Salon {
-  id          String      @id @default(uuid())
+  id               String      @id @default(uuid())
   // Permanent, human-shareable identifier — "BC-SHOP-000001" — distinct from `id` (the internal
   // UUID primary key, never shown to users). Assigned once at creation by a Postgres sequence (see
   // the add_salon_public_id migration's hand-written SQL default), so uniqueness/monotonicity are
@@ -508,7 +509,7 @@ model Salon {
   // Prisma Client the column has a DB-level default — the real default is the raw SQL in the
   // add_salon_public_id migration; this just makes `publicId` optional in create() calls instead
   // of forcing every caller to invent a value.
-  publicId    String      @unique @default(dbgenerated("('BC-SHOP-' || lpad(nextval('salon_public_id_seq'::regclass)::text, 6, '0'))"))
+  publicId         String      @unique @default(dbgenerated("('BC-SHOP-' || lpad(nextval('salon_public_id_seq'::regclass)::text, 6, '0'))"))
   // Phase 9: the shop's permanent QR/public-queue-join identifier — deliberately NOT `publicId`
   // above (that's a sequential, enumerable counter; guessable, unsuitable for a link anyone can
   // join a queue through) and NOT `id` (the internal PK, never exposed publicly). Nullable +
@@ -517,44 +518,44 @@ model Salon {
   // since a cryptographically random value isn't a Postgres built-in without the pgcrypto
   // extension. Nullable-unique is safe: Postgres allows multiple NULLs under a unique index (same
   // pattern as CancellationPolicy.salonId).
-  publicQueueToken String? @unique
-  ownerUserId String
-  owner       User        @relation("SalonOwner", fields: [ownerUserId], references: [id])
-  name        String
-  slug        String
-  cityId      String
-  city        City        @relation(fields: [cityId], references: [id])
-  localityId  String?
-  locality    Locality?   @relation(fields: [localityId], references: [id])
-  addressLine String
+  publicQueueToken String?     @unique
+  ownerUserId      String
+  owner            User        @relation("SalonOwner", fields: [ownerUserId], references: [id])
+  name             String
+  slug             String
+  cityId           String
+  city             City        @relation(fields: [cityId], references: [id])
+  localityId       String?
+  locality         Locality?   @relation(fields: [localityId], references: [id])
+  addressLine      String
   // IANA timezone (e.g. "Asia/Kolkata", "Europe/London"). Nullable for now: nothing can yet
   // derive a zone at registration — GPS is optional and no lookup service is wired — so
   // requiring it would break registerSalon. AvailabilityService still uses a fixed IST offset
   // and does NOT read this column yet; that switch is a separate, reviewed change.
-  timezone    String?
+  timezone         String?
   // ISO-4217 (e.g. "INR", "GBP"). Nullable for the same reason: no source populates it yet.
   // Money columns are already Decimal and currency-agnostic; this records which currency they
   // are denominated in.
-  currency    String?
+  currency         String?
   // Indian 6-digit PIN code. Stored as text, never a number: PIN codes are identifiers, not
   // quantities, and several legitimately need a meaning-bearing shape a numeric type would
   // mangle. Nullable because every salon registered before this column existed has none, and
   // backfilling one would mean inventing an address detail nobody supplied.
-  postalCode  String?
+  postalCode       String?
   // Nullable since Phase 11: coordinates now come from the device's GPS via the registration
   // form's "Use my current location" button, and an owner who denies that permission (or is on a
   // desktop) must still be able to register. Their only consumer is the schema.org `geo` block on
   // the public salon page — there is no distance search, map, or proximity sort in the product —
   // so a salon without them is fully functional, just slightly less rich to search engines.
-  lat         Float?
-  lng         Float?
-  phone       String?
+  lat              Float?
+  lng              Float?
+  phone            String?
   // Business contact email, distinct from the owner User's own login email — same "optional
   // business-facing contact field" pattern as `phone` above. Added for shop registration
   // (Phase C); not required, since not every shop has a dedicated reception inbox.
-  email       String?
-  description String?
-  status      SalonStatus @default(PENDING)
+  email            String?
+  description      String?
+  status           SalonStatus @default(PENDING)
 
   // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
   planId                String?
@@ -583,6 +584,7 @@ model Salon {
   // Phase 18 — at most one row (VerificationRequest.salonId is @@unique; NULL salonId rows, i.e.
   // PROFESSIONAL-type requests, are unaffected by that constraint under Postgres NULLS DISTINCT).
   verification          VerificationRequest?
+  subsidyEntries        PlatformShopSubsidyEntry[]
 
   @@unique([cityId, slug])
   @@map("salons")
@@ -594,6 +596,16 @@ model SalonPaymentPolicy {
   salon                 Salon                 @relation(fields: [salonId], references: [id])
   prepaymentRequirement PrepaymentRequirement @default(NONE)
   prepaymentPercentage  Int?
+  // FastQue Credits / Wallet V1 — the shop's own UPI/payment QR image, shown to a customer paying
+  // directly for an ONLINE (APP/WEB-sourced) booking. There is no live payment gateway yet (see
+  // Payment/Refund above: schema-only, unimplemented — PAYMENTS.md's Razorpay design is not coded),
+  // so online payment collection is manual QR-scan-and-pay, and BookingsService.create refuses to
+  // create an ONLINE booking (source APP or WEB) at any salon that hasn't configured one
+  // (BookingErrorCode.PAYMENT_QR_REQUIRED) — a real backend guard, not just a UI hint. WALK_IN
+  // bookings are unaffected. Same "URL-based, no object storage configured" convention as
+  // Photo.url, with the same link-or-upload dual path as SalonPhotosService — one column, two ways
+  // to fill it.
+  paymentQrImageUrl     String?
 
   @@map("salon_payment_policies")
 }
@@ -662,14 +674,14 @@ model Photo {
 // ---------- Staff / chairs (approved concepts, unchanged) ----------
 
 model SalonStaff {
-  id          String            @id @default(uuid())
-  salonId     String
-  salon       Salon             @relation(fields: [salonId], references: [id])
-  userId      String
-  user        User              @relation(fields: [userId], references: [id])
-  displayName String
-  roleInSalon SalonStaffRole
-  status      StaffMemberStatus @default(ACTIVE)
+  id              String            @id @default(uuid())
+  salonId         String
+  salon           Salon             @relation(fields: [salonId], references: [id])
+  userId          String
+  user            User              @relation(fields: [userId], references: [id])
+  displayName     String
+  roleInSalon     SalonStaffRole
+  status          StaffMemberStatus @default(ACTIVE)
   // Phase 17 (Barber Professional Profile) — all optional/additive. Which services this barber is
   // actually qualified for already lives in StaffService, a real DB-backed relation; these are the
   // genuinely new fields (no existing model covered them). photoUrl follows the same "URL-based,
@@ -797,14 +809,115 @@ model Booking {
   // customer, so the periodic sweep never double-reminds. Null means "not sent yet", not "no
   // reminder wanted" — every eligible booking gets exactly one until it's sent.
   reminderSentAt           DateTime?
+  // FastQue Credits / Wallet V1 — snapshots, not live-recomputed values, so a later change to
+  // CREDIT_PER_SLAB or the wallet balance can never retroactively change what a past booking shows
+  // it earned/redeemed. creditsEarnedAmount is set once, in the same transaction that marks this
+  // booking COMPLETED (QueueService.completeSession) — null until then, and null forever for a
+  // booking that never completes. creditsRedeemedAmount is set once, at creation, if the customer
+  // chose to redeem wallet balance against this booking's price — null means "redeemed nothing",
+  // not "unknown". See CustomerCreditsService for the earn/redeem/restore transaction logic.
+  creditsEarnedAmount      Decimal?      @db.Decimal(10, 2)
+  creditsRedeemedAmount    Decimal?      @db.Decimal(10, 2)
 
-  queueEntries  QueueEntry[]
-  payments      Payment[]
-  reviews       Review[]
-  ledgerEntries CustomerLedgerEntry[]
+  queueEntries       QueueEntry[]
+  payments           Payment[]
+  reviews            Review[]
+  ledgerEntries      CustomerLedgerEntry[]
+  creditTransactions CustomerCreditTransaction[]
+  subsidyEntry       PlatformShopSubsidyEntry?
 
   @@index([salonId, slotStart, slotEnd])
   @@map("bookings")
+}
+
+// ---------- FastQue Credits / Wallet V1 ----------
+//
+// A promotional customer wallet, deliberately NOT built on CustomerLedgerEntry: that model is
+// customer DUES (money owed BY the customer for a no-show/late cancellation — see its own doc
+// comment), the semantic opposite of a credit balance owed TO the customer. Conflating the two
+// would make a single customer row ambiguous about which direction the money moves.
+//
+// Two-table split (balance + append-only transaction log), the same shape as
+// CustomerSubscription/AiCreditTransaction above: `balance` is the single fast-read number every
+// booking-time redemption check needs, `CustomerCreditTransaction` is the durable, auditable
+// record of every event that ever changed it. The balance is never trusted as the sole source of
+// truth for "what happened" — only the transaction log is (see EARNED/REDEEMED/RESTORED below).
+enum CreditTransactionType {
+  // A completed, customer-attributed service session earned this amount — see
+  // CustomerCreditsService.computeEarnedCredits (20% of price, in ₹50 slabs, capped by
+  // construction: floor(price/50)*10 can never exceed 0.2*price).
+  EARNED
+  // Applied against a booking's price at creation time, reducing what the customer pays online.
+  REDEEMED
+  // A REDEEMED amount returned to the balance because the booking that redeemed it was cancelled
+  // before the service happened.
+  RESTORED
+  // Reserved for a future admin correction tool — never written by any code in this phase.
+  MANUAL_ADJUSTMENT
+}
+
+model CustomerCreditAccount {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  balance   Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions CustomerCreditTransaction[]
+
+  @@map("customer_credit_accounts")
+}
+
+// Append-only — nothing in CustomerCreditsService ever updates or deletes a row here, only
+// creates new ones, so `balance` on the account row above can always be reconciled against the
+// sum of this table if the two are ever suspected to have drifted.
+model CustomerCreditTransaction {
+  id        String                @id @default(uuid())
+  accountId String
+  account   CustomerCreditAccount @relation(fields: [accountId], references: [id])
+  type      CreditTransactionType
+  // Always positive; `type` alone says whether it added to or subtracted from the balance
+  // (EARNED/RESTORED add, REDEEMED subtracts) — never a signed value, so a display bug can't
+  // silently flip a debit into a credit.
+  amount    Decimal               @db.Decimal(10, 2)
+  bookingId String?
+  booking   Booking?              @relation(fields: [bookingId], references: [id])
+  note      String?
+  createdAt DateTime              @default(now())
+
+  @@index([accountId, createdAt])
+  @@map("customer_credit_transactions")
+}
+
+enum SubsidyLedgerStatus {
+  OUTSTANDING
+  SETTLED
+  // The booking that created this entry was cancelled before the service happened — FastQue never
+  // actually owed the shop this amount, so the entry is voided rather than deleted (an auditable
+  // "this was reversed," not silence).
+  VOIDED
+}
+
+// FastQue subsidizes redeemed credits, not the shop — a shop is always paid its full listed
+// price for a completed service. When a customer redeems credits against a booking, this is the
+// auditable record of what FastQue owes that shop to make up the difference. One row per booking
+// that redeemed credits (never aggregated across bookings), so each is independently traceable
+// back to the exact redemption that created it.
+model PlatformShopSubsidyEntry {
+  id        String              @id @default(uuid())
+  salonId   String
+  salon     Salon               @relation(fields: [salonId], references: [id])
+  bookingId String              @unique
+  booking   Booking             @relation(fields: [bookingId], references: [id])
+  amount    Decimal             @db.Decimal(10, 2)
+  status    SubsidyLedgerStatus @default(OUTSTANDING)
+  createdAt DateTime            @default(now())
+  voidedAt  DateTime?
+  settledAt DateTime?
+
+  @@index([salonId, status])
+  @@map("platform_shop_subsidy_entries")
 }
 
 model QueueEntry {
@@ -1147,8 +1260,8 @@ model CustomerSubscription {
   // consumed; see AiCreditService.hasAvailableCredit. Both are maintained by AiCreditService only,
   // inside a per-subscription-locked transaction (see bookings.service.ts's advisory-lock
   // pattern) — never written to directly by any controller.
-  aiCreditsReserved Int @default(0)
-  aiCreditsConsumed Int @default(0)
+  aiCreditsReserved  Int @default(0)
+  aiCreditsConsumed  Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

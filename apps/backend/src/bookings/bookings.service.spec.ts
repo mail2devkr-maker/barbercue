@@ -8,6 +8,14 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 import { QueueService } from '../queue/queue.service';
+import { CustomerCreditsService } from '../credits/customer-credits.service';
+
+// A payment QR configured by default so every pre-existing test (about prepayment/slot/staff
+// logic, not about credits/QR at all) keeps passing unchanged — BookingErrorCode.PAYMENT_QR_
+// REQUIRED is exercised by its own dedicated tests below, which explicitly set this back to null.
+const PAYMENT_POLICY_WITH_QR = {
+  paymentQrImageUrl: 'https://cdn.example.com/salon-qr.png',
+};
 
 function decimal(value: string) {
   return { toString: () => value } as unknown as number;
@@ -33,6 +41,8 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     preferredStaffId: null,
     prepaymentRequiredAmount: null,
     cancellationChargeAmount: null,
+    creditsEarnedAmount: null,
+    creditsRedeemedAmount: null,
     salon: {
       name: 'BarberCue Demo Salon',
       slug: 'barbercue-demo',
@@ -64,6 +74,10 @@ interface PrismaMock {
   };
   queueEntry: { updateMany: jest.Mock<Promise<{ count: number }>, [unknown]> };
   auditLog: { create: jest.Mock<Promise<unknown>, [unknown]> };
+  platformShopSubsidyEntry: {
+    create: jest.Mock<Promise<unknown>, [unknown]>;
+    updateMany: jest.Mock<Promise<{ count: number }>, [unknown]>;
+  };
   $executeRaw: jest.Mock<Promise<unknown>, [unknown]>;
   $transaction: jest.Mock;
 }
@@ -103,6 +117,13 @@ describe('BookingsService', () => {
   let queueService: {
     recomputeEtas: jest.Mock<Promise<void>, [string]>;
   };
+  let credits: {
+    redeemForBooking: jest.Mock<Promise<void>, [unknown, string, string, number]>;
+    restoreForCancelledBooking: jest.Mock<
+      Promise<void>,
+      [unknown, string, string, number]
+    >;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -124,6 +145,12 @@ describe('BookingsService', () => {
         updateMany: jest.fn<Promise<{ count: number }>, [unknown]>().mockResolvedValue({ count: 0 }),
       },
       auditLog: { create: jest.fn<Promise<unknown>, [unknown]>() },
+      platformShopSubsidyEntry: {
+        create: jest.fn<Promise<unknown>, [unknown]>(),
+        updateMany: jest
+          .fn<Promise<{ count: number }>, [unknown]>()
+          .mockResolvedValue({ count: 0 }),
+      },
       $executeRaw: jest.fn<Promise<unknown>, [unknown]>(),
       $transaction: jest.fn(),
     };
@@ -179,6 +206,10 @@ describe('BookingsService', () => {
       dispatchLocalizedToUser: jest.fn().mockResolvedValue(undefined),
     };
     queueService = { recomputeEtas: jest.fn().mockResolvedValue(undefined) };
+    credits = {
+      redeemForBooking: jest.fn().mockResolvedValue(undefined),
+      restoreForCancelledBooking: jest.fn().mockResolvedValue(undefined),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -190,6 +221,7 @@ describe('BookingsService', () => {
         { provide: NotificationsService, useValue: notifications },
         { provide: PushDispatchService, useValue: pushDispatch },
         { provide: QueueService, useValue: queueService },
+        { provide: CustomerCreditsService, useValue: credits },
       ],
     }).compile();
     service = moduleRef.get(BookingsService);
@@ -200,7 +232,9 @@ describe('BookingsService', () => {
 
     beforeEach(() => {
       prisma.customerLedgerEntry.findMany.mockResolvedValue([]);
-      prisma.salonPaymentPolicy.findUnique.mockResolvedValue(null);
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue(
+        PAYMENT_POLICY_WITH_QR,
+      );
       prisma.booking.count.mockResolvedValue(0);
       prisma.booking.create.mockResolvedValue({ id: 'b1' });
       prisma.booking.findFirst.mockResolvedValue(makeBookingRow());
@@ -432,7 +466,7 @@ describe('BookingsService', () => {
       expect(prisma.booking.count).toHaveBeenCalledTimes(2);
     });
 
-    it('creates a CONFIRMED booking with no prepayment when the salon has no payment policy (defaults to NONE)', async () => {
+    it('creates a CONFIRMED booking with no prepayment when the payment policy has no prepaymentRequirement configured (defaults to NONE)', async () => {
       await service.create(
         'c1',
         { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
@@ -483,6 +517,7 @@ describe('BookingsService', () => {
 
     it('creates a PENDING_PAYMENT booking with a snapshotted amount when the policy requires PARTIAL prepayment', async () => {
       prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+        ...PAYMENT_POLICY_WITH_QR,
         prepaymentRequirement: 'PARTIAL',
         prepaymentPercentage: 50,
       });
@@ -499,6 +534,7 @@ describe('BookingsService', () => {
 
     it('creates a PENDING_PAYMENT booking for the full service price when the policy requires FULL prepayment', async () => {
       prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+        ...PAYMENT_POLICY_WITH_QR,
         prepaymentRequirement: 'FULL',
         prepaymentPercentage: null,
       });
@@ -510,6 +546,131 @@ describe('BookingsService', () => {
       );
       const data = lastCreateData(prisma.booking.create);
       expect(data.prepaymentRequiredAmount).toBe(300);
+    });
+
+    describe('payment QR gate (FastQue Credits / Wallet V1)', () => {
+      it('rejects PAYMENT_QR_REQUIRED for an ONLINE (WEB) booking when the salon has no payment QR configured', async () => {
+        prisma.salonPaymentPolicy.findUnique.mockResolvedValue(null);
+        await expect(
+          service.create(
+            'c1',
+            { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+            BookingSource.WEB,
+            'key-1',
+          ),
+        ).rejects.toMatchObject({ code: 'PAYMENT_QR_REQUIRED' });
+        expect(prisma.booking.create).not.toHaveBeenCalled();
+      });
+
+      it('rejects PAYMENT_QR_REQUIRED for an ONLINE (APP) booking when the salon has a payment policy row but no QR image set on it', async () => {
+        prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+          paymentQrImageUrl: null,
+        });
+        await expect(
+          service.create(
+            'c1',
+            { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+            BookingSource.APP,
+            'key-1',
+          ),
+        ).rejects.toMatchObject({ code: 'PAYMENT_QR_REQUIRED' });
+      });
+
+      it('never gates a WALK_IN booking on the payment QR — that customer pays the shop in person', async () => {
+        prisma.salonPaymentPolicy.findUnique.mockResolvedValue(null);
+        await service.create(
+          'c1',
+          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+          BookingSource.WALK_IN,
+          'key-1',
+        );
+        expect(prisma.booking.create).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('credit redemption (FastQue Credits / Wallet V1)', () => {
+      it('rejects INSUFFICIENT_CREDITS before ever opening a transaction when creditsToRedeem exceeds the service price', async () => {
+        await expect(
+          service.create(
+            'c1',
+            {
+              salonId: 's1',
+              serviceId: 'sv1',
+              slotStart: futureSlot,
+              creditsToRedeem: 301,
+            },
+            BookingSource.WEB,
+            'key-1',
+          ),
+        ).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
+        expect(prisma.booking.create).not.toHaveBeenCalled();
+        expect(credits.redeemForBooking).not.toHaveBeenCalled();
+      });
+
+      it('snapshots creditsRedeemedAmount on the booking and redeems inside the same transaction as its creation', async () => {
+        await service.create(
+          'c1',
+          {
+            salonId: 's1',
+            serviceId: 'sv1',
+            slotStart: futureSlot,
+            creditsToRedeem: 30,
+          },
+          BookingSource.WEB,
+          'key-1',
+        );
+        const data = lastCreateData(prisma.booking.create);
+        expect(data.creditsRedeemedAmount).toBe(30);
+        expect(credits.redeemForBooking).toHaveBeenCalledWith(
+          prisma,
+          'c1',
+          'b1',
+          30,
+        );
+        expect(prisma.platformShopSubsidyEntry.create).toHaveBeenCalledWith({
+          data: {
+            salonId: 's1',
+            bookingId: 'b1',
+            amount: 30,
+            status: 'OUTSTANDING',
+          },
+        });
+      });
+
+      it('propagates INSUFFICIENT_CREDITS thrown by the live balance check inside the transaction', async () => {
+        credits.redeemForBooking.mockRejectedValue(
+          Object.assign(new Error('not enough'), {
+            code: 'INSUFFICIENT_CREDITS',
+          }),
+        );
+        await expect(
+          service.create(
+            'c1',
+            {
+              salonId: 's1',
+              serviceId: 'sv1',
+              slotStart: futureSlot,
+              creditsToRedeem: 30,
+            },
+            BookingSource.WEB,
+            'key-1',
+          ),
+        ).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
+        expect(prisma.platformShopSubsidyEntry.create).not.toHaveBeenCalled();
+      });
+
+      it('never touches credits or the subsidy ledger when creditsToRedeem is omitted', async () => {
+        await service.create(
+          'c1',
+          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+          BookingSource.WEB,
+          'key-1',
+        );
+        expect(credits.redeemForBooking).not.toHaveBeenCalled();
+        expect(prisma.platformShopSubsidyEntry.create).not.toHaveBeenCalled();
+        const data = lastCreateData(prisma.booking.create);
+        expect(data.creditsRedeemedAmount).toBeNull();
+      });
     });
   });
 
@@ -638,6 +799,53 @@ describe('BookingsService', () => {
 
     // Issue 3 (mobile stabilization mission) — a checked-in booking has a linked QueueEntry that
     // must not outlive the booking's own cancellation.
+    describe('credit restoration (FastQue Credits / Wallet V1)', () => {
+      beforeEach(() => {
+        const farSlot = new Date(Date.now() + 120 * 60_000);
+        cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+          salonId: 's1',
+          freeCancellationWindowMinutes: 60,
+          lateCancellationChargeType: 'PERCENTAGE',
+          lateCancellationChargeValue: 50,
+          noShowChargeType: 'PERCENTAGE',
+          noShowChargeValue: 100,
+          appointmentArrivalGraceMinutes: 10,
+          queueCallResponseGraceMinutes: 3,
+        });
+        prisma.booking.update.mockResolvedValue(
+          makeBookingRow({ slotStart: farSlot, status: 'CANCELLED' }),
+        );
+      });
+
+      it('restores exactly the snapshotted amount and voids the matching subsidy entry when a booking that redeemed credits is cancelled', async () => {
+        const farSlot = new Date(Date.now() + 120 * 60_000);
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({ slotStart: farSlot, creditsRedeemedAmount: 30 }),
+        );
+        await service.cancel('c1', 'b1');
+        expect(credits.restoreForCancelledBooking).toHaveBeenCalledWith(
+          prisma,
+          'c1',
+          'b1',
+          30,
+        );
+        expect(prisma.platformShopSubsidyEntry.updateMany).toHaveBeenCalledWith({
+          where: { bookingId: 'b1', status: 'OUTSTANDING' },
+          data: { status: 'VOIDED', voidedAt: expect.any(Date) },
+        });
+      });
+
+      it('never touches credits or the subsidy ledger when the cancelled booking redeemed nothing', async () => {
+        const farSlot = new Date(Date.now() + 120 * 60_000);
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({ slotStart: farSlot, creditsRedeemedAmount: null }),
+        );
+        await service.cancel('c1', 'b1');
+        expect(credits.restoreForCancelledBooking).not.toHaveBeenCalled();
+        expect(prisma.platformShopSubsidyEntry.updateMany).not.toHaveBeenCalled();
+      });
+    });
+
     describe('linked queue entry cleanup', () => {
       beforeEach(() => {
         const farSlot = new Date(Date.now() + 120 * 60_000);

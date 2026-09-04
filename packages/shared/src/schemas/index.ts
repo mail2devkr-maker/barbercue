@@ -27,6 +27,12 @@ export const createBookingSchema = z.object({
   // AI Style Advisor hand-off (major-upgrade phase) — set when booking arrives via "Try This
   // Look" -> "Book This Style"; omitted for every ordinary booking.
   selectedStyleName: z.string().min(1).max(100).optional(),
+  // FastQue Credits / Wallet V1: how much of the customer's own wallet balance to apply against
+  // this booking's price, reducing what they pay online. Omitted or 0 = redeem nothing. The
+  // backend re-validates this against both the live balance and the service price inside a
+  // transaction (BookingsService.create) — this schema only rejects shapes that could never be
+  // valid (negative, non-finite, more than 2 decimal places), never the actual balance check.
+  creditsToRedeem: z.number().finite().min(0).multipleOf(0.01).optional(),
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
@@ -440,6 +446,14 @@ export const salonPhotoUploadMetaSchema = z.object({
   type: z.nativeEnum(PhotoType),
 });
 export type SalonPhotoUploadMetaInput = z.infer<typeof salonPhotoUploadMetaSchema>;
+
+// PUT dashboard/salons/:salonId/payment-qr — link route (FastQue Credits / Wallet V1), same
+// https-only/no-credentials validation as salonPhotoUrlSchema above; the multipart upload sibling
+// (POST .../payment-qr/upload) needs no body schema at all, same as photos' upload route.
+export const setSalonPaymentQrSchema = z.object({
+  url: salonPhotoUrlSchema,
+});
+export type SetSalonPaymentQrInput = z.infer<typeof setSalonPaymentQrSchema>;
 
 export const createSalonChairSchema = z.object({
   label: z.string().min(1).max(60),

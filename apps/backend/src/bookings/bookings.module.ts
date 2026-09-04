@@ -3,6 +3,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { QueueModule } from '../queue/queue.module';
+import { CustomerCreditsModule } from '../credits/customer-credits.module';
 import { BookingInfoController } from './booking-info.controller';
 import { BookingsController } from './bookings.controller';
 import { AvailabilityService } from './availability.service';
@@ -19,6 +20,7 @@ import { BookingNoShowService } from './booking-no-show.service';
     RealtimeModule,
     NotificationsModule,
     PushNotificationsModule,
+    CustomerCreditsModule,
     forwardRef(() => QueueModule),
   ],
   controllers: [BookingInfoController, BookingsController],

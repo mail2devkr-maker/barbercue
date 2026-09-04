@@ -88,7 +88,28 @@ export const PrepaymentRequirement = {
   PARTIAL: 'PARTIAL',
   FULL: 'FULL',
 } as const;
-export type PrepaymentRequirement = (typeof PrepaymentRequirement)[keyof typeof PrepaymentRequirement];
+export type PrepaymentRequirement =
+  (typeof PrepaymentRequirement)[keyof typeof PrepaymentRequirement];
+
+// FastQue Credits / Wallet V1 — see schema.prisma's CreditTransactionType doc comment for what
+// each value means and why this is a separate concept from LedgerReason/LedgerStatus above.
+export const CreditTransactionType = {
+  EARNED: 'EARNED',
+  REDEEMED: 'REDEEMED',
+  RESTORED: 'RESTORED',
+  MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT',
+} as const;
+export type CreditTransactionType =
+  (typeof CreditTransactionType)[keyof typeof CreditTransactionType];
+
+// FastQue Credits / Wallet V1 — see schema.prisma's PlatformShopSubsidyEntry doc comment.
+export const SubsidyLedgerStatus = {
+  OUTSTANDING: 'OUTSTANDING',
+  SETTLED: 'SETTLED',
+  VOIDED: 'VOIDED',
+} as const;
+export type SubsidyLedgerStatus =
+  (typeof SubsidyLedgerStatus)[keyof typeof SubsidyLedgerStatus];
 
 export const BookingStatus = {
   PENDING_PAYMENT: 'PENDING_PAYMENT',
@@ -275,6 +296,11 @@ export const BookingErrorCode = {
   LEDGER_ENTRY_NOT_WAIVABLE: 'LEDGER_ENTRY_NOT_WAIVABLE',
   // Attempted to restore a ledger entry that isn't currently WAIVED.
   LEDGER_ENTRY_NOT_RESTORABLE: 'LEDGER_ENTRY_NOT_RESTORABLE',
+  // FastQue Credits / Wallet V1: an ONLINE (APP/WEB-sourced) booking was attempted at a salon with
+  // no payment QR configured (SalonPaymentPolicy.paymentQrImageUrl is null). Enforced server-side
+  // in BookingsService.create, never left to client-side validation alone. WALK_IN bookings never
+  // trigger this — a walk-in pays the shop in person, no QR needed.
+  PAYMENT_QR_REQUIRED: 'PAYMENT_QR_REQUIRED',
 } as const;
 export type BookingErrorCode = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
 
@@ -434,3 +460,14 @@ export const PremiumErrorCode = {
   DEV_ACTIVATION_DISABLED: 'DEV_ACTIVATION_DISABLED',
 } as const;
 export type PremiumErrorCode = (typeof PremiumErrorCode)[keyof typeof PremiumErrorCode];
+
+// FastQue Credits / Wallet V1 — stable machine-readable error codes for CustomerCreditsService and
+// the credit-redemption path inside BookingsService.create. Same convention as every other
+// ErrorCode block in this file.
+export const CreditsErrorCode = {
+  // Requested creditsToRedeem exceeds either the customer's current balance or the booking's own
+  // service price at the moment the redemption transaction actually runs — checked with a
+  // balance-guarded updateMany so a concurrent redemption can never take the balance negative.
+  INSUFFICIENT_CREDITS: 'INSUFFICIENT_CREDITS',
+} as const;
+export type CreditsErrorCode = (typeof CreditsErrorCode)[keyof typeof CreditsErrorCode];

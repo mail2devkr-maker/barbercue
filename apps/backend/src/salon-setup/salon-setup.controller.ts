@@ -22,6 +22,7 @@ import {
   SALON_PHOTO_UPLOAD,
   createSalonStaffSchema,
   setOperatingHoursSchema,
+  setSalonPaymentQrSchema,
   setStaffWorkingHoursSchema,
   updateSalonChairSchema,
   updateSalonServiceSchema,
@@ -35,6 +36,7 @@ import {
   type SalonPhotoUploadMetaInput,
   type CreateSalonStaffInput,
   type SetOperatingHoursInput,
+  type SetSalonPaymentQrInput,
   type SetStaffWorkingHoursInput,
   type UpdateSalonChairInput,
   type UpdateSalonServiceInput,
@@ -55,6 +57,7 @@ import { SalonOperatingHoursService } from './salon-operating-hours.service';
 import { SalonPhotosService } from './salon-photos.service';
 import { StaffWorkingHoursService } from './staff-working-hours.service';
 import { SalonTimezoneService } from './salon-timezone.service';
+import { SalonPaymentQrService } from './salon-payment-qr.service';
 
 const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId`;
 
@@ -83,6 +86,7 @@ export class SalonSetupController {
     private readonly photos: SalonPhotosService,
     private readonly staffWorkingHours: StaffWorkingHoursService,
     private readonly timezone: SalonTimezoneService,
+    private readonly paymentQr: SalonPaymentQrService,
   ) {}
 
   // ---------- Shop activation ----------
@@ -115,6 +119,51 @@ export class SalonSetupController {
     body: UpdateSalonTimezoneInput,
   ) {
     return this.timezone.updateTimezone(user.id, salonId, body);
+  }
+
+  // ---------- Payment QR (FastQue Credits / Wallet V1) ----------
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}`)
+  getPaymentQr(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.paymentQr.get(user.id, salonId);
+  }
+
+  @Put(`${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}`)
+  setPaymentQr(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(setSalonPaymentQrSchema))
+    body: SetSalonPaymentQrInput,
+  ) {
+    return this.paymentQr.setLink(user.id, salonId, body);
+  }
+
+  // Multipart sibling of the JSON route above — same shape as photos' upload/link pair.
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}/${DASHBOARD_PATHS.photoUpload}`)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: memoryStorage(),
+      limits: { fileSize: SALON_PHOTO_UPLOAD.maxBytes, files: 1 },
+    }),
+  )
+  uploadPaymentQr(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+  ) {
+    return this.paymentQr.setFromUpload(user.id, salonId, file);
+  }
+
+  @Delete(`${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}`)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removePaymentQr(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.paymentQr.remove(user.id, salonId);
   }
 
   // ---------- Operating hours ----------

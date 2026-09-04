@@ -249,6 +249,14 @@ export class DashboardBookingsService {
           ? Number(booking.cancellationChargeAmount)
           : null,
       selectedStyleName: booking.selectedStyleName,
+      creditsEarnedAmount:
+        booking.creditsEarnedAmount !== null
+          ? Number(booking.creditsEarnedAmount)
+          : null,
+      creditsRedeemedAmount:
+        booking.creditsRedeemedAmount !== null
+          ? Number(booking.creditsRedeemedAmount)
+          : null,
       currency: booking.salon.currency,
       salonName: booking.salon.name,
       salonSlug: booking.salon.slug,
@@ -260,6 +268,11 @@ export class DashboardBookingsService {
       serviceName: booking.service.name,
       serviceDurationMinutes: booking.service.durationMinutes,
       servicePrice: Number(booking.service.price),
+      payableAmount: Math.max(
+        0,
+        Number(booking.service.price) -
+          Number(booking.creditsRedeemedAmount ?? 0),
+      ),
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
       customerPhone: booking.customer.phone,
       customerEmail: booking.customer.email,

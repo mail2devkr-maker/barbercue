@@ -726,6 +726,33 @@ export interface UiStrings {
 
   /** Connector for "{service} at {salon}" (ConfirmBookingScreen) — includes surrounding spaces. */
   atConnector: string;
+
+  // FastQue Credits / Wallet V1
+  fastQueCreditsLabel: string;
+  walletBalanceLabel: string;
+  redeemCreditsLabel: string;
+  redeemCreditsHint: string;
+  creditsRedeemedLabel: string;
+  creditsEarnedLabel: string;
+  payableAmountLabel: string;
+  fullPriceLabel: string;
+  insufficientCreditsMessage: string;
+  couldNotLoadCreditsBalance: string;
+  noCreditsHistoryYet: string;
+  creditsHistoryTitle: string;
+  earnedCreditsEntryLabel: string;
+  redeemedCreditsEntryLabel: string;
+  restoredCreditsEntryLabel: string;
+  paymentQrRequiredMessage: string;
+  paymentQrSectionTitle: string;
+  paymentQrSectionHint: string;
+  uploadPaymentQrAction: string;
+  linkPaymentQrAction: string;
+  removePaymentQrAction: string;
+  noPaymentQrConfiguredLabel: string;
+  paymentQrConfiguredLabel: string;
+  couldNotSavePaymentQr: string;
+  couldNotRemovePaymentQr: string;
 }
 
 const enUi: UiStrings = {
@@ -1225,6 +1252,32 @@ const enUi: UiStrings = {
   bookingRefPrefix: 'Ref ',
 
   atConnector: ' at ',
+
+  fastQueCreditsLabel: 'FastQue Credits',
+  walletBalanceLabel: 'Your FastQue Credits balance',
+  redeemCreditsLabel: 'Redeem FastQue Credits',
+  redeemCreditsHint: 'Use some of your balance to pay less for this booking.',
+  creditsRedeemedLabel: 'Credits redeemed',
+  creditsEarnedLabel: 'Credits earned',
+  payableAmountLabel: 'Amount to pay',
+  fullPriceLabel: 'Full price',
+  insufficientCreditsMessage: "You don't have enough FastQue Credits to redeem that amount.",
+  couldNotLoadCreditsBalance: 'Could not load your FastQue Credits balance.',
+  noCreditsHistoryYet: 'No FastQue Credits activity yet.',
+  creditsHistoryTitle: 'Credits history',
+  earnedCreditsEntryLabel: 'Earned',
+  redeemedCreditsEntryLabel: 'Redeemed',
+  restoredCreditsEntryLabel: 'Restored',
+  paymentQrRequiredMessage: "This shop hasn't set up online payment yet. Please try again later or visit in person.",
+  paymentQrSectionTitle: 'Payment QR',
+  paymentQrSectionHint: 'Customers scan this to pay online. Required before online booking can be enabled.',
+  uploadPaymentQrAction: 'Upload QR code',
+  linkPaymentQrAction: 'Link QR code image',
+  removePaymentQrAction: 'Remove QR code',
+  noPaymentQrConfiguredLabel: 'No payment QR configured yet',
+  paymentQrConfiguredLabel: 'Payment QR configured',
+  couldNotSavePaymentQr: 'Could not save the payment QR.',
+  couldNotRemovePaymentQr: 'Could not remove the payment QR.',
 };
 
 const hiUi: UiStrings = {
@@ -1724,6 +1777,32 @@ const hiUi: UiStrings = {
   bookingRefPrefix: 'संदर्भ ',
 
   atConnector: ' में ',
+
+  fastQueCreditsLabel: 'FastQue Credits',
+  walletBalanceLabel: 'आपका FastQue Credits बैलेंस',
+  redeemCreditsLabel: 'FastQue Credits का उपयोग करें',
+  redeemCreditsHint: 'इस बुकिंग के लिए कम भुगतान करने हेतु अपने बैलेंस का कुछ हिस्सा उपयोग करें।',
+  creditsRedeemedLabel: 'उपयोग किए गए क्रेडिट',
+  creditsEarnedLabel: 'अर्जित क्रेडिट',
+  payableAmountLabel: 'भुगतान करने की राशि',
+  fullPriceLabel: 'पूरी कीमत',
+  insufficientCreditsMessage: 'इतनी राशि उपयोग करने के लिए आपके पास पर्याप्त FastQue Credits नहीं हैं।',
+  couldNotLoadCreditsBalance: 'आपका FastQue Credits बैलेंस लोड नहीं हो सका।',
+  noCreditsHistoryYet: 'अभी तक कोई FastQue Credits गतिविधि नहीं है।',
+  creditsHistoryTitle: 'क्रेडिट इतिहास',
+  earnedCreditsEntryLabel: 'अर्जित',
+  redeemedCreditsEntryLabel: 'उपयोग किया गया',
+  restoredCreditsEntryLabel: 'वापस किया गया',
+  paymentQrRequiredMessage: 'इस दुकान ने अभी तक ऑनलाइन भुगतान सेट अप नहीं किया है। कृपया बाद में पुनः प्रयास करें या व्यक्तिगत रूप से जाएँ।',
+  paymentQrSectionTitle: 'भुगतान QR',
+  paymentQrSectionHint: 'ग्राहक ऑनलाइन भुगतान के लिए इसे स्कैन करते हैं। ऑनलाइन बुकिंग चालू करने से पहले यह आवश्यक है।',
+  uploadPaymentQrAction: 'QR कोड अपलोड करें',
+  linkPaymentQrAction: 'QR कोड इमेज लिंक करें',
+  removePaymentQrAction: 'QR कोड हटाएं',
+  noPaymentQrConfiguredLabel: 'अभी तक कोई भुगतान QR सेट नहीं किया गया',
+  paymentQrConfiguredLabel: 'भुगतान QR सेट हो गया',
+  couldNotSavePaymentQr: 'भुगतान QR सेव नहीं हो सका।',
+  couldNotRemovePaymentQr: 'भुगतान QR हटाया नहीं जा सका।',
 };
 
 export const UI_STRINGS: Readonly<Record<Language, UiStrings>> = {

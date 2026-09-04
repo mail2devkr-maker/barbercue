@@ -30,6 +30,7 @@ import { RemindersModule } from './reminders/reminders.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { DashboardReviewsModule } from './dashboard-reviews/dashboard-reviews.module';
 import { VerificationModule } from './verification/verification.module';
+import { CustomerCreditsModule } from './credits/customer-credits.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { VerificationModule } from './verification/verification.module';
     // own doc comment, whose old "structurally non-overlapping" claim assumed order-independent
     // matching, which Express does not do). Any future `salons/:salonId/<literal>/...` controller
     // needs to be registered here too, before SalonsModule, or it will hit the same bug.
+    CustomerCreditsModule,
     BookingsModule,
     QueueModule,
     SalonsModule,

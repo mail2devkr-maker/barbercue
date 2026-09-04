@@ -3,6 +3,7 @@ import type {
   BookingStatus,
   ChairStatus,
   ChargeType,
+  CreditTransactionType,
   Language,
   LedgerReason,
   LedgerStatus,
@@ -390,6 +391,10 @@ export interface BookingDto {
   // "Try This Look" before booking, null for every ordinary booking. Free text at this layer
   // (not a foreign key) since HAIRSTYLE_CATALOG is a shared constant, not a DB table.
   selectedStyleName: string | null;
+  // FastQue Credits / Wallet V1 — snapshots taken at the moments described in schema.prisma's own
+  // doc comment on these two columns. Both null means "no credits involved in this booking at all".
+  creditsEarnedAmount: number | null;
+  creditsRedeemedAmount: number | null;
 }
 
 // ---------- AI Style Advisor (Phase E) ----------
@@ -448,6 +453,10 @@ export interface BookingDetailDto extends BookingDto {
   serviceName: string;
   serviceDurationMinutes: number;
   servicePrice: number;
+  // FastQue Credits / Wallet V1: servicePrice minus creditsRedeemedAmount, floored at 0 — the
+  // actual amount the customer needs to pay via the salon's payment QR. Always present (not just
+  // when credits were redeemed) so a client never has to duplicate this subtraction itself.
+  payableAmount: number;
   preferredStaffName: string | null;
   // Phase 16 (Ratings & Reviews) — whether the Review.bookingId-unique row already exists for this
   // booking, so a client can show "Leave a review" vs. "You reviewed this" without a second
@@ -923,6 +932,31 @@ export interface SalonTimezoneResultDto {
   id: string;
   timezone: string | null;
   countryCode: string;
+}
+
+// GET/PUT dashboard/salons/:salonId/payment-qr response (FastQue Credits / Wallet V1) — the
+// owner-facing counterpart to BookingErrorCode.PAYMENT_QR_REQUIRED. null means not configured yet,
+// which is exactly what blocks that salon from taking an ONLINE (APP/WEB-sourced) booking.
+export interface SalonPaymentQrDto {
+  salonId: string;
+  paymentQrImageUrl: string | null;
+}
+
+// GET credits/balance response — the single number a booking-time redemption UI needs. Always
+// reflects the durable CustomerCreditAccount.balance, never recomputed client-side.
+export interface CustomerCreditBalanceDto {
+  balance: number;
+}
+
+// GET credits/history — one row per CustomerCreditTransaction, oldest fields never mutated once
+// written (see that model's own "append-only" doc comment).
+export interface CustomerCreditTransactionDto {
+  id: string;
+  type: CreditTransactionType;
+  amount: number;
+  bookingId: string | null;
+  note: string | null;
+  createdAt: string; // ISO 8601
 }
 
 /**

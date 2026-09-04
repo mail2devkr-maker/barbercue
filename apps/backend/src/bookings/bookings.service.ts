@@ -4,10 +4,12 @@ import {
   BookingErrorCode,
   BookingSource,
   BookingStatus,
+  CreditsErrorCode,
   LedgerReason,
   LedgerStatus,
   PrepaymentRequirement,
   QueueEntryStatus,
+  SubsidyLedgerStatus,
   computeCancellationCharge,
   formatMoney,
   isSlotBookable,
@@ -24,6 +26,7 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 import { QueueService } from '../queue/queue.service';
+import { CustomerCreditsService } from '../credits/customer-credits.service';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 
@@ -85,6 +88,7 @@ export class BookingsService {
     private readonly pushDispatch: PushDispatchService,
     @Inject(forwardRef(() => QueueService))
     private readonly queue: QueueService,
+    private readonly credits: CustomerCreditsService,
   ) {}
 
   async create(
@@ -153,13 +157,18 @@ export class BookingsService {
       const message =
         outstandingEntries.length === 1
           ? `${formatMoney(totalOutstandingAmount, salon.currency)} ${
-              outstandingEntries[0].reason === LedgerReason.NO_SHOW_CHARGE ? 'no-show due' : 'cancellation charge'
+              outstandingEntries[0].reason === LedgerReason.NO_SHOW_CHARGE
+                ? 'no-show due'
+                : 'cancellation charge'
             } at ${salon.name}. Please settle it before booking again.`
           : `You have ${formatMoney(totalOutstandingAmount, salon.currency)} in outstanding dues at ${salon.name}. Please settle it before booking again.`;
       const details: OutstandingBalanceDetailsDto = {
         totalOutstandingAmount,
         currency: salon.currency ?? 'INR',
-        entries: outstandingEntries.map((e) => ({ reason: e.reason, amount: Number(e.amount) })),
+        entries: outstandingEntries.map((e) => ({
+          reason: e.reason,
+          amount: Number(e.amount),
+        })),
       };
       throw new AppException(
         BookingErrorCode.OUTSTANDING_BALANCE,
@@ -175,6 +184,36 @@ export class BookingsService {
     const paymentPolicy = await this.prisma.salonPaymentPolicy.findUnique({
       where: { salonId: input.salonId },
     });
+
+    // FastQue Credits / Wallet V1: an ONLINE (APP/WEB-sourced) booking needs the shop's payment QR
+    // to actually be shown to the customer for payment — there is no live payment gateway (see
+    // this file's own cancel()-comment on Payment being schema-only), so this is a hard,
+    // server-side prerequisite, not a UI hint the client could bypass. WALK_IN never needs one:
+    // that customer pays the shop in person, no QR involved.
+    if (
+      source !== BookingSource.WALK_IN &&
+      !paymentPolicy?.paymentQrImageUrl
+    ) {
+      throw new AppException(
+        BookingErrorCode.PAYMENT_QR_REQUIRED,
+        `${salon.name} hasn't set up online payment yet. Please try booking again later or visit in person.`,
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    // Cheap upper-bound check before the transaction even opens — the customer can never redeem
+    // more than the service costs. The actual live-balance check (the one that matters for
+    // correctness under concurrency) happens inside CustomerCreditsService.redeemForBooking, in
+    // the transaction below.
+    const creditsToRedeem = input.creditsToRedeem ?? 0;
+    if (creditsToRedeem > Number(service.price)) {
+      throw new AppException(
+        CreditsErrorCode.INSUFFICIENT_CREDITS,
+        "You can't redeem more credits than this service costs.",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const prepaymentRequirement =
       paymentPolicy?.prepaymentRequirement ?? PrepaymentRequirement.NONE;
     const requiresPrepayment =
@@ -266,8 +305,33 @@ export class BookingsService {
           preferredStaffId: input.preferredStaffId ?? null,
           prepaymentRequiredAmount,
           selectedStyleName: input.selectedStyleName ?? null,
+          creditsRedeemedAmount: creditsToRedeem > 0 ? creditsToRedeem : null,
         },
       });
+
+      // FastQue Credits / Wallet V1: redeem inside the same transaction as the booking's own
+      // creation — a rolled-back booking (e.g. SLOT_FULL, discovered a moment later in this same
+      // transaction on a race) must never have actually spent the customer's balance.
+      if (creditsToRedeem > 0) {
+        await this.credits.redeemForBooking(
+          tx,
+          customerId,
+          created.id,
+          creditsToRedeem,
+        );
+        // FastQue subsidizes the discount, not the shop — this is the auditable record of what
+        // FastQue owes this salon for the difference. Voided, not deleted, if the booking is later
+        // cancelled (see cancel() below) — see PlatformShopSubsidyEntry's own doc comment.
+        await tx.platformShopSubsidyEntry.create({
+          data: {
+            salonId: input.salonId,
+            bookingId: created.id,
+            amount: creditsToRedeem,
+            status: SubsidyLedgerStatus.OUTSTANDING,
+          },
+        });
+      }
+
       return created.id;
     }, TRANSACTION_OPTIONS);
 
@@ -380,63 +444,87 @@ export class BookingsService {
     // Only the reachable branch of STATE_MACHINES.md's cancellation flowchart is implemented: no
     // eligible Payment can exist in V1 data (the Payments module isn't built), so a charge always
     // becomes a CustomerLedgerEntry(OUTSTANDING), never a refund — see the plan's explicit scoping.
-    const { booking: updated, linkedQueueEntryCancelled } = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          status: BookingStatus.CANCELLED,
-          cancelledAt: new Date(),
-          cancelledById: customerId,
-          cancellationChargeAmount: chargeAmount,
-        },
-        include: bookingDetailInclude,
-      });
-
-      // Issue 3 (mobile stabilization mission) — a booking checked in before it was cancelled has
-      // a linked QueueEntry (source=APPOINTMENT, see queue.service.ts checkIn()) that would
-      // otherwise stay WAITING/CALLED forever, inflating the live queue and its waiting count/ETA.
-      // Only a WAITING or CALLED entry is touched here — never IN_SERVICE (the customer is
-      // physically in the chair; that stays the queue engine's own concern), and the `bookingId`
-      // match means an unrelated WALK_IN entry (bookingId always null) can never be affected.
-      const queueClaim = await tx.queueEntry.updateMany({
-        where: {
-          bookingId,
-          status: { in: QUEUE_ENTRY_STATUSES_CANCELLABLE_FROM_BOOKING },
-        },
-        data: { status: QueueEntryStatus.CANCELLED },
-      });
-
-      if (chargeAmount > 0) {
-        await tx.customerLedgerEntry.create({
+    const { booking: updated, linkedQueueEntryCancelled } =
+      await this.prisma.$transaction(async (tx) => {
+        const result = await tx.booking.update({
+          where: { id: bookingId },
           data: {
-            customerId,
-            salonId: booking.salonId,
+            status: BookingStatus.CANCELLED,
+            cancelledAt: new Date(),
+            cancelledById: customerId,
+            cancellationChargeAmount: chargeAmount,
+          },
+          include: bookingDetailInclude,
+        });
+
+        // Issue 3 (mobile stabilization mission) — a booking checked in before it was cancelled has
+        // a linked QueueEntry (source=APPOINTMENT, see queue.service.ts checkIn()) that would
+        // otherwise stay WAITING/CALLED forever, inflating the live queue and its waiting count/ETA.
+        // Only a WAITING or CALLED entry is touched here — never IN_SERVICE (the customer is
+        // physically in the chair; that stays the queue engine's own concern), and the `bookingId`
+        // match means an unrelated WALK_IN entry (bookingId always null) can never be affected.
+        const queueClaim = await tx.queueEntry.updateMany({
+          where: {
             bookingId,
-            amount: chargeAmount,
-            reason: LedgerReason.CANCELLATION_CHARGE,
-            status: LedgerStatus.OUTSTANDING,
+            status: { in: QUEUE_ENTRY_STATUSES_CANCELLABLE_FROM_BOOKING },
+          },
+          data: { status: QueueEntryStatus.CANCELLED },
+        });
+
+        if (chargeAmount > 0) {
+          await tx.customerLedgerEntry.create({
+            data: {
+              customerId,
+              salonId: booking.salonId,
+              bookingId,
+              amount: chargeAmount,
+              reason: LedgerReason.CANCELLATION_CHARGE,
+              status: LedgerStatus.OUTSTANDING,
+            },
+          });
+        }
+
+        // FastQue Credits / Wallet V1: give back exactly the amount snapshot at booking-creation
+        // time (never re-derived), and void — not delete — the matching subsidy entry, since the
+        // service this booking would have subsidized never happened. A booking only ever reaches
+        // this transaction from CONFIRMED/PENDING_PAYMENT (the guard above), so this can never run
+        // twice for the same booking.
+        if (booking.creditsRedeemedAmount != null) {
+          const restoredAmount = Number(booking.creditsRedeemedAmount);
+          await this.credits.restoreForCancelledBooking(
+            tx,
+            customerId,
+            bookingId,
+            restoredAmount,
+          );
+          await tx.platformShopSubsidyEntry.updateMany({
+            where: { bookingId, status: SubsidyLedgerStatus.OUTSTANDING },
+            data: { status: SubsidyLedgerStatus.VOIDED, voidedAt: new Date() },
+          });
+        }
+
+        // STATE_MACHINES.md's audit rule: every transition with money/customer-facing consequences
+        // writes an AuditLog row.
+        await tx.auditLog.create({
+          data: {
+            actorUserId: customerId,
+            action: 'BOOKING_CANCELLED',
+            entityType: 'Booking',
+            entityId: bookingId,
+            metadata: {
+              chargeAmount,
+              minutesUntilSlot,
+              freeCancellationWindowMinutes:
+                policy.freeCancellationWindowMinutes,
+            },
           },
         });
-      }
 
-      // STATE_MACHINES.md's audit rule: every transition with money/customer-facing consequences
-      // writes an AuditLog row.
-      await tx.auditLog.create({
-        data: {
-          actorUserId: customerId,
-          action: 'BOOKING_CANCELLED',
-          entityType: 'Booking',
-          entityId: bookingId,
-          metadata: {
-            chargeAmount,
-            minutesUntilSlot,
-            freeCancellationWindowMinutes: policy.freeCancellationWindowMinutes,
-          },
-        },
-      });
-
-      return { booking: result, linkedQueueEntryCancelled: queueClaim.count > 0 };
-    }, TRANSACTION_OPTIONS);
+        return {
+          booking: result,
+          linkedQueueEntryCancelled: queueClaim.count > 0,
+        };
+      }, TRANSACTION_OPTIONS);
 
     this.realtime.emitBookingCancelled(updated.salonId, bookingId);
     if (linkedQueueEntryCancelled) {
@@ -667,6 +755,14 @@ export class BookingsService {
           ? Number(booking.cancellationChargeAmount)
           : null,
       selectedStyleName: booking.selectedStyleName,
+      creditsEarnedAmount:
+        booking.creditsEarnedAmount !== null
+          ? Number(booking.creditsEarnedAmount)
+          : null,
+      creditsRedeemedAmount:
+        booking.creditsRedeemedAmount !== null
+          ? Number(booking.creditsRedeemedAmount)
+          : null,
       // Salon-scoped: a booking's amounts are denominated in its salon's currency.
       currency: booking.salon.currency,
       salonName: booking.salon.name,
@@ -679,6 +775,11 @@ export class BookingsService {
       serviceName: booking.service.name,
       serviceDurationMinutes: booking.service.durationMinutes,
       servicePrice: Number(booking.service.price),
+      payableAmount: Math.max(
+        0,
+        Number(booking.service.price) -
+          Number(booking.creditsRedeemedAmount ?? 0),
+      ),
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
       hasReview: booking.reviews.length > 0,
     };

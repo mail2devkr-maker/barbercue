@@ -31,6 +31,7 @@ import { AvailabilityService } from '../bookings/availability.service';
 import { zonedDayBounds } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CustomerCreditsService } from '../credits/customer-credits.service';
 
 // Allowed from 15 minutes before slotStart onward, no upper bound — the automatic no-show sweep
 // that would otherwise cap lateness isn't built in this phase (see the plan's explicit scoping).
@@ -66,6 +67,7 @@ export class QueueService {
     private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
+    private readonly credits: CustomerCreditsService,
   ) {}
 
   // ---------- Customer-facing ----------
@@ -749,7 +751,10 @@ export class QueueService {
   ): Promise<QueueEntryDetailDto> {
     const session = await this.prisma.serviceSession.findUnique({
       where: { id: sessionId },
-      include: { queueEntry: true },
+      include: {
+        queueEntry: true,
+        service: { select: { price: true } },
+      },
     });
     if (!session) {
       throw new AppException(
@@ -788,6 +793,26 @@ export class QueueService {
           where: { id: session.queueEntry.bookingId },
           data: { status: BookingStatus.COMPLETED },
         });
+      }
+
+      // FastQue Credits / Wallet V1: earned on ANY completed session by a known customer, not just
+      // an appointment-sourced one — a walk-in who joined via the shop's QR while logged in earns
+      // exactly the same as a booked customer would, since both are a real completed paid visit.
+      // Safe from double-earning because this line only runs once per session, guarded by the
+      // updateMany count-check above (a session can transition ACTIVE -> COMPLETED exactly once).
+      if (session.queueEntry.customerId) {
+        const earned = await this.credits.earnForCompletedSession(
+          tx,
+          session.queueEntry.customerId,
+          session.queueEntry.bookingId,
+          session.service.price,
+        );
+        if (earned > 0 && session.queueEntry.bookingId) {
+          await tx.booking.update({
+            where: { id: session.queueEntry.bookingId },
+            data: { creditsEarnedAmount: earned },
+          });
+        }
       }
     }, TRANSACTION_OPTIONS);
 

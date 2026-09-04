@@ -179,6 +179,24 @@ export const PREMIUM_PATHS = {
 // never duplicated here.
 export const PREMIUM_PLAN_IDS = ['basic', 'pro', 'max'] as const;
 
+// CustomerCreditsController's `@Controller('credits')` prefix (FastQue Credits / Wallet V1) — the
+// customer-facing wallet balance/history, distinct from PREMIUM_PATHS.credits above (that's the AI
+// Style Advisor's unrelated per-subscription generation-credit pool, not money).
+export const CREDITS_PATHS = {
+  credits: 'credits',
+  balance: 'balance',
+  history: 'history',
+} as const;
+
+// FastQue Credits earn formula: floor(price / CREDIT_SLAB_AMOUNT_INR) * CREDIT_PER_SLAB_INR — a
+// completed ₹50 service earns ₹10, ₹100 earns ₹20, ₹150 earns ₹30, and so on. This is exactly 20%
+// at every whole-slab price and strictly less than 20% at any price that isn't an exact multiple
+// of ₹50 (e.g. ₹75 earns ₹10, not ₹15) — so "never more than 20%" holds by construction, not by a
+// separate cap check. See CustomerCreditsService.computeEarnedCredits, the single place this
+// formula is implemented.
+export const CREDIT_SLAB_AMOUNT_INR = 50;
+export const CREDIT_PER_SLAB_INR = 10;
+
 // DashboardQueueController's `@Controller('dashboard')` prefix — staff/owner queue operations.
 // Salon photo upload limits. Shared so the browser can reject a bad file before spending an
 // upload on it and the server can reject the same file again on arrival — the client copy is a
@@ -270,6 +288,12 @@ export const DASHBOARD_PATHS = {
   // counterpart to SALON_TIMEZONE_REQUIRED: booking/analytics/isOpenNow all need a real IANA zone,
   // and until this endpoint existed there was no way for an owner to actually set one.
   timezone: 'timezone',
+  // GET/PUT dashboard/salons/:salonId/payment-qr, POST .../payment-qr/upload (FastQue Credits /
+  // Wallet V1) — the owner-facing counterpart to BookingErrorCode.PAYMENT_QR_REQUIRED: an ONLINE
+  // (APP/WEB-sourced) booking cannot be created at a salon with no payment QR configured, and until
+  // this endpoint existed there was no way for an owner to actually set one. Same link-or-upload
+  // dual-route shape as `photos`/`photoUpload` above.
+  paymentQr: 'payment-qr',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).
