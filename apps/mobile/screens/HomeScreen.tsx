@@ -3,7 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BOOKING_PATHS,
   QUEUE_ENTRIES_PATH,
@@ -17,6 +17,7 @@ import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, Skeleton, NotificationBell, LanguageSwitcher } from '../components/ui';
+import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
 
 type Props = CompositeScreenProps<
@@ -138,16 +139,26 @@ export default function HomeScreen({ navigation }: Props) {
         </>
       )}
 
+      {/* Build 9 physical feedback: text-only cards read as a generic prototype. Same two
+          FastQue-owned editorial photographs apps/web's own discovery surfaces already use (see
+          lib/editorial.ts) give each choice a real, premium visual anchor without inventing stock
+          imagery of an actual salon. */}
       <View style={styles.choiceRow}>
         <Pressable style={styles.choiceCard} onPress={goFindSalon}>
-          <Text style={styles.choiceKicker}>{t.bookAheadKicker}</Text>
-          <Text style={styles.choiceTitle}>{t.reserveChair}</Text>
-          <Text style={styles.choiceMeta}>{t.serviceBarberTime}</Text>
+          <Image source={{ uri: EDITORIAL_ASSET_URL.heroBand }} style={styles.choicePhoto} />
+          <View style={styles.choiceBody}>
+            <Text style={styles.choiceKicker}>{t.bookAheadKicker}</Text>
+            <Text style={styles.choiceTitle}>{t.reserveChair}</Text>
+            <Text style={styles.choiceMeta}>{t.serviceBarberTime}</Text>
+          </View>
         </Pressable>
-        <Pressable style={[styles.choiceCard, styles.choiceCardAccent]} onPress={goFindSalon}>
-          <Text style={[styles.choiceKicker, styles.choiceKickerAccent]}>{t.joinLiveKicker}</Text>
-          <Text style={styles.choiceTitle}>{t.skipTheWait}</Text>
-          <Text style={styles.choiceMeta}>{t.findShopJoinQueue}</Text>
+        <Pressable style={styles.choiceCard} onPress={goFindSalon}>
+          <Image source={{ uri: EDITORIAL_ASSET_URL.hairFlagship }} style={styles.choicePhoto} />
+          <View style={styles.choiceBody}>
+            <Text style={[styles.choiceKicker, styles.choiceKickerAccent]}>{t.joinLiveKicker}</Text>
+            <Text style={styles.choiceTitle}>{t.skipTheWait}</Text>
+            <Text style={styles.choiceMeta}>{t.findShopJoinQueue}</Text>
+          </View>
         </Pressable>
       </View>
 
@@ -204,9 +215,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.lg,
-    padding: space[4],
+    overflow: 'hidden',
+    shadowColor: color.ink,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1,
   },
-  choiceCardAccent: { backgroundColor: color.accentSoft, borderColor: 'rgba(176, 65, 62, 0.24)' },
+  choicePhoto: { width: '100%', height: 84 },
+  choiceBody: { padding: space[4] },
   choiceKicker: {
     fontFamily: font.bodyBold,
     fontSize: 10,

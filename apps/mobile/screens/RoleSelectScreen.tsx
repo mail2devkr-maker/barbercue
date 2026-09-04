@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, LanguageSwitcher } from '../components/ui';
+import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import type { AuthStackParamList } from '../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'RoleSelect'>;
@@ -42,11 +43,24 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
       {/* Issue 2 (mobile launch mission) — browse-first, auth-last: the prominent, primary action
           on first launch is finding a shop, not signing in. Google sign-in only appears later, at
-          the actual booking/queue confirm step (see ConfirmBookingScreen/WalkInJoinScreen). */}
+          the actual booking/queue confirm step (see ConfirmBookingScreen/WalkInJoinScreen).
+          Photo-backed since Build 9 physical feedback: the flat ink block read as a generic
+          prototype, not a premium marketplace's first impression. Reuses the exact editorial
+          photograph apps/web's own landing hero uses (see lib/editorial.ts) rather than an
+          arbitrary stock image, so the two clients open on a consistent brand moment. */}
       <Pressable style={styles.browseCard} onPress={() => navigation.navigate('GuestBrowse')}>
-        <Text style={styles.browseKicker}>{t.city} · {t.service}</Text>
-        <Text style={styles.browseTitle}>{t.findAShop}</Text>
-        <Text style={styles.browseSubtitle}>{t.browseHint}</Text>
+        <ImageBackground
+          source={{ uri: EDITORIAL_ASSET_URL.heroBand }}
+          style={styles.browsePhoto}
+          imageStyle={styles.browsePhotoImage}
+        >
+          <View style={[StyleSheet.absoluteFill, styles.browseScrim]} />
+          <View style={styles.browseContent}>
+            <Text style={styles.browseKicker}>{t.city} · {t.service}</Text>
+            <Text style={styles.browseTitle}>{t.findAShop}</Text>
+            <Text style={styles.browseSubtitle}>{t.browseHint}</Text>
+          </View>
+        </ImageBackground>
       </Pressable>
 
       <SectionHeader eyebrow={t.orContinueAs} title={t.alreadyKnowAccount} />
@@ -93,11 +107,22 @@ const styles = StyleSheet.create({
   optionSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: space[1] },
 
   browseCard: {
-    backgroundColor: color.ink,
     borderRadius: radius.lg,
-    padding: space[5],
     marginBottom: space[6],
+    overflow: 'hidden',
+    shadowColor: color.ink,
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
   },
+  browsePhoto: { minHeight: 200, justifyContent: 'flex-end' },
+  browsePhotoImage: { borderRadius: radius.lg },
+  // A solid scrim rather than a gradient — same legibility job web's hero gradient does, without
+  // pulling in a native gradient dependency that would force a fresh binary build for what should
+  // stay a JS-only OTA update.
+  browseScrim: { backgroundColor: 'rgba(20, 16, 12, 0.52)' },
+  browseContent: { padding: space[5] },
   browseKicker: {
     fontFamily: font.bodyBold,
     fontSize: 10,
@@ -107,5 +132,5 @@ const styles = StyleSheet.create({
     marginBottom: space[1],
   },
   browseTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.surface },
-  browseSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: 'rgba(255,255,255,0.72)', marginTop: space[1] },
+  browseSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: 'rgba(255,255,255,0.82)', marginTop: space[1] },
 });

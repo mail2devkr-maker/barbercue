@@ -6,7 +6,7 @@ import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from '@barbe
 import type { PublicSalonStatusDto, SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Button, Skeleton, ErrorState, SafeImage, PhotoGalleryViewer } from '../components/ui';
+import { Screen, Button, Skeleton, ErrorState, SafeImage, PhotoGalleryViewer } from '../components/ui';
 import { PublicSalonStatus } from '../components/PublicSalonStatus';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
@@ -110,8 +110,23 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         {/* Issue 8 (mobile stabilization mission) — SalonProfileDto.coverPhotoUrl (inherited from
             SalonListItemDto, already used correctly by SalonSearchScreen's cards) was never read
             or rendered anywhere in this screen, unlike apps/web's own profile page hero. SafeImage
-            degrades to the same neutral placeholder as everywhere else when there's no cover. */}
-        <SafeImage url={salon.coverPhotoUrl} alt={`${salon.name} cover photo`} style={styles.coverPhoto} />
+            degrades to the same neutral placeholder as everywhere else when there's no cover.
+            Build 9 physical feedback: the plain flat photo plus a separate white text block below
+            it read as a generic prototype. Name/verification/rating now sit directly on the
+            owner's own real cover photo (never stock — SafeImage's placeholder is the honest
+            fallback when there is none), reusing apps/web's own hero scrim pattern. */}
+        <View style={styles.heroWrap}>
+          <SafeImage url={salon.coverPhotoUrl} alt={`${salon.name} cover photo`} style={styles.coverPhoto} />
+          {salon.coverPhotoUrl && <View style={styles.heroScrim} />}
+          <View style={styles.heroOverlay}>
+            <Text style={[styles.heroName, !salon.coverPhotoUrl && styles.heroNameOnLight]} numberOfLines={2}>
+              {salon.name}
+            </Text>
+            <Text style={[styles.heroAddress, !salon.coverPhotoUrl && styles.heroAddressOnLight]} numberOfLines={1}>
+              {salon.addressLine}
+            </Text>
+          </View>
+        </View>
 
         {salon.photos.length > 0 && (
           <>
@@ -147,7 +162,6 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
           </>
         )}
 
-        <SectionHeader eyebrow={t.salonTitle} title={salon.name} subtitle={salon.addressLine} />
         {salon.verified && (
           <View style={styles.verifiedBadge}>
             <Text style={styles.verifiedBadgeText}>{t.verifiedBadge} — {VERIFICATION_BADGE_CAPTION}</Text>
@@ -257,7 +271,24 @@ const styles = StyleSheet.create({
   screenContent: { paddingHorizontal: space[5], paddingTop: space[5] },
   scrollContent: { paddingBottom: space[8] },
   heroSkeleton: { height: 180, borderRadius: radius.lg, marginBottom: space[4] },
-  coverPhoto: { width: '100%', height: 180, borderRadius: radius.lg, marginBottom: space[4] },
+  heroWrap: { borderRadius: radius.lg, overflow: 'hidden', marginBottom: space[4] },
+  coverPhoto: { width: '100%', height: 220 },
+  heroScrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '65%',
+    backgroundColor: 'rgba(20, 16, 12, 0.5)',
+    // A single flat rgba can't fade like web's gradient without expo-linear-gradient (a native
+    // module, which would force a fresh binary build for what should stay a JS-only OTA update
+    // here) — the bottom-heavy solid tone still does the legibility job, just without the fade.
+  },
+  heroOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: space[4] },
+  heroName: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, color: '#ffffff' },
+  heroNameOnLight: { color: color.ink },
+  heroAddress: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: 'rgba(255,255,255,0.85)', marginTop: space[1] },
+  heroAddressOnLight: { color: color.muted },
   lineSkeleton: { height: 18, borderRadius: 6, marginBottom: space[2] },
 
   photoStrip: { marginBottom: space[2] },
