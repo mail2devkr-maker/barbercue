@@ -56,3 +56,9 @@ apps/mobile/eas-log.txt
 # not by any script in this repo) and the report is disposable output. Never commit either.
 apps/backend/prisma/data/
 apps/backend/import-global-locations-report.json
+
+# prisma/seed-test-shops.ts's generated output — plaintext credentials for every synthetic
+# owner/staff account it creates. Never committed, never printed to logs; see that script's own
+# header comment for why (hundreds of production-account passwords must never land in git history
+# or CI output).
+apps/backend/prisma/.test-shop-credentials.json
