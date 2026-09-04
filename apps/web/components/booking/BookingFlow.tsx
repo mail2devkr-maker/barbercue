@@ -4,12 +4,14 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BOOKING_PATHS,
+  CREDITS_PATHS,
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
   type AvailabilitySlotDto,
   type BookingDetailDto,
   type CancellationPolicyDto,
   type CancelBookingResponseDto,
+  type CustomerCreditBalanceDto,
   type OperatingHoursDto,
   type ServiceDto,
   type StaffOptionDto,
@@ -90,6 +92,15 @@ export function BookingFlow({
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
 
+  // FastQue Credits / Wallet V1 — the customer's live wallet balance, fetched once they're signed
+  // in and reach the Confirm step (never before: an anonymous visitor has no balance to show).
+  // creditsToRedeem is a plain number input, re-clamped to [0, min(balance, price)] on every
+  // change so the displayed payable amount is always consistent with what the server will actually
+  // accept — the server re-validates this again regardless (see BookingsService.create), this is
+  // only for a sane, honest preview.
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [creditsToRedeem, setCreditsToRedeem] = useState(0);
+
   // Part O — fetched once per salon, shown alongside the Confirm step so the customer knows the
   // real policy before they book, not just at cancel time (CancelBookingDialog fetches it again
   // itself for the live charge preview, deliberately not shared state — see that component).
@@ -106,6 +117,20 @@ export function BookingFlow({
       cancelled = true;
     };
   }, [salonId]);
+
+  // FastQue Credits / Wallet V1 — only fetched once signed in; an anonymous visitor has no wallet.
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    let cancelled = false;
+    apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
+      .then((result) => {
+        if (!cancelled) setCreditsBalance(result.balance);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [authStatus]);
 
   // Stable across retries of the exact same attempt (same service/staff/date/slot); regenerates
   // the moment any earlier choice changes, since that's a materially different attempt. The deps
@@ -212,10 +237,12 @@ export function BookingFlow({
           slotStart: selectedSlot.slotStart,
           ...(selectedStaffId ? { preferredStaffId: selectedStaffId } : {}),
           ...(selectedStyleName ? { selectedStyleName } : {}),
+          ...(creditsToRedeem > 0 ? { creditsToRedeem } : {}),
         }),
       });
       void refreshCurrentAvailability().catch(() => undefined);
       setConfirmedBooking(booking);
+      setCreditsToRedeem(0);
     } catch (err) {
       // The availability grid is advisory; the booking transaction is authoritative. If another
       // customer won the last capacity concurrently, clear the stale selection and immediately
@@ -227,6 +254,14 @@ export function BookingFlow({
         void apiFetch<AvailabilitySlotDto[]>(
           `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
         ).then(setSlots).catch(() => undefined);
+      }
+      // The balance shown was a moment-in-time snapshot; a stale one could over-offer redemption
+      // (e.g. two tabs). Re-fetch it so the input's own max clamp reflects reality on the next try.
+      if (err instanceof ApiError && err.code === "INSUFFICIENT_CREDITS") {
+        setCreditsToRedeem(0);
+        void apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
+          .then((result) => setCreditsBalance(result.balance))
+          .catch(() => undefined);
       }
       setSubmitError(err instanceof ApiError ? err.message : "Could not create the booking. Please try again.");
     } finally {
@@ -279,6 +314,12 @@ export function BookingFlow({
               <> — prepayment of {formatMoney(booking.prepaymentRequiredAmount, currency, countryCode)} required</>
             )}
           </p>
+          {booking.creditsRedeemedAmount !== null && booking.creditsRedeemedAmount > 0 && (
+            <p className={styles.summaryLine}>
+              {formatMoney(booking.creditsRedeemedAmount, currency, countryCode)} in FastQue Credits applied —
+              pay {formatMoney(booking.payableAmount, currency, countryCode)} at the shop&apos;s payment QR.
+            </p>
+          )}
           {cancelResult && (
             <p className={styles.summaryLine}>
               {cancelResult.chargeAmount > 0
@@ -396,6 +437,33 @@ export function BookingFlow({
               appointment.
             </p>
           )}
+          {authStatus === "authenticated" && creditsBalance !== null && creditsBalance > 0 && (() => {
+            const servicePrice = services.find((s) => s.id === selectedServiceId)?.price ?? 0;
+            const maxRedeemable = Math.min(creditsBalance, servicePrice);
+            const payable = Math.max(0, servicePrice - creditsToRedeem);
+            return (
+              <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label htmlFor="credits-redeem">
+                  You have {formatMoney(creditsBalance, currency, countryCode)} in FastQue Credits — redeem up to{" "}
+                  {formatMoney(maxRedeemable, currency, countryCode)}
+                </label>
+                <input
+                  id="credits-redeem"
+                  type="range"
+                  min={0}
+                  max={maxRedeemable}
+                  step={1}
+                  value={Math.min(creditsToRedeem, maxRedeemable)}
+                  onChange={(e) => setCreditsToRedeem(Number(e.target.value))}
+                />
+                <p>
+                  {creditsToRedeem > 0
+                    ? `Applying ${formatMoney(creditsToRedeem, currency, countryCode)} — you pay ${formatMoney(payable, currency, countryCode)}`
+                    : "Slide to apply credits"}
+                </p>
+              </div>
+            );
+          })()}
           {submitError && <p className={styles.errorText}>{submitError}</p>}
           <div className={styles.confirmActions}>
             {authStatus === "authenticated" ? (
