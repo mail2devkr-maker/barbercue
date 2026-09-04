@@ -154,6 +154,15 @@
   gap: 14px;
 }
 
+/* A grid item's automatic minimum width defaults to its content's min-content size — for an <li>
+   containing a real photo, that's the photo's own native pixel width (often 3000px+ straight off a
+   phone camera), which the grid track was then forced to accommodate, stretching the whole row (and
+   the page) far past the viewport. Confirmed on a physical-device screenshot: a single "Handsome
+   Center" storefront photo rendered wider AND taller than its card, cut off at the screen edge. */
+.photoGridItem {
+  min-width: 0;
+}
+
 .queueGrid {
   list-style: none;
   padding: 0;

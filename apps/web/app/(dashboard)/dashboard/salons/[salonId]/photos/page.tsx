@@ -549,7 +549,7 @@ export default function DashboardPhotosPage({
           <div style={{ marginTop: 14 }}>
             <ul className={styles.queueGrid}>
               {galleryQueue.map((item) => (
-                <li key={item.id} style={{ border: "1px solid var(--bc-border)", borderRadius: "var(--bc-radius-sm)", padding: 8 }}>
+                <li key={item.id} className={styles.photoGridItem} style={{ border: "1px solid var(--bc-border)", borderRadius: "var(--bc-radius-sm)", padding: 8 }}>
                   <SalonImage url={item.previewUrl} alt={item.file.name} />
                   <p className={styles.hint} style={{ marginTop: 6, marginBottom: 4, wordBreak: "break-all" }}>
                     {item.file.name} · {(item.file.size / (1024 * 1024)).toFixed(1)} MB
@@ -643,7 +643,7 @@ export default function DashboardPhotosPage({
               .slice()
               .sort((a) => (a.type === PhotoType.COVER ? -1 : 1))
               .map((p) => (
-                <li key={p.id}>
+                <li key={p.id} className={styles.photoGridItem}>
                   <SalonImage url={p.url} alt={p.altText ?? "Shop photo"} />
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6 }}>
                     <span className={styles.rowMeta}>

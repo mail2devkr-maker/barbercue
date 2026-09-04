@@ -4,6 +4,13 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* SalonImage is used inside flex/grid layouts throughout the app (photo management grids, search
+     result cards, category tiles). A flex/grid item's automatic minimum width defaults to its
+     content's min-content size — for a box containing a real photo, that can mean the photo's own
+     native pixel width, which the item is then forced to accommodate instead of shrinking to its
+     actual column/cell width. min-width: 0 here is the standard, no-op-elsewhere fix: it only takes
+     effect where .frame is itself a flex/grid item, and does nothing in normal block contexts. */
+  min-width: 0;
   border: 1px solid var(--bc-border, #e7e0d3);
   background:
     radial-gradient(circle at 76% 20%, rgba(189, 142, 54, 0.16), transparent 30%),
