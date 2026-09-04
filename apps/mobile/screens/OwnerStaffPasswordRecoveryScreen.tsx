@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AUTH_PATHS, forgotPasswordSchema } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Button, InlineError, Screen, SectionHeader } from '../components/ui';
 import type { AuthStackParamList } from '../navigation/AuthStack';
@@ -16,18 +17,19 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'PasswordRecovery'>;
  */
 export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: Props) {
   const { audience } = route.params;
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const roleLabel = audience === 'owner' ? 'shop owner' : 'barber / staff';
+  const roleLabel = audience === 'owner' ? t.roleLabelOwner : t.roleLabelStaff;
 
   async function submit(): Promise<void> {
     setError(null);
     const parsed = forgotPasswordSchema.safeParse({ email, audience });
     if (!parsed.success) {
-      setError('Enter a valid email address.');
+      setError(t.enterValidEmail);
       return;
     }
 
@@ -43,7 +45,7 @@ export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: 
     } catch {
       // Keep provider/configuration errors non-technical and never turn them into an account
       // enumeration signal. A retry remains safe because the server owns rate limiting.
-      setError('Password recovery is temporarily unavailable. Please try again shortly.');
+      setError(t.recoveryUnavailableNotice);
     } finally {
       setSubmitting(false);
     }
@@ -52,14 +54,14 @@ export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: 
   if (submitted) {
     return (
       <Screen contentStyle={styles.screenContent}>
-        <SectionHeader eyebrow="Password recovery" title="Check your inbox" />
+        <SectionHeader eyebrow={t.passwordRecoveryTitle} title={t.checkYourInboxTitle} />
         <View style={styles.successCard}>
           <Text style={styles.successText}>
-            If an eligible {roleLabel} account uses that email, we&apos;ll send a secure password-reset link. The link expires soon and can be used once.
+            {t.eligibleAccountPrefix}{roleLabel}{t.eligibleAccountSuffix}
           </Text>
-          <Text style={styles.successHint}>After resetting your password, return here and sign in with your new password.</Text>
+          <Text style={styles.successHint}>{t.afterResetHint}</Text>
         </View>
-        <Button title="Back to sign in" onPress={() => navigation.goBack()} />
+        <Button title={t.backToSignIn} onPress={() => navigation.goBack()} />
       </Screen>
     );
   }
@@ -67,15 +69,15 @@ export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: 
   return (
     <Screen contentStyle={styles.screenContent}>
       <SectionHeader
-        eyebrow="Password recovery"
-        title="Reset your password"
-        subtitle={`Enter the email for your ${roleLabel} account.`}
+        eyebrow={t.passwordRecoveryTitle}
+        title={t.resetYourPasswordTitle}
+        subtitle={`${t.enterEmailForAccountPrefix}${roleLabel}${t.enterEmailForAccountSuffix}`}
       />
 
       {error && <InlineError message={error} />}
 
       <View style={styles.field}>
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>{t.email}</Text>
         <TextInput
           style={styles.input}
           placeholder="you@example.com"
@@ -87,13 +89,13 @@ export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: 
           autoComplete="email"
           value={email}
           onChangeText={setEmail}
-          accessibilityLabel="Email address"
+          accessibilityLabel={t.emailAddressAccessibilityLabel}
         />
       </View>
 
-      <Button title="Send reset link" onPress={() => void submit()} loading={submitting} />
+      <Button title={t.sendResetLinkAction} onPress={() => void submit()} loading={submitting} />
       <Pressable style={styles.backLink} onPress={() => navigation.goBack()} accessibilityRole="button">
-        <Text style={styles.backLinkText}>Back to sign in</Text>
+        <Text style={styles.backLinkText}>{t.backToSignIn}</Text>
       </Pressable>
     </Screen>
   );

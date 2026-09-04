@@ -13,8 +13,6 @@ import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonProfile'>;
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 // A wider, taller tile than a cramped grid thumbnail — big enough to actually read the photo at a
 // glance in the horizontal strip, while still clearly implying "more to swipe to." 3:2 landscape,
 // the same ratio real salon interior/work photos are usually shot in.
@@ -243,7 +241,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
                 .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
                 .map((h) => (
                   <View key={h.dayOfWeek} style={styles.hoursRow}>
-                    <Text style={styles.hoursDay}>{DAY_LABELS[h.dayOfWeek]}</Text>
+                    <Text style={styles.hoursDay}>{t.dayAbbreviations[h.dayOfWeek]}</Text>
                     <Text style={styles.hoursValue}>{h.isClosed ? t.slotsClosedLabel : `${h.openTime} – ${h.closeTime}`}</Text>
                   </View>
                 ))}

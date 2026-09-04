@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useOnlineStatus } from '../lib/network-status';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, space } from '../lib/theme';
 
 /**
@@ -13,10 +14,11 @@ import { color, font, fontSize, space } from '../lib/theme';
 export function OfflineBanner() {
   const online = useOnlineStatus();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   if (online) return null;
   return (
     <View style={[styles.bar, { paddingTop: insets.top + space[2] }]}>
-      <Text style={styles.text}>You&apos;re offline — showing the last data we had.</Text>
+      <Text style={styles.text}>{t.offlineMessage}</Text>
     </View>
   );
 }

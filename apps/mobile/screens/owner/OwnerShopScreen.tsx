@@ -24,8 +24,6 @@ import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError, SafeImage } from '../../components/ui';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 function scope(salonId: string, segment: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${segment}`;
 }
@@ -33,6 +31,7 @@ function scope(salonId: string, segment: string): string {
 // ---------- Services ----------
 
 function ServiceRow({ salonId, service, onChanged }: { salonId: string; service: ServiceDto; onChanged: () => void }) {
+  const { t } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(service.name);
   const [price, setPrice] = useState(String(service.price));
@@ -51,7 +50,7 @@ function ServiceRow({ salonId, service, onChanged }: { salonId: string; service:
       setEditing(false);
       onChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save this service.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSaveService);
     } finally {
       setSaving(false);
     }
@@ -67,7 +66,7 @@ function ServiceRow({ salonId, service, onChanged }: { salonId: string; service:
       });
       onChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not update this service.');
+      setError(err instanceof ApiError ? err.message : t.couldNotUpdateService);
     } finally {
       setSaving(false);
     }
@@ -79,14 +78,14 @@ function ServiceRow({ salonId, service, onChanged }: { salonId: string; service:
         <View style={styles.rowBody}>
           <Text style={[styles.rowTitle, !service.isActive && styles.rowTitleInactive]}>{service.name}</Text>
           <Text style={styles.rowMeta}>
-            {formatMoney(service.price, null)} · {service.durationMinutes} min {service.isActive ? '' : '· Inactive'}
+            {formatMoney(service.price, null)} · {service.durationMinutes} {t.minutesAbbrev} {service.isActive ? '' : t.inactiveSuffix}
           </Text>
         </View>
         <Pressable onPress={() => setEditing(true)}>
-          <Text style={styles.rowAction}>Edit</Text>
+          <Text style={styles.rowAction}>{t.editAction}</Text>
         </Pressable>
         <Pressable onPress={() => void toggleActive()} disabled={saving}>
-          <Text style={styles.rowAction}>{service.isActive ? 'Deactivate' : 'Activate'}</Text>
+          <Text style={styles.rowAction}>{service.isActive ? t.deactivateAction : t.activateAction}</Text>
         </Pressable>
       </View>
     );
@@ -95,20 +94,21 @@ function ServiceRow({ salonId, service, onChanged }: { salonId: string; service:
   return (
     <View style={styles.editPanel}>
       {error && <InlineError message={error} />}
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Service name" placeholderTextColor={color.muted} />
+      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t.servicePlaceholder} placeholderTextColor={color.muted} />
       <View style={styles.inlineRow}>
-        <TextInput style={[styles.input, styles.inputHalf]} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="Price" placeholderTextColor={color.muted} />
-        <TextInput style={[styles.input, styles.inputHalf]} value={duration} onChangeText={setDuration} keyboardType="numeric" placeholder="Minutes" placeholderTextColor={color.muted} />
+        <TextInput style={[styles.input, styles.inputHalf]} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder={t.pricePlaceholder} placeholderTextColor={color.muted} />
+        <TextInput style={[styles.input, styles.inputHalf]} value={duration} onChangeText={setDuration} keyboardType="numeric" placeholder={t.minutesPlaceholder} placeholderTextColor={color.muted} />
       </View>
       <View style={styles.actionRow}>
-        <Button title="Save" onPress={() => void save()} loading={saving} style={styles.actionButton} />
-        <Button title="Cancel" variant="outline" onPress={() => setEditing(false)} style={styles.actionButton} />
+        <Button title={t.saveAction} onPress={() => void save()} loading={saving} style={styles.actionButton} />
+        <Button title={t.cancelAction} variant="outline" onPress={() => setEditing(false)} style={styles.actionButton} />
       </View>
     </View>
   );
 }
 
 function AddServiceForm({ salonId, onAdded }: { salonId: string; onAdded: () => void }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
@@ -130,25 +130,25 @@ function AddServiceForm({ salonId, onAdded }: { salonId: string; onAdded: () => 
       setOpen(false);
       onAdded();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add this service.');
+      setError(err instanceof ApiError ? err.message : t.couldNotAddService);
     } finally {
       setSaving(false);
     }
   }
 
-  if (!open) return <Button title="Add service" variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
+  if (!open) return <Button title={t.addService} variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
 
   return (
     <View style={styles.editPanel}>
       {error && <InlineError message={error} />}
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Service name" placeholderTextColor={color.muted} />
+      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t.servicePlaceholder} placeholderTextColor={color.muted} />
       <View style={styles.inlineRow}>
-        <TextInput style={[styles.input, styles.inputHalf]} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="Price" placeholderTextColor={color.muted} />
-        <TextInput style={[styles.input, styles.inputHalf]} value={duration} onChangeText={setDuration} keyboardType="numeric" placeholder="Minutes" placeholderTextColor={color.muted} />
+        <TextInput style={[styles.input, styles.inputHalf]} value={price} onChangeText={setPrice} keyboardType="numeric" placeholder={t.pricePlaceholder} placeholderTextColor={color.muted} />
+        <TextInput style={[styles.input, styles.inputHalf]} value={duration} onChangeText={setDuration} keyboardType="numeric" placeholder={t.minutesPlaceholder} placeholderTextColor={color.muted} />
       </View>
       <View style={styles.actionRow}>
-        <Button title="Add" onPress={() => void submit()} loading={saving} disabled={!name || !price || !duration} style={styles.actionButton} />
-        <Button title="Cancel" variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
+        <Button title={t.addAction} onPress={() => void submit()} loading={saving} disabled={!name || !price || !duration} style={styles.actionButton} />
+        <Button title={t.cancelAction} variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
       </View>
     </View>
   );
@@ -157,6 +157,7 @@ function AddServiceForm({ salonId, onAdded }: { salonId: string; onAdded: () => 
 // ---------- Chairs ----------
 
 function ChairRow({ salonId, chair, onChanged }: { salonId: string; chair: SalonChairDto; onChanged: () => void }) {
+  const { t } = useLanguage();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isActive = chair.status === ChairStatus.ACTIVE;
@@ -173,7 +174,7 @@ function ChairRow({ salonId, chair, onChanged }: { salonId: string; chair: Salon
       });
       onChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not update this chair.');
+      setError(err instanceof ApiError ? err.message : t.couldNotUpdateChair);
     } finally {
       setSaving(false);
     }
@@ -187,13 +188,14 @@ function ChairRow({ salonId, chair, onChanged }: { salonId: string; chair: Salon
         {error && <InlineError message={error} />}
       </View>
       <Pressable onPress={() => void toggle()} disabled={saving}>
-        <Text style={styles.rowAction}>{isActive ? 'Remove' : 'Reactivate'}</Text>
+        <Text style={styles.rowAction}>{isActive ? t.removeAction : t.reactivateAction}</Text>
       </Pressable>
     </View>
   );
 }
 
 function AddChairForm({ salonId, onAdded }: { salonId: string; onAdded: () => void }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [saving, setSaving] = useState(false);
@@ -208,21 +210,21 @@ function AddChairForm({ salonId, onAdded }: { salonId: string; onAdded: () => vo
       setOpen(false);
       onAdded();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add this chair.');
+      setError(err instanceof ApiError ? err.message : t.couldNotAddChair);
     } finally {
       setSaving(false);
     }
   }
 
-  if (!open) return <Button title="Add chair" variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
+  if (!open) return <Button title={t.addChair} variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
 
   return (
     <View style={styles.editPanel}>
       {error && <InlineError message={error} />}
-      <TextInput style={styles.input} value={label} onChangeText={setLabel} placeholder="Chair label" placeholderTextColor={color.muted} />
+      <TextInput style={styles.input} value={label} onChangeText={setLabel} placeholder={t.chairLabelPlaceholder} placeholderTextColor={color.muted} />
       <View style={styles.actionRow}>
-        <Button title="Add" onPress={() => void submit()} loading={saving} disabled={!label} style={styles.actionButton} />
-        <Button title="Cancel" variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
+        <Button title={t.addAction} onPress={() => void submit()} loading={saving} disabled={!label} style={styles.actionButton} />
+        <Button title={t.cancelAction} variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
       </View>
     </View>
   );
@@ -271,6 +273,7 @@ function AddPhotoButton({
   label: string;
   onAdded: () => void;
 }) {
+  const { t } = useLanguage();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -278,14 +281,14 @@ function AddPhotoButton({
     setError(null);
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError('Photo library access is needed to add shop photos.');
+      setError(t.photoLibraryAccessNeededForShopPhotos);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (result.canceled || result.assets.length === 0) return;
     const asset = result.assets[0];
     if (asset.fileSize && asset.fileSize > SALON_PHOTO_UPLOAD.maxBytes) {
-      setError(`That photo is over the ${Math.floor(SALON_PHOTO_UPLOAD.maxBytes / (1024 * 1024))} MB limit.`);
+      setError(`${t.photoOverSizeLimitPrefix}${Math.floor(SALON_PHOTO_UPLOAD.maxBytes / (1024 * 1024))}${t.photoOverSizeLimitSuffix}`);
       return;
     }
     setUploading(true);
@@ -348,6 +351,7 @@ function PhotosSection({ salonId, photos, onChanged }: { salonId: string; photos
 // ---------- Hours ----------
 
 function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: OperatingHoursDto[]; onSaved: (h: OperatingHoursDto[]) => void }) {
+  const { t } = useLanguage();
   const [days, setDays] = useState(() =>
     Array.from({ length: 7 }, (_, dayOfWeek) => {
       const existing = hours.find((h) => h.dayOfWeek === dayOfWeek);
@@ -368,7 +372,7 @@ function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: Oper
   async function save() {
     setError(null);
     if (invalidDay) {
-      setError(`Check ${DAY_LABELS[invalidDay.dayOfWeek]}'s hours — use a time like 09:00, with closing after opening.`);
+      setError(`${t.checkHoursPrefix}${t.dayAbbreviations[invalidDay.dayOfWeek]}${t.checkHoursSuffix}`);
       return;
     }
     setSaving(true);
@@ -379,7 +383,7 @@ function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: Oper
       });
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save your hours.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSaveHours);
     } finally {
       setSaving(false);
     }
@@ -390,12 +394,12 @@ function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: Oper
       {error && <InlineError message={error} />}
       {days.map((d) => (
         <View key={d.dayOfWeek} style={styles.hoursEditRow}>
-          <Text style={styles.hoursDay}>{DAY_LABELS[d.dayOfWeek]}</Text>
+          <Text style={styles.hoursDay}>{t.dayAbbreviations[d.dayOfWeek]}</Text>
           <Pressable
             style={[styles.dayToggle, !d.isClosed && styles.dayToggleOpen]}
             onPress={() => updateDay(d.dayOfWeek, { isClosed: !d.isClosed })}
           >
-            <Text style={[styles.dayToggleText, !d.isClosed && styles.dayToggleTextOpen]}>{d.isClosed ? 'Closed' : 'Open'}</Text>
+            <Text style={[styles.dayToggleText, !d.isClosed && styles.dayToggleTextOpen]}>{d.isClosed ? t.slotsClosedLabel : t.openToggleLabel}</Text>
           </Pressable>
           {!d.isClosed && (
             <>
@@ -420,7 +424,7 @@ function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: Oper
           )}
         </View>
       ))}
-      <Button title="Save hours" onPress={() => void save()} loading={saving} style={styles.addButton} />
+      <Button title={t.saveHoursAction} onPress={() => void save()} loading={saving} style={styles.addButton} />
     </View>
   );
 }
@@ -428,6 +432,7 @@ function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: Oper
 // ---------- Staff ----------
 
 function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: () => void }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
@@ -440,7 +445,7 @@ function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: () => vo
   async function submit() {
     setError(null);
     if (!phoneValid) {
-      setError('Use international format, e.g. +919876543210');
+      setError(t.invalidPhoneFormatHint);
       return;
     }
     setSaving(true);
@@ -455,23 +460,23 @@ function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: () => vo
       setOpen(false);
       onAdded();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add this barber.');
+      setError(err instanceof ApiError ? err.message : t.couldNotAddBarber);
     } finally {
       setSaving(false);
     }
   }
 
-  if (!open) return <Button title="Add barber" variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
+  if (!open) return <Button title={t.addBarber} variant="outline" onPress={() => setOpen(true)} style={styles.addButton} />;
 
   return (
     <View style={styles.editPanel}>
       {error && <InlineError message={error} />}
-      <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder="Barber name" placeholderTextColor={color.muted} />
-      <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="+919876543210" placeholderTextColor={color.muted} keyboardType="phone-pad" />
-      <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="Email (optional, for account invite)" placeholderTextColor={color.muted} keyboardType="email-address" autoCapitalize="none" />
+      <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder={t.barberNamePlaceholder} placeholderTextColor={color.muted} />
+      <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder={t.phoneNumberPlaceholder} placeholderTextColor={color.muted} keyboardType="phone-pad" />
+      <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder={t.emailOptionalPlaceholder} placeholderTextColor={color.muted} keyboardType="email-address" autoCapitalize="none" />
       <View style={styles.actionRow}>
-        <Button title="Add" onPress={() => void submit()} loading={saving} disabled={!displayName || !phone} style={styles.actionButton} />
-        <Button title="Cancel" variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
+        <Button title={t.addAction} onPress={() => void submit()} loading={saving} disabled={!displayName || !phone} style={styles.actionButton} />
+        <Button title={t.cancelAction} variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
       </View>
     </View>
   );
@@ -549,7 +554,7 @@ export default function OwnerShopScreen() {
 
   return (
     <Screen contentStyle={styles.screenContent} refreshing={refreshing} onRefresh={() => void load(true)}>
-      <SectionHeader eyebrow="Owner" title={selectedSalon?.name ?? t.tabShop} subtitle={t.shopSubtitle} />
+      <SectionHeader eyebrow={t.ownerEyebrow} title={selectedSalon?.name ?? t.tabShop} subtitle={t.shopSubtitle} />
 
       <Text style={styles.sectionTitle}>{t.servicesLabel}</Text>
       <Card style={styles.card}>
@@ -581,7 +586,7 @@ export default function OwnerShopScreen() {
               <View style={styles.rowBody}>
                 <Text style={styles.rowTitle}>{member.displayName}</Text>
                 <Text style={styles.rowMeta}>
-                  {member.status} {member.hasPassword ? '' : '· Invite pending'}
+                  {member.status} {member.hasPassword ? '' : t.invitePendingSuffix}
                 </Text>
               </View>
             </View>

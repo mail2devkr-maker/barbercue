@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { DISCOVERY_PATHS, type SalonWorkplaceDto } from '@barbercue/shared';
 import { apiFetch } from './api';
+import { useLanguage } from './language-context';
 
 interface SalonContextValue {
   workplaces: SalonWorkplaceDto[];
@@ -21,6 +22,7 @@ const SalonContext = createContext<SalonContextValue | null>(null);
  * there's exactly one — the common case — otherwise the Dashboard/Today screens render a picker.
  */
 export function SalonProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useLanguage();
   const [workplaces, setWorkplaces] = useState<SalonWorkplaceDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,9 +36,9 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
         setWorkplaces(result);
         setSelectedSalonId((prev) => prev ?? (result.length === 1 ? result[0].id : null));
       })
-      .catch(() => setError('Could not load your salons.'))
+      .catch(() => setError(t.couldNotLoadSalons))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();

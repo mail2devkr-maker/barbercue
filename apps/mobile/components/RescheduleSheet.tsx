@@ -9,6 +9,7 @@ import {
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Button, Card, InlineError } from './ui';
 
@@ -39,6 +40,7 @@ export function RescheduleSheet({
   onRescheduled: (updated: BookingDetailDto) => void;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
   const [slots, setSlots] = useState<AvailabilitySlotDto[]>([]);
@@ -98,7 +100,7 @@ export function RescheduleSheet({
           .then(setSlots)
           .catch(() => undefined);
       }
-      setError(err instanceof ApiError ? err.message : 'Could not reschedule this booking.');
+      setError(err instanceof ApiError ? err.message : t.couldNotRescheduleBooking);
     } finally {
       setSubmitting(false);
     }
@@ -106,9 +108,9 @@ export function RescheduleSheet({
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>Reschedule booking</Text>
+      <Text style={styles.title}>{t.rescheduleBookingTitle}</Text>
       <Text style={styles.subtitle}>
-        Currently {new Date(booking.slotStart).toLocaleString()}
+        {t.currentlyPrefix}{new Date(booking.slotStart).toLocaleString()}
       </Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
@@ -131,7 +133,7 @@ export function RescheduleSheet({
       {selectedDate && (
         <View style={styles.slotWrap}>
           {slotsLoading && <ActivityIndicator color={color.muted} />}
-          {!slotsLoading && slots.length === 0 && <Text style={styles.subtitle}>No slots on this day.</Text>}
+          {!slotsLoading && slots.length === 0 && <Text style={styles.subtitle}>{t.noSlotsOnThisDay}</Text>}
           {!slotsLoading && slots.length > 0 && (
             <View style={styles.slotGrid}>
               {slots.map((slot) => (
@@ -163,9 +165,9 @@ export function RescheduleSheet({
       {error && <InlineError message={error} />}
 
       <View style={styles.actionsRow}>
-        <Button title="Keep current time" variant="outline" onPress={onClose} disabled={submitting} style={styles.actionButton} />
+        <Button title={t.keepCurrentTimeAction} variant="outline" onPress={onClose} disabled={submitting} style={styles.actionButton} />
         <Button
-          title={submitting ? 'Rescheduling…' : 'Confirm new time'}
+          title={submitting ? t.reschedulingEllipsis : t.confirmNewTimeAction}
           onPress={() => void handleConfirm()}
           disabled={submitting || !selectedSlot}
           style={styles.actionButton}

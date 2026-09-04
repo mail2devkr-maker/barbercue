@@ -9,9 +9,9 @@ import { color, font, fontSize } from '../../lib/theme';
  * (English/Hindi); a third Language enum value just adds another pill here automatically.
  */
 export function LanguageSwitcher() {
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   return (
-    <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel="Language">
+    <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel={t.language}>
       {Object.values(Language).map((lang) => (
         <Pressable
           key={lang}

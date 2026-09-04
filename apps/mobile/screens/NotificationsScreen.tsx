@@ -2,20 +2,20 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { NOTIFICATION_PATHS, notificationTypeLabel } from '@barbercue/shared';
-import type { NotificationDto } from '@barbercue/shared';
+import type { NotificationDto, UiStrings } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton } from '../components/ui';
 
-function timeAgo(iso: string): string {
+function timeAgo(t: UiStrings, iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t.justNowLabel;
+  if (mins < 60) return `${mins}${t.minutesAgoSuffix}`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return `${hours}${t.hoursAgoSuffix}`;
+  return `${Math.floor(hours / 24)}${t.daysAgoSuffix}`;
 }
 
 /**
@@ -112,7 +112,7 @@ export default function NotificationsScreen() {
                 {typeof n.payload?.serviceName === 'string' && (
                   <Text style={styles.meta}>{n.payload.serviceName}</Text>
                 )}
-                <Text style={styles.time}>{timeAgo(n.createdAt)}</Text>
+                <Text style={styles.time}>{timeAgo(t, n.createdAt)}</Text>
               </Pressable>
             ))
           )}

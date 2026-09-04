@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS } from '@barbercue/shared';
 import type { BookingDetailDto, SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from './api';
+import { useLanguage } from './language-context';
 import type { BookingsStackParamList, TabParamList } from '../navigation/types';
 
 /**
@@ -21,6 +22,7 @@ export function useRebook() {
   // SearchTab a route it owns. Resolve the actual parent tab navigator before cross-tab navigation
   // so "Book Again" cannot silently dispatch an unhandled SearchTab action.
   const navigation = useNavigation<NativeStackNavigationProp<BookingsStackParamList>>();
+  const { t } = useLanguage();
   const [rebookingId, setRebookingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +35,7 @@ export function useRebook() {
       );
       const tabNavigation = navigation.getParent<BottomTabNavigationProp<TabParamList>>();
       if (!tabNavigation) {
-        setError('Could not open the booking flow. Please try again.');
+        setError(t.couldNotOpenBookingFlow);
         return;
       }
       tabNavigation.navigate('SearchTab', {
@@ -51,7 +53,7 @@ export function useRebook() {
         },
       });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not start a new booking. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotStartNewBooking);
     } finally {
       setRebookingId(null);
     }

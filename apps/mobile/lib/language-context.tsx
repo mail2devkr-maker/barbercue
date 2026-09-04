@@ -3,6 +3,7 @@ import { AUTH_PATHS, Language, uiStringsFor, type UiStrings } from '@barbercue/s
 import { apiFetch } from './api';
 import { getItem, setItem } from './secure-storage';
 import { useAuth } from './auth-context';
+import { setCurrentLanguage } from './current-language';
 
 const LANGUAGE_STORAGE_KEY = 'barbercue_ui_language';
 
@@ -37,7 +38,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     getItem(LANGUAGE_STORAGE_KEY).then((stored) => {
       if (cancelled) return;
-      if (stored === Language.EN || stored === Language.HI) setLanguageState(stored);
+      if (stored === Language.EN || stored === Language.HI) {
+        setLanguageState(stored);
+        setCurrentLanguage(stored);
+      }
       setHydrated(true);
     });
     return () => {
@@ -51,12 +55,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated || status !== 'authenticated' || !user?.preferredLanguage) return;
     setLanguageState(user.preferredLanguage);
+    setCurrentLanguage(user.preferredLanguage);
     void setItem(LANGUAGE_STORAGE_KEY, user.preferredLanguage);
   }, [hydrated, status, user?.preferredLanguage]);
 
   const setLanguage = useCallback(
     (next: Language) => {
       setLanguageState(next);
+      setCurrentLanguage(next);
       void setItem(LANGUAGE_STORAGE_KEY, next);
       if (status === 'authenticated') {
         apiFetch(`auth/${AUTH_PATHS.language}`, { method: 'PATCH', body: JSON.stringify({ language: next }) })

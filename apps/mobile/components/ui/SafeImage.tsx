@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { ImageStyle, ImageResizeMode, StyleProp, ViewStyle } from 'react-native';
+import { useLanguage } from '../../lib/language-context';
 import { color, font } from '../../lib/theme';
 
 /**
@@ -28,6 +29,7 @@ export function SafeImage({
   // un-cropped photo is the point, so it passes 'contain' instead.
   resizeMode?: ImageResizeMode;
 }) {
+  const { t } = useLanguage();
   // Tracks the specific URL that failed, not just a boolean — if the `url` prop later changes to
   // a different (potentially working) address, this re-attempts it instead of staying stuck.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function SafeImage({
       style={[styles.placeholder, style]}
       accessible
       accessibilityRole="image"
-      accessibilityLabel={`${alt}: ${url ? "photo unavailable" : "no photo yet"}`}
+      accessibilityLabel={`${alt}: ${url ? t.photoUnavailableLabel : t.noPhotoYetLabel}`}
     >
       <View style={styles.badge}>
         <Text style={styles.badgeText}>FQ</Text>

@@ -30,7 +30,7 @@ export function GoogleSignInGate({
     setError(null);
     setSubmitting(true);
     try {
-      const result = await getGoogleIdToken();
+      const result = await getGoogleIdToken(t);
       if (result.type === 'cancelled') return;
       if (result.type === 'error') {
         setError(result.message);

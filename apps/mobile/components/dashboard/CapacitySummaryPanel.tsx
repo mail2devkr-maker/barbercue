@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { DASHBOARD_PATHS, type CapacitySummaryDto } from '@barbercue/shared';
 import { apiFetch } from '../../lib/api';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 
 function capacityPath(salonId: string): string {
@@ -16,6 +17,7 @@ function capacityPath(salonId: string): string {
  * this is a convenience widget, not something that should ever block the rest of the tab.
  */
 export function CapacitySummaryPanel({ salonId }: { salonId: string }) {
+  const { t } = useLanguage();
   const [data, setData] = useState<CapacitySummaryDto | null>(null);
 
   const load = useCallback(() => {
@@ -60,23 +62,23 @@ export function CapacitySummaryPanel({ salonId }: { salonId: string }) {
         <Text style={styles.value}>
           {data.chairs.available}/{data.chairs.active}
         </Text>
-        <Text style={styles.label}>Chairs free</Text>
+        <Text style={styles.label}>{t.chairsFreeLabel}</Text>
       </View>
       <View style={styles.stat}>
         <Text style={styles.value}>
           {data.staff.available}/{data.staff.active}
         </Text>
-        <Text style={styles.label}>Barbers free</Text>
+        <Text style={styles.label}>{t.barbersFreeLabel}</Text>
       </View>
       <View style={styles.stat}>
         <Text style={styles.value}>{data.waitingCustomers}</Text>
-        <Text style={styles.label}>Waiting</Text>
+        <Text style={styles.label}>{t.waitingLabel}</Text>
       </View>
       <View style={styles.stat}>
         <Text style={styles.value}>
           {data.averageEstimatedWaitMinutes !== null ? `~${data.averageEstimatedWaitMinutes}m` : '—'}
         </Text>
-        <Text style={styles.label}>Avg wait</Text>
+        <Text style={styles.label}>{t.avgWaitLabel}</Text>
       </View>
     </View>
   );

@@ -1,6 +1,7 @@
 import { AUTH_PATHS } from '@barbercue/shared';
 import { deleteItem, getItem, setItem } from './secure-storage';
 import { reportNetworkFailure, reportNetworkSuccess } from './network-status';
+import { getCurrentUiStrings } from './current-language';
 
 // A release binary must never silently point at localhost when an EAS public variable is absent.
 // EAS environments still provide EXPO_PUBLIC_API_BASE_URL for preview/production builds; this
@@ -96,9 +97,8 @@ async function tryRefresh(): Promise<boolean> {
 // fetch() itself reject with no status code at all, which is a different failure mode from a real
 // 4xx/5xx and deserves a message that says so. Status 0 is not a real HTTP status; it exists only
 // to make this distinguishable from every server-issued ApiError.
-const NETWORK_OFFLINE_MESSAGE = 'You appear to be offline. Check your connection and try again.';
 function networkOfflineError(): ApiError {
-  return new ApiError(0, { error: { code: 'NETWORK_OFFLINE', message: NETWORK_OFFLINE_MESSAGE } });
+  return new ApiError(0, { error: { code: 'NETWORK_OFFLINE', message: getCurrentUiStrings().networkOfflineMessage } });
 }
 async function fetchOrOffline(path: string, options: RequestInit): Promise<Response> {
   try {

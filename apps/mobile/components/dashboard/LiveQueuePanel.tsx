@@ -5,21 +5,26 @@ import { DASHBOARD_PATHS, type ChairOptionDto, type DashboardQueueDto, type Queu
 import { apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Card, Button, EmptyState, Skeleton, InlineError } from '../ui';
+import type { UiStrings } from '@barbercue/shared';
 
 function dashboardBase(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.queue}`;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  WAITING: 'Waiting',
-  CALLED: 'Called',
-  IN_SERVICE: 'In service',
-  COMPLETED: 'Completed',
-  NO_SHOW: 'No-show',
-  CANCELLED: 'Cancelled',
-};
+function statusLabel(t: UiStrings, status: string): string {
+  const labels: Record<string, string> = {
+    WAITING: t.waiting,
+    CALLED: t.statusCalledShort,
+    IN_SERVICE: t.inService,
+    COMPLETED: t.statusCompleted,
+    NO_SHOW: t.statusNoShow,
+    CANCELLED: t.statusCancelled,
+  };
+  return labels[status] ?? status;
+}
 
 function EntryRow({
   entry,
@@ -32,6 +37,7 @@ function EntryRow({
   activeStaff: StaffStatusDto[];
   onAction: () => void;
 }) {
+  const { t } = useLanguage();
   const [assigning, setAssigning] = useState(false);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [chairId, setChairId] = useState<string | null>(null);
@@ -46,7 +52,7 @@ function EntryRow({
       setAssigning(false);
       onAction();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not complete that action.');
+      setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
     } finally {
       setSubmitting(null);
     }
@@ -82,7 +88,7 @@ function EntryRow({
     <Card style={styles.entryCard}>
       <View style={styles.entryHeaderRow}>
         <Text style={styles.token}>#{entry.tokenNumber}</Text>
-        <Text style={styles.statusBadge}>{STATUS_LABEL[entry.status] ?? entry.status}</Text>
+        <Text style={styles.statusBadge}>{statusLabel(t, entry.status)}</Text>
       </View>
       {entry.serviceName && <Text style={styles.meta}>{entry.serviceName}</Text>}
       {entry.assignedStaffName && (
@@ -95,21 +101,21 @@ function EntryRow({
 
       {entry.status === 'WAITING' && (
         <View style={styles.actionRow}>
-          <Button title="Call" onPress={() => void call()} loading={submitting === 'call'} style={styles.actionButton} />
-          <Button title="Cancel" variant="outline" onPress={() => void cancel()} loading={submitting === 'cancel'} style={styles.actionButton} />
+          <Button title={t.callAction} onPress={() => void call()} loading={submitting === 'call'} style={styles.actionButton} />
+          <Button title={t.cancelAction} variant="outline" onPress={() => void cancel()} loading={submitting === 'cancel'} style={styles.actionButton} />
         </View>
       )}
 
       {entry.status === 'CALLED' && !assigning && (
         <View style={styles.actionRow}>
-          <Button title="Assign" onPress={() => setAssigning(true)} style={styles.actionButton} />
-          <Button title="No-show" variant="outline" onPress={() => void noShow()} loading={submitting === 'no-show'} style={styles.actionButton} />
+          <Button title={t.assignAction} onPress={() => setAssigning(true)} style={styles.actionButton} />
+          <Button title={t.noShowAction} variant="outline" onPress={() => void noShow()} loading={submitting === 'no-show'} style={styles.actionButton} />
         </View>
       )}
 
       {entry.status === 'CALLED' && assigning && (
         <View style={styles.assignPanel}>
-          <Text style={styles.assignLabel}>Barber</Text>
+          <Text style={styles.assignLabel}>{t.barberLabel}</Text>
           <View style={styles.chipRow}>
             {activeStaff.map((s) => (
               <Pressable key={s.id} style={[styles.chip, staffId === s.id && styles.chipActive]} onPress={() => setStaffId(s.id)}>
@@ -117,7 +123,7 @@ function EntryRow({
               </Pressable>
             ))}
           </View>
-          <Text style={styles.assignLabel}>Chair</Text>
+          <Text style={styles.assignLabel}>{t.chairLabel}</Text>
           <View style={styles.chipRow}>
             {chairs.map((c) => (
               <Pressable key={c.id} style={[styles.chip, chairId === c.id && styles.chipActive]} onPress={() => setChairId(c.id)}>
@@ -127,19 +133,19 @@ function EntryRow({
           </View>
           <View style={styles.actionRow}>
             <Button
-              title="Confirm assignment"
+              title={t.confirmAssignmentAction}
               onPress={() => void confirmAssign()}
               loading={submitting === 'assign'}
               disabled={!staffId || !chairId}
               style={styles.actionButton}
             />
-            <Button title="Cancel" variant="outline" onPress={() => setAssigning(false)} style={styles.actionButton} />
+            <Button title={t.cancelAction} variant="outline" onPress={() => setAssigning(false)} style={styles.actionButton} />
           </View>
         </View>
       )}
 
       {entry.status === 'IN_SERVICE' && (
-        <Button title="Complete" onPress={() => void complete()} loading={submitting === 'complete'} style={styles.fullButton} />
+        <Button title={t.completeAction} onPress={() => void complete()} loading={submitting === 'complete'} style={styles.fullButton} />
       )}
     </Card>
   );
@@ -164,6 +170,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   { salonId },
   ref,
 ) {
+  const { t } = useLanguage();
   const [data, setData] = useState<DashboardQueueDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,9 +180,9 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     setError(null);
     return apiFetch<DashboardQueueDto>(dashboardBase(salonId))
       .then(setData)
-      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load the queue.'))
+      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : t.couldNotLoadQueue))
       .finally(() => setLoading(false));
-  }, [salonId]);
+  }, [salonId, t]);
 
   useImperativeHandle(ref, () => ({ refresh: load }), [load]);
 
@@ -210,14 +217,14 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     );
   }
   if (error || !data) {
-    return <InlineError message={error ?? 'Could not load the queue.'} />;
+    return <InlineError message={error ?? t.couldNotLoadQueue} />;
   }
 
   const activeStaff = data.staffRoster.filter((s) => s.status === 'ACTIVE');
   const activeEntries = data.entries.filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED' && e.status !== 'NO_SHOW');
 
   if (activeEntries.length === 0) {
-    return <EmptyState title="Queue is empty" message="Walk-ins and checked-in bookings will appear here in real time." />;
+    return <EmptyState title={t.queueIsEmptyTitle} message={t.queueIsEmptyHint} />;
   }
 
   return (

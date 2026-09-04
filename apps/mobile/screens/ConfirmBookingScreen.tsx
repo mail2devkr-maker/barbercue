@@ -89,7 +89,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   if (booking) {
     return (
       <Screen contentStyle={styles.centeredContent}>
-        <SectionHeader eyebrow="Confirmed" title={t.bookingConfirmedTitle} />
+        <SectionHeader eyebrow={t.confirmedEyebrow} title={t.bookingConfirmedTitle} />
         <Card style={styles.card}>
           <Text style={styles.line}>
             {booking.serviceName} at {booking.salonName}

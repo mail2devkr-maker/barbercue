@@ -106,7 +106,7 @@ export default function BookingDetailScreen({ route }: Props) {
       setBooking(result);
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load this booking.');
+      setError(err instanceof ApiError ? err.message : t.couldNotLoadBooking);
     } finally {
       setRefreshing(false);
     }
@@ -116,7 +116,7 @@ export default function BookingDetailScreen({ route }: Props) {
     if (!booking) return;
     setActionError(null);
     try {
-      await shareSalon(booking);
+      await shareSalon(booking, t);
     } catch {
       setActionError(t.couldNotShare);
     }

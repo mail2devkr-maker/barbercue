@@ -77,7 +77,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
 
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow="Discovery" title={t.findASalonSearchTitle} />
+      <SectionHeader eyebrow={t.discoveryEyebrow} title={t.findASalonSearchTitle} />
       {selectedStyleName && (
         <Text style={styles.styleNote}>
           {t.bookingForTheLookPrefix}<Text style={styles.styleNoteBold}>{selectedStyleName}</Text>{t.bookingForTheLookSuffix}

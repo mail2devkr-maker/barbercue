@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { REVIEW_PATHS } from '@barbercue/shared';
 import type { BookingDetailDto, ReviewDetailDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Button, Card, InlineError } from './ui';
 
@@ -39,6 +40,7 @@ export function ReviewPanel({
   booking: BookingDetailDto;
   onReviewed: (bookingId: string) => void;
 }) {
+  const { t } = useLanguage();
   const [review, setReview] = useState<ReviewDetailDto | null>(null);
   const [loaded, setLoaded] = useState(!booking.hasReview);
   const [editing, setEditing] = useState(false);
@@ -87,7 +89,7 @@ export function ReviewPanel({
       setEditing(false);
       onReviewed(booking.id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save your review.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSaveReview);
     } finally {
       setSubmitting(false);
     }
@@ -98,28 +100,28 @@ export function ReviewPanel({
   if (review && !editing) {
     return (
       <Card style={styles.card}>
-        <Text style={styles.title}>Your review</Text>
+        <Text style={styles.title}>{t.yourReviewTitle}</Text>
         <StarDisplay rating={review.rating} />
         {review.comment ? <Text style={styles.comment}>{review.comment}</Text> : null}
         {review.ownerResponse ? (
           <Text style={styles.response}>
-            <Text style={styles.responseLabel}>Shop&apos;s response: </Text>
+            <Text style={styles.responseLabel}>{t.shopsResponseLabel}</Text>
             {review.ownerResponse}
           </Text>
         ) : null}
-        <Button title="Edit your review" variant="outline" onPress={() => setEditing(true)} style={styles.editButton} />
+        <Button title={t.editReviewAction} variant="outline" onPress={() => setEditing(true)} style={styles.editButton} />
       </Card>
     );
   }
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>{review ? 'Edit your review' : 'Leave a review'}</Text>
+      <Text style={styles.title}>{review ? t.editYourReviewTitle : t.leaveAReviewTitle}</Text>
       <StarPicker value={rating} onChange={setRating} />
       <TextInput
         value={comment}
         onChangeText={setComment}
-        placeholder="Optional comment"
+        placeholder={t.optionalCommentPlaceholder}
         placeholderTextColor={color.muted}
         multiline
         style={styles.input}
@@ -127,14 +129,14 @@ export function ReviewPanel({
       {error && <InlineError message={error} />}
       <View style={styles.actionsRow}>
         <Button
-          title={submitting ? 'Saving…' : review ? 'Save review' : 'Submit review'}
+          title={submitting ? t.savingEllipsis : review ? t.saveReviewAction : t.submitReviewAction}
           onPress={() => void submit()}
           loading={submitting}
           style={styles.actionButton}
         />
         {review && (
           <Button
-            title="Cancel"
+            title={t.cancelAction}
             variant="outline"
             onPress={() => setEditing(false)}
             disabled={submitting}

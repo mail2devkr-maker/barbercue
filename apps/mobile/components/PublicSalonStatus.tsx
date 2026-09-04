@@ -1,25 +1,27 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { PublicSalonStatusDto } from '@barbercue/shared';
 import { color, font, fontSize, radius, space } from '../lib/theme';
+import { useLanguage } from '../lib/language-context';
 
 export function PublicSalonStatus({ status }: { status: PublicSalonStatusDto }) {
+  const { t } = useLanguage();
   return (
-    <View style={styles.card} accessibilityLabel="Live shop snapshot">
+    <View style={styles.card} accessibilityLabel={t.liveShopSnapshotLabel}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.eyebrow}>LIVE SHOP SNAPSHOT</Text>
-          <Text style={styles.title}>A chair when you&apos;re ready</Text>
+          <Text style={styles.eyebrow}>{t.liveShopSnapshotEyebrow}</Text>
+          <Text style={styles.title}>{t.aChairWhenReady}</Text>
         </View>
-        <Text style={styles.chairCount}>{status.activeChairCount} active chair{status.activeChairCount === 1 ? '' : 's'}</Text>
+        <Text style={styles.chairCount}>{status.activeChairCount} {t.activeChairsSuffix}</Text>
       </View>
       {status.professionals.length > 0 ? status.professionals.map((professional) => (
         <View style={styles.professional} key={professional.displayName}>
           <View style={styles.dot} />
           <Text style={styles.name} numberOfLines={1}>{professional.displayName}</Text>
-          <Text style={styles.queueCount}>{professional.activeQueueCount} waiting</Text>
+          <Text style={styles.queueCount}>{professional.activeQueueCount} {t.waitingCountSuffix}</Text>
         </View>
-      )) : <Text style={styles.empty}>Professional availability will appear here during shop hours.</Text>}
-      <Text style={styles.note}>Aggregate counts only — no customer details are shown.</Text>
+      )) : <Text style={styles.empty}>{t.professionalAvailabilityHint}</Text>}
+      <Text style={styles.note}>{t.aggregateCountsNote}</Text>
     </View>
   );
 }

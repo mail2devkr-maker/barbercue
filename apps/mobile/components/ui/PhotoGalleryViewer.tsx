@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { color, font, fontSize, space } from '../../lib/theme';
+import { useLanguage } from '../../lib/language-context';
 import { SafeImage } from './SafeImage';
 
 export type GalleryPhoto = { id: string; url: string; altText: string | null };
@@ -35,6 +36,7 @@ export function PhotoGalleryViewer({
   visible: boolean;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const [index, setIndex] = useState(initialIndex);
   const screenWidth = Dimensions.get('window').width;
   const scrollRef = useRef<ScrollView>(null);
@@ -86,7 +88,7 @@ export function PhotoGalleryViewer({
           <Pressable
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Close photo gallery"
+            accessibilityLabel={t.closePhotoGallery}
             hitSlop={space[3]}
             style={styles.closeButton}
           >

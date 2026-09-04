@@ -12,13 +12,18 @@ import {
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, Skeleton, InlineError } from '../../components/ui';
+import type { UiStrings } from '@barbercue/shared';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
 type Props = NativeStackScreenProps<OwnerShopStackParamList, 'OwnerCustomerDetail'>;
 
-const SEGMENT_LABEL: Record<string, string> = { new: 'New', repeat: 'Repeat', frequent: 'Frequent' };
+function segmentLabel(t: UiStrings, segment: string): string {
+  const labels: Record<string, string> = { new: t.segmentNew, repeat: t.segmentRepeat, frequent: t.segmentFrequent };
+  return labels[segment] ?? segment;
+}
 
 function customerPath(salonId: string, customerId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.customers}/${customerId}`;
@@ -34,8 +39,8 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-function reasonLabel(reason: string): string {
-  return reason === 'NO_SHOW_CHARGE' ? 'No-show due' : 'Cancellation charge';
+function reasonLabel(t: UiStrings, reason: string): string {
+  return reason === 'NO_SHOW_CHARGE' ? t.noShowDueReason : t.cancellationChargeReason;
 }
 
 /**
@@ -47,6 +52,7 @@ function reasonLabel(reason: string): string {
 export default function OwnerCustomerDetailScreen({ route }: Props) {
   const { customerId } = route.params;
   const { selectedSalonId } = useSalon();
+  const { t } = useLanguage();
   const [summary, setSummary] = useState<OwnerCustomerSummaryDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +66,7 @@ export default function OwnerCustomerDetailScreen({ route }: Props) {
     setError(null);
     apiFetch<OwnerCustomerSummaryDto>(customerPath(selectedSalonId, customerId))
       .then(setSummary)
-      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load this customer.'))
+      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : t.couldNotLoadCustomer))
       .finally(() => setLoading(false));
   }, [selectedSalonId, customerId]);
 
@@ -93,7 +99,13 @@ export default function OwnerCustomerDetailScreen({ route }: Props) {
       applyLedgerResult(result);
       setPendingAction(null);
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : `Could not ${pendingAction.action} this due. Please try again.`);
+      setActionError(
+        err instanceof ApiError
+          ? err.message
+          : pendingAction.action === 'waive'
+            ? t.couldNotWaiveDue
+            : t.couldNotRestoreDue,
+      );
     } finally {
       setActionSubmitting(false);
     }
@@ -109,37 +121,36 @@ export default function OwnerCustomerDetailScreen({ route }: Props) {
   if (error || !summary) {
     return (
       <Screen scroll={false}>
-        <InlineError message={error ?? 'Customer not found.'} />
+        <InlineError message={error ?? t.customerNotFound} />
       </Screen>
     );
   }
 
   const currency = summary.currency;
   const graceStatus = summary.newCustomerGraceEligible
-    ? `New customer grace · ${summary.completedCount} of ${NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT} completed visits`
-    : `New customer grace completed · ${summary.completedCount}+ visits`;
+    ? `${t.graceEligiblePrefix}${summary.completedCount}${t.graceEligibleMiddle}${NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT}${t.graceEligibleSuffix}`
+    : `${t.graceCompletedPrefix}${summary.completedCount}${t.graceCompletedSuffix}`;
 
   return (
     <Screen>
-      <SectionHeader eyebrow="Owner" title={summary.phone ?? summary.email ?? 'No contact on file'} subtitle={graceStatus} />
+      <SectionHeader eyebrow={t.ownerEyebrow} title={summary.phone ?? summary.email ?? t.noContactOnFile} subtitle={graceStatus} />
 
       <Text style={styles.statsLine}>
-        {summary.completedCount} completed · {summary.cancelledCount} cancelled · {summary.noShowCount} no-show
-        {summary.segment && ` · ${SEGMENT_LABEL[summary.segment]} customer`}
+        {summary.completedCount} {t.statusCompleted} · {summary.cancelledCount} {t.statusCancelled} · {summary.noShowCount} {t.statusNoShow}
+        {summary.segment && ` · ${segmentLabel(t, summary.segment)}${t.customerSuffix}`}
       </Text>
 
       {summary.outstandingTotalAmount > 0 && (
         <Card style={styles.warningCard}>
           <Text style={styles.warningText}>
-            {formatMoney(summary.outstandingTotalAmount, currency)} outstanding — new bookings are blocked at this
-            shop until this is settled or waived.
+            {t.outstandingBlockedPrefix}{formatMoney(summary.outstandingTotalAmount, currency)}{t.outstandingBlockedSuffix}
           </Text>
         </Card>
       )}
 
-      <Text style={styles.sectionTitle}>Dues</Text>
+      <Text style={styles.sectionTitle}>{t.duesTitle}</Text>
       {summary.ledgerEntries.length === 0 ? (
-        <Text style={styles.emptyText}>No outstanding or waived dues.</Text>
+        <Text style={styles.emptyText}>{t.noDuesYet}</Text>
       ) : (
         summary.ledgerEntries.map((entry) => {
           const eligibleToWaive = entry.status === 'OUTSTANDING' && entry.reason === 'NO_SHOW_CHARGE' && summary.newCustomerGraceEligible;
@@ -147,20 +158,20 @@ export default function OwnerCustomerDetailScreen({ route }: Props) {
             <Card key={entry.id} style={styles.dueCard}>
               <View style={styles.dueHeadRow}>
                 <Text style={styles.dueTitle}>
-                  {reasonLabel(entry.reason)} · {formatMoney(entry.amount, currency)}
+                  {reasonLabel(t, entry.reason)} · {formatMoney(entry.amount, currency)}
                 </Text>
                 <Text style={[styles.statusBadge, entry.status === 'OUTSTANDING' ? styles.statusOutstanding : styles.statusWaived]}>
-                  {entry.status === 'OUTSTANDING' ? 'Outstanding' : 'Waived'}
+                  {entry.status === 'OUTSTANDING' ? t.outstandingBadge : t.waivedBadge}
                 </Text>
               </View>
               <Text style={styles.dueMeta}>
                 {entry.bookingServiceName ? `${entry.bookingServiceName} · ` : ''}
-                {entry.bookingSlotStart ? formatDate(entry.bookingSlotStart) : 'No related booking'}
+                {entry.bookingSlotStart ? formatDate(entry.bookingSlotStart) : t.noRelatedBooking}
               </Text>
-              <Text style={styles.dueMeta}>Recorded {formatDate(entry.createdAt)}</Text>
+              <Text style={styles.dueMeta}>{t.recordedPrefix}{formatDate(entry.createdAt)}</Text>
               {entry.status === 'OUTSTANDING' && entry.reason === 'NO_SHOW_CHARGE' && (
                 <Button
-                  title="Waive no-show due"
+                  title={t.waiveNoShowDueAction}
                   variant="outline"
                   disabled={!eligibleToWaive}
                   onPress={() => { setActionError(null); setPendingAction({ entry, action: 'waive' }); }}
@@ -169,7 +180,7 @@ export default function OwnerCustomerDetailScreen({ route }: Props) {
               )}
               {entry.status === 'WAIVED' && (
                 <Button
-                  title="Restore due"
+                  title={t.restoreDueRowAction}
                   variant="outline"
                   onPress={() => { setActionError(null); setPendingAction({ entry, action: 'restore' }); }}
                   style={styles.dueAction}
@@ -186,15 +197,15 @@ export default function OwnerCustomerDetailScreen({ route }: Props) {
             {pendingAction && (
               <Text style={styles.modalText}>
                 {pendingAction.action === 'waive'
-                  ? `Waive ${formatMoney(pendingAction.entry.amount, currency)} no-show due for this customer?`
-                  : `Restore the ${formatMoney(pendingAction.entry.amount, currency)} no-show due? The customer will be blocked from new bookings again until it is settled or waived.`}
+                  ? `${t.waiveConfirmPrefix}${formatMoney(pendingAction.entry.amount, currency)}${t.waiveConfirmSuffix}`
+                  : `${t.restoreConfirmPrefix}${formatMoney(pendingAction.entry.amount, currency)}${t.restoreConfirmSuffix}`}
               </Text>
             )}
             {actionError && <InlineError message={actionError} />}
             <View style={styles.modalActions}>
-              <Button title="Cancel" variant="outline" onPress={() => setPendingAction(null)} disabled={actionSubmitting} style={styles.modalButton} />
+              <Button title={t.cancelAction} variant="outline" onPress={() => setPendingAction(null)} disabled={actionSubmitting} style={styles.modalButton} />
               <Button
-                title={pendingAction?.action === 'waive' ? 'Waive due' : 'Restore due'}
+                title={pendingAction?.action === 'waive' ? t.waiveDueAction : t.restoreDueModalAction}
                 onPress={() => void confirmPendingAction()}
                 loading={actionSubmitting}
                 style={styles.modalButton}

@@ -215,7 +215,7 @@ export default function OwnerDashboardScreen() {
   if (workplaces.length === 0) {
     return (
       <Screen scroll={false}>
-        <EmptyState title="No shops yet" message={t.registerShopHint} />
+        <EmptyState title={t.noShopsYetTitle} message={t.registerShopHint} />
       </Screen>
     );
   }
@@ -223,7 +223,7 @@ export default function OwnerDashboardScreen() {
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <View style={styles.headerRow}>
-        <SectionHeader eyebrow="Owner" title={t.dashboardTitle} />
+        <SectionHeader eyebrow={t.ownerEyebrow} title={t.dashboardTitle} />
         <NotificationBell
           unreadCount={unreadCount}
           onPress={() => navigation.navigate('OwnerAccountTab', { screen: 'Notifications' })}

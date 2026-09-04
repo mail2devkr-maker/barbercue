@@ -5,16 +5,19 @@ import { staffLoginSchema } from '@barbercue/shared';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, InlineError } from '../components/ui';
+import type { UiStrings } from '@barbercue/shared';
 import type { AuthStackParamList } from '../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'OwnerStaffLogin'>;
 
-const COPY: Record<'OWNER' | 'STAFF', { eyebrow: string; title: string }> = {
-  OWNER: { eyebrow: 'Shop Owner', title: 'Sign in to your shop' },
-  STAFF: { eyebrow: 'Barber / Staff', title: 'Sign in to work today' },
-};
+function copyFor(t: UiStrings, role: 'OWNER' | 'STAFF'): { eyebrow: string; title: string } {
+  return role === 'OWNER'
+    ? { eyebrow: t.roleOwner, title: t.signInToYourShop }
+    : { eyebrow: t.roleStaff, title: t.signInToWorkToday };
+}
 
 // Same POST auth/staff/login web's own /owner/login and /staff/login pages call — the account's
 // actual roles (not which button was tapped here) determine what the app shows after sign-in.
@@ -23,6 +26,7 @@ const COPY: Record<'OWNER' | 'STAFF', { eyebrow: string; title: string }> = {
 export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
   const { role } = route.params;
   const { staffLogin, staffGoogleLogin } = useAuth();
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +37,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
     setError(null);
     const parsed = staffLoginSchema.safeParse({ email, password });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Enter a valid email and password.');
+      setError(parsed.error.issues[0]?.message ?? t.enterValidEmailPassword);
       return;
     }
     setSubmitting(true);
@@ -42,7 +46,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
       // No further navigation call needed — App.tsx re-routes to the Owner/Staff shell the
       // moment AuthProvider's status flips to 'authenticated', same pattern as customer login.
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not sign in. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSignIn);
     } finally {
       setSubmitting(false);
     }
@@ -52,7 +56,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
     setError(null);
     setGoogleSubmitting(true);
     try {
-      const result = await getGoogleIdToken();
+      const result = await getGoogleIdToken(t);
       if (result.type === 'cancelled') return;
       if (result.type === 'error') {
         setError(result.message);
@@ -63,17 +67,17 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
       // creates an account and never grants a role based on this call.
       await staffGoogleLogin({ idToken: result.idToken });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not sign in with Google. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSignInWithGoogle);
     } finally {
       setGoogleSubmitting(false);
     }
   }
 
-  const copy = COPY[role];
+  const copy = copyFor(t, role);
 
   return (
     <Screen contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle="Use your FastQue dashboard account." />
+      <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle={t.useYourDashboardAccount} />
 
       {error && <InlineError message={error} />}
 
@@ -83,22 +87,22 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
             {googleSubmitting ? (
               <ActivityIndicator color={color.ink} />
             ) : (
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>
             )}
           </Pressable>
           <Text style={styles.googleNote}>
-            Only works if this Google account is already registered as {role === 'OWNER' ? 'a shop owner' : 'staff'}.
+            {role === 'OWNER' ? t.onlyWorksIfRegisteredOwner : t.onlyWorksIfRegisteredStaff}
           </Text>
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
+            <Text style={styles.dividerText}>{t.orDivider}</Text>
             <View style={styles.dividerLine} />
           </View>
         </>
       )}
 
       <View style={styles.field}>
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>{t.email}</Text>
         <TextInput
           style={styles.input}
           placeholder="you@example.com"
@@ -111,7 +115,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
       </View>
 
       <View style={styles.field}>
-        <Text style={styles.label}>Password</Text>
+        <Text style={styles.label}>{t.passwordLabel}</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
@@ -124,13 +128,13 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
           style={styles.recoveryLink}
           onPress={() => navigation.navigate('PasswordRecovery', { audience: role === 'OWNER' ? 'owner' : 'staff' })}
           accessibilityRole="button"
-          accessibilityLabel="Forgot password"
+          accessibilityLabel={t.forgotPasswordQuestion}
         >
-          <Text style={styles.recoveryLinkText}>Forgot password?</Text>
+          <Text style={styles.recoveryLinkText}>{t.forgotPasswordQuestion}</Text>
         </Pressable>
       </View>
 
-      <Button title="Sign in" onPress={() => void handleSubmit()} loading={submitting} style={styles.submitButton} />
+      <Button title={t.signInTitle} onPress={() => void handleSubmit()} loading={submitting} style={styles.submitButton} />
     </Screen>
   );
 }

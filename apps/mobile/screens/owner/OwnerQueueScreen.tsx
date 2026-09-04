@@ -1,17 +1,19 @@
 import { useRef, useState } from 'react';
 import { useSalon } from '../../lib/salon-context';
+import { useLanguage } from '../../lib/language-context';
 import { Screen, SectionHeader, EmptyState } from '../../components/ui';
 import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
 
 export default function OwnerQueueScreen() {
   const { selectedSalonId, selectedSalon } = useSalon();
+  const { t } = useLanguage();
   const panelRef = useRef<LiveQueuePanelHandle>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   if (!selectedSalonId) {
     return (
       <Screen scroll={false}>
-        <EmptyState title="Select a shop" message="Choose a shop from the Dashboard tab to see its live queue." />
+        <EmptyState title={t.selectShopTitle} message={t.chooseShopQueueHint} />
       </Screen>
     );
   }
@@ -24,7 +26,7 @@ export default function OwnerQueueScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
-      <SectionHeader eyebrow="Live queue" title={selectedSalon?.name ?? 'Queue'} />
+      <SectionHeader eyebrow={t.liveQueue} title={selectedSalon?.name ?? t.queueTitle} />
       <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} />
     </Screen>
   );

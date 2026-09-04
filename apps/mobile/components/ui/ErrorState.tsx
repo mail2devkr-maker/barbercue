@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { color, font, fontSize, space } from '../../lib/theme';
+import { useLanguage } from '../../lib/language-context';
 import { Button } from './Button';
 
 interface ErrorStateProps {
@@ -10,10 +11,11 @@ interface ErrorStateProps {
 /** A retry-capable error surface — every screen that fetches on mount should offer this instead
  * of stranding the customer on plain red text with no way forward. */
 export function ErrorState({ message, onRetry }: ErrorStateProps) {
+  const { t } = useLanguage();
   return (
     <View style={styles.container}>
       <Text style={styles.message}>{message}</Text>
-      {onRetry && <Button title="Try again" onPress={onRetry} variant="outline" style={styles.action} />}
+      {onRetry && <Button title={t.tryAgain} onPress={onRetry} variant="outline" style={styles.action} />}
     </View>
   );
 }

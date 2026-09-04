@@ -1,5 +1,5 @@
 import { Linking, Share } from 'react-native';
-import type { BookingDetailDto } from '@barbercue/shared';
+import type { BookingDetailDto, UiStrings } from '@barbercue/shared';
 
 // The web app is a separate Railway service from the backend API (see .env.example) — its origin
 // can't be derived from EXPO_PUBLIC_API_BASE_URL the way apps/web derives the realtime socket
@@ -38,10 +38,11 @@ export function salonPageUrl(
 // 'dismissedAction'), which callers should treat as "nothing to report," not an error.
 export async function shareSalon(
   booking: Pick<BookingDetailDto, 'salonCountryCode' | 'citySlug' | 'salonSlug' | 'salonName'>,
+  t: UiStrings,
 ): Promise<'shared' | 'dismissed'> {
   const url = salonPageUrl(booking);
   const result = await Share.share({
-    message: `Book at ${booking.salonName} on FastQue: ${url}`,
+    message: `${t.shareBookingPrefix}${booking.salonName}${t.shareBookingMiddle}${url}`,
     url, // iOS uses this as the shared URL; Android folds it into `message` above.
   });
   return result.action === Share.dismissedAction ? 'dismissed' : 'shared';

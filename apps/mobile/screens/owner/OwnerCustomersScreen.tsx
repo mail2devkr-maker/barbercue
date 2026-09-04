@@ -7,9 +7,14 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
+import { useLanguage } from '../../lib/language-context';
+import type { UiStrings } from '@barbercue/shared';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
-const SEGMENT_LABEL: Record<string, string> = { new: 'New', repeat: 'Repeat', frequent: 'Frequent' };
+function segmentLabel(t: UiStrings, segment: string): string {
+  const labels: Record<string, string> = { new: t.segmentNew, repeat: t.segmentRepeat, frequent: t.segmentFrequent };
+  return labels[segment] ?? segment;
+}
 
 function customersPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.customers}`;
@@ -28,6 +33,7 @@ function formatDate(iso: string | null): string {
 export default function OwnerCustomersScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<OwnerShopStackParamList>>();
   const { selectedSalonId } = useSalon();
+  const { t } = useLanguage();
   const [items, setItems] = useState<OwnerCustomerSummaryDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +52,7 @@ export default function OwnerCustomersScreen() {
           setItems((prev) => (append ? [...prev, ...result.items] : result.items));
           setNextCursor(result.nextCursor);
         })
-        .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load customers.'))
+        .catch((err: unknown) => setError(err instanceof ApiError ? err.message : t.couldNotLoadCustomers))
         .finally(() => {
           setLoading(false);
           setLoadingMore(false);
@@ -65,19 +71,19 @@ export default function OwnerCustomersScreen() {
   if (!selectedSalonId) {
     return (
       <Screen scroll={false}>
-        <EmptyState title="Select a shop" message="Choose a shop from the Dashboard tab first." />
+        <EmptyState title={t.selectShopTitle} message={t.chooseShopHint} />
       </Screen>
     );
   }
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => { setRefreshing(true); void loadPage(undefined, false); }}>
-      <SectionHeader eyebrow="Owner" title="Customers" subtitle="Visit history and dues, from your own booking records." />
+      <SectionHeader eyebrow={t.ownerEyebrow} title={t.customersTitle} subtitle={t.customersSubtitle} />
       {error && <InlineError message={error} />}
       {loading ? (
         <Skeleton style={styles.skeleton} />
       ) : items.length === 0 ? (
-        <EmptyState title="No customers yet" message="Everyone who books at your shop will show up here." />
+        <EmptyState title={t.noCustomersYetTitle} message={t.noCustomersYetHint} />
       ) : (
         items.map((c) => (
           <Pressable
@@ -86,21 +92,21 @@ export default function OwnerCustomersScreen() {
             onPress={() => navigation.navigate('OwnerCustomerDetail', { customerId: c.customerId })}
           >
             <View style={styles.rowBody}>
-              <Text style={styles.rowTitle}>{c.phone ?? c.email ?? 'No contact on file'}</Text>
+              <Text style={styles.rowTitle}>{c.phone ?? c.email ?? t.noContactOnFile}</Text>
               <Text style={styles.rowMeta}>
-                {c.completedCount} completed · {c.cancelledCount} cancelled · {c.noShowCount} no-show
+                {c.completedCount} {t.statusCompleted} · {c.cancelledCount} {t.statusCancelled} · {c.noShowCount} {t.statusNoShow}
               </Text>
               {c.outstandingTotalAmount > 0 && (
-                <Text style={styles.dueText}>{formatMoney(c.outstandingTotalAmount, c.currency)} outstanding</Text>
+                <Text style={styles.dueText}>{formatMoney(c.outstandingTotalAmount, c.currency)}{t.outstandingSuffix}</Text>
               )}
             </View>
-            {c.segment && <Text style={styles.segmentBadge}>{SEGMENT_LABEL[c.segment]}</Text>}
+            {c.segment && <Text style={styles.segmentBadge}>{segmentLabel(t, c.segment)}</Text>}
           </Pressable>
         ))
       )}
       {nextCursor && (
         <Button
-          title={loadingMore ? 'Loading…' : 'Load more'}
+          title={loadingMore ? t.loading : t.loadMore}
           variant="outline"
           onPress={() => void loadPage(nextCursor, true)}
           loading={loadingMore}

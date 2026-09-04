@@ -17,7 +17,6 @@ import {
   type UiStrings,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
-import { useAuth } from '../../lib/auth-context';
 import { useLanguage } from '../../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
@@ -103,8 +102,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
  */
 export default function OwnerBookingsScreen({ route }: Props) {
   const { selectedSalonId } = useSalon();
-  const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [filter, setFilter] = useState<OwnerBookingFilter>(route.params?.filter ?? 'today');
   const [items, setItems] = useState<OwnerBookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -119,8 +117,19 @@ export default function OwnerBookingsScreen({ route }: Props) {
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const filterRef = useRef(filter);
   filterRef.current = filter;
-  const preferredLanguageRef = useRef(user?.preferredLanguage);
-  preferredLanguageRef.current = user?.preferredLanguage;
+  // Reads LanguageProvider's own `language`, NOT user.preferredLanguage directly. setLanguage()
+  // (lib/language-context.tsx) updates this local state SYNCHRONOUSLY and OPTIMISTICALLY, before
+  // the PATCH auth/language request even fires; user.preferredLanguage only catches up once that
+  // request resolves AND the subsequent refreshMe() GET completes — two full round-trips later.
+  // Reading user.preferredLanguage here was a real race: an owner who switched to Hindi and
+  // immediately triggered a booking (exactly the physical-device test scenario) could have this
+  // ref still holding the pre-switch language for the sub-second gap before that refetch landed,
+  // producing an English announcement despite the UI already showing Hindi. Reading the same
+  // state the language switcher itself writes closes that window entirely — there is only one
+  // source of truth, updated in the same synchronous state transition the UI's own re-render
+  // uses, not two independently-timed ones.
+  const preferredLanguageRef = useRef(language);
+  preferredLanguageRef.current = language;
   // Voice announcements must speak this salon's own local date/time (Part 7/28 of the mobile
   // launch mission), never the listening device's timezone. Fetched once per salon rather than
   // per announcement — a booking event needs this instantly, not after a network round-trip.
@@ -270,7 +279,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
   if (!selectedSalonId) {
     return (
       <Screen scroll={false}>
-        <SectionHeader eyebrow="Owner" title={t.bookingsTitle} />
+        <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
         <EmptyState title={t.noShopSelected} message={t.selectShopHint} />
       </Screen>
     );
@@ -278,7 +287,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
 
   return (
     <Screen scroll={false}>
-      <SectionHeader eyebrow="Owner" title={t.bookingsTitle} />
+      <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
 
       {newNotice && (
         <Pressable style={styles.noticeBanner} onPress={() => setNewNotice(null)}>
@@ -300,8 +309,8 @@ export default function OwnerBookingsScreen({ route }: Props) {
         showsHorizontalScrollIndicator
         style={styles.filterScroll}
         contentContainerStyle={styles.filterRow}
-        accessibilityLabel="Booking filters"
-        accessibilityHint="Swipe left or right to reach every booking filter"
+        accessibilityLabel={t.bookingFiltersLabel}
+        accessibilityHint={t.bookingFiltersHint}
       >
         {OWNER_BOOKING_FILTERS.map((f) => (
           <Pressable

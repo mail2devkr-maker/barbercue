@@ -6,6 +6,7 @@ import {
   isSuccessResponse,
   statusCodes,
 } from 'react-native-nitro-google-signin';
+import type { UiStrings } from '@barbercue/shared';
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
@@ -39,9 +40,9 @@ export type GoogleSignInResult =
 // updates can add response variants), so any branch that fell through unhandled would look to the
 // user like a dead button with nothing in the logs. Callers must not log idToken or any other
 // token value from the result.
-export async function getGoogleIdToken(): Promise<GoogleSignInResult> {
+export async function getGoogleIdToken(t: UiStrings): Promise<GoogleSignInResult> {
   if (!GOOGLE_WEB_CLIENT_ID) {
-    return { type: 'error', stage: 'PLAY_SERVICES', message: 'Google sign-in is not available in this build.' };
+    return { type: 'error', stage: 'PLAY_SERVICES', message: t.googleSignInUnavailable };
   }
   ensureConfigured();
 
@@ -52,7 +53,7 @@ export async function getGoogleIdToken(): Promise<GoogleSignInResult> {
     return {
       type: 'error',
       stage: 'PLAY_SERVICES',
-      message: 'Google Play Services is unavailable or out of date on this device.',
+      message: t.googlePlayServicesUnavailable,
     };
   }
 
@@ -72,7 +73,7 @@ export async function getGoogleIdToken(): Promise<GoogleSignInResult> {
     }
   } catch (err) {
     if (isErrorWithCode(err) && err.code === statusCodes.SIGN_IN_CANCELLED) return { type: 'cancelled' };
-    return { type: 'error', stage: 'ACCOUNT_PICKER', message: 'Could not open the Google account picker.' };
+    return { type: 'error', stage: 'ACCOUNT_PICKER', message: t.couldNotOpenGooglePicker };
   }
 
   if (isCancelledResponse(response)) return { type: 'cancelled' };
@@ -80,12 +81,12 @@ export async function getGoogleIdToken(): Promise<GoogleSignInResult> {
   if (isSuccessResponse(response)) {
     const idToken = response.data?.idToken;
     if (!idToken) {
-      return { type: 'error', stage: 'TOKEN', message: 'Google did not return a sign-in token. Please try again.' };
+      return { type: 'error', stage: 'TOKEN', message: t.googleNoTokenReturned };
     }
     return { type: 'success', idToken };
   }
 
   // A response shape none of the guards above recognized (e.g. an SDK version returning something
   // new). Surface it as an error rather than falling through silently.
-  return { type: 'error', stage: 'TOKEN', message: 'Could not complete Google sign-in. Please try again.' };
+  return { type: 'error', stage: 'TOKEN', message: t.couldNotCompleteGoogleSignIn };
 }

@@ -12,6 +12,7 @@ import type {
   StyleAdvisorResultDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, Skeleton, SafeImage } from '../components/ui';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
@@ -32,6 +33,7 @@ type PremiumStatus = 'checking' | 'locked' | 'no-credits' | 'ready';
 // billing we haven't enabled, no verified free alternative found) — disclosed via the
 // AI_PROVIDER_NOT_CONFIGURED branch below, never faked.
 export default function StyleAdvisorScreen({ navigation }: Props) {
+  const { t } = useLanguage();
   const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
   async function pickImage() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError('Photo library access is needed to try the AI Style Advisor.');
+      setError(t.photoLibraryAccessNeeded);
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -108,9 +110,9 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
         return;
       }
       if (err instanceof ApiError && err.code === 'AI_PROVIDER_NOT_CONFIGURED') {
-        setError('AI Style Preview is temporarily unavailable while we prepare the image-generation service. Your photo was not stored.');
+        setError(t.aiStylePreviewUnavailable);
       } else {
-        setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+        setError(err instanceof ApiError ? err.message : t.genericError);
       }
       setStatus('error');
     }
@@ -131,7 +133,7 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
   if (premiumStatus === 'locked') {
     return (
       <Screen scroll={false} contentStyle={styles.screenContent}>
-        <SectionHeader eyebrow="Premium" title="AI Style Advisor is a Premium feature" subtitle="Upgrade to Premium on the FastQue web app to preview hairstyles on your photo." />
+        <SectionHeader eyebrow={t.premiumLabel} title={t.aiStyleAdvisorPremiumTitle} subtitle={t.upgradeToPreviewHairstyles} />
       </Screen>
     );
   }
@@ -140,9 +142,9 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
     return (
       <Screen scroll={false} contentStyle={styles.screenContent}>
         <SectionHeader
-          eyebrow="AI Style Advisor"
-          title="You're out of AI Style Credits"
-          subtitle="You've used all your AI Style Credits for this subscription period."
+          eyebrow={t.aiStyleAdvisorEyebrow}
+          title={t.outOfAiStyleCreditsTitle}
+          subtitle={t.outOfAiStyleCreditsSubtitle}
         />
       </Screen>
     );
@@ -151,7 +153,7 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
   if (status === 'results') {
     return (
       <Screen scroll={false} contentStyle={styles.screenContent}>
-        <SectionHeader eyebrow="AI Style Advisor" title="Your looks" subtitle="Each shows an AI Style Match — not a guarantee of how it will turn out on you." />
+        <SectionHeader eyebrow={t.aiStyleAdvisorEyebrow} title={t.yourLooksTitle} subtitle={t.aiStyleMatchDisclaimer} />
         <FlatList
           data={results}
           keyExtractor={(item) => item.styleId}
@@ -160,8 +162,8 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
             <Card style={styles.resultCard}>
               <SafeImage url={item.previewUrl} alt={item.styleName} style={styles.previewImage} />
               <Text style={styles.cardTitle}>{item.styleName}</Text>
-              <Text style={styles.cardSubtitle}>AI Style Match: {item.matchPercent}%</Text>
-              <Button title="Try This Look" onPress={() => handleTryThisLook(item.styleName)} />
+              <Text style={styles.cardSubtitle}>{t.aiStyleMatchPrefix}{item.matchPercent}{t.aiStyleMatchSuffix}</Text>
+              <Button title={t.tryThisLookAction} onPress={() => handleTryThisLook(item.styleName)} />
             </Card>
           )}
         />
@@ -171,25 +173,25 @@ export default function StyleAdvisorScreen({ navigation }: Props) {
 
   return (
     <Screen contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow="AI Style Advisor" title="Preview your next look" subtitle="Upload a photo and preview a few hairstyles before you book." />
+      <SectionHeader eyebrow={t.aiStyleAdvisorEyebrow} title={t.previewYourNextLookTitle} subtitle={t.uploadPhotoPreviewSubtitle} />
 
       {asset && <Image source={{ uri: asset.uri }} style={styles.preview} />}
 
-      <Button title={asset ? 'Choose a different photo' : 'Choose a photo'} variant="secondary" onPress={() => void pickImage()} style={styles.pickButton} />
+      <Button title={asset ? t.chooseDifferentPhotoAction : t.choosePhotoAction} variant="secondary" onPress={() => void pickImage()} style={styles.pickButton} />
 
       {error && <InlineError message={error} />}
 
-      {credits && <Text style={styles.note}>AI Credits remaining: {credits.available}</Text>}
+      {credits && <Text style={styles.note}>{t.aiCreditsRemainingPrefix}{credits.available}</Text>}
 
       <Button
-        title="Analyze my photo"
+        title={t.analyzeMyPhotoAction}
         onPress={() => void handleAnalyze()}
         loading={status === 'analyzing'}
         disabled={!asset}
         style={styles.analyzeButton}
       />
 
-      <Text style={styles.note}>Your photo is used only to generate these previews and is not stored.</Text>
+      <Text style={styles.note}>{t.photoNotStoredNote}</Text>
     </Screen>
   );
 }

@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { color, font, fontSize } from '../../lib/theme';
+import { useLanguage } from '../../lib/language-context';
 
 /**
  * Issue 7 (mobile stabilization mission) — a directly-visible entry point to the existing
@@ -8,12 +9,13 @@ import { color, font, fontSize } from '../../lib/theme';
  * count capped the same way the Account tab's own tabBarBadge already is.
  */
 export function NotificationBell({ unreadCount, onPress }: { unreadCount: number; onPress: () => void }) {
+  const { t } = useLanguage();
   return (
     <Pressable
       onPress={onPress}
       hitSlop={10}
       accessibilityRole="button"
-      accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+      accessibilityLabel={unreadCount > 0 ? `${t.notifications}, ${unreadCount}${t.unreadSuffix}` : t.notifications}
       style={styles.button}
     >
       <View style={styles.bellShape}>
