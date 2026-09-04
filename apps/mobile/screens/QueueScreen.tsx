@@ -5,12 +5,14 @@ import { QUEUE_ENTRIES_PATH, type QueueEntryDetailDto } from '@barbercue/shared'
 import { apiFetch } from '../lib/api';
 import { Screen, SectionHeader, EmptyState, Skeleton, ErrorState } from '../components/ui';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
+import { useLanguage } from '../lib/language-context';
 import type { TabParamList } from '../navigation/types';
 
 const ACTIVE_QUEUE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
 export default function QueueScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
+  const { t } = useLanguage();
   const [entry, setEntry] = useState<QueueEntryDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -23,7 +25,7 @@ export default function QueueScreen() {
       const active = await apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`);
       setEntry(active && ACTIVE_QUEUE_STATUSES.has(active.status) ? active : null);
     } catch {
-      setError('Could not load your queue status.');
+      setError(t.couldNotLoadQueueStatus);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -38,7 +40,7 @@ export default function QueueScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <SectionHeader eyebrow="Live queue" title="Queue status" />
+      <SectionHeader eyebrow={t.liveQueue} title={t.queueStatusTitle} />
 
       {loading ? (
         <Skeleton style={{ height: 140, borderRadius: 20 }} />
@@ -48,9 +50,9 @@ export default function QueueScreen() {
         <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
       ) : (
         <EmptyState
-          title="No active queue"
-          message="Join a live queue at a nearby shop and follow your position here."
-          actionLabel="Find a salon"
+          title={t.noActiveQueueTitle}
+          message={t.noActiveQueueHint}
+          actionLabel={t.findASalonAction}
           onAction={() => navigation.navigate('SearchTab', { screen: 'SalonSearch' })}
         />
       )}

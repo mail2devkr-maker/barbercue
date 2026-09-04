@@ -7,12 +7,14 @@ import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, SafeImage } from '../components/ui';
+import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
 export default function SalonSearchScreen({ navigation, route }: Props) {
+  const { t } = useLanguage();
   const selectedStyleName = route.params?.selectedStyleName;
   const [q, setQ] = useState('');
   const [results, setResults] = useState<SalonListItemDto[]>([]);
@@ -39,7 +41,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       );
       setResults(result.items);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not search salons.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -59,7 +61,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setError('Location permission was denied. Try searching by name instead.');
+        setError(t.locationDenied);
         return;
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -67,7 +69,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       setNearMe(coords);
       await runSearch(false, coords);
     } catch {
-      setError("Couldn't get your location. Try searching by name instead.");
+      setError(t.couldNotGetLocation);
     } finally {
       setLocating(false);
     }
@@ -75,28 +77,28 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
 
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow="Discovery" title="Find a salon" />
+      <SectionHeader eyebrow="Discovery" title={t.findASalonSearchTitle} />
       {selectedStyleName && (
         <Text style={styles.styleNote}>
-          Booking for the <Text style={styles.styleNoteBold}>{selectedStyleName}</Text> look — pick a shop to continue.
+          {t.bookingForTheLookPrefix}<Text style={styles.styleNoteBold}>{selectedStyleName}</Text>{t.bookingForTheLookSuffix}
         </Text>
       )}
 
       <View style={styles.searchRow}>
         <TextInput
           style={styles.input}
-          placeholder="Search by name…"
+          placeholder={t.searchByNamePlaceholder}
           placeholderTextColor={color.muted}
           value={q}
           onChangeText={setQ}
           onSubmitEditing={() => void handleSearch()}
           returnKeyType="search"
         />
-        <Button title="Search" onPress={() => void handleSearch()} loading={loading} style={styles.searchButton} />
+        <Button title={t.searchAction} onPress={() => void handleSearch()} loading={loading} style={styles.searchButton} />
       </View>
 
       <Button
-        title={locating ? 'Locating…' : nearMe ? 'Near me ✓' : 'Near me'}
+        title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
         variant="outline"
         onPress={() => void handleNearMe()}
         loading={locating}
@@ -112,7 +114,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           <Skeleton style={styles.skeletonCard} />
         </View>
       ) : searched && !error && results.length === 0 ? (
-        <EmptyState title="No salons found" message="Try a different name, or clear the search to browse everything." />
+        <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
       ) : (
         <FlatList
           data={results}
@@ -145,9 +147,9 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                 )}
                 {(item.isOpenNow !== null || item.distanceKm !== null) && (
                   <Text style={styles.cardMeta}>
-                    {item.isOpenNow !== null ? (item.isOpenNow ? 'Open now' : 'Closed now') : ''}
+                    {item.isOpenNow !== null ? (item.isOpenNow ? t.openNowLabel : t.closedNowLabel) : ''}
                     {item.isOpenNow !== null && item.distanceKm !== null ? ' · ' : ''}
-                    {item.distanceKm !== null ? `${item.distanceKm} km away` : ''}
+                    {item.distanceKm !== null ? `${item.distanceKm}${t.kmAwaySuffix}` : ''}
                   </Text>
                 )}
               </View>

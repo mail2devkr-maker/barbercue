@@ -3,11 +3,13 @@ import HomeScreen from '../screens/HomeScreen';
 import StyleAdvisorScreen from '../screens/StyleAdvisorScreen';
 import { styleAdvisorHeaderOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
+import { useLanguage } from '../lib/language-context';
 import type { HomeStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
 export default function HomeStack() {
+  const { t } = useLanguage();
   return (
     <Stack.Navigator>
       {/* Home renders its own branded header (SectionHeader) — no native header needed for a
@@ -16,7 +18,7 @@ export default function HomeStack() {
       <Stack.Screen
         name="StyleAdvisor"
         component={StyleAdvisorScreen}
-        options={{ ...styleAdvisorHeaderOptions, headerRight: () => <HomeHeaderButton /> }}
+        options={{ ...styleAdvisorHeaderOptions, title: t.aiStyleAdvisor, headerRight: () => <HomeHeaderButton /> }}
       />
     </Stack.Navigator>
   );

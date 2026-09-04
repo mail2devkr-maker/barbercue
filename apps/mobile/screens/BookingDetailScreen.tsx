@@ -18,6 +18,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { openDirections, openWhatsappShare, salonPageUrl, shareSalon } from '../lib/booking-actions';
 import { useRebook } from '../lib/use-rebook';
+import { useLanguage } from '../lib/language-context';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import { RescheduleSheet } from '../components/RescheduleSheet';
 import { ReviewPanel } from '../components/ReviewPanel';
@@ -47,6 +48,7 @@ function statusColor(status: string): string {
 
 export default function BookingDetailScreen({ route }: Props) {
   const { bookingId } = route.params;
+  const { t } = useLanguage();
   const { rebook, rebookingId, rebookError } = useRebook();
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,7 @@ export default function BookingDetailScreen({ route }: Props) {
         if (!cancelled) setBooking(result);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load this booking.');
+        if (!cancelled) setError(err instanceof ApiError ? err.message : t.couldNotLoadBooking);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -116,7 +118,7 @@ export default function BookingDetailScreen({ route }: Props) {
     try {
       await shareSalon(booking);
     } catch {
-      setActionError('Could not open the share sheet.');
+      setActionError(t.couldNotShare);
     }
   }
 
@@ -132,7 +134,7 @@ export default function BookingDetailScreen({ route }: Props) {
       const minutesUntilSlot = (new Date(booking.slotStart).getTime() - Date.now()) / 60_000;
       setPreview(computeCancellationCharge(policy, booking.servicePrice, minutesUntilSlot, false));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load the cancellation policy.');
+      setError(err instanceof ApiError ? err.message : t.couldNotLoadCancellationPolicy);
       setConfirming(false);
     } finally {
       setPreviewLoading(false);
@@ -150,7 +152,7 @@ export default function BookingDetailScreen({ route }: Props) {
       setBooking(result.booking);
       setConfirming(false);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not cancel this booking.');
+      setError(err instanceof ApiError ? err.message : t.couldNotCancelBooking);
     } finally {
       setCancelling(false);
     }
@@ -167,7 +169,7 @@ export default function BookingDetailScreen({ route }: Props) {
       );
       setQueueEntry(created);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not check in. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotCheckIn);
     } finally {
       setCheckingIn(false);
     }
@@ -192,43 +194,43 @@ export default function BookingDetailScreen({ route }: Props) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
-      <SectionHeader eyebrow="Booking" title={booking.serviceName} subtitle={booking.salonName} />
+      <SectionHeader eyebrow={t.bookingTitle} title={booking.serviceName} subtitle={booking.salonName} />
 
       <Card style={styles.card}>
-        <Text style={[styles.status, { color: statusColor(booking.status) }]}>Status: {booking.status}</Text>
+        <Text style={[styles.status, { color: statusColor(booking.status) }]}>{t.statusLabelPrefix}{booking.status}</Text>
         <Text style={styles.line}>
           {new Date(booking.slotStart).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
         </Text>
         <Text style={styles.line}>
           {new Date(booking.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} –{' '}
           {new Date(booking.slotEnd).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-          {` (${booking.serviceDurationMinutes} min)`}
+          {` (${booking.serviceDurationMinutes} ${t.minutesAbbrev})`}
         </Text>
         <Text style={styles.line}>{formatMoney(booking.servicePrice, booking.currency)}</Text>
-        {booking.preferredStaffName && <Text style={styles.line}>Preferred barber: {booking.preferredStaffName}</Text>}
-        {booking.selectedStyleName && <Text style={styles.line}>Style: {booking.selectedStyleName}</Text>}
+        {booking.preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{booking.preferredStaffName}</Text>}
+        {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
         {booking.prepaymentRequiredAmount !== null && booking.prepaymentRequiredAmount > 0 && (
-          <Text style={styles.line}>Prepayment required: {formatMoney(booking.prepaymentRequiredAmount, booking.currency)}</Text>
+          <Text style={styles.line}>{t.prepaymentRequiredPrefix}{formatMoney(booking.prepaymentRequiredAmount, booking.currency)}</Text>
         )}
         {booking.cancellationChargeAmount !== null && booking.cancellationChargeAmount > 0 && (
-          <Text style={styles.line}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
+          <Text style={styles.line}>{t.cancellationChargePrefix}{formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
         )}
-        <Text style={styles.bookingId}>Booking ID: {booking.id.slice(0, 8).toUpperCase()}</Text>
+        <Text style={styles.bookingId}>{t.bookingIdPrefix}{booking.id.slice(0, 8).toUpperCase()}</Text>
       </Card>
 
       <View style={styles.linkRow}>
-        <Button title="Get Directions" variant="outline" onPress={() => void openDirections(booking)} style={styles.linkButton} />
-        <Button title="Share" variant="outline" onPress={() => void handleShare()} style={styles.linkButton} />
+        <Button title={t.getDirections} variant="outline" onPress={() => void openDirections(booking)} style={styles.linkButton} />
+        <Button title={t.shareAction} variant="outline" onPress={() => void handleShare()} style={styles.linkButton} />
       </View>
       <View style={styles.linkRow}>
         <Button
-          title="Share on WhatsApp"
+          title={t.shareOnWhatsApp}
           variant="outline"
           onPress={() => void openWhatsappShare(`Check out ${booking.salonName} on FastQue: ${salonPageUrl(booking)}`)}
           style={styles.linkButton}
         />
         <Button
-          title="Book again"
+          title={t.bookAgainAction}
           variant="outline"
           onPress={() => void rebook(booking)}
           loading={rebookingId === booking.id}
@@ -242,9 +244,9 @@ export default function BookingDetailScreen({ route }: Props) {
 
       {CANCELLABLE_STATUSES.has(booking.status) && !confirming && (
         <View style={styles.linkRow}>
-          <Button title="Cancel booking" variant="secondary" onPress={() => void startCancelFlow()} style={styles.linkButton} />
+          <Button title={t.cancelBookingAction} variant="secondary" onPress={() => void startCancelFlow()} style={styles.linkButton} />
           <Button
-            title={rescheduling ? 'Hide reschedule' : 'Reschedule'}
+            title={rescheduling ? t.hideRescheduleAction : t.rescheduleAction}
             variant="secondary"
             onPress={() => setRescheduling((v) => !v)}
             style={styles.linkButton}
@@ -265,24 +267,24 @@ export default function BookingDetailScreen({ route }: Props) {
 
       {confirming && (
         <Card style={styles.confirmBox}>
-          <Text style={styles.confirmTitle}>Cancel booking?</Text>
+          <Text style={styles.confirmTitle}>{t.cancelBookingConfirmTitle}</Text>
           {previewLoading && <ActivityIndicator color={color.muted} style={styles.previewSpinner} />}
           {!previewLoading && preview !== null && preview > 0 && (
             <Text style={styles.line}>
-              Cancelling now will charge {formatMoney(preview, booking.currency)} (outside the free cancellation window).
+              {t.cancellingWillChargePrefix}{formatMoney(preview, booking.currency)}{t.cancellingWillChargeSuffix}
             </Text>
           )}
-          {!previewLoading && preview === 0 && <Text style={styles.line}>No charge — you&apos;re within the free cancellation window.</Text>}
+          {!previewLoading && preview === 0 && <Text style={styles.line}>{t.noChargeFreeWindow}</Text>}
           <View style={styles.confirmRow}>
             <Button
-              title="Keep booking"
+              title={t.keepBooking}
               variant="outline"
               onPress={() => setConfirming(false)}
               disabled={cancelling}
               style={styles.confirmRowButton}
             />
             <Button
-              title="Confirm cancellation"
+              title={t.confirmCancellationAction}
               onPress={() => void confirmCancel()}
               loading={cancelling}
               disabled={previewLoading}
@@ -296,7 +298,7 @@ export default function BookingDetailScreen({ route }: Props) {
         <QueueStatusPanel entry={queueEntry} onEntryChange={setQueueEntry} />
       ) : (
         canCheckIn(booking) && (
-          <Button title="Check in" variant="secondary" onPress={() => void handleCheckIn()} loading={checkingIn} style={styles.actionButton} />
+          <Button title={t.checkInAction} variant="secondary" onPress={() => void handleCheckIn()} loading={checkingIn} style={styles.actionButton} />
         )
       )}
 

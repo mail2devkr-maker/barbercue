@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import OwnerShopScreen from '../screens/owner/OwnerShopScreen';
 import OwnerCustomersScreen from '../screens/owner/OwnerCustomersScreen';
 import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScreen';
+import { useLanguage } from '../lib/language-context';
 
 export type OwnerShopStackParamList = {
   OwnerShop: undefined;
@@ -16,14 +17,15 @@ const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
 // small native stack instead, same shape as DashboardAccountStack. Services/Chairs/Staff/Hours/
 // Photos all stay on the root screen (they're forms/lists, not a drill-down flow).
 export default function OwnerShopStack() {
+  const { t } = useLanguage();
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="OwnerShop" component={OwnerShopScreen} />
-      <Stack.Screen name="OwnerCustomers" component={OwnerCustomersScreen} options={{ headerShown: true, title: 'Customers' }} />
+      <Stack.Screen name="OwnerCustomers" component={OwnerCustomersScreen} options={{ headerShown: true, title: t.customersLabel }} />
       <Stack.Screen
         name="OwnerCustomerDetail"
         component={OwnerCustomerDetailScreen}
-        options={{ headerShown: true, title: 'Customer' }}
+        options={{ headerShown: true, title: t.customerLabel }}
       />
     </Stack.Navigator>
   );

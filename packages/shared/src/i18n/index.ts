@@ -242,6 +242,7 @@ export interface UiStrings {
   hoursLabel: string;
   photosLabel: string;
   customersLabel: string;
+  customerLabel: string;
   addService: string;
   addChair: string;
   addBarber: string;
@@ -345,6 +346,159 @@ export interface UiStrings {
   noShopYetTitle: string;
   noShopYetHint: string;
   todaysQueue: string;
+
+  // Navigation stack header titles (customer + auth stacks) — shown at the top of literally
+  // every screen below the tab root, so a gap here is maximally visible.
+  findASalonTitle: string;
+  salonTitle: string;
+  chooseABarberTitle: string;
+  chooseADateTitle: string;
+  chooseATimeTitle: string;
+  confirmTitle: string;
+  queueTitle: string;
+  bookingTitle: string;
+  signInTitle: string;
+  passwordRecoveryTitle: string;
+  homeButtonLabel: string;
+
+  // AccountScreen (customer) + shared role labels.
+  accountDetailsCard: string;
+  contactDetailsSubtitle: string;
+  couldNotLoadSessions: string;
+  couldNotSignOutSession: string;
+  couldNotSignOutOtherSessions: string;
+  voiceHint: string;
+  premiumActive: string;
+  premiumInactive: string;
+  noActiveSessions: string;
+  signOutOtherSessions: string;
+  roleCustomerLabel: string;
+  roleStaffLabel: string;
+  roleOwnerLabel: string;
+  roleAdminLabel: string;
+  premiumLabel: string;
+
+  // Core booking flow: DateSelect, SlotSelect, StaffSelect, ConfirmBooking, BookingDetail,
+  // MyBookings, WalkInJoin, QueueScreen, QueueStatusPanel, SalonSearch, SalonProfile.
+  anyStaffOption: string;
+  staffSelectHint: string;
+  slotsClosedLabel: string;
+  noSlotsTitle: string;
+  noSlotsHint: string;
+  availableLegend: string;
+  occupiedLegend: string;
+  availableWord: string;
+  occupiedWord: string;
+  timeAvailabilityLegend: string;
+  couldNotLoadTimes: string;
+  couldNotLoadStaff: string;
+  getDirections: string;
+  shareAction: string;
+  shareOnWhatsApp: string;
+  bookAgainAction: string;
+  cancelBookingAction: string;
+  hideRescheduleAction: string;
+  rescheduleAction: string;
+  cancelBookingConfirmTitle: string;
+  confirmCancellationAction: string;
+  checkInAction: string;
+  statusLabelPrefix: string;
+  preferredBarberPrefix: string;
+  styleLabelPrefix: string;
+  prepaymentRequiredPrefix: string;
+  cancellationChargePrefix: string;
+  bookingIdPrefix: string;
+  couldNotLoadBooking: string;
+  couldNotShare: string;
+  couldNotLoadCancellationPolicy: string;
+  couldNotCancelBooking: string;
+  couldNotCheckIn: string;
+  couldNotCreateBooking: string;
+  bookingConfirmedTitle: string;
+  confirmBookingTitle: string;
+  viewMyBookings: string;
+  freeCancellationUpTo: string;
+  beforeYourAppointment: string;
+  hoursSingular: string;
+  hoursPlural: string;
+  minutesSuffix: string;
+  myBookingsTitle: string;
+  noBookingsYetTitle: string;
+  noBookingsYetHint: string;
+  viewDetailsAction: string;
+  couldNotLoadBookings: string;
+  couldNotJoinQueue: string;
+  alreadyInQueueTitle: string;
+  alreadyInQueueHint: string;
+  youreInLineTitle: string;
+  joinTheQueueTitle: string;
+  serviceOptional: string;
+  anyServiceOption: string;
+  queueStatusTitle: string;
+  noActiveQueueTitle: string;
+  noActiveQueueHint: string;
+  findASalonAction: string;
+  couldNotLoadQueueStatus: string;
+  tokenNumberLabel: string;
+  estimatedWaitLabel: string;
+  headOverNowMessage: string;
+  withBarberPrefix: string;
+  turnAlmostHereToast: string;
+  waitChangedToast: string;
+  findASalonSearchTitle: string;
+  searchAction: string;
+  locatingAction: string;
+  nearMeFound: string;
+  couldNotSearchSalons: string;
+  locationDenied: string;
+  couldNotGetLocation: string;
+  noSalonsFoundTitle: string;
+  noSalonsFoundHint: string;
+  openNowLabel: string;
+  closedNowLabel: string;
+  kmAwaySuffix: string;
+  couldNotLoadSalon: string;
+  salonNotFound: string;
+  photoGalleryHint: string;
+  photosTapToView: string;
+  verifiedBadge: string;
+  reviewsSuffix: string;
+  joinQueueNow: string;
+  meetTheTeam: string;
+  bookingForTheLookPrefix: string;
+  bookingForTheLookSuffix: string;
+  searchByNamePlaceholder: string;
+  reviewsTitle: string;
+
+  // PhoneOtpLoginScreen (customer sign-in).
+  continueWithGoogle: string;
+  couldNotSignInWithGoogle: string;
+  signInUnavailableNotice: string;
+  orDivider: string;
+  invalidPhoneNumber: string;
+  couldNotSendOtp: string;
+  newCodeSent: string;
+  couldNotResendCode: string;
+  invalidCode: string;
+  couldNotVerifyOtp: string;
+  otpSubtitleGoogleOnly: string;
+  otpSubtitleBoth: string;
+  enterCodeSentToPrefix: string;
+  phoneOtpUnavailableNotice: string;
+  phoneNumberPlaceholder: string;
+  otpCodePlaceholder: string;
+  sendOtpAction: string;
+  verifyAndContinueAction: string;
+  resendOtpAction: string;
+  resendOtpInPrefix: string;
+  resendOtpInSuffix: string;
+  cancellingWillChargePrefix: string;
+  cancellingWillChargeSuffix: string;
+  noChargeFreeWindow: string;
+  barberPrefix: string;
+  minutesAbbrev: string;
+  yearsExpAbbrev: string;
+  yearsExperienceWord: string;
 }
 
 const enUi: UiStrings = {
@@ -410,6 +564,7 @@ const enUi: UiStrings = {
   hoursLabel: 'Hours',
   photosLabel: 'Photos',
   customersLabel: 'Customers',
+  customerLabel: 'Customer',
   addService: 'Add service',
   addChair: 'Add chair',
   addBarber: 'Add barber',
@@ -504,6 +659,153 @@ const enUi: UiStrings = {
   noShopYetTitle: 'No shop yet',
   noShopYetHint: 'Ask your shop owner to add you as staff on the FastQue web dashboard.',
   todaysQueue: "Today's queue",
+
+  findASalonTitle: 'Find a salon',
+  salonTitle: 'Salon',
+  chooseABarberTitle: 'Choose a barber',
+  chooseADateTitle: 'Choose a date',
+  chooseATimeTitle: 'Choose a time',
+  confirmTitle: 'Confirm',
+  queueTitle: 'Queue',
+  bookingTitle: 'Booking',
+  signInTitle: 'Sign in',
+  passwordRecoveryTitle: 'Password recovery',
+  homeButtonLabel: 'Home',
+
+  accountDetailsCard: 'Account details',
+  contactDetailsSubtitle: 'Contact details, security, and shortcuts.',
+  couldNotLoadSessions: 'Could not load your sessions.',
+  couldNotSignOutSession: 'Could not sign out that session.',
+  couldNotSignOutOtherSessions: 'Could not sign out other sessions.',
+  voiceHint: 'Also controls voice announcements read aloud on this device.',
+  premiumActive: 'Active',
+  premiumInactive: 'Not subscribed — manage on web',
+  noActiveSessions: 'No active sessions were returned for this account.',
+  signOutOtherSessions: 'Sign out of other sessions',
+  roleCustomerLabel: 'Customer',
+  roleStaffLabel: 'Salon Staff',
+  roleOwnerLabel: 'Salon Owner',
+  roleAdminLabel: 'Platform Admin',
+  premiumLabel: 'Premium',
+
+  anyStaffOption: 'Any Staff',
+  staffSelectHint: 'This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in.',
+  slotsClosedLabel: 'Closed',
+  noSlotsTitle: 'No slots on this day',
+  noSlotsHint: 'Try a different date.',
+  availableLegend: '● Available',
+  occupiedLegend: '● Occupied',
+  availableWord: 'available',
+  occupiedWord: 'occupied',
+  timeAvailabilityLegend: 'Time availability legend',
+  couldNotLoadTimes: 'Could not load available times.',
+  couldNotLoadStaff: 'Could not load staff.',
+  getDirections: 'Get Directions',
+  shareAction: 'Share',
+  shareOnWhatsApp: 'Share on WhatsApp',
+  bookAgainAction: 'Book again',
+  cancelBookingAction: 'Cancel booking',
+  hideRescheduleAction: 'Hide reschedule',
+  rescheduleAction: 'Reschedule',
+  cancelBookingConfirmTitle: 'Cancel booking?',
+  confirmCancellationAction: 'Confirm cancellation',
+  checkInAction: 'Check in',
+  statusLabelPrefix: 'Status: ',
+  preferredBarberPrefix: 'Preferred barber: ',
+  styleLabelPrefix: 'Style: ',
+  prepaymentRequiredPrefix: 'Prepayment required: ',
+  cancellationChargePrefix: 'Cancellation charge: ',
+  bookingIdPrefix: 'Booking ID: ',
+  couldNotLoadBooking: 'Could not load this booking.',
+  couldNotShare: 'Could not open the share sheet.',
+  couldNotLoadCancellationPolicy: 'Could not load the cancellation policy.',
+  couldNotCancelBooking: 'Could not cancel this booking.',
+  couldNotCheckIn: 'Could not check in. Please try again.',
+  couldNotCreateBooking: 'Could not create the booking. Please try again.',
+  bookingConfirmedTitle: 'Booking confirmed',
+  confirmBookingTitle: 'Confirm booking',
+  viewMyBookings: 'View my bookings',
+  freeCancellationUpTo: 'Free cancellation up to ',
+  beforeYourAppointment: ' before your appointment.',
+  hoursSingular: 'hour',
+  hoursPlural: 'hours',
+  minutesSuffix: 'minutes',
+  myBookingsTitle: 'My bookings',
+  noBookingsYetTitle: 'No bookings yet',
+  noBookingsYetHint: 'Find a salon and book your next visit.',
+  viewDetailsAction: 'View details',
+  couldNotLoadBookings: 'Could not load your bookings.',
+  couldNotJoinQueue: 'Could not join the queue. Please try again.',
+  alreadyInQueueTitle: 'Already in a queue',
+  alreadyInQueueHint: 'You already have an active queue token at another salon. Finish or cancel it before joining here.',
+  youreInLineTitle: "You're in line",
+  joinTheQueueTitle: 'Join the queue',
+  serviceOptional: 'Service (optional)',
+  anyServiceOption: 'Any service',
+  queueStatusTitle: 'Queue status',
+  noActiveQueueTitle: 'No active queue',
+  noActiveQueueHint: 'Join a live queue at a nearby shop and follow your position here.',
+  findASalonAction: 'Find a salon',
+  couldNotLoadQueueStatus: 'Could not load your queue status.',
+  tokenNumberLabel: 'Token #',
+  estimatedWaitLabel: 'Estimated wait: ',
+  headOverNowMessage: "Please head over now — you're almost up.",
+  withBarberPrefix: 'With ',
+  turnAlmostHereToast: 'Your turn is almost here! Tap to dismiss.',
+  waitChangedToast: 'Your wait time changed. Tap to dismiss.',
+  findASalonSearchTitle: 'Find a salon',
+  searchAction: 'Search',
+  locatingAction: 'Locating…',
+  nearMeFound: 'Near me ✓',
+  couldNotSearchSalons: 'Could not search salons.',
+  locationDenied: 'Location permission was denied. Try searching by name instead.',
+  couldNotGetLocation: "Couldn't get your location. Try searching by name instead.",
+  noSalonsFoundTitle: 'No salons found',
+  noSalonsFoundHint: 'Try a different name, or clear the search to browse everything.',
+  openNowLabel: 'Open now',
+  closedNowLabel: 'Closed now',
+  kmAwaySuffix: ' km away',
+  couldNotLoadSalon: 'Could not load this salon.',
+  salonNotFound: 'Salon not found.',
+  photoGalleryHint: 'Opens full-screen photo gallery',
+  photosTapToView: 'photo(s) · tap to view',
+  verifiedBadge: '✓ Verified',
+  reviewsSuffix: 'review(s)',
+  joinQueueNow: 'Join queue now',
+  meetTheTeam: 'Meet the team',
+  bookingForTheLookPrefix: 'Booking for the ',
+  bookingForTheLookSuffix: ' look — pick a shop to continue.',
+  searchByNamePlaceholder: 'Search by name…',
+  reviewsTitle: 'Reviews',
+
+  continueWithGoogle: 'Continue with Google',
+  couldNotSignInWithGoogle: 'Could not sign in with Google. Please try again.',
+  signInUnavailableNotice: 'Sign-in is temporarily unavailable. Please try again shortly.',
+  orDivider: 'or',
+  invalidPhoneNumber: 'Invalid phone number.',
+  couldNotSendOtp: 'Could not send OTP. Please try again.',
+  newCodeSent: 'A new code has been sent.',
+  couldNotResendCode: 'Could not resend the code. Please try again.',
+  invalidCode: 'Invalid code.',
+  couldNotVerifyOtp: 'Could not verify OTP. Please try again.',
+  otpSubtitleGoogleOnly: 'Continue with Google. New here? This creates your account automatically.',
+  otpSubtitleBoth: 'Continue with Google, or use a one-time code. New here? This creates your account automatically.',
+  enterCodeSentToPrefix: 'Enter the code sent to ',
+  phoneOtpUnavailableNotice: "Phone sign-in is temporarily unavailable. Please continue with Google above — it's the same account either way.",
+  phoneNumberPlaceholder: '+919876543210',
+  otpCodePlaceholder: '6-digit code',
+  sendOtpAction: 'Send OTP',
+  verifyAndContinueAction: 'Verify & Continue',
+  resendOtpAction: 'Resend OTP',
+  resendOtpInPrefix: 'Resend OTP in ',
+  resendOtpInSuffix: 's',
+  cancellingWillChargePrefix: 'Cancelling now will charge ',
+  cancellingWillChargeSuffix: ' (outside the free cancellation window).',
+  noChargeFreeWindow: "No charge — you're within the free cancellation window.",
+  barberPrefix: 'Barber: ',
+  minutesAbbrev: 'min',
+  yearsExpAbbrev: 'yr(s) exp.',
+  yearsExperienceWord: 'years experience',
 };
 
 const hiUi: UiStrings = {
@@ -569,6 +871,7 @@ const hiUi: UiStrings = {
   hoursLabel: 'समय',
   photosLabel: 'फ़ोटो',
   customersLabel: 'ग्राहक',
+  customerLabel: 'ग्राहक',
   addService: 'सेवा जोड़ें',
   addChair: 'कुर्सी जोड़ें',
   addBarber: 'बार्बर जोड़ें',
@@ -663,6 +966,153 @@ const hiUi: UiStrings = {
   noShopYetTitle: 'अभी कोई दुकान नहीं',
   noShopYetHint: 'अपने दुकान मालिक से FastQue वेब डैशबोर्ड पर आपको स्टाफ के रूप में जोड़ने के लिए कहें।',
   todaysQueue: 'आज की कतार',
+
+  findASalonTitle: 'सैलून खोजें',
+  salonTitle: 'सैलून',
+  chooseABarberTitle: 'बार्बर चुनें',
+  chooseADateTitle: 'तारीख चुनें',
+  chooseATimeTitle: 'समय चुनें',
+  confirmTitle: 'पुष्टि करें',
+  queueTitle: 'कतार',
+  bookingTitle: 'बुकिंग',
+  signInTitle: 'साइन इन करें',
+  passwordRecoveryTitle: 'पासवर्ड पुनर्प्राप्ति',
+  homeButtonLabel: 'होम',
+
+  accountDetailsCard: 'खाता विवरण',
+  contactDetailsSubtitle: 'संपर्क विवरण, सुरक्षा और शॉर्टकट।',
+  couldNotLoadSessions: 'आपके सत्र लोड नहीं हो सके।',
+  couldNotSignOutSession: 'उस सत्र से साइन आउट नहीं हो सका।',
+  couldNotSignOutOtherSessions: 'अन्य सत्रों से साइन आउट नहीं हो सका।',
+  voiceHint: 'यह डिवाइस पर बोली जाने वाली आवाज़ सूचनाओं को भी नियंत्रित करता है।',
+  premiumActive: 'सक्रिय',
+  premiumInactive: 'सदस्यता नहीं है — वेब पर प्रबंधित करें',
+  noActiveSessions: 'इस खाते के लिए कोई सक्रिय सत्र नहीं मिला।',
+  signOutOtherSessions: 'अन्य सत्रों से साइन आउट करें',
+  roleCustomerLabel: 'ग्राहक',
+  roleStaffLabel: 'सैलून स्टाफ',
+  roleOwnerLabel: 'सैलून मालिक',
+  roleAdminLabel: 'प्लेटफ़ॉर्म एडमिन',
+  premiumLabel: 'प्रीमियम',
+
+  anyStaffOption: 'कोई भी स्टाफ',
+  staffSelectHint: 'यह एक पसंद है, गारंटी नहीं — चेक-इन के समय सैलून ही असली बार्बर और कुर्सी तय करता है।',
+  slotsClosedLabel: 'बंद है',
+  noSlotsTitle: 'इस दिन कोई स्लॉट नहीं',
+  noSlotsHint: 'कोई और तारीख आज़माएं।',
+  availableLegend: '● उपलब्ध',
+  occupiedLegend: '● व्यस्त',
+  availableWord: 'उपलब्ध',
+  occupiedWord: 'व्यस्त',
+  timeAvailabilityLegend: 'समय उपलब्धता सूचक',
+  couldNotLoadTimes: 'उपलब्ध समय लोड नहीं हो सके।',
+  couldNotLoadStaff: 'स्टाफ लोड नहीं हो सका।',
+  getDirections: 'दिशा-निर्देश पाएं',
+  shareAction: 'शेयर करें',
+  shareOnWhatsApp: 'WhatsApp पर शेयर करें',
+  bookAgainAction: 'फिर से बुक करें',
+  cancelBookingAction: 'बुकिंग रद्द करें',
+  hideRescheduleAction: 'पुनर्निर्धारण छुपाएं',
+  rescheduleAction: 'पुनर्निर्धारित करें',
+  cancelBookingConfirmTitle: 'बुकिंग रद्द करें?',
+  confirmCancellationAction: 'रद्दीकरण की पुष्टि करें',
+  checkInAction: 'चेक इन करें',
+  statusLabelPrefix: 'स्थिति: ',
+  preferredBarberPrefix: 'पसंदीदा बार्बर: ',
+  styleLabelPrefix: 'स्टाइल: ',
+  prepaymentRequiredPrefix: 'अग्रिम भुगतान आवश्यक: ',
+  cancellationChargePrefix: 'रद्दीकरण शुल्क: ',
+  bookingIdPrefix: 'बुकिंग आईडी: ',
+  couldNotLoadBooking: 'यह बुकिंग लोड नहीं हो सकी।',
+  couldNotShare: 'शेयर शीट नहीं खुल सकी।',
+  couldNotLoadCancellationPolicy: 'रद्दीकरण नीति लोड नहीं हो सकी।',
+  couldNotCancelBooking: 'यह बुकिंग रद्द नहीं हो सकी।',
+  couldNotCheckIn: 'चेक इन नहीं हो सका। कृपया फिर कोशिश करें।',
+  couldNotCreateBooking: 'बुकिंग नहीं बन सकी। कृपया फिर कोशिश करें।',
+  bookingConfirmedTitle: 'बुकिंग की पुष्टि हो गई',
+  confirmBookingTitle: 'बुकिंग की पुष्टि करें',
+  viewMyBookings: 'मेरी बुकिंग्स देखें',
+  freeCancellationUpTo: 'मुफ़्त रद्दीकरण अपॉइंटमेंट से ',
+  beforeYourAppointment: ' पहले तक।',
+  hoursSingular: 'घंटा',
+  hoursPlural: 'घंटे',
+  minutesSuffix: 'मिनट',
+  myBookingsTitle: 'मेरी बुकिंग्स',
+  noBookingsYetTitle: 'अभी कोई बुकिंग नहीं',
+  noBookingsYetHint: 'सैलून खोजें और अपनी अगली विज़िट बुक करें।',
+  viewDetailsAction: 'विवरण देखें',
+  couldNotLoadBookings: 'आपकी बुकिंग्स लोड नहीं हो सकीं।',
+  couldNotJoinQueue: 'कतार में शामिल नहीं हो सके। कृपया फिर कोशिश करें।',
+  alreadyInQueueTitle: 'पहले से कतार में',
+  alreadyInQueueHint: 'आपके पास पहले से किसी और सैलून में सक्रिय कतार टोकन है। यहां शामिल होने से पहले उसे पूरा करें या रद्द करें।',
+  youreInLineTitle: 'आप कतार में हैं',
+  joinTheQueueTitle: 'कतार में शामिल हों',
+  serviceOptional: 'सेवा (वैकल्पिक)',
+  anyServiceOption: 'कोई भी सेवा',
+  queueStatusTitle: 'कतार की स्थिति',
+  noActiveQueueTitle: 'कोई सक्रिय कतार नहीं',
+  noActiveQueueHint: 'पास की किसी दुकान की लाइव कतार में शामिल हों और यहां अपनी स्थिति देखें।',
+  findASalonAction: 'सैलून खोजें',
+  couldNotLoadQueueStatus: 'आपकी कतार स्थिति लोड नहीं हो सकी।',
+  tokenNumberLabel: 'टोकन #',
+  estimatedWaitLabel: 'अनुमानित प्रतीक्षा: ',
+  headOverNowMessage: 'कृपया अभी आएं — आपकी बारी लगभग आ गई है।',
+  withBarberPrefix: 'साथ में ',
+  turnAlmostHereToast: 'आपकी बारी लगभग आने वाली है! खारिज करने के लिए टैप करें।',
+  waitChangedToast: 'आपका प्रतीक्षा समय बदल गया है। खारिज करने के लिए टैप करें।',
+  findASalonSearchTitle: 'सैलून खोजें',
+  searchAction: 'खोजें',
+  locatingAction: 'स्थान ढूंढ रहे हैं…',
+  nearMeFound: 'मेरे पास ✓',
+  couldNotSearchSalons: 'सैलून खोजे नहीं जा सके।',
+  locationDenied: 'लोकेशन अनुमति अस्वीकृत हुई। नाम से खोजने का प्रयास करें।',
+  couldNotGetLocation: 'आपका स्थान नहीं मिल सका। नाम से खोजने का प्रयास करें।',
+  noSalonsFoundTitle: 'कोई सैलून नहीं मिला',
+  noSalonsFoundHint: 'कोई और नाम आज़माएं, या सब कुछ देखने के लिए खोज साफ़ करें।',
+  openNowLabel: 'अभी खुला है',
+  closedNowLabel: 'अभी बंद है',
+  kmAwaySuffix: ' किमी दूर',
+  couldNotLoadSalon: 'यह सैलून लोड नहीं हो सका।',
+  salonNotFound: 'सैलून नहीं मिला।',
+  photoGalleryHint: 'पूर्ण-स्क्रीन फ़ोटो गैलरी खोलता है',
+  photosTapToView: 'फ़ोटो · देखने के लिए टैप करें',
+  verifiedBadge: '✓ सत्यापित',
+  reviewsSuffix: 'समीक्षा',
+  joinQueueNow: 'अभी कतार में शामिल हों',
+  meetTheTeam: 'टीम से मिलें',
+  bookingForTheLookPrefix: '',
+  bookingForTheLookSuffix: ' लुक के लिए बुकिंग — जारी रखने के लिए दुकान चुनें।',
+  searchByNamePlaceholder: 'नाम से खोजें…',
+  reviewsTitle: 'समीक्षाएं',
+
+  continueWithGoogle: 'Google से जारी रखें',
+  couldNotSignInWithGoogle: 'Google से साइन इन नहीं हो सका। कृपया फिर कोशिश करें।',
+  signInUnavailableNotice: 'साइन-इन अस्थायी रूप से उपलब्ध नहीं है। कृपया थोड़ी देर बाद फिर कोशिश करें।',
+  orDivider: 'या',
+  invalidPhoneNumber: 'अमान्य फ़ोन नंबर।',
+  couldNotSendOtp: 'OTP भेजा नहीं जा सका। कृपया फिर कोशिश करें।',
+  newCodeSent: 'नया कोड भेज दिया गया है।',
+  couldNotResendCode: 'कोड फिर से नहीं भेजा जा सका। कृपया फिर कोशिश करें।',
+  invalidCode: 'अमान्य कोड।',
+  couldNotVerifyOtp: 'OTP सत्यापित नहीं हो सका। कृपया फिर कोशिश करें।',
+  otpSubtitleGoogleOnly: 'Google से जारी रखें। नए हैं? इससे आपका खाता अपने आप बन जाएगा।',
+  otpSubtitleBoth: 'Google से जारी रखें, या वन-टाइम कोड का उपयोग करें। नए हैं? इससे आपका खाता अपने आप बन जाएगा।',
+  enterCodeSentToPrefix: 'भेजा गया कोड डालें ',
+  phoneOtpUnavailableNotice: 'फ़ोन साइन-इन अस्थायी रूप से उपलब्ध नहीं है। कृपया ऊपर Google से जारी रखें — यह वही खाता है।',
+  phoneNumberPlaceholder: '+919876543210',
+  otpCodePlaceholder: '6-अंकीय कोड',
+  sendOtpAction: 'OTP भेजें',
+  verifyAndContinueAction: 'सत्यापित करें और जारी रखें',
+  resendOtpAction: 'OTP फिर भेजें',
+  resendOtpInPrefix: 'OTP फिर भेजें ',
+  resendOtpInSuffix: ' सेकंड में',
+  cancellingWillChargePrefix: 'अभी रद्द करने पर ',
+  cancellingWillChargeSuffix: ' शुल्क लगेगा (मुफ़्त रद्दीकरण विंडो के बाहर)।',
+  noChargeFreeWindow: 'कोई शुल्क नहीं — आप मुफ़्त रद्दीकरण विंडो में हैं।',
+  barberPrefix: 'बार्बर: ',
+  minutesAbbrev: 'मिनट',
+  yearsExpAbbrev: 'वर्ष अनुभव',
+  yearsExperienceWord: 'वर्ष अनुभव',
 };
 
 export const UI_STRINGS: Readonly<Record<Language, UiStrings>> = {

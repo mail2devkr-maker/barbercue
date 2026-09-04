@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { color, font, fontSize } from '../lib/theme';
+import { useLanguage } from '../lib/language-context';
 import type { TabParamList } from './types';
 
 /**
@@ -14,6 +15,7 @@ import type { TabParamList } from './types';
  */
 export function HomeHeaderButton() {
   const navigation = useNavigation<NativeStackNavigationProp<Record<string, undefined>>>();
+  const { t } = useLanguage();
 
   function goHome() {
     navigation.popToTop();
@@ -22,7 +24,7 @@ export function HomeHeaderButton() {
 
   return (
     <Pressable onPress={goHome} hitSlop={8} style={styles.button}>
-      <Text style={styles.text}>Home</Text>
+      <Text style={styles.text}>{t.homeButtonLabel}</Text>
     </Pressable>
   );
 }

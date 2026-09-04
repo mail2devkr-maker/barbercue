@@ -4,7 +4,7 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BOOKING_PATHS, DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
-import type { BookingDetailDto, CancellationPolicyDto } from '@barbercue/shared';
+import type { BookingDetailDto, CancellationPolicyDto, UiStrings } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useAuth } from '../lib/auth-context';
@@ -22,12 +22,12 @@ type Props = CompositeScreenProps<
 
 // Part O (Customer Dues + Cancellation Policy mission) — same formatting rule as apps/web's
 // BookingFlow.tsx: only the real effective window, never a hard-coded "1 hour".
-function formatFreeCancellationWindow(minutes: number): string {
+function formatFreeCancellationWindow(minutes: number, t: UiStrings): string {
   if (minutes % 60 === 0) {
     const hours = minutes / 60;
-    return `${hours} hour${hours === 1 ? '' : 's'}`;
+    return `${hours} ${hours === 1 ? t.hoursSingular : t.hoursPlural}`;
   }
-  return `${minutes} minutes`;
+  return `${minutes} ${t.minutesSuffix}`;
 }
 
 export default function ConfirmBookingScreen({ route, navigation }: Props) {
@@ -80,7 +80,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
       });
       setBooking(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not create the booking. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotCreateBooking);
     } finally {
       setSubmitting(false);
     }
@@ -89,17 +89,17 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   if (booking) {
     return (
       <Screen contentStyle={styles.centeredContent}>
-        <SectionHeader eyebrow="Confirmed" title="Booking confirmed" />
+        <SectionHeader eyebrow="Confirmed" title={t.bookingConfirmedTitle} />
         <Card style={styles.card}>
           <Text style={styles.line}>
             {booking.serviceName} at {booking.salonName}
           </Text>
           <Text style={styles.line}>{new Date(booking.slotStart).toLocaleString()}</Text>
-          {booking.selectedStyleName && <Text style={styles.line}>Style: {booking.selectedStyleName}</Text>}
-          <Text style={styles.status}>Status: {booking.status}</Text>
+          {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
+          <Text style={styles.status}>{t.statusLabelPrefix}{booking.status}</Text>
         </Card>
         <Button
-          title="View my bookings"
+          title={t.viewMyBookings}
           onPress={() => {
             // Leave this stack clean for next time (pop back to the salon search root) before
             // jumping to the Bookings tab — otherwise returning to Search later would land back
@@ -115,7 +115,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
 
   return (
     <Screen contentStyle={styles.centeredContent}>
-      <SectionHeader eyebrow="Booking" title="Confirm booking" />
+      <SectionHeader eyebrow={t.bookingTitle} title={t.confirmBookingTitle} />
       <Card style={styles.card}>
         <Text style={styles.line}>
           {serviceName} at {salonName}
@@ -124,12 +124,11 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           {new Date(slotStart).toLocaleString()} –{' '}
           {new Date(slotEnd).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
         </Text>
-        {preferredStaffName && <Text style={styles.line}>Preferred barber: {preferredStaffName}</Text>}
-        {selectedStyleName && <Text style={styles.line}>Style: {selectedStyleName}</Text>}
+        {preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{preferredStaffName}</Text>}
+        {selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{selectedStyleName}</Text>}
         {cancellationPolicy && (
           <Text style={styles.policyLine}>
-            Free cancellation up to {formatFreeCancellationWindow(cancellationPolicy.effectiveFreeCancellationWindowMinutes)}{' '}
-            before your appointment.
+            {t.freeCancellationUpTo}{formatFreeCancellationWindow(cancellationPolicy.effectiveFreeCancellationWindowMinutes, t)}{t.beforeYourAppointment}
           </Text>
         )}
       </Card>

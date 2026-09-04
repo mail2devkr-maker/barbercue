@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../../lib/google-signin';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 
 /**
@@ -21,6 +22,7 @@ export function GoogleSignInGate({
   onBeforeSignIn: () => void;
 }) {
   const { googleLogin } = useAuth();
+  const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,14 +39,14 @@ export function GoogleSignInGate({
       onBeforeSignIn();
       await googleLogin({ idToken: result.idToken });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not sign in with Google. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSignInWithGoogle);
     } finally {
       setSubmitting(false);
     }
   }
 
   if (!GOOGLE_SIGNIN_CONFIGURED) {
-    return <Text style={styles.unavailableText}>Sign-in is temporarily unavailable. Please try again shortly.</Text>;
+    return <Text style={styles.unavailableText}>{t.signInUnavailableNotice}</Text>;
   }
 
   return (
@@ -52,7 +54,7 @@ export function GoogleSignInGate({
       <Text style={styles.hint}>{label}</Text>
       {error && <Text style={styles.errorText}>{error}</Text>}
       <Pressable style={styles.button} onPress={() => void handleSignIn()} disabled={submitting}>
-        {submitting ? <ActivityIndicator color={color.ink} /> : <Text style={styles.buttonText}>Continue with Google</Text>}
+        {submitting ? <ActivityIndicator color={color.ink} /> : <Text style={styles.buttonText}>{t.continueWithGoogle}</Text>}
       </Pressable>
     </View>
   );

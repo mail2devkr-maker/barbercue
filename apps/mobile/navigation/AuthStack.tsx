@@ -6,6 +6,7 @@ import OwnerStaffLoginScreen from '../screens/OwnerStaffLoginScreen';
 import OwnerStaffPasswordRecoveryScreen from '../screens/OwnerStaffPasswordRecoveryScreen';
 import GuestSearchStack from './GuestSearchStack';
 import { lightStackOptions } from './screenOptions';
+import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from './types';
 
 export type AuthStackParamList = {
@@ -24,12 +25,13 @@ const Stack = createNativeStackNavigator<AuthStackParamList>();
 // Staff both hit the same POST auth/staff/login the web app's own /owner/login and /staff/login
 // pages already use; there is no separate backend concept of "owner auth" vs "staff auth".
 export default function AuthStack() {
+  const { t } = useLanguage();
   return (
     <Stack.Navigator screenOptions={lightStackOptions}>
       <Stack.Screen name="RoleSelect" component={RoleSelectScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerLogin" component={PhoneOtpLoginScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="OwnerStaffLogin" component={OwnerStaffLoginScreen} options={{ title: 'Sign in' }} />
-      <Stack.Screen name="PasswordRecovery" component={OwnerStaffPasswordRecoveryScreen} options={{ title: 'Password recovery' }} />
+      <Stack.Screen name="OwnerStaffLogin" component={OwnerStaffLoginScreen} options={{ title: t.signInTitle }} />
+      <Stack.Screen name="PasswordRecovery" component={OwnerStaffPasswordRecoveryScreen} options={{ title: t.passwordRecoveryTitle }} />
       <Stack.Screen name="GuestBrowse" component={GuestSearchStack} options={{ headerShown: false }} />
     </Stack.Navigator>
   );

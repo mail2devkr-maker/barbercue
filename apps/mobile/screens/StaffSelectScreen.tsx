@@ -6,6 +6,7 @@ import type { StaffOptionDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Skeleton, InlineError } from '../components/ui';
+import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'StaffSelect'>;
@@ -33,6 +34,7 @@ function StaffPhoto({ url, displayName }: { url: string | null; displayName: str
 }
 
 export default function StaffSelectScreen({ route, navigation }: Props) {
+  const { t } = useLanguage();
   const { salonId, serviceId, ...rest } = route.params;
   const [options, setOptions] = useState<StaffOptionDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +49,7 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
         if (!cancelled) setOptions(result);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load staff.');
+        if (!cancelled) setError(err instanceof ApiError ? err.message : t.couldNotLoadStaff);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -64,9 +66,9 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
       <SectionHeader
-        eyebrow="Booking"
-        title="Choose a barber"
-        subtitle="This is a preference, not a guarantee — the salon assigns the actual barber and chair when you check in."
+        eyebrow={t.bookingTitle}
+        title={t.chooseABarberTitle}
+        subtitle={t.staffSelectHint}
       />
       {loading && (
         <>
@@ -82,7 +84,7 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <Pressable style={styles.card} onPress={() => choose(null, null)}>
-              <Text style={styles.cardTitle}>Any Staff</Text>
+              <Text style={styles.cardTitle}>{t.anyStaffOption}</Text>
             </Pressable>
           }
           renderItem={({ item }) => (
@@ -93,7 +95,7 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
                   <Text style={styles.cardTitle}>{item.displayName}</Text>
                   {item.yearsExperience !== null && (
                     <Text style={styles.cardMeta}>
-                      {item.yearsExperience} yr{item.yearsExperience === 1 ? '' : 's'} experience
+                      {item.yearsExperience} {t.yearsExperienceWord}
                     </Text>
                   )}
                   {item.bio && (

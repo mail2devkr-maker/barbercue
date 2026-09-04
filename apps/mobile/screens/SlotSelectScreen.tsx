@@ -7,11 +7,13 @@ import type { AvailabilitySlotDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Skeleton, InlineError, EmptyState } from '../components/ui';
+import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SlotSelect'>;
 
 export default function SlotSelectScreen({ route, navigation }: Props) {
+  const { t } = useLanguage();
   const { salonId, serviceId, preferredStaffId, date, ...rest } = route.params;
   const [slots, setSlots] = useState<AvailabilitySlotDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
         if (!cancelled) setSlots(result);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'Could not load available times.');
+        if (!cancelled) setError(err instanceof ApiError ? err.message : t.couldNotLoadTimes);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -46,7 +48,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
 
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow="Booking" title="Choose a time" />
+      <SectionHeader eyebrow={t.bookingTitle} title={t.chooseATimeTitle} />
       {loading && (
         <>
           <Skeleton style={styles.skeletonRow} />
@@ -54,12 +56,12 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
         </>
       )}
       {error && <InlineError message={error} />}
-      {!loading && !error && slots.length === 0 && <EmptyState title="No slots on this day" message="Try a different date." />}
+      {!loading && !error && slots.length === 0 && <EmptyState title={t.noSlotsTitle} message={t.noSlotsHint} />}
       {!loading && !error && slots.length > 0 && (
         <>
-          <Text style={styles.legend} accessibilityLabel="Time availability legend">
-            <Text style={styles.legendAvailable}>● Available</Text>{'  '}
-            <Text style={styles.legendOccupied}>● Occupied</Text>
+          <Text style={styles.legend} accessibilityLabel={t.timeAvailabilityLegend}>
+            <Text style={styles.legendAvailable}>{t.availableLegend}</Text>{'  '}
+            <Text style={styles.legendOccupied}>{t.occupiedLegend}</Text>
           </Text>
           <FlatList
             data={slots}
@@ -74,7 +76,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
                   disabled={occupied}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: occupied }}
-                  accessibilityLabel={`${new Date(item.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}, ${occupied ? 'occupied' : 'available'}`}
+                  accessibilityLabel={`${new Date(item.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}, ${occupied ? t.occupiedWord : t.availableWord}`}
                   onPress={() =>
                     navigation.navigate('ConfirmBooking', {
                       salonId,

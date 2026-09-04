@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import * as Speech from 'expo-speech';
-import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, voiceAnnouncementsFor, type QueueEntryDetailDto } from '@barbercue/shared';
+import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, voiceAnnouncementsFor, type QueueEntryDetailDto, type UiStrings } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
+import { useLanguage } from '../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../lib/realtime';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 
 const ACTIVE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
-function statusLabel(entry: QueueEntryDetailDto): string {
-  if (entry.status === 'CALLED') return "You're being called — please head to the counter!";
-  if (entry.status === 'IN_SERVICE') return 'In service';
-  if (entry.status === 'WAITING' && entry.position) return `Position ${entry.position} in line`;
+function statusLabel(t: UiStrings, entry: QueueEntryDetailDto): string {
+  if (entry.status === 'CALLED') return t.calledMessage;
+  if (entry.status === 'IN_SERVICE') return t.inService;
+  if (entry.status === 'WAITING' && entry.position) return `${t.positionPrefix}${entry.position}${t.positionSuffix}`;
   return entry.status;
 }
 
@@ -32,6 +33,7 @@ export function QueueStatusPanel({
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
 }) {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [turnAlert, setTurnAlert] = useState(false);
 
   useEffect(() => {
@@ -90,25 +92,25 @@ export function QueueStatusPanel({
       {turnAlert && (
         <Pressable style={styles.turnAlertBanner} onPress={() => setTurnAlert(false)}>
           <Text style={styles.turnAlertText}>
-            {entry.turnApproaching ? 'Your turn is almost here! Tap to dismiss.' : "Your wait time changed. Tap to dismiss."}
+            {entry.turnApproaching ? t.turnAlmostHereToast : t.waitChangedToast}
           </Text>
         </Pressable>
       )}
       <View style={styles.headerRow}>
-        <Text style={styles.token}>Token #{entry.tokenNumber}</Text>
-        <Text style={[styles.status, entry.status === 'CALLED' && styles.statusCalled]}>{statusLabel(entry)}</Text>
+        <Text style={styles.token}>{t.tokenNumberLabel}{entry.tokenNumber}</Text>
+        <Text style={[styles.status, entry.status === 'CALLED' && styles.statusCalled]}>{statusLabel(t, entry)}</Text>
       </View>
       {entry.status === 'WAITING' && entry.estimatedWaitRangeMinutes && (
         <Text style={styles.detail}>
-          Estimated wait: {entry.estimatedWaitRangeMinutes.min}–{entry.estimatedWaitRangeMinutes.max} min
+          {t.estimatedWaitLabel}{entry.estimatedWaitRangeMinutes.min}–{entry.estimatedWaitRangeMinutes.max} {t.minutesAbbrev}
         </Text>
       )}
       {entry.status === 'WAITING' && entry.turnApproaching && (
-        <Text style={styles.detail}>Please head over now — you&apos;re almost up.</Text>
+        <Text style={styles.detail}>{t.headOverNowMessage}</Text>
       )}
       {entry.status === 'IN_SERVICE' && (
         <Text style={styles.detail}>
-          {entry.assignedStaffName ? `With ${entry.assignedStaffName}` : 'In service'}
+          {entry.assignedStaffName ? `${t.withBarberPrefix}${entry.assignedStaffName}` : t.inService}
           {entry.assignedChairLabel ? ` — ${entry.assignedChairLabel}` : ''}
         </Text>
       )}

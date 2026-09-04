@@ -7,8 +7,10 @@ import type { BookingDetailDto, PaginatedResult } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { openDirections } from '../lib/booking-actions';
 import { useRebook } from '../lib/use-rebook';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Skeleton, EmptyState, InlineError, Button } from '../components/ui';
+import type { UiStrings } from '@barbercue/shared';
 import type { BookingsStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<BookingsStackParamList, 'MyBookings'>;
@@ -18,13 +20,16 @@ function loadPage(cursor?: string): Promise<PaginatedResult<BookingDetailDto>> {
   return apiFetch<PaginatedResult<BookingDetailDto>>(`${BOOKING_PATHS.bookings}/${BOOKING_PATHS.mine}${query}`);
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  CONFIRMED: 'Confirmed',
-  PENDING_PAYMENT: 'Payment pending',
-  CANCELLED: 'Cancelled',
-  COMPLETED: 'Completed',
-  NO_SHOW: 'No-show',
-};
+function statusLabel(t: UiStrings, status: string): string {
+  const labels: Record<string, string> = {
+    CONFIRMED: t.statusConfirmed,
+    PENDING_PAYMENT: t.statusPendingPayment,
+    CANCELLED: t.statusCancelled,
+    COMPLETED: t.statusCompleted,
+    NO_SHOW: t.statusNoShow,
+  };
+  return labels[status] ?? status;
+}
 
 function statusColor(status: string): string {
   if (status === 'CONFIRMED') return color.success;
@@ -51,6 +56,7 @@ function BookingCard({
   onRebook: () => void;
   rebooking: boolean;
 }) {
+  const { t } = useLanguage();
   const date = new Date(booking.slotStart);
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -60,7 +66,7 @@ function BookingCard({
         </Text>
         <View style={[styles.statusPill, { backgroundColor: statusBg(booking.status) }]}>
           <Text style={[styles.statusPillText, { color: statusColor(booking.status) }]}>
-            {STATUS_LABEL[booking.status] ?? booking.status}
+            {statusLabel(t, booking.status)}
           </Text>
         </View>
       </View>
@@ -71,11 +77,11 @@ function BookingCard({
         {date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
       </Text>
 
-      {booking.preferredStaffName && <Text style={styles.cardMeta}>Barber: {booking.preferredStaffName}</Text>}
-      {booking.selectedStyleName && <Text style={styles.cardMeta}>Style: {booking.selectedStyleName}</Text>}
+      {booking.preferredStaffName && <Text style={styles.cardMeta}>{t.barberPrefix}{booking.preferredStaffName}</Text>}
+      {booking.selectedStyleName && <Text style={styles.cardMeta}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
       <Text style={styles.cardMeta}>{formatMoney(booking.servicePrice, booking.currency)}</Text>
       {booking.cancellationChargeAmount !== null && booking.cancellationChargeAmount > 0 && (
-        <Text style={styles.cardMetaWarn}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
+        <Text style={styles.cardMetaWarn}>{t.cancellationChargePrefix}{formatMoney(booking.cancellationChargeAmount, booking.currency)}</Text>
       )}
 
       <View style={styles.quickActionsRow}>
@@ -86,7 +92,7 @@ function BookingCard({
             void openDirections(booking);
           }}
         >
-          <Text style={styles.quickActionText}>Get Directions</Text>
+          <Text style={styles.quickActionText}>{t.getDirections}</Text>
         </Pressable>
         <Pressable
           style={styles.quickActionButton}
@@ -96,12 +102,12 @@ function BookingCard({
           }}
           disabled={rebooking}
         >
-          <Text style={styles.quickActionText}>{rebooking ? 'Loading…' : 'Book again'}</Text>
+          <Text style={styles.quickActionText}>{rebooking ? t.loading : t.bookAgainAction}</Text>
         </Pressable>
       </View>
 
       <View style={styles.detailsRow}>
-        <Text style={styles.detailsText}>View details</Text>
+        <Text style={styles.detailsText}>{t.viewDetailsAction}</Text>
         <Text style={styles.chevron}>›</Text>
       </View>
     </Pressable>
@@ -109,6 +115,7 @@ function BookingCard({
 }
 
 export default function MyBookingsScreen({ navigation }: Props) {
+  const { t } = useLanguage();
   const { rebook, rebookingId, rebookError } = useRebook();
   const [bookings, setBookings] = useState<BookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -124,7 +131,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
         setBookings(result.items);
         setNextCursor(result.nextCursor);
       })
-      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load your bookings.'))
+      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : t.couldNotLoadBookings))
       .finally(() => {
         setLoading(false);
         setRefreshing(false);
@@ -146,7 +153,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
 
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow="Bookings" title="My bookings" />
+      <SectionHeader eyebrow={t.tabBookings} title={t.myBookingsTitle} />
       {loading ? (
         <View style={styles.skeletonStack}>
           <Skeleton style={styles.skeletonCard} />
@@ -155,7 +162,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
       ) : error ? (
         <InlineError message={error} />
       ) : bookings.length === 0 ? (
-        <EmptyState title="No bookings yet" message="Find a salon and book your next visit." />
+        <EmptyState title={t.noBookingsYetTitle} message={t.noBookingsYetHint} />
       ) : (
         <FlatList
           data={bookings}
@@ -172,7 +179,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
             />
           )}
           ListFooterComponent={
-            nextCursor ? <Button title="Load more" variant="outline" onPress={() => void handleLoadMore()} style={styles.loadMore} /> : null
+            nextCursor ? <Button title={t.loadMore} variant="outline" onPress={() => void handleLoadMore()} style={styles.loadMore} /> : null
           }
         />
       )}

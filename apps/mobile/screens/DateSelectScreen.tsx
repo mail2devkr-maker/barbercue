@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader } from '../components/ui';
+import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'DateSelect'>;
@@ -10,6 +11,7 @@ type Props = NativeStackScreenProps<SearchStackParamList, 'DateSelect'>;
 const DAYS_AHEAD = 30;
 
 export default function DateSelectScreen({ route, navigation }: Props) {
+  const { t } = useLanguage();
   const { operatingHours, ...rest } = route.params;
 
   // Client-side convenience only, same as apps/web's DateStep — the server's availability
@@ -32,7 +34,7 @@ export default function DateSelectScreen({ route, navigation }: Props) {
 
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow="Booking" title="Choose a date" />
+      <SectionHeader eyebrow={t.bookingTitle} title={t.chooseADateTitle} />
       <FlatList
         data={days}
         keyExtractor={(item) => item.date}
@@ -44,7 +46,7 @@ export default function DateSelectScreen({ route, navigation }: Props) {
             onPress={() => navigation.navigate('SlotSelect', { ...rest, date: item.date })}
           >
             <Text style={styles.cardTitle}>{item.label}</Text>
-            {item.closed && <Text style={styles.cardSubtitle}>Closed</Text>}
+            {item.closed && <Text style={styles.cardSubtitle}>{t.slotsClosedLabel}</Text>}
           </Pressable>
         )}
       />

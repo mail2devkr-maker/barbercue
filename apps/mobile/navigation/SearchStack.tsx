@@ -8,6 +8,7 @@ import ConfirmBookingScreen from '../screens/ConfirmBookingScreen';
 import WalkInJoinScreen from '../screens/WalkInJoinScreen';
 import { lightStackOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
+import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<SearchStackParamList>();
@@ -22,15 +23,16 @@ const homeAction = { headerRight: () => <HomeHeaderButton /> };
 // Discovery + the full booking flow, nested under the Search tab so it keeps a native back
 // button through every step while the bottom tab bar stays visible.
 export default function SearchStack() {
+  const { t } = useLanguage();
   return (
     <Stack.Navigator initialRouteName="SalonSearch" screenOptions={lightStackOptions}>
-      <Stack.Screen name="SalonSearch" component={SalonSearchScreen} options={{ title: 'Find a salon' }} />
-      <Stack.Screen name="SalonProfile" component={SalonProfileScreen} options={{ title: 'Salon', ...homeAction }} />
-      <Stack.Screen name="StaffSelect" component={StaffSelectScreen} options={{ title: 'Choose a barber', ...homeAction }} />
-      <Stack.Screen name="DateSelect" component={DateSelectScreen} options={{ title: 'Choose a date', ...homeAction }} />
-      <Stack.Screen name="SlotSelect" component={SlotSelectScreen} options={{ title: 'Choose a time', ...homeAction }} />
-      <Stack.Screen name="ConfirmBooking" component={ConfirmBookingScreen} options={{ title: 'Confirm', ...homeAction }} />
-      <Stack.Screen name="WalkInJoin" component={WalkInJoinScreen} options={{ title: 'Queue', ...homeAction }} />
+      <Stack.Screen name="SalonSearch" component={SalonSearchScreen} options={{ title: t.findASalonTitle }} />
+      <Stack.Screen name="SalonProfile" component={SalonProfileScreen} options={{ title: t.salonTitle, ...homeAction }} />
+      <Stack.Screen name="StaffSelect" component={StaffSelectScreen} options={{ title: t.chooseABarberTitle, ...homeAction }} />
+      <Stack.Screen name="DateSelect" component={DateSelectScreen} options={{ title: t.chooseADateTitle, ...homeAction }} />
+      <Stack.Screen name="SlotSelect" component={SlotSelectScreen} options={{ title: t.chooseATimeTitle, ...homeAction }} />
+      <Stack.Screen name="ConfirmBooking" component={ConfirmBookingScreen} options={{ title: t.confirmTitle, ...homeAction }} />
+      <Stack.Screen name="WalkInJoin" component={WalkInJoinScreen} options={{ title: t.queueTitle, ...homeAction }} />
     </Stack.Navigator>
   );
 }

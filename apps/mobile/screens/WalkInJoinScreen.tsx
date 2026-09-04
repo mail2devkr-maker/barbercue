@@ -63,7 +63,7 @@ export default function WalkInJoinScreen({ route }: Props) {
       });
       setEntry(created);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not join the queue. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotJoinQueue);
     } finally {
       setSubmitting(false);
     }
@@ -80,9 +80,9 @@ export default function WalkInJoinScreen({ route }: Props) {
   if (entry && entry.salonId !== salonId) {
     return (
       <Screen scroll={false} contentStyle={styles.screenContent}>
-        <SectionHeader eyebrow="Queue" title="Already in a queue" />
+        <SectionHeader eyebrow={t.queueTitle} title={t.alreadyInQueueTitle} />
         <Text style={styles.subtitle}>
-          You already have an active queue token at another salon. Finish or cancel it before joining here.
+          {t.alreadyInQueueHint}
         </Text>
       </Screen>
     );
@@ -91,7 +91,7 @@ export default function WalkInJoinScreen({ route }: Props) {
   if (entry) {
     return (
       <Screen scroll={false} contentStyle={styles.screenContent}>
-        <SectionHeader eyebrow="Queue" title="You're in line" />
+        <SectionHeader eyebrow={t.queueTitle} title={t.youreInLineTitle} />
         <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
       </Screen>
     );
@@ -99,13 +99,13 @@ export default function WalkInJoinScreen({ route }: Props) {
 
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow="Live queue" title="Join the queue" subtitle="Service (optional)" />
+      <SectionHeader eyebrow={t.liveQueue} title={t.joinTheQueueTitle} subtitle={t.serviceOptional} />
       <View style={styles.serviceList}>
         <Pressable
           style={[styles.serviceOption, selectedServiceId === null && styles.serviceOptionSelected]}
           onPress={() => setSelectedServiceId(null)}
         >
-          <Text style={styles.serviceOptionText}>Any service</Text>
+          <Text style={styles.serviceOptionText}>{t.anyServiceOption}</Text>
         </Pressable>
         {services.map((s) => (
           <Pressable
@@ -114,7 +114,7 @@ export default function WalkInJoinScreen({ route }: Props) {
             onPress={() => setSelectedServiceId(s.id)}
           >
             <Text style={styles.serviceOptionText}>
-              {s.name} ({s.durationMinutes} min)
+              {s.name} ({s.durationMinutes} {t.minutesAbbrev})
             </Text>
           </Pressable>
         ))}

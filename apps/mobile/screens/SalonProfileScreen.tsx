@@ -8,6 +8,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, Skeleton, ErrorState, SafeImage, PhotoGalleryViewer } from '../components/ui';
 import { PublicSalonStatus } from '../components/PublicSalonStatus';
+import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonProfile'>;
@@ -45,6 +46,7 @@ function TeamPhoto({ url, displayName }: { url: string | null; displayName: stri
 
 // Public discovery endpoint — same GET /salons/:countryCode/:citySlug/:salonSlug apps/web uses (B9).
 export default function SalonProfileScreen({ route, navigation }: Props) {
+  const { t } = useLanguage();
   const { countryCode, citySlug, salonSlug, selectedStyleName } = route.params;
   const [salon, setSalon] = useState<SalonProfileDto | null>(null);
   const [publicStatus, setPublicStatus] = useState<PublicSalonStatusDto | null>(null);
@@ -66,7 +68,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
           setSalon(result);
           setPublicStatus(status);
         })
-        .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load this salon.'))
+        .catch((err: unknown) => setError(err instanceof ApiError ? err.message : t.couldNotLoadSalon))
         .finally(() => {
           setLoading(false);
           setRefreshing(false);
@@ -93,7 +95,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
   if (error || !salon) {
     return (
       <Screen scroll={false}>
-        <ErrorState message={error ?? 'Salon not found.'} onRetry={() => void load(false)} />
+        <ErrorState message={error ?? t.salonNotFound} onRetry={() => void load(false)} />
       </Screen>
     );
   }
@@ -126,14 +128,14 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
                   onPress={() => setGalleryIndex(i)}
                   accessibilityRole="imagebutton"
                   accessibilityLabel={photo.altText ?? `${salon.name} photo ${i + 1} of ${salon.photos.length}`}
-                  accessibilityHint="Opens full-screen photo gallery"
+                  accessibilityHint={t.photoGalleryHint}
                 >
                   <SafeImage url={photo.url} alt={photo.altText ?? salon.name} style={styles.photo} />
                 </Pressable>
               ))}
             </ScrollView>
             <Text style={styles.photoCount}>
-              {salon.photos.length} photo{salon.photos.length === 1 ? '' : 's'} · tap to view
+              {salon.photos.length} {t.photosTapToView}
             </Text>
             <PhotoGalleryViewer
               photos={salon.photos}
@@ -145,15 +147,15 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
           </>
         )}
 
-        <SectionHeader eyebrow="Salon" title={salon.name} subtitle={salon.addressLine} />
+        <SectionHeader eyebrow={t.salonTitle} title={salon.name} subtitle={salon.addressLine} />
         {salon.verified && (
           <View style={styles.verifiedBadge}>
-            <Text style={styles.verifiedBadgeText}>✓ Verified — {VERIFICATION_BADGE_CAPTION}</Text>
+            <Text style={styles.verifiedBadgeText}>{t.verifiedBadge} — {VERIFICATION_BADGE_CAPTION}</Text>
           </View>
         )}
         {salon.ratingCount > 0 && (
           <Text style={styles.rating}>
-            ★ {salon.ratingAverage?.toFixed(1)} · {salon.ratingCount} review{salon.ratingCount === 1 ? '' : 's'}
+            ★ {salon.ratingAverage?.toFixed(1)} · {salon.ratingCount} {t.reviewsSuffix}
           </Text>
         )}
         {salon.description && <Text style={styles.description}>{salon.description}</Text>}
@@ -161,13 +163,13 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         {publicStatus && <PublicSalonStatus status={publicStatus} />}
 
         <Button
-          title="Join queue now"
+          title={t.joinQueueNow}
           variant="secondary"
           onPress={() => navigation.navigate('WalkInJoin', { salonId: salon.id, salonName: salon.name, services: salon.services })}
           style={styles.queueButton}
         />
 
-        <Text style={styles.sectionTitle}>Services</Text>
+        <Text style={styles.sectionTitle}>{t.servicesLabel}</Text>
         {salon.services.map((item) => (
           <Pressable
             key={item.id}
@@ -189,13 +191,13 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
               <Text style={styles.cardTitle}>{item.name}</Text>
               <Text style={styles.cardTitle}>{formatMoney(item.price, salon.currency, salon.countryCode)}</Text>
             </View>
-            <Text style={styles.cardSubtitle}>{item.durationMinutes} min</Text>
+            <Text style={styles.cardSubtitle}>{item.durationMinutes} {t.minutesAbbrev}</Text>
           </Pressable>
         ))}
 
         {salon.team.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Meet the team</Text>
+            <Text style={styles.sectionTitle}>{t.meetTheTeam}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.teamStrip}>
               {salon.team.map((member) => (
                 <View key={member.id} style={styles.teamCard}>
@@ -206,7 +208,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
                   </Text>
                   {member.yearsExperience !== null && (
                     <Text style={styles.teamMeta}>
-                      {member.yearsExperience} yr{member.yearsExperience === 1 ? '' : 's'} exp.
+                      {member.yearsExperience} {t.yearsExpAbbrev}
                     </Text>
                   )}
                   {member.bio && (
@@ -220,7 +222,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
 
         {salon.operatingHours.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Hours</Text>
+            <Text style={styles.sectionTitle}>{t.hoursLabel}</Text>
             <View style={styles.hoursCard}>
               {salon.operatingHours
                 .slice()
@@ -228,7 +230,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
                 .map((h) => (
                   <View key={h.dayOfWeek} style={styles.hoursRow}>
                     <Text style={styles.hoursDay}>{DAY_LABELS[h.dayOfWeek]}</Text>
-                    <Text style={styles.hoursValue}>{h.isClosed ? 'Closed' : `${h.openTime} – ${h.closeTime}`}</Text>
+                    <Text style={styles.hoursValue}>{h.isClosed ? t.slotsClosedLabel : `${h.openTime} – ${h.closeTime}`}</Text>
                   </View>
                 ))}
             </View>
@@ -237,7 +239,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
 
         {salon.reviews.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Reviews</Text>
+            <Text style={styles.sectionTitle}>{t.reviewsTitle}</Text>
             {salon.reviews.slice(0, 5).map((review) => (
               <View key={review.id} style={styles.reviewCard}>
                 <Text style={styles.reviewRating}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</Text>

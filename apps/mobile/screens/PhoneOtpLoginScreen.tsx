@@ -22,12 +22,14 @@ import {
 import { ApiError, apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
+import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 
 type Step = 'phone' | 'otp';
 
 function GoogleSignInButton() {
   const { googleLogin } = useAuth();
+  const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +45,7 @@ function GoogleSignInButton() {
       }
       await googleLogin({ idToken: result.idToken });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not sign in with Google. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSignInWithGoogle);
     } finally {
       setSubmitting(false);
     }
@@ -60,12 +62,12 @@ function GoogleSignInButton() {
         {submitting ? (
           <ActivityIndicator color={color.ink} />
         ) : (
-          <Text style={styles.googleButtonText}>Continue with Google</Text>
+          <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>
         )}
       </Pressable>
       <View style={styles.dividerRow}>
         <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>or</Text>
+        <Text style={styles.dividerText}>{t.orDivider}</Text>
         <View style={styles.dividerLine} />
       </View>
     </>
@@ -75,6 +77,7 @@ function GoogleSignInButton() {
 // Customer-only per ARCHITECTURE.md §2 — staff/owner/admin use the web dashboard, not this app.
 export default function PhoneOtpLoginScreen() {
   const { verifyCustomerOtp } = useAuth();
+  const { t } = useLanguage();
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -131,7 +134,7 @@ export default function PhoneOtpLoginScreen() {
     setError(null);
     const parsed = otpRequestSchema.safeParse({ phone });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid phone number.');
+      setError(parsed.error.issues[0]?.message ?? t.invalidPhoneNumber);
       return;
     }
     setSubmitting(true);
@@ -140,7 +143,7 @@ export default function PhoneOtpLoginScreen() {
       setStep('otp');
       setResendCooldown(OTP_RESEND_COOLDOWN_SECONDS);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not send OTP. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotSendOtp);
     } finally {
       setSubmitting(false);
     }
@@ -153,11 +156,11 @@ export default function PhoneOtpLoginScreen() {
     setResending(true);
     try {
       await sendOtp(phone);
-      setResendMessage('A new code has been sent.');
+      setResendMessage(t.newCodeSent);
     } catch (err) {
       // The backend's OTP_RATE_LIMITED message is already written for end users (see
       // OtpService) — surfaced as-is rather than replaced with a generic string.
-      setError(err instanceof ApiError ? err.message : 'Could not resend the code. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotResendCode);
     } finally {
       // Restart the cooldown on both success and failure — on failure this also prevents
       // hammering the resend button (and the server's rate limit) with instant retries.
@@ -171,14 +174,14 @@ export default function PhoneOtpLoginScreen() {
     setResendMessage(null);
     const parsed = otpVerifySchema.safeParse({ phone, code });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Invalid code.');
+      setError(parsed.error.issues[0]?.message ?? t.invalidCode);
       return;
     }
     setSubmitting(true);
     try {
       await verifyCustomerOtp(parsed.data);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not verify OTP. Please try again.');
+      setError(err instanceof ApiError ? err.message : t.couldNotVerifyOtp);
     } finally {
       setSubmitting(false);
     }
@@ -216,13 +219,13 @@ export default function PhoneOtpLoginScreen() {
             <Text style={styles.wordmark}>FastQue</Text>
           </View>
 
-          <Text style={styles.eyebrow}>Sign in</Text>
+          <Text style={styles.eyebrow}>{t.signInTitle}</Text>
           <Text style={styles.subtitle}>
             {step === 'phone'
               ? phoneOtpAvailable === false
-                ? 'Continue with Google. New here? This creates your account automatically.'
-                : 'Continue with Google, or use a one-time code. New here? This creates your account automatically.'
-              : `Enter the code sent to ${phone}.`}
+                ? t.otpSubtitleGoogleOnly
+                : t.otpSubtitleBoth
+              : `${t.enterCodeSentToPrefix}${phone}.`}
           </Text>
 
           {error && (
@@ -243,8 +246,7 @@ export default function PhoneOtpLoginScreen() {
                 {phoneOtpAvailable === false ? (
                   <View style={styles.noticeCard}>
                     <Text style={styles.noticeCardText}>
-                      Phone sign-in is temporarily unavailable. Please continue with Google above —
-                      it&apos;s the same account either way.
+                      {t.phoneOtpUnavailableNotice}
                     </Text>
                   </View>
                 ) : phoneOtpAvailable === null ? (
@@ -253,7 +255,7 @@ export default function PhoneOtpLoginScreen() {
                   <>
                     <TextInput
                       style={styles.input}
-                      placeholder="+919876543210"
+                      placeholder={t.phoneNumberPlaceholder}
                       placeholderTextColor={color.muted}
                       keyboardType="phone-pad"
                       value={phone}
@@ -263,7 +265,7 @@ export default function PhoneOtpLoginScreen() {
                       {submitting ? (
                         <ActivityIndicator color={color.accentContrast} />
                       ) : (
-                        <Text style={styles.primaryButtonText}>Send OTP</Text>
+                        <Text style={styles.primaryButtonText}>{t.sendOtpAction}</Text>
                       )}
                     </Pressable>
                   </>
@@ -273,7 +275,7 @@ export default function PhoneOtpLoginScreen() {
               <>
                 <TextInput
                   style={styles.input}
-                  placeholder="6-digit code"
+                  placeholder={t.otpCodePlaceholder}
                   placeholderTextColor={color.muted}
                   keyboardType="number-pad"
                   value={code}
@@ -284,7 +286,7 @@ export default function PhoneOtpLoginScreen() {
                   {submitting ? (
                     <ActivityIndicator color={color.accentContrast} />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Verify & Continue</Text>
+                    <Text style={styles.primaryButtonText}>{t.verifyAndContinueAction}</Text>
                   )}
                 </Pressable>
                 <Pressable
@@ -296,7 +298,7 @@ export default function PhoneOtpLoginScreen() {
                     <ActivityIndicator color={color.ink} />
                   ) : (
                     <Text style={styles.resendButtonText}>
-                      {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
+                      {resendCooldown > 0 ? `${t.resendOtpInPrefix}${resendCooldown}${t.resendOtpInSuffix}` : t.resendOtpAction}
                     </Text>
                   )}
                 </Pressable>
