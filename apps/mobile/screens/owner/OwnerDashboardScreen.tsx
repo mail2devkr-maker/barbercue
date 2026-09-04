@@ -18,7 +18,7 @@ import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtim
 import { useSalon } from '../../lib/salon-context';
 import { useUnreadNotificationCount } from '../../lib/notifications';
 import { useLanguage } from '../../lib/language-context';
-import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
@@ -331,12 +331,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     padding: space[3],
   },
-  summaryValue: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, color: color.ink },
-  summaryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
+  summaryValue: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, lineHeight: lineHeightFor(fontSize.xl), color: color.ink },
+  summaryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted, marginTop: 2 },
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
-  pickerChip: { paddingVertical: space[2], paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: color.border },
+  pickerChip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: space[2],
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
   pickerChipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
-  pickerChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted },
+  pickerChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted },
   pickerChipTextActive: { color: color.accent },
   card: { marginBottom: space[4] },
   salonName: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink },

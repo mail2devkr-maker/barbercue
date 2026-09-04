@@ -64,3 +64,18 @@ export const font = {
   bodySemiBold: 'WorkSans_600SemiBold',
   bodyBold: 'WorkSans_700Bold',
 } as const;
+
+/**
+ * Physical-device Build 10 retest: Hindi text in chips/badges/pills was visibly clipped vertically
+ * (matras cut off top/bottom) on Android. Root cause — Fraunces/Work Sans are Latin-only webfonts
+ * with no Devanagari glyphs, so Android silently substitutes a system Devanagari font per-glyph at
+ * *render* time, but React Native's Yoga layout measures line height from the *requested* font
+ * (the Latin one) at *layout* time. The substituted fallback font's taller glyph metrics then
+ * overflow a box sized for the smaller Latin metrics. An explicit, generous lineHeight sidesteps
+ * the mismeasurement entirely by not relying on font-metric auto-sizing at all. Use this for any
+ * Text style that can render translated (potentially Hindi) content — proper nouns/IDs that are
+ * always Latin don't need it, but nothing is hurt by using it there too.
+ */
+export function lineHeightFor(size: number): number {
+  return Math.round(size * 1.55);
+}

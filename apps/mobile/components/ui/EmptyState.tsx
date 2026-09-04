@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { color, font, fontSize, space } from '../../lib/theme';
+import { color, font, fontSize, lineHeightFor, space } from '../../lib/theme';
 import { Button } from './Button';
 
 interface EmptyStateProps {
@@ -33,11 +33,17 @@ const styles = StyleSheet.create({
     backgroundColor: color.goldSoft,
     marginBottom: space[4],
   },
-  title: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, textAlign: 'center' },
+  title: {
+    fontFamily: font.displaySemiBold,
+    fontSize: fontSize.lg,
+    lineHeight: lineHeightFor(fontSize.lg),
+    color: color.ink,
+    textAlign: 'center',
+  },
   message: {
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,
-    lineHeight: 20,
+    lineHeight: lineHeightFor(fontSize.sm),
     color: color.muted,
     textAlign: 'center',
     marginTop: space[2],

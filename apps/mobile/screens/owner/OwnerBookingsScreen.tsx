@@ -2,14 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import * as Speech from 'expo-speech';
 import {
   DASHBOARD_PATHS,
-  Language,
   OWNER_BOOKING_FILTERS,
-  SPEECH_LOCALE,
   formatVoiceDateTime,
-  voiceAnnouncementsFor,
+  type Language,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
@@ -17,10 +14,12 @@ import {
   type UiStrings,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
+import { dateLocaleFor } from '../../lib/date-locale';
 import { useLanguage } from '../../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
-import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { speakBooking } from '../../lib/voice-announce';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 
@@ -56,8 +55,8 @@ function bookingsPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
 }
 
-function formatSlot(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+function formatSlot(iso: string, language: Language): string {
+  return new Date(iso).toLocaleString(dateLocaleFor(language), {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -67,7 +66,7 @@ function formatSlot(iso: string): string {
 }
 
 function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   return (
     <Card style={styles.card}>
       <View style={styles.cardHeadRow}>
@@ -76,7 +75,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
             {booking.serviceName}
             {isNew && <Text style={styles.newBadge}> {t.newBadge}</Text>}
           </Text>
-          <Text style={styles.meta}>{formatSlot(booking.slotStart)}</Text>
+          <Text style={styles.meta}>{formatSlot(booking.slotStart, language)}</Text>
           {booking.customerPhone && <Text style={styles.meta}>{booking.customerPhone}</Text>}
           {(booking.assignedStaffName ?? booking.preferredStaffName) && (
             <Text style={styles.meta}>
@@ -87,7 +86,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
         <Text style={styles.statusBadge}>{statusLabel(t, booking.status)}</Text>
       </View>
       <Text style={styles.priceText}>
-        {booking.currency ?? ''} {booking.servicePrice} · Ref {booking.id.slice(0, 8)}
+        {booking.currency ?? ''} {booking.servicePrice} · {t.bookingRefPrefix}{booking.id.slice(0, 8)}
       </Text>
     </Card>
   );
@@ -223,17 +222,16 @@ export default function OwnerBookingsScreen({ route }: Props) {
           const { date, time } = detail.slotStart && timeZone
             ? formatVoiceDateTime(detail.slotStart, timeZone)
             : { date: null, time: null };
-          console.warn('[voice] speaking booking.created', { language: preferredLanguageRef.current });
-          Speech.speak(
-            voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
-              detail.serviceName ?? null,
-              barberName,
-              detail.salonName ?? null,
-              date,
-              time,
-            ),
-            { language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN] },
-          );
+          speakBooking({
+            event: 'booking.created',
+            bookingId: payload.bookingId,
+            language: preferredLanguageRef.current,
+            serviceName: detail.serviceName ?? null,
+            barberName,
+            salonName: detail.salonName ?? null,
+            date,
+            time,
+          });
         })
         .catch((err: unknown) => {
           // toast just won't have rich details — the list refresh above still shows it
@@ -251,10 +249,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
       }
       notifiedIdsRef.current.add(dedupeKey);
       setCancelNotice(true);
-      console.warn('[voice] speaking booking.cancelled', { language: preferredLanguageRef.current });
-      Speech.speak(voiceAnnouncementsFor(preferredLanguageRef.current).bookingCancelled(), {
-        language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN],
-      });
+      speakBooking({ event: 'booking.cancelled', bookingId: payload.bookingId, language: preferredLanguageRef.current });
     }
 
     socket.on('booking.created', onCreated);
@@ -293,7 +288,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
         <Pressable style={styles.noticeBanner} onPress={() => setNewNotice(null)}>
           <Text style={styles.noticeTitle}>{t.newBookingReceivedBanner}</Text>
           <Text style={styles.noticeBody}>
-            {newNotice.serviceName} · {formatSlot(newNotice.slotStart)}
+            {newNotice.serviceName} · {formatSlot(newNotice.slotStart, language)}
             {newNotice.customerPhone ? ` · ${newNotice.customerPhone}` : ''}
           </Text>
         </Pressable>
@@ -381,18 +376,34 @@ const styles = StyleSheet.create({
   noticeTitle: { fontFamily: font.bodyBold, fontSize: fontSize.sm, color: color.ink },
   noticeBody: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
   filterScroll: { marginBottom: space[3] },
-  filterRow: { gap: space[2], paddingRight: space[4] },
-  filterChip: { paddingVertical: space[2], paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: color.border },
+  filterRow: { gap: space[2], paddingRight: space[4], alignItems: 'stretch' },
+  filterChip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: space[2],
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
   filterChipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
-  filterChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted },
+  filterChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted },
   filterChipTextActive: { color: color.accent },
   card: { marginBottom: space[3] },
   cardHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardHeadText: { flex: 1, paddingRight: space[2] },
-  serviceName: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
+  serviceName: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink },
   newBadge: { fontFamily: font.bodyBold, fontSize: 10, color: color.surface, backgroundColor: '#2e7d32' },
-  meta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: 2 },
-  statusBadge: { fontFamily: font.bodyBold, fontSize: 11, letterSpacing: 0.5, color: color.gold, textTransform: 'uppercase' },
+  meta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted, marginTop: 2 },
+  statusBadge: {
+    fontFamily: font.bodyBold,
+    fontSize: 11,
+    lineHeight: lineHeightFor(11),
+    letterSpacing: 0.5,
+    color: color.gold,
+    textTransform: 'uppercase',
+  },
   priceText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
   loadMoreButton: { marginTop: space[2], marginBottom: space[6] },
 });

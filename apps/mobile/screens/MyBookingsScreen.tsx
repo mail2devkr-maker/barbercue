@@ -6,9 +6,10 @@ import { BOOKING_PATHS, formatMoney } from '@barbercue/shared';
 import type { BookingDetailDto, PaginatedResult } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { openDirections } from '../lib/booking-actions';
+import { dateLocaleFor } from '../lib/date-locale';
 import { useRebook } from '../lib/use-rebook';
 import { useLanguage } from '../lib/language-context';
-import { color, font, fontSize, radius, space } from '../lib/theme';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Skeleton, EmptyState, InlineError, Button } from '../components/ui';
 import type { UiStrings } from '@barbercue/shared';
 import type { BookingsStackParamList } from '../navigation/types';
@@ -56,7 +57,7 @@ function BookingCard({
   onRebook: () => void;
   rebooking: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const date = new Date(booking.slotStart);
   return (
     <Pressable style={styles.card} onPress={onPress}>
@@ -73,8 +74,8 @@ function BookingCard({
 
       <Text style={styles.cardSalon}>{booking.salonName}</Text>
       <Text style={styles.cardMeta}>
-        {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} ·{' '}
-        {date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+        {date.toLocaleDateString(dateLocaleFor(language), { weekday: 'short', month: 'short', day: 'numeric' })} ·{' '}
+        {date.toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
       </Text>
 
       {booking.preferredStaffName && <Text style={styles.cardMeta}>{t.barberPrefix}{booking.preferredStaffName}</Text>}
@@ -201,12 +202,12 @@ const styles = StyleSheet.create({
     marginBottom: space[3],
   },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space[2] },
-  cardTitle: { flex: 1, fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
-  statusPill: { paddingVertical: 3, paddingHorizontal: space[2], borderRadius: radius.pill },
-  statusPillText: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' },
-  cardSalon: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink, marginTop: space[2] },
-  cardMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
-  cardMetaWarn: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.accent, marginTop: 2 },
+  cardTitle: { flex: 1, fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink },
+  statusPill: { minHeight: 22, justifyContent: 'center', paddingVertical: 3, paddingHorizontal: space[2], borderRadius: radius.pill },
+  statusPillText: { fontFamily: font.bodyBold, fontSize: 10, lineHeight: lineHeightFor(10), letterSpacing: 0.4, textTransform: 'uppercase' },
+  cardSalon: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink, marginTop: space[2] },
+  cardMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted, marginTop: 2 },
+  cardMetaWarn: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.accent, marginTop: 2 },
   quickActionsRow: { flexDirection: 'row', gap: space[2], marginTop: space[3] },
   quickActionButton: {
     flex: 1,

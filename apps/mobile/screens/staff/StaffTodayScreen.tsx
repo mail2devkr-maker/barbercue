@@ -7,7 +7,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { useUnreadNotificationCount } from '../../lib/notifications';
 import { useLanguage } from '../../lib/language-context';
-import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
 import type { StaffTabParamList } from '../../navigation/StaffNavigator';
@@ -162,9 +162,18 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   skeleton: { height: 140, borderRadius: radius.lg },
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
-  pickerChip: { paddingVertical: space[2], paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: color.border },
+  pickerChip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: space[2],
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
   pickerChipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
-  pickerChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted },
+  pickerChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted },
   pickerChipTextActive: { color: color.accent },
   selfCard: {
     flexDirection: 'row',

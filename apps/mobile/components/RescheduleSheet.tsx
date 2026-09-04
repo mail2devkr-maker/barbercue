@@ -6,23 +6,26 @@ import {
   SALON_BOOKING_INFO_PATHS,
   type AvailabilitySlotDto,
   type BookingDetailDto,
+  type Language,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { dateLocaleFor } from '../lib/date-locale';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useLanguage } from '../lib/language-context';
-import { color, font, fontSize, radius, space } from '../lib/theme';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Button, Card, InlineError } from './ui';
 
 const DAYS_AHEAD = 14;
 
-function nextDays(): { date: string; label: string }[] {
+function nextDays(language: Language): { date: string; label: string }[] {
   const result: { date: string; label: string }[] = [];
+  const locale = dateLocaleFor(language);
   for (let i = 0; i < DAYS_AHEAD; i++) {
     const d = new Date();
     d.setDate(d.getDate() + i);
     result.push({
       date: d.toISOString().slice(0, 10),
-      label: d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }),
+      label: d.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' }),
     });
   }
   return result;
@@ -40,14 +43,14 @@ export function RescheduleSheet({
   onRescheduled: (updated: BookingDetailDto) => void;
   onClose: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
   const [slots, setSlots] = useState<AvailabilitySlotDto[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const days = nextDays();
+  const days = nextDays(language);
 
   useEffect(() => {
     if (!selectedDate) return;
@@ -110,7 +113,7 @@ export function RescheduleSheet({
     <Card style={styles.card}>
       <Text style={styles.title}>{t.rescheduleBookingTitle}</Text>
       <Text style={styles.subtitle}>
-        {t.currentlyPrefix}{new Date(booking.slotStart).toLocaleString()}
+        {t.currentlyPrefix}{new Date(booking.slotStart).toLocaleString(dateLocaleFor(language))}
       </Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
@@ -153,7 +156,7 @@ export function RescheduleSheet({
                       selectedSlot?.slotStart === slot.slotStart && styles.slotChipTextActive,
                     ]}
                   >
-                    {new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(slot.slotStart).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </Pressable>
               ))}
@@ -179,10 +182,13 @@ export function RescheduleSheet({
 
 const styles = StyleSheet.create({
   card: { marginTop: space[3] },
-  title: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, marginBottom: space[1] },
-  subtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted },
+  title: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink, marginBottom: space[1] },
+  subtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted },
   dateScroll: { marginTop: space[3] },
   dateChip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingVertical: space[2],
     paddingHorizontal: space[3],
     borderRadius: radius.pill,
@@ -191,14 +197,23 @@ const styles = StyleSheet.create({
     marginRight: space[2],
   },
   dateChipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
-  dateChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted },
+  dateChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted },
   dateChipTextActive: { color: color.accent },
   slotWrap: { marginTop: space[3] },
   slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
-  slotChip: { paddingVertical: space[2], paddingHorizontal: space[3], borderRadius: radius.sm, borderWidth: 1, borderColor: color.border },
+  slotChip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: space[2],
+    paddingHorizontal: space[3],
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
   slotChipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
   slotChipDisabled: { opacity: 0.4 },
-  slotChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.ink },
+  slotChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.ink },
   slotChipTextActive: { color: color.accent },
   actionsRow: { flexDirection: 'row', gap: space[3], marginTop: space[4] },
   actionButton: { flex: 1 },

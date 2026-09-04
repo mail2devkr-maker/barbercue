@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader } from '../components/ui';
+import { dateLocaleFor } from '../lib/date-locale';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 
@@ -11,13 +12,14 @@ type Props = NativeStackScreenProps<SearchStackParamList, 'DateSelect'>;
 const DAYS_AHEAD = 30;
 
 export default function DateSelectScreen({ route, navigation }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { operatingHours, ...rest } = route.params;
 
   // Client-side convenience only, same as apps/web's DateStep — the server's availability
   // endpoint is the sole authority on what's actually bookable.
   const days = useMemo(() => {
     const result: { date: string; label: string; closed: boolean }[] = [];
+    const locale = dateLocaleFor(language);
     for (let i = 0; i < DAYS_AHEAD; i++) {
       const d = new Date();
       d.setDate(d.getDate() + i);
@@ -25,12 +27,12 @@ export default function DateSelectScreen({ route, navigation }: Props) {
       const hours = operatingHours.find((h) => h.dayOfWeek === d.getDay());
       result.push({
         date: iso,
-        label: d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }),
+        label: d.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' }),
         closed: !hours || hours.isClosed,
       });
     }
     return result;
-  }, [operatingHours]);
+  }, [operatingHours, language]);
 
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>

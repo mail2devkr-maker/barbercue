@@ -15,6 +15,7 @@ import type {
   QueueEntryDetailDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { dateLocaleFor } from '../lib/date-locale';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { openDirections, openWhatsappShare, salonPageUrl, shareSalon } from '../lib/booking-actions';
 import { useRebook } from '../lib/use-rebook';
@@ -48,7 +49,7 @@ function statusColor(status: string): string {
 
 export default function BookingDetailScreen({ route }: Props) {
   const { bookingId } = route.params;
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { rebook, rebookingId, rebookError } = useRebook();
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
@@ -199,11 +200,11 @@ export default function BookingDetailScreen({ route }: Props) {
       <Card style={styles.card}>
         <Text style={[styles.status, { color: statusColor(booking.status) }]}>{t.statusLabelPrefix}{booking.status}</Text>
         <Text style={styles.line}>
-          {new Date(booking.slotStart).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+          {new Date(booking.slotStart).toLocaleDateString(dateLocaleFor(language), { weekday: 'long', month: 'long', day: 'numeric' })}
         </Text>
         <Text style={styles.line}>
-          {new Date(booking.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} –{' '}
-          {new Date(booking.slotEnd).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          {new Date(booking.slotStart).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })} –{' '}
+          {new Date(booking.slotEnd).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
           {` (${booking.serviceDurationMinutes} ${t.minutesAbbrev})`}
         </Text>
         <Text style={styles.line}>{formatMoney(booking.servicePrice, booking.currency)}</Text>

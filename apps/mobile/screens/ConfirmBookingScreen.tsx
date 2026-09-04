@@ -6,6 +6,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { BOOKING_PATHS, DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
 import type { BookingDetailDto, CancellationPolicyDto, UiStrings } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { dateLocaleFor } from '../lib/date-locale';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
@@ -46,7 +47,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { status } = useAuth();
 
   useEffect(() => {
@@ -92,9 +93,9 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
         <SectionHeader eyebrow={t.confirmedEyebrow} title={t.bookingConfirmedTitle} />
         <Card style={styles.card}>
           <Text style={styles.line}>
-            {booking.serviceName} at {booking.salonName}
+            {booking.serviceName}{t.atConnector}{booking.salonName}
           </Text>
-          <Text style={styles.line}>{new Date(booking.slotStart).toLocaleString()}</Text>
+          <Text style={styles.line}>{new Date(booking.slotStart).toLocaleString(dateLocaleFor(language))}</Text>
           {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
           <Text style={styles.status}>{t.statusLabelPrefix}{booking.status}</Text>
         </Card>
@@ -118,11 +119,11 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
       <SectionHeader eyebrow={t.bookingTitle} title={t.confirmBookingTitle} />
       <Card style={styles.card}>
         <Text style={styles.line}>
-          {serviceName} at {salonName}
+          {serviceName}{t.atConnector}{salonName}
         </Text>
         <Text style={styles.line}>
-          {new Date(slotStart).toLocaleString()} –{' '}
-          {new Date(slotEnd).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          {new Date(slotStart).toLocaleString(dateLocaleFor(language))} –{' '}
+          {new Date(slotEnd).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
         </Text>
         {preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{preferredStaffName}</Text>}
         {selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{selectedStyleName}</Text>}

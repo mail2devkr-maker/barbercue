@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { color, font, fontSize, space } from '../../lib/theme';
+import { color, font, fontSize, lineHeightFor, space } from '../../lib/theme';
 
 interface SectionHeaderProps {
   eyebrow?: string;
@@ -24,11 +24,18 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontFamily: font.bodyBold,
     fontSize: 11,
+    lineHeight: lineHeightFor(11),
     letterSpacing: 2,
     textTransform: 'uppercase',
     color: color.gold,
     marginBottom: space[1],
   },
-  title: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, color: color.ink },
-  subtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 20, color: color.muted, marginTop: space[1] },
+  title: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, lineHeight: lineHeightFor(fontSize.xl), color: color.ink },
+  subtitle: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeightFor(fontSize.sm),
+    color: color.muted,
+    marginTop: space[1],
+  },
 });

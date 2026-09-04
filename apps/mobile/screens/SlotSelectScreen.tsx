@@ -5,7 +5,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
 import type { AvailabilitySlotDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import { color, font, fontSize, radius, space } from '../lib/theme';
+import { dateLocaleFor } from '../lib/date-locale';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Skeleton, InlineError, EmptyState } from '../components/ui';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
@@ -13,7 +14,7 @@ import type { SearchStackParamList } from '../navigation/types';
 type Props = NativeStackScreenProps<SearchStackParamList, 'SlotSelect'>;
 
 export default function SlotSelectScreen({ route, navigation }: Props) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { salonId, serviceId, preferredStaffId, date, ...rest } = route.params;
   const [slots, setSlots] = useState<AvailabilitySlotDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,7 +77,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
                   disabled={occupied}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: occupied }}
-                  accessibilityLabel={`${new Date(item.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}, ${occupied ? t.occupiedWord : t.availableWord}`}
+                  accessibilityLabel={`${new Date(item.slotStart).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}, ${occupied ? t.occupiedWord : t.availableWord}`}
                   onPress={() =>
                     navigation.navigate('ConfirmBooking', {
                       salonId,
@@ -89,7 +90,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
                   }
                 >
                   <Text style={[styles.slotText, occupied && styles.slotTextOccupied]}>
-                    {new Date(item.slotStart).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(item.slotStart).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </Pressable>
               );
@@ -106,17 +107,19 @@ const styles = StyleSheet.create({
   skeletonRow: { height: 44, borderRadius: radius.sm, marginBottom: space[2] },
   listContent: { paddingTop: space[2] },
   slot: {
+    minHeight: 44,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.sm,
     paddingVertical: space[3],
     alignItems: 'center',
+    justifyContent: 'center',
     flex: 1,
     margin: space[1],
   },
   slotAvailable: { backgroundColor: color.surface },
   slotOccupied: { backgroundColor: color.ink, borderColor: color.ink },
-  slotText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
+  slotText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.ink },
   slotTextOccupied: { color: '#ffffff' },
   legend: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
   legendAvailable: { color: color.muted },

@@ -6,7 +6,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useLanguage } from '../../lib/language-context';
-import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Card, Button, EmptyState, Skeleton, InlineError } from '../ui';
 import type { UiStrings } from '@barbercue/shared';
 
@@ -240,17 +240,39 @@ const styles = StyleSheet.create({
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },
   entryCard: { marginBottom: space[3] },
   entryHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  token: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink },
-  statusBadge: { fontFamily: font.bodyBold, fontSize: 11, letterSpacing: 0.5, color: color.gold, textTransform: 'uppercase' },
-  meta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: space[1] },
+  token: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, lineHeight: lineHeightFor(fontSize.lg), color: color.ink },
+  statusBadge: {
+    fontFamily: font.bodyBold,
+    fontSize: 11,
+    lineHeight: lineHeightFor(11),
+    letterSpacing: 0.5,
+    color: color.gold,
+    textTransform: 'uppercase',
+  },
+  meta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted, marginTop: space[1] },
   actionRow: { flexDirection: 'row', gap: space[2], marginTop: space[3] },
   actionButton: { flex: 1 },
   fullButton: { marginTop: space[3] },
   assignPanel: { marginTop: space[3] },
-  assignLabel: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink, marginBottom: space[2] },
+  assignLabel: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeightFor(fontSize.xs),
+    color: color.ink,
+    marginBottom: space[2],
+  },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[3] },
-  chip: { paddingVertical: space[2], paddingHorizontal: space[3], borderRadius: radius.pill, borderWidth: 1, borderColor: color.border },
+  chip: {
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: space[2],
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.border,
+  },
   chipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
-  chipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted },
+  chipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted },
   chipTextActive: { color: color.accent },
 });

@@ -14,9 +14,10 @@ import {
   type PremiumEntitlementDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
+import { dateLocaleFor } from '../lib/date-locale';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
-import { color, font, fontSize, radius, space } from '../lib/theme';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button } from '../components/ui';
 import { InlineError } from '../components/ui/ErrorState';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
@@ -189,7 +190,7 @@ export default function AccountScreen() {
                     </View>
                   )}
                 </View>
-                <Text style={styles.sessionMeta}>{t.signedInOnPrefix}{new Date(session.createdAt).toLocaleDateString()}</Text>
+                <Text style={styles.sessionMeta}>{t.signedInOnPrefix}{new Date(session.createdAt).toLocaleDateString(dateLocaleFor(language))}</Text>
               </View>
               {!session.current && (
                 <Pressable onPress={() => void revokeSession(session.id)} disabled={revokingId === session.id || revokingOthers}>
@@ -230,11 +231,14 @@ const styles = StyleSheet.create({
     borderBottomColor: color.border,
   },
   fieldRowLast: { borderBottomWidth: 0, paddingBottom: 0 },
-  fieldLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.muted },
-  fieldValue: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  fieldLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted },
+  fieldValue: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
 
   languageRow: { flexDirection: 'row', gap: space[2], marginTop: space[2] },
   languagePill: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: radius.pill,
@@ -242,7 +246,7 @@ const styles = StyleSheet.create({
     paddingVertical: space[2],
   },
   languagePillActive: { backgroundColor: color.ink, borderColor: color.ink },
-  languagePillText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  languagePillText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
   languagePillTextActive: { color: color.accentContrast },
 
   shortcutGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[3], marginBottom: space[4] },
@@ -257,8 +261,14 @@ const styles = StyleSheet.create({
     minHeight: 64,
     justifyContent: 'center',
   },
-  shortcutTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
-  shortcutMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
+  shortcutTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
+  shortcutMeta: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeightFor(fontSize.xs),
+    color: color.muted,
+    marginTop: space[1],
+  },
 
   sessionsLoading: { marginVertical: space[2] },
   sessionRow: {
@@ -272,8 +282,22 @@ const styles = StyleSheet.create({
   sessionInfo: { flex: 1, marginRight: space[3] },
   sessionDeviceRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space[2] },
   sessionDevice: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
-  currentBadge: { backgroundColor: color.goldSoft, borderRadius: radius.pill, paddingHorizontal: space[2], paddingVertical: 2 },
-  currentBadgeText: { fontFamily: font.bodyBold, fontSize: 10, color: color.gold, textTransform: 'uppercase', letterSpacing: 0.5 },
+  currentBadge: {
+    minHeight: 20,
+    justifyContent: 'center',
+    backgroundColor: color.goldSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: space[2],
+    paddingVertical: 2,
+  },
+  currentBadgeText: {
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    lineHeight: lineHeightFor(10),
+    color: color.gold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   sessionMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
   revokeText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.accent },
   noteText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted },

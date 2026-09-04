@@ -3,20 +3,22 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BOOKING_PATHS,
   QUEUE_ENTRIES_PATH,
   formatMoney,
   type BookingDetailDto,
+  type Language,
   type PaginatedResult,
   type QueueEntryDetailDto,
 } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
+import { dateLocaleFor } from '../lib/date-locale';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Card, Button, Skeleton, NotificationBell, LanguageSwitcher } from '../components/ui';
+import { Screen, SectionHeader, Card, Button, Skeleton, NotificationBell, LanguageSwitcher, SafeImage } from '../components/ui';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
 
@@ -27,8 +29,8 @@ type Props = CompositeScreenProps<
 
 const ACTIVE_QUEUE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
-function formatSlot(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+function formatSlot(iso: string, language: Language): string {
+  return new Date(iso).toLocaleString(dateLocaleFor(language), {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -43,7 +45,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [activeQueueEntry, setActiveQueueEntry] = useState<QueueEntryDetailDto | null>(null);
   const [upcomingBooking, setUpcomingBooking] = useState<BookingDetailDto | null>(null);
   const unreadCount = useUnreadNotificationCount();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
@@ -123,7 +125,7 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.statusEyebrow}>{t.upcomingBookingLabel}</Text>
               <Text style={styles.statusTitle}>{upcomingBooking.serviceName}</Text>
               <Text style={styles.statusMeta}>
-                {upcomingBooking.salonName} · {formatSlot(upcomingBooking.slotStart)}
+                {upcomingBooking.salonName} · {formatSlot(upcomingBooking.slotStart, language)}
               </Text>
               <Text style={styles.statusMeta}>{formatMoney(upcomingBooking.servicePrice, upcomingBooking.currency)}</Text>
               <Button
@@ -145,7 +147,7 @@ export default function HomeScreen({ navigation }: Props) {
           imagery of an actual salon. */}
       <View style={styles.choiceRow}>
         <Pressable style={styles.choiceCard} onPress={goFindSalon}>
-          <Image source={{ uri: EDITORIAL_ASSET_URL.heroBand }} style={styles.choicePhoto} />
+          <SafeImage url={EDITORIAL_ASSET_URL.heroBand} alt={t.reserveChair} style={styles.choicePhoto} />
           <View style={styles.choiceBody}>
             <Text style={styles.choiceKicker}>{t.bookAheadKicker}</Text>
             <Text style={styles.choiceTitle}>{t.reserveChair}</Text>
@@ -153,7 +155,7 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         </Pressable>
         <Pressable style={styles.choiceCard} onPress={goFindSalon}>
-          <Image source={{ uri: EDITORIAL_ASSET_URL.hairFlagship }} style={styles.choicePhoto} />
+          <SafeImage url={EDITORIAL_ASSET_URL.hairFlagship} alt={t.skipTheWait} style={styles.choicePhoto} />
           <View style={styles.choiceBody}>
             <Text style={[styles.choiceKicker, styles.choiceKickerAccent]}>{t.joinLiveKicker}</Text>
             <Text style={styles.choiceTitle}>{t.skipTheWait}</Text>

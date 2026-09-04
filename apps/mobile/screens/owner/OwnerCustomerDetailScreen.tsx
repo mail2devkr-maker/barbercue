@@ -7,13 +7,15 @@ import {
   NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT,
   formatMoney,
   type CustomerLedgerEntryDto,
+  type Language,
   type LedgerActionResultDto,
   type OwnerCustomerSummaryDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
+import { dateLocaleFor } from '../../lib/date-locale';
 import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
-import { color, font, fontSize, space } from '../../lib/theme';
+import { color, font, fontSize, lineHeightFor, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, Skeleton, InlineError } from '../../components/ui';
 import type { UiStrings } from '@barbercue/shared';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
@@ -34,9 +36,9 @@ function ledgerActionPath(salonId: string, customerId: string, ledgerEntryId: st
   return `${customerPath(salonId, customerId)}/${DASHBOARD_PATHS.ledger}/${ledgerEntryId}/${verb}`;
 }
 
-function formatDate(iso: string | null): string {
+function formatDate(iso: string | null, language: Language): string {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(dateLocaleFor(language), { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function reasonLabel(t: UiStrings, reason: string): string {
@@ -52,7 +54,7 @@ function reasonLabel(t: UiStrings, reason: string): string {
 export default function OwnerCustomerDetailScreen({ route }: Props) {
   const { customerId } = route.params;
   const { selectedSalonId } = useSalon();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [summary, setSummary] = useState<OwnerCustomerSummaryDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,9 +168,9 @@ export default function OwnerCustomerDetailScreen({ route }: Props) {
               </View>
               <Text style={styles.dueMeta}>
                 {entry.bookingServiceName ? `${entry.bookingServiceName} · ` : ''}
-                {entry.bookingSlotStart ? formatDate(entry.bookingSlotStart) : t.noRelatedBooking}
+                {entry.bookingSlotStart ? formatDate(entry.bookingSlotStart, language) : t.noRelatedBooking}
               </Text>
-              <Text style={styles.dueMeta}>{t.recordedPrefix}{formatDate(entry.createdAt)}</Text>
+              <Text style={styles.dueMeta}>{t.recordedPrefix}{formatDate(entry.createdAt, language)}</Text>
               {entry.status === 'OUTSTANDING' && entry.reason === 'NO_SHOW_CHARGE' && (
                 <Button
                   title={t.waiveNoShowDueAction}
@@ -228,7 +230,16 @@ const styles = StyleSheet.create({
   dueCard: { marginBottom: space[3] },
   dueHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   dueTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink, flex: 1, paddingRight: space[2] },
-  statusBadge: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase', paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999 },
+  statusBadge: {
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    lineHeight: lineHeightFor(10),
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+  },
   statusOutstanding: { color: '#8a5a00', backgroundColor: color.goldSoft },
   statusWaived: { color: color.muted, backgroundColor: '#f1ede2' },
   dueMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },

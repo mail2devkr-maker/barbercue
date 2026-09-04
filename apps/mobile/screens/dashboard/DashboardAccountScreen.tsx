@@ -1,19 +1,23 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { AUTH_PATHS, Role, type AuthSession } from '@barbercue/shared';
+import { AUTH_PATHS, Role, type AuthSession, type UiStrings } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
+import { dateLocaleFor } from '../../lib/date-locale';
 import { useAuth } from '../../lib/auth-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, LanguageSwitcher } from '../../components/ui';
 
-const ROLE_LABELS: Record<string, string> = {
-  [Role.CUSTOMER]: 'Customer',
-  [Role.SALON_STAFF]: 'Salon Staff',
-  [Role.SALON_OWNER]: 'Salon Owner',
-  [Role.PLATFORM_ADMIN]: 'Platform Admin',
-};
+function roleLabel(t: UiStrings, role: string): string {
+  const labels: Record<string, string> = {
+    [Role.CUSTOMER]: t.roleCustomerLabel,
+    [Role.SALON_STAFF]: t.roleStaffLabel,
+    [Role.SALON_OWNER]: t.roleOwnerLabel,
+    [Role.PLATFORM_ADMIN]: t.roleAdminLabel,
+  };
+  return labels[role] ?? role;
+}
 
 // Same read-only auth/me + auth/sessions pattern as the customer AccountScreen — MeResponse and
 // the sessions endpoints are role-agnostic, so this is genuinely the same account underneath.
@@ -25,7 +29,7 @@ const ROLE_LABELS: Record<string, string> = {
 // correctly reading user.preferredLanguage, it just could never become anything but the default.
 export default function DashboardAccountScreen() {
   const { user, logout } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -80,7 +84,7 @@ export default function DashboardAccountScreen() {
         </View>
         <View style={[styles.fieldRow, styles.fieldRowLast]}>
           <Text style={styles.fieldLabel}>{t.accountType}</Text>
-          <Text style={styles.fieldValue}>{user?.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ') ?? '—'}</Text>
+          <Text style={styles.fieldValue}>{user?.roles.map((r) => roleLabel(t, r)).join(', ') ?? '—'}</Text>
         </View>
       </Card>
 
@@ -94,7 +98,7 @@ export default function DashboardAccountScreen() {
                 <Text style={styles.sessionDevice}>
                   {session.deviceInfo ?? t.unknownDevice} {session.current ? `(${t.thisDevice})` : ''}
                 </Text>
-                <Text style={styles.sessionMeta}>{t.signedInOnPrefix}{new Date(session.createdAt).toLocaleDateString()}</Text>
+                <Text style={styles.sessionMeta}>{t.signedInOnPrefix}{new Date(session.createdAt).toLocaleDateString(dateLocaleFor(language))}</Text>
               </View>
               {!session.current && (
                 <Pressable onPress={() => void revokeSession(session.id)} disabled={revokingId === session.id}>

@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
-import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 
 type Variant = 'primary' | 'secondary' | 'outline';
 
@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
   },
   disabled: { opacity: 0.55 },
-  text: { fontFamily: font.bodyBold, fontSize: fontSize.base },
+  text: { fontFamily: font.bodyBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base) },
 });
 
 const variantStyles = StyleSheet.create({
