@@ -5,6 +5,7 @@ import Link from "next/link";
 import { NOTIFICATION_PATHS } from "@barbercue/shared";
 import type { NotificationDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
+import styles from "./notification-bell.module.css";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -141,13 +142,8 @@ export function NotificationBell() {
       {open && (
         <div
           role="menu"
+          className={styles.panel}
           style={{
-            position: "absolute",
-            right: 0,
-            top: 44,
-            width: 320,
-            maxHeight: 420,
-            overflowY: "auto",
             background: "var(--bc-surface)",
             border: "1px solid var(--bc-border)",
             borderRadius: "var(--bc-radius-md)",

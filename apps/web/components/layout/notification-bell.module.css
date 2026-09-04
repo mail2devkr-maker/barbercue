@@ -1,0 +1,29 @@
+/* The dropdown panel's positioning only, extracted out of NotificationBell.tsx's inline styles —
+   everything else in that component stays inline, unchanged. Needed because inline React style
+   objects can't express a media query, and the bell isn't always near the header's right edge
+   (CustomerHeader places it left of the account menu), so a fixed-width panel anchored `right: 0`
+   to the bell's own small button can run most of its width off the LEFT edge of a narrow phone
+   screen — confirmed from a physical-device screenshot: only a ~120px sliver of the panel was
+   visible, clipped by globals.css's `overflow-x: hidden`, with page content still readable behind
+   it. Below the breakpoint the panel switches from "anchored to the bell" to "anchored to the
+   viewport" (position: fixed, inset from both edges), so its position no longer depends on where
+   in the header the bell happens to sit. */
+.panel {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  width: 320px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: 72px;
+    width: auto;
+    max-height: calc(100vh - 96px);
+  }
+}

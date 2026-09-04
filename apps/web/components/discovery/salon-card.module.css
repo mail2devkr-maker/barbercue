@@ -53,13 +53,20 @@
   border-radius: 3px;
 }
 
+/* A real shop name/address on a 2-column mobile card (~169px) has nowhere near enough room on one
+   line — single-line white-space:nowrap + ellipsis was truncating ordinary names down to 3-4
+   letters ("Han…" for "Handsome Center"). A 2-line clamp gives real text room to actually read
+   before anything gets cut. -webkit-line-clamp is supported by every browser this app targets
+   (Chrome/Safari/Firefox/Edge, including mobile) despite the vendor prefix. */
 .name {
   overflow: hidden;
   margin: 0;
   color: var(--bc-ink);
   font-size: 1.3rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.18;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .address {
@@ -67,8 +74,10 @@
   margin: 5px 0 0;
   color: var(--bc-muted);
   font-size: var(--bc-text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .rating {
