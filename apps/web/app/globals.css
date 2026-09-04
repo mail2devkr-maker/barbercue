@@ -67,6 +67,15 @@
 html {
   height: 100%;
   color-scheme: light;
+  /* Android Chrome auto-inflates font sizes in narrow text columns ("font boosting") as a
+     readability heuristic — invisible to any desktop-based emulator/testing tool, since it's a
+     real-device-only behavior, but consistent with what physical-device video evidence has shown
+     repeatedly: text and headings rendering larger, and less predictably, than their actual CSS
+     font-size on real phones. This is the standard, documented opt-out — every font-size on this
+     site is already deliberately chosen and responsive; the browser guessing a different one on
+     top of that is what should be disabled, not any of our own sizing. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,

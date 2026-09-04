@@ -78,7 +78,12 @@
     height: 30px;
   }
 
+  /* Physical retest: this link is `white-space: nowrap; flex-shrink: 0` — on a phone it has
+     nowhere near enough room next to the wordmark and the notification bell, so it forced the
+     whole header row (and everything downstream sized relative to the resulting overflow) wider
+     than the viewport. Hiding it here loses no reachable action: the "FastQue" wordmark right next
+     to it already links to "/", the exact same destination. */
   .publicLink {
-    font-size: 0.78rem;
+    display: none;
   }
 }
