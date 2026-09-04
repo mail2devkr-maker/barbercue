@@ -98,6 +98,7 @@ describe('BookingsService', () => {
   };
   let pushDispatch: {
     dispatchToUser: jest.Mock<Promise<void>, [string, unknown]>;
+    dispatchLocalizedToUser: jest.Mock<Promise<void>, [string, string, string | null, Record<string, unknown>]>;
   };
   let queueService: {
     recomputeEtas: jest.Mock<Promise<void>, [string]>;
@@ -146,6 +147,7 @@ describe('BookingsService', () => {
         .mockResolvedValue({
           id: 'sv1',
           salonId: 's1',
+          name: 'Haircut',
           durationMinutes: 30,
           price: decimal('300'),
         }),
@@ -172,7 +174,10 @@ describe('BookingsService', () => {
       emitQueueUpdated: jest.fn(),
     };
     notifications = { notify: jest.fn().mockResolvedValue(undefined) };
-    pushDispatch = { dispatchToUser: jest.fn().mockResolvedValue(undefined) };
+    pushDispatch = {
+      dispatchToUser: jest.fn().mockResolvedValue(undefined),
+      dispatchLocalizedToUser: jest.fn().mockResolvedValue(undefined),
+    };
     queueService = { recomputeEtas: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
@@ -451,23 +456,25 @@ describe('BookingsService', () => {
       expect(realtime.emitBookingCreated).toHaveBeenCalledWith('s1', 'b1');
     });
 
-    it('dispatches a push to the salon owner exactly once after a successful create, with an ids-only payload (no customer PII)', async () => {
+    it('dispatches a localized push to the salon owner exactly once after a successful create, with an ids-only data payload (no customer PII)', async () => {
       await service.create(
         'c1',
         { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
         BookingSource.WEB,
         'key-1',
       );
-      expect(pushDispatch.dispatchToUser).toHaveBeenCalledTimes(1);
-      const [userId, payload] = pushDispatch.dispatchToUser.mock.calls[0] as [
+      expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledTimes(1);
+      const [userId, kind, serviceName, data] = pushDispatch.dispatchLocalizedToUser.mock.calls[0] as [
         string,
-        { title: string; body: string; data?: Record<string, unknown> },
+        string,
+        string | null,
+        Record<string, unknown>,
       ];
       expect(userId).toBe('owner1');
-      expect(payload.title).toBeTruthy();
-      expect(payload.body).toContain('booked for your shop');
-      expect(JSON.stringify(payload)).not.toMatch(/c1|customer|phone|email/i);
-      expect(payload.data).toEqual({
+      expect(kind).toBe('newBooking');
+      expect(serviceName).toBeTruthy();
+      expect(JSON.stringify({ userId, serviceName, data })).not.toMatch(/c1|customer|phone|email/i);
+      expect(data).toEqual({
         type: 'booking.created',
         salonId: 's1',
         bookingId: 'b1',
@@ -563,6 +570,40 @@ describe('BookingsService', () => {
       expect(prisma.customerLedgerEntry.create).not.toHaveBeenCalled();
       expect(prisma.auditLog.create).toHaveBeenCalled();
       expect(realtime.emitBookingCancelled).toHaveBeenCalledWith('s1', 'b1');
+    });
+
+    // Build 9 physical-device regression: cancellation previously dispatched NO push at all (only
+    // creation did), so a backgrounded/terminated owner had no way to learn of a cancellation
+    // except reopening the app — this closes that asymmetry.
+    it('dispatches a localized push to the salon owner after a successful cancellation, with an ids-only data payload', async () => {
+      const farSlot = new Date(Date.now() + 120 * 60_000);
+      prisma.booking.findFirst.mockResolvedValue(makeBookingRow({ slotStart: farSlot }));
+      prisma.booking.update.mockResolvedValue(makeBookingRow({ slotStart: farSlot, status: 'CANCELLED' }));
+      cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+        salonId: 's1',
+        freeCancellationWindowMinutes: 60,
+        lateCancellationChargeType: 'PERCENTAGE',
+        lateCancellationChargeValue: 50,
+        noShowChargeType: 'PERCENTAGE',
+        noShowChargeValue: 100,
+        appointmentArrivalGraceMinutes: 10,
+        queueCallResponseGraceMinutes: 3,
+      });
+
+      await service.cancel('c1', 'b1');
+
+      expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledTimes(1);
+      const [userId, kind, serviceName, data] = pushDispatch.dispatchLocalizedToUser.mock.calls[0] as [
+        string,
+        string,
+        string | null,
+        Record<string, unknown>,
+      ];
+      expect(userId).toBe('owner1');
+      expect(kind).toBe('bookingCancelled');
+      expect(serviceName).toBeTruthy();
+      expect(JSON.stringify({ userId, serviceName, data })).not.toMatch(/c1|customer|phone|email/i);
+      expect(data).toEqual({ type: 'booking.cancelled', salonId: 's1', bookingId: 'b1' });
     });
 
     it('charges the late-cancellation percentage and creates an OUTSTANDING ledger entry outside the free window', async () => {

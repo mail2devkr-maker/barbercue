@@ -297,12 +297,14 @@ export class BookingsService {
     // #13 Mission L). Fire-and-forget: PushDispatchService never throws, so this can never turn a
     // successful booking into a failed request, and this call site only runs once per genuine
     // creation (the controller's @Idempotent() replays a retried request's cached response
-    // without re-invoking this method at all).
-    void this.pushDispatch.dispatchToUser(salon.ownerUserId, {
-      title: 'New booking',
-      body: `${service.name} booked for your shop.`,
-      data: { type: 'booking.created', salonId: input.salonId, bookingId },
-    });
+    // without re-invoking this method at all). Localized to the owner's own preferredLanguage —
+    // see dispatchLocalizedToUser's own doc comment for the Build 9 defect this closes.
+    void this.pushDispatch.dispatchLocalizedToUser(
+      salon.ownerUserId,
+      'newBooking',
+      service.name,
+      { type: 'booking.created', salonId: input.salonId, bookingId },
+    );
 
     return this.getDetailOrThrow(bookingId, customerId);
   }
@@ -457,6 +459,16 @@ export class BookingsService {
       'owner.booking.cancelled',
       { salonId: updated.salonId, bookingId },
       `dashboard/salons/${updated.salonId}/bookings`,
+    );
+    // Real OS push, same rationale and fire-and-forget contract as create()'s own push — this was
+    // previously MISSING entirely for cancellation (only creation dispatched one), so a
+    // backgrounded/terminated owner had no way to learn of a cancellation except reopening the
+    // app. Localized to the owner's own preferredLanguage, same as the created push.
+    void this.pushDispatch.dispatchLocalizedToUser(
+      updated.salon.ownerUserId,
+      'bookingCancelled',
+      updated.service.name,
+      { type: 'booking.cancelled', salonId: updated.salonId, bookingId },
     );
 
     return {

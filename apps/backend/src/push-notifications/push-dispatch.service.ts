@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { PushDevice } from '@prisma/client';
+import { Language, pushCopyFor } from '@barbercue/shared';
+import { PrismaService } from '../prisma/prisma.service';
 import { PushDeviceService } from './push-device.service';
 import {
   ExpoPushSender,
@@ -27,7 +29,41 @@ export class PushDispatchService {
   constructor(
     private readonly devices: PushDeviceService,
     private readonly expo: ExpoPushSender,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Booking-lifecycle push, localized to the recipient's own preferredLanguage.
+   *
+   * Root-cause fix for a Build 9 physical-device defect: `dispatchToUser`'s title/body were
+   * previously built by the caller (bookings.service.ts) as hardcoded English literals, so an
+   * owner with Hindi selected still received an English push regardless. This method is the one
+   * place that decides push copy for a booking event, so bookings.service.ts's create() and
+   * cancel() call sites can never drift apart on how they localize (the same class of bug
+   * newBookingReceived/bookingCancelled's shared VoiceAnnouncements already prevents for speech).
+   *
+   * A missing/unset preferredLanguage — or this lookup itself failing — degrades to English via
+   * pushCopyFor's own fallback, never blocks the push.
+   */
+  async dispatchLocalizedToUser(
+    userId: string,
+    kind: 'newBooking' | 'bookingCancelled',
+    serviceName: string | null,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    let preferredLanguage: Language | null = null;
+    try {
+      const recipient = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { preferredLanguage: true },
+      });
+      preferredLanguage = recipient?.preferredLanguage ?? null;
+    } catch (err) {
+      this.logger.warn(`Could not load recipient language, defaulting to English push copy: ${errorMessage(err)}`);
+    }
+    const { title, body } = pushCopyFor(preferredLanguage)[kind](serviceName);
+    await this.dispatchToUser(userId, { title, body, data });
+  }
 
   /**
    * Fire-and-forget from the caller's perspective (see bookings.service.ts's call site: `void
