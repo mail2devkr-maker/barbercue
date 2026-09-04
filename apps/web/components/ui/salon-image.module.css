@@ -11,6 +11,14 @@
      actual column/cell width. min-width: 0 here is the standard, no-op-elsewhere fix: it only takes
      effect where .frame is itself a flex/grid item, and does nothing in normal block contexts. */
   min-width: 0;
+  /* Belt-and-suspenders after min-width: 0 alone didn't clear a real-device report (the "Cover
+     photo" preview elsewhere on the same page, which has an explicit maxWidth wrapper, rendered
+     correctly; this grid's photos, with no such cap, still overflowed). max-width: 100% is an
+     unconditional ceiling on .frame's own box — it can never render wider than its immediate
+     parent regardless of what any upstream grid/flex sizing computes it to be, which no-op'd fix
+     couldn't guarantee. Every existing caller already expects .frame to fill its container, not
+     exceed it, so this changes nothing for any use site that wasn't already overflowing. */
+  max-width: 100%;
   border: 1px solid var(--bc-border, #e7e0d3);
   background:
     radial-gradient(circle at 76% 20%, rgba(189, 142, 54, 0.16), transparent 30%),
