@@ -106,6 +106,22 @@ export const SPEECH_LOCALE: Readonly<Record<Language, string>> = {
   [Language.HI]: 'hi-IN',
 };
 
+/**
+ * BCP-47 tags for `Intl.DateTimeFormat`/`toLocaleDateString`/`toLocaleTimeString`/`toLocaleString`,
+ * driven by the app's own selected UI language — NOT `COUNTRY_LOCALE` in ../locale, which is a
+ * business's operating country (for number-grouping/currency) and has nothing to do with which
+ * language the viewer has chosen. Physical Build 10 retest found FastQue-generated weekday/month
+ * labels (e.g. booking slot times on Owner Bookings) still rendering in English while Hindi was
+ * selected, because every call site passed `undefined` as the locale argument — which resolves to
+ * the *device's* locale, not this app's language selection. Same values as SPEECH_LOCALE today,
+ * but named and documented for its own (date-formatting, not speech) call sites so the two don't
+ * have to be conceptually the same constant just because they happen to share values.
+ */
+export const DATE_LOCALE: Readonly<Record<Language, string>> = {
+  [Language.EN]: 'en-IN',
+  [Language.HI]: 'hi-IN',
+};
+
 /** Shown in the language switcher itself — each language's own name, in its own script. */
 export const LANGUAGE_LABELS: Readonly<Record<Language, string>> = {
   [Language.EN]: 'English',
@@ -704,6 +720,12 @@ export interface UiStrings {
   // Share-sheet text (lib/booking-actions.ts)
   shareBookingPrefix: string;
   shareBookingMiddle: string;
+
+  // Booking reference prefix (OwnerBookingsScreen card, "· Ref abcd1234")
+  bookingRefPrefix: string;
+
+  /** Connector for "{service} at {salon}" (ConfirmBookingScreen) — includes surrounding spaces. */
+  atConnector: string;
 }
 
 const enUi: UiStrings = {
@@ -1199,6 +1221,10 @@ const enUi: UiStrings = {
 
   shareBookingPrefix: 'Book at ',
   shareBookingMiddle: ' on FastQue: ',
+
+  bookingRefPrefix: 'Ref ',
+
+  atConnector: ' at ',
 };
 
 const hiUi: UiStrings = {
@@ -1694,6 +1720,10 @@ const hiUi: UiStrings = {
 
   shareBookingPrefix: 'यहां बुक करें ',
   shareBookingMiddle: ' FastQue पर: ',
+
+  bookingRefPrefix: 'संदर्भ ',
+
+  atConnector: ' में ',
 };
 
 export const UI_STRINGS: Readonly<Record<Language, UiStrings>> = {
