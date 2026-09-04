@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Work_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "../lib/auth-context";
@@ -31,6 +31,17 @@ export const metadata: Metadata = {
     template: "%s | FastQue",
   },
   description: "Find nearby barbershops, check the wait, and book your chair.",
+};
+
+// Build 12 physical retest: a real Android phone rendered the entire site with inverted colors —
+// dark backgrounds, light text, a black/red hero — despite globals.css's `html { color-scheme:
+// light }`. That CSS property alone isn't reliably honored by Android Chrome/WebView's automatic
+// "force dark" page-darkening heuristic; a `<meta name="color-scheme">` tag in <head> is the
+// documented, more broadly-respected opt-out. Next's `viewport` export is what renders that tag
+// (colorScheme here, not the `metadata` export above, which has no such field).
+export const viewport: Viewport = {
+  colorScheme: "light",
+  themeColor: "#fffdf9",
 };
 
 export default function RootLayout({
