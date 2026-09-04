@@ -492,6 +492,20 @@ export interface UiStrings {
   resendOtpAction: string;
   resendOtpInPrefix: string;
   resendOtpInSuffix: string;
+
+  // Small shared UI components (ErrorState, NotificationBell, PhotoGalleryViewer, OfflineBanner,
+  // PublicSalonStatus).
+  tryAgain: string;
+  unreadSuffix: string;
+  closePhotoGallery: string;
+  offlineMessage: string;
+  liveShopSnapshotLabel: string;
+  liveShopSnapshotEyebrow: string;
+  aChairWhenReady: string;
+  activeChairsSuffix: string;
+  waitingCountSuffix: string;
+  professionalAvailabilityHint: string;
+  aggregateCountsNote: string;
   cancellingWillChargePrefix: string;
   cancellingWillChargeSuffix: string;
   noChargeFreeWindow: string;
@@ -499,6 +513,197 @@ export interface UiStrings {
   minutesAbbrev: string;
   yearsExpAbbrev: string;
   yearsExperienceWord: string;
+  /** Sun..Sat, in display order — index by JS Date#getDay()/dayOfWeek (0=Sunday). */
+  dayAbbreviations: readonly [string, string, string, string, string, string, string];
+
+  // OwnerShopScreen sub-components (ServiceRow, AddServiceForm, ChairRow, AddChairForm,
+  // HoursEditor, AddStaffForm) — Manage Shop's remaining Save/Cancel/Add forms.
+  couldNotSaveService: string;
+  couldNotUpdateService: string;
+  couldNotAddService: string;
+  couldNotUpdateChair: string;
+  couldNotAddChair: string;
+  couldNotAddBarber: string;
+  servicePlaceholder: string;
+  pricePlaceholder: string;
+  minutesPlaceholder: string;
+  chairLabelPlaceholder: string;
+  barberNamePlaceholder: string;
+  emailOptionalPlaceholder: string;
+  inactiveSuffix: string;
+  invitePendingSuffix: string;
+  addAction: string;
+  reactivateAction: string;
+  invalidPhoneFormatHint: string;
+  openToggleLabel: string;
+  checkHoursPrefix: string;
+  checkHoursSuffix: string;
+  saveHoursAction: string;
+  couldNotSaveHours: string;
+  ownerEyebrow: string;
+
+  // OwnerCustomersScreen / OwnerCustomerDetailScreen.
+  segmentNew: string;
+  segmentRepeat: string;
+  segmentFrequent: string;
+  noContactOnFile: string;
+  couldNotLoadCustomer: string;
+  couldNotLoadCustomers: string;
+  customerNotFound: string;
+  customerSuffix: string;
+  outstandingBlockedPrefix: string;
+  outstandingBlockedSuffix: string;
+  duesTitle: string;
+  noDuesYet: string;
+  noShowDueReason: string;
+  cancellationChargeReason: string;
+  outstandingBadge: string;
+  waivedBadge: string;
+  noRelatedBooking: string;
+  recordedPrefix: string;
+  waiveNoShowDueAction: string;
+  restoreDueRowAction: string;
+  waiveConfirmPrefix: string;
+  waiveConfirmSuffix: string;
+  restoreConfirmPrefix: string;
+  restoreConfirmSuffix: string;
+  waiveDueAction: string;
+  restoreDueModalAction: string;
+  graceEligiblePrefix: string;
+  graceEligibleMiddle: string;
+  graceEligibleSuffix: string;
+  graceCompletedPrefix: string;
+  graceCompletedSuffix: string;
+  customersTitle: string;
+  customersSubtitle: string;
+  noCustomersYetTitle: string;
+  noCustomersYetHint: string;
+  outstandingSuffix: string;
+  couldNotWaiveDue: string;
+  couldNotRestoreDue: string;
+  chooseShopQueueHint: string;
+
+  // OwnerStaffLoginScreen / OwnerStaffPasswordRecoveryScreen.
+  signInToYourShop: string;
+  signInToWorkToday: string;
+  useYourDashboardAccount: string;
+  onlyWorksIfRegisteredOwner: string;
+  onlyWorksIfRegisteredStaff: string;
+  passwordLabel: string;
+  forgotPasswordQuestion: string;
+  enterValidEmailPassword: string;
+  couldNotSignIn: string;
+  enterValidEmail: string;
+  recoveryUnavailableNotice: string;
+  checkYourInboxTitle: string;
+  eligibleAccountPrefix: string;
+  eligibleAccountSuffix: string;
+  afterResetHint: string;
+  backToSignIn: string;
+  resetYourPasswordTitle: string;
+  enterEmailForAccountPrefix: string;
+  enterEmailForAccountSuffix: string;
+  roleLabelOwner: string;
+  roleLabelStaff: string;
+  sendResetLinkAction: string;
+  emailAddressAccessibilityLabel: string;
+
+  // CapacitySummaryPanel, LiveQueuePanel (owner dashboard widgets).
+  chairsFreeLabel: string;
+  barbersFreeLabel: string;
+  waitingLabel: string;
+  avgWaitLabel: string;
+  couldNotCompleteAction: string;
+  callAction: string;
+  assignAction: string;
+  noShowAction: string;
+  barberLabel: string;
+  chairLabel: string;
+  confirmAssignmentAction: string;
+  completeAction: string;
+  couldNotLoadQueue: string;
+  queueIsEmptyTitle: string;
+  queueIsEmptyHint: string;
+  statusCalledShort: string;
+
+  // Style Advisor screen (mobile)
+  photoLibraryAccessNeeded: string;
+  aiStylePreviewUnavailable: string;
+  aiStyleAdvisorPremiumTitle: string;
+  upgradeToPreviewHairstyles: string;
+  aiStyleAdvisorEyebrow: string;
+  outOfAiStyleCreditsTitle: string;
+  outOfAiStyleCreditsSubtitle: string;
+  yourLooksTitle: string;
+  aiStyleMatchDisclaimer: string;
+  aiStyleMatchPrefix: string;
+  aiStyleMatchSuffix: string;
+  tryThisLookAction: string;
+  previewYourNextLookTitle: string;
+  uploadPhotoPreviewSubtitle: string;
+  choosePhotoAction: string;
+  chooseDifferentPhotoAction: string;
+  aiCreditsRemainingPrefix: string;
+  analyzeMyPhotoAction: string;
+  photoNotStoredNote: string;
+
+  // Review panel (mobile)
+  yourReviewTitle: string;
+  shopsResponseLabel: string;
+  editReviewAction: string;
+  editYourReviewTitle: string;
+  leaveAReviewTitle: string;
+  optionalCommentPlaceholder: string;
+  savingEllipsis: string;
+  saveReviewAction: string;
+  submitReviewAction: string;
+  couldNotSaveReview: string;
+
+  // Reschedule sheet (mobile)
+  rescheduleBookingTitle: string;
+  currentlyPrefix: string;
+  noSlotsOnThisDay: string;
+  keepCurrentTimeAction: string;
+  reschedulingEllipsis: string;
+  confirmNewTimeAction: string;
+  couldNotRescheduleBooking: string;
+
+  // Google sign-in error messages (lib/google-signin.ts)
+  googleSignInUnavailable: string;
+  googlePlayServicesUnavailable: string;
+  couldNotOpenGooglePicker: string;
+  googleNoTokenReturned: string;
+  couldNotCompleteGoogleSignIn: string;
+
+  // Network / data-loading error fallbacks
+  networkOfflineMessage: string;
+  couldNotLoadSalons: string;
+  couldNotOpenBookingFlow: string;
+  couldNotStartNewBooking: string;
+
+  // Relative-time labels (NotificationsScreen)
+  justNowLabel: string;
+  minutesAgoSuffix: string;
+  hoursAgoSuffix: string;
+  daysAgoSuffix: string;
+
+  // SafeImage accessibility fallback labels
+  photoUnavailableLabel: string;
+  noPhotoYetLabel: string;
+
+  // OwnerShopScreen photo upload
+  photoLibraryAccessNeededForShopPhotos: string;
+  photoOverSizeLimitPrefix: string;
+  photoOverSizeLimitSuffix: string;
+  noShopsYetTitle: string;
+  bookingFiltersLabel: string;
+  bookingFiltersHint: string;
+  confirmedEyebrow: string;
+  discoveryEyebrow: string;
+
+  // Share-sheet text (lib/booking-actions.ts)
+  shareBookingPrefix: string;
+  shareBookingMiddle: string;
 }
 
 const enUi: UiStrings = {
@@ -799,6 +1004,18 @@ const enUi: UiStrings = {
   resendOtpAction: 'Resend OTP',
   resendOtpInPrefix: 'Resend OTP in ',
   resendOtpInSuffix: 's',
+
+  tryAgain: 'Try again',
+  unreadSuffix: ' unread',
+  closePhotoGallery: 'Close photo gallery',
+  offlineMessage: "You're offline — showing the last data we had.",
+  liveShopSnapshotLabel: 'Live shop snapshot',
+  liveShopSnapshotEyebrow: 'LIVE SHOP SNAPSHOT',
+  aChairWhenReady: "A chair when you're ready",
+  activeChairsSuffix: 'active chair(s)',
+  waitingCountSuffix: 'waiting',
+  professionalAvailabilityHint: 'Professional availability will appear here during shop hours.',
+  aggregateCountsNote: 'Aggregate counts only — no customer details are shown.',
   cancellingWillChargePrefix: 'Cancelling now will charge ',
   cancellingWillChargeSuffix: ' (outside the free cancellation window).',
   noChargeFreeWindow: "No charge — you're within the free cancellation window.",
@@ -806,6 +1023,182 @@ const enUi: UiStrings = {
   minutesAbbrev: 'min',
   yearsExpAbbrev: 'yr(s) exp.',
   yearsExperienceWord: 'years experience',
+  dayAbbreviations: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+
+  couldNotSaveService: 'Could not save this service.',
+  couldNotUpdateService: 'Could not update this service.',
+  couldNotAddService: 'Could not add this service.',
+  couldNotUpdateChair: 'Could not update this chair.',
+  couldNotAddChair: 'Could not add this chair.',
+  couldNotAddBarber: 'Could not add this barber.',
+  servicePlaceholder: 'Service name',
+  pricePlaceholder: 'Price',
+  minutesPlaceholder: 'Minutes',
+  chairLabelPlaceholder: 'Chair label',
+  barberNamePlaceholder: 'Barber name',
+  emailOptionalPlaceholder: 'Email (optional, for account invite)',
+  inactiveSuffix: ' · Inactive',
+  invitePendingSuffix: ' · Invite pending',
+  addAction: 'Add',
+  reactivateAction: 'Reactivate',
+  invalidPhoneFormatHint: 'Use international format, e.g. +919876543210',
+  openToggleLabel: 'Open',
+  checkHoursPrefix: 'Check ',
+  checkHoursSuffix: "'s hours — use a time like 09:00, with closing after opening.",
+  saveHoursAction: 'Save hours',
+  couldNotSaveHours: 'Could not save your hours.',
+  ownerEyebrow: 'Owner',
+
+  segmentNew: 'New',
+  segmentRepeat: 'Repeat',
+  segmentFrequent: 'Frequent',
+  noContactOnFile: 'No contact on file',
+  couldNotLoadCustomer: 'Could not load this customer.',
+  couldNotLoadCustomers: 'Could not load customers.',
+  customerNotFound: 'Customer not found.',
+  customerSuffix: ' customer',
+  outstandingBlockedPrefix: '',
+  outstandingBlockedSuffix: ' outstanding — new bookings are blocked at this shop until this is settled or waived.',
+  duesTitle: 'Dues',
+  noDuesYet: 'No outstanding or waived dues.',
+  noShowDueReason: 'No-show due',
+  cancellationChargeReason: 'Cancellation charge',
+  outstandingBadge: 'Outstanding',
+  waivedBadge: 'Waived',
+  noRelatedBooking: 'No related booking',
+  recordedPrefix: 'Recorded ',
+  waiveNoShowDueAction: 'Waive no-show due',
+  restoreDueRowAction: 'Restore due',
+  waiveConfirmPrefix: 'Waive ',
+  waiveConfirmSuffix: ' no-show due for this customer?',
+  restoreConfirmPrefix: 'Restore the ',
+  restoreConfirmSuffix: ' no-show due? The customer will be blocked from new bookings again until it is settled or waived.',
+  waiveDueAction: 'Waive due',
+  restoreDueModalAction: 'Restore due',
+  graceEligiblePrefix: 'New customer grace · ',
+  graceEligibleMiddle: ' of ',
+  graceEligibleSuffix: ' completed visits',
+  graceCompletedPrefix: 'New customer grace completed · ',
+  graceCompletedSuffix: '+ visits',
+  customersTitle: 'Customers',
+  customersSubtitle: 'Visit history and dues, from your own booking records.',
+  noCustomersYetTitle: 'No customers yet',
+  noCustomersYetHint: 'Everyone who books at your shop will show up here.',
+  outstandingSuffix: ' outstanding',
+  couldNotWaiveDue: 'Could not waive this due. Please try again.',
+  couldNotRestoreDue: 'Could not restore this due. Please try again.',
+  chooseShopQueueHint: 'Choose a shop from the Dashboard tab to see its live queue.',
+
+  signInToYourShop: 'Sign in to your shop',
+  signInToWorkToday: 'Sign in to work today',
+  useYourDashboardAccount: 'Use your FastQue dashboard account.',
+  onlyWorksIfRegisteredOwner: 'Only works if this Google account is already registered as a shop owner.',
+  onlyWorksIfRegisteredStaff: 'Only works if this Google account is already registered as staff.',
+  passwordLabel: 'Password',
+  forgotPasswordQuestion: 'Forgot password?',
+  enterValidEmailPassword: 'Enter a valid email and password.',
+  couldNotSignIn: 'Could not sign in. Please try again.',
+  enterValidEmail: 'Enter a valid email address.',
+  recoveryUnavailableNotice: 'Password recovery is temporarily unavailable. Please try again shortly.',
+  checkYourInboxTitle: 'Check your inbox',
+  eligibleAccountPrefix: 'If an eligible ',
+  eligibleAccountSuffix: " account uses that email, we'll send a secure password-reset link. The link expires soon and can be used once.",
+  afterResetHint: 'After resetting your password, return here and sign in with your new password.',
+  backToSignIn: 'Back to sign in',
+  resetYourPasswordTitle: 'Reset your password',
+  enterEmailForAccountPrefix: 'Enter the email for your ',
+  enterEmailForAccountSuffix: ' account.',
+  roleLabelOwner: 'shop owner',
+  roleLabelStaff: 'barber / staff',
+  sendResetLinkAction: 'Send reset link',
+  emailAddressAccessibilityLabel: 'Email address',
+
+  chairsFreeLabel: 'Chairs free',
+  barbersFreeLabel: 'Barbers free',
+  waitingLabel: 'Waiting',
+  avgWaitLabel: 'Avg wait',
+  couldNotCompleteAction: 'Could not complete that action.',
+  callAction: 'Call',
+  assignAction: 'Assign',
+  noShowAction: 'No-show',
+  barberLabel: 'Barber',
+  chairLabel: 'Chair',
+  confirmAssignmentAction: 'Confirm assignment',
+  completeAction: 'Complete',
+  couldNotLoadQueue: 'Could not load the queue.',
+  queueIsEmptyTitle: 'Queue is empty',
+  queueIsEmptyHint: 'Walk-ins and checked-in bookings will appear here in real time.',
+  statusCalledShort: 'Called',
+
+  photoLibraryAccessNeeded: 'Photo library access is needed to try the AI Style Advisor.',
+  aiStylePreviewUnavailable: 'AI Style Preview is temporarily unavailable while we prepare the image-generation service. Your photo was not stored.',
+  aiStyleAdvisorPremiumTitle: 'AI Style Advisor is a Premium feature',
+  upgradeToPreviewHairstyles: 'Upgrade to Premium on the FastQue web app to preview hairstyles on your photo.',
+  aiStyleAdvisorEyebrow: 'AI Style Advisor',
+  outOfAiStyleCreditsTitle: "You're out of AI Style Credits",
+  outOfAiStyleCreditsSubtitle: "You've used all your AI Style Credits for this subscription period.",
+  yourLooksTitle: 'Your looks',
+  aiStyleMatchDisclaimer: 'Each shows an AI Style Match — not a guarantee of how it will turn out on you.',
+  aiStyleMatchPrefix: 'AI Style Match: ',
+  aiStyleMatchSuffix: '%',
+  tryThisLookAction: 'Try This Look',
+  previewYourNextLookTitle: 'Preview your next look',
+  uploadPhotoPreviewSubtitle: 'Upload a photo and preview a few hairstyles before you book.',
+  choosePhotoAction: 'Choose a photo',
+  chooseDifferentPhotoAction: 'Choose a different photo',
+  aiCreditsRemainingPrefix: 'AI Credits remaining: ',
+  analyzeMyPhotoAction: 'Analyze my photo',
+  photoNotStoredNote: 'Your photo is used only to generate these previews and is not stored.',
+
+  yourReviewTitle: 'Your review',
+  shopsResponseLabel: "Shop's response: ",
+  editReviewAction: 'Edit your review',
+  editYourReviewTitle: 'Edit your review',
+  leaveAReviewTitle: 'Leave a review',
+  optionalCommentPlaceholder: 'Optional comment',
+  savingEllipsis: 'Saving…',
+  saveReviewAction: 'Save review',
+  submitReviewAction: 'Submit review',
+  couldNotSaveReview: 'Could not save your review.',
+
+  rescheduleBookingTitle: 'Reschedule booking',
+  currentlyPrefix: 'Currently ',
+  noSlotsOnThisDay: 'No slots on this day.',
+  keepCurrentTimeAction: 'Keep current time',
+  reschedulingEllipsis: 'Rescheduling…',
+  confirmNewTimeAction: 'Confirm new time',
+  couldNotRescheduleBooking: 'Could not reschedule this booking.',
+
+  googleSignInUnavailable: 'Google sign-in is not available in this build.',
+  googlePlayServicesUnavailable: 'Google Play Services is unavailable or out of date on this device.',
+  couldNotOpenGooglePicker: 'Could not open the Google account picker.',
+  googleNoTokenReturned: 'Google did not return a sign-in token. Please try again.',
+  couldNotCompleteGoogleSignIn: 'Could not complete Google sign-in. Please try again.',
+
+  networkOfflineMessage: 'You appear to be offline. Check your connection and try again.',
+  couldNotLoadSalons: 'Could not load your salons.',
+  couldNotOpenBookingFlow: 'Could not open the booking flow. Please try again.',
+  couldNotStartNewBooking: 'Could not start a new booking. Please try again.',
+
+  justNowLabel: 'just now',
+  minutesAgoSuffix: 'm ago',
+  hoursAgoSuffix: 'h ago',
+  daysAgoSuffix: 'd ago',
+
+  photoUnavailableLabel: 'photo unavailable',
+  noPhotoYetLabel: 'no photo yet',
+
+  photoLibraryAccessNeededForShopPhotos: 'Photo library access is needed to add shop photos.',
+  photoOverSizeLimitPrefix: 'That photo is over the ',
+  photoOverSizeLimitSuffix: ' MB limit.',
+  noShopsYetTitle: 'No shops yet',
+  bookingFiltersLabel: 'Booking filters',
+  bookingFiltersHint: 'Swipe left or right to reach every booking filter',
+  confirmedEyebrow: 'Confirmed',
+  discoveryEyebrow: 'Discovery',
+
+  shareBookingPrefix: 'Book at ',
+  shareBookingMiddle: ' on FastQue: ',
 };
 
 const hiUi: UiStrings = {
@@ -1106,6 +1499,18 @@ const hiUi: UiStrings = {
   resendOtpAction: 'OTP फिर भेजें',
   resendOtpInPrefix: 'OTP फिर भेजें ',
   resendOtpInSuffix: ' सेकंड में',
+
+  tryAgain: 'फिर कोशिश करें',
+  unreadSuffix: ' अपठित',
+  closePhotoGallery: 'फ़ोटो गैलरी बंद करें',
+  offlineMessage: 'आप ऑफ़लाइन हैं — पिछला डेटा दिखाया जा रहा है।',
+  liveShopSnapshotLabel: 'लाइव दुकान स्नैपशॉट',
+  liveShopSnapshotEyebrow: 'लाइव दुकान स्नैपशॉट',
+  aChairWhenReady: 'जब आप तैयार हों तब कुर्सी',
+  activeChairsSuffix: 'सक्रिय कुर्सियां',
+  waitingCountSuffix: 'प्रतीक्षा में',
+  professionalAvailabilityHint: 'दुकान के समय के दौरान पेशेवर उपलब्धता यहां दिखेगी।',
+  aggregateCountsNote: 'केवल कुल संख्या — कोई ग्राहक विवरण नहीं दिखाया गया।',
   cancellingWillChargePrefix: 'अभी रद्द करने पर ',
   cancellingWillChargeSuffix: ' शुल्क लगेगा (मुफ़्त रद्दीकरण विंडो के बाहर)।',
   noChargeFreeWindow: 'कोई शुल्क नहीं — आप मुफ़्त रद्दीकरण विंडो में हैं।',
@@ -1113,6 +1518,182 @@ const hiUi: UiStrings = {
   minutesAbbrev: 'मिनट',
   yearsExpAbbrev: 'वर्ष अनुभव',
   yearsExperienceWord: 'वर्ष अनुभव',
+  dayAbbreviations: ['रवि', 'सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि'],
+
+  couldNotSaveService: 'यह सेवा सहेजी नहीं जा सकी।',
+  couldNotUpdateService: 'यह सेवा अपडेट नहीं हो सकी।',
+  couldNotAddService: 'यह सेवा जोड़ी नहीं जा सकी।',
+  couldNotUpdateChair: 'यह कुर्सी अपडेट नहीं हो सकी।',
+  couldNotAddChair: 'यह कुर्सी जोड़ी नहीं जा सकी।',
+  couldNotAddBarber: 'यह बार्बर जोड़ा नहीं जा सका।',
+  servicePlaceholder: 'सेवा का नाम',
+  pricePlaceholder: 'कीमत',
+  minutesPlaceholder: 'मिनट',
+  chairLabelPlaceholder: 'कुर्सी लेबल',
+  barberNamePlaceholder: 'बार्बर का नाम',
+  emailOptionalPlaceholder: 'ईमेल (वैकल्पिक, खाता आमंत्रण हेतु)',
+  inactiveSuffix: ' · निष्क्रिय',
+  invitePendingSuffix: ' · आमंत्रण लंबित',
+  addAction: 'जोड़ें',
+  reactivateAction: 'फिर सक्रिय करें',
+  invalidPhoneFormatHint: 'अंतरराष्ट्रीय प्रारूप का उपयोग करें, जैसे +919876543210',
+  openToggleLabel: 'खुला',
+  checkHoursPrefix: '',
+  checkHoursSuffix: ' का समय जांचें — 09:00 जैसा समय उपयोग करें, बंद होने का समय खुलने के बाद होना चाहिए।',
+  saveHoursAction: 'समय सहेजें',
+  couldNotSaveHours: 'आपका समय सहेजा नहीं जा सका।',
+  ownerEyebrow: 'मालिक',
+
+  segmentNew: 'नया',
+  segmentRepeat: 'दोहराया',
+  segmentFrequent: 'बार-बार आने वाला',
+  noContactOnFile: 'कोई संपर्क दर्ज नहीं',
+  couldNotLoadCustomer: 'यह ग्राहक लोड नहीं हो सका।',
+  couldNotLoadCustomers: 'ग्राहक लोड नहीं हो सके।',
+  customerNotFound: 'ग्राहक नहीं मिला।',
+  customerSuffix: ' ग्राहक',
+  outstandingBlockedPrefix: '',
+  outstandingBlockedSuffix: ' बकाया है — जब तक यह चुकाया या माफ़ नहीं किया जाता, इस दुकान पर नई बुकिंग रोकी गई है।',
+  duesTitle: 'बकाया',
+  noDuesYet: 'कोई बकाया या माफ़ की गई राशि नहीं है।',
+  noShowDueReason: 'नो-शो बकाया',
+  cancellationChargeReason: 'रद्दीकरण शुल्क',
+  outstandingBadge: 'बकाया',
+  waivedBadge: 'माफ़ किया गया',
+  noRelatedBooking: 'कोई संबंधित बुकिंग नहीं',
+  recordedPrefix: 'दर्ज किया गया ',
+  waiveNoShowDueAction: 'नो-शो बकाया माफ़ करें',
+  restoreDueRowAction: 'बकाया बहाल करें',
+  waiveConfirmPrefix: '',
+  waiveConfirmSuffix: ' का नो-शो बकाया इस ग्राहक के लिए माफ़ करें?',
+  restoreConfirmPrefix: '',
+  restoreConfirmSuffix: ' का नो-शो बकाया बहाल करें? जब तक यह चुकाया या माफ़ नहीं किया जाता, ग्राहक को फिर से नई बुकिंग से रोका जाएगा।',
+  waiveDueAction: 'बकाया माफ़ करें',
+  restoreDueModalAction: 'बकाया बहाल करें',
+  graceEligiblePrefix: 'नया ग्राहक छूट · ',
+  graceEligibleMiddle: ' में से ',
+  graceEligibleSuffix: ' पूर्ण विज़िट',
+  graceCompletedPrefix: 'नया ग्राहक छूट पूर्ण · ',
+  graceCompletedSuffix: '+ विज़िट',
+  customersTitle: 'ग्राहक',
+  customersSubtitle: 'आपके अपने बुकिंग रिकॉर्ड से विज़िट इतिहास और बकाया।',
+  noCustomersYetTitle: 'अभी कोई ग्राहक नहीं',
+  noCustomersYetHint: 'आपकी दुकान पर बुकिंग करने वाला हर कोई यहां दिखेगा।',
+  outstandingSuffix: ' बकाया',
+  couldNotWaiveDue: 'यह बकाया माफ़ नहीं हो सका। कृपया फिर कोशिश करें।',
+  couldNotRestoreDue: 'यह बकाया बहाल नहीं हो सका। कृपया फिर कोशिश करें।',
+  chooseShopQueueHint: 'इसकी लाइव कतार देखने के लिए डैशबोर्ड टैब से एक दुकान चुनें।',
+
+  signInToYourShop: 'अपनी दुकान में साइन इन करें',
+  signInToWorkToday: 'आज काम करने के लिए साइन इन करें',
+  useYourDashboardAccount: 'अपना FastQue डैशबोर्ड खाता उपयोग करें।',
+  onlyWorksIfRegisteredOwner: 'यह तभी काम करता है जब यह Google खाता पहले से दुकान मालिक के रूप में पंजीकृत हो।',
+  onlyWorksIfRegisteredStaff: 'यह तभी काम करता है जब यह Google खाता पहले से स्टाफ के रूप में पंजीकृत हो।',
+  passwordLabel: 'पासवर्ड',
+  forgotPasswordQuestion: 'पासवर्ड भूल गए?',
+  enterValidEmailPassword: 'एक मान्य ईमेल और पासवर्ड दर्ज करें।',
+  couldNotSignIn: 'साइन इन नहीं हो सका। कृपया फिर कोशिश करें।',
+  enterValidEmail: 'एक मान्य ईमेल पता दर्ज करें।',
+  recoveryUnavailableNotice: 'पासवर्ड पुनर्प्राप्ति अस्थायी रूप से उपलब्ध नहीं है। कृपया थोड़ी देर बाद फिर कोशिश करें।',
+  checkYourInboxTitle: 'अपना इनबॉक्स जांचें',
+  eligibleAccountPrefix: 'यदि किसी योग्य ',
+  eligibleAccountSuffix: ' खाते में वह ईमेल है, तो हम एक सुरक्षित पासवर्ड-रीसेट लिंक भेजेंगे। लिंक जल्द ही समाप्त हो जाता है और केवल एक बार उपयोग किया जा सकता है।',
+  afterResetHint: 'अपना पासवर्ड रीसेट करने के बाद, यहां लौटें और अपने नए पासवर्ड से साइन इन करें।',
+  backToSignIn: 'साइन इन पर वापस जाएं',
+  resetYourPasswordTitle: 'अपना पासवर्ड रीसेट करें',
+  enterEmailForAccountPrefix: 'अपने ',
+  enterEmailForAccountSuffix: ' खाते का ईमेल दर्ज करें।',
+  roleLabelOwner: 'दुकान मालिक',
+  roleLabelStaff: 'बार्बर / स्टाफ',
+  sendResetLinkAction: 'रीसेट लिंक भेजें',
+  emailAddressAccessibilityLabel: 'ईमेल पता',
+
+  chairsFreeLabel: 'खाली कुर्सियां',
+  barbersFreeLabel: 'खाली बार्बर',
+  waitingLabel: 'प्रतीक्षा में',
+  avgWaitLabel: 'औसत प्रतीक्षा',
+  couldNotCompleteAction: 'वह कार्रवाई पूरी नहीं हो सकी।',
+  callAction: 'बुलाएं',
+  assignAction: 'नियुक्त करें',
+  noShowAction: 'नो-शो',
+  barberLabel: 'बार्बर',
+  chairLabel: 'कुर्सी',
+  confirmAssignmentAction: 'नियुक्ति की पुष्टि करें',
+  completeAction: 'पूर्ण करें',
+  couldNotLoadQueue: 'कतार लोड नहीं हो सकी।',
+  queueIsEmptyTitle: 'कतार खाली है',
+  queueIsEmptyHint: 'वॉक-इन और चेक-इन की गई बुकिंग्स यहां वास्तविक समय में दिखेंगी।',
+  statusCalledShort: 'बुलाया गया',
+
+  photoLibraryAccessNeeded: 'AI स्टाइल एडवाइज़र आज़माने के लिए फोटो लाइब्रेरी की अनुमति आवश्यक है।',
+  aiStylePreviewUnavailable: 'इमेज-जनरेशन सेवा तैयार करते समय AI स्टाइल प्रीव्यू अस्थायी रूप से अनुपलब्ध है। आपकी फोटो सेव नहीं की गई।',
+  aiStyleAdvisorPremiumTitle: 'AI स्टाइल एडवाइज़र एक प्रीमियम सुविधा है',
+  upgradeToPreviewHairstyles: 'अपनी फोटो पर हेयरस्टाइल प्रीव्यू करने के लिए FastQue वेब ऐप पर प्रीमियम में अपग्रेड करें।',
+  aiStyleAdvisorEyebrow: 'AI स्टाइल एडवाइज़र',
+  outOfAiStyleCreditsTitle: 'आपके AI स्टाइल क्रेडिट समाप्त हो गए हैं',
+  outOfAiStyleCreditsSubtitle: 'आपने इस सदस्यता अवधि के लिए अपने सभी AI स्टाइल क्रेडिट उपयोग कर लिए हैं।',
+  yourLooksTitle: 'आपके लुक्स',
+  aiStyleMatchDisclaimer: 'प्रत्येक एक AI स्टाइल मैच दिखाता है — यह गारंटी नहीं कि आप पर वैसा ही दिखेगा।',
+  aiStyleMatchPrefix: 'AI स्टाइल मैच: ',
+  aiStyleMatchSuffix: '%',
+  tryThisLookAction: 'यह लुक आज़माएं',
+  previewYourNextLookTitle: 'अपना अगला लुक प्रीव्यू करें',
+  uploadPhotoPreviewSubtitle: 'बुक करने से पहले एक फोटो अपलोड करें और कुछ हेयरस्टाइल प्रीव्यू करें।',
+  choosePhotoAction: 'फोटो चुनें',
+  chooseDifferentPhotoAction: 'दूसरी फोटो चुनें',
+  aiCreditsRemainingPrefix: 'शेष AI क्रेडिट: ',
+  analyzeMyPhotoAction: 'मेरी फोटो विश्लेषण करें',
+  photoNotStoredNote: 'आपकी फोटो केवल इन प्रीव्यू को बनाने के लिए उपयोग की जाती है और सेव नहीं की जाती।',
+
+  yourReviewTitle: 'आपकी समीक्षा',
+  shopsResponseLabel: 'दुकान की प्रतिक्रिया: ',
+  editReviewAction: 'अपनी समीक्षा संपादित करें',
+  editYourReviewTitle: 'अपनी समीक्षा संपादित करें',
+  leaveAReviewTitle: 'समीक्षा दें',
+  optionalCommentPlaceholder: 'वैकल्पिक टिप्पणी',
+  savingEllipsis: 'सेव हो रहा है…',
+  saveReviewAction: 'समीक्षा सेव करें',
+  submitReviewAction: 'समीक्षा सबमिट करें',
+  couldNotSaveReview: 'आपकी समीक्षा सेव नहीं हो सकी।',
+
+  rescheduleBookingTitle: 'बुकिंग पुनर्निर्धारित करें',
+  currentlyPrefix: 'अभी ',
+  noSlotsOnThisDay: 'इस दिन कोई स्लॉट उपलब्ध नहीं है।',
+  keepCurrentTimeAction: 'वर्तमान समय रखें',
+  reschedulingEllipsis: 'पुनर्निर्धारित हो रहा है…',
+  confirmNewTimeAction: 'नया समय पुष्ट करें',
+  couldNotRescheduleBooking: 'यह बुकिंग पुनर्निर्धारित नहीं हो सकी।',
+
+  googleSignInUnavailable: 'इस बिल्ड में Google साइन-इन उपलब्ध नहीं है।',
+  googlePlayServicesUnavailable: 'इस डिवाइस पर Google Play सेवाएं अनुपलब्ध हैं या पुरानी हैं।',
+  couldNotOpenGooglePicker: 'Google खाता चयनकर्ता नहीं खोला जा सका।',
+  googleNoTokenReturned: 'Google ने साइन-इन टोकन नहीं भेजा। कृपया फिर कोशिश करें।',
+  couldNotCompleteGoogleSignIn: 'Google साइन-इन पूरा नहीं हो सका। कृपया फिर कोशिश करें।',
+
+  networkOfflineMessage: 'लगता है आप ऑफ़लाइन हैं। अपना कनेक्शन जांचें और फिर कोशिश करें।',
+  couldNotLoadSalons: 'आपकी दुकानें लोड नहीं हो सकीं।',
+  couldNotOpenBookingFlow: 'बुकिंग फ़्लो नहीं खोला जा सका। कृपया फिर कोशिश करें।',
+  couldNotStartNewBooking: 'नई बुकिंग शुरू नहीं हो सकी। कृपया फिर कोशिश करें।',
+
+  justNowLabel: 'अभी अभी',
+  minutesAgoSuffix: 'मि पहले',
+  hoursAgoSuffix: 'घं पहले',
+  daysAgoSuffix: 'दि पहले',
+
+  photoUnavailableLabel: 'फोटो उपलब्ध नहीं',
+  noPhotoYetLabel: 'अभी तक कोई फोटो नहीं',
+
+  photoLibraryAccessNeededForShopPhotos: 'दुकान की फोटो जोड़ने के लिए फोटो लाइब्रेरी की अनुमति आवश्यक है।',
+  photoOverSizeLimitPrefix: 'यह फोटो ',
+  photoOverSizeLimitSuffix: ' MB सीमा से बड़ी है।',
+  noShopsYetTitle: 'अभी तक कोई दुकान नहीं',
+  bookingFiltersLabel: 'बुकिंग फ़िल्टर',
+  bookingFiltersHint: 'हर बुकिंग फ़िल्टर तक पहुंचने के लिए बाएं या दाएं स्वाइप करें',
+  confirmedEyebrow: 'पुष्ट',
+  discoveryEyebrow: 'खोज',
+
+  shareBookingPrefix: 'यहां बुक करें ',
+  shareBookingMiddle: ' FastQue पर: ',
 };
 
 export const UI_STRINGS: Readonly<Record<Language, UiStrings>> = {
