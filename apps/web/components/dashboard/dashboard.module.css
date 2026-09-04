@@ -146,6 +146,22 @@
   gap: 8px;
 }
 
+.photoGrid {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.queueGrid {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
 .row {
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
@@ -546,6 +562,16 @@
   .shopNav {
     margin-inline: -16px;
     padding-inline: 12px;
+  }
+
+  /* Physical-device report: the photo grid's auto-fill columns (minmax(180px, 1fr)) computed 2
+     columns fitting when they didn't quite — the second photo rendered mostly off the right edge
+     of the screen instead of dropping to a single column. Forcing one column below this width
+     removes the ambiguity outright rather than fine-tuning the minmax floor and hoping it clears
+     every phone. */
+  .photoGrid,
+  .queueGrid {
+    grid-template-columns: 1fr;
   }
 }
 

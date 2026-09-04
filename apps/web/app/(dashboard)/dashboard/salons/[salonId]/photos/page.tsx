@@ -547,7 +547,7 @@ export default function DashboardPhotosPage({
 
         {galleryQueue.length > 0 && (
           <div style={{ marginTop: 14 }}>
-            <ul style={{ listStyle: "none", padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
+            <ul className={styles.queueGrid}>
               {galleryQueue.map((item) => (
                 <li key={item.id} style={{ border: "1px solid var(--bc-border)", borderRadius: "var(--bc-radius-sm)", padding: 8 }}>
                   <SalonImage url={item.previewUrl} alt={item.file.name} />
@@ -638,7 +638,7 @@ export default function DashboardPhotosPage({
           {galleryPhotos.length === 0 && !cover && (
             <p className={styles.emptyState}>No photos yet. Set your cover photo above.</p>
           )}
-          <ul style={{ listStyle: "none", padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 14 }}>
+          <ul className={styles.photoGrid}>
             {photos
               .slice()
               .sort((a) => (a.type === PhotoType.COVER ? -1 : 1))
