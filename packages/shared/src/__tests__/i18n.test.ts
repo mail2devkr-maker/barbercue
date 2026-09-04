@@ -1,5 +1,16 @@
 import { Language } from '../enums';
-import { UI_STRINGS, formatVoiceDateTime, ordinalDay, uiStringsFor, voiceAnnouncementsFor } from '../i18n';
+import { NOTIFICATION_TYPES } from '../types';
+import {
+  NOTIFICATION_TYPE_LABELS,
+  PUSH_COPY,
+  UI_STRINGS,
+  formatVoiceDateTime,
+  notificationTypeLabel,
+  ordinalDay,
+  pushCopyFor,
+  uiStringsFor,
+  voiceAnnouncementsFor,
+} from '../i18n';
 
 describe('ordinalDay', () => {
   it.each([
@@ -93,5 +104,66 @@ describe('uiStringsFor', () => {
 
   it('resolves Hindi when requested', () => {
     expect(uiStringsFor(Language.HI)).toBe(UI_STRINGS[Language.HI]);
+  });
+});
+
+// Guards against exactly the Build 9 physical-device regression: a NotificationsScreen kept its
+// own English-only label map outside this module, so the screen heading could be Hindi while
+// every notification title underneath stayed English. Every NotificationType must resolve to a
+// real, distinct-from-English Hindi label — no silent fallback to the raw type string.
+describe('notificationTypeLabel', () => {
+  it('every NotificationType has a label in every language', () => {
+    for (const language of [Language.EN, Language.HI]) {
+      for (const type of NOTIFICATION_TYPES) {
+        expect(NOTIFICATION_TYPE_LABELS[language][type]).toBeTruthy();
+      }
+    }
+  });
+
+  it('Hindi labels are actually Hindi, not a copy-pasted English fallback', () => {
+    for (const type of NOTIFICATION_TYPES) {
+      expect(NOTIFICATION_TYPE_LABELS[Language.HI][type]).not.toBe(NOTIFICATION_TYPE_LABELS[Language.EN][type]);
+    }
+  });
+
+  it('falls back to the English label for an unrecognised/unset language', () => {
+    expect(notificationTypeLabel(undefined, 'owner.booking.created')).toBe('New booking');
+    expect(notificationTypeLabel(null, 'owner.booking.cancelled')).toBe('Booking cancelled');
+  });
+
+  it('resolves the correct Hindi label', () => {
+    expect(notificationTypeLabel(Language.HI, 'owner.booking.created')).toBe('नई बुकिंग');
+  });
+});
+
+// Push notification title/body are generated server-side (bookings.service.ts), the one path in
+// this codebase where a push payload's copy was hardcoded English regardless of the recipient
+// owner's preferredLanguage — a second concrete Build 9 physical-device defect distinct from the
+// in-app notification list above.
+describe('pushCopyFor', () => {
+  it('every language produces a non-empty title and body for both event types', () => {
+    for (const language of [Language.EN, Language.HI]) {
+      const copy = PUSH_COPY[language];
+      expect(copy.newBooking('Haircut').title).toBeTruthy();
+      expect(copy.newBooking('Haircut').body).toBeTruthy();
+      expect(copy.bookingCancelled('Haircut').title).toBeTruthy();
+      expect(copy.bookingCancelled('Haircut').body).toBeTruthy();
+    }
+  });
+
+  it('Hindi copy is actually Hindi, not an English copy-paste', () => {
+    expect(PUSH_COPY[Language.HI].newBooking('Haircut').title).not.toBe(PUSH_COPY[Language.EN].newBooking('Haircut').title);
+    expect(PUSH_COPY[Language.HI].bookingCancelled('Haircut').body).not.toBe(
+      PUSH_COPY[Language.EN].bookingCancelled('Haircut').body,
+    );
+  });
+
+  it('degrades gracefully with no service name', () => {
+    expect(pushCopyFor(Language.EN).newBooking(null).body).toBeTruthy();
+    expect(pushCopyFor(Language.HI).bookingCancelled(null).body).toBeTruthy();
+  });
+
+  it('falls back to English for an unrecognised/unset language', () => {
+    expect(pushCopyFor(undefined)).toBe(PUSH_COPY[Language.EN]);
   });
 });
