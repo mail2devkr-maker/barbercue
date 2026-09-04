@@ -4,7 +4,6 @@ import {
   BookingErrorCode,
   BookingSource,
   BookingStatus,
-  CreditsErrorCode,
   LedgerReason,
   LedgerStatus,
   PrepaymentRequirement,
@@ -201,18 +200,15 @@ export class BookingsService {
       );
     }
 
-    // Cheap upper-bound check before the transaction even opens — the customer can never redeem
-    // more than the service costs. The actual live-balance check (the one that matters for
-    // correctness under concurrency) happens inside CustomerCreditsService.redeemForBooking, in
-    // the transaction below.
-    const creditsToRedeem = input.creditsToRedeem ?? 0;
-    if (creditsToRedeem > Number(service.price)) {
-      throw new AppException(
-        CreditsErrorCode.INSUFFICIENT_CREDITS,
-        "You can't redeem more credits than this service costs.",
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+    // FastQue Credits / Wallet V1: the client-requested amount is never trusted as-is — it is only
+    // ever an upper bound. The server independently computes the redemption cap from its own
+    // trusted service price and, inside the transaction below, clamps to the customer's live
+    // wallet balance too — CustomerCreditsService.redeemUpTo returns the ACTUAL amount applied,
+    // which is what gets snapshotted onto the booking, never this requested figure.
+    const requestedCredits = input.creditsToRedeem ?? 0;
+    const maxCreditsAllowed = this.credits.computeMaxRedeemable(
+      Number(service.price),
+    );
 
     const prepaymentRequirement =
       paymentPolicy?.prepaymentRequirement ?? PrepaymentRequirement.NONE;
@@ -305,31 +301,42 @@ export class BookingsService {
           preferredStaffId: input.preferredStaffId ?? null,
           prepaymentRequiredAmount,
           selectedStyleName: input.selectedStyleName ?? null,
-          creditsRedeemedAmount: creditsToRedeem > 0 ? creditsToRedeem : null,
         },
       });
 
       // FastQue Credits / Wallet V1: redeem inside the same transaction as the booking's own
       // creation — a rolled-back booking (e.g. SLOT_FULL, discovered a moment later in this same
-      // transaction on a race) must never have actually spent the customer's balance.
-      if (creditsToRedeem > 0) {
-        await this.credits.redeemForBooking(
-          tx,
-          customerId,
-          created.id,
-          creditsToRedeem,
-        );
-        // FastQue subsidizes the discount, not the shop — this is the auditable record of what
-        // FastQue owes this salon for the difference. Voided, not deleted, if the booking is later
-        // cancelled (see cancel() below) — see PlatformShopSubsidyEntry's own doc comment.
-        await tx.platformShopSubsidyEntry.create({
-          data: {
-            salonId: input.salonId,
-            bookingId: created.id,
-            amount: creditsToRedeem,
-            status: SubsidyLedgerStatus.OUTSTANDING,
-          },
-        });
+      // transaction on a race) must never have actually spent the customer's balance. actualUsed
+      // is the server-clamped amount (min of requested, live balance, price-based cap) — never the
+      // raw requestedCredits figure — so that's what gets snapshotted onto the booking.
+      if (requestedCredits > 0) {
+        const { actualUsed, fastQueFundedConsumed } =
+          await this.credits.redeemUpTo(
+            tx,
+            customerId,
+            created.id,
+            requestedCredits,
+            maxCreditsAllowed,
+          );
+        if (actualUsed > 0) {
+          await tx.booking.update({
+            where: { id: created.id },
+            data: { creditsRedeemedAmount: actualUsed },
+          });
+        }
+        // FastQue subsidizes only the portion it actually funded — a future SHOP_FUNDED grant
+        // must never create a FastQue liability (see PlatformShopSubsidyEntry's own doc comment).
+        // Voided, not deleted, if the booking is later cancelled (see cancel() below).
+        if (fastQueFundedConsumed > 0) {
+          await tx.platformShopSubsidyEntry.create({
+            data: {
+              salonId: input.salonId,
+              bookingId: created.id,
+              amount: fastQueFundedConsumed,
+              status: SubsidyLedgerStatus.OUTSTANDING,
+            },
+          });
+        }
       }
 
       return created.id;
@@ -755,10 +762,6 @@ export class BookingsService {
           ? Number(booking.cancellationChargeAmount)
           : null,
       selectedStyleName: booking.selectedStyleName,
-      creditsEarnedAmount:
-        booking.creditsEarnedAmount !== null
-          ? Number(booking.creditsEarnedAmount)
-          : null,
       creditsRedeemedAmount:
         booking.creditsRedeemedAmount !== null
           ? Number(booking.creditsRedeemedAmount)

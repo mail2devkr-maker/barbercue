@@ -92,15 +92,26 @@ export type PrepaymentRequirement =
   (typeof PrepaymentRequirement)[keyof typeof PrepaymentRequirement];
 
 // FastQue Credits / Wallet V1 — see schema.prisma's CreditTransactionType doc comment for what
-// each value means and why this is a separate concept from LedgerReason/LedgerStatus above.
+// each value means and why this is a separate concept from LedgerReason/LedgerStatus above. There
+// is deliberately no EARNED value: completing a service never automatically grants credit in this
+// product — see PROMO_GRANT.
 export const CreditTransactionType = {
-  EARNED: 'EARNED',
+  PROMO_GRANT: 'PROMO_GRANT',
   REDEEMED: 'REDEEMED',
   RESTORED: 'RESTORED',
   MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT',
 } as const;
 export type CreditTransactionType =
   (typeof CreditTransactionType)[keyof typeof CreditTransactionType];
+
+// FastQue Credits / Wallet V1 — see schema.prisma's CreditFundingSource doc comment. Only
+// FASTQUE_FUNDED is ever actually produced by any code in this phase.
+export const CreditFundingSource = {
+  FASTQUE_FUNDED: 'FASTQUE_FUNDED',
+  SHOP_FUNDED: 'SHOP_FUNDED',
+} as const;
+export type CreditFundingSource =
+  (typeof CreditFundingSource)[keyof typeof CreditFundingSource];
 
 // FastQue Credits / Wallet V1 — see schema.prisma's PlatformShopSubsidyEntry doc comment.
 export const SubsidyLedgerStatus = {
@@ -461,13 +472,17 @@ export const PremiumErrorCode = {
 } as const;
 export type PremiumErrorCode = (typeof PremiumErrorCode)[keyof typeof PremiumErrorCode];
 
-// FastQue Credits / Wallet V1 — stable machine-readable error codes for CustomerCreditsService and
-// the credit-redemption path inside BookingsService.create. Same convention as every other
-// ErrorCode block in this file.
+// FastQue Credits / Wallet V1 — stable machine-readable error codes for CustomerCreditsService's
+// admin-grant path (AdminCreditsController). Same convention as every other ErrorCode block in
+// this file. Redemption itself never rejects for "not enough credits" — it silently clamps to
+// whatever is actually redeemable (see CustomerCreditsService.redeemUpTo's own doc comment) — so
+// there is deliberately no INSUFFICIENT_CREDITS code here.
 export const CreditsErrorCode = {
-  // Requested creditsToRedeem exceeds either the customer's current balance or the booking's own
-  // service price at the moment the redemption transaction actually runs — checked with a
-  // balance-guarded updateMany so a concurrent redemption can never take the balance negative.
-  INSUFFICIENT_CREDITS: 'INSUFFICIENT_CREDITS',
+  // The grant's target customerId does not resolve to an existing User.
+  CUSTOMER_NOT_FOUND: 'CUSTOMER_NOT_FOUND',
+  // The same Idempotency-Key was reused for a grant with different customerId/amount/reason —
+  // a genuinely different request, not a retry of the same one, so it cannot be silently replayed
+  // the way an exact-match retry can.
+  GRANT_IDEMPOTENCY_KEY_REUSED: 'GRANT_IDEMPOTENCY_KEY_REUSED',
 } as const;
 export type CreditsErrorCode = (typeof CreditsErrorCode)[keyof typeof CreditsErrorCode];

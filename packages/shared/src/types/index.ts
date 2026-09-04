@@ -3,6 +3,7 @@ import type {
   BookingStatus,
   ChairStatus,
   ChargeType,
+  CreditFundingSource,
   CreditTransactionType,
   Language,
   LedgerReason,
@@ -391,9 +392,10 @@ export interface BookingDto {
   // "Try This Look" before booking, null for every ordinary booking. Free text at this layer
   // (not a foreign key) since HAIRSTYLE_CATALOG is a shared constant, not a DB table.
   selectedStyleName: string | null;
-  // FastQue Credits / Wallet V1 — snapshots taken at the moments described in schema.prisma's own
-  // doc comment on these two columns. Both null means "no credits involved in this booking at all".
-  creditsEarnedAmount: number | null;
+  // FastQue Credits / Wallet V1 — the actual amount applied at creation, after the server clamped
+  // the customer's request to min(requested, live balance, price-based cap). Null means "redeemed
+  // nothing". There is deliberately no "credits earned" field — completing a service never
+  // automatically grants credit in this product (see CreditTransactionType.PROMO_GRANT).
   creditsRedeemedAmount: number | null;
 }
 
@@ -955,9 +957,23 @@ export interface CustomerCreditTransactionDto {
   type: CreditTransactionType;
   amount: number;
   bookingId: string | null;
+  // Meaningful only for PROMO_GRANT/RESTORED rows (the "lots") — how much of this specific grant
+  // is still unspent. Null for REDEEMED/MANUAL_ADJUSTMENT, which never hold spendable balance.
+  remainingAmount: number | null;
+  campaignRef: string | null;
+  fundingSource: CreditFundingSource | null;
+  // Null means "never expires". A lot with a past expiresAt is already excluded from balance/
+  // redemption by the server — this is shown for transparency, not as something the client must
+  // itself re-check.
+  expiresAt: string | null; // ISO 8601
+  reason: string | null;
   note: string | null;
   createdAt: string; // ISO 8601
 }
+
+// POST admin/credits/grant response (AdminCreditsController, PLATFORM_ADMIN-only) — the created
+// PROMO_GRANT transaction, same shape as one CustomerCreditTransactionDto row.
+export type PromotionalCreditGrantResultDto = CustomerCreditTransactionDto;
 
 /**
  * What a PENDING salon still needs before it can be opened. Carried as the `details` payload of a

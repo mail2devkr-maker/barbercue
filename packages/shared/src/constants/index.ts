@@ -186,14 +186,29 @@ export const CREDITS_PATHS = {
   credits: 'credits',
   balance: 'balance',
   history: 'history',
+  // POST admin/credits/grant (AdminCreditsController, PLATFORM_ADMIN-only) — mounted under
+  // ADMIN_CREDITS_PATHS below, not this prefix, since it is never reachable at plain `credits/...`.
 } as const;
 
-// FastQue Credits earn formula: floor(price / CREDIT_SLAB_AMOUNT_INR) * CREDIT_PER_SLAB_INR — a
-// completed ₹50 service earns ₹10, ₹100 earns ₹20, ₹150 earns ₹30, and so on. This is exactly 20%
-// at every whole-slab price and strictly less than 20% at any price that isn't an exact multiple
-// of ₹50 (e.g. ₹75 earns ₹10, not ₹15) — so "never more than 20%" holds by construction, not by a
-// separate cap check. See CustomerCreditsService.computeEarnedCredits, the single place this
-// formula is implemented.
+// FastQue Credits admin grant route — deliberately a distinct top-level prefix from CREDITS_PATHS
+// (the customer-facing balance/history reads), never nested under it, so the two can never be
+// confused by a role-check bug — a route under `admin/` is a strong, visible signal that it needs
+// PLATFORM_ADMIN, the same convention AdminController already uses for `admin/overview` etc.
+export const ADMIN_CREDITS_PATHS = {
+  admin: 'admin',
+  credits: 'credits',
+  grant: 'grant',
+} as const;
+
+// FastQue Credits REDEMPTION CAP (not an earn rate — see schema.prisma's CreditTransactionType
+// doc comment: completing a service never automatically grants credit in this product):
+// maxCreditsAllowed = floor(price / CREDIT_SLAB_AMOUNT_INR) * CREDIT_PER_SLAB_INR. The most a
+// customer may redeem against a single ₹50 service is ₹10, ₹100 is ₹20, ₹150 is ₹30, and so on —
+// exactly 20% at every whole-slab price and strictly less at any price that isn't an exact
+// multiple of ₹50 (e.g. a ₹75 service caps redemption at ₹10, not ₹15). The customer's live wallet
+// balance is a SEPARATE, independent cap — actualCreditsUsed is the minimum of the requested
+// amount, the live balance, and this price-based cap. See
+// CustomerCreditsService.computeMaxRedeemable, the single place this formula is implemented.
 export const CREDIT_SLAB_AMOUNT_INR = 50;
 export const CREDIT_PER_SLAB_INR = 10;
 

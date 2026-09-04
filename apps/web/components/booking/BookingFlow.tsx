@@ -7,6 +7,7 @@ import {
   CREDITS_PATHS,
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
+  computeMaxRedeemableCredits,
   type AvailabilitySlotDto,
   type BookingDetailDto,
   type CancellationPolicyDto,
@@ -439,7 +440,14 @@ export function BookingFlow({
           )}
           {authStatus === "authenticated" && creditsBalance !== null && creditsBalance > 0 && (() => {
             const servicePrice = services.find((s) => s.id === selectedServiceId)?.price ?? 0;
-            const maxRedeemable = Math.min(creditsBalance, servicePrice);
+            // FastQue Credits / Wallet V1: the redemption cap is price-based (floor(price/50)*10),
+            // NOT "whatever the wallet balance happens to be" — a customer can never redeem more
+            // than 20% of the service price even with a much larger balance. This is only a
+            // preview; the server independently re-derives and enforces the same cap (see
+            // BookingsService.create / CustomerCreditsService.redeemUpTo) regardless of what this
+            // slider sends.
+            const maxRedeemable = Math.min(creditsBalance, computeMaxRedeemableCredits(servicePrice));
+            if (maxRedeemable <= 0) return null;
             const payable = Math.max(0, servicePrice - creditsToRedeem);
             return (
               <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 6 }}>

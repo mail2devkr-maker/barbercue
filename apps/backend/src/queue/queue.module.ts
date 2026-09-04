@@ -2,7 +2,6 @@ import { Module, forwardRef } from '@nestjs/common';
 import { BookingsModule } from '../bookings/bookings.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { CustomerCreditsModule } from '../credits/customer-credits.module';
 import { SalonQueueController } from './salon-queue.controller';
 import { QueueEntriesController } from './queue-entries.controller';
 import { BookingCheckInController } from './booking-check-in.controller';
@@ -20,7 +19,6 @@ import { QueueEntryExpiryService } from './queue-entry-expiry.service';
     forwardRef(() => BookingsModule),
     RealtimeModule,
     NotificationsModule,
-    CustomerCreditsModule,
   ],
   controllers: [
     SalonQueueController,

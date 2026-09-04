@@ -1,4 +1,5 @@
 import { ChargeType } from '../enums';
+import { CREDIT_PER_SLAB_INR, CREDIT_SLAB_AMOUNT_INR } from '../constants';
 
 // Pure functions only — no I/O, no Date.now() side effects baked in (callers pass "now" in).
 // These mirror the rules in PAYMENTS.md / STATE_MACHINES.md / DATABASE.md exactly so web, mobile,
@@ -41,6 +42,23 @@ export const PLATFORM_MINIMUM_FREE_CANCELLATION_WINDOW_MINUTES = 60;
  */
 export function effectiveFreeCancellationWindowMinutes(configuredMinutes: number): number {
   return Math.max(PLATFORM_MINIMUM_FREE_CANCELLATION_WINDOW_MINUTES, configuredMinutes);
+}
+
+/**
+ * FastQue Credits / Wallet V1 — the REDEMPTION CAP for a booking at this price, NOT an earn rate:
+ * floor(price / CREDIT_SLAB_AMOUNT_INR) * CREDIT_PER_SLAB_INR. A ₹50 service caps redemption at
+ * ₹10, ₹100 at ₹20, ₹150 at ₹30, and so on — exactly 20% at every whole-slab price and strictly
+ * less at any price that isn't an exact multiple of ₹50 (₹75 caps at ₹10, not ₹15).
+ *
+ * Single source of truth shared by the server (CustomerCreditsService.redeemUpTo — the actual
+ * authority, which independently re-derives this from its own trusted price and never trusts a
+ * client-supplied redemption amount) and every client-side redemption preview (e.g. web's
+ * BookingFlow slider), so the number a customer sees before booking can never silently disagree
+ * with what the server will actually allow.
+ */
+export function computeMaxRedeemableCredits(servicePrice: number): number {
+  const slabs = Math.floor(servicePrice / CREDIT_SLAB_AMOUNT_INR);
+  return slabs * CREDIT_PER_SLAB_INR;
 }
 
 /**

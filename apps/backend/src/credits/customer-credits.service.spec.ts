@@ -1,9 +1,10 @@
+import { Prisma } from '@prisma/client';
+import { CreditFundingSource } from '@barbercue/shared';
 import { CustomerCreditsService } from './customer-credits.service';
 
 interface AccountRow {
   id: string;
   userId: string;
-  balance: number;
 }
 
 interface TransactionRow {
@@ -11,102 +12,141 @@ interface TransactionRow {
   accountId: string;
   type: string;
   amount: number;
+  remainingAmount: number | null;
   bookingId: string | null;
+  campaignRef: string | null;
+  fundingSource: string | null;
+  expiresAt: Date | null;
+  idempotencyKey: string | null;
+  reason: string | null;
   note: string | null;
   createdAt: Date;
 }
 
-interface PrismaMock {
-  customerCreditAccount: {
-    findUnique: jest.Mock;
-    upsert: jest.Mock;
-    updateMany: jest.Mock;
-    findUniqueOrThrow: jest.Mock;
-  };
-  customerCreditTransaction: {
-    create: jest.Mock;
-    findMany: jest.Mock;
-  };
-  $executeRaw: jest.Mock;
-  $transaction: jest.Mock;
-}
-
 describe('CustomerCreditsService', () => {
   let service: CustomerCreditsService;
-  let prisma: PrismaMock;
-  let account: AccountRow | null;
+  let accounts: AccountRow[];
   let transactions: TransactionRow[];
-  let nextTxId: number;
+  let nextId: number;
+  let prisma: {
+    customerCreditAccount: {
+      findUnique: jest.Mock;
+      upsert: jest.Mock;
+    };
+    customerCreditTransaction: {
+      findMany: jest.Mock;
+      findUnique: jest.Mock;
+      aggregate: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+    };
+    user: { findUnique: jest.Mock };
+    auditLog: { create: jest.Mock };
+    $executeRaw: jest.Mock;
+    $transaction: jest.Mock;
+  };
+
+  function findOrCreateAccount(userId: string): AccountRow {
+    let account = accounts.find((a) => a.userId === userId);
+    if (!account) {
+      account = { id: `acct-${nextId++}`, userId };
+      accounts.push(account);
+    }
+    return account;
+  }
+
+  function isValid(t: TransactionRow, now: Date): boolean {
+    return (
+      (t.remainingAmount ?? 0) > 0 &&
+      (t.expiresAt === null || t.expiresAt > now)
+    );
+  }
 
   beforeEach(() => {
-    account = null;
+    accounts = [];
     transactions = [];
-    nextTxId = 1;
+    nextId = 1;
 
     prisma = {
       customerCreditAccount: {
-        findUnique: jest.fn((args: { where: { userId: string } }) =>
+        findUnique: jest.fn((args: { where: { userId?: string; id?: string } }) =>
           Promise.resolve(
-            account && account.userId === args.where.userId ? account : null,
+            accounts.find((a) =>
+              args.where.userId !== undefined
+                ? a.userId === args.where.userId
+                : a.id === args.where.id,
+            ) ?? null,
           ),
         ),
-        findUniqueOrThrow: jest.fn((args: { where: { userId: string } }) => {
-          if (!account || account.userId !== args.where.userId) {
-            throw new Error('not found');
-          }
-          return Promise.resolve(account);
-        }),
-        upsert: jest.fn(
-          (args: {
-            where: { userId: string };
-            create: { userId: string; balance: number };
-            update: { balance: { increment: number } };
-          }) => {
-            if (!account) {
-              account = {
-                id: 'acct-1',
-                userId: args.where.userId,
-                balance: Number(args.create.balance),
-              };
-            } else {
-              account.balance += args.update.balance.increment;
-            }
-            return Promise.resolve(account);
-          },
-        ),
-        updateMany: jest.fn(
-          (args: {
-            where: { userId: string; balance: { gte: number } };
-            data: { balance: { decrement: number } };
-          }) => {
-            if (!account || account.userId !== args.where.userId) {
-              return Promise.resolve({ count: 0 });
-            }
-            if (account.balance < args.where.balance.gte) {
-              return Promise.resolve({ count: 0 });
-            }
-            account.balance -= args.data.balance.decrement;
-            return Promise.resolve({ count: 1 });
-          },
+        upsert: jest.fn((args: { where: { userId: string } }) =>
+          Promise.resolve(findOrCreateAccount(args.where.userId)),
         ),
       },
       customerCreditTransaction: {
+        findMany: jest.fn(
+          (args: {
+            where: { accountId: string };
+          }) => {
+            const now = new Date();
+            const rows = transactions
+              .filter((t) => t.accountId === args.where.accountId)
+              .filter((t) => isValid(t, now))
+              .slice()
+              .sort((a, b) => {
+                const aExp = a.expiresAt?.getTime() ?? Infinity;
+                const bExp = b.expiresAt?.getTime() ?? Infinity;
+                if (aExp !== bExp) return aExp - bExp;
+                return a.createdAt.getTime() - b.createdAt.getTime();
+              });
+            return Promise.resolve(rows);
+          },
+        ),
+        findUnique: jest.fn((args: { where: { idempotencyKey: string } }) =>
+          Promise.resolve(
+            transactions.find(
+              (t) => t.idempotencyKey === args.where.idempotencyKey,
+            ) ?? null,
+          ),
+        ),
+        aggregate: jest.fn((args: { where: { accountId: string } }) => {
+          const now = new Date();
+          const sum = transactions
+            .filter((t) => t.accountId === args.where.accountId)
+            .filter((t) => isValid(t, now))
+            .reduce((s, t) => s + (t.remainingAmount ?? 0), 0);
+          return Promise.resolve({ _sum: { remainingAmount: sum } });
+        }),
         create: jest.fn(
           (args: {
-            data: {
+            data: Partial<TransactionRow> & {
               accountId: string;
               type: string;
               amount: number;
-              bookingId?: string;
-              note?: string;
             };
           }) => {
+            if (
+              args.data.idempotencyKey &&
+              transactions.some(
+                (t) => t.idempotencyKey === args.data.idempotencyKey,
+              )
+            ) {
+              throw new Prisma.PrismaClientKnownRequestError(
+                'Unique constraint failed',
+                { code: 'P2002', clientVersion: '5.22.0' },
+              );
+            }
             const row: TransactionRow = {
-              id: `tx-${nextTxId++}`,
+              id: `tx-${nextId++}`,
               accountId: args.data.accountId,
               type: args.data.type,
               amount: args.data.amount,
+              remainingAmount: args.data.remainingAmount ?? null,
               bookingId: args.data.bookingId ?? null,
+              campaignRef: args.data.campaignRef ?? null,
+              fundingSource: args.data.fundingSource ?? null,
+              expiresAt: args.data.expiresAt ?? null,
+              idempotencyKey: args.data.idempotencyKey ?? null,
+              reason: args.data.reason ?? null,
               note: args.data.note ?? null,
               createdAt: new Date(),
             };
@@ -114,25 +154,23 @@ describe('CustomerCreditsService', () => {
             return Promise.resolve(row);
           },
         ),
-        findMany: jest.fn(
+        update: jest.fn(
           (args: {
-            where: { accountId: string };
-            take: number;
-            cursor?: { id: string };
-            skip?: number;
+            where: { id: string };
+            data: { remainingAmount: { decrement: number } };
           }) => {
-            let rows = transactions
-              .filter((t) => t.accountId === args.where.accountId)
-              .slice()
-              .reverse(); // newest first, matches orderBy: { createdAt: 'desc' }
-            if (args.cursor) {
-              const idx = rows.findIndex((r) => r.id === args.cursor!.id);
-              rows = idx >= 0 ? rows.slice(idx + (args.skip ?? 0)) : [];
-            }
-            return Promise.resolve(rows.slice(0, args.take));
+            const row = transactions.find((t) => t.id === args.where.id);
+            if (!row) throw new Error('not found');
+            row.remainingAmount =
+              (row.remainingAmount ?? 0) - args.data.remainingAmount.decrement;
+            return Promise.resolve(row);
           },
         ),
       },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'u1' }),
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
       $executeRaw: jest.fn(() => Promise.resolve(undefined)),
       $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) =>
         fn(prisma),
@@ -142,193 +180,370 @@ describe('CustomerCreditsService', () => {
     service = new CustomerCreditsService(prisma as never);
   });
 
-  describe('computeEarnedCredits', () => {
+  describe('computeMaxRedeemable (redemption cap, NOT an earn rate)', () => {
     it.each([
+      [49, 0],
       [50, 10],
+      [75, 10],
+      [99, 10],
       [100, 20],
+      [149, 20],
       [150, 30],
       [500, 100],
-    ])('earns exactly 20%% for an exact ₹50-slab price: ₹%d -> ₹%d', (price, expected) => {
-      expect(service.computeEarnedCredits(price)).toBe(expected);
-    });
-
-    it('earns strictly less than 20% for a price that is not an exact ₹50 multiple (₹75 -> ₹10, not ₹15)', () => {
-      expect(service.computeEarnedCredits(75)).toBe(10);
-    });
-
-    it('earns nothing for a price under one full ₹50 slab', () => {
-      expect(service.computeEarnedCredits(49)).toBe(0);
-      expect(service.computeEarnedCredits(0)).toBe(0);
+      [1000, 200],
+    ])('price ₹%d -> max redeemable ₹%d', (price, expected) => {
+      expect(service.computeMaxRedeemable(price)).toBe(expected);
     });
   });
 
   describe('getBalance', () => {
-    it('returns 0 for a customer with no credit account yet', async () => {
+    it('returns 0 for a customer with no account', async () => {
       await expect(service.getBalance('u1')).resolves.toEqual({ balance: 0 });
     });
 
-    it("returns the account's real balance once one exists", async () => {
-      account = { id: 'acct-1', userId: 'u1', balance: 42 };
-      await expect(service.getBalance('u1')).resolves.toEqual({
-        balance: 42,
+    it('sums remainingAmount across valid lots', async () => {
+      const account = findOrCreateAccount('u1');
+      transactions.push(
+        {
+          id: 't1',
+          accountId: account.id,
+          type: 'PROMO_GRANT',
+          amount: 50,
+          remainingAmount: 50,
+          bookingId: null,
+          campaignRef: null,
+          fundingSource: 'FASTQUE_FUNDED',
+          expiresAt: null,
+          idempotencyKey: null,
+          reason: 'welcome',
+          note: null,
+          createdAt: new Date(),
+        },
+        {
+          id: 't2',
+          accountId: account.id,
+          type: 'PROMO_GRANT',
+          amount: 20,
+          remainingAmount: 20,
+          bookingId: null,
+          campaignRef: null,
+          fundingSource: 'FASTQUE_FUNDED',
+          expiresAt: null,
+          idempotencyKey: null,
+          reason: 'bonus',
+          note: null,
+          createdAt: new Date(),
+        },
+      );
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 70 });
+    });
+
+    it('excludes an expired lot from the balance', async () => {
+      const account = findOrCreateAccount('u1');
+      transactions.push({
+        id: 't1',
+        accountId: account.id,
+        type: 'PROMO_GRANT',
+        amount: 50,
+        remainingAmount: 50,
+        bookingId: null,
+        campaignRef: null,
+        fundingSource: 'FASTQUE_FUNDED',
+        expiresAt: new Date(Date.now() - 1000),
+        idempotencyKey: null,
+        reason: null,
+        note: null,
+        createdAt: new Date(),
       });
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 0 });
+    });
+
+    it('excludes a fully-consumed lot (remainingAmount 0)', async () => {
+      const account = findOrCreateAccount('u1');
+      transactions.push({
+        id: 't1',
+        accountId: account.id,
+        type: 'PROMO_GRANT',
+        amount: 50,
+        remainingAmount: 0,
+        bookingId: null,
+        campaignRef: null,
+        fundingSource: 'FASTQUE_FUNDED',
+        expiresAt: null,
+        idempotencyKey: null,
+        reason: null,
+        note: null,
+        createdAt: new Date(),
+      });
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 0 });
     });
   });
 
-  describe('earnForCompletedSession', () => {
-    it('creates a new account on first earn, seeded with exactly the earned amount', async () => {
-      const earned = await service.earnForCompletedSession(
+  describe('redeemUpTo — actualCreditsUsed = min(requested, available, maxCreditsAllowed)', () => {
+    function grantLot(
+      userId: string,
+      amount: number,
+      overrides: Partial<TransactionRow> = {},
+    ) {
+      const account = findOrCreateAccount(userId);
+      const row: TransactionRow = {
+        id: `lot-${nextId++}`,
+        accountId: account.id,
+        type: 'PROMO_GRANT',
+        amount,
+        remainingAmount: amount,
+        bookingId: null,
+        campaignRef: null,
+        fundingSource: 'FASTQUE_FUNDED',
+        expiresAt: null,
+        idempotencyKey: null,
+        reason: null,
+        note: null,
+        createdAt: new Date(),
+        ...overrides,
+      };
+      transactions.push(row);
+      return row;
+    }
+
+    it('service ₹500, balance ₹30 -> redeems 30, not the full 100 cap', async () => {
+      grantLot('u1', 30);
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        30,
+        service.computeMaxRedeemable(500),
+      );
+      expect(result.actualUsed).toBe(30);
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 0 });
+    });
+
+    it('service ₹500, balance ₹500 -> redeems only the 100 price-based cap, not the full balance', async () => {
+      grantLot('u1', 500);
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        500,
+        service.computeMaxRedeemable(500),
+      );
+      expect(result.actualUsed).toBe(100);
+      await expect(service.getBalance('u1')).resolves.toEqual({
+        balance: 400,
+      });
+    });
+
+    it('service ₹100, balance ≥20 -> redeems exactly 20 (the price cap), pay 80 implied', async () => {
+      grantLot('u1', 100);
+      const result = await service.redeemUpTo(
         prisma as never,
         'u1',
         'b1',
         100,
+        service.computeMaxRedeemable(100),
       );
-      expect(earned).toBe(20);
-      expect(account).toMatchObject({ userId: 'u1', balance: 20 });
-      expect(transactions).toEqual([
-        expect.objectContaining({
-          type: 'EARNED',
-          amount: 20,
-          bookingId: 'b1',
-        }),
-      ]);
+      expect(result.actualUsed).toBe(20);
     });
 
-    it('increments an existing balance rather than replacing it', async () => {
-      account = { id: 'acct-1', userId: 'u1', balance: 15 };
-      await service.earnForCompletedSession(prisma as never, 'u1', 'b2', 150);
-      expect(account!.balance).toBe(45); // 15 + 30
+    it('service ₹75, wallet large -> redeems only 10, never 15 (20% of 75)', async () => {
+      grantLot('u1', 1000);
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        1000,
+        service.computeMaxRedeemable(75),
+      );
+      expect(result.actualUsed).toBe(10);
     });
 
-    it('does nothing and returns 0 when the price earns zero credits (under one slab)', async () => {
-      const earned = await service.earnForCompletedSession(
+    it('never rejects for exceeding balance — clamps to 0 when the customer has nothing', async () => {
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        50,
+        service.computeMaxRedeemable(500),
+      );
+      expect(result.actualUsed).toBe(0);
+    });
+
+    it('draws from the soonest-expiring lot first', async () => {
+      const soon = grantLot('u1', 10, {
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      grantLot('u1', 10, { expiresAt: null });
+      await service.redeemUpTo(
         prisma as never,
         'u1',
         'b1',
         10,
+        service.computeMaxRedeemable(500),
       );
-      expect(earned).toBe(0);
-      expect(account).toBeNull();
-      expect(transactions).toHaveLength(0);
+      const refreshedSoon = transactions.find((t) => t.id === soon.id)!;
+      expect(refreshedSoon.remainingAmount).toBe(0);
     });
 
-    it('records a null bookingId for a walk-in completion with no linked booking', async () => {
-      await service.earnForCompletedSession(prisma as never, 'u1', null, 50);
-      expect(transactions[0].bookingId).toBeNull();
+    it('splits a redemption across multiple lots when one alone is not enough', async () => {
+      grantLot('u1', 5, { expiresAt: new Date(Date.now() + 60_000) });
+      grantLot('u1', 20);
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        15,
+        service.computeMaxRedeemable(500),
+      );
+      expect(result.actualUsed).toBe(15);
+      await expect(service.getBalance('u1')).resolves.toEqual({
+        balance: 10,
+      });
     });
-  });
 
-  describe('redeemForBooking', () => {
-    beforeEach(() => {
-      account = { id: 'acct-1', userId: 'u1', balance: 50 };
+    it('reports fastQueFundedConsumed for FASTQUE_FUNDED lots, for subsidy accounting', async () => {
+      grantLot('u1', 30, { fundingSource: CreditFundingSource.FASTQUE_FUNDED });
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        30,
+        service.computeMaxRedeemable(500),
+      );
+      expect(result.fastQueFundedConsumed).toBe(30);
     });
 
-    it('does nothing for a zero or negative amount', async () => {
-      await service.redeemForBooking(prisma as never, 'u1', 'b1', 0);
-      expect(account!.balance).toBe(50);
-      expect(transactions).toHaveLength(0);
+    it('does NOT count a SHOP_FUNDED lot toward fastQueFundedConsumed (no subsidy liability for shop-funded credit)', async () => {
+      grantLot('u1', 30, { fundingSource: CreditFundingSource.SHOP_FUNDED });
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        30,
+        service.computeMaxRedeemable(500),
+      );
+      expect(result.actualUsed).toBe(30);
+      expect(result.fastQueFundedConsumed).toBe(0);
     });
 
-    it('decrements the balance and logs a REDEEMED transaction on success', async () => {
-      await service.redeemForBooking(prisma as never, 'u1', 'b1', 30);
-      expect(account!.balance).toBe(20);
-      expect(transactions).toEqual([
-        expect.objectContaining({
-          type: 'REDEEMED',
-          amount: 30,
-          bookingId: 'b1',
-        }),
+    it('two concurrent redemptions against a shared balance never double-spend or go negative', async () => {
+      grantLot('u1', 30);
+      const cap = service.computeMaxRedeemable(500);
+      const [a, b] = await Promise.all([
+        service.redeemUpTo(prisma as never, 'u1', 'b1', 30, cap),
+        service.redeemUpTo(prisma as never, 'u1', 'b2', 30, cap),
       ]);
-    });
-
-    it('acquires a per-customer advisory lock before checking the balance', async () => {
-      await service.redeemForBooking(prisma as never, 'u1', 'b1', 10);
-      expect(prisma.$executeRaw).toHaveBeenCalled();
-    });
-
-    it('throws INSUFFICIENT_CREDITS and leaves the balance untouched when the amount exceeds the live balance', async () => {
-      await expect(
-        service.redeemForBooking(prisma as never, 'u1', 'b1', 51),
-      ).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
-      expect(account!.balance).toBe(50);
-      expect(transactions).toHaveLength(0);
-    });
-
-    it('never drives the balance negative under a simulated race (second concurrent redeem sees the post-first-redeem balance)', async () => {
-      await service.redeemForBooking(prisma as never, 'u1', 'b1', 30);
-      await expect(
-        service.redeemForBooking(prisma as never, 'u1', 'b2', 30),
-      ).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
-      expect(account!.balance).toBe(20);
+      expect(a.actualUsed + b.actualUsed).toBe(30);
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 0 });
     });
   });
 
   describe('restoreForCancelledBooking', () => {
+    it('mints a brand-new, never-expiring lot for exactly the restored amount', async () => {
+      await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 30);
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 30 });
+      const restored = transactions.find((t) => t.type === 'RESTORED')!;
+      expect(restored.expiresAt).toBeNull();
+      expect(restored.remainingAmount).toBe(30);
+    });
+
     it('does nothing for a zero amount', async () => {
       await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 0);
-      expect(account).toBeNull();
+      expect(transactions).toHaveLength(0);
     });
 
-    it('creates the account if none exists (a customer whose only credit event was a redemption later restored)', async () => {
-      await service.restoreForCancelledBooking(
-        prisma as never,
-        'u1',
-        'b1',
-        30,
-      );
-      expect(account).toMatchObject({ userId: 'u1', balance: 30 });
-      expect(transactions).toEqual([
-        expect.objectContaining({
-          type: 'RESTORED',
-          amount: 30,
-          bookingId: 'b1',
-        }),
-      ]);
-    });
-
-    it('increments an existing balance', async () => {
-      account = { id: 'acct-1', userId: 'u1', balance: 20 };
-      await service.restoreForCancelledBooking(
-        prisma as never,
-        'u1',
-        'b1',
-        30,
-      );
-      expect(account!.balance).toBe(50);
+    it('a restored lot remains redeemable even if the original grant has since expired', async () => {
+      // Simulates: redeem from an expiring grant, the grant later expires, the booking is
+      // cancelled — the customer must still get their money back, spendable.
+      const grantAccount = findOrCreateAccount('u1');
+      transactions.push({
+        id: 'expired-lot',
+        accountId: grantAccount.id,
+        type: 'PROMO_GRANT',
+        amount: 30,
+        remainingAmount: 0, // fully consumed by the (now-cancelled) redemption
+        bookingId: null,
+        campaignRef: null,
+        fundingSource: 'FASTQUE_FUNDED',
+        expiresAt: new Date(Date.now() - 1000), // expired since
+        idempotencyKey: null,
+        reason: null,
+        note: null,
+        createdAt: new Date(Date.now() - 100_000),
+      });
+      await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 30);
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 30 });
     });
   });
 
-  describe('getHistory', () => {
-    it('returns an empty page for a customer with no credit account', async () => {
-      await expect(service.getHistory('u1')).resolves.toEqual({
-        items: [],
-        nextCursor: null,
+  describe('grantPromotionalCredits — the only way new credit enters a wallet', () => {
+    const input = {
+      customerId: 'u1',
+      amount: 100,
+      reason: 'Launch promo',
+      fundingSource: CreditFundingSource.FASTQUE_FUNDED,
+    };
+
+    it('creates a PROMO_GRANT lot with the full requested amount as remainingAmount', async () => {
+      const result = await service.grantPromotionalCredits(
+        'admin-1',
+        'idem-1',
+        input,
+      );
+      expect(result.type).toBe('PROMO_GRANT');
+      expect(result.amount).toBe(100);
+      expect(result.remainingAmount).toBe(100);
+      await expect(service.getBalance('u1')).resolves.toEqual({
+        balance: 100,
       });
     });
 
-    it('returns transactions newest-first with amount coerced to a number', async () => {
-      account = { id: 'acct-1', userId: 'u1', balance: 40 };
-      await service.earnForCompletedSession(prisma as never, 'u1', 'b1', 100);
-      await service.redeemForBooking(prisma as never, 'u1', 'b2', 20);
-      const page = await service.getHistory('u1');
-      expect(page.items.map((i) => i.type)).toEqual(['REDEEMED', 'EARNED']);
-      expect(page.items[0].amount).toBe(20);
-      expect(page.nextCursor).toBeNull();
+    it('throws CUSTOMER_NOT_FOUND for a nonexistent customerId, writing nothing', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce(null);
+      await expect(
+        service.grantPromotionalCredits('admin-1', 'idem-1', input),
+      ).rejects.toMatchObject({ code: 'CUSTOMER_NOT_FOUND' });
+      expect(transactions).toHaveLength(0);
     });
 
-    it('paginates with a cursor when there are more rows than the page size', async () => {
-      account = { id: 'acct-1', userId: 'u1', balance: 0 };
-      for (let i = 0; i < 3; i++) {
-        await service.earnForCompletedSession(
-          prisma as never,
-          'u1',
-          `b${i}`,
-          50,
-        );
-      }
-      const page = await service.getHistory('u1', undefined, 2);
-      expect(page.items).toHaveLength(2);
-      expect(page.nextCursor).not.toBeNull();
+    it('writes an AuditLog row for every grant', async () => {
+      await service.grantPromotionalCredits('admin-1', 'idem-1', input);
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            actorUserId: 'admin-1',
+            action: 'CREDIT_GRANTED',
+          }),
+        }),
+      );
+    });
+
+    it('replays the same result for a retried request with an identical idempotency key and identical params', async () => {
+      const first = await service.grantPromotionalCredits(
+        'admin-1',
+        'idem-1',
+        input,
+      );
+      const second = await service.grantPromotionalCredits(
+        'admin-1',
+        'idem-1',
+        input,
+      );
+      expect(second.id).toBe(first.id);
+      // Never a second grant — balance reflects only the one lot.
+      await expect(service.getBalance('u1')).resolves.toEqual({
+        balance: 100,
+      });
+    });
+
+    it('rejects a reused idempotency key with different parameters as GRANT_IDEMPOTENCY_KEY_REUSED', async () => {
+      await service.grantPromotionalCredits('admin-1', 'idem-1', input);
+      await expect(
+        service.grantPromotionalCredits('admin-1', 'idem-1', {
+          ...input,
+          amount: 999,
+        }),
+      ).rejects.toMatchObject({ code: 'GRANT_IDEMPOTENCY_KEY_REUSED' });
     });
   });
 });

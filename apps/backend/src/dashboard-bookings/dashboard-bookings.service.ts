@@ -249,10 +249,6 @@ export class DashboardBookingsService {
           ? Number(booking.cancellationChargeAmount)
           : null,
       selectedStyleName: booking.selectedStyleName,
-      creditsEarnedAmount:
-        booking.creditsEarnedAmount !== null
-          ? Number(booking.creditsEarnedAmount)
-          : null,
       creditsRedeemedAmount:
         booking.creditsRedeemedAmount !== null
           ? Number(booking.creditsRedeemedAmount)

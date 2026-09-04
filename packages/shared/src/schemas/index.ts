@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ChairStatus,
   ChargeType,
+  CreditFundingSource,
   Language,
   NotificationCategory,
   NotificationChannel,
@@ -588,3 +589,22 @@ export const decideVerificationSchema = z
     path: ['reviewNotes'],
   });
 export type DecideVerificationInput = z.infer<typeof decideVerificationSchema>;
+
+// POST admin/credits/grant (AdminCreditsController, PLATFORM_ADMIN-only) — see
+// schema.prisma's CreditTransactionType.PROMO_GRANT doc comment: this is the ONLY way new
+// spendable credit enters a customer's wallet (besides a redemption restoration), and it is never
+// exposed to a customer-facing route. `reason` is required — an admin must always say why a grant
+// happened. The request's own Idempotency-Key header (not a body field) is what the backend
+// persists onto the created transaction row, so there is exactly one source of truth for "was
+// this exact grant already made" — see AdminCreditsController.
+export const grantPromotionalCreditsSchema = z.object({
+  customerId: z.string().uuid(),
+  amount: z.number().finite().positive().multipleOf(0.01),
+  reason: z.string().trim().min(1).max(500),
+  campaignRef: z.string().trim().min(1).max(200).optional(),
+  fundingSource: z.nativeEnum(CreditFundingSource).default(CreditFundingSource.FASTQUE_FUNDED),
+  // ISO 8601 — must be strictly in the future if provided; enforced again server-side, not just
+  // here, since a client clock can't be trusted for a hard business rule.
+  expiresAt: z.string().datetime().optional(),
+});
+export type GrantPromotionalCreditsInput = z.infer<typeof grantPromotionalCreditsSchema>;

@@ -41,7 +41,6 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     preferredStaffId: null,
     prepaymentRequiredAmount: null,
     cancellationChargeAmount: null,
-    creditsEarnedAmount: null,
     creditsRedeemedAmount: null,
     salon: {
       name: 'BarberCue Demo Salon',
@@ -118,7 +117,11 @@ describe('BookingsService', () => {
     recomputeEtas: jest.Mock<Promise<void>, [string]>;
   };
   let credits: {
-    redeemForBooking: jest.Mock<Promise<void>, [unknown, string, string, number]>;
+    computeMaxRedeemable: jest.Mock<number, [number]>;
+    redeemUpTo: jest.Mock<
+      Promise<{ actualUsed: number; fastQueFundedConsumed: number }>,
+      [unknown, string, string, number, number]
+    >;
     restoreForCancelledBooking: jest.Mock<
       Promise<void>,
       [unknown, string, string, number]
@@ -207,7 +210,25 @@ describe('BookingsService', () => {
     };
     queueService = { recomputeEtas: jest.fn().mockResolvedValue(undefined) };
     credits = {
-      redeemForBooking: jest.fn().mockResolvedValue(undefined),
+      computeMaxRedeemable: jest.fn((price: number) => Math.floor(price / 50) * 10),
+      // Default: behaves as if the customer always has enough balance — clamps only to the
+      // price-based cap, mirroring the real service's own min(requested, balance, cap) with an
+      // effectively infinite balance. Individual tests override this to exercise real clamping.
+      redeemUpTo: jest
+        .fn()
+        .mockImplementation(
+          (
+            _tx: unknown,
+            _customerId: string,
+            _bookingId: string,
+            requested: number,
+            max: number,
+          ) =>
+            Promise.resolve({
+              actualUsed: Math.min(requested, max),
+              fastQueFundedConsumed: Math.min(requested, max),
+            }),
+        ),
       restoreForCancelledBooking: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -589,25 +610,65 @@ describe('BookingsService', () => {
     });
 
     describe('credit redemption (FastQue Credits / Wallet V1)', () => {
-      it('rejects INSUFFICIENT_CREDITS before ever opening a transaction when creditsToRedeem exceeds the service price', async () => {
-        await expect(
-          service.create(
-            'c1',
-            {
-              salonId: 's1',
-              serviceId: 'sv1',
-              slotStart: futureSlot,
-              creditsToRedeem: 301,
-            },
-            BookingSource.WEB,
-            'key-1',
-          ),
-        ).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
-        expect(prisma.booking.create).not.toHaveBeenCalled();
-        expect(credits.redeemForBooking).not.toHaveBeenCalled();
+      // Corrected design (post-review): the server never trusts the client-requested
+      // creditsToRedeem, and redemption never rejects for "too much requested" — it always
+      // clamps to min(requested, live balance, price-based cap), where the cap itself
+      // (floor(price/50)*10) is exhaustively tested against the frozen table in
+      // customer-credits.service.spec.ts. This file only tests that BookingsService correctly
+      // WIRES that up: computes the cap from its own server-trusted price (never the client's),
+      // passes it to redeemUpTo, and snapshots the ACTUAL amount CustomerCreditsService returns
+      // — never the raw request.
+
+      it('computes maxCreditsAllowed from the server-trusted service price and passes it to redeemUpTo, never trusting the client amount directly', async () => {
+        await service.create(
+          'c1',
+          {
+            salonId: 's1',
+            serviceId: 'sv1',
+            slotStart: futureSlot,
+            creditsToRedeem: 9999,
+          },
+          BookingSource.WEB,
+          'key-1',
+        );
+        // service.price is 300 in this suite's fixture -> cap is floor(300/50)*10 = 60.
+        expect(credits.computeMaxRedeemable).toHaveBeenCalledWith(300);
+        expect(credits.redeemUpTo).toHaveBeenCalledWith(
+          prisma,
+          'c1',
+          'b1',
+          9999,
+          60,
+        );
       });
 
-      it('snapshots creditsRedeemedAmount on the booking and redeems inside the same transaction as its creation', async () => {
+      it('snapshots creditsRedeemedAmount as the ACTUAL amount CustomerCreditsService applied, not the raw request', async () => {
+        credits.redeemUpTo.mockResolvedValueOnce({
+          actualUsed: 20,
+          fastQueFundedConsumed: 20,
+        });
+        await service.create(
+          'c1',
+          {
+            salonId: 's1',
+            serviceId: 'sv1',
+            slotStart: futureSlot,
+            creditsToRedeem: 9999, // far more than the customer could ever actually redeem
+          },
+          BookingSource.WEB,
+          'key-1',
+        );
+        expect(prisma.booking.update).toHaveBeenCalledWith({
+          where: { id: 'b1' },
+          data: { creditsRedeemedAmount: 20 },
+        });
+      });
+
+      it('creates a subsidy entry for exactly fastQueFundedConsumed, never the full actualUsed once a future SHOP_FUNDED credit exists', async () => {
+        credits.redeemUpTo.mockResolvedValueOnce({
+          actualUsed: 30,
+          fastQueFundedConsumed: 12, // e.g. partly drawn from a hypothetical SHOP_FUNDED lot
+        });
         await service.create(
           'c1',
           {
@@ -619,57 +680,66 @@ describe('BookingsService', () => {
           BookingSource.WEB,
           'key-1',
         );
-        const data = lastCreateData(prisma.booking.create);
-        expect(data.creditsRedeemedAmount).toBe(30);
-        expect(credits.redeemForBooking).toHaveBeenCalledWith(
-          prisma,
-          'c1',
-          'b1',
-          30,
-        );
         expect(prisma.platformShopSubsidyEntry.create).toHaveBeenCalledWith({
           data: {
             salonId: 's1',
             bookingId: 'b1',
-            amount: 30,
+            amount: 12,
             status: 'OUTSTANDING',
           },
         });
       });
 
-      it('propagates INSUFFICIENT_CREDITS thrown by the live balance check inside the transaction', async () => {
-        credits.redeemForBooking.mockRejectedValue(
-          Object.assign(new Error('not enough'), {
-            code: 'INSUFFICIENT_CREDITS',
-          }),
+      it('creates no subsidy entry at all when fastQueFundedConsumed is 0 (e.g. entirely shop-funded credit)', async () => {
+        credits.redeemUpTo.mockResolvedValueOnce({
+          actualUsed: 30,
+          fastQueFundedConsumed: 0,
+        });
+        await service.create(
+          'c1',
+          {
+            salonId: 's1',
+            serviceId: 'sv1',
+            slotStart: futureSlot,
+            creditsToRedeem: 30,
+          },
+          BookingSource.WEB,
+          'key-1',
         );
-        await expect(
-          service.create(
-            'c1',
-            {
-              salonId: 's1',
-              serviceId: 'sv1',
-              slotStart: futureSlot,
-              creditsToRedeem: 30,
-            },
-            BookingSource.WEB,
-            'key-1',
-          ),
-        ).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
         expect(prisma.platformShopSubsidyEntry.create).not.toHaveBeenCalled();
       });
 
-      it('never touches credits or the subsidy ledger when creditsToRedeem is omitted', async () => {
+      it('never snapshots creditsRedeemedAmount or writes a subsidy entry when actualUsed is 0 (e.g. zero balance)', async () => {
+        credits.redeemUpTo.mockResolvedValueOnce({
+          actualUsed: 0,
+          fastQueFundedConsumed: 0,
+        });
+        await service.create(
+          'c1',
+          {
+            salonId: 's1',
+            serviceId: 'sv1',
+            slotStart: futureSlot,
+            creditsToRedeem: 30,
+          },
+          BookingSource.WEB,
+          'key-1',
+        );
+        expect(prisma.booking.update).not.toHaveBeenCalled();
+        expect(prisma.platformShopSubsidyEntry.create).not.toHaveBeenCalled();
+      });
+
+      it('never calls into credits at all when creditsToRedeem is omitted', async () => {
         await service.create(
           'c1',
           { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
           BookingSource.WEB,
           'key-1',
         );
-        expect(credits.redeemForBooking).not.toHaveBeenCalled();
+        expect(credits.redeemUpTo).not.toHaveBeenCalled();
         expect(prisma.platformShopSubsidyEntry.create).not.toHaveBeenCalled();
         const data = lastCreateData(prisma.booking.create);
-        expect(data.creditsRedeemedAmount).toBeNull();
+        expect(data.creditsRedeemedAmount).toBeUndefined();
       });
     });
   });

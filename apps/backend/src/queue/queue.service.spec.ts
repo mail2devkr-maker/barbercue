@@ -7,7 +7,6 @@ import { SalonAccessService } from '../common/salon-access/salon-access.service'
 import { AvailabilityService } from '../bookings/availability.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
-import { CustomerCreditsService } from '../credits/customer-credits.service';
 
 function lastCallData(
   mock: jest.Mock<Promise<unknown>, [unknown]>,
@@ -108,12 +107,6 @@ describe('QueueService', () => {
     emitQueueEntryWaitAlert: jest.Mock;
   };
   let notifications: { notify: jest.Mock<Promise<void>, [string, string, unknown?, string?]> };
-  let credits: {
-    earnForCompletedSession: jest.Mock<
-      Promise<number>,
-      [unknown, string, string | null, unknown]
-    >;
-  };
 
   beforeEach(async () => {
     prisma = {
@@ -217,9 +210,6 @@ describe('QueueService', () => {
       emitQueueEntryWaitAlert: jest.fn(),
     };
     notifications = { notify: jest.fn().mockResolvedValue(undefined) };
-    credits = {
-      earnForCompletedSession: jest.fn().mockResolvedValue(0),
-    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -229,7 +219,6 @@ describe('QueueService', () => {
         { provide: SalonAccessService, useValue: salonAccess },
         { provide: RealtimeGateway, useValue: realtime },
         { provide: NotificationsService, useValue: notifications },
-        { provide: CustomerCreditsService, useValue: credits },
       ],
     }).compile();
     service = moduleRef.get(QueueService);
@@ -575,7 +564,6 @@ describe('QueueService', () => {
         id: 'sess1',
         queueEntryId: 'q1',
         queueEntry: makeRawEntry({ bookingId: 'b1' }),
-        service: { price: 300 },
       });
       await service.completeSession('staff1', 'sess1');
       expect(prisma.booking.update).toHaveBeenCalledWith({
@@ -589,7 +577,6 @@ describe('QueueService', () => {
         id: 'sess1',
         queueEntryId: 'q1',
         queueEntry: makeRawEntry({ bookingId: null }),
-        service: { price: 300 },
       });
       await service.completeSession('staff1', 'sess1');
       expect(prisma.booking.update).not.toHaveBeenCalled();
@@ -600,7 +587,6 @@ describe('QueueService', () => {
         id: 'sess1',
         queueEntryId: 'q1',
         queueEntry: makeRawEntry(),
-        service: { price: 300 },
       });
       prisma.serviceSession.updateMany.mockResolvedValueOnce({ count: 0 });
       await expect(
@@ -609,73 +595,23 @@ describe('QueueService', () => {
       expect(prisma.queueEntry.update).not.toHaveBeenCalled();
     });
 
-    describe('FastQue Credits / Wallet V1 — earn on completion', () => {
-      it('earns credits for a known customer on an appointment-sourced completion and snapshots the amount onto the Booking', async () => {
-        credits.earnForCompletedSession.mockResolvedValueOnce(60);
-        prisma.serviceSession.findUnique.mockResolvedValueOnce({
-          id: 'sess1',
-          queueEntryId: 'q1',
-          queueEntry: makeRawEntry({ bookingId: 'b1', customerId: 'c1' }),
-          service: { price: 300 },
-        });
-        await service.completeSession('staff1', 'sess1');
-        expect(credits.earnForCompletedSession).toHaveBeenCalledWith(
-          prisma,
-          'c1',
-          'b1',
-          300,
-        );
-        expect(prisma.booking.update).toHaveBeenCalledWith({
-          where: { id: 'b1' },
-          data: { creditsEarnedAmount: 60 },
-        });
+    // FastQue Credits / Wallet V1 (post-review correction): completing a service must NEVER
+    // automatically grant the customer any credit — an earlier version of this method did, which
+    // was a misreading of the product rule (floor(price/50)*10 is a redemption cap, not an earn
+    // rate). Regression guard: no credits service is even wired into QueueService's constructor
+    // any more (see the providers list above), so there is no code path left that could reintroduce
+    // this by accident without a compile error.
+    it('never touches CustomerCreditAccount/CustomerCreditTransaction on completion', async () => {
+      prisma.serviceSession.findUnique.mockResolvedValueOnce({
+        id: 'sess1',
+        queueEntryId: 'q1',
+        queueEntry: makeRawEntry({ bookingId: 'b1', customerId: 'c1' }),
       });
-
-      it('earns credits for a known customer on a walk-in completion (no bookingId) — never writes to Booking since none exists', async () => {
-        credits.earnForCompletedSession.mockResolvedValueOnce(10);
-        prisma.serviceSession.findUnique.mockResolvedValueOnce({
-          id: 'sess1',
-          queueEntryId: 'q1',
-          queueEntry: makeRawEntry({ bookingId: null, customerId: 'c1' }),
-          service: { price: 50 },
-        });
-        await service.completeSession('staff1', 'sess1');
-        expect(credits.earnForCompletedSession).toHaveBeenCalledWith(
-          prisma,
-          'c1',
-          null,
-          50,
-        );
-        expect(prisma.booking.update).not.toHaveBeenCalled();
-      });
-
-      it('never earns anything for an anonymous walk-in (no customerId at all)', async () => {
-        prisma.serviceSession.findUnique.mockResolvedValueOnce({
-          id: 'sess1',
-          queueEntryId: 'q1',
-          queueEntry: makeRawEntry({ bookingId: null, customerId: null }),
-          service: { price: 300 },
-        });
-        await service.completeSession('staff1', 'sess1');
-        expect(credits.earnForCompletedSession).not.toHaveBeenCalled();
-      });
-
-      it('does not snapshot creditsEarnedAmount onto the Booking when the earn amount is zero (price under one slab)', async () => {
-        credits.earnForCompletedSession.mockResolvedValueOnce(0);
-        prisma.serviceSession.findUnique.mockResolvedValueOnce({
-          id: 'sess1',
-          queueEntryId: 'q1',
-          queueEntry: makeRawEntry({ bookingId: 'b1', customerId: 'c1' }),
-          service: { price: 20 },
-        });
-        await service.completeSession('staff1', 'sess1');
-        // booking.update is still called once, to mark the booking COMPLETED — just never with a
-        // creditsEarnedAmount payload when nothing was actually earned.
-        expect(prisma.booking.update).toHaveBeenCalledTimes(1);
-        expect(prisma.booking.update).not.toHaveBeenCalledWith({
-          where: { id: 'b1' },
-          data: { creditsEarnedAmount: expect.anything() },
-        });
+      await service.completeSession('staff1', 'sess1');
+      expect(prisma.booking.update).toHaveBeenCalledTimes(1);
+      expect(prisma.booking.update).toHaveBeenCalledWith({
+        where: { id: 'b1' },
+        data: { status: 'COMPLETED' },
       });
     });
   });

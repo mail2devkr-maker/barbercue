@@ -809,14 +809,14 @@ model Booking {
   // customer, so the periodic sweep never double-reminds. Null means "not sent yet", not "no
   // reminder wanted" — every eligible booking gets exactly one until it's sent.
   reminderSentAt           DateTime?
-  // FastQue Credits / Wallet V1 — snapshots, not live-recomputed values, so a later change to
-  // CREDIT_PER_SLAB or the wallet balance can never retroactively change what a past booking shows
-  // it earned/redeemed. creditsEarnedAmount is set once, in the same transaction that marks this
-  // booking COMPLETED (QueueService.completeSession) — null until then, and null forever for a
-  // booking that never completes. creditsRedeemedAmount is set once, at creation, if the customer
-  // chose to redeem wallet balance against this booking's price — null means "redeemed nothing",
-  // not "unknown". See CustomerCreditsService for the earn/redeem/restore transaction logic.
-  creditsEarnedAmount      Decimal?      @db.Decimal(10, 2)
+  // FastQue Credits / Wallet V1 — a snapshot, not a live-recomputed value, so a later change to
+  // CREDIT_SLAB_AMOUNT_INR or the wallet balance can never retroactively change what a past
+  // booking shows it redeemed. Set once, at creation, to the ACTUAL amount applied after the
+  // server clamped the customer's request to min(requested, live balance, the price-based
+  // redemption cap) — never the raw client-requested amount. Null means "redeemed nothing", not
+  // "unknown". There is deliberately no "credits earned" snapshot: completing a service does not
+  // automatically grant credits in this product (see CreditTransactionType.PROMO_GRANT) — credits
+  // only ever enter a wallet through an authorized promotional grant or a redemption restoration.
   creditsRedeemedAmount    Decimal?      @db.Decimal(10, 2)
 
   queueEntries       QueueEntry[]
@@ -837,30 +837,60 @@ model Booking {
 // comment), the semantic opposite of a credit balance owed TO the customer. Conflating the two
 // would make a single customer row ambiguous about which direction the money moves.
 //
-// Two-table split (balance + append-only transaction log), the same shape as
-// CustomerSubscription/AiCreditTransaction above: `balance` is the single fast-read number every
-// booking-time redemption check needs, `CustomerCreditTransaction` is the durable, auditable
-// record of every event that ever changed it. The balance is never trusted as the sole source of
-// truth for "what happened" — only the transaction log is (see EARNED/REDEEMED/RESTORED below).
+// CORRECTED DESIGN (this replaces an earlier version of this comment/model that had two mistakes,
+// caught in independent review before any production use): there is no "complete a service and
+// automatically earn 20% back" mechanic. Credits only ever enter a wallet through an explicit,
+// authorized PROMO_GRANT (platform-admin-only, never self-service) or a RESTORED reversal of a
+// redemption whose booking was cancelled. floor(price/50)*10 is a REDEMPTION CAP (the most credit
+// a customer may apply against one booking's price), not an earn rate — see
+// CustomerCreditsService.computeMaxRedeemable.
+//
+// Lot-based ledger, not a cached balance counter: there is no `balance` column anywhere. Every
+// PROMO_GRANT and RESTORED row is a "lot" carrying its own `remainingAmount` (how much of that
+// specific grant is still unspent) and optional `expiresAt`. A customer's spendable balance and
+// redemption eligibility are both computed live, at query time, as the sum of remainingAmount
+// over lots that are not expired — so an expired grant is mechanically unspendable and simply
+// excluded from every read, rather than requiring a sweep job to "deactivate" it, and a cached
+// number can never drift from what the ledger actually supports. See
+// CustomerCreditsService.getBalance/redeemUpTo for the exact queries.
 enum CreditTransactionType {
-  // A completed, customer-attributed service session earned this amount — see
-  // CustomerCreditsService.computeEarnedCredits (20% of price, in ₹50 slabs, capped by
-  // construction: floor(price/50)*10 can never exceed 0.2*price).
-  EARNED
+  // An authorized, auditable grant of promotional credit — see fundingSource/campaignRef/
+  // expiresAt below. The ONLY way new spendable value enters a wallet in this product (besides
+  // RESTORED). Never self-service — see AdminCreditsController's PLATFORM_ADMIN-only route.
+  PROMO_GRANT
   // Applied against a booking's price at creation time, reducing what the customer pays online.
+  // Drawn from one or more still-valid PROMO_GRANT/RESTORED lots (soonest-expiring first).
   REDEEMED
-  // A REDEEMED amount returned to the balance because the booking that redeemed it was cancelled
-  // before the service happened.
+  // A REDEEMED amount returned to the customer because the booking that redeemed it was cancelled
+  // before the service happened. Deliberately minted as a brand-new, never-expiring lot rather
+  // than crediited back to whichever original lot(s) funded the redemption — a customer should
+  // never lose restored money to an expiry clock that kept ticking while it was tied up in a
+  // booking through no fault of theirs.
   RESTORED
-  // Reserved for a future admin correction tool — never written by any code in this phase.
+  // Reserved for a future admin correction tool — never written by any code in this phase, and
+  // never a substitute for PROMO_GRANT as the normal promotional-credit mechanism.
   MANUAL_ADJUSTMENT
 }
 
+// FastQue subsidizes redeemed credits it funded itself; a future SHOP_FUNDED grant (a shop
+// funding its own promotion) would mean the shop simply receives less, and FastQue owes it
+// nothing for that portion — see PlatformShopSubsidyEntry and
+// CustomerCreditsService.redeemUpTo's fundingSource-aware subsidy computation. Only
+// FASTQUE_FUNDED is ever actually produced by any code in this phase; SHOP_FUNDED exists so that
+// future capability doesn't require a schema change.
+enum CreditFundingSource {
+  FASTQUE_FUNDED
+  SHOP_FUNDED
+}
+
+// The anchor row a customer's credit transactions hang off; carries no balance of its own (see
+// the lot-based design note above) — it exists so CustomerCreditTransaction has a stable,
+// per-customer id to key off, and so a customer with zero credit history still has an
+// unambiguous "no rows yet" (not "row with balance 0") represented state.
 model CustomerCreditAccount {
   id        String   @id @default(uuid())
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id])
-  balance   Decimal  @default(0) @db.Decimal(10, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -869,24 +899,48 @@ model CustomerCreditAccount {
   @@map("customer_credit_accounts")
 }
 
-// Append-only — nothing in CustomerCreditsService ever updates or deletes a row here, only
-// creates new ones, so `balance` on the account row above can always be reconciled against the
-// sum of this table if the two are ever suspected to have drifted.
+// Append-only — nothing in CustomerCreditsService ever deletes a row here. The one field that DOES
+// get updated in place after creation is `remainingAmount` on a PROMO_GRANT/RESTORED lot, as
+// later REDEEMED transactions consume from it — the row itself, and every other field, never
+// changes once written, so the full history of what happened is always reconstructable.
 model CustomerCreditTransaction {
-  id        String                @id @default(uuid())
-  accountId String
-  account   CustomerCreditAccount @relation(fields: [accountId], references: [id])
-  type      CreditTransactionType
-  // Always positive; `type` alone says whether it added to or subtracted from the balance
-  // (EARNED/RESTORED add, REDEEMED subtracts) — never a signed value, so a display bug can't
-  // silently flip a debit into a credit.
-  amount    Decimal               @db.Decimal(10, 2)
-  bookingId String?
-  booking   Booking?              @relation(fields: [bookingId], references: [id])
-  note      String?
-  createdAt DateTime              @default(now())
+  id              String                @id @default(uuid())
+  accountId       String
+  account         CustomerCreditAccount @relation(fields: [accountId], references: [id])
+  type            CreditTransactionType
+  // Always positive; `type` alone says direction (PROMO_GRANT/RESTORED add, REDEEMED subtracts) —
+  // never a signed value, so a display bug can't silently flip a debit into a credit.
+  amount          Decimal               @db.Decimal(10, 2)
+  // Meaningful only for PROMO_GRANT and RESTORED rows (the "lots" — see the model-group doc
+  // comment above): how much of this specific grant/restoration has not yet been consumed by a
+  // later REDEEMED transaction. Null for REDEEMED/MANUAL_ADJUSTMENT rows, which never themselves
+  // hold spendable balance. Decrements as redemptions draw from this lot; never goes negative
+  // (every consuming update is guarded — see CustomerCreditsService.consumeLots).
+  remainingAmount Decimal?              @db.Decimal(10, 2)
+  bookingId       String?
+  booking         Booking?              @relation(fields: [bookingId], references: [id])
+  // Free-text/opaque reference to whatever campaign or promotion authorized a PROMO_GRANT — this
+  // product does not (yet) have a real Campaign table, so this is intentionally not a foreign key.
+  campaignRef     String?
+  fundingSource   CreditFundingSource?
+  // Only ever set on a PROMO_GRANT lot; null means "never expires". See the model-group doc
+  // comment above for how expiry is actually enforced (live query filter, not a sweep).
+  expiresAt       DateTime?
+  // Required and unique for a PROMO_GRANT (the admin-facing grant endpoint always supplies the
+  // same value it required as the request's Idempotency-Key header, so the two can never drift) —
+  // a second grant attempt with the same key is a retried request, not a second grant. Null for
+  // every other transaction type, whose own idempotency is structurally guaranteed elsewhere (a
+  // booking can only be created/cancelled once per real attempt — see BookingsController's
+  // existing @Idempotent() interceptor and the booking status state machine).
+  idempotencyKey  String?               @unique
+  // Why this transaction happened — required for PROMO_GRANT (an admin must always say why),
+  // optional elsewhere.
+  reason          String?
+  note            String?
+  createdAt       DateTime              @default(now())
 
   @@index([accountId, createdAt])
+  @@index([bookingId])
   @@map("customer_credit_transactions")
 }
 
