@@ -8,6 +8,7 @@ import OwnerShopStack, { type OwnerShopStackParamList } from './OwnerShopStack';
 import DashboardAccountStack, { type DashboardAccountStackParamList } from './DashboardAccountStack';
 import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
+import { useLanguage } from '../lib/language-context';
 import { color, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import { useEffect } from 'react';
@@ -32,6 +33,7 @@ const Tab = createBottomTabNavigator<OwnerTabParamList>();
 // session never mounts it.
 export default function OwnerNavigator() {
   const unreadCount = useUnreadNotificationCount();
+  const { t } = useLanguage();
   return (
     <SalonProvider>
       <OwnerPushNavigationBridge />
@@ -45,13 +47,13 @@ export default function OwnerNavigator() {
           tabBarIconStyle: { marginTop: 2 },
         }}
       >
-        <Tab.Screen name="OwnerDashboardTab" component={OwnerDashboardScreen} options={tabOptions('Dashboard', 'home')} />
-        <Tab.Screen name="OwnerQueueTab" component={OwnerQueueScreen} options={tabOptions('Queue', 'queue')} />
+        <Tab.Screen name="OwnerDashboardTab" component={OwnerDashboardScreen} options={tabOptions(t.tabDashboard, 'home')} />
+        <Tab.Screen name="OwnerQueueTab" component={OwnerQueueScreen} options={tabOptions(t.tabQueue, 'queue')} />
         <Tab.Screen
           name="OwnerBookingsTab"
           component={OwnerBookingsScreen}
           options={{
-            ...tabOptions('Bookings', 'bookings'),
+            ...tabOptions(t.tabBookings, 'bookings'),
             // PROTECTED FEATURE — VOICE NOTIFICATIONS. OwnerBookingsScreen owns the proven
             // booking.created -> fetch detail -> Speech.speak listener. Bottom tabs are lazy by
             // default, which meant a fresh owner session received no spoken booking alert until
@@ -60,12 +62,12 @@ export default function OwnerNavigator() {
             lazy: false,
           }}
         />
-        <Tab.Screen name="OwnerShopTab" component={OwnerShopStack} options={tabOptions('Shop', 'shop')} />
+        <Tab.Screen name="OwnerShopTab" component={OwnerShopStack} options={tabOptions(t.tabShop, 'shop')} />
         <Tab.Screen
           name="OwnerAccountTab"
           component={DashboardAccountStack}
           options={{
-            ...tabOptions('Account', 'account'),
+            ...tabOptions(t.tabAccount, 'account'),
             tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
             // See the matching comment in RootNavigator.tsx — resets the nested Account stack
             // (which the notification bell navigates into via {screen: 'Notifications'}) back to

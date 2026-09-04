@@ -4,8 +4,9 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { AUTH_PATHS, Role, type AuthSession } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
-import { Screen, SectionHeader, Card, Button, InlineError } from '../../components/ui';
+import { Screen, SectionHeader, Card, Button, InlineError, LanguageSwitcher } from '../../components/ui';
 
 const ROLE_LABELS: Record<string, string> = {
   [Role.CUSTOMER]: 'Customer',
@@ -16,8 +17,15 @@ const ROLE_LABELS: Record<string, string> = {
 
 // Same read-only auth/me + auth/sessions pattern as the customer AccountScreen — MeResponse and
 // the sessions endpoints are role-agnostic, so this is genuinely the same account underneath.
+//
+// Build 9 physical-device root cause fix: this screen — the ONLY Account surface an owner or
+// staff member ever reaches (see DashboardAccountStack) — previously had no language switcher at
+// all. The customer-only AccountScreen was the sole place PATCH auth/language was ever reachable,
+// so an owner had no durable way to select Hindi; the voice/push code downstream was already
+// correctly reading user.preferredLanguage, it just could never become anything but the default.
 export default function DashboardAccountScreen() {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,38 +64,41 @@ export default function DashboardAccountScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <SectionHeader eyebrow="Account" title="Your account" />
+      <View style={styles.headerRow}>
+        <SectionHeader eyebrow={t.tabAccount} title={t.yourAccount} />
+        <LanguageSwitcher />
+      </View>
 
       <Card style={styles.card}>
         <View style={styles.fieldRow}>
-          <Text style={styles.fieldLabel}>Email</Text>
-          <Text style={styles.fieldValue}>{user?.email ?? 'Not set'}</Text>
+          <Text style={styles.fieldLabel}>{t.email}</Text>
+          <Text style={styles.fieldValue}>{user?.email ?? t.notSet}</Text>
         </View>
         <View style={styles.fieldRow}>
-          <Text style={styles.fieldLabel}>Phone</Text>
-          <Text style={styles.fieldValue}>{user?.phone ?? 'Not set'}</Text>
+          <Text style={styles.fieldLabel}>{t.phone}</Text>
+          <Text style={styles.fieldValue}>{user?.phone ?? t.notSet}</Text>
         </View>
         <View style={[styles.fieldRow, styles.fieldRowLast]}>
-          <Text style={styles.fieldLabel}>Account type</Text>
+          <Text style={styles.fieldLabel}>{t.accountType}</Text>
           <Text style={styles.fieldValue}>{user?.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ') ?? '—'}</Text>
         </View>
       </Card>
 
       <Card style={styles.card}>
-        <Text style={styles.cardTitle}>Signed-in devices</Text>
+        <Text style={styles.cardTitle}>{t.signedInDevices}</Text>
         {loading && <ActivityIndicator color={color.muted} style={styles.spinner} />}
         {!loading &&
           sessions.map((session) => (
             <View key={session.id} style={styles.sessionRow}>
               <View style={styles.sessionInfo}>
                 <Text style={styles.sessionDevice}>
-                  {session.deviceInfo ?? 'Unknown device'} {session.current ? '(this device)' : ''}
+                  {session.deviceInfo ?? t.unknownDevice} {session.current ? `(${t.thisDevice})` : ''}
                 </Text>
-                <Text style={styles.sessionMeta}>Signed in {new Date(session.createdAt).toLocaleDateString()}</Text>
+                <Text style={styles.sessionMeta}>{t.signedInOnPrefix}{new Date(session.createdAt).toLocaleDateString()}</Text>
               </View>
               {!session.current && (
                 <Pressable onPress={() => void revokeSession(session.id)} disabled={revokingId === session.id}>
-                  <Text style={styles.revokeText}>{revokingId === session.id ? 'Signing out…' : 'Sign out'}</Text>
+                  <Text style={styles.revokeText}>{revokingId === session.id ? t.signingOut : t.signOut}</Text>
                 </Pressable>
               )}
             </View>
@@ -95,12 +106,13 @@ export default function DashboardAccountScreen() {
         {error && <InlineError message={error} />}
       </Card>
 
-      <Button title="Log out of this device" variant="secondary" onPress={() => void logout()} style={styles.logoutButton} />
+      <Button title={t.signOutThisDevice} variant="secondary" onPress={() => void logout()} style={styles.logoutButton} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space[2] },
   card: { marginBottom: space[4] },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginBottom: space[3] },
   fieldRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: space[3], borderBottomWidth: 1, borderBottomColor: color.border },

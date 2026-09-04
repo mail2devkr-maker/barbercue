@@ -79,7 +79,7 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
       <View style={styles.headerRow}>
-        <SectionHeader eyebrow="FastQue" title="Welcome back" subtitle="Book ahead, or join a live queue near you." />
+        <SectionHeader eyebrow="FastQue" title={t.welcomeBack} subtitle={t.welcomeSubtitle} />
         <View style={styles.headerActions}>
           <LanguageSwitcher />
           <NotificationBell
@@ -102,31 +102,31 @@ export default function HomeScreen({ navigation }: Props) {
         <>
           {activeQueueEntry && (
             <Card style={styles.statusCard}>
-              <Text style={styles.statusEyebrow}>Live queue</Text>
-              <Text style={styles.statusTitle}>Token #{activeQueueEntry.tokenNumber}</Text>
+              <Text style={styles.statusEyebrow}>{t.liveQueueLabel}</Text>
+              <Text style={styles.statusTitle}>{t.tokenNumberPrefix}{activeQueueEntry.tokenNumber}</Text>
               <Text style={styles.statusMeta}>
                 {activeQueueEntry.status === 'CALLED'
-                  ? "You're being called — please head to the counter!"
+                  ? t.calledMessage
                   : activeQueueEntry.status === 'IN_SERVICE'
-                    ? 'In service'
+                    ? t.inService
                     : activeQueueEntry.position
-                      ? `Position ${activeQueueEntry.position} in line`
+                      ? `${t.positionPrefix}${activeQueueEntry.position}${t.positionSuffix}`
                       : activeQueueEntry.status}
               </Text>
-              <Button title="View queue status" variant="secondary" onPress={() => navigation.navigate('QueueTab', { screen: 'QueueHome' })} style={styles.cardAction} />
+              <Button title={t.viewQueueStatus} variant="secondary" onPress={() => navigation.navigate('QueueTab', { screen: 'QueueHome' })} style={styles.cardAction} />
             </Card>
           )}
 
           {upcomingBooking && (
             <Card style={styles.statusCard}>
-              <Text style={styles.statusEyebrow}>Upcoming booking</Text>
+              <Text style={styles.statusEyebrow}>{t.upcomingBookingLabel}</Text>
               <Text style={styles.statusTitle}>{upcomingBooking.serviceName}</Text>
               <Text style={styles.statusMeta}>
                 {upcomingBooking.salonName} · {formatSlot(upcomingBooking.slotStart)}
               </Text>
               <Text style={styles.statusMeta}>{formatMoney(upcomingBooking.servicePrice, upcomingBooking.currency)}</Text>
               <Button
-                title="View booking"
+                title={t.viewBookingAction}
                 variant="secondary"
                 onPress={() =>
                   navigation.navigate('BookingsTab', { screen: 'BookingDetail', params: { bookingId: upcomingBooking.id } })
@@ -140,26 +140,26 @@ export default function HomeScreen({ navigation }: Props) {
 
       <View style={styles.choiceRow}>
         <Pressable style={styles.choiceCard} onPress={goFindSalon}>
-          <Text style={styles.choiceKicker}>Book ahead</Text>
-          <Text style={styles.choiceTitle}>Reserve a chair</Text>
-          <Text style={styles.choiceMeta}>Service → barber → time</Text>
+          <Text style={styles.choiceKicker}>{t.bookAheadKicker}</Text>
+          <Text style={styles.choiceTitle}>{t.reserveChair}</Text>
+          <Text style={styles.choiceMeta}>{t.serviceBarberTime}</Text>
         </Pressable>
         <Pressable style={[styles.choiceCard, styles.choiceCardAccent]} onPress={goFindSalon}>
-          <Text style={[styles.choiceKicker, styles.choiceKickerAccent]}>Join live</Text>
-          <Text style={styles.choiceTitle}>Skip the wait</Text>
-          <Text style={styles.choiceMeta}>Find a shop, join the queue</Text>
+          <Text style={[styles.choiceKicker, styles.choiceKickerAccent]}>{t.joinLiveKicker}</Text>
+          <Text style={styles.choiceTitle}>{t.skipTheWait}</Text>
+          <Text style={styles.choiceMeta}>{t.findShopJoinQueue}</Text>
         </Pressable>
       </View>
 
       <View style={styles.shortcutRow}>
         <Pressable style={styles.shortcut} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyBookings' })}>
-          <Text style={styles.shortcutText}>My bookings</Text>
+          <Text style={styles.shortcutText}>{t.myBookings}</Text>
         </Pressable>
         <Pressable style={styles.shortcut} onPress={() => navigation.navigate('StyleAdvisor')}>
-          <Text style={styles.shortcutText}>AI Style Advisor</Text>
+          <Text style={styles.shortcutText}>{t.aiStyleAdvisor}</Text>
         </Pressable>
         <Pressable style={styles.shortcut} onPress={() => navigation.navigate('AccountTab', { screen: 'Account' })}>
-          <Text style={styles.shortcutText}>Account &amp; Premium</Text>
+          <Text style={styles.shortcutText}>{t.accountAndPremium}</Text>
         </Pressable>
       </View>
     </Screen>

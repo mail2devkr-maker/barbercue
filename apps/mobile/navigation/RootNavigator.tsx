@@ -6,6 +6,7 @@ import BookingsStack from './BookingsStack';
 import QueueStack from './QueueStack';
 import AccountStack from './AccountStack';
 import { useUnreadNotificationCount } from '../lib/notifications';
+import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
 import { navigationRef } from './navigation-ref';
 import { color, font } from '../lib/theme';
@@ -41,6 +42,7 @@ function GuestBookingHandoffBridge() {
 // the app's restrained, editorial visual language rather than a generic icon-driven tab bar.
 export default function RootNavigator() {
   const unreadCount = useUnreadNotificationCount();
+  const { t } = useLanguage();
 
   return (
     <>
@@ -62,15 +64,15 @@ export default function RootNavigator() {
         tabBarIconStyle: { marginTop: 2 },
       }}
     >
-      <Tab.Screen name="HomeTab" component={HomeStack} options={tabOptions('Home', 'home')} />
-      <Tab.Screen name="SearchTab" component={SearchStack} options={tabOptions('Search', 'search')} />
-      <Tab.Screen name="BookingsTab" component={BookingsStack} options={tabOptions('Bookings', 'bookings')} />
-      <Tab.Screen name="QueueTab" component={QueueStack} options={tabOptions('Queue', 'queue')} />
+      <Tab.Screen name="HomeTab" component={HomeStack} options={tabOptions(t.tabHome, 'home')} />
+      <Tab.Screen name="SearchTab" component={SearchStack} options={tabOptions(t.tabSearch, 'search')} />
+      <Tab.Screen name="BookingsTab" component={BookingsStack} options={tabOptions(t.tabBookings, 'bookings')} />
+      <Tab.Screen name="QueueTab" component={QueueStack} options={tabOptions(t.tabQueue, 'queue')} />
       <Tab.Screen
         name="AccountTab"
         component={AccountStack}
         options={{
-            ...tabOptions('Account', 'account'),
+            ...tabOptions(t.tabAccount, 'account'),
           tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
           // Regression fix: the notification bell navigates into this tab's nested stack via
           // navigate('AccountTab', { screen: 'Notifications' }), which leaves that nested stack's

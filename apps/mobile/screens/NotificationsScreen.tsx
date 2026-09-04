@@ -1,23 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { NOTIFICATION_PATHS } from '@barbercue/shared';
+import { NOTIFICATION_PATHS, notificationTypeLabel } from '@barbercue/shared';
 import type { NotificationDto } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton } from '../components/ui';
-
-const TYPE_LABEL: Record<string, string> = {
-  'booking.confirmed': 'Booking confirmed',
-  'booking.cancelled': 'Booking cancelled',
-  'booking.reminder': 'Upcoming appointment',
-  'queue.turn_approaching': 'Your turn is approaching',
-  'owner.booking.created': 'New booking',
-  'owner.booking.cancelled': 'Booking cancelled',
-  'owner.walk_in.joined': 'New walk-in',
-  'staff.assigned': 'You were assigned a customer',
-};
 
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -36,7 +25,7 @@ function timeAgo(iso: string): string {
  * notification content itself rather than attempting to navigate anywhere on tap.
  */
 export default function NotificationsScreen() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [items, setItems] = useState<NotificationDto[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -84,7 +73,7 @@ export default function NotificationsScreen() {
 
   return (
     <Screen scroll={false}>
-      <SectionHeader eyebrow="Account" title={t.notifications} />
+      <SectionHeader eyebrow={t.tabAccount} title={t.notifications} />
       {hasUnread && (
         <Button title={t.markAllRead} variant="outline" onPress={markAllRead} style={styles.markAllButton} />
       )}
@@ -117,7 +106,7 @@ export default function NotificationsScreen() {
                 <View style={styles.rowHead}>
                   {!n.readAt && <View style={styles.dot} />}
                   <Text style={[styles.title, !n.readAt && styles.titleUnread]}>
-                    {TYPE_LABEL[n.type] ?? n.type}
+                    {notificationTypeLabel(language, n.type)}
                   </Text>
                 </View>
                 {typeof n.payload?.serviceName === 'string' && (
@@ -129,7 +118,7 @@ export default function NotificationsScreen() {
           )}
           {nextCursor && (
             <Button
-              title={loadingMore ? 'Loading…' : 'Load more'}
+              title={loadingMore ? t.loading : t.loadMore}
               variant="outline"
               onPress={() => void load(nextCursor, true)}
               loading={loadingMore}

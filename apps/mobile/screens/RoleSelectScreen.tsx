@@ -7,17 +7,16 @@ import type { AuthStackParamList } from '../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'RoleSelect'>;
 
-const OPTIONS: { role: 'CUSTOMER' | 'OWNER' | 'STAFF'; title: string; subtitle: string }[] = [
-  { role: 'CUSTOMER', title: 'Customer', subtitle: 'Book a chair or join a live queue' },
-  { role: 'OWNER', title: 'Shop Owner', subtitle: 'Run your salon, queue, and team' },
-  { role: 'STAFF', title: 'Barber / Staff', subtitle: 'Work today’s queue and bookings' },
-];
-
 // First screen a signed-out visitor sees. Customer keeps the frozen native Google/OTP flow;
 // Owner/Staff share one email+password screen (same backend endpoint, different copy) — see
 // AuthStack.tsx for why there is no separate "owner auth" concept on the backend.
 export default function RoleSelectScreen({ navigation }: Props) {
   const { t } = useLanguage();
+  const OPTIONS: { role: 'CUSTOMER' | 'OWNER' | 'STAFF'; title: string; subtitle: string }[] = [
+    { role: 'CUSTOMER', title: t.roleCustomer, subtitle: t.roleCustomerSubtitle },
+    { role: 'OWNER', title: t.roleOwner, subtitle: t.roleOwnerSubtitle },
+    { role: 'STAFF', title: t.roleStaff, subtitle: t.roleStaffSubtitle },
+  ];
 
   function choose(role: 'CUSTOMER' | 'OWNER' | 'STAFF') {
     if (role === 'CUSTOMER') {
@@ -46,11 +45,11 @@ export default function RoleSelectScreen({ navigation }: Props) {
           the actual booking/queue confirm step (see ConfirmBookingScreen/WalkInJoinScreen). */}
       <Pressable style={styles.browseCard} onPress={() => navigation.navigate('GuestBrowse')}>
         <Text style={styles.browseKicker}>{t.city} · {t.service}</Text>
-        <Text style={styles.browseTitle}>Find a shop</Text>
-        <Text style={styles.browseSubtitle}>{t.book} or {t.joinQueue.toLowerCase()} — no sign-in needed to look around.</Text>
+        <Text style={styles.browseTitle}>{t.findAShop}</Text>
+        <Text style={styles.browseSubtitle}>{t.browseHint}</Text>
       </Pressable>
 
-      <SectionHeader eyebrow="Or continue as" title="Already know your account?" />
+      <SectionHeader eyebrow={t.orContinueAs} title={t.alreadyKnowAccount} />
 
       <View style={styles.optionList}>
         {OPTIONS.map((option) => (

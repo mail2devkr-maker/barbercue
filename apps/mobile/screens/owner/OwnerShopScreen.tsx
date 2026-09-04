@@ -19,6 +19,7 @@ import {
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError, SafeImage } from '../../components/ui';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
@@ -318,27 +319,28 @@ function AddPhotoButton({
 }
 
 function PhotosSection({ salonId, photos, onChanged }: { salonId: string; photos: PhotoDto[]; onChanged: () => void }) {
+  const { t } = useLanguage();
   const cover = photos.find((p) => p.type === PhotoType.COVER) ?? null;
   const gallery = photos.filter((p) => p.type === PhotoType.GALLERY);
 
   return (
     <>
-      <Text style={styles.sectionTitle}>Photos</Text>
-      <Text style={styles.hint}>Your cover photo is what customers see first when they find you.</Text>
+      <Text style={styles.sectionTitle}>{t.photosLabel}</Text>
+      <Text style={styles.hint}>{t.coverPhotoHint}</Text>
       <View style={styles.photoGrid}>
         {cover && <PhotoTile salonId={salonId} photo={cover} onChanged={onChanged} />}
         {gallery.map((p) => (
           <PhotoTile key={p.id} salonId={salonId} photo={p} onChanged={onChanged} />
         ))}
       </View>
-      {photos.length === 0 && <Text style={styles.emptyText}>No photos yet.</Text>}
+      {photos.length === 0 && <Text style={styles.emptyText}>{t.noPhotosYet}</Text>}
       <AddPhotoButton
         salonId={salonId}
         type={PhotoType.COVER}
-        label={cover ? 'Replace cover photo' : 'Add cover photo'}
+        label={cover ? t.replaceCoverPhoto : t.addCoverPhoto}
         onAdded={onChanged}
       />
-      <AddPhotoButton salonId={salonId} type={PhotoType.GALLERY} label="Add gallery photo" onAdded={onChanged} />
+      <AddPhotoButton salonId={salonId} type={PhotoType.GALLERY} label={t.addGalleryPhoto} onAdded={onChanged} />
     </>
   );
 }
@@ -480,6 +482,7 @@ function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: () => vo
 export default function OwnerShopScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<OwnerShopStackParamList>>();
   const { selectedSalonId, selectedSalon } = useSalon();
+  const { t } = useLanguage();
   const [services, setServices] = useState<ServiceDto[]>([]);
   const [chairs, setChairs] = useState<SalonChairDto[]>([]);
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
@@ -524,7 +527,7 @@ export default function OwnerShopScreen() {
   if (!selectedSalonId) {
     return (
       <Screen scroll={false}>
-        <EmptyState title="Select a shop" message="Choose a shop from the Dashboard tab first." />
+        <EmptyState title={t.selectShopTitle} message={t.chooseShopHint} />
       </Screen>
     );
   }
@@ -546,32 +549,32 @@ export default function OwnerShopScreen() {
 
   return (
     <Screen contentStyle={styles.screenContent} refreshing={refreshing} onRefresh={() => void load(true)}>
-      <SectionHeader eyebrow="Owner" title={selectedSalon?.name ?? 'Shop'} subtitle="Services, chairs, staff, and hours" />
+      <SectionHeader eyebrow="Owner" title={selectedSalon?.name ?? t.tabShop} subtitle={t.shopSubtitle} />
 
-      <Text style={styles.sectionTitle}>Services</Text>
+      <Text style={styles.sectionTitle}>{t.servicesLabel}</Text>
       <Card style={styles.card}>
         {services.length === 0 ? (
-          <Text style={styles.emptyText}>No services yet.</Text>
+          <Text style={styles.emptyText}>{t.noServicesYet}</Text>
         ) : (
           services.map((s) => <ServiceRow key={s.id} salonId={selectedSalonId} service={s} onChanged={() => void load()} />)
         )}
       </Card>
       <AddServiceForm salonId={selectedSalonId} onAdded={() => void load()} />
 
-      <Text style={styles.sectionTitle}>Chairs</Text>
+      <Text style={styles.sectionTitle}>{t.chairsLabel}</Text>
       <Card style={styles.card}>
         {chairs.length === 0 ? (
-          <Text style={styles.emptyText}>No chairs yet.</Text>
+          <Text style={styles.emptyText}>{t.noChairsYet}</Text>
         ) : (
           chairs.map((c) => <ChairRow key={c.id} salonId={selectedSalonId} chair={c} onChanged={() => void load()} />)
         )}
       </Card>
       <AddChairForm salonId={selectedSalonId} onAdded={() => void load()} />
 
-      <Text style={styles.sectionTitle}>Staff</Text>
+      <Text style={styles.sectionTitle}>{t.staffLabel}</Text>
       <Card style={styles.card}>
         {staff.length === 0 ? (
-          <Text style={styles.emptyText}>No barbers added yet.</Text>
+          <Text style={styles.emptyText}>{t.noBarbersYet}</Text>
         ) : (
           staff.map((member) => (
             <View key={member.id} style={styles.row}>
@@ -587,16 +590,16 @@ export default function OwnerShopScreen() {
       </Card>
       <AddStaffForm salonId={selectedSalonId} onAdded={() => void load()} />
 
-      <Text style={styles.sectionTitle}>Hours</Text>
+      <Text style={styles.sectionTitle}>{t.hoursLabel}</Text>
       <Card style={styles.card}>
         <HoursEditor salonId={selectedSalonId} hours={hours} onSaved={setHours} />
       </Card>
 
       <PhotosSection salonId={selectedSalonId} photos={photos} onChanged={() => void load()} />
 
-      <Text style={styles.sectionTitle}>Customers</Text>
-      <Text style={styles.hint}>Visit history, dues, and no-show waivers for everyone who has booked at your shop.</Text>
-      <Button title="View customers" variant="outline" onPress={() => navigation.navigate('OwnerCustomers')} style={styles.addButton} />
+      <Text style={styles.sectionTitle}>{t.customersLabel}</Text>
+      <Text style={styles.hint}>{t.customersHint}</Text>
+      <Button title={t.viewCustomers} variant="outline" onPress={() => navigation.navigate('OwnerCustomers')} style={styles.addButton} />
     </Screen>
   );
 }

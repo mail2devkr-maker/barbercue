@@ -6,6 +6,7 @@ import { DASHBOARD_PATHS, type StaffStatusDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { useUnreadNotificationCount } from '../../lib/notifications';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
@@ -97,6 +98,7 @@ export default function StaffTodayScreen() {
   const panelRef = useRef<LiveQueuePanelHandle>(null);
   const [refreshing, setRefreshing] = useState(false);
   const unreadCount = useUnreadNotificationCount();
+  const { t } = useLanguage();
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -121,7 +123,7 @@ export default function StaffTodayScreen() {
   if (workplaces.length === 0) {
     return (
       <Screen scroll={false}>
-        <EmptyState title="No shop yet" message="Ask your shop owner to add you as staff on the FastQue web dashboard." />
+        <EmptyState title={t.noShopYetTitle} message={t.noShopYetHint} />
       </Screen>
     );
   }
@@ -129,7 +131,7 @@ export default function StaffTodayScreen() {
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <View style={styles.headerRow}>
-        <SectionHeader eyebrow="Today" title={selectedSalon?.name ?? "Today's queue"} />
+        <SectionHeader eyebrow={t.tabToday} title={selectedSalon?.name ?? t.todaysQueue} />
         <NotificationBell
           unreadCount={unreadCount}
           onPress={() => navigation.navigate('StaffAccountTab', { screen: 'Notifications' })}

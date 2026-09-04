@@ -17,6 +17,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
 import { useUnreadNotificationCount } from '../../lib/notifications';
+import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
@@ -86,6 +87,7 @@ export default function OwnerDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const summaryRequestIdRef = useRef(0);
   const unreadCount = useUnreadNotificationCount();
+  const { t } = useLanguage();
 
   const loadSummary = useCallback(async () => {
     const requestId = ++summaryRequestIdRef.current;
@@ -213,7 +215,7 @@ export default function OwnerDashboardScreen() {
   if (workplaces.length === 0) {
     return (
       <Screen scroll={false}>
-        <EmptyState title="No shops yet" message="Register a shop on the FastQue web dashboard to manage it here." />
+        <EmptyState title="No shops yet" message={t.registerShopHint} />
       </Screen>
     );
   }
@@ -221,7 +223,7 @@ export default function OwnerDashboardScreen() {
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <View style={styles.headerRow}>
-        <SectionHeader eyebrow="Owner" title="Dashboard" />
+        <SectionHeader eyebrow="Owner" title={t.dashboardTitle} />
         <NotificationBell
           unreadCount={unreadCount}
           onPress={() => navigation.navigate('OwnerAccountTab', { screen: 'Notifications' })}
@@ -245,21 +247,21 @@ export default function OwnerDashboardScreen() {
       {selectedSalon && (
         <Card style={styles.card}>
           <Text style={styles.salonName}>{selectedSalon.name}</Text>
-          <Text style={styles.salonStatus}>Status: {status ?? selectedSalon.status}</Text>
+          <Text style={styles.salonStatus}>{t.statusPrefix}{status ?? selectedSalon.status}</Text>
 
           {actionError && <InlineError message={actionError} />}
           {readiness && (
             <View style={styles.readinessList}>
-              <Text style={styles.readinessItem}>{readiness.hasActiveService ? '✓' : '○'} Active service</Text>
-              <Text style={styles.readinessItem}>{readiness.hasActiveChair ? '✓' : '○'} Active chair</Text>
-              <Text style={styles.readinessItem}>{readiness.hasActiveStaff ? '✓' : '○'} Active barber</Text>
+              <Text style={styles.readinessItem}>{readiness.hasActiveService ? '✓' : '○'} {t.activeService}</Text>
+              <Text style={styles.readinessItem}>{readiness.hasActiveChair ? '✓' : '○'} {t.activeChair}</Text>
+              <Text style={styles.readinessItem}>{readiness.hasActiveStaff ? '✓' : '○'} {t.activeBarber}</Text>
             </View>
           )}
 
           {(status ?? selectedSalon.status) === SalonStatus.ACTIVE ? (
-            <Button title="Close shop" variant="secondary" onPress={() => void toggleStatus('SUSPENDED')} loading={updating} style={styles.actionButton} />
+            <Button title={t.closeShop} variant="secondary" onPress={() => void toggleStatus('SUSPENDED')} loading={updating} style={styles.actionButton} />
           ) : (
-            <Button title="Open shop" onPress={() => void toggleStatus('ACTIVE')} loading={updating} style={styles.actionButton} />
+            <Button title={t.openShop} onPress={() => void toggleStatus('ACTIVE')} loading={updating} style={styles.actionButton} />
           )}
         </Card>
       )}
@@ -275,41 +277,41 @@ export default function OwnerDashboardScreen() {
             onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'today' })}
           >
             <Text style={styles.summaryValue}>{summary.today}</Text>
-            <Text style={styles.summaryLabel}>Today&apos;s bookings</Text>
+            <Text style={styles.summaryLabel}>{t.todaysBookings}</Text>
           </Pressable>
           <Pressable
             style={styles.summaryTile}
             onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'upcoming' })}
           >
             <Text style={styles.summaryValue}>{summary.upcoming}</Text>
-            <Text style={styles.summaryLabel}>Upcoming</Text>
+            <Text style={styles.summaryLabel}>{t.filterUpcoming}</Text>
           </Pressable>
           <Pressable
             style={styles.summaryTile}
             onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'completed' })}
           >
             <Text style={styles.summaryValue}>{summary.completedToday}</Text>
-            <Text style={styles.summaryLabel}>Completed today</Text>
+            <Text style={styles.summaryLabel}>{t.completedTodayLabel}</Text>
           </Pressable>
           <Pressable
             style={styles.summaryTile}
             onPress={() => navigation.navigate('OwnerBookingsTab', { filter: 'cancelled' })}
           >
             <Text style={styles.summaryValue}>{summary.cancelledNoShowToday}</Text>
-            <Text style={styles.summaryLabel}>Cancelled / no-show today</Text>
+            <Text style={styles.summaryLabel}>{t.cancelledNoShowToday}</Text>
           </Pressable>
         </View>
       )}
 
       <View style={styles.quickLinks}>
         <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerBookingsTab', undefined)}>
-          <Text style={styles.quickLinkText}>Bookings</Text>
+          <Text style={styles.quickLinkText}>{t.tabBookings}</Text>
         </Pressable>
         <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerQueueTab')}>
-          <Text style={styles.quickLinkText}>Live queue</Text>
+          <Text style={styles.quickLinkText}>{t.liveQueue}</Text>
         </Pressable>
         <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab')}>
-          <Text style={styles.quickLinkText}>Manage shop</Text>
+          <Text style={styles.quickLinkText}>{t.manageShop}</Text>
         </Pressable>
       </View>
     </Screen>

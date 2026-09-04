@@ -14,9 +14,11 @@ import {
   type OwnerBookingFilter,
   type PaginatedResult,
   type SalonTimezoneResultDto,
+  type UiStrings,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
+import { useLanguage } from '../../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
@@ -27,23 +29,29 @@ type Props = BottomTabScreenProps<OwnerTabParamList, 'OwnerBookingsTab'>;
 
 const PAGE_SIZE = 20;
 
-const FILTER_LABEL: Record<OwnerBookingFilter, string> = {
-  today: 'Today',
-  upcoming: 'Upcoming',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-  no_show: 'No-show',
-  all: 'History',
-};
+function filterLabel(t: UiStrings, filter: OwnerBookingFilter): string {
+  const labels: Record<OwnerBookingFilter, string> = {
+    today: t.filterToday,
+    upcoming: t.filterUpcoming,
+    completed: t.filterCompleted,
+    cancelled: t.filterCancelled,
+    no_show: t.filterNoShow,
+    all: t.filterHistory,
+  };
+  return labels[filter];
+}
 
-const STATUS_LABEL: Record<string, string> = {
-  CONFIRMED: 'Confirmed',
-  PENDING_PAYMENT: 'Pending payment',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-  NO_SHOW: 'No-show',
-  EXPIRED: 'Expired',
-};
+function statusLabel(t: UiStrings, status: string): string {
+  const labels: Record<string, string> = {
+    CONFIRMED: t.statusConfirmed,
+    PENDING_PAYMENT: t.statusPendingPayment,
+    COMPLETED: t.statusCompleted,
+    CANCELLED: t.statusCancelled,
+    NO_SHOW: t.statusNoShow,
+    EXPIRED: t.statusExpired,
+  };
+  return labels[status] ?? status;
+}
 
 function bookingsPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
@@ -60,23 +68,24 @@ function formatSlot(iso: string): string {
 }
 
 function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
+  const { t } = useLanguage();
   return (
     <Card style={styles.card}>
       <View style={styles.cardHeadRow}>
         <View style={styles.cardHeadText}>
           <Text style={styles.serviceName}>
             {booking.serviceName}
-            {isNew && <Text style={styles.newBadge}> NEW</Text>}
+            {isNew && <Text style={styles.newBadge}> {t.newBadge}</Text>}
           </Text>
           <Text style={styles.meta}>{formatSlot(booking.slotStart)}</Text>
           {booking.customerPhone && <Text style={styles.meta}>{booking.customerPhone}</Text>}
           {(booking.assignedStaffName ?? booking.preferredStaffName) && (
             <Text style={styles.meta}>
-              {booking.assignedStaffName ? booking.assignedStaffName : `Pref: ${booking.preferredStaffName}`}
+              {booking.assignedStaffName ? booking.assignedStaffName : `${t.preferredPrefix}${booking.preferredStaffName}`}
             </Text>
           )}
         </View>
-        <Text style={styles.statusBadge}>{STATUS_LABEL[booking.status] ?? booking.status}</Text>
+        <Text style={styles.statusBadge}>{statusLabel(t, booking.status)}</Text>
       </View>
       <Text style={styles.priceText}>
         {booking.currency ?? ''} {booking.servicePrice} · Ref {booking.id.slice(0, 8)}
@@ -95,6 +104,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
 export default function OwnerBookingsScreen({ route }: Props) {
   const { selectedSalonId } = useSalon();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [filter, setFilter] = useState<OwnerBookingFilter>(route.params?.filter ?? 'today');
   const [items, setItems] = useState<OwnerBookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -174,12 +184,23 @@ export default function OwnerBookingsScreen({ route }: Props) {
     const socket = getRealtimeSocket();
     joinSalonRoom(selectedSalonId);
 
+    // Dedupe by "event kind + booking id", never by booking id alone — a real Build 9
+    // physical-device concern was that a created+cancelled pair for the SAME booking could look
+    // like it shares one dedupe slot. It never actually did (onCancelled never touched this ref),
+    // but scoping the key this way makes that failure mode structurally impossible going forward:
+    // the same event delivered twice (e.g. a duplicate emit) is suppressed, while a different
+    // lifecycle event for the same booking always gets its own announcement.
     function onCreated(payload: { salonId: string; bookingId: string }) {
       if (payload.salonId !== selectedSalonId) return;
       void loadPage(filterRef.current, undefined, false);
-      if (notifiedIdsRef.current.has(payload.bookingId)) return;
-      notifiedIdsRef.current.add(payload.bookingId);
+      const dedupeKey = `created:${payload.bookingId}`;
+      if (notifiedIdsRef.current.has(dedupeKey)) {
+        console.warn('[voice] booking.created ignored — already announced', payload.bookingId);
+        return;
+      }
+      notifiedIdsRef.current.add(dedupeKey);
       setNewIds((current) => [...current, payload.bookingId]);
+      console.warn('[voice] booking.created received, fetching detail to announce', payload.bookingId);
       apiFetch<OwnerBookingDetailDto>(`${bookingsPath(selectedSalonId)}/${payload.bookingId}`)
         .then((detail) => {
           setNewNotice(detail);
@@ -193,6 +214,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
           const { date, time } = detail.slotStart && timeZone
             ? formatVoiceDateTime(detail.slotStart, timeZone)
             : { date: null, time: null };
+          console.warn('[voice] speaking booking.created', { language: preferredLanguageRef.current });
           Speech.speak(
             voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
               detail.serviceName ?? null,
@@ -204,15 +226,23 @@ export default function OwnerBookingsScreen({ route }: Props) {
             { language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN] },
           );
         })
-        .catch(() => {
-          /* toast just won't have rich details — the list refresh above still shows it */
+        .catch((err: unknown) => {
+          // toast just won't have rich details — the list refresh above still shows it
+          console.warn('[voice] could not fetch booking detail for announcement', err);
         });
     }
 
     function onCancelled(payload: { salonId: string; bookingId: string }) {
       if (payload.salonId !== selectedSalonId) return;
       void loadPage(filterRef.current, undefined, false);
+      const dedupeKey = `cancelled:${payload.bookingId}`;
+      if (notifiedIdsRef.current.has(dedupeKey)) {
+        console.warn('[voice] booking.cancelled ignored — already announced', payload.bookingId);
+        return;
+      }
+      notifiedIdsRef.current.add(dedupeKey);
       setCancelNotice(true);
+      console.warn('[voice] speaking booking.cancelled', { language: preferredLanguageRef.current });
       Speech.speak(voiceAnnouncementsFor(preferredLanguageRef.current).bookingCancelled(), {
         language: SPEECH_LOCALE[preferredLanguageRef.current ?? Language.EN],
       });
@@ -221,8 +251,15 @@ export default function OwnerBookingsScreen({ route }: Props) {
     socket.on('booking.created', onCreated);
     socket.on('booking.cancelled', onCancelled);
     // Phase 15: resync once the socket reconnects — a missed booking.created/cancelled while
-    // offline is never replayed by the backend.
-    const unsubscribeReconnect = onReconnect(() => void loadPage(filterRef.current, undefined, false));
+    // offline is never replayed by the backend, so the list catches up but any voice/toast for
+    // whatever was missed during the disconnect never fires. Diagnostic-only warn (no behavior
+    // change) so a physical retest can confirm whether this — not the announcement code itself —
+    // explains a "voice didn't play" report: if this line appears in logcat between a created and
+    // a cancelled announcement, the socket was briefly down and the gap is expected, not a bug.
+    const unsubscribeReconnect = onReconnect(() => {
+      console.warn('[voice] realtime socket reconnected — resyncing list; any event missed while disconnected will not retroactively announce');
+      void loadPage(filterRef.current, undefined, false);
+    });
     return () => {
       socket.off('booking.created', onCreated);
       socket.off('booking.cancelled', onCancelled);
@@ -233,19 +270,19 @@ export default function OwnerBookingsScreen({ route }: Props) {
   if (!selectedSalonId) {
     return (
       <Screen scroll={false}>
-        <SectionHeader eyebrow="Owner" title="Bookings" />
-        <EmptyState title="No shop selected" message="Select a shop from the Dashboard tab to see its bookings." />
+        <SectionHeader eyebrow="Owner" title={t.bookingsTitle} />
+        <EmptyState title={t.noShopSelected} message={t.selectShopHint} />
       </Screen>
     );
   }
 
   return (
     <Screen scroll={false}>
-      <SectionHeader eyebrow="Owner" title="Bookings" />
+      <SectionHeader eyebrow="Owner" title={t.bookingsTitle} />
 
       {newNotice && (
         <Pressable style={styles.noticeBanner} onPress={() => setNewNotice(null)}>
-          <Text style={styles.noticeTitle}>New booking received</Text>
+          <Text style={styles.noticeTitle}>{t.newBookingReceivedBanner}</Text>
           <Text style={styles.noticeBody}>
             {newNotice.serviceName} · {formatSlot(newNotice.slotStart)}
             {newNotice.customerPhone ? ` · ${newNotice.customerPhone}` : ''}
@@ -254,7 +291,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
       )}
       {cancelNotice && (
         <Pressable style={[styles.noticeBanner, styles.cancelBanner]} onPress={() => setCancelNotice(false)}>
-          <Text style={styles.noticeTitle}>Booking cancelled</Text>
+          <Text style={styles.noticeTitle}>{t.bookingCancelledBanner}</Text>
         </Pressable>
       )}
 
@@ -272,7 +309,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
             style={[styles.filterChip, filter === f && styles.filterChipActive]}
             onPress={() => setFilter(f)}
           >
-            <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>{FILTER_LABEL[f]}</Text>
+            <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>{filterLabel(t, f)}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -300,7 +337,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
           }
         >
           {items.length === 0 ? (
-            <EmptyState title="No bookings" message="Nothing in this view yet." />
+            <EmptyState title={t.noBookingsTitle} message={t.noBookingsHint} />
           ) : (
             items.map((booking) => (
               <BookingRow key={booking.id} booking={booking} isNew={newIds.includes(booking.id)} />
@@ -308,7 +345,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
           )}
           {nextCursor && (
             <Button
-              title={loadingMore ? 'Loading…' : 'Load more'}
+              title={loadingMore ? t.loading : t.loadMore}
               variant="outline"
               onPress={() => void loadPage(filter, nextCursor, true)}
               loading={loadingMore}
