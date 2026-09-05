@@ -12,8 +12,9 @@ describe('SalonPhotosService', () => {
       deleteMany: jest.Mock;
     };
     $transaction: jest.Mock;
+    auditLog: { create: jest.Mock };
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
   let storage: {
     isConfigured: boolean;
     putPublicObject: jest.Mock;
@@ -25,7 +26,7 @@ describe('SalonPhotosService', () => {
       photo: {
         findMany: jest
           .fn()
-          .mockResolvedValue([{ url: 'https://cdn.test/existing.jpg' }]),
+          .mockResolvedValue([{ url: 'https://cdn.test/existing.jpg', type: 'GALLERY' }]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue({
           id: 'p1',
@@ -39,8 +40,9 @@ describe('SalonPhotosService', () => {
       $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) =>
         fn(prisma),
       ),
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
     storage = {
       isConfigured: true,
       putPublicObject: jest
@@ -62,14 +64,14 @@ describe('SalonPhotosService', () => {
 
   it('checks salon access before listing', async () => {
     await service.list('owner-1', 'salon-1');
-    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
       'owner-1',
       'salon-1',
     );
   });
 
   it('refuses to add a photo to another owner’s salon, writing nothing', async () => {
-    salonAccess.assertOwnerAccess.mockRejectedValue(
+    salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
       Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
     );
     await expect(
@@ -237,7 +239,7 @@ describe('SalonPhotosService', () => {
     });
 
     it('checks salon access before touching storage', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValue(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -266,6 +268,70 @@ describe('SalonPhotosService', () => {
         where: { salonId: 'salon-1', type: 'COVER' },
         data: { type: 'GALLERY' },
       });
+    });
+  });
+
+  // Part 2 — PLATFORM_ADMIN delegated shop management.
+  describe('delegated admin management', () => {
+    it('an owner add/remove never writes an AuditLog row', async () => {
+      await service.create('owner-1', 'salon-1', input);
+      await service.remove('owner-1', 'salon-1', 'p1');
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('PLATFORM_ADMIN linking a photo is recorded under the real admin actor, with no binary content', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      await service.create('admin-1', 'salon-1', input);
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_SALON_PHOTO_ADDED',
+          entityType: 'Photo',
+          entityId: 'p1',
+          metadata: expect.objectContaining({ salonId: 'salon-1', via: 'link', url: 'https://cdn.test/a.jpg' }),
+        }),
+      });
+    });
+
+    it('PLATFORM_ADMIN uploading a photo is recorded under the real admin actor, with no file bytes in metadata', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      const jpegFile = {
+        buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]),
+        size: 68,
+        mimetype: 'image/jpeg',
+        originalname: 'shop.jpg',
+      } as never;
+      await service.createFromUpload('admin-1', 'salon-1', jpegFile, { type: 'COVER' as never });
+      const call = prisma.auditLog.create.mock.calls.find((c) => c[0].data.action === 'ADMIN_SALON_PHOTO_ADDED');
+      expect(call).toBeDefined();
+      // photo.create's mock always resolves the same static row regardless of input — this
+      // asserts the actor/action/via triad, not the (mock-fixed) url value.
+      expect(call![0].data).toMatchObject({ actorUserId: 'admin-1', metadata: { salonId: 'salon-1', via: 'upload', type: 'COVER' } });
+    });
+
+    it('PLATFORM_ADMIN removing a photo is recorded under the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      await service.remove('admin-1', 'salon-1', 'p1');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_SALON_PHOTO_REMOVED',
+          entityType: 'Photo',
+          entityId: 'p1',
+          metadata: expect.objectContaining({ salonId: 'salon-1', url: 'https://cdn.test/existing.jpg' }),
+        }),
+      });
+    });
+
+    it('a normal CUSTOMER is denied and nothing is written', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(service.remove('customer-1', 'salon-1', 'p1')).rejects.toMatchObject({
+        code: 'SALON_ACCESS_DENIED',
+      });
+      expect(prisma.photo.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
     });
   });
 });

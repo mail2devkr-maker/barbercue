@@ -30,8 +30,9 @@ describe('SalonStaffService', () => {
     };
     passwordResetToken: { create: jest.Mock };
     $transaction: jest.Mock;
+    auditLog: { create: jest.Mock };
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
   let emailSender: {
     assertAvailable: jest.Mock;
     sendPasswordReset: jest.Mock;
@@ -73,8 +74,9 @@ describe('SalonStaffService', () => {
       $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) =>
         fn(prisma),
       ),
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
     emailSender = {
       assertAvailable: jest.fn(),
       sendPasswordReset: jest.fn().mockResolvedValue(undefined),
@@ -94,7 +96,7 @@ describe('SalonStaffService', () => {
   });
 
   it('checks salon access before creating anything', async () => {
-    salonAccess.assertOwnerAccess.mockRejectedValue(
+    salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
       Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
     );
     await expect(
@@ -112,7 +114,7 @@ describe('SalonStaffService', () => {
       phone: '+919876543210',
     });
 
-    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
       'owner-1',
       'salon-1',
     );
@@ -397,6 +399,66 @@ describe('SalonStaffService', () => {
         where: { id: 'staff-1' },
         data: { yearsExperience: 3 },
       });
+    });
+  });
+
+  // Part 2 — PLATFORM_ADMIN delegated shop management.
+  describe('delegated admin management', () => {
+    it('an owner create/update never writes an AuditLog row', async () => {
+      await service.create('owner-1', 'salon-1', { displayName: 'Marcus', phone: '+919876543210' });
+      await service.update('owner-1', 'salon-1', 'staff-1', { yearsExperience: 3 } as never);
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('PLATFORM_ADMIN can add a barber, recorded under the real admin actor and never leaking the invite token', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      await service.create('admin-1', 'salon-1', {
+        displayName: 'Marcus',
+        phone: '+919876543210',
+        email: 'marcus@example.com',
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_STAFF_CREATED',
+          entityType: 'SalonStaff',
+        }),
+      });
+      const metadata = prisma.auditLog.create.mock.calls[0][0].data.metadata;
+      expect(JSON.stringify(metadata)).not.toMatch(/[0-9a-f]{64}/); // no raw/hashed token
+      expect(metadata.inviteUrl).toBeUndefined();
+    });
+
+    it('PLATFORM_ADMIN can deactivate a barber, recorded as ADMIN_STAFF_STATUS_CHANGED under the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      await service.update('admin-1', 'salon-1', 'staff-1', { status: 'INACTIVE' as never });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_STAFF_STATUS_CHANGED',
+          entityType: 'SalonStaff',
+          entityId: 'staff-1',
+        }),
+      });
+    });
+
+    it('a non-status profile edit by PLATFORM_ADMIN is recorded as ADMIN_STAFF_UPDATED', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      await service.update('admin-1', 'salon-1', 'staff-1', { yearsExperience: 5 } as never);
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ action: 'ADMIN_STAFF_UPDATED' }),
+      });
+    });
+
+    it('a normal CUSTOMER is denied and nothing is written', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(
+        service.update('customer-1', 'salon-1', 'staff-1', { yearsExperience: 1 } as never),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.salonStaff.update).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
     });
   });
 });

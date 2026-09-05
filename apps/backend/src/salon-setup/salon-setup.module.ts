@@ -10,6 +10,7 @@ import { SalonPhotosService } from './salon-photos.service';
 import { StaffWorkingHoursService } from './staff-working-hours.service';
 import { SalonTimezoneService } from './salon-timezone.service';
 import { SalonPaymentQrService } from './salon-payment-qr.service';
+import { SalonProfileService } from './salon-profile.service';
 import { StorageModule } from '../storage/storage.module';
 
 @Module({
@@ -30,6 +31,7 @@ import { StorageModule } from '../storage/storage.module';
     StaffWorkingHoursService,
     SalonTimezoneService,
     SalonPaymentQrService,
+    SalonProfileService,
   ],
 })
 export class SalonSetupModule {}

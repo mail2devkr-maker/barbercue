@@ -13,6 +13,7 @@ import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { QueueQrSection } from "../../../../../../components/dashboard/QueueQrSection";
 import { SetupChecklist } from "../../../../../../components/dashboard/SetupChecklist";
 import { PaymentQrSection } from "../../../../../../components/dashboard/PaymentQrSection";
+import { ProfileSection } from "../../../../../../components/dashboard/ProfileSection";
 import { Button } from "../../../../../../components/ui/Button";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
@@ -339,6 +340,11 @@ export default function DashboardSettingsPage({
         </dl>
       )}
 
+      {/* Part 2 (admin delegated shop management) — the shop's basic identity/contact fields,
+          editable by the owner or, on their behalf, a PLATFORM_ADMIN (AdminManagingBanner above
+          discloses that session). Placed first: it's the most foundational "fix this shop's
+          details" concern on this hub. */}
+      {salon && <ProfileSection salonId={salonId} />}
       {/* Payment QR moved up here (Part 1, shop-onboarding mission): this settings page is exactly
           where RegisterSalonForm lands a brand-new owner right after creating their shop, so QR —
           "Required for online bookings" — is presented immediately rather than buried below the

@@ -99,7 +99,7 @@ export class SalonTimezoneService {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,
-          action: 'ADMIN_SALON_PROFILE_UPDATED',
+          action: 'ADMIN_SALON_TIMEZONE_UPDATED',
           entityType: 'Salon',
           entityId: salonId,
           metadata: { field: 'timezone', before: previousTimezone, after: updated.timezone },

@@ -500,6 +500,29 @@ export const updateSalonStaffSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateSalonStaffInput = z.infer<typeof updateSalonStaffSchema>;
 
+// PATCH dashboard/salons/:salonId/profile (Part 2, admin delegated shop management) — the one
+// place either the real owner or a PLATFORM_ADMIN acting on their behalf can correct a shop's
+// basic identity/contact details after registration; no such endpoint existed before this. Every
+// field is safe to change post-registration without breaking a URL or a data-integrity invariant
+// elsewhere in the schema. Deliberately excludes: slug, cityId/localityId, publicId, ownerUserId,
+// status (each is either immutable in practice or already has its own dedicated, purpose-built,
+// more carefully-gated endpoint — timezone/currency via updateSalonTimezoneSchema, status via
+// updateSalonStatusSchema above). '' clears an optional field, same convention as
+// updateSalonStaffSchema's bio/photoUrl; postalCode's real per-country shape (SalonProfileService
+// re-validates via isValidPostalCode against the salon's actual stored country, the same
+// "shape-only here, real check server-side" split updateSalonTimezoneSchema already uses).
+export const updateSalonProfileSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    phone: z.union([z.string().trim().min(1).max(20), z.literal('')]).optional(),
+    email: z.union([z.string().trim().email(), z.literal('')]).optional(),
+    addressLine: z.string().trim().min(1).max(300).optional(),
+    postalCode: z.union([z.string().trim().max(12), z.literal('')]).optional(),
+    description: z.union([z.string().trim().max(2000), z.literal('')]).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+export type UpdateSalonProfileInput = z.infer<typeof updateSalonProfileSchema>;
+
 // PATCH dashboard/salons/:salonId/status — owner self-activation. Deliberately restricted to
 // ACTIVE/SUSPENDED: an owner may open or pause their own shop, but cannot move it back to
 // PENDING (a moderation state owned by the platform, not the shop).

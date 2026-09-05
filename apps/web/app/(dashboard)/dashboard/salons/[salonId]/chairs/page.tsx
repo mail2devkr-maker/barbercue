@@ -95,7 +95,7 @@ export default function DashboardChairsPage({
   const activeCount = (chairs ?? []).filter((c) => c.status === ChairStatus.ACTIVE).length;
 
   return (
-    <RequireRole roles={[Role.SALON_OWNER]} redirectTo="/dashboard/salons">
+    <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Chairs</h1>
       <p className={styles.pageSubtitle}>

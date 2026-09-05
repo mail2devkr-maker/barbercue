@@ -936,6 +936,20 @@ export interface SalonTimezoneResultDto {
   countryCode: string;
 }
 
+// GET/PATCH dashboard/salons/:salonId/profile (Part 2, admin delegated shop management) — the
+// safe-to-edit-post-registration subset of the Salon row. Deliberately excludes slug/cityId/
+// localityId/publicId/ownerUserId/status/timezone/currency — see updateSalonProfileSchema's own
+// doc comment for exactly why each is excluded.
+export interface SalonProfileDetailDto {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  addressLine: string;
+  postalCode: string | null;
+  description: string | null;
+}
+
 // GET/PUT dashboard/salons/:salonId/payment-qr response (FastQue Credits / Wallet V1) — the
 // owner-facing counterpart to BookingErrorCode.PAYMENT_QR_REQUIRED. null means not configured yet,
 // which is exactly what blocks that salon from taking an ONLINE (APP/WEB-sourced) booking.

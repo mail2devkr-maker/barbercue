@@ -53,7 +53,7 @@ export class SalonStaffService {
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonStaffDto[]> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const staff = await this.prisma.salonStaff.findMany({
       where: { salonId },
       orderBy: [{ status: 'asc' }, { displayName: 'asc' }],
@@ -75,7 +75,7 @@ export class SalonStaffService {
     salonId: string,
     input: CreateSalonStaffInput,
   ): Promise<StaffInviteResultDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
 
     const phone = input.phone.trim();
     const email = input.email?.trim().toLowerCase() || null;
@@ -208,6 +208,22 @@ export class SalonStaffService {
       );
 
     const staff = await this.getDtoOrThrow(salonId, staffId);
+    // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor.
+    // Deliberately never includes rawToken/inviteUrl in metadata (the one-time invite link is a
+    // bearer credential — see hashResetToken's own comment on why only its hash is ever stored —
+    // and must not persist anywhere else, including here, even though it is already returned to
+    // the caller outside production, exactly as it already is for an owner's own staff creation).
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_STAFF_CREATED',
+          entityType: 'SalonStaff',
+          entityId: staff.id,
+          metadata: { salonId, displayName: staff.displayName, invitationSent: Boolean(email && inviteUrl) },
+        },
+      });
+    }
     if (!email || !inviteUrl) return { staff, invitationSent: false };
     return process.env.NODE_ENV === 'production'
       ? { staff, invitationSent: true }
@@ -220,7 +236,7 @@ export class SalonStaffService {
     salonId: string,
     staffId: string,
   ): Promise<StaffInviteResultDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const staff = await this.prisma.salonStaff.findFirst({
       where: { id: staffId, salonId },
       include: { user: { select: { id: true, email: true } } },
@@ -264,6 +280,18 @@ export class SalonStaffService {
     );
 
     const dto = await this.getDtoOrThrow(salonId, staffId);
+    // Part 2 — same never-log-the-token rule as create() above.
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_STAFF_INVITE_RESENT',
+          entityType: 'SalonStaff',
+          entityId: staffId,
+          metadata: { salonId },
+        },
+      });
+    }
     return process.env.NODE_ENV === 'production'
       ? { staff: dto, invitationSent: true }
       : { staff: dto, invitationSent: true, inviteUrl };
@@ -275,7 +303,7 @@ export class SalonStaffService {
     staffId: string,
     input: UpdateSalonStaffInput,
   ): Promise<SalonStaffDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const existing = await this.prisma.salonStaff.findFirst({
       where: { id: staffId, salonId },
     });
@@ -305,7 +333,26 @@ export class SalonStaffService {
         }),
       },
     });
-    return this.getDtoOrThrow(salonId, staffId);
+    const updated = await this.getDtoOrThrow(salonId, staffId);
+    // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor. A
+    // status-only (or status-plus-other-fields) change gets its own, more specific action name so
+    // "activated/deactivated a barber" is distinguishable from a routine profile edit in the log.
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: input.status !== undefined ? 'ADMIN_STAFF_STATUS_CHANGED' : 'ADMIN_STAFF_UPDATED',
+          entityType: 'SalonStaff',
+          entityId: staffId,
+          metadata: {
+            salonId,
+            before: { displayName: existing.displayName, status: existing.status, bio: existing.bio, yearsExperience: existing.yearsExperience },
+            after: { displayName: updated.displayName, status: updated.status, bio: updated.bio, yearsExperience: updated.yearsExperience },
+          },
+        },
+      });
+    }
+    return updated;
   }
 
   private async getDtoOrThrow(

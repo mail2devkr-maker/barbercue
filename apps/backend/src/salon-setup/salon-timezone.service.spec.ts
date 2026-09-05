@@ -122,7 +122,7 @@ describe('SalonTimezoneService', () => {
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           actorUserId: 'admin-1',
-          action: 'ADMIN_SALON_PROFILE_UPDATED',
+          action: 'ADMIN_SALON_TIMEZONE_UPDATED',
           entityType: 'Salon',
           entityId: 'salon-1',
           metadata: expect.objectContaining({ field: 'timezone', after: 'Asia/Kolkata' }),

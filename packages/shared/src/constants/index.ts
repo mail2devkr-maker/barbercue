@@ -309,6 +309,11 @@ export const DASHBOARD_PATHS = {
   // this endpoint existed there was no way for an owner to actually set one. Same link-or-upload
   // dual-route shape as `photos`/`photoUpload` above.
   paymentQr: 'payment-qr',
+  // GET/PATCH dashboard/salons/:salonId/profile (Part 2, admin delegated shop management) — the
+  // safe-to-edit-post-registration subset of the Salon row (name/phone/email/addressLine/
+  // postalCode/description). No such endpoint existed before this; shared verbatim by owner and
+  // PLATFORM_ADMIN via the same SalonProfileService.
+  profile: 'profile',
 } as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).

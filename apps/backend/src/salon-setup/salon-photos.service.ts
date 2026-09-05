@@ -55,7 +55,7 @@ export class SalonPhotosService {
   ) {}
 
   async list(userId: string, salonId: string): Promise<PhotoDto[]> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const photos = await this.prisma.photo.findMany({
       where: { salonId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -69,9 +69,11 @@ export class SalonPhotosService {
     salonId: string,
     input: CreateSalonPhotoInput,
   ): Promise<PhotoDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const count = await this.assertUnderLimit(salonId);
-    return this.insert(salonId, input.url, input.altText, input.type, count);
+    const photo = await this.insert(salonId, input.url, input.altText, input.type, count);
+    if (actor === 'PLATFORM_ADMIN') await this.logAdminAdd(userId, salonId, photo, 'link');
+    return photo;
   }
 
   /**
@@ -87,7 +89,7 @@ export class SalonPhotosService {
     file: Express.Multer.File | undefined,
     meta: SalonPhotoUploadMetaInput,
   ): Promise<PhotoDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const count = await this.assertUnderLimit(salonId);
 
     if (!file || file.size === 0) {
@@ -124,7 +126,9 @@ export class SalonPhotosService {
     const key = `salons/${salonId}/photos/${randomUUID()}.${extensionForMimeType(detected)}`;
     const url = await this.storage.putPublicObject(key, file.buffer, detected);
 
-    return this.insert(salonId, url, meta.altText, meta.type, count);
+    const photo = await this.insert(salonId, url, meta.altText, meta.type, count);
+    if (actor === 'PLATFORM_ADMIN') await this.logAdminAdd(userId, salonId, photo, 'upload');
+    return photo;
   }
 
   /** Current photo count, or a typed error when the salon is already at the cap. */
@@ -175,13 +179,13 @@ export class SalonPhotosService {
     salonId: string,
     photoId: string,
   ): Promise<void> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     // deleteMany scoped by salonId, not delete-by-id: an id alone would let an owner of salon A
     // delete a photo belonging to salon B. url is selected out first (deleteMany itself cannot
     // return the row) so the storage-side cleanup below knows what to remove.
     const [photo] = await this.prisma.photo.findMany({
       where: { id: photoId, salonId },
-      select: { url: true },
+      select: { url: true, type: true },
     });
     if (!photo) {
       throw new AppException(
@@ -191,6 +195,19 @@ export class SalonPhotosService {
       );
     }
     await this.prisma.photo.deleteMany({ where: { id: photoId, salonId } });
+    // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor.
+    // Logs the photo's URL (already public) and type only — never binary content.
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_SALON_PHOTO_REMOVED',
+          entityType: 'Photo',
+          entityId: photoId,
+          metadata: { salonId, url: photo.url, type: photo.type },
+        },
+      });
+    }
     // Best-effort and after the database is already updated. ObjectStorageService.deleteObject is
     // documented as never-throwing, but that contract is enforced here too rather than trusted
     // blindly — a surprise rejection from a future/misbehaving driver must not turn an already-
@@ -201,6 +218,26 @@ export class SalonPhotosService {
       // Nothing else to do: the row is already gone, and the driver itself already logged
       // whatever went wrong.
     }
+  }
+
+  // Part 2 — shared by both add routes (link/upload) so ADMIN_SALON_PHOTO_ADDED is written
+  // identically either way; `via` in metadata distinguishes them. Logs the resulting URL only,
+  // never file bytes.
+  private async logAdminAdd(
+    adminUserId: string,
+    salonId: string,
+    photo: PhotoDto,
+    via: 'link' | 'upload',
+  ): Promise<void> {
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: adminUserId,
+        action: 'ADMIN_SALON_PHOTO_ADDED',
+        entityType: 'Photo',
+        entityId: photo.id,
+        metadata: { salonId, via, url: photo.url, type: photo.type },
+      },
+    });
   }
 
   private toDto(photo: {

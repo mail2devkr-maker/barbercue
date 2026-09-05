@@ -25,6 +25,7 @@ import {
   setSalonPaymentQrSchema,
   setStaffWorkingHoursSchema,
   updateSalonChairSchema,
+  updateSalonProfileSchema,
   updateSalonServiceSchema,
   updateSalonStaffSchema,
   updateSalonStatusSchema,
@@ -39,6 +40,7 @@ import {
   type SetSalonPaymentQrInput,
   type SetStaffWorkingHoursInput,
   type UpdateSalonChairInput,
+  type UpdateSalonProfileInput,
   type UpdateSalonServiceInput,
   type UpdateSalonStaffInput,
   type UpdateSalonStatusInput,
@@ -58,6 +60,7 @@ import { SalonPhotosService } from './salon-photos.service';
 import { StaffWorkingHoursService } from './staff-working-hours.service';
 import { SalonTimezoneService } from './salon-timezone.service';
 import { SalonPaymentQrService } from './salon-payment-qr.service';
+import { SalonProfileService } from './salon-profile.service';
 
 const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId`;
 
@@ -97,7 +100,28 @@ export class SalonSetupController {
     private readonly staffWorkingHours: StaffWorkingHoursService,
     private readonly timezone: SalonTimezoneService,
     private readonly paymentQr: SalonPaymentQrService,
+    private readonly profile: SalonProfileService,
   ) {}
+
+  // ---------- Shop profile (Part 2, admin delegated shop management) ----------
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.profile}`)
+  getProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.profile.get(user.id, salonId);
+  }
+
+  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.profile}`)
+  updateProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(updateSalonProfileSchema))
+    body: UpdateSalonProfileInput,
+  ) {
+    return this.profile.update(user.id, salonId, body);
+  }
 
   // ---------- Shop activation ----------
 

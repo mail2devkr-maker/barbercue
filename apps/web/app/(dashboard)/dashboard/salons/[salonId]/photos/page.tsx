@@ -387,7 +387,7 @@ export default function DashboardPhotosPage({
   const queueAtCapacity = galleryQueue.length >= SALON_PHOTO_UPLOAD.maxBatchCount;
 
   return (
-    <RequireRole roles={[Role.SALON_OWNER]} redirectTo="/dashboard/salons">
+    <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Photos</h1>
       <p className={styles.pageSubtitle}>
