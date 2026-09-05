@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -58,6 +59,13 @@ const POPULAR_SERVICE_CATEGORIES = [
 
 const GRADIENT_COLORS = [color.brandGradientStart, color.brandGradientEnd] as const;
 
+// Below this width, one header row can't fit brand + location + language + bell without
+// truncating the "FastQue" wordmark itself (observed at 320px) — the header splits into two rows
+// instead: brand+bell stay on row 1 (never shrink, never truncate), location+language get a full
+// row of their own with real room to breathe. 340 comfortably covers 320px devices while leaving
+// 360px+ (already fine as a single row) untouched.
+const NARROW_HEADER_MAX_WIDTH = 340;
+
 function formatSlot(iso: string, language: Language): string {
   return new Date(iso).toLocaleString(dateLocaleFor(language), {
     weekday: 'short',
@@ -70,6 +78,8 @@ function formatSlot(iso: string, language: Language): string {
 
 export default function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const isNarrowHeader = windowWidth <= NARROW_HEADER_MAX_WIDTH;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeQueueEntry, setActiveQueueEntry] = useState<QueueEntryDetailDto | null>(null);
@@ -179,35 +189,56 @@ export default function HomeScreen({ navigation }: Props) {
     goSearch({ initialQuery: query.trim() || undefined });
   }
 
+  const locationText = locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction;
+  const locationPill = (wide: boolean) => (
+    <Pressable
+      style={[styles.locationPill, wide && styles.locationPillWide]}
+      onPress={handleChooseLocation}
+      disabled={locating}
+      accessibilityRole="button"
+    >
+      <View style={styles.locationDot} />
+      <Text style={styles.locationPillText} numberOfLines={1}>
+        {locationText}
+      </Text>
+    </Pressable>
+  );
+  const bell = (
+    <NotificationBell
+      unreadCount={unreadCount}
+      onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications' })}
+    />
+  );
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + space[2] }]}>
-        <View style={styles.brandRow}>
-          <GradientView colors={GRADIENT_COLORS} style={styles.brandBadge}>
-            <Text style={styles.brandBadgeText}>FQ</Text>
-          </GradientView>
-          <Text style={styles.brandWordmark} numberOfLines={1}>
-            FastQue
-          </Text>
+        <View style={styles.headerTopRow}>
+          <View style={styles.brandRow}>
+            <GradientView colors={GRADIENT_COLORS} style={styles.brandBadge}>
+              <Text style={styles.brandBadgeText}>FQ</Text>
+            </GradientView>
+            {/* Never truncated (no numberOfLines/flexShrink) — the brand name must always read in
+                full; a narrow header instead gives location+language their own row below rather
+                than fighting this one for space. */}
+            <Text style={styles.brandWordmark}>FastQue</Text>
+          </View>
+          {isNarrowHeader ? (
+            bell
+          ) : (
+            <View style={styles.headerActions}>
+              {locationPill(false)}
+              <LanguageSwitcher compact />
+              {bell}
+            </View>
+          )}
         </View>
-        <View style={styles.headerActions}>
-          <Pressable
-            style={styles.locationPill}
-            onPress={handleChooseLocation}
-            disabled={locating}
-            accessibilityRole="button"
-          >
-            <View style={styles.locationDot} />
-            <Text style={styles.locationPillText} numberOfLines={1}>
-              {locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction}
-            </Text>
-          </Pressable>
-          <LanguageSwitcher compact />
-          <NotificationBell
-            unreadCount={unreadCount}
-            onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications' })}
-          />
-        </View>
+        {isNarrowHeader && (
+          <View style={styles.headerBottomRow}>
+            {locationPill(true)}
+            <LanguageSwitcher compact />
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -460,15 +491,19 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
 
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: space[4],
     paddingBottom: space[2],
     backgroundColor: color.surface,
     gap: space[2],
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0, gap: space[2] },
+  // Row 1 always: brand (never shrinks, never truncates) + bell. Part 7 fix history: the previous
+  // single-row header let a long title push the language switcher off the right edge of the screen
+  // entirely (Yoga doesn't clip an overflowing sibling — it just renders past the viewport). Giving
+  // location+language their own row below at narrow widths (see headerBottomRow) means row 1 never
+  // has more than two items competing for space, so the wordmark never needs to shrink at all.
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
+  headerBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   brandBadge: {
     width: 32,
     height: 32,
@@ -479,11 +514,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   brandBadgeText: { color: color.surface, fontFamily: font.bodyBold, fontSize: 12, letterSpacing: 0.3 },
-  brandWordmark: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, flexShrink: 1 },
-  // Part 7 fix: the previous header row let a long title push this whole block off the right edge
-  // of the screen with no way to see it (Yoga doesn't clip an overflowing sibling — it just renders
-  // past the viewport). flexShrink:0 + minWidth:0 on brandRow above means the wordmark truncates
-  // first, so headerActions always keeps its own guaranteed space and can never be squeezed out.
+  brandWordmark: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
   locationPill: {
     flexDirection: 'row',
@@ -496,6 +527,10 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     gap: 4,
   },
+  // The narrow-header second row: no fixed maxWidth (the single-row pill above still caps itself
+  // for the wider single-row layout) — flex:1 lets it use whatever width the language switcher
+  // doesn't need, comfortably fitting "Choose location" or a real city name without truncating.
+  locationPillWide: { flex: 1, maxWidth: 9999 },
   locationDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.brandCoral, flexShrink: 0 },
   locationPillText: { fontFamily: font.bodySemiBold, fontSize: 11, lineHeight: lineHeightFor(11), color: color.ink, flexShrink: 1 },
 
