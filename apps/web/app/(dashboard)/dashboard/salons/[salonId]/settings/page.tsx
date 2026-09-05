@@ -314,20 +314,13 @@ export default function DashboardSettingsPage({
           opened automatically.
         </div>
       )}
-      {/* This page is where RegisterSalonForm lands a brand-new owner, so it has to be a hub:
-          without these the only route to services/chairs/staff is back out to the shop list. */}
-      <nav className={styles.shopCardLinks} style={{ margin: "8px 0 4px" }}>
-        <Link href={`/dashboard/salons/${salonId}/services`}>Services</Link>
-        <Link href={`/dashboard/salons/${salonId}/hours`}>Opening hours</Link>
-        <Link href={`/dashboard/salons/${salonId}/photos`}>Photos</Link>
-        <Link href={`/dashboard/salons/${salonId}/chairs`}>Chairs</Link>
-        <Link href={`/dashboard/salons/${salonId}/staff`}>Barbers</Link>
-        <Link href={`/dashboard/salons/${salonId}/queue`}>Live queue</Link>
-        <Link href={`/dashboard/salons/${salonId}/bookings`}>Bookings</Link>
-        <Link href={`/dashboard/salons/${salonId}/schedule`}>Schedule</Link>
-        <Link href={`/dashboard/salons/${salonId}/customers`}>Customers</Link>
-        <Link href={`/dashboard/salons/${salonId}/analytics`}>Analytics</Link>
-      </nav>
+      {/* The redundant in-page section-links nav that used to live here was removed (admin-nav
+          polish, Part 2): OwnerShopNav — rendered just above this page by [salonId]/layout.tsx —
+          already covers this exact same ground, and now also correctly hides links a
+          PLATFORM_ADMIN's delegated session can't actually use (bookings/schedule/customers/
+          analytics/queue/reviews/verification all still 403 for admin). Keeping a second,
+          separately-maintained copy of the same route list here would have meant filtering it a
+          second time to match. */}
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
       {salon && (
         <dl style={{ margin: "18px 0", fontSize: 15 }}>
