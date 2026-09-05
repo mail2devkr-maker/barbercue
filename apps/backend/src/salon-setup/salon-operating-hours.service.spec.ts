@@ -15,8 +15,9 @@ describe('SalonOperatingHoursService', () => {
   let prisma: {
     operatingHours: { findMany: jest.Mock; upsert: jest.Mock };
     $transaction: jest.Mock;
+    auditLog: { create: jest.Mock };
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -26,8 +27,9 @@ describe('SalonOperatingHoursService', () => {
       },
       // The service passes an array of upsert promises; the real client runs them atomically.
       $transaction: jest.fn().mockResolvedValue([]),
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
     service = new SalonOperatingHoursService(
       prisma as never,
       salonAccess as never,
@@ -37,7 +39,7 @@ describe('SalonOperatingHoursService', () => {
   describe('list', () => {
     it('checks salon access before reading anything', async () => {
       await service.list('owner-1', 'salon-1');
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
         'owner-1',
         'salon-1',
       );
@@ -77,7 +79,7 @@ describe('SalonOperatingHoursService', () => {
     });
 
     it('refuses to read another owner’s salon', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValue(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -114,7 +116,7 @@ describe('SalonOperatingHoursService', () => {
     });
 
     it('checks access before writing anything', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValue(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -134,6 +136,26 @@ describe('SalonOperatingHoursService', () => {
       };
       expect(monday.create.isClosed).toBe(true);
       expect(monday.create.openTime).toBe('09:00');
+    });
+
+    it('an owner update never writes an AuditLog row', async () => {
+      await service.set('owner-1', 'salon-1', { days: week() });
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — PLATFORM_ADMIN delegated shop management.
+    it('PLATFORM_ADMIN managing an ACTIVE salon can set hours and it is recorded under the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      await service.set('admin-1', 'salon-1', { days: week() });
+      expect(prisma.operatingHours.upsert).toHaveBeenCalledTimes(7);
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_OPERATING_HOURS_UPDATED',
+          entityType: 'Salon',
+          entityId: 'salon-1',
+        }),
+      });
     });
   });
 

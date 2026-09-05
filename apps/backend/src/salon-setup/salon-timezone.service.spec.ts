@@ -5,8 +5,9 @@ describe('SalonTimezoneService', () => {
   let service: SalonTimezoneService;
   let prisma: {
     salon: { findUnique: jest.Mock; update: jest.Mock };
+    auditLog: { create: jest.Mock };
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -20,15 +21,16 @@ describe('SalonTimezoneService', () => {
           .fn()
           .mockResolvedValue({ id: 'salon-1', timezone: 'Asia/Kolkata' }),
       },
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
     service = new SalonTimezoneService(prisma as never, salonAccess as never);
   });
 
   describe('getTimezone', () => {
     it('checks salon access first, then returns the current value', async () => {
       const result = await service.getTimezone('owner-1', 'salon-1');
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
         'owner-1',
         'salon-1',
       );
@@ -87,7 +89,7 @@ describe('SalonTimezoneService', () => {
     });
 
     it('checks salon access before touching the database', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValue(new Error('denied'));
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(new Error('denied'));
       await expect(
         service.updateTimezone('owner-1', 'salon-1', {
           timezone: 'Asia/Kolkata',
@@ -103,6 +105,29 @@ describe('SalonTimezoneService', () => {
           timezone: 'Asia/Kolkata',
         }),
       ).rejects.toThrow(AppException);
+    });
+
+    it('an owner update never writes an AuditLog row', async () => {
+      await service.updateTimezone('owner-1', 'salon-1', { timezone: 'Asia/Kolkata' });
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — PLATFORM_ADMIN delegated shop management.
+    it('PLATFORM_ADMIN managing an ACTIVE salon succeeds and writes an AuditLog row naming the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      const result = await service.updateTimezone('admin-1', 'salon-1', {
+        timezone: 'Asia/Kolkata',
+      });
+      expect(result.timezone).toBe('Asia/Kolkata');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_SALON_PROFILE_UPDATED',
+          entityType: 'Salon',
+          entityId: 'salon-1',
+          metadata: expect.objectContaining({ field: 'timezone', after: 'Asia/Kolkata' }),
+        }),
+      });
     });
   });
 });

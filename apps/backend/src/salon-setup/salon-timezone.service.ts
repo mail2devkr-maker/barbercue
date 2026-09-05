@@ -32,7 +32,7 @@ export class SalonTimezoneService {
     userId: string,
     salonId: string,
   ): Promise<SalonTimezoneResultDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
       select: {
@@ -60,7 +60,7 @@ export class SalonTimezoneService {
     salonId: string,
     input: UpdateSalonTimezoneInput,
   ): Promise<SalonTimezoneResultDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
       include: { city: { select: { countryCode: true } } },
@@ -87,11 +87,25 @@ export class SalonTimezoneService {
         HttpStatus.BAD_REQUEST,
       );
     }
+    const previousTimezone = salon.timezone;
     const updated = await this.prisma.salon.update({
       where: { id: salonId },
       data: { timezone: input.timezone },
       select: { id: true, timezone: true },
     });
+    // Part 2 — every delegated admin mutation gets an AuditLog row with the real actor; an owner
+    // editing their own shop is unchanged (no new logging for that path).
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_SALON_PROFILE_UPDATED',
+          entityType: 'Salon',
+          entityId: salonId,
+          metadata: { field: 'timezone', before: previousTimezone, after: updated.timezone },
+        },
+      });
+    }
     return { ...updated, countryCode: salon.city.countryCode };
   }
 }

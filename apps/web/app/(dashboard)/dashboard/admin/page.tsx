@@ -124,7 +124,17 @@ export default function AdminDashboardPage() {
                   <td>{contact(shop.ownerEmail, shop.ownerPhone)}</td>
                   <td>{shop.staffCount} staff · {shop.bookingCount} bookings · {shop.liveQueueCount} live</td>
                   <td>{shop.subscriptionStatus}</td>
-                  <td>
+                  <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {/* Part 2 (admin delegated shop management) — only an ACTIVE shop is
+                        delegated-manageable (SalonAccessService.assertOwnerOrAdminAccess enforces
+                        this server-side regardless of what this button does); reusing the exact
+                        same owner "Set up & open" settings page rather than a second admin-only UI,
+                        with AdminManagingBanner disclosing the admin session on every page there. */}
+                    {shop.status === SalonStatus.ACTIVE && (
+                      <LinkButton href={`/dashboard/salons/${shop.id}/settings`} variant="secondary">
+                        Manage
+                      </LinkButton>
+                    )}
                     <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleDeleteShop(shop.id, shop.name)}>
                       {deletingShopId === shop.id ? "Deleting…" : "Delete"}
                     </Button>

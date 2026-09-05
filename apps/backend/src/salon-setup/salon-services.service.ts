@@ -30,7 +30,7 @@ export class SalonServicesService {
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonServiceDto[]> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const services = await this.prisma.service.findMany({
       where: { salonId },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
@@ -84,7 +84,7 @@ export class SalonServicesService {
     serviceId: string,
     input: UpdateSalonServiceInput,
   ): Promise<SalonServiceDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     // Scoped by BOTH id and salonId: an owner with access to salon A must not be able to mutate
     // salon B's service by guessing its id.
     const existing = await this.prisma.service.findFirst({
@@ -113,6 +113,36 @@ export class SalonServicesService {
         ...(input.isActive !== undefined && { isActive: input.isActive }),
       },
     });
+    // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor.
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_SERVICE_UPDATED',
+          entityType: 'Service',
+          entityId: serviceId,
+          metadata: {
+            salonId,
+            before: {
+              name: existing.name,
+              description: existing.description,
+              price: String(existing.price),
+              durationMinutes: existing.durationMinutes,
+              category: existing.category,
+              isActive: existing.isActive,
+            },
+            after: {
+              name: updated.name,
+              description: updated.description,
+              price: String(updated.price),
+              durationMinutes: updated.durationMinutes,
+              category: updated.category,
+              isActive: updated.isActive,
+            },
+          },
+        },
+      });
+    }
     return this.toDto(updated, await this.currencyFor(salonId));
   }
 

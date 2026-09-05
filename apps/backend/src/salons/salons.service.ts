@@ -622,12 +622,23 @@ export class SalonsService {
    * settings page. Reuses SalonAccessService (the same membership check the queue dashboard
    * already relies on) rather than a bespoke ownerUserId check, so access rules can't drift
    * between "can view this salon's settings" and "can operate this salon's queue".
+   *
+   * Part 2 — falls back to assertOwnerOrAdminAccess only when the normal owner/staff check fails,
+   * so a genuine owner/staff request is completely unaffected (same call, same behavior, same
+   * error) and a PLATFORM_ADMIN can load this same settings-page data for an ACTIVE salon they are
+   * delegated-managing. A caller that is neither still gets assertOwnerOrAdminAccess's own
+   * SALON_ACCESS_DENIED, not the original assertAccess error — both are 403s with an equivalent
+   * message, so nothing meaningful is lost for a genuinely unauthorized caller.
    */
   async getOwnedSalon(
     userId: string,
     salonId: string,
   ): Promise<RegisterSalonResultDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    try {
+      await this.salonAccess.assertAccess(userId, salonId);
+    } catch {
+      await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    }
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
     });

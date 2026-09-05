@@ -8,8 +8,9 @@ describe('SalonPaymentQrService', () => {
       upsert: jest.Mock;
       update: jest.Mock;
     };
+    auditLog: { create: jest.Mock };
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
   let storage: { putPublicObject: jest.Mock; deleteObject: jest.Mock };
 
   beforeEach(() => {
@@ -24,8 +25,9 @@ describe('SalonPaymentQrService', () => {
         ),
         update: jest.fn().mockResolvedValue({ paymentQrImageUrl: null }),
       },
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
     storage = {
       putPublicObject: jest.fn().mockResolvedValue('https://cdn.test/qr.jpg'),
       deleteObject: jest.fn().mockResolvedValue(undefined),
@@ -51,7 +53,7 @@ describe('SalonPaymentQrService', () => {
   describe('get', () => {
     it('checks salon access before reading', async () => {
       await service.get('owner-1', 'salon-1');
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
         'owner-1',
         'salon-1',
       );
@@ -90,7 +92,7 @@ describe('SalonPaymentQrService', () => {
     });
 
     it('refuses to set a QR for another owner’s salon', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValue(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -99,6 +101,29 @@ describe('SalonPaymentQrService', () => {
         }),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(prisma.salonPaymentPolicy.upsert).not.toHaveBeenCalled();
+    });
+
+    it('an owner update never writes an AuditLog row', async () => {
+      await service.setLink('owner-1', 'salon-1', { url: 'https://cdn.test/qr.png' });
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — PLATFORM_ADMIN delegated shop management.
+    it('PLATFORM_ADMIN managing an ACTIVE salon can link a QR and it is recorded under the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      const result = await service.setLink('admin-1', 'salon-1', {
+        url: 'https://cdn.test/qr.png',
+      });
+      expect(result.paymentQrImageUrl).toBe('https://cdn.test/qr.png');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_PAYMENT_QR_UPDATED',
+          entityType: 'Salon',
+          entityId: 'salon-1',
+          metadata: expect.objectContaining({ via: 'link', after: 'https://cdn.test/qr.png' }),
+        }),
+      });
     });
   });
 
@@ -134,6 +159,20 @@ describe('SalonPaymentQrService', () => {
         service.setFromUpload('owner-1', 'salon-1', undefined),
       ).rejects.toMatchObject({ code: 'PAYMENT_QR_FILE_REQUIRED' });
     });
+
+    // Part 2 — PLATFORM_ADMIN delegated shop management. Confirms the upload path never leaks
+    // file bytes/EXIF into the audit trail — only the resulting public URL.
+    it('PLATFORM_ADMIN uploading a QR image is recorded under the real admin actor, with no file content in metadata', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      await service.setFromUpload('admin-1', 'salon-1', jpeg());
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_PAYMENT_QR_UPDATED',
+          metadata: { via: 'upload', before: null, after: 'https://cdn.test/qr.jpg' },
+        }),
+      });
+    });
   });
 
   describe('remove', () => {
@@ -164,6 +203,41 @@ describe('SalonPaymentQrService', () => {
       await expect(
         service.remove('owner-1', 'salon-1'),
       ).resolves.toBeUndefined();
+    });
+
+    it('an owner remove never writes an AuditLog row', async () => {
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+        paymentQrImageUrl: 'https://cdn.test/qr.png',
+      });
+      await service.remove('owner-1', 'salon-1');
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — PLATFORM_ADMIN delegated shop management.
+    it('PLATFORM_ADMIN removing a QR is recorded under the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+        paymentQrImageUrl: 'https://cdn.test/qr.png',
+      });
+      await service.remove('admin-1', 'salon-1');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_PAYMENT_QR_UPDATED',
+          metadata: { via: 'remove', before: 'https://cdn.test/qr.png', after: null },
+        }),
+      });
+    });
+
+    it('a normal CUSTOMER is denied and no mutation or audit write happens', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(service.remove('customer-1', 'salon-1')).rejects.toMatchObject({
+        code: 'SALON_ACCESS_DENIED',
+      });
+      expect(prisma.salonPaymentPolicy.update).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
     });
   });
 });

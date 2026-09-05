@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type {
   OperatingHoursDto,
   SetOperatingHoursInput,
@@ -44,7 +45,7 @@ export class SalonOperatingHoursService {
 
   /** Always returns exactly 7 entries, ordered Sunday..Saturday, so the UI has a stable shape. */
   async list(userId: string, salonId: string): Promise<OperatingHoursDto[]> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const rows = await this.prisma.operatingHours.findMany({
       where: { salonId },
     });
@@ -72,7 +73,8 @@ export class SalonOperatingHoursService {
     salonId: string,
     input: SetOperatingHoursInput,
   ): Promise<OperatingHoursDto[]> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const before = actor === 'PLATFORM_ADMIN' ? await this.list(userId, salonId) : null;
 
     await this.prisma.$transaction(
       input.days.map((day) =>
@@ -96,6 +98,19 @@ export class SalonOperatingHoursService {
       ),
     );
 
-    return this.list(userId, salonId);
+    const after = await this.list(userId, salonId);
+    // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor.
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_OPERATING_HOURS_UPDATED',
+          entityType: 'Salon',
+          entityId: salonId,
+          metadata: { before, after } as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
+    return after;
   }
 }

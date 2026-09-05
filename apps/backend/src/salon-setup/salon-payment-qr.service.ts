@@ -29,7 +29,7 @@ export class SalonPaymentQrService {
   ) {}
 
   async get(userId: string, salonId: string): Promise<SalonPaymentQrDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const policy = await this.prisma.salonPaymentPolicy.findUnique({
       where: { salonId },
       select: { paymentQrImageUrl: true },
@@ -43,8 +43,13 @@ export class SalonPaymentQrService {
     salonId: string,
     input: SetSalonPaymentQrInput,
   ): Promise<SalonPaymentQrDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
-    return this.upsert(salonId, input.url);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const before = actor === 'PLATFORM_ADMIN' ? await this.currentUrl(salonId) : null;
+    const result = await this.upsert(salonId, input.url);
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.logAdminAudit(userId, salonId, 'link', before, result.paymentQrImageUrl);
+    }
+    return result;
   }
 
   /** Route 2: the owner picks a file off their device — same magic-byte validation as
@@ -54,7 +59,7 @@ export class SalonPaymentQrService {
     salonId: string,
     file: Express.Multer.File | undefined,
   ): Promise<SalonPaymentQrDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
 
     if (!file || file.size === 0) {
       throw new AppException(
@@ -72,13 +77,18 @@ export class SalonPaymentQrService {
       );
     }
 
+    const before = actor === 'PLATFORM_ADMIN' ? await this.currentUrl(salonId) : null;
     const key = `salons/${salonId}/payment-qr/${randomUUID()}.${extensionForMimeType(detected)}`;
     const url = await this.storage.putPublicObject(key, file.buffer, detected);
-    return this.upsert(salonId, url);
+    const result = await this.upsert(salonId, url);
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.logAdminAudit(userId, salonId, 'upload', before, result.paymentQrImageUrl);
+    }
+    return result;
   }
 
   async remove(userId: string, salonId: string): Promise<void> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const policy = await this.prisma.salonPaymentPolicy.findUnique({
       where: { salonId },
       select: { paymentQrImageUrl: true },
@@ -88,11 +98,43 @@ export class SalonPaymentQrService {
       where: { salonId },
       data: { paymentQrImageUrl: null },
     });
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.logAdminAudit(userId, salonId, 'remove', policy.paymentQrImageUrl, null);
+    }
     try {
       await this.storage.deleteObject(policy.paymentQrImageUrl);
     } catch {
       // Best-effort, same contract as SalonPhotosService.remove — the row is already updated.
     }
+  }
+
+  private async currentUrl(salonId: string): Promise<string | null> {
+    const policy = await this.prisma.salonPaymentPolicy.findUnique({
+      where: { salonId },
+      select: { paymentQrImageUrl: true },
+    });
+    return policy?.paymentQrImageUrl ?? null;
+  }
+
+  // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor. Logs
+  // the image URL (already public/owner-shared, never a secret), never file bytes/EXIF/anything
+  // from the multipart upload itself.
+  private async logAdminAudit(
+    adminUserId: string,
+    salonId: string,
+    via: 'link' | 'upload' | 'remove',
+    before: string | null,
+    after: string | null,
+  ): Promise<void> {
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: adminUserId,
+        action: 'ADMIN_PAYMENT_QR_UPDATED',
+        entityType: 'Salon',
+        entityId: salonId,
+        metadata: { via, before, after },
+      },
+    });
   }
 
   private async upsert(

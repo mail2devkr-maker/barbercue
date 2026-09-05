@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { Role } from '@barbercue/shared';
+import { Role, SalonStatus } from '@barbercue/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SalonAccessService } from './salon-access.service';
 
@@ -7,11 +7,13 @@ describe('SalonAccessService', () => {
   let service: SalonAccessService;
   let prisma: {
     userRole: { findFirst: jest.Mock };
+    salon: { findUnique: jest.Mock };
   };
 
   beforeEach(async () => {
     prisma = {
       userRole: { findFirst: jest.fn() },
+      salon: { findUnique: jest.fn() },
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -89,5 +91,82 @@ describe('SalonAccessService', () => {
     await expect(
       service.assertAccess('mixed-role-user', 'salon-c'),
     ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+  });
+
+  // Part 2 — PLATFORM_ADMIN delegated shop management.
+  describe('assertOwnerOrAdminAccess', () => {
+    it('grants access to the real owner without ever checking for a global admin role', async () => {
+      prisma.userRole.findFirst.mockResolvedValueOnce({ role: Role.SALON_OWNER });
+      await expect(
+        service.assertOwnerOrAdminAccess('owner-1', 'salon-1'),
+      ).resolves.toBe('OWNER');
+      expect(prisma.userRole.findFirst).toHaveBeenCalledTimes(1);
+      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('grants a PLATFORM_ADMIN access to an ACTIVE salon', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null) // not the owner
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN }); // is a global admin
+      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.ACTIVE });
+      await expect(
+        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
+      ).resolves.toBe('PLATFORM_ADMIN');
+    });
+
+    it('denies a PLATFORM_ADMIN a PENDING salon — no moderation backdoor for lifecycle-incomplete shops', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
+      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.PENDING });
+      await expect(
+        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    });
+
+    it('denies a PLATFORM_ADMIN a SUSPENDED salon', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
+      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.SUSPENDED });
+      await expect(
+        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    });
+
+    it('throws SALON_NOT_FOUND for a real admin acting on a salonId that does not exist', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
+      prisma.salon.findUnique.mockResolvedValue(null);
+      await expect(
+        service.assertOwnerOrAdminAccess('admin-1', 'missing-salon'),
+      ).rejects.toMatchObject({ code: 'SALON_NOT_FOUND' });
+    });
+
+    it('denies a normal CUSTOMER with neither an owner UserRole row nor a global PLATFORM_ADMIN row', async () => {
+      prisma.userRole.findFirst.mockResolvedValue(null);
+      await expect(
+        service.assertOwnerOrAdminAccess('customer-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('denies a SALON_STAFF member with no owner access and no admin role — staff cannot use owner/admin-only mutations', async () => {
+      prisma.userRole.findFirst.mockResolvedValue(null); // neither the OWNER nor PLATFORM_ADMIN lookup matches a staff-only row
+      await expect(
+        service.assertOwnerOrAdminAccess('staff-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    });
+
+    it("an unrelated SALON_OWNER (owner of a different salon) is denied — cannot manage another owner's salon", async () => {
+      // This owner's UserRole row exists, but for a different salonId — findFirst is scoped by
+      // salonId in the where-clause, so a real Prisma call would already return null here; the
+      // mock mirrors that by resolving null for both lookups against THIS salonId.
+      prisma.userRole.findFirst.mockResolvedValue(null);
+      await expect(
+        service.assertOwnerOrAdminAccess('other-owner-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    });
   });
 });

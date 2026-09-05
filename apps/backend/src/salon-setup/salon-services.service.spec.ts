@@ -14,8 +14,12 @@ describe('SalonServicesService', () => {
       create: jest.Mock;
       update: jest.Mock;
     };
+    auditLog: { create: jest.Mock };
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  // `create` still calls assertOwnerAccess (unconverted — Part 2 only wired list/update for
+  // delegated admin management); `list`/`update` call the new assertOwnerOrAdminAccess. Both
+  // mocks coexist here for exactly that reason.
+  let salonAccess: { assertOwnerAccess: jest.Mock; assertOwnerOrAdminAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -27,22 +31,26 @@ describe('SalonServicesService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = {
+      assertOwnerAccess: jest.fn().mockResolvedValue(undefined),
+      assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER'),
+    };
     service = new SalonServicesService(prisma as never, salonAccess as never);
   });
 
   describe('salon isolation', () => {
     it('checks salon access before listing', async () => {
       await service.list('owner-1', 'salon-1');
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
         'owner-1',
         'salon-1',
       );
     });
 
     it('propagates SALON_ACCESS_DENIED and never queries when access is refused', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValue(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -262,5 +270,65 @@ describe('SalonServicesService', () => {
     expect(prisma.service.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { salonId: 'salon-1' } }),
     );
+  });
+
+  // Part 2 — PLATFORM_ADMIN delegated shop management.
+  describe('delegated admin update', () => {
+    beforeEach(() => {
+      prisma.service.findFirst.mockResolvedValue({
+        id: 'svc-1',
+        salonId: 'salon-1',
+        name: 'Haircut',
+        description: null,
+        durationMinutes: 30,
+        price: decimal('300'),
+        category: null,
+        isActive: true,
+      });
+      prisma.service.update.mockResolvedValue({
+        id: 'svc-1',
+        name: 'Haircut',
+        description: null,
+        durationMinutes: 30,
+        price: decimal('350'),
+        category: null,
+        isActive: true,
+      });
+    });
+
+    it('an owner update never writes an AuditLog row', async () => {
+      await service.update('owner-1', 'salon-1', 'svc-1', { price: 350 });
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('PLATFORM_ADMIN managing an ACTIVE salon can update a service price and it is recorded under the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      const result = await service.update('admin-1', 'salon-1', 'svc-1', { price: 350 });
+      expect(result.price).toBe(350);
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_SERVICE_UPDATED',
+          entityType: 'Service',
+          entityId: 'svc-1',
+          metadata: expect.objectContaining({
+            salonId: 'salon-1',
+            before: expect.objectContaining({ price: '300' }),
+            after: expect.objectContaining({ price: '350' }),
+          }),
+        }),
+      });
+    });
+
+    it('a normal CUSTOMER (or any caller with no owner/admin access) is denied', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(
+        service.update('customer-1', 'salon-1', 'svc-1', { price: 350 }),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.service.update).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
   });
 });

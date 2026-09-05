@@ -60,7 +60,7 @@ describe('SalonsService', () => {
     findCityBySlugOrThrow: jest.Mock;
     findCityByCountryAndSlugOrThrow: jest.Mock;
   };
-  let salonAccess: { assertAccess: jest.Mock };
+  let salonAccess: { assertAccess: jest.Mock; assertOwnerOrAdminAccess: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -95,7 +95,10 @@ describe('SalonsService', () => {
       findCityBySlugOrThrow: jest.fn(),
       findCityByCountryAndSlugOrThrow: jest.fn(),
     };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = {
+      assertAccess: jest.fn().mockResolvedValue(undefined),
+      assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('PLATFORM_ADMIN'),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -1005,11 +1008,41 @@ describe('SalonsService', () => {
       );
     });
 
-    it('propagates the access-denied error without reaching the DB lookup', async () => {
+    it('propagates the access-denied error without reaching the DB lookup, when neither the owner/staff nor the admin fallback check passes', async () => {
       const denied = new Error('denied');
-      salonAccess.assertAccess.mockRejectedValueOnce(denied);
+      salonAccess.assertAccess.mockRejectedValueOnce(new Error('not owner/staff'));
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(denied);
       await expect(service.getOwnedSalon('user-1', 's1')).rejects.toBe(denied);
       expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('never calls the admin fallback when the plain owner/staff check already succeeds', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'a',
+        name: 'A',
+        status: 'PENDING',
+      });
+      await service.getOwnedSalon('owner-1', 's1');
+      expect(salonAccess.assertOwnerOrAdminAccess).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — PLATFORM_ADMIN delegated shop management: a caller who fails the normal
+    // owner/staff check can still load this same data via the admin fallback.
+    it('PLATFORM_ADMIN managing an ACTIVE salon can load its owned-salon data via the fallback check', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'a',
+        name: 'A',
+        status: 'ACTIVE',
+      });
+      salonAccess.assertAccess.mockRejectedValueOnce(new Error('not owner/staff'));
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      const result = await service.getOwnedSalon('admin-1', 's1');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('admin-1', 's1');
+      expect(result.publicId).toBe('BC-SHOP-000001');
     });
   });
 
