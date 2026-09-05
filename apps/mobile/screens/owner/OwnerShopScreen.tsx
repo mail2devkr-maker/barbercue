@@ -11,9 +11,11 @@ import {
   TIME_OF_DAY_REGEX,
   e164PhoneSchema,
   formatMoney,
+  salonPhotoUrlSchema,
   type OperatingHoursDto,
   type PhotoDto,
   type SalonChairDto,
+  type SalonPaymentQrDto,
   type SalonStaffDto,
   type ServiceDto,
 } from '@barbercue/shared';
@@ -348,6 +350,144 @@ function PhotosSection({ salonId, photos, onChanged }: { salonId: string; photos
   );
 }
 
+// ---------- Payment QR (FastQue Credits / Wallet V1) ----------
+//
+// Owner-facing counterpart to BookingErrorCode.PAYMENT_QR_REQUIRED: BookingsService.create
+// refuses to create an ONLINE (APP/WEB-sourced) booking at a salon with no QR configured here.
+// Same link-or-upload dual path as photos above (PUT for a URL already hosted elsewhere, POST
+// .../upload multipart for a device picture), reusing the exact same {uri, name, type} FormData
+// shape as AddPhotoButton.
+function PaymentQrSection({
+  salonId,
+  paymentQr,
+  onChanged,
+}: {
+  salonId: string;
+  paymentQr: SalonPaymentQrDto | null;
+  onChanged: () => void;
+}) {
+  const { t } = useLanguage();
+  const [linkUrl, setLinkUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function saveLink() {
+    const parsed = salonPhotoUrlSchema.safeParse(linkUrl.trim());
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? t.couldNotSavePaymentQr);
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    try {
+      await apiFetch(scope(salonId, DASHBOARD_PATHS.paymentQr), {
+        method: 'PUT',
+        body: JSON.stringify({ url: parsed.data }),
+      });
+      setLinkUrl('');
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.couldNotSavePaymentQr);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function pickAndUpload() {
+    setError(null);
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError(t.photoLibraryAccessNeededForShopPhotos);
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+    if (result.canceled || result.assets.length === 0) return;
+    const asset = result.assets[0];
+    if (asset.fileSize && asset.fileSize > SALON_PHOTO_UPLOAD.maxBytes) {
+      setError(`${t.photoOverSizeLimitPrefix}${Math.floor(SALON_PHOTO_UPLOAD.maxBytes / (1024 * 1024))}${t.photoOverSizeLimitSuffix}`);
+      return;
+    }
+    setSaving(true);
+    try {
+      const form = new FormData();
+      form.append('image', {
+        uri: asset.uri,
+        name: asset.fileName ?? 'payment-qr.jpg',
+        type: asset.mimeType ?? 'image/jpeg',
+      } as unknown as Blob);
+      await apiFetch(`${scope(salonId, DASHBOARD_PATHS.paymentQr)}/${DASHBOARD_PATHS.photoUpload}`, {
+        method: 'POST',
+        body: form,
+      });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.couldNotSavePaymentQr);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    setRemoving(true);
+    setError(null);
+    try {
+      await apiFetch(scope(salonId, DASHBOARD_PATHS.paymentQr), { method: 'DELETE' });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.couldNotRemovePaymentQr);
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  return (
+    <>
+      <Text style={styles.sectionTitle}>{t.paymentQrSectionTitle}</Text>
+      <Text style={styles.hint}>{t.paymentQrSectionHint}</Text>
+      {paymentQr?.paymentQrImageUrl ? (
+        <View style={styles.photoTile}>
+          <SafeImage url={paymentQr.paymentQrImageUrl} alt={t.paymentQrSectionTitle} style={styles.photoImage} />
+          <View style={styles.photoTileFoot}>
+            <Text style={styles.photoTypeLabel}>{t.paymentQrConfiguredLabel}</Text>
+            <Pressable onPress={() => void remove()} disabled={removing}>
+              <Text style={styles.rowAction}>{removing ? t.removingEllipsis : t.removePaymentQrAction}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.emptyText}>{t.noPaymentQrConfiguredLabel}</Text>
+      )}
+      {error && <InlineError message={error} />}
+      <View style={styles.inlineRow}>
+        <TextInput
+          style={[styles.input, styles.inputHalf]}
+          placeholder="https://example.com/my-upi-qr.png"
+          autoCapitalize="none"
+          keyboardType="url"
+          value={linkUrl}
+          onChangeText={setLinkUrl}
+        />
+      </View>
+      <Button
+        title={saving ? t.savingEllipsis : t.linkPaymentQrAction}
+        variant="outline"
+        onPress={() => void saveLink()}
+        loading={saving}
+        disabled={!linkUrl.trim()}
+        style={styles.addButton}
+      />
+      <Button
+        title={saving ? t.savingEllipsis : t.uploadPaymentQrAction}
+        variant="outline"
+        onPress={() => void pickAndUpload()}
+        loading={saving}
+        style={styles.addButton}
+      />
+    </>
+  );
+}
+
 // ---------- Hours ----------
 
 function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hours: OperatingHoursDto[]; onSaved: (h: OperatingHoursDto[]) => void }) {
@@ -493,6 +633,7 @@ export default function OwnerShopScreen() {
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
   const [hours, setHours] = useState<OperatingHoursDto[]>([]);
   const [photos, setPhotos] = useState<PhotoDto[]>([]);
+  const [paymentQr, setPaymentQr] = useState<SalonPaymentQrDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -508,13 +649,15 @@ export default function OwnerShopScreen() {
       apiFetch<SalonStaffDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.staff)),
       apiFetch<OperatingHoursDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.operatingHours)),
       apiFetch<PhotoDto[]>(scope(selectedSalonId, DASHBOARD_PATHS.photos)),
+      apiFetch<SalonPaymentQrDto>(scope(selectedSalonId, DASHBOARD_PATHS.paymentQr)),
     ])
-      .then(([s, c, st, h, p]) => {
+      .then(([s, c, st, h, p, qr]) => {
         setServices(s);
         setChairs(c);
         setStaff(st);
         setHours(h);
         setPhotos(p);
+        setPaymentQr(qr);
       })
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load your shop.'))
       .finally(() => {
@@ -601,6 +744,8 @@ export default function OwnerShopScreen() {
       </Card>
 
       <PhotosSection salonId={selectedSalonId} photos={photos} onChanged={() => void load()} />
+
+      <PaymentQrSection salonId={selectedSalonId} paymentQr={paymentQr} onChanged={() => void load()} />
 
       <Text style={styles.sectionTitle}>{t.customersLabel}</Text>
       <Text style={styles.hint}>{t.customersHint}</Text>

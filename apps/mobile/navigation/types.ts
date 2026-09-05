@@ -77,6 +77,7 @@ export type AccountStackParamList = {
   Account: undefined;
   StyleAdvisor: undefined;
   Notifications: undefined;
+  CreditsHistory: undefined;
 };
 
 // Bottom-tab level — each tab owns its own native stack. NavigatorScreenParams lets a caller

@@ -244,6 +244,16 @@ export function BookingFlow({
       void refreshCurrentAvailability().catch(() => undefined);
       setConfirmedBooking(booking);
       setCreditsToRedeem(0);
+      // Redemption never fails/rejects — the server always clamps and the booking always succeeds
+      // (see BookingsService.create) — so a successful response can still mean some or all of the
+      // requested credits were actually applied. Re-fetch the real balance rather than
+      // locally subtracting creditsToRedeem, since the server's actualUsed
+      // (booking.creditsRedeemedAmount) may be less than what was requested.
+      if (creditsToRedeem > 0) {
+        void apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
+          .then((result) => setCreditsBalance(result.balance))
+          .catch(() => undefined);
+      }
     } catch (err) {
       // The availability grid is advisory; the booking transaction is authoritative. If another
       // customer won the last capacity concurrently, clear the stale selection and immediately
@@ -256,14 +266,9 @@ export function BookingFlow({
           `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
         ).then(setSlots).catch(() => undefined);
       }
-      // The balance shown was a moment-in-time snapshot; a stale one could over-offer redemption
-      // (e.g. two tabs). Re-fetch it so the input's own max clamp reflects reality on the next try.
-      if (err instanceof ApiError && err.code === "INSUFFICIENT_CREDITS") {
-        setCreditsToRedeem(0);
-        void apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
-          .then((result) => setCreditsBalance(result.balance))
-          .catch(() => undefined);
-      }
+      // A failed create (e.g. SLOT_FULL) never reaches the redemption step at all — the whole
+      // transaction rolls back — so the wallet balance is genuinely untouched and doesn't need
+      // re-fetching here.
       setSubmitError(err instanceof ApiError ? err.message : "Could not create the booking. Please try again.");
     } finally {
       setSubmitting(false);

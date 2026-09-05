@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { BOOKING_PATHS, DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
-import type { BookingDetailDto, CancellationPolicyDto, UiStrings } from '@barbercue/shared';
+import {
+  BOOKING_PATHS,
+  CREDITS_PATHS,
+  DISCOVERY_PATHS,
+  SALON_BOOKING_INFO_PATHS,
+  computeMaxRedeemableCredits,
+  formatMoney,
+} from '@barbercue/shared';
+import type {
+  BookingDetailDto,
+  CancellationPolicyDto,
+  CustomerCreditBalanceDto,
+  UiStrings,
+} from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { dateLocaleFor } from '../lib/date-locale';
 import { newIdempotencyKey } from '../lib/idempotency';
@@ -12,9 +24,15 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { stashPendingGuestIntent } from '../lib/guest-booking-handoff';
 import { GoogleSignInGate } from '../components/auth/GoogleSignInGate';
-import { color, font, fontSize, space } from '../lib/theme';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError } from '../components/ui';
 import type { SearchStackParamList, TabParamList } from '../navigation/types';
+
+// FastQue Credits / Wallet V1: steps by a flat ₹5 — fine-grained enough to reach any cap value
+// (all multiples of 10, per computeMaxRedeemableCredits) without a control cluttered by 1-unit
+// taps. No slider dependency exists in this app, so a stepper (−/+) is the RN-native equivalent of
+// web's <input type="range">.
+const CREDITS_STEP = 5;
 
 type Props = CompositeScreenProps<
   NativeStackScreenProps<SearchStackParamList, 'ConfirmBooking'>,
@@ -37,6 +55,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
     salonName,
     serviceId,
     serviceName,
+    servicePrice,
     preferredStaffId,
     preferredStaffName,
     slotStart,
@@ -49,6 +68,15 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
   const { t, language } = useLanguage();
   const { status } = useAuth();
+
+  // FastQue Credits / Wallet V1 — only fetched once signed in; an anonymous guest has no wallet.
+  // maxRedeemable is a pure client-side preview (packages/shared's computeMaxRedeemableCredits,
+  // the same formula the server independently re-derives and enforces) — never trusted as
+  // authoritative; the server always recomputes it from its own price and clamps to the live
+  // balance regardless of what this screen sends.
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [creditsToRedeem, setCreditsToRedeem] = useState(0);
+  const maxRedeemable = Math.min(creditsBalance ?? 0, computeMaxRedeemableCredits(servicePrice));
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +92,19 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
     };
   }, [salonId]);
 
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let cancelled = false;
+    apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
+      .then((result) => {
+        if (!cancelled) setCreditsBalance(result.balance);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+
   async function handleConfirm() {
     setSubmitting(true);
     setError(null);
@@ -77,9 +118,20 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           slotStart,
           ...(preferredStaffId ? { preferredStaffId } : {}),
           ...(selectedStyleName ? { selectedStyleName } : {}),
+          ...(creditsToRedeem > 0 ? { creditsToRedeem } : {}),
         }),
       });
       setBooking(result);
+      setCreditsToRedeem(0);
+      // Redemption never fails/rejects — the server always clamps to whatever is actually
+      // redeemable (see BookingsService.create) — so re-fetch the real balance rather than
+      // locally subtracting: result.creditsRedeemedAmount is the server's actual applied amount,
+      // which may be less than what this screen requested.
+      if (creditsToRedeem > 0) {
+        apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
+          .then((r) => setCreditsBalance(r.balance))
+          .catch(() => undefined);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.couldNotCreateBooking);
     } finally {
@@ -97,6 +149,12 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           </Text>
           <Text style={styles.line}>{new Date(booking.slotStart).toLocaleString(dateLocaleFor(language))}</Text>
           {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
+          {booking.creditsRedeemedAmount !== null && booking.creditsRedeemedAmount > 0 && (
+            <Text style={styles.line}>
+              {t.creditsRedeemedLabel}: {formatMoney(booking.creditsRedeemedAmount, null)} · {t.payableAmountLabel}:{' '}
+              {formatMoney(booking.payableAmount, null)}
+            </Text>
+          )}
           <Text style={styles.status}>{t.statusLabelPrefix}{booking.status}</Text>
         </Card>
         <Button
@@ -133,6 +191,42 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           </Text>
         )}
       </Card>
+      {status === 'authenticated' && maxRedeemable > 0 && (
+        <Card style={styles.card}>
+          <Text style={styles.line}>{t.redeemCreditsLabel}</Text>
+          <Text style={styles.line}>
+            {t.walletBalanceLabel}: {formatMoney(creditsBalance ?? 0, null)}
+          </Text>
+          <Text style={styles.hint}>{t.redeemCreditsHint}</Text>
+          <View style={styles.stepperRow}>
+            <Pressable
+              style={styles.stepperButton}
+              disabled={creditsToRedeem <= 0}
+              onPress={() => setCreditsToRedeem((v) => Math.max(0, v - CREDITS_STEP))}
+            >
+              <Text style={styles.stepperButtonText}>−</Text>
+            </Pressable>
+            <Text style={styles.stepperValue}>{formatMoney(creditsToRedeem, null)}</Text>
+            <Pressable
+              style={styles.stepperButton}
+              disabled={creditsToRedeem >= maxRedeemable}
+              onPress={() => setCreditsToRedeem((v) => Math.min(maxRedeemable, v + CREDITS_STEP))}
+            >
+              <Text style={styles.stepperButtonText}>+</Text>
+            </Pressable>
+            <Pressable
+              style={styles.maxButton}
+              disabled={creditsToRedeem >= maxRedeemable}
+              onPress={() => setCreditsToRedeem(maxRedeemable)}
+            >
+              <Text style={styles.maxButtonText}>{formatMoney(maxRedeemable, null)}</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.policyLine}>
+            {t.payableAmountLabel}: {formatMoney(Math.max(0, servicePrice - creditsToRedeem), null)}
+          </Text>
+        </Card>
+      )}
       {error && <InlineError message={error} />}
       {/* The summary above (service/salon/time) already functions as the confirmation step —
           matching apps/web's BookingFlow, which also has no separate "are you sure" dialog.
@@ -165,4 +259,43 @@ const styles = StyleSheet.create({
   policyLine: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
   status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent, marginTop: space[2] },
   actionButton: { marginTop: space[2] },
+  hint: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeightFor(fontSize.xs),
+    color: color.muted,
+    marginBottom: space[2],
+  },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  stepperButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: color.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.lg, color: color.ink },
+  stepperValue: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeightFor(fontSize.sm),
+    color: color.ink,
+    minWidth: 64,
+    textAlign: 'center',
+  },
+  maxButton: {
+    marginLeft: 'auto',
+    paddingVertical: space[2],
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    backgroundColor: color.accentSoft,
+  },
+  maxButtonText: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeightFor(fontSize.xs),
+    color: color.accent,
+  },
 });

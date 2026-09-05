@@ -167,6 +167,9 @@ export default function AccountScreen() {
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('Notifications')}>
           <Text style={styles.shortcutTitle}>{t.notifications}</Text>
         </Pressable>
+        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('CreditsHistory')}>
+          <Text style={styles.shortcutTitle}>{t.fastQueCreditsLabel}</Text>
+        </Pressable>
         <View style={styles.shortcutCard}>
           <Text style={styles.shortcutTitle}>{t.premiumLabel}</Text>
           <Text style={styles.shortcutMeta}>
