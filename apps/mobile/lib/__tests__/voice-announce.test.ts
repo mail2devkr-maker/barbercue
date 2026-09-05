@@ -129,4 +129,46 @@ describe('speakBooking — the exact call site voice/TTS reaches', () => {
     );
     warnSpy.mockRestore();
   });
+
+  it('retries once with the bare primary language subtag when the TTS engine errors and no voice was matched', async () => {
+    getVoicesMock.mockResolvedValue([{ identifier: 'en-us-voice', name: 'English US', language: 'en-US', quality: 'Default' }]);
+    // Simulate a real engine failure on the first (region-qualified) attempt only.
+    speakMock.mockImplementationOnce((_text: string, options: { onError?: (e: unknown) => void }) => {
+      options.onError?.(new Error('LANG_MISSING_DATA'));
+    });
+    speakMock.mockImplementationOnce(() => {
+      // Second attempt (the retry) succeeds — no onError called.
+    });
+
+    speakBooking({ event: 'booking.cancelled', bookingId: 'b4', language: Language.HI });
+    await flush();
+
+    expect(speakMock).toHaveBeenCalledTimes(2);
+    expect(speakMock.mock.calls[0][1].language).toBe('hi-IN');
+    expect(speakMock.mock.calls[1][1].language).toBe('hi'); // bare primary subtag retry
+  });
+
+  it('never retries a second time if the retry attempt also errors (no infinite loop)', async () => {
+    getVoicesMock.mockResolvedValue([{ identifier: 'en-us-voice', name: 'English US', language: 'en-US', quality: 'Default' }]);
+    speakMock.mockImplementation((_text: string, options: { onError?: (e: unknown) => void }) => {
+      options.onError?.(new Error('LANG_MISSING_DATA'));
+    });
+
+    speakBooking({ event: 'booking.cancelled', bookingId: 'b5', language: Language.HI });
+    await flush();
+
+    expect(speakMock).toHaveBeenCalledTimes(2); // original + exactly one retry, never more
+  });
+
+  it('does not retry at all when a real matching voice was found (the engine failure must be something else)', async () => {
+    getVoicesMock.mockResolvedValue([{ identifier: 'hi-in-voice', name: 'Hindi India', language: 'hi-IN', quality: 'Default' }]);
+    speakMock.mockImplementation((_text: string, options: { onError?: (e: unknown) => void }) => {
+      options.onError?.(new Error('some other engine failure'));
+    });
+
+    speakBooking({ event: 'booking.cancelled', bookingId: 'b6', language: Language.HI });
+    await flush();
+
+    expect(speakMock).toHaveBeenCalledTimes(1);
+  });
 });

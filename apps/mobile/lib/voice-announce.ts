@@ -107,13 +107,36 @@ export function speakBooking(
       matchedVoiceIdentifier: matchedVoice?.identifier ?? null,
       matchedVoiceLanguage: matchedVoice?.language ?? null,
     });
-    Speech.speak(text, {
-      language: requestedLocale,
-      ...(matchedVoice ? { voice: matchedVoice.identifier } : {}),
-      onStart: () => console.warn('[voice] onStart', { event, bookingId }),
-      onDone: () => console.warn('[voice] onDone', { event, bookingId }),
-      onStopped: () => console.warn('[voice] onStopped', { event, bookingId }),
-      onError: (error) => console.warn('[voice] onError — TTS engine reported a failure', { event, bookingId, requestedLocale, error: String(error) }),
-    });
+
+    // Still unresolved without a physical-device retest of this exact build (see this file's own
+    // header comment) — two real device symptoms were previously observed: total silence, and the
+    // announcement speaking in English despite a Hindi `text`/`requestedLocale`. Neither is
+    // reproducible in this environment (no device/simulator access), so this is a reasoned
+    // hardening of the failure path, not a claimed fix. Android's TextToSpeech is documented to be
+    // inconsistent about resolving a full region-qualified tag ("hi-IN") when a voice is only
+    // registered under the bare primary subtag ("hi") — a real, general Android TTS quirk, not a
+    // guess specific to this bug. If the primary attempt errors out AND no exact/family voice was
+    // matched, retry exactly once with the bare primary subtag before giving up, so a
+    // region-tag-only mismatch doesn't present as silence when a plain-language attempt might work.
+    const primarySubtag = requestedLocale.split(/[-_]/)[0];
+    let retried = false;
+    function attempt(languageTag: string, voiceIdentifier: string | undefined) {
+      Speech.speak(text, {
+        language: languageTag,
+        ...(voiceIdentifier ? { voice: voiceIdentifier } : {}),
+        onStart: () => console.warn('[voice] onStart', { event, bookingId, languageTag }),
+        onDone: () => console.warn('[voice] onDone', { event, bookingId, languageTag }),
+        onStopped: () => console.warn('[voice] onStopped', { event, bookingId, languageTag }),
+        onError: (error) => {
+          console.warn('[voice] onError — TTS engine reported a failure', { event, bookingId, languageTag, retried, error: String(error) });
+          if (!retried && !matchedVoice && primarySubtag && primarySubtag !== languageTag) {
+            retried = true;
+            console.warn('[voice] retrying once with the bare primary language subtag', { event, bookingId, primarySubtag });
+            attempt(primarySubtag, undefined);
+          }
+        },
+      });
+    }
+    attempt(requestedLocale, matchedVoice?.identifier);
   });
 }
