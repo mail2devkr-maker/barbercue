@@ -291,6 +291,26 @@ export function BookingFlow({
     }
   }
 
+  // Root cause of "can't book a second service": once confirmedBooking was set, this component
+  // had no path back to the picker steps at all — the early `if (confirmedBooking) return ...`
+  // below is permanent for the lifetime of this component instance, and nothing ever set
+  // confirmedBooking back to null. A customer landing back on this same salon's booking page
+  // (e.g. via "Book again" or simply not navigating away) was stuck looking at their first
+  // booking's confirmation forever, with no way to start another one from this screen. This does
+  // NOT touch cancel/reschedule (those correctly update the SAME booking in place) or the
+  // create-fails-with-SLOT_FULL path (that already stays on the picker, unaffected) — only the
+  // "start a genuinely new booking attempt" gap.
+  function handleBookAnother() {
+    setConfirmedBooking(null);
+    setCancelResult(null);
+    setSubmitError(null);
+    setSelectedServiceId(null);
+    setSelectedStaffId(undefined);
+    setSelectedDate(null);
+    setSelectedSlot(null);
+    setCreditsToRedeem(0);
+  }
+
   if (confirmedBooking) {
     const booking = confirmedBooking;
     const cancelled = booking.status === "CANCELLED";
@@ -339,6 +359,9 @@ export function BookingFlow({
                 Cancel this booking
               </Button>
             )}
+            <Button type="button" variant="primary" onClick={handleBookAnother}>
+              Book another service
+            </Button>
             <Link href="/account/bookings" className={styles.textLink}>
               View my bookings
             </Link>

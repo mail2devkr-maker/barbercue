@@ -158,6 +158,22 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           <Text style={styles.status}>{t.statusLabelPrefix}{booking.status}</Text>
         </Card>
         <Button
+          title={t.bookAgainAction}
+          onPress={() => {
+            // ConfirmBookingScreen's route params carry no countryCode/citySlug/salonSlug, so there
+            // is no direct route back to this same salon's profile — the search root is the
+            // reachable, always-valid reset target. Local state is reset too (rather than relying
+            // solely on popToTop unmounting this instance) since this screen can in principle be
+            // revisited without a full remount depending on navigator config.
+            setBooking(null);
+            setError(null);
+            setCreditsToRedeem(0);
+            navigation.popToTop();
+            navigation.navigate('SearchTab', { screen: 'SalonSearch' });
+          }}
+          style={styles.actionButton}
+        />
+        <Button
           title={t.viewMyBookings}
           onPress={() => {
             // Leave this stack clean for next time (pop back to the salon search root) before
