@@ -8,6 +8,7 @@ const SETUP_STEPS = [
   { id: "photos", label: "Photos" },
   { id: "chairs", label: "Chairs" },
   { id: "staff", label: "Barbers" },
+  { id: "payment-qr", label: "Payment QR" },
   { id: "queue", label: "Live queue" },
 ] as const;
 

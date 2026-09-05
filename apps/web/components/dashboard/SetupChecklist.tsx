@@ -6,6 +6,7 @@ import { ChairStatus, DASHBOARD_PATHS, SalonStatus, StaffMemberStatus } from "@b
 import type {
   OperatingHoursDto,
   SalonChairDto,
+  SalonPaymentQrDto,
   SalonServiceDto,
   SalonSetupReadinessDto,
   SalonStaffDto,
@@ -56,6 +57,7 @@ export function SetupChecklist({
   const [chairs, setChairs] = useState<SalonChairDto[] | null>(null);
   const [staff, setStaff] = useState<SalonStaffDto[] | null>(null);
   const [hours, setHours] = useState<OperatingHoursDto[] | null>(null);
+  const [paymentQr, setPaymentQr] = useState<SalonPaymentQrDto | null>(null);
   // A failed count must not render as "not done" — that would nag an owner who has already
   // finished the step. On error the whole checklist hides instead.
   const [failed, setFailed] = useState(false);
@@ -67,13 +69,15 @@ export function SetupChecklist({
       apiFetch<SalonChairDto[]>(`${base}/${DASHBOARD_PATHS.chairs}`),
       apiFetch<SalonStaffDto[]>(`${base}/${DASHBOARD_PATHS.staff}`),
       apiFetch<OperatingHoursDto[]>(`${base}/${DASHBOARD_PATHS.operatingHours}`),
+      apiFetch<SalonPaymentQrDto>(`${base}/${DASHBOARD_PATHS.paymentQr}`),
     ])
-      .then(([s, c, st, h]) => {
+      .then(([s, c, st, h, qr]) => {
         if (cancelled) return;
         setServices(s);
         setChairs(c);
         setStaff(st);
         setHours(h);
+        setPaymentQr(qr);
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -83,7 +87,7 @@ export function SetupChecklist({
     };
   }, [base]);
 
-  const loading = services === null || chairs === null || staff === null || hours === null;
+  const loading = services === null || chairs === null || staff === null || hours === null || paymentQr === null;
 
   // `isActive`, not merely present: this must agree exactly with the backend's activation gate,
   // which counts only active services. A checklist that ticks a step the server then rejects is
@@ -95,6 +99,10 @@ export function SetupChecklist({
   // with no open days is still a perfectly valid walk-in/queue-only shop; it simply cannot take
   // online bookings, which the step text says plainly.
   const hasOpenDay = (hours ?? []).some((h) => !h.isClosed);
+  // Also advisory only, same reasoning as hasOpenDay — mirrors BookingsService.create's real gate
+  // (PAYMENT_QR_REQUIRED for APP/WEB bookings; WALK_IN is never blocked), so a walk-in-only shop
+  // can open with no QR configured at all.
+  const hasPaymentQr = Boolean(paymentQr?.paymentQrImageUrl);
   // Opening is the last step by design: a shop that becomes publicly discoverable with no
   // services, no chairs or no barbers is a dead end for the customer who finds it — they can
   // reach the page but there is nothing to book and nobody to seat them.
@@ -139,6 +147,12 @@ export function SetupChecklist({
       done: hasBarber,
       href: `/dashboard/salons/${salonId}/staff`,
       why: "Your barbers run the live queue from their own login.",
+    },
+    {
+      label: "Add a payment QR",
+      done: hasPaymentQr,
+      href: `/dashboard/salons/${salonId}/payment-qr`,
+      why: "Shown to a customer paying for an app/website booking so they can scan and pay you directly. Until you add one, walk-ins work as normal but online booking is blocked.",
     },
     {
       label: "Open your shop",
