@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeStack from './HomeStack';
 import SearchStack from './SearchStack';
 import BookingsStack from './BookingsStack';
@@ -43,6 +44,7 @@ function GuestBookingHandoffBridge() {
 export default function RootNavigator() {
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   return (
     <>
@@ -50,17 +52,29 @@ export default function RootNavigator() {
       <Tab.Navigator
         screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: color.ink,
+        // FastQue brand accent on the active tab (visual-fidelity checkpoint) — was plain ink,
+        // indistinguishable from a default/unbranded tab bar; every tab (Home included) now reads
+        // clearly as "selected" via the same brand accent the rest of Home's redesign uses.
+        tabBarActiveTintColor: color.brandCoral,
         tabBarInactiveTintColor: color.muted,
         tabBarStyle: {
           backgroundColor: color.surface,
           borderTopColor: color.border,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          // A fixed height/padding here previously overrode React Navigation's own automatic
+          // safe-area handling for the bottom tab bar (bumping into a phone's gesture-nav bar/home
+          // indicator on some devices) — insets.bottom restores that safe-area accommodation
+          // explicitly instead of relying on the (bypassed) default.
+          height: 60 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
           paddingTop: 8,
+          shadowColor: color.ink,
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: -2 },
+          elevation: 8,
         },
-        tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11 },
+        tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11, marginTop: 2 },
         tabBarIconStyle: { marginTop: 2 },
       }}
     >

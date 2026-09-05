@@ -1,6 +1,16 @@
 import { StyleSheet, View } from 'react-native';
 
-export type TabIconName = 'home' | 'search' | 'bookings' | 'queue' | 'shop' | 'account' | 'today' | 'offer';
+export type TabIconName =
+  | 'home'
+  | 'search'
+  | 'bookings'
+  | 'queue'
+  | 'shop'
+  | 'account'
+  | 'today'
+  | 'offer'
+  | 'scissors'
+  | 'salon';
 
 interface TabIconProps {
   name: TabIconName;
@@ -96,6 +106,36 @@ export function TabIcon({ name, color, size = 22 }: TabIconProps) {
           </View>
         </View>
       );
+    // Search-mode segmented tabs ("Find a barber" reference concept). Two rings (blade-pivot
+    // handles) at the bottom with a pair of crossing bars (blades) converging above them — the same
+    // abstract, geometric drawing style as 'search' above (a ring + a handle bar), not a literal
+    // illustration.
+    case 'scissors':
+      return (
+        <View style={[styles.icon, base]} accessible={false}>
+          <View style={[styles.scissorsBlade, { width: size * 0.78, height: stroke, backgroundColor: color, transform: [{ rotate: '32deg' }] }]} />
+          <View style={[styles.scissorsBlade, { width: size * 0.78, height: stroke, backgroundColor: color, transform: [{ rotate: '-32deg' }] }]} />
+          <View style={[styles.scissorsRing, { width: size * 0.3, height: size * 0.3, borderColor: color, borderWidth: stroke, left: 0 }]} />
+          <View style={[styles.scissorsRing, { width: size * 0.3, height: size * 0.3, borderColor: color, borderWidth: stroke, right: 0 }]} />
+        </View>
+      );
+    // Search-mode segmented tabs ("Find a salon & more" reference concept) — a simple flower glyph
+    // (four petals around a center), the salon/spa/wellness concept, same abstract-geometric style.
+    case 'salon':
+      return (
+        <View style={[styles.icon, base]} accessible={false}>
+          <View style={[styles.salonPetal, { width: size * 0.34, height: size * 0.34, borderRadius: size * 0.17, backgroundColor: color, top: 1, left: '50%', marginLeft: -size * 0.17 }]} />
+          <View style={[styles.salonPetal, { width: size * 0.34, height: size * 0.34, borderRadius: size * 0.17, backgroundColor: color, bottom: 1, left: '50%', marginLeft: -size * 0.17 }]} />
+          <View style={[styles.salonPetal, { width: size * 0.34, height: size * 0.34, borderRadius: size * 0.17, backgroundColor: color, left: 1, top: '50%', marginTop: -size * 0.17 }]} />
+          <View style={[styles.salonPetal, { width: size * 0.34, height: size * 0.34, borderRadius: size * 0.17, backgroundColor: color, right: 1, top: '50%', marginTop: -size * 0.17 }]} />
+          <View
+            style={[
+              styles.salonCenter,
+              { width: size * 0.26, height: size * 0.26, borderRadius: size * 0.13, backgroundColor: color, marginTop: -size * 0.13, marginLeft: -size * 0.13 },
+            ]}
+          />
+        </View>
+      );
   }
 }
 
@@ -121,4 +161,8 @@ const styles = StyleSheet.create({
   accountShoulders: { position: 'absolute', bottom: 1, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomWidth: 0 },
   offerTag: { borderRadius: 3, alignItems: 'flex-end', justifyContent: 'flex-start', padding: 2 },
   offerHole: {},
+  scissorsBlade: { position: 'absolute', top: '38%', borderRadius: 99 },
+  scissorsRing: { position: 'absolute', bottom: 1, borderRadius: 999 },
+  salonPetal: { position: 'absolute' },
+  salonCenter: { position: 'absolute', top: '50%', left: '50%' },
 });

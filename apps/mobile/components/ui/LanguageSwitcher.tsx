@@ -7,8 +7,16 @@ import { color, font, fontSize, lineHeightFor } from '../../lib/theme';
  * Issue 9 (mobile launch mission) — directly visible, not buried in Account: rendered on the
  * pre-auth landing (RoleSelectScreen) and the customer Home header. Two languages today
  * (English/Hindi); a third Language enum value just adds another pill here automatically.
+ *
+ * `compact` renders each pill's own enum value ("EN"/"HI") instead of LANGUAGE_LABELS' full word
+ * ("English"/"हिन्दी") — not a smaller font (the mission's own "never solve cropping via
+ * unreadably small text" rule), a shorter but still fully legible label. Home's premium header
+ * packs a brand wordmark + location pill + this switcher + a bell into one row; at a 320px-wide
+ * device the full-word pills left no room for the wordmark at all (it shrank to zero width) even
+ * though nothing was clipped off-screen. AccountScreen/DashboardAccountScreen/RoleSelectScreen have
+ * a full row to themselves and keep the default full-word labels.
  */
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   const { language, setLanguage, t } = useLanguage();
   return (
     <View style={styles.row} accessibilityRole="radiogroup" accessibilityLabel={t.language}>
@@ -18,9 +26,11 @@ export function LanguageSwitcher() {
           onPress={() => setLanguage(lang)}
           accessibilityRole="radio"
           accessibilityState={{ selected: language === lang }}
-          style={[styles.pill, language === lang && styles.pillActive]}
+          style={[styles.pill, compact && styles.pillCompact, language === lang && styles.pillActive]}
         >
-          <Text style={[styles.pillText, language === lang && styles.pillTextActive]}>{LANGUAGE_LABELS[lang]}</Text>
+          <Text style={[styles.pillText, language === lang && styles.pillTextActive]}>
+            {compact ? lang : LANGUAGE_LABELS[lang]}
+          </Text>
         </Pressable>
       ))}
     </View>
@@ -42,6 +52,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: color.border,
   },
+  pillCompact: { minHeight: 28, paddingVertical: 4, paddingHorizontal: 8 },
   pillActive: { backgroundColor: color.ink, borderColor: color.ink },
   pillText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.ink },
   pillTextActive: { color: color.accentContrast },

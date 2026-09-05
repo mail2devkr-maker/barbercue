@@ -20,13 +20,19 @@ export const color = {
   accentContrast: '#ffffff',
   gold: '#a8791f',
   goldSoft: '#f7ecd3',
-  // FastQue Home redesign (mobile landing mission, Part 3.5 checkpoint) — a distinct brand accent
-  // for the new hero/search-panel/CTA surfaces, additive to the palette above rather than replacing
-  // it: `accent` (terracotta) remains the one action color everywhere else in the app. The
-  // reference design calls for a pink->orange gradient on these surfaces; expo-linear-gradient /
-  // react-native-svg are both new native dependencies not currently installed (see PR notes), which
-  // would block a JS-only OTA update, so this solid coral is a deliberate non-native approximation
-  // of that gradient's midpoint rather than the literal two-stop effect.
+  // FastQue Home redesign — distinct brand accents for the new hero/search-panel/CTA surfaces,
+  // additive to the palette above rather than replacing it: `accent` (terracotta) remains the one
+  // action color everywhere else in the app.
+  //
+  // The reference design's pink->orange gradient is rendered as a REAL two-stop gradient (see
+  // components/ui/GradientView.tsx) via a row of interpolated solid-color strips, not an image or
+  // native gradient library — neither react-native-svg nor expo-linear-gradient is installed, and
+  // either would be a new NATIVE dependency that forces a rebuild before the next OTA (this
+  // codebase already made the identical call for RoleSelectScreen's hero scrim). brandGradientStart
+  // /End are that gradient's two stops; brandCoral is kept as a cheap non-gradient fallback (small
+  // dots/dividers where a full GradientView would be overkill).
+  brandGradientStart: '#f2295c',
+  brandGradientEnd: '#ff7a3d',
   brandCoral: '#f2542d',
   brandNavy: '#1a1533',
 } as const;

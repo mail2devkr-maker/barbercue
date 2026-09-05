@@ -32,7 +32,7 @@ import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { resolveHomeLocation } from '../lib/home-location';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
-import { Card, Button, Skeleton, NotificationBell, LanguageSwitcher } from '../components/ui';
+import { Card, Button, Skeleton, NotificationBell, LanguageSwitcher, SafeImage, GradientView } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
@@ -48,13 +48,15 @@ const ACTIVE_QUEUE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 // Service.name/Service.category (see salons.service.ts's `service`/`q` filters), never an
 // invented taxonomy. Labels are localized (t.categoryXxx); values are the actual search text sent.
 const POPULAR_SERVICE_CATEGORIES = [
-  { key: 'categoryHaircut', value: 'Haircut' },
-  { key: 'categoryBeardTrim', value: 'Beard Trim' },
-  { key: 'categoryFade', value: 'Fade' },
-  { key: 'categoryShave', value: 'Shave' },
-  { key: 'categoryNails', value: 'Nails' },
-  { key: 'categorySpa', value: 'Spa' },
+  { key: 'categoryHaircut', value: 'Haircut', imageUrl: EDITORIAL_ASSET_URL.categoryHaircut },
+  { key: 'categoryBeardTrim', value: 'Beard Trim', imageUrl: EDITORIAL_ASSET_URL.categoryBeardTrim },
+  { key: 'categoryFade', value: 'Fade', imageUrl: EDITORIAL_ASSET_URL.categoryFade },
+  { key: 'categoryShave', value: 'Shave', imageUrl: EDITORIAL_ASSET_URL.categoryShave },
+  { key: 'categoryNails', value: 'Nails', imageUrl: EDITORIAL_ASSET_URL.categoryNails },
+  { key: 'categorySpa', value: 'Spa', imageUrl: EDITORIAL_ASSET_URL.categorySpa },
 ] as const;
+
+const GRADIENT_COLORS = [color.brandGradientStart, color.brandGradientEnd] as const;
 
 function formatSlot(iso: string, language: Language): string {
   return new Date(iso).toLocaleString(dateLocaleFor(language), {
@@ -181,9 +183,9 @@ export default function HomeScreen({ navigation }: Props) {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + space[2] }]}>
         <View style={styles.brandRow}>
-          <View style={styles.brandBadge}>
+          <GradientView colors={GRADIENT_COLORS} style={styles.brandBadge}>
             <Text style={styles.brandBadgeText}>FQ</Text>
-          </View>
+          </GradientView>
           <Text style={styles.brandWordmark} numberOfLines={1}>
             FastQue
           </Text>
@@ -200,7 +202,7 @@ export default function HomeScreen({ navigation }: Props) {
               {locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction}
             </Text>
           </Pressable>
-          <LanguageSwitcher />
+          <LanguageSwitcher compact />
           <NotificationBell
             unreadCount={unreadCount}
             onPress={() => navigation.navigate('AccountTab', { screen: 'Notifications' })}
@@ -215,7 +217,12 @@ export default function HomeScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <ImageBackground source={{ uri: EDITORIAL_ASSET_URL.heroBand }} style={styles.hero} imageStyle={styles.heroImage}>
-          <View style={[StyleSheet.absoluteFill, styles.heroScrim]} />
+          <View style={[StyleSheet.absoluteFill, styles.heroBaseScrim]} />
+          <GradientView
+            colors={['transparent', 'rgba(15, 12, 25, 0.86)']}
+            direction="vertical"
+            style={StyleSheet.absoluteFill}
+          />
           <View style={styles.heroContent}>
             <Text style={styles.heroEyebrow}>{t.homeHeroEyebrow}</Text>
             <Text style={styles.heroHeadline}>
@@ -250,24 +257,48 @@ export default function HomeScreen({ navigation }: Props) {
         <View style={styles.searchCard}>
           <View style={styles.segmentRow}>
             <Pressable
-              style={[styles.segment, searchMode === 'barber' && styles.segmentActive]}
+              style={styles.segmentPressable}
               onPress={() => setSearchMode('barber')}
               accessibilityRole="button"
               accessibilityState={{ selected: searchMode === 'barber' }}
             >
-              <Text style={[styles.segmentText, searchMode === 'barber' && styles.segmentTextActive]} numberOfLines={1}>
-                {t.searchModeBarber}
-              </Text>
+              {searchMode === 'barber' ? (
+                <GradientView colors={GRADIENT_COLORS} style={styles.segment}>
+                  <TabIcon name="scissors" color={color.surface} size={15} />
+                  <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
+                    {t.searchModeBarber}
+                  </Text>
+                </GradientView>
+              ) : (
+                <View style={styles.segment}>
+                  <TabIcon name="scissors" color={color.muted} size={15} />
+                  <Text style={styles.segmentText} numberOfLines={1}>
+                    {t.searchModeBarber}
+                  </Text>
+                </View>
+              )}
             </Pressable>
             <Pressable
-              style={[styles.segment, searchMode === 'salon' && styles.segmentActive]}
+              style={styles.segmentPressable}
               onPress={() => setSearchMode('salon')}
               accessibilityRole="button"
               accessibilityState={{ selected: searchMode === 'salon' }}
             >
-              <Text style={[styles.segmentText, searchMode === 'salon' && styles.segmentTextActive]} numberOfLines={1}>
-                {t.searchModeSalon}
-              </Text>
+              {searchMode === 'salon' ? (
+                <GradientView colors={GRADIENT_COLORS} style={styles.segment}>
+                  <TabIcon name="salon" color={color.surface} size={15} />
+                  <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
+                    {t.searchModeSalon}
+                  </Text>
+                </GradientView>
+              ) : (
+                <View style={styles.segment}>
+                  <TabIcon name="salon" color={color.muted} size={15} />
+                  <Text style={styles.segmentText} numberOfLines={1}>
+                    {t.searchModeSalon}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           </View>
 
@@ -289,11 +320,11 @@ export default function HomeScreen({ navigation }: Props) {
             </Text>
           </Pressable>
 
-          <Button
-            title={searchMode === 'barber' ? t.findABarberAction : t.findShopsAction}
-            onPress={handleFindPress}
-            style={styles.ctaButton}
-          />
+          <Pressable onPress={handleFindPress} accessibilityRole="button">
+            <GradientView colors={GRADIENT_COLORS} style={styles.ctaButton}>
+              <Text style={styles.ctaButtonText}>{searchMode === 'barber' ? t.findABarberAction : t.findShopsAction}</Text>
+            </GradientView>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -353,9 +384,7 @@ export default function HomeScreen({ navigation }: Props) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
           {POPULAR_SERVICE_CATEGORIES.map((category) => (
             <Pressable key={category.key} style={styles.categoryChip} onPress={() => goSearch({ initialQuery: category.value })}>
-              <View style={styles.categoryIconWrap}>
-                <TabIcon name="shop" color={color.accent} size={20} />
-              </View>
+              <SafeImage url={category.imageUrl} alt={t[category.key]} style={styles.categoryThumb} />
               <Text style={styles.categoryLabel} numberOfLines={1}>
                 {t[category.key]}
               </Text>
@@ -373,9 +402,9 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={styles.queueBannerHeadline}>{t.queuePromoHeadlineLine2}</Text>
             <Text style={styles.queueBannerSubcopy}>{t.queuePromoSubcopy}</Text>
           </View>
-          <View style={styles.queueBannerIconWrap}>
-            <TabIcon name="queue" color={color.surface} size={26} />
-          </View>
+          <GradientView colors={GRADIENT_COLORS} style={styles.queueBannerIconWrap}>
+            <TabIcon name="queue" color={color.surface} size={24} />
+          </GradientView>
         </Pressable>
 
         <View style={styles.trustStrip}>
@@ -421,7 +450,10 @@ export default function HomeScreen({ navigation }: Props) {
   );
 }
 
-const HERO_HEIGHT = 380;
+// Tuned down from an earlier 380 — on a small Android screen (~640-680dp tall) that left too
+// little of the search card + status cards visible above the fold; this still comfortably fits the
+// eyebrow/headline/subcopy/benefit-row stack with room to spare.
+const HERO_HEIGHT = 336;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.surface },
@@ -452,11 +484,11 @@ const styles = StyleSheet.create({
   // of the screen with no way to see it (Yoga doesn't clip an overflowing sibling — it just renders
   // past the viewport). flexShrink:0 + minWidth:0 on brandRow above means the wordmark truncates
   // first, so headerActions always keeps its own guaranteed space and can never be squeezed out.
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space[2], flexShrink: 0 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
   locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: 92,
+    maxWidth: 76,
     minHeight: 32,
     paddingHorizontal: space[2],
     borderRadius: radius.pill,
@@ -469,8 +501,11 @@ const styles = StyleSheet.create({
 
   hero: { height: HERO_HEIGHT, justifyContent: 'flex-end' },
   heroImage: { resizeMode: 'cover' },
-  heroScrim: { backgroundColor: 'rgba(15, 12, 25, 0.56)' },
-  heroContent: { padding: space[5], paddingBottom: space[6] },
+  // A light base tint (the gradient above handles the actual top->bottom legibility ramp) — keeps
+  // the upper portion of the photo still clearly a real photo, not fully washed out, closer to the
+  // reference's "imagery visible strongly" note than a single flat dark overlay was.
+  heroBaseScrim: { backgroundColor: 'rgba(10, 8, 20, 0.22)' },
+  heroContent: { padding: space[5], paddingTop: space[4], paddingBottom: space[5] },
   heroEyebrow: {
     fontFamily: font.bodyBold,
     fontSize: 11,
@@ -482,20 +517,20 @@ const styles = StyleSheet.create({
   },
   heroHeadline: {
     fontFamily: font.displaySemiBold,
-    fontSize: fontSize['2xl'],
-    lineHeight: lineHeightFor(fontSize['2xl']),
+    fontSize: 34,
+    lineHeight: lineHeightFor(34),
     color: color.surface,
   },
-  heroHeadlineAccent: { color: color.brandCoral },
+  heroHeadlineAccent: { color: color.brandGradientEnd },
   heroSubcopy: {
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,
     lineHeight: lineHeightFor(fontSize.sm),
     color: 'rgba(255,255,255,0.86)',
     marginTop: space[3],
-    maxWidth: 320,
+    maxWidth: 300,
   },
-  benefitRow: { flexDirection: 'row', gap: space[4], marginTop: space[5] },
+  benefitRow: { flexDirection: 'row', gap: space[4], marginTop: space[4] },
   benefitItem: { alignItems: 'center', gap: space[1] },
   benefitIconWrap: {
     width: 36,
@@ -510,18 +545,26 @@ const styles = StyleSheet.create({
   searchCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: space[4],
-    marginTop: -space[7],
-    borderRadius: radius.lg,
+    marginTop: -56,
+    borderRadius: 26,
     padding: space[4],
     shadowColor: color.ink,
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
-  segmentRow: { flexDirection: 'row', backgroundColor: color.surfaceTint, borderRadius: radius.pill, padding: 3, marginBottom: space[4] },
-  segment: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, paddingHorizontal: space[2] },
-  segmentActive: { backgroundColor: color.brandCoral },
+  segmentRow: { flexDirection: 'row', backgroundColor: color.surfaceTint, borderRadius: radius.pill, padding: 3, marginBottom: space[4], gap: 3 },
+  segmentPressable: { flex: 1 },
+  segment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 40,
+    borderRadius: radius.pill,
+    paddingHorizontal: space[2],
+  },
   segmentText: { fontFamily: font.bodySemiBold, fontSize: 12.5, lineHeight: lineHeightFor(12.5), color: color.muted },
   segmentTextActive: { color: color.surface },
   fieldLabel: {
@@ -545,14 +588,21 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     marginBottom: space[3],
   },
-  cityValueText: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
-  cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted },
-  ctaButton: { backgroundColor: color.brandCoral, marginTop: space[1] },
+  cityValueText: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
+  cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted },
+  ctaButton: {
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+    marginTop: space[1],
+  },
+  ctaButtonText: { fontFamily: font.bodyBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.surface },
 
   section: { paddingHorizontal: space[5], marginTop: space[6] },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink },
-  viewAllText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.accent },
+  sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, lineHeight: lineHeightFor(fontSize.lg), color: color.ink },
+  viewAllText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.accent },
 
   loadingStack: { gap: space[3] },
   skeletonCard: { height: 96, borderRadius: radius.lg },
@@ -569,17 +619,15 @@ const styles = StyleSheet.create({
   statusMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: space[1] },
   cardAction: { marginTop: space[3], alignSelf: 'flex-start', minHeight: 40, paddingHorizontal: space[4] },
 
-  categoryRow: { paddingHorizontal: space[5], gap: space[3], marginTop: space[3] },
-  categoryChip: { width: 76, alignItems: 'center', gap: space[1] },
-  categoryIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  categoryRow: { paddingHorizontal: space[5], gap: space[4], marginTop: space[3] },
+  categoryChip: { width: 72, alignItems: 'center', gap: space[2] },
+  categoryThumb: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: color.surfaceTint,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  categoryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.ink, textAlign: 'center' },
+  categoryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.ink, textAlign: 'center' },
 
   queueBanner: {
     flexDirection: 'row',
@@ -592,13 +640,12 @@ const styles = StyleSheet.create({
     padding: space[4],
   },
   queueBannerText: { flexShrink: 1, gap: 2 },
-  queueBannerHeadline: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.surface },
-  queueBannerSubcopy: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: 'rgba(255,255,255,0.7)', marginTop: space[1] },
+  queueBannerHeadline: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.surface },
+  queueBannerSubcopy: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: 'rgba(255,255,255,0.7)', marginTop: space[1] },
   queueBannerIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -610,9 +657,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginHorizontal: space[5],
     marginTop: space[6],
-    gap: space[2],
+    gap: space[3],
   },
-  trustItem: { flex: 1, alignItems: 'center', gap: space[1] },
+  trustItem: { flex: 1, alignItems: 'center', gap: space[2] },
   trustLabel: { fontFamily: font.bodyMedium, fontSize: 10.5, lineHeight: lineHeightFor(10.5), color: color.muted, textAlign: 'center' },
 
   shortcutRow: { paddingHorizontal: space[5], marginTop: space[6], gap: space[2] },
@@ -625,5 +672,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     paddingHorizontal: space[4],
   },
-  shortcutText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  shortcutText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
 });
