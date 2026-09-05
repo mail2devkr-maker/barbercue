@@ -20,6 +20,15 @@ export const color = {
   accentContrast: '#ffffff',
   gold: '#a8791f',
   goldSoft: '#f7ecd3',
+  // FastQue Home redesign (mobile landing mission, Part 3.5 checkpoint) — a distinct brand accent
+  // for the new hero/search-panel/CTA surfaces, additive to the palette above rather than replacing
+  // it: `accent` (terracotta) remains the one action color everywhere else in the app. The
+  // reference design calls for a pink->orange gradient on these surfaces; expo-linear-gradient /
+  // react-native-svg are both new native dependencies not currently installed (see PR notes), which
+  // would block a JS-only OTA update, so this solid coral is a deliberate non-native approximation
+  // of that gradient's midpoint rather than the literal two-stop effect.
+  brandCoral: '#f2542d',
+  brandNavy: '#1a1533',
 } as const;
 
 /** Matches web's 1.25-ratio type scale (`--bc-text-*`). */

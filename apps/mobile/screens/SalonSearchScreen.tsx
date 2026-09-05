@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
-import { DISCOVERY_PATHS } from '@barbercue/shared';
+import { DISCOVERY_PATHS, formatMoney } from '@barbercue/shared';
 import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
@@ -16,13 +16,16 @@ type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
 export default function SalonSearchScreen({ navigation, route }: Props) {
   const { t } = useLanguage();
   const selectedStyleName = route.params?.selectedStyleName;
-  const [q, setQ] = useState('');
+  const { initialQuery, initialLat, initialLng } = route.params ?? {};
+  const [q, setQ] = useState(initialQuery ?? '');
   const [results, setResults] = useState<SalonListItemDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
-  const [nearMe, setNearMe] = useState<{ lat: number; lng: number } | null>(null);
+  const [nearMe, setNearMe] = useState<{ lat: number; lng: number } | null>(
+    initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null,
+  );
   const [locating, setLocating] = useState(false);
 
   async function runSearch(isRefresh: boolean, coords: { lat: number; lng: number } | null) {
@@ -51,6 +54,17 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   function handleSearch(isRefresh = false) {
     return runSearch(isRefresh, nearMe);
   }
+
+  // Home's search card / Popular Services chips hand off a query (and, when already known,
+  // coordinates) via route params rather than this screen re-deriving them — runs once per mount,
+  // not on every param change, so returning to this same screen instance later doesn't re-fire a
+  // stale search.
+  useEffect(() => {
+    if (initialQuery || (initialLat !== undefined && initialLng !== undefined)) {
+      void runSearch(false, initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // "Near Me" (Phase 4) — expo-location's foreground permission flow, no paid Maps/geocoding SDK.
   // Denial/unavailability degrades gracefully to the existing text search rather than blocking the
@@ -143,6 +157,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                 {item.ratingCount > 0 && (
                   <Text style={styles.cardMeta}>
                     ★ {item.ratingAverage?.toFixed(1)} ({item.ratingCount})
+                  </Text>
+                )}
+                {item.priceMin !== null && (
+                  <Text style={styles.cardMeta}>
+                    {t.startingPricePrefix}{formatMoney(item.priceMin, item.currency, item.countryCode)}
                   </Text>
                 )}
                 {(item.isOpenNow !== null || item.distanceKm !== null) && (

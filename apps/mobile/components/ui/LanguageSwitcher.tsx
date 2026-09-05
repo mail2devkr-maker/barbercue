@@ -28,7 +28,10 @@ export function LanguageSwitcher() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 6 },
+  // flexShrink: 0 — a sibling in a flex row (e.g. Home's header title) must never compress this
+  // control instead of wrapping/truncating itself; see HomeScreen's header layout for the other
+  // half of the Part 7 cropping fix (the row that was pushing this off-screen, not this component).
+  row: { flexDirection: 'row', gap: 6, flexShrink: 0 },
   pill: {
     minHeight: 32,
     justifyContent: 'center',

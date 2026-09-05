@@ -4,7 +4,11 @@ import type { OperatingHoursDto, ServiceDto } from '@barbercue/shared';
 // Params are carried forward step-to-step rather than re-fetched, since the customer already
 // loaded them on the salon profile screen — same data-flow shape as apps/web's BookingFlow.
 export type SearchStackParamList = {
-  SalonSearch: { selectedStyleName?: string } | undefined;
+  // initialQuery/initialLat/initialLng let Home's search card and Popular Services chips hand off
+  // a query (and, when the customer's location is already known, coordinates) into this screen's
+  // own search state without duplicating the search engine itself — SalonSearchScreen still owns
+  // `q`/`nearMe` and the one real request to DISCOVERY_PATHS.salons.
+  SalonSearch: { selectedStyleName?: string; initialQuery?: string; initialLat?: number; initialLng?: number } | undefined;
   SalonProfile: {
     countryCode: string;
     citySlug: string;

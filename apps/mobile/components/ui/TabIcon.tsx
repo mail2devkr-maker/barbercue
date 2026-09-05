@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-export type TabIconName = 'home' | 'search' | 'bookings' | 'queue' | 'shop' | 'account' | 'today';
+export type TabIconName = 'home' | 'search' | 'bookings' | 'queue' | 'shop' | 'account' | 'today' | 'offer';
 
 interface TabIconProps {
   name: TabIconName;
@@ -83,6 +83,19 @@ export function TabIcon({ name, color, size = 22 }: TabIconProps) {
           <View style={[styles.accountShoulders, { width: size * 0.72, height: size * 0.36, borderColor: color, borderWidth: stroke }]} />
         </View>
       );
+    case 'offer':
+      return (
+        <View style={[styles.icon, base, { transform: [{ rotate: '-45deg' }] }]} accessible={false}>
+          <View
+            style={[
+              styles.offerTag,
+              { width: size * 0.62, height: size * 0.5, borderColor: color, borderWidth: stroke },
+            ]}
+          >
+            <View style={[styles.offerHole, { width: stroke * 1.6, height: stroke * 1.6, borderRadius: stroke, backgroundColor: color }]} />
+          </View>
+        </View>
+      );
   }
 }
 
@@ -106,4 +119,6 @@ const styles = StyleSheet.create({
   todayCheck: { position: 'absolute', width: '42%', height: '22%', top: '47%', left: '26%', transform: [{ rotate: '45deg' }] },
   accountHead: { position: 'absolute', top: 1, borderRadius: 999 },
   accountShoulders: { position: 'absolute', bottom: 1, borderTopLeftRadius: 999, borderTopRightRadius: 999, borderBottomWidth: 0 },
+  offerTag: { borderRadius: 3, alignItems: 'flex-end', justifyContent: 'flex-start', padding: 2 },
+  offerHole: {},
 });

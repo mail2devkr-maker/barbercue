@@ -316,6 +316,38 @@ export interface UiStrings {
   aiStyleAdvisor: string;
   accountAndPremium: string;
 
+  // HomeScreen premium redesign (FastQue Home discovery mission checkpoint).
+  homeHeroEyebrow: string;
+  homeHeroHeadlineLine1: string;
+  homeHeroHeadlineLine2: string;
+  homeHeroSubcopy: string;
+  chooseLocationAction: string;
+  detectingLocationAction: string;
+  searchModeBarber: string;
+  searchModeSalon: string;
+  shopOrServiceLabel: string;
+  shopOrServiceExample: string;
+  cityLocationLabel: string;
+  findABarberAction: string;
+  findShopsAction: string;
+  popularServicesTitle: string;
+  viewAllAction: string;
+  categoryHaircut: string;
+  categoryBeardTrim: string;
+  categoryFade: string;
+  categoryShave: string;
+  categoryNails: string;
+  categorySpa: string;
+  queuePromoHeadlineLine1: string;
+  queuePromoHeadlineLine2: string;
+  queuePromoSubcopy: string;
+  trustShopsLabel: string;
+  trustExperienceLabel: string;
+  trustRealTimeLabel: string;
+  trustOffersLabel: string;
+  fastQueCreditsShortcut: string;
+  startingPricePrefix: string;
+
   notSet: string;
   unknownDevice: string;
   signedInOnPrefix: string;
@@ -870,6 +902,37 @@ const enUi: UiStrings = {
   aiStyleAdvisor: 'AI Style Advisor',
   accountAndPremium: 'Account & Premium',
 
+  homeHeroEyebrow: 'GOOD LOOKS · LESS WAITING',
+  homeHeroHeadlineLine1: 'Your Style.',
+  homeHeroHeadlineLine2: 'Your Time.',
+  homeHeroSubcopy: 'Discover barbers, salons and grooming services. Book ahead or join a live queue.',
+  chooseLocationAction: 'Choose location',
+  detectingLocationAction: 'Detecting…',
+  searchModeBarber: 'Find a barber',
+  searchModeSalon: 'Find a salon & more',
+  shopOrServiceLabel: 'Shop or service',
+  shopOrServiceExample: 'Haircut, fade, beard trim, massage…',
+  cityLocationLabel: 'City / Location',
+  findABarberAction: 'Find a barber',
+  findShopsAction: 'Find shops',
+  popularServicesTitle: 'Popular Services',
+  viewAllAction: 'View all',
+  categoryHaircut: 'Haircut',
+  categoryBeardTrim: 'Beard Trim',
+  categoryFade: 'Fade',
+  categoryShave: 'Shave',
+  categoryNails: 'Nails',
+  categorySpa: 'Spa',
+  queuePromoHeadlineLine1: 'Skip the wait.',
+  queuePromoHeadlineLine2: 'Keep your day.',
+  queuePromoSubcopy: 'Real-time queue, live updates.',
+  trustShopsLabel: 'Trusted Shops',
+  trustExperienceLabel: 'Better Experience',
+  trustRealTimeLabel: 'Real-time Updates',
+  trustOffersLabel: 'Great Offers',
+  fastQueCreditsShortcut: 'FastQue Credits',
+  startingPricePrefix: 'From ',
+
   notSet: 'Not set',
   unknownDevice: 'Unknown device',
   signedInOnPrefix: 'Signed in ',
@@ -1394,6 +1457,37 @@ const hiUi: UiStrings = {
   myBookings: 'मेरी बुकिंग्स',
   aiStyleAdvisor: 'AI स्टाइल सलाहकार',
   accountAndPremium: 'खाता और प्रीमियम',
+
+  homeHeroEyebrow: 'बेहतरीन लुक · कम इंतज़ार',
+  homeHeroHeadlineLine1: 'आपकी स्टाइल.',
+  homeHeroHeadlineLine2: 'आपका समय.',
+  homeHeroSubcopy: 'बार्बर, सैलून और ग्रूमिंग सेवाएं खोजें। पहले से बुक करें या लाइव कतार में शामिल हों।',
+  chooseLocationAction: 'स्थान चुनें',
+  detectingLocationAction: 'पता लगाया जा रहा है…',
+  searchModeBarber: 'बार्बर खोजें',
+  searchModeSalon: 'सैलून व अन्य खोजें',
+  shopOrServiceLabel: 'दुकान या सेवा',
+  shopOrServiceExample: 'हेयरकट, फेड, बियर्ड ट्रिम, मसाज…',
+  cityLocationLabel: 'शहर / स्थान',
+  findABarberAction: 'बार्बर खोजें',
+  findShopsAction: 'दुकानें खोजें',
+  popularServicesTitle: 'लोकप्रिय सेवाएं',
+  viewAllAction: 'सभी देखें',
+  categoryHaircut: 'हेयरकट',
+  categoryBeardTrim: 'बियर्ड ट्रिम',
+  categoryFade: 'फेड',
+  categoryShave: 'शेव',
+  categoryNails: 'नेल्स',
+  categorySpa: 'स्पा',
+  queuePromoHeadlineLine1: 'इंतज़ार छोड़ें.',
+  queuePromoHeadlineLine2: 'अपना समय बचाएं.',
+  queuePromoSubcopy: 'रीयल-टाइम कतार, लाइव अपडेट्स।',
+  trustShopsLabel: 'विश्वसनीय दुकानें',
+  trustExperienceLabel: 'बेहतर अनुभव',
+  trustRealTimeLabel: 'रीयल-टाइम अपडेट्स',
+  trustOffersLabel: 'शानदार ऑफ़र',
+  fastQueCreditsShortcut: 'FastQue क्रेडिट्स',
+  startingPricePrefix: 'शुरुआत ',
 
   notSet: 'सेट नहीं है',
   unknownDevice: 'अज्ञात डिवाइस',
