@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BOOKING_PATHS, formatMoney } from '@barbercue/shared';
+import { BOOKING_PATHS, formatBookingArrivalTime, formatMoney } from '@barbercue/shared';
 import type { BookingDetailDto, PaginatedResult } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { openDirections } from '../lib/booking-actions';
@@ -58,7 +58,10 @@ function BookingCard({
   rebooking: boolean;
 }) {
   const { t, language } = useLanguage();
-  const date = new Date(booking.slotStart);
+  // Part 5 (show arrival time after booking): converted through the salon's own timezone, never
+  // the device's — a customer booking a shop outside their own city/timezone must never be shown
+  // a silently-wrong arrival time.
+  const arrival = formatBookingArrivalTime(booking.slotStart, booking.salonTimezone, dateLocaleFor(language));
   return (
     <Pressable style={styles.card} onPress={onPress}>
       <View style={styles.cardRow}>
@@ -74,8 +77,8 @@ function BookingCard({
 
       <Text style={styles.cardSalon}>{booking.salonName}</Text>
       <Text style={styles.cardMeta}>
-        {date.toLocaleDateString(dateLocaleFor(language), { weekday: 'short', month: 'short', day: 'numeric' })} ·{' '}
-        {date.toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
+        {arrival.date} · {arrival.time}
+        {!arrival.isDeviceLocalTimezone && t.shopLocalTimeSuffix}
       </Text>
 
       {booking.preferredStaffName && <Text style={styles.cardMeta}>{t.barberPrefix}{booking.preferredStaffName}</Text>}

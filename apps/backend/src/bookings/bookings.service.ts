@@ -21,6 +21,7 @@ import {
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
+import { resolveSalonTimeZone } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
@@ -62,6 +63,9 @@ const bookingDetailInclude = {
       lat: true,
       lng: true,
       ownerUserId: true,
+      // Part 5: resolved into BookingDetailDto.salonTimezone via resolveSalonTimeZone below, so
+      // every client formats slotStart/slotEnd in the salon's own zone instead of the device's.
+      timezone: true,
       city: { select: { slug: true, countryCode: true } },
     },
   },
@@ -775,6 +779,10 @@ export class BookingsService {
       salonAddress: booking.salon.addressLine,
       salonLat: booking.salon.lat,
       salonLng: booking.salon.lng,
+      salonTimezone: resolveSalonTimeZone({
+        timezone: booking.salon.timezone,
+        countryCode: booking.salon.city.countryCode,
+      }),
       serviceName: booking.service.name,
       serviceDurationMinutes: booking.service.durationMinutes,
       servicePrice: Number(booking.service.price),

@@ -760,6 +760,14 @@ export interface UiStrings {
   /** Connector for "{service} at {salon}" (ConfirmBookingScreen) — includes surrounding spaces. */
   atConnector: string;
 
+  /**
+   * Part 5 (show arrival time after booking) — appended after an arrival time whenever it's shown
+   * in the salon's own zone and that differs from the device's own (formatBookingArrivalTime's
+   * isDeviceLocalTimezone === false), so a traveling customer knows the clock time isn't in their
+   * own timezone. Includes a leading space.
+   */
+  shopLocalTimeSuffix: string;
+
   // FastQue Credits / Wallet V1
   fastQueCreditsLabel: string;
   walletBalanceLabel: string;
@@ -1317,6 +1325,8 @@ const enUi: UiStrings = {
 
   atConnector: ' at ',
 
+  shopLocalTimeSuffix: " (shop's local time)",
+
   fastQueCreditsLabel: 'FastQue Credits',
   walletBalanceLabel: 'Your FastQue Credits balance',
   redeemCreditsLabel: 'Redeem FastQue Credits',
@@ -1872,6 +1882,8 @@ const hiUi: UiStrings = {
   bookingRefPrefix: 'संदर्भ ',
 
   atConnector: ' में ',
+
+  shopLocalTimeSuffix: ' (दुकान के स्थानीय समय पर)',
 
   fastQueCreditsLabel: 'FastQue Credits',
   walletBalanceLabel: 'आपका FastQue Credits बैलेंस',

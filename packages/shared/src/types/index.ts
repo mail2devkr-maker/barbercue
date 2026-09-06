@@ -452,6 +452,13 @@ export interface BookingDetailDto extends BookingDto {
   // "Get Directions" falls back to a text-address maps search in that case.
   salonLat: number | null;
   salonLng: number | null;
+  // Part 5 (show arrival time after booking): the salon's real IANA zone, resolved server-side via
+  // resolveSalonTimeZone (explicit Salon.timezone, else Asia/Kolkata for an India salon, else
+  // null). Every client must format slotStart/slotEnd through this — via
+  // formatBookingArrivalTime — rather than the device's own timezone, which silently misrepresents
+  // the appointment time whenever the customer isn't in the same zone as the shop. Null means the
+  // zone genuinely could not be resolved; clients degrade to formatting with no explicit zone.
+  salonTimezone: string | null;
   serviceName: string;
   serviceDurationMinutes: number;
   servicePrice: number;

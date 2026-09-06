@@ -9,6 +9,7 @@ import {
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
   computeMaxRedeemableCredits,
+  formatBookingArrivalTime,
   formatMoney,
 } from '@barbercue/shared';
 import type {
@@ -147,7 +148,22 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           <Text style={styles.line}>
             {booking.serviceName}{t.atConnector}{booking.salonName}
           </Text>
-          <Text style={styles.line}>{new Date(booking.slotStart).toLocaleString(dateLocaleFor(language))}</Text>
+          {(() => {
+            // Part 5 (show arrival time after booking): converted through the salon's own
+            // timezone, never the device's — a customer booking a shop outside their own
+            // city/timezone must never be shown a silently-wrong arrival time.
+            const arrival = formatBookingArrivalTime(
+              booking.slotStart,
+              booking.salonTimezone,
+              dateLocaleFor(language),
+            );
+            return (
+              <Text style={styles.line}>
+                {arrival.date}, {arrival.time}
+                {!arrival.isDeviceLocalTimezone && t.shopLocalTimeSuffix}
+              </Text>
+            );
+          })()}
           {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
           {booking.creditsRedeemedAmount !== null && booking.creditsRedeemedAmount > 0 && (
             <Text style={styles.line}>

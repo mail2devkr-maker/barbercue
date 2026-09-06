@@ -32,6 +32,9 @@ const ownerBookingInclude = {
       addressLine: true,
       lat: true,
       lng: true,
+      // Part 5: resolved into OwnerBookingDetailDto.salonTimezone below, same as
+      // bookings.service.ts's customer-facing bookingDetailInclude.
+      timezone: true,
       city: { select: { slug: true, countryCode: true } },
     },
   },
@@ -261,6 +264,10 @@ export class DashboardBookingsService {
       salonAddress: booking.salon.addressLine,
       salonLat: booking.salon.lat,
       salonLng: booking.salon.lng,
+      salonTimezone: resolveSalonTimeZone({
+        timezone: booking.salon.timezone,
+        countryCode: booking.salon.city.countryCode,
+      }),
       serviceName: booking.service.name,
       serviceDurationMinutes: booking.service.durationMinutes,
       servicePrice: Number(booking.service.price),

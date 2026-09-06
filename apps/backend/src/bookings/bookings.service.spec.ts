@@ -764,6 +764,54 @@ describe('BookingsService', () => {
         code: 'BOOKING_NOT_FOUND',
       });
     });
+
+    // Part 5 (show arrival time after booking) — every client must format slotStart/slotEnd
+    // through this field instead of the device's own timezone.
+    describe('salonTimezone', () => {
+      it('uses the salon\'s explicit timezone when set', async () => {
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({
+            salon: {
+              name: 'BarberCue Demo Salon',
+              slug: 'barbercue-demo',
+              addressLine: '12 MG Road',
+              lat: 12.97,
+              lng: 77.59,
+              ownerUserId: 'owner1',
+              timezone: 'America/Chicago',
+              city: { slug: 'dallas', countryCode: 'US' },
+            },
+          }),
+        );
+        const result = await service.getOne('c1', 'b1');
+        expect(result.salonTimezone).toBe('America/Chicago');
+      });
+
+      it('falls back to Asia/Kolkata for an India salon with no explicit timezone', async () => {
+        prisma.booking.findFirst.mockResolvedValue(makeBookingRow());
+        const result = await service.getOne('c1', 'b1');
+        expect(result.salonTimezone).toBe('Asia/Kolkata');
+      });
+
+      it('is null rather than guessed for a non-India salon with no explicit timezone', async () => {
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({
+            salon: {
+              name: 'BarberCue Demo Salon',
+              slug: 'barbercue-demo',
+              addressLine: '12 MG Road',
+              lat: null,
+              lng: null,
+              ownerUserId: 'owner1',
+              timezone: null,
+              city: { slug: 'some-us-city', countryCode: 'US' },
+            },
+          }),
+        );
+        const result = await service.getOne('c1', 'b1');
+        expect(result.salonTimezone).toBeNull();
+      });
+    });
   });
 
   describe('cancel', () => {

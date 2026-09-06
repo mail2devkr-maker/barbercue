@@ -390,5 +390,53 @@ describe('DashboardBookingsService', () => {
       expect(dto.assignedStaffId).toBeNull();
       expect(dto.assignedStaffName).toBeNull();
     });
+
+    // Part 5 (show arrival time after booking) — the owner dashboard shares the same resolution
+    // rule as the customer-facing bookings.service.ts, never a second, potentially drifting copy.
+    describe('salonTimezone', () => {
+      it("uses the salon's explicit timezone when set", async () => {
+        prisma.booking.findFirst.mockResolvedValueOnce(
+          makeBookingRow({
+            salon: {
+              name: 'BarberCue Demo Salon',
+              slug: 'barbercue-demo',
+              currency: 'USD',
+              addressLine: '100 Main St',
+              lat: 32.7767,
+              lng: -96.797,
+              timezone: 'America/Chicago',
+              city: { slug: 'dallas', countryCode: 'US' },
+            },
+          }),
+        );
+        const dto = await service.getOne('owner1', 's1', 'b1');
+        expect(dto.salonTimezone).toBe('America/Chicago');
+      });
+
+      it('falls back to Asia/Kolkata for an India salon with no explicit timezone', async () => {
+        prisma.booking.findFirst.mockResolvedValueOnce(makeBookingRow());
+        const dto = await service.getOne('owner1', 's1', 'b1');
+        expect(dto.salonTimezone).toBe('Asia/Kolkata');
+      });
+
+      it('is null rather than guessed for a non-India salon with no explicit timezone', async () => {
+        prisma.booking.findFirst.mockResolvedValueOnce(
+          makeBookingRow({
+            salon: {
+              name: 'BarberCue Demo Salon',
+              slug: 'barbercue-demo',
+              currency: null,
+              addressLine: '100 Main St',
+              lat: null,
+              lng: null,
+              timezone: null,
+              city: { slug: 'some-us-city', countryCode: 'US' },
+            },
+          }),
+        );
+        const dto = await service.getOne('owner1', 's1', 'b1');
+        expect(dto.salonTimezone).toBeNull();
+      });
+    });
   });
 });

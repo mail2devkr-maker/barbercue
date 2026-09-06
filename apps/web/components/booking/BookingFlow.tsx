@@ -16,6 +16,7 @@ import {
   type OperatingHoursDto,
   type ServiceDto,
   type StaffOptionDto,
+  formatBookingArrivalTime,
   formatMoney,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
@@ -314,6 +315,10 @@ export function BookingFlow({
   if (confirmedBooking) {
     const booking = confirmedBooking;
     const cancelled = booking.status === "CANCELLED";
+    // Part 5 (show arrival time after booking): always converted through the salon's own
+    // timezone, never the device's — a customer booking a shop outside their own city/timezone
+    // must never be shown a silently-wrong arrival time.
+    const arrival = formatBookingArrivalTime(booking.slotStart, booking.salonTimezone);
     const statusClass =
       booking.status === "CONFIRMED"
         ? styles.statusConfirmed
@@ -332,7 +337,10 @@ export function BookingFlow({
           <p className={styles.summaryLine}>
             <strong>{booking.serviceName}</strong> at {booking.salonName}
           </p>
-          <p className={styles.summaryLine}>{new Date(booking.slotStart).toLocaleString()}</p>
+          <p className={styles.summaryLine}>
+            Arrival time: <strong>{arrival.date}, {arrival.time}</strong>
+            {!arrival.isDeviceLocalTimezone && " (shop's local time)"}
+          </p>
           {booking.selectedStyleName && <p className={styles.summaryLine}>Style: {booking.selectedStyleName}</p>}
           <p className={styles.summaryLine}>
             <span className={`${styles.statusBadge} ${statusClass}`}>{booking.status.replace(/_/g, " ")}</span>

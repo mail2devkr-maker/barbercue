@@ -6,7 +6,9 @@ import {
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
   computeCancellationCharge,
+  formatBookingArrivalTime,
   formatMoney,
+  formatZonedDateTime,
 } from '@barbercue/shared';
 import type {
   BookingDetailDto,
@@ -199,13 +201,28 @@ export default function BookingDetailScreen({ route }: Props) {
 
       <Card style={styles.card}>
         <Text style={[styles.status, { color: statusColor(booking.status) }]}>{t.statusLabelPrefix}{booking.status}</Text>
+        {/* Part 5 (show arrival time after booking): converted through the salon's own timezone,
+            never the device's — a customer booking a shop outside their own city/timezone must
+            never be shown a silently-wrong arrival time. */}
         <Text style={styles.line}>
-          {new Date(booking.slotStart).toLocaleDateString(dateLocaleFor(language), { weekday: 'long', month: 'long', day: 'numeric' })}
+          {formatZonedDateTime(booking.slotStart, booking.salonTimezone, dateLocaleFor(language), {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+          })}
         </Text>
         <Text style={styles.line}>
-          {new Date(booking.slotStart).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })} –{' '}
-          {new Date(booking.slotEnd).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
+          {formatZonedDateTime(booking.slotStart, booking.salonTimezone, dateLocaleFor(language), {
+            hour: '2-digit',
+            minute: '2-digit',
+          })} –{' '}
+          {formatZonedDateTime(booking.slotEnd, booking.salonTimezone, dateLocaleFor(language), {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
           {` (${booking.serviceDurationMinutes} ${t.minutesAbbrev})`}
+          {!formatBookingArrivalTime(booking.slotStart, booking.salonTimezone).isDeviceLocalTimezone &&
+            t.shopLocalTimeSuffix}
         </Text>
         <Text style={styles.line}>{formatMoney(booking.servicePrice, booking.currency)}</Text>
         {booking.preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{booking.preferredStaffName}</Text>}

@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BOOKING_PATHS, QUEUE_ENTRIES_PATH,
+  formatBookingArrivalTime,
   formatMoney,
+  zonedDateKey,
 } from "@barbercue/shared";
 import type {
   BookingDetailDto,
@@ -47,17 +49,19 @@ function formatStatus(status: string): string {
     .join(" ");
 }
 
-function formatWhen(slotStart: string): string {
-  const date = new Date(slotStart);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  const isTomorrow = date.toDateString() === tomorrow.toDateString();
-  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  if (isToday) return `Today · ${time}`;
-  if (isTomorrow) return `Tomorrow · ${time}`;
-  return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }) + ` · ${time}`;
+// Part 5 (show arrival time after booking): "Today"/"Tomorrow" is judged by the salon's own
+// calendar day (zonedDateKey), not the device's — a shop many hours away can already be in its
+// next/previous day relative to the customer's own clock. The clock time itself always goes
+// through formatBookingArrivalTime, never a bare toLocaleTimeString, for the same reason.
+function formatWhen(slotStart: string, salonTimezone: string | null): string {
+  const arrival = formatBookingArrivalTime(slotStart, salonTimezone);
+  const todayKey = zonedDateKey(new Date().toISOString(), salonTimezone);
+  const tomorrowKey = zonedDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), salonTimezone);
+  const targetKey = zonedDateKey(slotStart, salonTimezone);
+  const suffix = arrival.isDeviceLocalTimezone ? "" : " (shop's local time)";
+  if (targetKey === todayKey) return `Today · ${arrival.time}${suffix}`;
+  if (targetKey === tomorrowKey) return `Tomorrow · ${arrival.time}${suffix}`;
+  return `${arrival.date} · ${arrival.time}${suffix}`;
 }
 
 function BookingRow({
@@ -80,7 +84,7 @@ function BookingRow({
         </span>
       </div>
       <p className={styles.bookingRowSalon}>
-        {booking.salonName} — {new Date(booking.slotStart).toLocaleString()}
+        {booking.salonName} — {formatWhen(booking.slotStart, booking.salonTimezone)}
       </p>
       {booking.preferredStaffName && (
         <p className={styles.bookingRowMeta}>Preferred barber: {booking.preferredStaffName}</p>
@@ -220,7 +224,7 @@ export default function MyBookingsPage() {
         ) : nextBooking ? (
           <Card raised className={styles.nextChairCard}>
             <span className={styles.nextChairEyebrow}>Upcoming</span>
-            <span className={styles.nextChairWhen}>{formatWhen(nextBooking.slotStart)}</span>
+            <span className={styles.nextChairWhen}>{formatWhen(nextBooking.slotStart, nextBooking.salonTimezone)}</span>
             <span className={styles.nextChairSalon}>{nextBooking.salonName}</span>
             <span className={styles.nextChairMeta}>{nextBooking.serviceName}</span>
             {nextBooking.preferredStaffName && (

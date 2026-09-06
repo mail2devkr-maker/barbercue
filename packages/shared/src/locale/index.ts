@@ -147,3 +147,104 @@ export function phonePlaceholderForCountry(
   if (!countryCode) return '+…';
   return COUNTRY_PHONE_EXAMPLE[countryCode.toUpperCase()] ?? '+…';
 }
+
+// ---------- Zoned date/time (Part 5 — show arrival time after booking) ----------
+//
+// Every booking-time render on web and mobile used to call `Date#toLocaleString()` /
+// `toLocaleTimeString()` with no `timeZone` option, which silently formats in the *device's* own
+// timezone. That is correct for a customer booking a shop in their own city, but actively wrong
+// the moment they book a shop in a different one (e.g. traveling, or a multi-city product) — the
+// exact "arrival time" a customer is shown could be off by hours with no indication anything was
+// wrong. These helpers are the single place that formats a booking instant, so both apps convert
+// through the salon's own IANA zone (BookingDetailDto.salonTimezone, resolved server-side by
+// resolveSalonTimeZone) the same way, instead of each re-implementing (or forgetting) it.
+
+/**
+ * Formats an ISO instant as wall-clock text in a specific IANA zone. An unknown/invalid timezone
+ * string throws inside `Intl.DateTimeFormat`; rather than crash a booking screen over one bad
+ * value, this falls back to formatting with no explicit zone (the runtime's own default) — the
+ * same "incomplete beats wrong" precedent formatMoney above follows for an unlisted currency.
+ */
+export function formatZonedDateTime(
+  iso: string,
+  timezone: string | null | undefined,
+  locale: string | undefined,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  const date = new Date(iso);
+  try {
+    return new Intl.DateTimeFormat(locale, { ...options, timeZone: timezone ?? undefined }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat(locale, options).format(date);
+  }
+}
+
+/**
+ * A stable 'YYYY-MM-DD' key for `iso`'s calendar date in `timezone` — always this exact format
+ * regardless of `Intl`'s locale-dependent field ordering, via the same 'en-CA' trick the backend's
+ * own timezone.ts formatter uses. For comparing "is this the same calendar day as X" (e.g.
+ * "Today"/"Tomorrow" labeling) in the salon's own zone rather than the device's — the day boundary
+ * itself can differ by zone, not just the clock time shown within it.
+ */
+export function zonedDateKey(iso: string, timezone: string | null | undefined): string {
+  const date = new Date(iso);
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone ?? undefined,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  }
+}
+
+export interface BookingArrivalTime {
+  /** e.g. "Fri, Sep 12" */
+  date: string;
+  /** e.g. "3:45 PM" */
+  time: string;
+  /**
+   * True when `timezone` is missing OR matches the *viewing device's* own resolved zone. The UI
+   * uses this to decide whether a "(shop's local time)" qualifier is worth showing — pointless
+   * (and slightly confusing) when the customer's own device is already in that same zone, but
+   * exactly the disambiguation a traveling customer needs when it isn't.
+   */
+  isDeviceLocalTimezone: boolean;
+}
+
+/**
+ * The one function every booking confirmation/detail/list screen should call to show an "arrival
+ * time" — never a raw `new Date(slotStart).toLocaleString()`. `timezone` should be the booking's
+ * `salonTimezone` (null when the salon's zone genuinely could not be resolved server-side, in
+ * which case this degrades to the device's own zone, same as the pre-Part-5 behavior, rather than
+ * fabricating one).
+ */
+export function formatBookingArrivalTime(
+  iso: string,
+  timezone: string | null | undefined,
+  locale?: string,
+): BookingArrivalTime {
+  const date = formatZonedDateTime(iso, timezone, locale, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  const time = formatZonedDateTime(iso, timezone, locale, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  let deviceTimezone: string | null = null;
+  try {
+    deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    deviceTimezone = null;
+  }
+  const isDeviceLocalTimezone = !timezone || !deviceTimezone || timezone === deviceTimezone;
+  return { date, time, isDeviceLocalTimezone };
+}

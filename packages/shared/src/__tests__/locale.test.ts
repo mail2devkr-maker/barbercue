@@ -1,10 +1,13 @@
 import {
   INDIAN_PIN_CODE_REGEX,
   currencyForCountry,
+  formatBookingArrivalTime,
   formatMoney,
+  formatZonedDateTime,
   isValidPostalCode,
   phonePlaceholderForCountry,
   postalCodeRuleFor,
+  zonedDateKey,
 } from '../index';
 
 describe('postal codes', () => {
@@ -124,6 +127,78 @@ describe('formatMoney', () => {
 
   it('formats a non-INR currency correctly when one is supplied', () => {
     expect(formatMoney(300, 'GBP', 'GB')).toContain('300');
+  });
+});
+
+describe('formatZonedDateTime / formatBookingArrivalTime (Part 5 — show arrival time after booking)', () => {
+  // A fixed instant that is unambiguously a different calendar day/hour depending on zone —
+  // 2026-01-15T02:00:00Z is Jan 14 evening in Chicago, Jan 15 morning in Kolkata.
+  const instant = '2026-01-15T02:00:00.000Z';
+
+  it('renders the same instant differently depending on the requested IANA zone, regardless of host timezone', () => {
+    const kolkata = formatZonedDateTime(instant, 'Asia/Kolkata', 'en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    const chicago = formatZonedDateTime(instant, 'America/Chicago', 'en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    // 02:00 UTC = 07:30 IST (UTC+5:30) = 20:00 CST previous day (UTC-6).
+    expect(kolkata).toBe('7:30 AM');
+    expect(chicago).toBe('8:00 PM');
+  });
+
+  it('degrades to formatting with no explicit zone rather than throwing on an invalid timezone string', () => {
+    expect(() =>
+      formatZonedDateTime(instant, 'Not/AZone', 'en-US', { hour: 'numeric', minute: '2-digit' }),
+    ).not.toThrow();
+  });
+
+  it('treats a null/undefined timezone as "use the runtime default" rather than throwing', () => {
+    expect(() => formatZonedDateTime(instant, null, 'en-US', { hour: 'numeric' })).not.toThrow();
+    expect(() => formatZonedDateTime(instant, undefined, 'en-US', { hour: 'numeric' })).not.toThrow();
+  });
+
+  describe('formatBookingArrivalTime', () => {
+    it('returns a distinct date and time string formatted in the given zone', () => {
+      const result = formatBookingArrivalTime(instant, 'Asia/Kolkata', 'en-US');
+      expect(result.time).toBe('7:30 AM');
+      expect(result.date).toContain('Jan');
+      expect(result.date).toContain('15');
+    });
+
+    it('flags isDeviceLocalTimezone=true when the salon timezone is unknown (never a false "different zone" alarm)', () => {
+      expect(formatBookingArrivalTime(instant, null, 'en-US').isDeviceLocalTimezone).toBe(true);
+    });
+
+    it('flags isDeviceLocalTimezone based on the actual resolved device zone, not a hard-coded guess', () => {
+      const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      expect(formatBookingArrivalTime(instant, deviceZone, 'en-US').isDeviceLocalTimezone).toBe(true);
+
+      // Pick whichever of these two well-known zones is NOT the actual device zone, so this
+      // assertion holds no matter what machine/CI runner executes the test.
+      const definitelyDifferentZone = deviceZone === 'Pacific/Kiritimati' ? 'Etc/GMT+12' : 'Pacific/Kiritimati';
+      expect(
+        formatBookingArrivalTime(instant, definitelyDifferentZone, 'en-US').isDeviceLocalTimezone,
+      ).toBe(false);
+    });
+  });
+});
+
+describe('zonedDateKey', () => {
+  it('gives a different calendar-day key depending on zone for an instant near midnight', () => {
+    // 2026-01-15T02:00:00Z is Jan 15 morning in Kolkata but still Jan 14 evening in Chicago.
+    expect(zonedDateKey('2026-01-15T02:00:00.000Z', 'Asia/Kolkata')).toBe('2026-01-15');
+    expect(zonedDateKey('2026-01-15T02:00:00.000Z', 'America/Chicago')).toBe('2026-01-14');
+  });
+
+  it('always returns YYYY-MM-DD regardless of what locale-dependent ordering might otherwise apply', () => {
+    expect(zonedDateKey('2026-03-05T12:00:00.000Z', 'Europe/London')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('degrades to the runtime default zone rather than throwing on an invalid timezone', () => {
+    expect(() => zonedDateKey('2026-01-15T02:00:00.000Z', 'Not/AZone')).not.toThrow();
   });
 });
 
