@@ -168,6 +168,10 @@ interface ExistingCityBackfillData {
   nativeName: string | null;
   latitude: number | null;
   longitude: number | null;
+  // Part 4 (auto timezone selection): the source dataset's per-city IANA zone, previously parsed
+  // and silently discarded here (CITY_COLUMNS/Dr5hnCityRow always carried it -- see dr5hn-types.ts
+  // -- there was simply no City.timezone column to receive it before this).
+  timezone: string | null;
   population: number | null;
   sourceDataset: string;
   sourceId: number;
@@ -624,6 +628,7 @@ async function main() {
       nativeName: sourceCity.native,
       latitude: toNumberOrNull(sourceCity.latitude),
       longitude: toNumberOrNull(sourceCity.longitude),
+      timezone: sourceCity.timezone,
       population: toNumberOrNull(sourceCity.population),
       sourceDataset: SOURCE_DATASET,
       sourceId: toNumberOrNull(sourceCity.id)!,
@@ -693,6 +698,7 @@ async function main() {
               nativeName: c.native,
               latitude: toNumberOrNull(c.latitude),
               longitude: toNumberOrNull(c.longitude),
+              timezone: c.timezone,
               population: toNumberOrNull(c.population),
               sourceDataset: SOURCE_DATASET,
               sourceId: toNumberOrNull(c.id),

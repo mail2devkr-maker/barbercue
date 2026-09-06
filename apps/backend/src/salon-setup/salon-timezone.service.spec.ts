@@ -15,11 +15,18 @@ describe('SalonTimezoneService', () => {
         findUnique: jest.fn().mockResolvedValue({
           id: 'salon-1',
           timezone: null,
-          city: { countryCode: 'IN' },
+          timezoneAutoDetected: false,
+          timezoneManuallyOverridden: false,
+          lat: null,
+          lng: null,
+          city: { countryCode: 'IN', timezone: null },
         }),
-        update: jest
-          .fn()
-          .mockResolvedValue({ id: 'salon-1', timezone: 'Asia/Kolkata' }),
+        update: jest.fn().mockResolvedValue({
+          id: 'salon-1',
+          timezone: 'Asia/Kolkata',
+          timezoneAutoDetected: false,
+          timezoneManuallyOverridden: true,
+        }),
       },
       auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
@@ -28,7 +35,7 @@ describe('SalonTimezoneService', () => {
   });
 
   describe('getTimezone', () => {
-    it('checks salon access first, then returns the current value', async () => {
+    it('checks salon access first, then returns the current value plus an India country-fallback suggestion', async () => {
       const result = await service.getTimezone('owner-1', 'salon-1');
       expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
         'owner-1',
@@ -38,6 +45,60 @@ describe('SalonTimezoneService', () => {
         id: 'salon-1',
         timezone: null,
         countryCode: 'IN',
+        timezoneAutoDetected: false,
+        timezoneManuallyOverridden: false,
+        suggestion: { timezone: 'Asia/Kolkata', confidence: 'HIGH', source: 'country' },
+      });
+    });
+
+    it('suggests from GPS coordinates when present, even for a non-India salon', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 'salon-2',
+        timezone: null,
+        timezoneAutoDetected: false,
+        timezoneManuallyOverridden: false,
+        lat: 32.7767,
+        lng: -96.797, // Dallas
+        city: { countryCode: 'US', timezone: null },
+      });
+      const result = await service.getTimezone('owner-1', 'salon-2');
+      expect(result.suggestion).toEqual({
+        timezone: 'America/Chicago',
+        confidence: 'EXACT',
+        source: 'coordinates',
+      });
+    });
+
+    it('returns a null suggestion when nothing confidently resolves — never fabricates one', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 'salon-3',
+        timezone: null,
+        timezoneAutoDetected: false,
+        timezoneManuallyOverridden: false,
+        lat: null,
+        lng: null,
+        city: { countryCode: 'US', timezone: null },
+      });
+      const result = await service.getTimezone('owner-1', 'salon-3');
+      expect(result.suggestion).toBeNull();
+    });
+
+    it('still offers a suggestion even when a timezone is already stored, without touching it', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 'salon-4',
+        timezone: 'Asia/Kolkata',
+        timezoneAutoDetected: true,
+        timezoneManuallyOverridden: false,
+        lat: null,
+        lng: null,
+        city: { countryCode: 'IN', timezone: null },
+      });
+      const result = await service.getTimezone('owner-1', 'salon-4');
+      expect(result.timezone).toBe('Asia/Kolkata');
+      expect(result.suggestion).toEqual({
+        timezone: 'Asia/Kolkata',
+        confidence: 'HIGH',
+        source: 'country',
       });
     });
 
@@ -50,26 +111,65 @@ describe('SalonTimezoneService', () => {
   });
 
   describe('updateTimezone', () => {
-    it('saves a real IANA zone', async () => {
+    it('saves a real IANA zone and marks it as a manual, non-auto-detected choice', async () => {
       const result = await service.updateTimezone('owner-1', 'salon-1', {
         timezone: 'Asia/Kolkata',
       });
       expect(prisma.salon.update).toHaveBeenCalledWith({
         where: { id: 'salon-1' },
-        data: { timezone: 'Asia/Kolkata' },
-        select: { id: true, timezone: true },
+        data: {
+          timezone: 'Asia/Kolkata',
+          timezoneAutoDetected: false,
+          timezoneManuallyOverridden: true,
+        },
+        select: {
+          id: true,
+          timezone: true,
+          timezoneAutoDetected: true,
+          timezoneManuallyOverridden: true,
+        },
       });
       expect(result).toEqual({
         id: 'salon-1',
         timezone: 'Asia/Kolkata',
+        timezoneAutoDetected: false,
+        timezoneManuallyOverridden: true,
         countryCode: 'IN',
+        suggestion: { timezone: 'Asia/Kolkata', confidence: 'HIGH', source: 'country' },
       });
+    });
+
+    // Part 4, section 5: once the owner has explicitly chosen a value, a later render/refresh —
+    // or another PATCH with the exact same explicit value — must never be treated as anything
+    // other than an authoritative manual choice; it should never flip back to "auto-detected".
+    it('a second explicit PATCH keeps timezoneManuallyOverridden true and timezoneAutoDetected false', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 'salon-1',
+        timezone: 'Asia/Kolkata',
+        timezoneAutoDetected: true, // was auto-filled at registration
+        timezoneManuallyOverridden: false,
+        lat: null,
+        lng: null,
+        city: { countryCode: 'IN', timezone: null },
+      });
+      await service.updateTimezone('owner-1', 'salon-1', { timezone: 'America/New_York' });
+      expect(prisma.salon.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            timezone: 'America/New_York',
+            timezoneAutoDetected: false,
+            timezoneManuallyOverridden: true,
+          }),
+        }),
+      );
     });
 
     it('saves a real non-India zone just as validly — never assumes India', async () => {
       prisma.salon.update.mockResolvedValue({
         id: 'salon-1',
         timezone: 'America/New_York',
+        timezoneAutoDetected: false,
+        timezoneManuallyOverridden: true,
       });
       const result = await service.updateTimezone('owner-1', 'salon-1', {
         timezone: 'America/New_York',

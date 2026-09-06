@@ -90,15 +90,16 @@ function supportedTimeZones(current: string | null): string[] {
   return withKolkata;
 }
 
-// Issue #13: a real production salon (Handsome Center, Hajipur, Bihar) ended up with its timezone
-// explicitly set to "Indian/Christmas" — a real IANA zone (Christmas Island, UTC+7), not the
-// intended "Asia/Kolkata" (UTC+5:30). Root cause: the picker below is every ICU timezone name
-// (400+), unfiltered and un-suggested, and "Indian/Christmas" sits alphabetically close to what
-// someone searching for "India" would look for. Deliberately NOT a big hardcoded country->zone
-// table (that would mislead any multi-zone country — US, Russia, Brazil, Australia — into a wrong
-// single guess); only add an entry here for a country with one unambiguous, genuinely common zone.
-const SUGGESTED_ZONE_FOR_COUNTRY: Record<string, string> = {
-  IN: "Asia/Kolkata",
+// Human-readable label for where a Part 4 auto-detected suggestion came from. Deliberately does
+// not name a specific city/region (the API returns only the resolved zone + source, not a display
+// name) — "from your shop's exact location" etc. stays accurate without fabricating a place name.
+const SUGGESTION_SOURCE_LABEL: Record<
+  NonNullable<SalonTimezoneResultDto["suggestion"]>["source"],
+  string
+> = {
+  coordinates: "your shop's exact location",
+  city: "your shop's city",
+  country: "your shop's country",
 };
 
 // Owner-facing counterpart to Global timezone correctness (booking/analytics/isOpenNow all need a
@@ -106,9 +107,17 @@ const SUGGESTED_ZONE_FOR_COUNTRY: Record<string, string> = {
 // India shops keep working unchanged with no zone set at all (resolveSalonTimeZone's own
 // country-code fallback) — this control exists for every OTHER country, and for an India shop that
 // wants to set one explicitly anyway.
+//
+// Part 4 (auto timezone selection): the GET response now also carries a freshly-computed
+// `suggestion` (coordinates > city > country, never a guess — see resolveAutoTimezone) alongside
+// the stored value. The suggestion is offered, never auto-applied: it only pre-fills the picker's
+// local `selected` state (when nothing is stored yet) or shows a dismissible "use this" banner
+// (when a stored value already differs from it) — either way the owner must still press Save for
+// anything to actually persist, so this can never silently overwrite a manually-configured shop.
 function TimezoneSection({ salonId }: { salonId: string }) {
   const [current, setCurrent] = useState<string | null | undefined>(undefined);
-  const [countryCode, setCountryCode] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<SalonTimezoneResultDto["suggestion"]>(null);
+  const [manuallyOverridden, setManuallyOverridden] = useState(false);
   const [selected, setSelected] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,8 +135,12 @@ function TimezoneSection({ salonId }: { salonId: string }) {
       .then((result) => {
         if (cancelled) return;
         setCurrent(result.timezone);
-        setSelected(result.timezone ?? "");
-        setCountryCode(result.countryCode);
+        // Nothing stored yet: pre-fill the picker with the suggestion so the owner sees a
+        // confident value immediately, but this is still just local <select> state — Save is
+        // still required before anything is written.
+        setSelected(result.timezone ?? result.suggestion?.timezone ?? "");
+        setSuggestion(result.suggestion);
+        setManuallyOverridden(result.timezoneManuallyOverridden);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof ApiError ? err.message : "Could not load your time zone.");
@@ -148,6 +161,8 @@ function TimezoneSection({ salonId }: { salonId: string }) {
         { method: "PATCH", body: JSON.stringify({ timezone: selected }) },
       );
       setCurrent(result.timezone);
+      setSuggestion(result.suggestion);
+      setManuallyOverridden(result.timezoneManuallyOverridden);
       setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save your time zone.");
@@ -155,6 +170,11 @@ function TimezoneSection({ salonId }: { salonId: string }) {
       setSaving(false);
     }
   }
+
+  // Show the "use detected zone" banner only while it would actually change something the owner
+  // hasn't already confirmed — never once they've explicitly picked a different value on purpose.
+  const showSuggestionBanner =
+    suggestion !== null && selected !== suggestion.timezone && !manuallyOverridden;
 
   return (
     <section className={styles.dividerSection}>
@@ -171,41 +191,53 @@ function TimezoneSection({ salonId }: { salonId: string }) {
           <p style={{ fontSize: 14, marginBottom: 8 }}>
             Current: <strong>{current ?? "Not set"}</strong>
           </p>
-          {countryCode &&
-            SUGGESTED_ZONE_FOR_COUNTRY[countryCode] &&
-            current !== SUGGESTED_ZONE_FOR_COUNTRY[countryCode] && (
-              <p
+          {showSuggestionBanner && suggestion && (
+            <p
+              style={{
+                fontSize: 13,
+                marginBottom: 10,
+                padding: "8px 10px",
+                borderRadius: 8,
+                background: "var(--bc-gold-soft)",
+                color: "var(--bc-ink)",
+              }}
+            >
+              Automatically detected from {SUGGESTION_SOURCE_LABEL[suggestion.source]}:{" "}
+              <strong>{suggestion.timezone}</strong>. Confirm or choose a different zone below.{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected(suggestion.timezone);
+                  setSaved(false);
+                }}
                 style={{
-                  fontSize: 13,
-                  marginBottom: 10,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  background: "var(--bc-gold-soft)",
-                  color: "var(--bc-ink)",
+                  color: "var(--bc-accent)",
+                  textDecoration: "underline",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  font: "inherit",
                 }}
               >
-                This shop&apos;s city is in {countryCode} — the correct time zone is usually{" "}
-                <strong>{SUGGESTED_ZONE_FOR_COUNTRY[countryCode]}</strong>.{" "}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(SUGGESTED_ZONE_FOR_COUNTRY[countryCode]);
-                    setSaved(false);
-                  }}
-                  style={{
-                    color: "var(--bc-accent)",
-                    textDecoration: "underline",
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    font: "inherit",
-                  }}
-                >
-                  Use {SUGGESTED_ZONE_FOR_COUNTRY[countryCode]}
-                </button>
-              </p>
-            )}
+                Use {suggestion.timezone}
+              </button>
+            </p>
+          )}
+          {suggestion === null && current === null && (
+            <p
+              style={{
+                fontSize: 13,
+                marginBottom: 10,
+                padding: "8px 10px",
+                borderRadius: 8,
+                background: "var(--bc-gold-soft)",
+                color: "var(--bc-ink)",
+              }}
+            >
+              We couldn&apos;t automatically detect your time zone. Please confirm it below.
+            </p>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <select
               value={selected}

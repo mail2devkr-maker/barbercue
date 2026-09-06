@@ -25,6 +25,7 @@ import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { CitiesService } from './cities.service';
 import { isOpenAt, resolveSalonTimeZone } from '../common/timezone/timezone';
+import { resolveAutoTimezone } from '../common/timezone/timezone-resolution';
 
 const DEFAULT_PAGE_SIZE = 20;
 const RECENT_REVIEWS_LIMIT = 10;
@@ -476,6 +477,17 @@ export class SalonsService {
       localityId = locality.id;
     }
 
+    // Part 4 (auto timezone selection): try to resolve a confident IANA zone from whatever the
+    // owner actually gave us at registration — GPS coordinates first (most precise), then the
+    // resolved city's own known zone, then the India-only country fallback. Ambiguous/unresolved
+    // stays null, same as before this feature existed — never a fabricated guess.
+    const timezoneSuggestion = resolveAutoTimezone({
+      latitude: input.lat ?? null,
+      longitude: input.lng ?? null,
+      cityTimezone: city.timezone,
+      countryCode: city.countryCode,
+    });
+
     const baseSlug = slugify(input.name);
     let lastError: Prisma.PrismaClientKnownRequestError | undefined;
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt++) {
@@ -496,10 +508,15 @@ export class SalonsService {
               postalCode: input.postalCode ?? null,
               // Derived from the country, and only where that mapping is authoritative — an
               // unlisted country leaves this null rather than guessing a currency, and the UI
-              // then renders a bare amount instead of a wrong symbol. `timezone` is deliberately
-              // NOT set here: nothing can determine an IANA zone yet (GPS is optional, no lookup
-              // is wired), so inventing one would be worse than leaving it null.
+              // then renders a bare amount instead of a wrong symbol.
               currency: currencyForCountry(city.countryCode),
+              // Part 4: auto-filled only when resolveAutoTimezone is actually confident (EXACT or
+              // HIGH) — an AMBIGUOUS/null result leaves this null exactly like before the feature
+              // existed, so a multi-timezone country with no coordinates never gets a guessed
+              // zone. timezoneAutoDetected records that this came from detection, not an owner
+              // choice, so the settings page can still offer to refine/confirm it later.
+              timezone: timezoneSuggestion?.timezone ?? null,
+              timezoneAutoDetected: Boolean(timezoneSuggestion),
               // Absent when the owner declined GPS — stored as NULL, not 0/0 (a real place in
               // the Gulf of Guinea), so "unknown" stays distinguishable from "there".
               lat: input.lat ?? null,

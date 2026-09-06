@@ -8,6 +8,7 @@ import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { isValidTimeZone } from '../common/timezone/timezone';
+import { resolveAutoTimezone } from '../common/timezone/timezone-resolution';
 
 /**
  * Owner-facing counterpart to the Global timezone correctness work: booking availability,
@@ -38,7 +39,11 @@ export class SalonTimezoneService {
       select: {
         id: true,
         timezone: true,
-        city: { select: { countryCode: true } },
+        timezoneAutoDetected: true,
+        timezoneManuallyOverridden: true,
+        lat: true,
+        lng: true,
+        city: { select: { countryCode: true, timezone: true } },
       },
     });
     if (!salon) {
@@ -52,6 +57,16 @@ export class SalonTimezoneService {
       id: salon.id,
       timezone: salon.timezone,
       countryCode: salon.city.countryCode,
+      timezoneAutoDetected: salon.timezoneAutoDetected,
+      timezoneManuallyOverridden: salon.timezoneManuallyOverridden,
+      // Computed fresh every call, never persisted on its own — see SalonTimezoneResultDto's
+      // doc comment for why this is offered even when `timezone` is already set.
+      suggestion: resolveAutoTimezone({
+        latitude: salon.lat,
+        longitude: salon.lng,
+        cityTimezone: salon.city.timezone,
+        countryCode: salon.city.countryCode,
+      }),
     };
   }
 
@@ -63,7 +78,12 @@ export class SalonTimezoneService {
     const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      include: { city: { select: { countryCode: true } } },
+      select: {
+        timezone: true,
+        lat: true,
+        lng: true,
+        city: { select: { countryCode: true, timezone: true } },
+      },
     });
     if (!salon) {
       throw new AppException(
@@ -88,10 +108,18 @@ export class SalonTimezoneService {
       );
     }
     const previousTimezone = salon.timezone;
+    // Any explicit PATCH — whether the owner typed a value or clicked "use detected timezone" and
+    // then saved — is a deliberate confirmation, never an automatic write. Once this has happened,
+    // the stored value is authoritative and must never be silently replaced by a future
+    // auto-detect pass (Part 4, section 7/5).
     const updated = await this.prisma.salon.update({
       where: { id: salonId },
-      data: { timezone: input.timezone },
-      select: { id: true, timezone: true },
+      data: {
+        timezone: input.timezone,
+        timezoneAutoDetected: false,
+        timezoneManuallyOverridden: true,
+      },
+      select: { id: true, timezone: true, timezoneAutoDetected: true, timezoneManuallyOverridden: true },
     });
     // Part 2 — every delegated admin mutation gets an AuditLog row with the real actor; an owner
     // editing their own shop is unchanged (no new logging for that path).
@@ -106,6 +134,15 @@ export class SalonTimezoneService {
         },
       });
     }
-    return { ...updated, countryCode: salon.city.countryCode };
+    return {
+      ...updated,
+      countryCode: salon.city.countryCode,
+      suggestion: resolveAutoTimezone({
+        latitude: salon.lat,
+        longitude: salon.lng,
+        cityTimezone: salon.city.timezone,
+        countryCode: salon.city.countryCode,
+      }),
+    };
   }
 }

@@ -930,10 +930,30 @@ export interface SalonStatusResultDto {
 // alpha-2 code, always present for a real salon — it drives an owner-facing "suggested zone" hint
 // in web's TimezoneSection, never a silent default; the raw picker still works exactly as before
 // for every country this doesn't have a confident single-zone suggestion for.
+//
+// Part 4 (auto timezone selection) additions:
+//   - timezoneAutoDetected / timezoneManuallyOverridden mirror the Salon columns of the same name
+//     — whether the CURRENT stored value (if any) came from auto-detection or an explicit owner
+//     choice.
+//   - suggestion is computed fresh on every GET (never persisted on its own) from
+//     resolveAutoTimezone against the salon's current coordinates/city/country. Null means
+//     detection is genuinely ambiguous — the UI must keep showing a manual selector, never invent
+//     a value. Present even when `timezone` is already set, so a shop whose owner never
+//     explicitly confirmed a value (timezoneManuallyOverridden === false) can still be offered a
+//     more precise suggestion without it ever being silently applied.
+export interface SalonTimezoneSuggestionDto {
+  timezone: string;
+  confidence: 'EXACT' | 'HIGH' | 'AMBIGUOUS';
+  source: 'coordinates' | 'city' | 'country';
+}
+
 export interface SalonTimezoneResultDto {
   id: string;
   timezone: string | null;
   countryCode: string;
+  timezoneAutoDetected: boolean;
+  timezoneManuallyOverridden: boolean;
+  suggestion: SalonTimezoneSuggestionDto | null;
 }
 
 // GET/PATCH dashboard/salons/:salonId/profile (Part 2, admin delegated shop management) — the

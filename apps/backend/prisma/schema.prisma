@@ -464,6 +464,13 @@ model City {
   nativeName    String?
   latitude      Float?
   longitude     Float?
+  // IANA timezone (e.g. "America/Chicago"), sourced from the same dr5hn import as
+  // latitude/longitude above (Part 4, auto timezone selection). Nullable: only populated for
+  // cities the global-location importer has enriched — legacy/demo cities and any city imported
+  // before this column existed have none until a separate, explicitly-approved backfill runs.
+  // This is city-level metadata, never a per-salon override — Salon.timezone remains the
+  // authoritative, owner-configurable value; this only feeds the auto-detection suggestion.
+  timezone      String?
   population    Int?
   sourceDataset String?
   sourceId      Int?
@@ -533,6 +540,14 @@ model Salon {
   // requiring it would break registerSalon. AvailabilityService still uses a fixed IST offset
   // and does NOT read this column yet; that switch is a separate, reviewed change.
   timezone         String?
+  // Part 4 (auto timezone selection) provenance flags — never used to gate behavior on their own,
+  // only to decide whether a future auto-detect pass may safely replace the current value.
+  // `timezoneAutoDetected`: true iff the current `timezone` value was set by resolveAutoTimezone
+  // (coordinates/city/country), never by an explicit owner/admin PATCH.
+  // `timezoneManuallyOverridden`: true once an owner/admin has ever explicitly PATCHed timezone —
+  // once set, auto-detection must never silently overwrite the stored value again.
+  timezoneAutoDetected       Boolean @default(false)
+  timezoneManuallyOverridden Boolean @default(false)
   // ISO-4217 (e.g. "INR", "GBP"). Nullable for the same reason: no source populates it yet.
   // Money columns are already Decimal and currency-agnostic; this records which currency they
   // are denominated in.

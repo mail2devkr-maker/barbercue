@@ -892,9 +892,10 @@ describe('SalonsService', () => {
       });
     });
 
-    // Nothing can derive an IANA zone at registration yet — GPS is optional and no lookup is
-    // wired — so a guessed timezone would be worse than none.
-    it('does not invent a timezone at registration', async () => {
+    // Part 4 (auto timezone selection): the default `input` above carries real Bengaluru
+    // coordinates, so registration should confidently auto-fill the IANA zone rather than
+    // leaving it null the way it always used to before coordinate-based resolution existed.
+    it('auto-detects the timezone from GPS coordinates at registration and flags it as auto-detected', async () => {
       prisma.salon.create.mockResolvedValue({
         id: 's1',
         publicId: 'BC-SHOP-000001',
@@ -905,10 +906,74 @@ describe('SalonsService', () => {
 
       await service.registerSalon('owner-1', input);
 
-      const [args] = prisma.salon.create.mock.calls[0] as [
-        { data: Record<string, unknown> },
-      ];
-      expect(args.data.timezone).toBeUndefined();
+      expect(prisma.salon.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          timezone: 'Asia/Kolkata',
+          timezoneAutoDetected: true,
+        }),
+      });
+    });
+
+    it('auto-detects a non-India timezone from coordinates alone (Dallas -> America/Chicago)', async () => {
+      citiesService.findCityBySlugOrThrow.mockResolvedValue({
+        id: 'c2',
+        slug: 'dallas',
+        countryCode: 'US',
+      });
+      prisma.salon.create.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+
+      await service.registerSalon('owner-1', {
+        ...input,
+        countryCode: 'US',
+        citySlug: 'dallas',
+        lat: 32.7767,
+        lng: -96.797,
+      });
+
+      expect(prisma.salon.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          timezone: 'America/Chicago',
+          timezoneAutoDetected: true,
+        }),
+      });
+    });
+
+    // No coordinates, no known city timezone, and a genuinely multi-timezone country (USA) — none
+    // of the resolution signals clear their confidence bar, so this must stay null rather than
+    // guessing one of several plausible US zones.
+    it('does not invent a timezone when nothing confidently resolves one', async () => {
+      citiesService.findCityBySlugOrThrow.mockResolvedValue({
+        id: 'c3',
+        slug: 'some-us-city',
+        countryCode: 'US',
+      });
+      prisma.salon.create.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+      const { lat: _lat, lng: _lng, ...withoutCoords } = input;
+
+      await service.registerSalon('owner-1', {
+        ...withoutCoords,
+        countryCode: 'US',
+        citySlug: 'some-us-city',
+      });
+
+      expect(prisma.salon.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          timezone: null,
+          timezoneAutoDetected: false,
+        }),
+      });
     });
 
     it('throws LOCALITY_NOT_FOUND when localitySlug is given but does not exist in the city', async () => {
