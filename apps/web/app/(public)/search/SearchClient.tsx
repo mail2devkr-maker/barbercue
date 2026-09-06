@@ -21,6 +21,29 @@ import styles from "./search.module.css";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
+// Part 8/9 correction — same canonical km values and semantics as apps/mobile's
+// SalonSearchScreen.tsx (kept in sync by hand; there's no shared cross-platform UI layer to derive
+// this from). `null` = "Any" (clears the filter). Distance is only meaningful alongside lat/lng —
+// see salonSearchQuerySchema's own doc comment — so those chips only render when nearMeActive.
+const DISTANCE_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: "Any distance" },
+  { value: 0.1, label: "100 m" },
+  { value: 0.2, label: "200 m" },
+  { value: 0.5, label: "500 m" },
+  { value: 1, label: "1 km" },
+  { value: 2, label: "2 km" },
+  { value: 3, label: "3 km" },
+  { value: 5, label: "5 km" },
+];
+
+const PRICE_OPTIONS: { min: number | null; max: number | null; label: string }[] = [
+  { min: null, max: null, label: "Any price" },
+  { min: null, max: 300, label: "Under 300" },
+  { min: 300, max: 600, label: "300 – 600" },
+  { min: 600, max: 1000, label: "600 – 1000" },
+  { min: 1000, max: null, label: "1000+" },
+];
+
 export default function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -41,6 +64,31 @@ export default function SearchClient() {
   const styleName = searchParams.get("style") ?? undefined;
   const nearMeActive = searchParams.has("lat") && searchParams.has("lng");
 
+  // Part 8/9 correction — URL params are the source of truth (same pattern as q/city/lat/lng
+  // above), so a shared/bookmarked search link reproduces the exact same filtered results.
+  const radiusKmParam = searchParams.get("radiusKm");
+  const activeRadiusKm = radiusKmParam !== null ? Number(radiusKmParam) : null;
+  const priceMinParam = searchParams.get("priceMin");
+  const priceMaxParam = searchParams.get("priceMax");
+  const activePriceMin = priceMinParam !== null ? Number(priceMinParam) : null;
+  const activePriceMax = priceMaxParam !== null ? Number(priceMaxParam) : null;
+
+  function selectRadius(value: number | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === null) params.delete("radiusKm");
+    else params.set("radiusKm", String(value));
+    router.push(`/search?${params.toString()}`);
+  }
+
+  function selectPrice(min: number | null, max: number | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (min === null) params.delete("priceMin");
+    else params.set("priceMin", String(min));
+    if (max === null) params.delete("priceMax");
+    else params.set("priceMax", String(max));
+    router.push(`/search?${params.toString()}`);
+  }
+
   useEffect(() => {
     apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
       .then((countries) => {
@@ -56,7 +104,7 @@ export default function SearchClient() {
     const params = new URLSearchParams();
     // city/countryCode already arrive as real slugs/codes here (from CitySearchField's own
     // selection, or a shared/bookmarked URL) — no client-side normalization needed or safe to do.
-    for (const key of ["q", "city", "countryCode", "locality", "service", "lat", "lng"]) {
+    for (const key of ["q", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm", "priceMin", "priceMax"]) {
       const value = searchParams.get(key);
       if (value) params.set(key, value);
     }
@@ -135,6 +183,9 @@ export default function SearchClient() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("lat");
     params.delete("lng");
+    // radiusKm is meaningless without a query point (see salonSearchQuerySchema's own doc
+    // comment) — dropped here too so it doesn't linger as a dead param a shared link would carry.
+    params.delete("radiusKm");
     router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
   }
 
@@ -179,6 +230,53 @@ export default function SearchClient() {
             Clear &ldquo;Near me&rdquo; and sort by name instead
           </button>
         )}
+
+        {/* Part 8/9 correction — distance filter. Only shown once a query point exists; radiusKm
+            is otherwise meaningless server-side (see salonSearchQuerySchema's own doc comment). If
+            location is unavailable, this simply doesn't render — the existing "Near me" button's
+            own locationError message above already explains why. */}
+        {nearMeActive && (
+          <div className={styles.filterGroup}>
+            <span className={styles.filterGroupLabel}>Distance</span>
+            <div className={styles.filterChips}>
+              {DISTANCE_OPTIONS.map((option) => (
+                <button
+                  key={String(option.value)}
+                  type="button"
+                  className={`${styles.filterChip} ${activeRadiusKm === option.value ? styles.filterChipActive : ""}`}
+                  aria-pressed={activeRadiusKm === option.value}
+                  onClick={() => selectRadius(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Price filter — always available (unlike distance, price never depends on a query
+            point). Independent of the service/q text search only when no `service`/`q` matched a
+            specific service — see SalonsService.search's own doc comment on the same-service
+            requirement this now enforces when both are present. */}
+        <div className={styles.filterGroup}>
+          <span className={styles.filterGroupLabel}>Price</span>
+          <div className={styles.filterChips}>
+            {PRICE_OPTIONS.map((option) => {
+              const active = activePriceMin === option.min && activePriceMax === option.max;
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={`${styles.filterChip} ${active ? styles.filterChipActive : ""}`}
+                  aria-pressed={active}
+                  onClick={() => selectPrice(option.min, option.max)}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <nav className={styles.categoryChips} aria-label="Browse by category">
           {SERVICE_CATEGORIES.map((category) => (

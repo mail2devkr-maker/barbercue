@@ -509,17 +509,26 @@ export interface UiStrings {
   noSalonsFoundHint: string;
   openNowLabel: string;
   closedNowLabel: string;
-  kmAwaySuffix: string;
+  // Unit-agnostic — the actual number+unit ("2 km"/"1.2 mi") comes from formatDistance, which
+  // already picks metric vs imperial per salon country; this is only ever appended after that.
+  awaySuffix: string;
   // Part 8/9 (distance + price filters), SalonSearchScreen. Distance chips only render once "Near
   // Me" coordinates are known (radiusKm is meaningless without a query point — see
   // salonSearchQuerySchema's own doc comment); price chips are always available. "Any" clears that
-  // filter back to unset, never a fabricated 0 value.
+  // filter back to unset, never a fabricated 0 value. Values corrected (Part 8/9 review) to
+  // practical near-shop radii (100m-5km) instead of the original 2/5/10/25km set — the canonical
+  // internal radiusKm sent to the backend is still exactly 0.1/0.2/0.5/1/2/3/5, in km; these labels
+  // are metric display only (formatDistance handles imperial elsewhere) since the chips apply to
+  // the whole result set, not one salon with its own country.
   distanceFilterLabel: string;
   distanceFilterAny: string;
+  distanceFilter100m: string;
+  distanceFilter200m: string;
+  distanceFilter500m: string;
+  distanceFilter1km: string;
   distanceFilter2km: string;
+  distanceFilter3km: string;
   distanceFilter5km: string;
-  distanceFilter10km: string;
-  distanceFilter25km: string;
   priceFilterLabel: string;
   priceFilterAny: string;
   priceFilterUnder300: string;
@@ -1122,13 +1131,16 @@ const enUi: UiStrings = {
   noSalonsFoundHint: 'Try a different name, or clear the search to browse everything.',
   openNowLabel: 'Open now',
   closedNowLabel: 'Closed now',
-  kmAwaySuffix: ' km away',
+  awaySuffix: ' away',
   distanceFilterLabel: 'Distance',
   distanceFilterAny: 'Any distance',
+  distanceFilter100m: '100 m',
+  distanceFilter200m: '200 m',
+  distanceFilter500m: '500 m',
+  distanceFilter1km: '1 km',
   distanceFilter2km: '2 km',
+  distanceFilter3km: '3 km',
   distanceFilter5km: '5 km',
-  distanceFilter10km: '10 km',
-  distanceFilter25km: '25 km',
   priceFilterLabel: 'Price',
   priceFilterAny: 'Any price',
   priceFilterUnder300: 'Under 300',
@@ -1697,13 +1709,16 @@ const hiUi: UiStrings = {
   noSalonsFoundHint: 'कोई और नाम आज़माएं, या सब कुछ देखने के लिए खोज साफ़ करें।',
   openNowLabel: 'अभी खुला है',
   closedNowLabel: 'अभी बंद है',
-  kmAwaySuffix: ' किमी दूर',
+  awaySuffix: ' दूर',
   distanceFilterLabel: 'दूरी',
   distanceFilterAny: 'कोई भी दूरी',
+  distanceFilter100m: '100 मी',
+  distanceFilter200m: '200 मी',
+  distanceFilter500m: '500 मी',
+  distanceFilter1km: '1 किमी',
   distanceFilter2km: '2 किमी',
+  distanceFilter3km: '3 किमी',
   distanceFilter5km: '5 किमी',
-  distanceFilter10km: '10 किमी',
-  distanceFilter25km: '25 किमी',
   priceFilterLabel: 'कीमत',
   priceFilterAny: 'कोई भी कीमत',
   priceFilterUnder300: '300 से कम',

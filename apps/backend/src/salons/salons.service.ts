@@ -144,63 +144,75 @@ export class SalonsService {
         : { slug: query.city };
     }
     if (query.locality) where.locality = { slug: query.locality };
+
+    // Part 8/9 correction: a price filter must be satisfied by the SAME service that matched the
+    // text search, never any unrelated service the salon happens to also offer. Searching "Haircut"
+    // with a ₹300 ceiling at a salon selling an ₹800 Haircut and a ₹200 Shave must exclude that
+    // salon — the ₹200 Shave is irrelevant to what was actually searched for. `priceCondition` is
+    // the raw Decimal range (undefined when no price filter is active); `withPrice` folds it onto a
+    // service-relevance predicate as an extra AND branch, so a single `services.some(...)` row has
+    // to satisfy both at once.
+    const priceCondition: Prisma.DecimalFilter | undefined =
+      query.priceMin !== undefined || query.priceMax !== undefined
+        ? {
+            ...(query.priceMin !== undefined ? { gte: query.priceMin } : {}),
+            ...(query.priceMax !== undefined ? { lte: query.priceMax } : {}),
+          }
+        : undefined;
+
+    function serviceRelevance(term: string): Prisma.ServiceWhereInput {
+      return {
+        OR: [
+          { name: { contains: term, mode: 'insensitive' } },
+          { category: { contains: term, mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    function withPrice(relevance: Prisma.ServiceWhereInput): Prisma.ServiceWhereInput {
+      return priceCondition ? { AND: [relevance, { price: priceCondition }] } : relevance;
+    }
+
     if (query.service) {
       where.services = {
-        some: {
-          isActive: true,
-          OR: [
-            { name: { contains: query.service, mode: 'insensitive' } },
-            { category: { contains: query.service, mode: 'insensitive' } },
-          ],
-        },
+        some: { isActive: true, ...withPrice(serviceRelevance(query.service)) },
       };
     }
     // Issue #13 Mission D: the web search form's field is genuinely labeled "Shop or service" —
     // typing "bear" (or "beard") for a real shop's real "Beard" service returned zero results,
     // because this only ever matched salon name/description, never a service. Now mirrors the
     // same name-or-category match query.service already uses above, so the field actually
-    // searches what it claims to.
+    // searches what it claims to. Its own service sub-clause gets the identical same-service price
+    // treatment as `query.service` above — this is the field the real search UI actually sends
+    // free-text through, so the "Haircut + ₹300 ceiling excludes an ₹800 Haircut" fix must apply
+    // here too, not only to the separate, rarely-used `service` param.
     if (query.q) {
       where.OR = [
         { name: { contains: query.q, mode: 'insensitive' } },
         { description: { contains: query.q, mode: 'insensitive' } },
         {
           services: {
-            some: {
-              isActive: true,
-              OR: [
-                { name: { contains: query.q, mode: 'insensitive' } },
-                { category: { contains: query.q, mode: 'insensitive' } },
-              ],
-            },
+            some: { isActive: true, ...withPrice(serviceRelevance(query.q)) },
           },
         },
       ];
     }
 
-    // Price filter (Part 8/9) — deliberately independent of `service`/`q`: "has an active service
-    // priced in this range" rather than requiring the SAME service to also match the text search
-    // (a customer filtering "haircut" + "under ₹500" plausibly means either a ₹500 haircut, or a
-    // salon offering both a haircut and something else in range — the pricier, more specific
-    // interpretation isn't obviously "more correct", so this takes the simpler, more permissive
-    // one). Uses `where.AND` rather than a second `where.services` key: `query.service` above may
-    // already have claimed that key, and a second assignment on the same `where` object would
-    // silently overwrite the first instead of combining with it.
-    if (query.priceMin !== undefined || query.priceMax !== undefined) {
-      const priceCondition: Prisma.SalonWhereInput = {
-        services: {
-          some: {
-            isActive: true,
-            price: {
-              ...(query.priceMin !== undefined ? { gte: query.priceMin } : {}),
-              ...(query.priceMax !== undefined ? { lte: query.priceMax } : {}),
-            },
-          },
-        },
+    // Broad price filtering (Part 8/9) — only when there is no service-relevance text to pin the
+    // price check to (no `service` param). A price filter alone, or paired with `q`, still requires
+    // *some* active service in range: `q`'s name/description match branches above have no specific
+    // service to check price against, so without this a name-matched salon with zero affordable
+    // services could otherwise pass a price filter entirely unchecked. When `query.service` is
+    // set, this would be redundant (the tightened where.services above already fully encodes the
+    // price constraint) and is skipped. Uses `where.AND` rather than a second `where.services` key
+    // so it never collides with `query.service`'s own key on the same `where` object.
+    if (priceCondition && !query.service) {
+      const broadPriceCondition: Prisma.SalonWhereInput = {
+        services: { some: { isActive: true, price: priceCondition } },
       };
       where.AND = where.AND
-        ? [...(Array.isArray(where.AND) ? where.AND : [where.AND]), priceCondition]
-        : [priceCondition];
+        ? [...(Array.isArray(where.AND) ? where.AND : [where.AND]), broadPriceCondition]
+        : [broadPriceCondition];
     }
 
     // "Near Me" (Phase 4): sorting by a computed haversine distance isn't something Prisma/Postgres
@@ -253,23 +265,35 @@ export class SalonsService {
         if (candidates.length >= limit) break;
       }
       const withDistance = await Promise.all(
-        candidates.map((s) => this.toListItem(s, from)),
+        candidates.map(async (s) => ({
+          item: await this.toListItem(s, from),
+          // SalonListItemDto.distanceKm is deliberately pre-rounded to 1 decimal place for
+          // display — not precise enough for a hard radius cutoff (a salon at exactly 0.15km
+          // rounds to "0.1 km" and would then wrongly pass a 0.1km radius check). The radius
+          // filter below always compares against this unrounded value instead.
+          rawDistanceKm:
+            s.lat !== null && s.lng !== null
+              ? haversineDistanceKm(from.lat, from.lng, s.lat, s.lng)
+              : null,
+        })),
       );
       const sorted = withDistance
-        .filter((s) => s.distanceKm !== null)
+        .filter((w) => w.item.distanceKm !== null)
         // The bounding box is a rectangle approximation of a circle (see boundingBoxDegrees), so a
         // corner of the box can sit slightly beyond the true requested radius — this is the actual
-        // hard cutoff a caller-supplied radiusKm promises, checked against the real Haversine
-        // distance, never just "was it inside the prefilter box."
-        .filter((s) => query.radiusKm === undefined || s.distanceKm! <= query.radiusKm)
+        // hard cutoff a caller-supplied radiusKm promises, checked against the real, unrounded
+        // Haversine distance, never just "was it inside the prefilter box" or the rounded display
+        // value.
+        .filter((w) => query.radiusKm === undefined || w.rawDistanceKm! <= query.radiusKm)
         // Tie-broken by id: the candidate query has no explicit orderBy, so two salons at an
         // identical distance would otherwise sort in whatever incidental row order Postgres
         // happened to return them in — never guaranteed, and not something a client can rely on
         // page-to-page. Sorting is stable (ES2019+), so this tiebreaker makes the full order
         // deterministic rather than merely "probably consistent."
         .sort(
-          (a, b) => a.distanceKm! - b.distanceKm! || a.id.localeCompare(b.id),
+          (a, b) => a.rawDistanceKm! - b.rawDistanceKm! || a.item.id.localeCompare(b.item.id),
         )
+        .map((w) => w.item)
         .slice(0, limit);
       return { items: sorted, nextCursor: null };
     }

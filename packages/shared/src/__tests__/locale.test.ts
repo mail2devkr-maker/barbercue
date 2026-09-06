@@ -2,11 +2,13 @@ import {
   INDIAN_PIN_CODE_REGEX,
   currencyForCountry,
   formatBookingArrivalTime,
+  formatDistance,
   formatMoney,
   formatZonedDateTime,
   isValidPostalCode,
   phonePlaceholderForCountry,
   postalCodeRuleFor,
+  usesImperialDistance,
   zonedDateKey,
 } from '../index';
 
@@ -183,6 +185,62 @@ describe('formatZonedDateTime / formatBookingArrivalTime (Part 5 — show arriva
         formatBookingArrivalTime(instant, definitelyDifferentZone, 'en-US').isDeviceLocalTimezone,
       ).toBe(false);
     });
+  });
+});
+
+describe('formatDistance / usesImperialDistance (Part 8/9 correction)', () => {
+  it('uses imperial only for the small, verified set of countries', () => {
+    expect(usesImperialDistance('US')).toBe(true);
+    expect(usesImperialDistance('us')).toBe(true);
+    expect(usesImperialDistance('LR')).toBe(true);
+    expect(usesImperialDistance('MM')).toBe(true);
+    expect(usesImperialDistance('IN')).toBe(false);
+    expect(usesImperialDistance('GB')).toBe(false);
+    expect(usesImperialDistance(null)).toBe(false);
+    expect(usesImperialDistance(undefined)).toBe(false);
+  });
+
+  describe('metric display (default)', () => {
+    it('shows meters below 1km, matching the distance-filter chip granularity', () => {
+      expect(formatDistance(0.1, 'IN')).toBe('100 m');
+      expect(formatDistance(0.2, 'IN')).toBe('200 m');
+      expect(formatDistance(0.5, 'IN')).toBe('500 m');
+    });
+
+    it('shows km with one decimal place at and above 1km', () => {
+      expect(formatDistance(1, 'IN')).toBe('1 km');
+      expect(formatDistance(2, 'IN')).toBe('2 km');
+      expect(formatDistance(3, 'IN')).toBe('3 km');
+      expect(formatDistance(5, 'IN')).toBe('5 km');
+    });
+
+    it('defaults to metric for a null/unknown country, never guessing imperial', () => {
+      expect(formatDistance(2, null)).toBe('2 km');
+    });
+  });
+
+  describe('imperial display (US/LR/MM)', () => {
+    // Exact expected roundings from the mission's own worked examples.
+    it.each([
+      [0.1, '0.1 mi'],
+      [0.2, '0.1 mi'],
+      [0.5, '0.3 mi'],
+      [1, '0.6 mi'],
+      [2, '1.2 mi'],
+      [3, '1.9 mi'],
+      [5, '3.1 mi'],
+    ])('converts %p km to %p for an imperial-market salon', (km, expected) => {
+      expect(formatDistance(km, 'US')).toBe(expected);
+    });
+  });
+
+  it('never changes filtering/sorting semantics — this is a display-only conversion', () => {
+    // The canonical km value passed in is identical regardless of which country/unit is shown;
+    // formatDistance has no way to feed a different number back into a query, by construction (it
+    // returns a string, not a value used for comparison).
+    const km = 2;
+    expect(formatDistance(km, 'IN')).toBe('2 km');
+    expect(formatDistance(km, 'US')).toBe('1.2 mi');
   });
 });
 

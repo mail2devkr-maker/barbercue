@@ -318,3 +318,46 @@
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* Part 8/9 correction — distance/price filter chips, same visual language as .categoryChip above. */
+.filterGroup {
+  margin-top: 14px;
+}
+
+.filterGroupLabel {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bc-muted);
+  margin-bottom: 6px;
+}
+
+.filterChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filterChip {
+  padding: 6px 14px;
+  color: var(--bc-ink);
+  background: #fff;
+  border: 1px solid var(--bc-border);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filterChip:hover,
+.filterChip:focus-visible {
+  border-color: var(--bc-accent);
+}
+
+.filterChipActive {
+  background: var(--bc-ink);
+  border-color: var(--bc-ink);
+  color: #fff;
+}

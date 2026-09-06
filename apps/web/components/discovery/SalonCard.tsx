@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { SalonListItemDto } from "@barbercue/shared";
-import { formatMoney, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
+import { formatDistance, formatMoney, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
 import { SalonImage } from "../ui/SalonImage";
 import styles from "./salon-card.module.css";
 
@@ -86,7 +86,9 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
                 {salon.isOpenNow ? "Open now" : "Closed now"}
               </span>
             )}
-            {salon.distanceKm !== null && <span className={styles.distanceText}>{salon.distanceKm} km away</span>}
+            {salon.distanceKm !== null && (
+              <span className={styles.distanceText}>{formatDistance(salon.distanceKm, salon.countryCode)} away</span>
+            )}
             {/* Real live signal (Issue #13 Mission F) — only shown when genuinely > 0, never a
                 fabricated "0 waiting" placeholder. */}
             {salon.waitingCount > 0 && (

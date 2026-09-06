@@ -76,6 +76,47 @@ export function currencyForCountry(countryCode: string | null | undefined): stri
   return COUNTRY_CURRENCY[countryCode.toUpperCase()] ?? null;
 }
 
+// ---------- Distance ----------
+
+/**
+ * Part 8/9 correction — the only countries where everyday distances are customarily communicated
+ * in miles rather than km. Deliberately as small/conservative as COUNTRY_CURRENCY above: every
+ * other country gets the metric display below, never a guessed unit.
+ */
+export const IMPERIAL_DISTANCE_COUNTRY_CODES: ReadonlySet<string> = new Set(['US', 'LR', 'MM']);
+
+export function usesImperialDistance(countryCode: string | null | undefined): boolean {
+  if (!countryCode) return false;
+  return IMPERIAL_DISTANCE_COUNTRY_CODES.has(countryCode.toUpperCase());
+}
+
+const KM_PER_MILE = 1.609344;
+
+/**
+ * Formats a distance already computed in km — the one canonical unit search filtering/sorting
+ * ever uses, on both server and client, regardless of what this function displays — as
+ * customer-friendly text. `countryCode` should be the specific salon's own country (the same field
+ * formatMoney already takes it from), never a device-wide setting: there is no per-user unit
+ * preference in this app today, so this is a deterministic, per-result, country-based display rule
+ * exactly like formatMoney's own currency-by-country resolution, not an invented preference system.
+ *
+ * Metric shows meters below 1km (matching the distance-filter chips' own 100m/200m/500m
+ * granularity) and km with one decimal place above it. Imperial always shows miles — converting
+ * only for display; the underlying km value and every filter/sort computation are untouched.
+ */
+export function formatDistance(km: number, countryCode: string | null | undefined): string {
+  if (usesImperialDistance(countryCode)) {
+    const miles = km / KM_PER_MILE;
+    const rounded = miles < 10 ? Math.round(miles * 10) / 10 : Math.round(miles);
+    return `${rounded} mi`;
+  }
+  if (km < 1) {
+    return `${Math.round(km * 1000)} m`;
+  }
+  const rounded = km < 10 ? Math.round(km * 10) / 10 : Math.round(km);
+  return `${rounded} km`;
+}
+
 /**
  * Locale used for number grouping. India groups as 12,34,567 rather than 1,234,567, so this is a
  * correctness concern, not cosmetics. An unlisted country falls back to the runtime default.

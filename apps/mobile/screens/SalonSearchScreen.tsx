@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
-import { DISCOVERY_PATHS, formatMoney } from '@barbercue/shared';
+import { DISCOVERY_PATHS, formatDistance, formatMoney } from '@barbercue/shared';
 import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, font, fontSize, radius, space } from '../lib/theme';
@@ -15,13 +15,31 @@ type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
 // Part 8/9 — distance chips. Only meaningful alongside "Near Me" coordinates (radiusKm is ignored
 // server-side without a query point — see salonSearchQuerySchema's own doc comment), so this row
 // only renders once `nearMe` is set. `null` = "Any distance" (clears the filter, never a
-// fabricated cap).
-const DISTANCE_OPTIONS: { value: number | null; labelKey: 'distanceFilterAny' | 'distanceFilter2km' | 'distanceFilter5km' | 'distanceFilter10km' | 'distanceFilter25km' }[] = [
+// fabricated cap). Values corrected (Part 8/9 review) to practical near-shop radii — a customer
+// filtering "near me" is choosing between walking distance and a short ride, not 25km. The
+// canonical value sent as radiusKm is always exactly this number, in km (never rounded — 0.1 stays
+// 0.1, never coerced to 1); these labels are metric-only (see the interface's own doc comment on
+// why the chips themselves don't switch to imperial, unlike the per-result distance display below).
+const DISTANCE_OPTIONS: {
+  value: number | null;
+  labelKey:
+    | 'distanceFilterAny'
+    | 'distanceFilter100m'
+    | 'distanceFilter200m'
+    | 'distanceFilter500m'
+    | 'distanceFilter1km'
+    | 'distanceFilter2km'
+    | 'distanceFilter3km'
+    | 'distanceFilter5km';
+}[] = [
   { value: null, labelKey: 'distanceFilterAny' },
+  { value: 0.1, labelKey: 'distanceFilter100m' },
+  { value: 0.2, labelKey: 'distanceFilter200m' },
+  { value: 0.5, labelKey: 'distanceFilter500m' },
+  { value: 1, labelKey: 'distanceFilter1km' },
   { value: 2, labelKey: 'distanceFilter2km' },
+  { value: 3, labelKey: 'distanceFilter3km' },
   { value: 5, labelKey: 'distanceFilter5km' },
-  { value: 10, labelKey: 'distanceFilter10km' },
-  { value: 25, labelKey: 'distanceFilter25km' },
 ];
 
 // Price buckets — plain numbers (no currency symbol baked into the label) since a salon's currency
@@ -270,7 +288,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                   <Text style={styles.cardMeta}>
                     {item.isOpenNow !== null ? (item.isOpenNow ? t.openNowLabel : t.closedNowLabel) : ''}
                     {item.isOpenNow !== null && item.distanceKm !== null ? ' · ' : ''}
-                    {item.distanceKm !== null ? `${item.distanceKm}${t.kmAwaySuffix}` : ''}
+                    {item.distanceKm !== null ? `${formatDistance(item.distanceKm, item.countryCode)}${t.awaySuffix}` : ''}
                   </Text>
                 )}
               </View>

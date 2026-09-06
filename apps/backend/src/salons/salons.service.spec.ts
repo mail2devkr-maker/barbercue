@@ -230,29 +230,6 @@ describe('SalonsService', () => {
         ]);
       });
 
-      // The price condition must never overwrite `service`'s own where.services key — Part 8/9
-      // combines them as two independent services.some checks (possibly different services),
-      // not a single narrower one.
-      it('combines with a service text filter without either clause clobbering the other', async () => {
-        prisma.salon.findMany.mockResolvedValue([]);
-        await service.search({ service: 'Haircut', priceMin: 200, priceMax: 800 });
-        const { where } = prisma.salon.findMany.mock.calls[0][0] as {
-          where: { services?: unknown; AND?: Record<string, unknown>[] };
-        };
-        expect(where.services).toEqual({
-          some: {
-            isActive: true,
-            OR: [
-              { name: { contains: 'Haircut', mode: 'insensitive' } },
-              { category: { contains: 'Haircut', mode: 'insensitive' } },
-            ],
-          },
-        });
-        expect(where.AND).toEqual([
-          { services: { some: { isActive: true, price: { gte: 200, lte: 800 } } } },
-        ]);
-      });
-
       it('adds no price condition at all when neither priceMin nor priceMax is given', async () => {
         prisma.salon.findMany.mockResolvedValue([]);
         await service.search({});
@@ -260,6 +237,221 @@ describe('SalonsService', () => {
           where: { AND?: unknown };
         };
         expect(where.AND).toBeUndefined();
+      });
+
+      // Correction (Part 8/9 review): a price filter combined with a service/text query must be
+      // satisfied by the SAME service row, never an unrelated one the salon happens to also sell —
+      // searching "Haircut" + "under ₹300" at a salon selling an ₹800 Haircut and a ₹200 Shave must
+      // exclude that salon. The broad, independent where.AND price condition is what "no service
+      // query" still uses — see the two describe blocks below for both the where-clause
+      // construction and genuinely behavioral proof against realistic salon/service data.
+      describe('same-service requirement when combined with a service/text query', () => {
+        it('folds the price condition into where.services as an AND with the relevance predicate, for the `service` param', async () => {
+          prisma.salon.findMany.mockResolvedValue([]);
+          await service.search({ service: 'Haircut', priceMin: 200, priceMax: 800 });
+          const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+            where: { services?: unknown; AND?: unknown };
+          };
+          expect(where.services).toEqual({
+            some: {
+              isActive: true,
+              AND: [
+                {
+                  OR: [
+                    { name: { contains: 'Haircut', mode: 'insensitive' } },
+                    { category: { contains: 'Haircut', mode: 'insensitive' } },
+                  ],
+                },
+                { price: { gte: 200, lte: 800 } },
+              ],
+            },
+          });
+          // No redundant broad where.AND price clause — where.services above already fully
+          // encodes the price constraint when `service` is present.
+          expect(where.AND).toBeUndefined();
+        });
+
+        it('applies the identical same-service treatment to `q`\'s own service sub-clause (the field the real search UI actually sends free text through)', async () => {
+          prisma.salon.findMany.mockResolvedValue([]);
+          await service.search({ q: 'Haircut', priceMax: 300 });
+          const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+            where: { OR?: Record<string, unknown>[]; AND?: unknown };
+          };
+          expect(where.OR).toEqual(
+            expect.arrayContaining([
+              {
+                services: {
+                  some: {
+                    isActive: true,
+                    AND: [
+                      {
+                        OR: [
+                          { name: { contains: 'Haircut', mode: 'insensitive' } },
+                          { category: { contains: 'Haircut', mode: 'insensitive' } },
+                        ],
+                      },
+                      { price: { lte: 300 } },
+                    ],
+                  },
+                },
+              },
+            ]),
+          );
+          // `q`'s name/description branches have no specific service to check price against, so
+          // the broad AND still applies alongside it — unlike the `service` param case above.
+          expect(where.AND).toEqual([
+            { services: { some: { isActive: true, price: { lte: 300 } } } },
+          ]);
+        });
+      });
+
+      // Genuinely behavioral proof (not just where-clause shape) against the mission's own worked
+      // examples — mockImplementation replicates exactly what Prisma would do with the constructed
+      // where clause against real salon/service rows, the same technique this file's own near-me
+      // bounding-box tests already use for the analogous "don't just trust the query, prove the
+      // filter" concern.
+      describe('same-service price filtering — behavioral proof', () => {
+        interface FakeService {
+          name: string;
+          category?: string;
+          price: number;
+          isActive: boolean;
+        }
+        interface FakeSalon {
+          id: string;
+          services: FakeService[];
+        }
+
+        function evalServiceCond(cond: Record<string, unknown>, s: FakeService): boolean {
+          if (cond.OR) {
+            return (cond.OR as Record<string, unknown>[]).some((c) => evalServiceCond(c, s));
+          }
+          if (cond.name) {
+            const term = String((cond.name as { contains: string }).contains).toLowerCase();
+            return s.name.toLowerCase().includes(term);
+          }
+          if (cond.category) {
+            const term = String((cond.category as { contains: string }).contains).toLowerCase();
+            return (s.category ?? '').toLowerCase().includes(term);
+          }
+          if (cond.price) {
+            const { gte, lte } = cond.price as { gte?: number; lte?: number };
+            if (gte !== undefined && s.price < gte) return false;
+            if (lte !== undefined && s.price > lte) return false;
+            return true;
+          }
+          return true;
+        }
+
+        function evalServicesSome(someClause: Record<string, unknown>, services: FakeService[]): boolean {
+          return services.some((s) => {
+            if (someClause.isActive !== undefined && s.isActive !== someClause.isActive) return false;
+            const conditions = (someClause.AND as Record<string, unknown>[] | undefined) ?? [someClause];
+            return conditions.every((c) => evalServiceCond(c, s));
+          });
+        }
+
+        function salonMatchesWhere(where: Record<string, unknown>, salon: FakeSalon): boolean {
+          return Object.entries(where).every(([key, value]) => {
+            if (key === 'services') {
+              return evalServicesSome(
+                (value as { some: Record<string, unknown> }).some,
+                salon.services,
+              );
+            }
+            if (key === 'AND') {
+              const clauses = Array.isArray(value) ? value : [value];
+              return (clauses as Record<string, unknown>[]).every((c) => salonMatchesWhere(c, salon));
+            }
+            if (key === 'OR') {
+              return (value as Record<string, unknown>[]).some((c) => {
+                if (c.services) {
+                  return evalServicesSome(
+                    (c.services as { some: Record<string, unknown> }).some,
+                    salon.services,
+                  );
+                }
+                return false; // name/description branches: these fixtures never match by name
+              });
+            }
+            return true; // status, city, etc. — not modeled by these fixtures
+          });
+        }
+
+        async function searchAgainst(salon: FakeSalon, query: Parameters<typeof service.search>[0]) {
+          prisma.salon.findMany.mockImplementation((args: SalonFindManyArgs) =>
+            Promise.resolve(
+              salonMatchesWhere(args.where as unknown as Record<string, unknown>, salon)
+                ? [makeSalon({ id: salon.id })]
+                : [],
+            ),
+          );
+          return service.search(query);
+        }
+
+        it('Salon A (Haircut ₹250, Shave ₹500) — query Haircut + max ₹300 → INCLUDED', async () => {
+          const salonA: FakeSalon = {
+            id: 'salon-a',
+            services: [
+              { name: 'Haircut', price: 250, isActive: true },
+              { name: 'Shave', price: 500, isActive: true },
+            ],
+          };
+          const result = await searchAgainst(salonA, { service: 'Haircut', priceMax: 300 });
+          expect(result.items.map((i) => i.id)).toEqual(['salon-a']);
+        });
+
+        it('Salon B (Haircut ₹800, Shave ₹200) — query Haircut + max ₹300 → EXCLUDED', async () => {
+          const salonB: FakeSalon = {
+            id: 'salon-b',
+            services: [
+              { name: 'Haircut', price: 800, isActive: true },
+              { name: 'Shave', price: 200, isActive: true },
+            ],
+          };
+          const result = await searchAgainst(salonB, { service: 'Haircut', priceMax: 300 });
+          expect(result.items).toHaveLength(0);
+        });
+
+        it('Salon C (Haircut ₹400) — query Haircut + ₹300–₹600 → INCLUDED', async () => {
+          const salonC: FakeSalon = {
+            id: 'salon-c',
+            services: [{ name: 'Haircut', price: 400, isActive: true }],
+          };
+          const result = await searchAgainst(salonC, {
+            service: 'Haircut',
+            priceMin: 300,
+            priceMax: 600,
+          });
+          expect(result.items.map((i) => i.id)).toEqual(['salon-c']);
+        });
+
+        it('Salon D (inactive Haircut ₹200, active Haircut ₹700) — query Haircut + max ₹300 → EXCLUDED', async () => {
+          const salonD: FakeSalon = {
+            id: 'salon-d',
+            services: [
+              { name: 'Haircut', price: 200, isActive: false },
+              { name: 'Haircut', price: 700, isActive: true },
+            ],
+          };
+          const result = await searchAgainst(salonD, { service: 'Haircut', priceMax: 300 });
+          expect(result.items).toHaveLength(0);
+        });
+
+        it('no service query + max ₹300 — a salon with any qualifying ACTIVE service is included under the documented broad semantics', async () => {
+          // Same salon shape as Salon B (an unrelated affordable Shave alongside a pricey
+          // Haircut), but with NO service/text query at all — the broad "any active service in
+          // range" rule from the price-filter-alone case explicitly still applies here.
+          const salon: FakeSalon = {
+            id: 'salon-broad',
+            services: [
+              { name: 'Haircut', price: 800, isActive: true },
+              { name: 'Shave', price: 200, isActive: true },
+            ],
+          };
+          const result = await searchAgainst(salon, { priceMax: 300 });
+          expect(result.items.map((i) => i.id)).toEqual(['salon-broad']);
+        });
       });
     });
 
@@ -518,6 +710,70 @@ describe('SalonsService', () => {
           prisma.salon.findMany.mockResolvedValue([far]);
           const result = await service.search({ lat: 12.9716, lng: 77.6412 });
           expect(result.items.map((i) => i.id)).toEqual(['far']);
+        });
+
+        // Deterministic cutoffs at exact distances from a known query point (Part 8/9 review).
+        // Coordinates are precise: each fixture's lat offset was derived from the real, imported
+        // haversineDistanceKm — the same function search() itself uses for the final cutoff — so
+        // "750m away" genuinely measures as 0.750km, not an approximation that happens to round
+        // there. The final Haversine check (not bounding-box inclusion) is what's authoritative
+        // here: the mock returns the fixture unconditionally, so a passing test proves the
+        // post-fetch distance filter itself made the right call, not the DB prefilter.
+        describe('deterministic cutoffs at exact known distances', () => {
+          const QUERY_LAT = 12.9716;
+          const QUERY_LNG = 77.6412;
+          // Latitude for a point due north of the query point at exactly this many km away,
+          // verified against haversineDistanceKm to 6 decimal places.
+          const latAt = {
+            '0.05': 12.97204966,
+            '0.15': 12.97294898,
+            '0.4': 12.97519729,
+            '0.75': 12.97834491,
+            '2.5': 12.99408304,
+            '4.5': 13.01206947,
+            '6': 13.0255593,
+          };
+
+          async function searchAtDistance(distanceKey: keyof typeof latAt, radiusKm: number) {
+            const salon = makeSalon({ id: `at-${distanceKey}km`, lat: latAt[distanceKey], lng: QUERY_LNG });
+            prisma.salon.findMany.mockResolvedValue([salon]);
+            return service.search({ lat: QUERY_LAT, lng: QUERY_LNG, radiusKm });
+          }
+
+          it('a salon 50m away is included for a 100m radius', async () => {
+            const result = await searchAtDistance('0.05', 0.1);
+            expect(result.items).toHaveLength(1);
+          });
+
+          it('a salon 150m away is excluded for a 100m radius but included for a 200m radius', async () => {
+            expect((await searchAtDistance('0.15', 0.1)).items).toHaveLength(0);
+            expect((await searchAtDistance('0.15', 0.2)).items).toHaveLength(1);
+          });
+
+          it('a salon 400m away is included for a 500m radius', async () => {
+            const result = await searchAtDistance('0.4', 0.5);
+            expect(result.items).toHaveLength(1);
+          });
+
+          it('a salon 750m away is excluded for a 500m radius but included for a 1km radius', async () => {
+            expect((await searchAtDistance('0.75', 0.5)).items).toHaveLength(0);
+            expect((await searchAtDistance('0.75', 1)).items).toHaveLength(1);
+          });
+
+          it('a salon 2.5km away is excluded for a 2km radius but included for a 3km radius', async () => {
+            expect((await searchAtDistance('2.5', 2)).items).toHaveLength(0);
+            expect((await searchAtDistance('2.5', 3)).items).toHaveLength(1);
+          });
+
+          it('a salon 4.5km away is included for a 5km radius', async () => {
+            const result = await searchAtDistance('4.5', 5);
+            expect(result.items).toHaveLength(1);
+          });
+
+          it('a salon 6km away (>5km) is excluded for a 5km radius', async () => {
+            const result = await searchAtDistance('6', 5);
+            expect(result.items).toHaveLength(0);
+          });
         });
       });
     });
