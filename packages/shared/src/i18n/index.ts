@@ -1009,7 +1009,7 @@ const enUi: UiStrings = {
   newBookingReceivedBanner: 'New booking received',
   bookingCancelledBanner: 'Booking cancelled',
   hindiVoiceUnavailableWarning:
-    "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings to fix this.",
+    "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings, then reopen FastQue to try again.",
   noShopSelected: 'No shop selected',
   selectShopHint: 'Select a shop from the Dashboard tab to see its bookings.',
   noBookingsTitle: 'No bookings',
@@ -1589,7 +1589,7 @@ const hiUi: UiStrings = {
   newBookingReceivedBanner: 'नई बुकिंग प्राप्त हुई',
   bookingCancelledBanner: 'बुकिंग रद्द हुई',
   hindiVoiceUnavailableWarning:
-    'इस डिवाइस पर हिंदी आवाज़ इंस्टॉल नहीं है, इसलिए आवाज़ में सूचनाएं नहीं सुनाई देंगी। इसे ठीक करने के लिए अपने फ़ोन की सेटिंग्स में हिंदी टेक्स्ट-टू-स्पीच आवाज़ इंस्टॉल करें।',
+    'इस डिवाइस पर हिंदी आवाज़ इंस्टॉल नहीं है, इसलिए आवाज़ में सूचनाएं नहीं सुनाई देंगी। अपने फ़ोन की सेटिंग्स में हिंदी टेक्स्ट-टू-स्पीच आवाज़ इंस्टॉल करें, फिर दोबारा आज़माने के लिए FastQue को फिर से खोलें।',
   noShopSelected: 'कोई दुकान चयनित नहीं',
   selectShopHint: 'इसकी बुकिंग्स देखने के लिए डैशबोर्ड टैब से एक दुकान चुनें।',
   noBookingsTitle: 'कोई बुकिंग नहीं',

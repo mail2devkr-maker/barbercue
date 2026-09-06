@@ -277,40 +277,68 @@ describe('speakBooking — Hindi voice-selection hardening (Build 10 physical re
     });
   });
 
-  describe('bounded Hindi retry — only ever retries a genuine Hindi voice, never fabricates or falls back', () => {
-    it('retries once with the bare primary subtag, using the SAME matched Hindi voice, when the engine errors on the region-qualified tag', async () => {
+  describe('bounded Hindi retry — walks the ordered candidate list of genuine Hindi voices, never English', () => {
+    it('Voice A fails -> Voice B is attempted and succeeds; no English voice attempted, no missing-Hindi warning', async () => {
       getVoicesMock.mockResolvedValue([
-        { identifier: 'hi-in-voice', name: 'Hindi India', language: 'hi-IN', quality: 'Default' },
+        { identifier: 'hindi-voice-a', name: 'Hindi Voice A', language: 'hi-IN', quality: 'Default' },
+        { identifier: 'hindi-voice-b', name: 'Hindi Voice B', language: 'hi-Deva-IN', quality: 'Default' },
+        { identifier: 'english-voice', name: 'English Voice', language: 'en-US', quality: 'Default' },
       ]);
       speakMock.mockImplementationOnce((_text: string, options: { onError?: (e: unknown) => void }) => {
-        options.onError?.(new Error('engine rejected hi-IN'));
+        options.onError?.(new Error('Voice A failed'));
       });
       speakMock.mockImplementationOnce(() => {
-        // Second attempt (the retry) succeeds — no onError called.
+        // Voice B succeeds — no onError called.
       });
+      const onHindiVoiceMissing = jest.fn();
 
-      speakBooking({ event: 'booking.cancelled', bookingId: 'b17', language: Language.HI });
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b17', language: Language.HI, onHindiVoiceMissing });
       await flush();
 
       expect(speakMock).toHaveBeenCalledTimes(2);
-      expect(speakMock.mock.calls[0][1].language).toBe('hi-IN');
-      expect(speakMock.mock.calls[0][1].voice).toBe('hi-in-voice');
-      expect(speakMock.mock.calls[1][1].language).toBe('hi'); // bare primary subtag retry
-      expect(speakMock.mock.calls[1][1].voice).toBe('hi-in-voice'); // still the same genuine Hindi voice
+      expect(speakMock.mock.calls[0][1].voice).toBe('hindi-voice-a');
+      expect(speakMock.mock.calls[1][1].voice).toBe('hindi-voice-b');
+      // Never the English voice, at any point.
+      expect(speakMock.mock.calls.some((call) => call[1].voice === 'english-voice')).toBe(false);
+      expect(onHindiVoiceMissing).not.toHaveBeenCalled();
     });
 
-    it('never retries a second time if the retry attempt also errors (bounded, no infinite loop)', async () => {
+    it('Voice A fails, Voice B also fails -> warning fires and the English voice is never attempted', async () => {
       getVoicesMock.mockResolvedValue([
-        { identifier: 'hi-in-voice', name: 'Hindi India', language: 'hi-IN', quality: 'Default' },
+        { identifier: 'hindi-voice-a', name: 'Hindi Voice A', language: 'hi-IN', quality: 'Default' },
+        { identifier: 'hindi-voice-b', name: 'Hindi Voice B', language: 'hi-Deva-IN', quality: 'Default' },
+        { identifier: 'english-voice', name: 'English Voice', language: 'en-US', quality: 'Default' },
       ]);
       speakMock.mockImplementation((_text: string, options: { onError?: (e: unknown) => void }) => {
         options.onError?.(new Error('engine keeps failing'));
       });
+      const onHindiVoiceMissing = jest.fn();
 
-      speakBooking({ event: 'booking.cancelled', bookingId: 'b18', language: Language.HI });
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b18', language: Language.HI, onHindiVoiceMissing });
       await flush();
 
-      expect(speakMock).toHaveBeenCalledTimes(2); // original + exactly one retry, never more
+      expect(speakMock).toHaveBeenCalledTimes(2); // Voice A + Voice B, bounded by the candidate list length
+      expect(speakMock.mock.calls[0][1].voice).toBe('hindi-voice-a');
+      expect(speakMock.mock.calls[1][1].voice).toBe('hindi-voice-b');
+      expect(speakMock.mock.calls.some((call) => call[1].voice === 'english-voice')).toBe(false);
+      expect(onHindiVoiceMissing).toHaveBeenCalledTimes(1);
+    });
+
+    it('with three genuine Hindi voices, walks A -> B -> C and stops (bounded by the candidate list length, never a fourth attempt)', async () => {
+      getVoicesMock.mockResolvedValue([
+        { identifier: 'hindi-voice-a', name: 'Hindi Voice A', language: 'hi-IN', quality: 'Default' },
+        { identifier: 'hindi-voice-b', name: 'Hindi Voice B', language: 'hi_IN', quality: 'Default' },
+        { identifier: 'hindi-voice-c', name: 'Hindi Voice C', language: 'hi', quality: 'Default' },
+      ]);
+      speakMock.mockImplementation((_text: string, options: { onError?: (e: unknown) => void }) => {
+        options.onError?.(new Error('always fails'));
+      });
+
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b19', language: Language.HI });
+      await flush();
+
+      expect(speakMock).toHaveBeenCalledTimes(3);
+      expect(speakMock.mock.calls.map((call) => call[1].voice)).toEqual(['hindi-voice-a', 'hindi-voice-b', 'hindi-voice-c']);
     });
 
     it('never attempts a retry at all for Hindi when no voice was matched in the first place (nothing genuine to retry)', async () => {
@@ -318,10 +346,72 @@ describe('speakBooking — Hindi voice-selection hardening (Build 10 physical re
         { identifier: 'en-us-voice', name: 'English US', language: 'en-US', quality: 'Default' },
       ]);
 
-      speakBooking({ event: 'booking.cancelled', bookingId: 'b19', language: Language.HI });
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b20', language: Language.HI });
       await flush();
 
       expect(speakMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('voice cache refresh — a stale "no Hindi voice" result does not persist forever', () => {
+    it('does not re-query the device on a second Hindi announcement within the cooldown, even though no Hindi voice was found', async () => {
+      getVoicesMock.mockResolvedValue([
+        { identifier: 'en-us-voice', name: 'English US', language: 'en-US', quality: 'Default' },
+      ]);
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b21', language: Language.HI });
+      await flush();
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b22', language: Language.HI });
+      await flush();
+
+      expect(getVoicesMock).toHaveBeenCalledTimes(1); // second call reused the cached (negative) result
+      nowSpy.mockRestore();
+    });
+
+    it('re-queries the device once the warning cooldown has elapsed, and finds the newly-installed Hindi voice', async () => {
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+      // First check: no Hindi voice yet.
+      getVoicesMock.mockResolvedValueOnce([
+        { identifier: 'en-us-voice', name: 'English US', language: 'en-US', quality: 'Default' },
+      ]);
+
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b23', language: Language.HI });
+      await flush();
+      expect(speakMock).not.toHaveBeenCalled();
+
+      // Owner installs a Hindi voice and reopens the app; enough time has passed for a recheck.
+      nowSpy.mockReturnValue(1_000_000 + 6 * 60_000);
+      getVoicesMock.mockResolvedValueOnce([
+        { identifier: 'en-us-voice', name: 'English US', language: 'en-US', quality: 'Default' },
+        { identifier: 'hi-in-voice', name: 'Hindi India', language: 'hi-IN', quality: 'Default' },
+      ]);
+
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b24', language: Language.HI });
+      await flush();
+
+      expect(getVoicesMock).toHaveBeenCalledTimes(2); // re-queried, not trusted from the stale cache
+      expect(speakMock).toHaveBeenCalledTimes(1);
+      expect(speakMock.mock.calls[0][1].voice).toBe('hi-in-voice');
+      nowSpy.mockRestore();
+    });
+
+    it('never re-queries the device once a Hindi voice has already been found, no matter how many bookings follow', async () => {
+      getVoicesMock.mockResolvedValue([
+        { identifier: 'hi-in-voice', name: 'Hindi India', language: 'hi-IN', quality: 'Default' },
+      ]);
+      const nowSpy = jest.spyOn(Date, 'now');
+      nowSpy.mockReturnValue(1_000_000);
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b25', language: Language.HI });
+      await flush();
+
+      nowSpy.mockReturnValue(1_000_000 + 60 * 60_000); // an hour later — well past any cooldown
+      speakBooking({ event: 'booking.cancelled', bookingId: 'b26', language: Language.HI });
+      await flush();
+
+      expect(getVoicesMock).toHaveBeenCalledTimes(1); // a known-good result is never re-queried
+      expect(speakMock).toHaveBeenCalledTimes(2);
+      nowSpy.mockRestore();
     });
   });
 
