@@ -174,6 +174,64 @@ describe('AuthService', () => {
         SessionAudience.CUSTOMER,
         undefined,
       );
+      // [Fix2-C] the user already has CUSTOMER — no duplicate role grant.
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+    });
+
+    it('[Fix2-A] an existing SALON_OWNER with no CUSTOMER role yet is granted CUSTOMER on first OTP verification, without losing the owner role', async () => {
+      otpService.verifyOtp.mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'owner-1',
+        phone: '+919876543210',
+        email: 'owner@salon.com',
+        phoneVerifiedAt: new Date(),
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.SALON_OWNER, salonId: 's1' }],
+      });
+
+      const result = await service.verifyCustomerOtp('+919876543210', '123456');
+
+      expect(prisma.userRole.create).toHaveBeenCalledWith({
+        data: { userId: 'owner-1', role: Role.CUSTOMER },
+      });
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'owner-1',
+        [Role.CUSTOMER],
+        SessionAudience.CUSTOMER,
+        undefined,
+      );
+      // The DB grant only ADDS CUSTOMER — it never touches/removes the existing SALON_OWNER row.
+      expect(prisma.userRole.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ role: Role.SALON_OWNER }) }),
+      );
+    });
+
+    it('[Fix2-B] an existing global PLATFORM_ADMIN with no CUSTOMER role yet is granted CUSTOMER on first OTP verification, and the session never carries PLATFORM_ADMIN', async () => {
+      otpService.verifyOtp.mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'admin-1',
+        phone: '+919876543210',
+        email: 'admin@barbercue.app',
+        phoneVerifiedAt: new Date(),
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.PLATFORM_ADMIN, salonId: null }],
+      });
+
+      const result = await service.verifyCustomerOtp('+919876543210', '123456');
+
+      expect(prisma.userRole.create).toHaveBeenCalledWith({
+        data: { userId: 'admin-1', role: Role.CUSTOMER },
+      });
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'admin-1',
+        [Role.CUSTOMER],
+        SessionAudience.CUSTOMER,
+        undefined,
+      );
     });
 
     it('reuses the existing user on a returning customer and does not create a duplicate', async () => {

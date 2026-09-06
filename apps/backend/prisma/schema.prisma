@@ -339,7 +339,15 @@ model RefreshToken {
   // from every role the User row currently holds. Every row created before this column existed was
   // revoked in the same migration that added it (see migration.sql) — its true audience is unknown
   // and is never guessed.
-  audience   SessionAudience
+  //
+  // The @default(CUSTOMER) here exists ONLY to keep this schema in sync with the DB-level DEFAULT
+  // 'CUSTOMER' added by that same migration — a Railway-rollout-safety measure, not an application
+  // behavior: TokenService.issueTokenPair always supplies an explicit audience for every row it
+  // creates, so this default is only ever read if an old (pre-audience) binary is still inserting
+  // rows during a deploy's migrate/cutover window (see migration.sql's own extensive comment). A
+  // later, separate post-stabilization migration is expected to DROP this default once no such old
+  // binary can serve again — see that migration's trailing note.
+  audience   SessionAudience @default(CUSTOMER)
   deviceInfo String?
   expiresAt  DateTime
   revokedAt  DateTime?

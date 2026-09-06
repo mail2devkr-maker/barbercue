@@ -79,24 +79,39 @@ export class AuthService {
     }
 
     this.assertActive(user.status);
+
+    // Same CUSTOMER-guarantee semantics as googleLogin (see that method's own doc comment): an
+    // existing staff/owner/admin User row that phone-verifies via OTP for the first time is
+    // guaranteed CUSTOMER access too — a no-op for the common case (brand-new user or an existing
+    // customer) — never removes or alters any role the user already has. `roles` here is
+    // deliberately the FULL, unscoped set (needed to decide whether a CUSTOMER row must be
+    // created); it is never what gets issued into the token — see sessionRoles below for that.
+    let roles = user.roles.map((r) => r.role);
+    if (!roles.includes(Role.CUSTOMER)) {
+      await this.prisma.userRole.create({
+        data: { userId: user.id, role: Role.CUSTOMER },
+      });
+      roles = [...roles, Role.CUSTOMER];
+    }
+
     // Security fix: customer OTP login is a CUSTOMER-audience session — this User row may also
     // hold PLATFORM_ADMIN/staff roles (same real person, different login surface), but this login
     // path must never assert them. scopeRolesToAudience is the single choke point that enforces
     // that, so the value used here and the value actually signed into the token can never diverge.
-    const roles = this.tokenService.scopeRolesToAudience(
-      user.roles.map((r) => r.role),
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
       SessionAudience.CUSTOMER,
     );
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
-      roles,
+      sessionRoles,
       SessionAudience.CUSTOMER,
       deviceInfo,
     );
     return {
       user: this.toMeResponse(
         user.id,
-        roles,
+        sessionRoles,
         SessionAudience.CUSTOMER,
         user.phone,
         user.email,

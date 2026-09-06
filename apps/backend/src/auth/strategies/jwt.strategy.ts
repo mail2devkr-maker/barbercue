@@ -3,12 +3,17 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import {
   AuthErrorCode,
+  SessionAudience,
   UserStatus,
   type AuthenticatedUser,
 } from '@barbercue/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import type { JwtPayload } from '../services/token.service';
+
+const VALID_AUDIENCES: ReadonlySet<string> = new Set(
+  Object.values(SessionAudience),
+);
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -38,10 +43,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    // payload.audience is undefined at runtime for any access token signed before this security
-    // fix — RolesGuard's PLATFORM_ADMIN check treats anything other than a literal 'ADMIN' match
-    // as untrusted, so a pre-fix token surfacing here degrades to "no admin authority" rather than
-    // silently being treated as one audience or another.
+    // Fail-closed, not fail-open: an access token signed before this security fix (or one with any
+    // malformed/unrecognized audience) has `payload.audience` missing or invalid at runtime, even
+    // though the TS type claims it's always present. Rejecting it outright here — rather than
+    // letting it through with an undefined audience and relying only on RolesGuard's later
+    // PLATFORM_ADMIN-audience check — closes the full access-token TTL window a pre-fix token would
+    // otherwise still have (up to 15 minutes) and guarantees no `undefined`/unrecognized audience
+    // value ever reaches `/auth/me`, `setLanguage`, `setInitialPassword`, or any other consumer of
+    // AuthenticatedUser. This intentionally forces every pre-fix session — access token AND its
+    // refresh token (already revoked by this fix's migration) — to re-authenticate from scratch.
+    if (
+      typeof payload.audience !== 'string' ||
+      !VALID_AUDIENCES.has(payload.audience)
+    ) {
+      throw new AppException(
+        AuthErrorCode.UNAUTHENTICATED,
+        'This session is no longer valid. Please log in again.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
     return { id: user.id, roles: payload.roles, audience: payload.audience };
   }
 }
