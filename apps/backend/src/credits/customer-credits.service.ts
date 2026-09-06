@@ -288,11 +288,21 @@ export class CustomerCreditsService {
         const existing = await this.prisma.customerCreditTransaction.findUnique({
           where: { idempotencyKey },
         });
+        // Every field the request actually controls must match for this to be a genuine replay —
+        // not just type/amount/reason. The primary defense against a same-key-different-payload
+        // retry is the generic @Idempotent() interceptor's full-request-hash cache (see
+        // IdempotencyInterceptor), but that cache has a 24h TTL; this DB-level fallback is reached
+        // whenever it has expired or was bypassed, so it must independently enforce the same "same
+        // key + different payload -> reject" rule on its own, not just on the subset of fields
+        // originally checked here.
         if (
           existing &&
           existing.type === CreditTransactionType.PROMO_GRANT &&
           Number(existing.amount) === input.amount &&
-          existing.reason === input.reason
+          existing.reason === input.reason &&
+          existing.campaignRef === (input.campaignRef ?? null) &&
+          existing.fundingSource === input.fundingSource &&
+          (existing.expiresAt?.getTime() ?? null) === (expiresAt?.getTime() ?? null)
         ) {
           const existingAccount = await this.prisma.customerCreditAccount.findUnique({
             where: { id: existing.accountId },

@@ -470,6 +470,33 @@ export class BookingsService {
     // becomes a CustomerLedgerEntry(OUTSTANDING), never a refund — see the plan's explicit scoping.
     const { booking: updated, linkedQueueEntryCancelled } =
       await this.prisma.$transaction(async (tx) => {
+        // The status check above is only a fast-path/UX check against a pre-transaction read — two
+        // concurrent cancel requests for the same booking could otherwise both pass it before
+        // either commits, then both restore credits and both create a cancellation-charge ledger
+        // entry (tx.booking.update below has no status guard in its WHERE, so a second call would
+        // silently re-cancel an already-cancelled booking). This advisory lock plus a fresh
+        // in-transaction status re-check closes that race exactly like create()'s per-salon lock
+        // closes the equivalent double-booking race — the second caller sees CANCELLED here and is
+        // rejected instead of double-executing every money-moving effect below.
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`booking-cancel:${bookingId}`}))`,
+        );
+        const current = await tx.booking.findUnique({
+          where: { id: bookingId },
+          select: { status: true },
+        });
+        if (
+          !current ||
+          (current.status !== BookingStatus.CONFIRMED &&
+            current.status !== BookingStatus.PENDING_PAYMENT)
+        ) {
+          throw new AppException(
+            BookingErrorCode.BOOKING_NOT_CANCELLABLE,
+            'This booking can no longer be cancelled.',
+            HttpStatus.CONFLICT,
+          );
+        }
+
         const result = await tx.booking.update({
           where: { id: bookingId },
           data: {

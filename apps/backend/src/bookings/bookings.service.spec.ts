@@ -72,6 +72,7 @@ interface PrismaMock {
   salonPaymentPolicy: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   booking: {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
+    findUnique: jest.Mock<Promise<unknown>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
     count: jest.Mock<Promise<number>, [unknown]>;
     create: jest.Mock<Promise<unknown>, [unknown]>;
@@ -145,6 +146,14 @@ describe('BookingsService', () => {
       },
       booking: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
+        // Part 11 regression fix: cancel() re-checks status inside its transaction (via a fresh
+        // findUnique, guarded by an advisory lock) to close a double-cancel/double-restore race.
+        // Defaults to "still cancellable" so every pre-existing cancel() test — which only ever set
+        // up the OUTER findFirst — keeps passing; the one test exercising the race explicitly
+        // overrides this to a terminal status instead.
+        findUnique: jest
+          .fn<Promise<unknown>, [unknown]>()
+          .mockResolvedValue({ status: 'CONFIRMED' }),
         findMany: jest.fn<Promise<unknown[]>, [unknown]>(),
         count: jest.fn<Promise<number>, [unknown]>(),
         create: jest.fn<Promise<unknown>, [unknown]>(),
@@ -1042,6 +1051,30 @@ describe('BookingsService', () => {
         await service.cancel('c1', 'b1');
         expect(credits.restoreForCancelledBooking).not.toHaveBeenCalled();
         expect(prisma.platformShopSubsidyEntry.updateMany).not.toHaveBeenCalled();
+      });
+
+      // Part 11 (FastQue Credits regression audit): the pre-transaction findFirst status check is
+      // only a fast-path/UX check. Two concurrent cancel() calls for the same booking could both
+      // pass it before either commits — without the in-transaction re-check this fix adds, the
+      // second caller would silently re-cancel an already-cancelled booking and double-restore
+      // credits / double-create a cancellation-charge ledger entry. Simulated here by having the
+      // fresh in-transaction read (findUnique, behind the advisory lock) report a status the
+      // outer/pre-transaction read never saw.
+      it('rejects and performs no money-moving side effects when the in-transaction status re-check finds the booking already cancelled (double-cancel race guard)', async () => {
+        const farSlot = new Date(Date.now() + 120 * 60_000);
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({ slotStart: farSlot, creditsRedeemedAmount: 30, status: 'CONFIRMED' }),
+        );
+        prisma.booking.findUnique.mockResolvedValue({ status: 'CANCELLED' });
+
+        await expect(service.cancel('c1', 'b1')).rejects.toMatchObject({
+          code: 'BOOKING_NOT_CANCELLABLE',
+        });
+        expect(prisma.booking.update).not.toHaveBeenCalled();
+        expect(credits.restoreForCancelledBooking).not.toHaveBeenCalled();
+        expect(prisma.customerLedgerEntry.create).not.toHaveBeenCalled();
+        expect(prisma.platformShopSubsidyEntry.updateMany).not.toHaveBeenCalled();
+        expect(prisma.auditLog.create).not.toHaveBeenCalled();
       });
     });
 

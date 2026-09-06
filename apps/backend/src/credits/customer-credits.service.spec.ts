@@ -319,6 +319,24 @@ describe('CustomerCreditsService', () => {
       await expect(service.getBalance('u1')).resolves.toEqual({ balance: 0 });
     });
 
+    // Part 11 (FastQue Credits regression audit, test-matrix item L): balance already had a direct
+    // expired-lot-exclusion test, but redemption itself — which shares the same validLots query —
+    // did not have its own. An expired lot must never be consumed even when it's the only lot.
+    it('an expired lot is unavailable for redemption even though it is the only lot on the account', async () => {
+      grantLot('u1', 30, { expiresAt: new Date(Date.now() - 1000) });
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        30,
+        service.computeMaxRedeemable(500),
+      );
+      expect(result.actualUsed).toBe(0);
+      expect(result.fastQueFundedConsumed).toBe(0);
+      // The expired lot's own remainingAmount must be untouched — no phantom partial consumption.
+      expect(transactions.find((t) => t.type === 'PROMO_GRANT')?.remainingAmount).toBe(30);
+    });
+
     it('service ₹500, balance ₹500 -> redeems only the 100 price-based cap, not the full balance', async () => {
       grantLot('u1', 500);
       const result = await service.redeemUpTo(
@@ -545,5 +563,30 @@ describe('CustomerCreditsService', () => {
         }),
       ).rejects.toMatchObject({ code: 'GRANT_IDEMPOTENCY_KEY_REUSED' });
     });
+
+    // Part 11 (FastQue Credits regression audit): the DB-level idempotency backstop (reached once
+    // the generic @Idempotent() interceptor's own request-hash cache has expired/been bypassed —
+    // see this method's own doc comment) used to compare only type/amount/reason, so a retried
+    // request reusing the same key with the SAME amount/reason but a DIFFERENT campaignRef,
+    // fundingSource, or expiresAt would have been silently treated as a valid replay of the
+    // original grant instead of a genuine conflict. Each of these must independently reject.
+    it.each([
+      ['campaignRef', { campaignRef: 'DIFFERENT_CAMPAIGN' }],
+      ['fundingSource', { fundingSource: CreditFundingSource.SHOP_FUNDED }],
+      ['expiresAt', { expiresAt: new Date(Date.now() + 86_400_000).toISOString() }],
+    ])(
+      'rejects a reused idempotency key with the same amount/reason but a different %s as GRANT_IDEMPOTENCY_KEY_REUSED',
+      async (_field, overrides) => {
+        await service.grantPromotionalCredits('admin-1', 'idem-1', input);
+        await expect(
+          service.grantPromotionalCredits('admin-1', 'idem-1', {
+            ...input,
+            ...overrides,
+          }),
+        ).rejects.toMatchObject({ code: 'GRANT_IDEMPOTENCY_KEY_REUSED' });
+        // Still exactly one lot — the mismatched retry must not have minted a second grant either.
+        await expect(service.getBalance('u1')).resolves.toEqual({ balance: 100 });
+      },
+    );
   });
 });
