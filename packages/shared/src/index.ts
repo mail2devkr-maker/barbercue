@@ -2,6 +2,7 @@ export * from './enums';
 export * from './types';
 export * from './schemas';
 export * from './calc';
+export * from './money';
 export * from './constants';
 export * from './locale';
 export * from './i18n';

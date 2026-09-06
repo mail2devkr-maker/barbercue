@@ -10,8 +10,11 @@ import {
   QueueEntryStatus,
   SubsidyLedgerStatus,
   computeCancellationCharge,
+  decimalStringToPaise,
   formatMoney,
   isSlotBookable,
+  paiseToDecimalString,
+  paiseToRupees,
   type BookingDetailDto,
   type CancelBookingResponseDto,
   type CreateBookingInput,
@@ -221,9 +224,9 @@ export class BookingsService {
     // wallet balance too — CustomerCreditsService.redeemUpTo returns the ACTUAL amount applied,
     // which is what gets snapshotted onto the booking, never this requested figure.
     const requestedCredits = input.creditsToRedeem ?? 0;
-    const maxCreditsAllowed = this.credits.computeMaxRedeemable(
-      Number(service.price),
-    );
+    // Part 11 precision hardening: pass the exact Decimal straight through — never Number(price)
+    // — so the authoritative cap is derived via integer paise, not a float division of the price.
+    const maxCreditsAllowed = this.credits.computeMaxRedeemable(service.price);
 
     const prepaymentRequirement =
       paymentPolicy?.prepaymentRequirement ?? PrepaymentRequirement.NONE;
@@ -327,7 +330,10 @@ export class BookingsService {
       // is the server-clamped amount (min of requested, live balance, price-based cap) — never the
       // raw requestedCredits figure — so that's what gets snapshotted onto the booking.
       if (requestedCredits > 0) {
-        const { actualUsed, fastQueFundedConsumed } =
+        // Part 11 precision hardening: redeemUpTo now returns exact integer PAISE, never a rupee
+        // float — both writes below convert straight from paise to a Decimal string, so no
+        // Decimal -> Number -> Decimal round-trip ever happens on the way to persistence.
+        const { actualUsedPaise, fastQueFundedConsumedPaise } =
           await this.credits.redeemUpTo(
             tx,
             customerId,
@@ -335,21 +341,21 @@ export class BookingsService {
             requestedCredits,
             maxCreditsAllowed,
           );
-        if (actualUsed > 0) {
+        if (actualUsedPaise > 0) {
           await tx.booking.update({
             where: { id: created.id },
-            data: { creditsRedeemedAmount: actualUsed },
+            data: { creditsRedeemedAmount: paiseToDecimalString(actualUsedPaise) },
           });
         }
         // FastQue subsidizes only the portion it actually funded — a future SHOP_FUNDED grant
         // must never create a FastQue liability (see PlatformShopSubsidyEntry's own doc comment).
         // Voided, not deleted, if the booking is later cancelled (see cancel() below).
-        if (fastQueFundedConsumed > 0) {
+        if (fastQueFundedConsumedPaise > 0) {
           await tx.platformShopSubsidyEntry.create({
             data: {
               salonId: input.salonId,
               bookingId: created.id,
-              amount: fastQueFundedConsumed,
+              amount: paiseToDecimalString(fastQueFundedConsumedPaise),
               status: SubsidyLedgerStatus.OUTSTANDING,
             },
           });
@@ -541,12 +547,16 @@ export class BookingsService {
         // this transaction from CONFIRMED/PENDING_PAYMENT (the guard above), so this can never run
         // twice for the same booking.
         if (booking.creditsRedeemedAmount != null) {
-          const restoredAmount = Number(booking.creditsRedeemedAmount);
+          // Part 11 precision hardening: read the exact Decimal string, never Number(decimal) —
+          // the snapshot is restored via integer paise, never re-derived, never rounded.
+          const restoredAmountPaise = decimalStringToPaise(
+            booking.creditsRedeemedAmount.toString(),
+          );
           await this.credits.restoreForCancelledBooking(
             tx,
             customerId,
             bookingId,
-            restoredAmount,
+            restoredAmountPaise,
           );
           await tx.platformShopSubsidyEntry.updateMany({
             where: { bookingId, status: SubsidyLedgerStatus.OUTSTANDING },
@@ -833,10 +843,18 @@ export class BookingsService {
       serviceName: booking.service.name,
       serviceDurationMinutes: booking.service.durationMinutes,
       servicePrice: Number(booking.service.price),
-      payableAmount: Math.max(
-        0,
-        Number(booking.service.price) -
-          Number(booking.creditsRedeemedAmount ?? 0),
+      // Part 11 precision hardening: the payable invariant (servicePrice = payableAmount +
+      // creditsRedeemed) is computed in integer paise, never via float subtraction of two
+      // Number(decimal) values — Number(...) is only used once more here, at the very end, to
+      // produce the display/DTO number (a controlled boundary conversion, not further arithmetic).
+      payableAmount: paiseToRupees(
+        Math.max(
+          0,
+          decimalStringToPaise(booking.service.price.toString()) -
+            (booking.creditsRedeemedAmount
+              ? decimalStringToPaise(booking.creditsRedeemedAmount.toString())
+              : 0),
+        ),
       ),
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
       hasReview: booking.reviews.length > 0,

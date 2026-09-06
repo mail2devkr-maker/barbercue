@@ -124,9 +124,9 @@ describe('BookingsService', () => {
     recomputeEtas: jest.Mock<Promise<void>, [string]>;
   };
   let credits: {
-    computeMaxRedeemable: jest.Mock<number, [number]>;
+    computeMaxRedeemable: jest.Mock<number, [unknown]>;
     redeemUpTo: jest.Mock<
-      Promise<{ actualUsed: number; fastQueFundedConsumed: number }>,
+      Promise<{ actualUsedPaise: number; fastQueFundedConsumedPaise: number }>,
       [unknown, string, string, number, number]
     >;
     restoreForCancelledBooking: jest.Mock<
@@ -236,10 +236,17 @@ describe('BookingsService', () => {
     };
     queueService = { recomputeEtas: jest.fn().mockResolvedValue(undefined) };
     credits = {
-      computeMaxRedeemable: jest.fn((price: number) => Math.floor(price / 50) * 10),
+      // Part 11 precision hardening: the real method now takes the service's Decimal (or a
+      // decimal()-shaped fixture) rather than a plain rupee number — this mock mirrors that via
+      // .toString(), same as the real implementation's own decimalStringToPaise(price.toString()).
+      computeMaxRedeemable: jest.fn(
+        (price: unknown) => Math.floor(Number((price as { toString(): string }).toString()) / 50) * 10,
+      ),
       // Default: behaves as if the customer always has enough balance — clamps only to the
       // price-based cap, mirroring the real service's own min(requested, balance, cap) with an
       // effectively infinite balance. Individual tests override this to exercise real clamping.
+      // Returns paise (the real method's contract post-Part-11) even though requested/max here are
+      // still rupee numbers, matching real callers.
       redeemUpTo: jest
         .fn()
         .mockImplementation(
@@ -251,8 +258,8 @@ describe('BookingsService', () => {
             max: number,
           ) =>
             Promise.resolve({
-              actualUsed: Math.min(requested, max),
-              fastQueFundedConsumed: Math.min(requested, max),
+              actualUsedPaise: Math.min(requested, max) * 100,
+              fastQueFundedConsumedPaise: Math.min(requested, max) * 100,
             }),
         ),
       restoreForCancelledBooking: jest.fn().mockResolvedValue(undefined),
@@ -657,8 +664,10 @@ describe('BookingsService', () => {
           BookingSource.WEB,
           'key-1',
         );
-        // service.price is 300 in this suite's fixture -> cap is floor(300/50)*10 = 60.
-        expect(credits.computeMaxRedeemable).toHaveBeenCalledWith(300);
+        // service.price is 300 in this suite's fixture -> cap is floor(300/50)*10 = 60. Part 11:
+        // the real call now passes the Decimal itself (never Number(price)) — this fixture's
+        // decimal() helper is a { toString() } stand-in, so assert on that rather than identity.
+        expect(String(credits.computeMaxRedeemable.mock.calls[0][0])).toBe('300');
         expect(credits.redeemUpTo).toHaveBeenCalledWith(
           prisma,
           'c1',
@@ -669,9 +678,11 @@ describe('BookingsService', () => {
       });
 
       it('snapshots creditsRedeemedAmount as the ACTUAL amount CustomerCreditsService applied, not the raw request', async () => {
+        // Part 11: redeemUpTo's contract is now paise (2000 paise = Rs.20), and the write below
+        // goes straight from paise to a Decimal string, never through a rupee float.
         credits.redeemUpTo.mockResolvedValueOnce({
-          actualUsed: 20,
-          fastQueFundedConsumed: 20,
+          actualUsedPaise: 2000,
+          fastQueFundedConsumedPaise: 2000,
         });
         await service.create(
           'c1',
@@ -686,14 +697,14 @@ describe('BookingsService', () => {
         );
         expect(prisma.booking.update).toHaveBeenCalledWith({
           where: { id: 'b1' },
-          data: { creditsRedeemedAmount: 20 },
+          data: { creditsRedeemedAmount: '20.00' },
         });
       });
 
       it('creates a subsidy entry for exactly fastQueFundedConsumed, never the full actualUsed once a future SHOP_FUNDED credit exists', async () => {
         credits.redeemUpTo.mockResolvedValueOnce({
-          actualUsed: 30,
-          fastQueFundedConsumed: 12, // e.g. partly drawn from a hypothetical SHOP_FUNDED lot
+          actualUsedPaise: 3000,
+          fastQueFundedConsumedPaise: 1200, // e.g. partly drawn from a hypothetical SHOP_FUNDED lot
         });
         await service.create(
           'c1',
@@ -710,7 +721,7 @@ describe('BookingsService', () => {
           data: {
             salonId: 's1',
             bookingId: 'b1',
-            amount: 12,
+            amount: '12.00',
             status: 'OUTSTANDING',
           },
         });
@@ -718,8 +729,8 @@ describe('BookingsService', () => {
 
       it('creates no subsidy entry at all when fastQueFundedConsumed is 0 (e.g. entirely shop-funded credit)', async () => {
         credits.redeemUpTo.mockResolvedValueOnce({
-          actualUsed: 30,
-          fastQueFundedConsumed: 0,
+          actualUsedPaise: 3000,
+          fastQueFundedConsumedPaise: 0,
         });
         await service.create(
           'c1',
@@ -737,8 +748,8 @@ describe('BookingsService', () => {
 
       it('never snapshots creditsRedeemedAmount or writes a subsidy entry when actualUsed is 0 (e.g. zero balance)', async () => {
         credits.redeemUpTo.mockResolvedValueOnce({
-          actualUsed: 0,
-          fastQueFundedConsumed: 0,
+          actualUsedPaise: 0,
+          fastQueFundedConsumedPaise: 0,
         });
         await service.create(
           'c1',
@@ -753,6 +764,36 @@ describe('BookingsService', () => {
         );
         expect(prisma.booking.update).not.toHaveBeenCalled();
         expect(prisma.platformShopSubsidyEntry.create).not.toHaveBeenCalled();
+      });
+
+      // Part 11 precision hardening — the payable invariant (servicePrice = payableAmount +
+      // creditsRedeemed) for a fractional price at the exact cap boundary. The returned DTO's
+      // payableAmount must be exactly 65.99, never 65.98999999999999 or 66.00.
+      it('service Rs.75.99, redeems the max Rs.10.00 cap -> returned payableAmount is exactly Rs.65.99', async () => {
+        credits.redeemUpTo.mockResolvedValueOnce({
+          actualUsedPaise: 1000,
+          fastQueFundedConsumedPaise: 1000,
+        });
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({
+            service: { name: 'Haircut', durationMinutes: 30, price: decimal('75.99') },
+            creditsRedeemedAmount: '10.00',
+          }),
+        );
+        const result = await service.create(
+          'c1',
+          {
+            salonId: 's1',
+            serviceId: 'sv1',
+            slotStart: futureSlot,
+            creditsToRedeem: 10,
+          },
+          BookingSource.WEB,
+          'key-1',
+        );
+        expect(result.servicePrice).toBe(75.99);
+        expect(result.creditsRedeemedAmount).toBe(10);
+        expect(result.payableAmount).toBe(65.99);
       });
 
       it('never calls into credits at all when creditsToRedeem is omitted', async () => {
@@ -1031,11 +1072,13 @@ describe('BookingsService', () => {
           makeBookingRow({ slotStart: farSlot, creditsRedeemedAmount: 30 }),
         );
         await service.cancel('c1', 'b1');
+        // Part 11: cancel() now converts the Decimal snapshot to exact integer paise (30 rupees ->
+        // 3000 paise) before calling restoreForCancelledBooking, never via Number(decimal).
         expect(credits.restoreForCancelledBooking).toHaveBeenCalledWith(
           prisma,
           'c1',
           'b1',
-          30,
+          3000,
         );
         expect(prisma.platformShopSubsidyEntry.updateMany).toHaveBeenCalledWith({
           where: { bookingId: 'b1', status: 'OUTSTANDING' },

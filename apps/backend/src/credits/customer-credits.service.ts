@@ -1,10 +1,14 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
-  computeMaxRedeemableCredits,
+  computeMaxRedeemableCreditsPaise,
   CreditFundingSource,
   CreditsErrorCode,
   CreditTransactionType,
+  decimalStringToPaise,
+  numberToPaise,
+  paiseToDecimalString,
+  paiseToRupees,
 } from '@barbercue/shared';
 import type {
   CustomerCreditBalanceDto,
@@ -19,12 +23,16 @@ import { PrismaService } from '../prisma/prisma.service';
 const DEFAULT_HISTORY_PAGE_SIZE = 20;
 
 interface RedeemResult {
-  /** The amount actually applied — may be less than requested; see redeemUpTo's own doc comment. */
-  actualUsed: number;
-  /** The portion of actualUsed drawn from FASTQUE_FUNDED lots — what BookingsService should
-   * actually record as FastQue's subsidy liability to the shop (never the full actualUsed once a
-   * SHOP_FUNDED grant exists — see PlatformShopSubsidyEntry's own doc comment). */
-  fastQueFundedConsumed: number;
+  /** The amount actually applied, in exact integer PAISE — may be less than requested; see
+   * redeemUpTo's own doc comment. Paise, not rupees (Part 11 precision hardening): the caller
+   * converts straight to a Decimal string at the point of persistence, never through a rupee
+   * float. */
+  actualUsedPaise: number;
+  /** The portion of actualUsedPaise drawn from FASTQUE_FUNDED lots, in paise — what
+   * BookingsService should actually record as FastQue's subsidy liability to the shop (never the
+   * full actualUsedPaise once a SHOP_FUNDED grant exists — see PlatformShopSubsidyEntry's own doc
+   * comment). */
+  fastQueFundedConsumedPaise: number;
 }
 
 /**
@@ -54,12 +62,22 @@ export class CustomerCreditsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * The REDEMPTION CAP for one booking at this price — see
-   * packages/shared/src/calc.computeMaxRedeemableCredits, the single implementation this
-   * delegates to so the server and every client-side preview can never disagree.
+   * The AUTHORITATIVE REDEMPTION CAP for one booking at this price (Part 11 precision hardening).
+   * Accepts the service's own Prisma.Decimal directly — never `Number(service.price)` — and
+   * converts it to exact integer paise via its `.toString()` before the slab formula runs, so the
+   * cap the server actually enforces is never derived from a floating-point division of a
+   * fractional rupee value. A plain `number`/`string` is also accepted (existing call sites and
+   * tests that already hold a whole-rupee value) — safe because `String(n)` for any such value is
+   * the exact literal (see packages/shared's money module for why), never a source of the
+   * float-division risk this hardening exists to remove.
+   *
+   * packages/shared/src/calc.computeMaxRedeemableCredits is the float-based CLIENT PREVIEW ONLY
+   * (web/mobile render it before a booking exists, purely for UX) — the server never calls it or
+   * trusts its result; this method is the one true authority.
    */
-  computeMaxRedeemable(servicePrice: number): number {
-    return computeMaxRedeemableCredits(servicePrice);
+  computeMaxRedeemable(servicePrice: Prisma.Decimal | string | number): number {
+    const paise = decimalStringToPaise(servicePrice.toString());
+    return paiseToRupees(computeMaxRedeemableCreditsPaise(paise));
   }
 
   /** Live sum of remainingAmount over this customer's still-valid (unexpired) lots. Never a cached
@@ -114,6 +132,13 @@ export class CustomerCreditsService {
    * actual amount rather than throwing: BookingsService uses the return value, not the client's
    * request, to snapshot Booking.creditsRedeemedAmount.
    *
+   * Part 11 precision hardening: `requestedAmount`/`maxCreditsAllowed` are still rupee `number`s at
+   * this public boundary (the caller's existing values — a client-supplied, already-validated
+   * ≤2-decimal request amount, and computeMaxRedeemable's own rupee return value), but everything
+   * from here on — the live balance, the min() clamp, and every lot decrement — happens in exact
+   * integer PAISE. The result (RedeemResult) is paise too, so BookingsService never has to convert
+   * back through a rupee float before writing a Decimal field.
+   *
    * Concurrency: a per-customer Postgres advisory lock (held for this transaction) serializes every
    * redeem/restore/grant for this customer, so the read-then-write lot consumption below can never
    * race with another one — a second concurrent redemption simply sees whatever balance is left
@@ -128,7 +153,7 @@ export class CustomerCreditsService {
     maxCreditsAllowed: number,
   ): Promise<RedeemResult> {
     if (requestedAmount <= 0 || maxCreditsAllowed <= 0) {
-      return { actualUsed: 0, fastQueFundedConsumed: 0 };
+      return { actualUsedPaise: 0, fastQueFundedConsumedPaise: 0 };
     }
 
     await tx.$executeRaw(
@@ -139,41 +164,47 @@ export class CustomerCreditsService {
       where: { userId: customerId },
       select: { id: true },
     });
-    if (!account) return { actualUsed: 0, fastQueFundedConsumed: 0 };
+    if (!account) return { actualUsedPaise: 0, fastQueFundedConsumedPaise: 0 };
 
     const now = new Date();
     const lots = await this.validLots(tx, account.id, now);
-    const available = lots.reduce((sum, lot) => sum + Number(lot.remainingAmount), 0);
-    const target = Math.min(requestedAmount, available, maxCreditsAllowed);
-    if (target <= 0) return { actualUsed: 0, fastQueFundedConsumed: 0 };
+    // Every lot's remainingAmount is converted from its exact Decimal string once, here — never
+    // via Number(lot.remainingAmount). The validLots query's own `remainingAmount: { gt: 0 }`
+    // filter guarantees this is never null for a row actually returned.
+    const lotPaise = lots.map((lot) => decimalStringToPaise(lot.remainingAmount!.toString()));
+    const requestedPaise = numberToPaise(requestedAmount);
+    const maxCreditsAllowedPaise = numberToPaise(maxCreditsAllowed);
+    const availablePaise = lotPaise.reduce((sum, paise) => sum + paise, 0);
+    const targetPaise = Math.min(requestedPaise, availablePaise, maxCreditsAllowedPaise);
+    if (targetPaise <= 0) return { actualUsedPaise: 0, fastQueFundedConsumedPaise: 0 };
 
-    let remaining = target;
-    let fastQueFundedConsumed = 0;
-    for (const lot of lots) {
-      if (remaining <= 0) break;
-      const take = Math.min(Number(lot.remainingAmount), remaining);
-      if (take <= 0) continue;
+    let remainingPaise = targetPaise;
+    let fastQueFundedConsumedPaise = 0;
+    for (let i = 0; i < lots.length; i++) {
+      if (remainingPaise <= 0) break;
+      const takePaise = Math.min(lotPaise[i], remainingPaise);
+      if (takePaise <= 0) continue;
       await tx.customerCreditTransaction.update({
-        where: { id: lot.id },
-        data: { remainingAmount: { decrement: take } },
+        where: { id: lots[i].id },
+        data: { remainingAmount: { decrement: paiseToDecimalString(takePaise) } },
       });
-      if (lot.fundingSource === CreditFundingSource.FASTQUE_FUNDED) {
-        fastQueFundedConsumed += take;
+      if (lots[i].fundingSource === CreditFundingSource.FASTQUE_FUNDED) {
+        fastQueFundedConsumedPaise += takePaise;
       }
-      remaining -= take;
+      remainingPaise -= takePaise;
     }
-    const actualUsed = target - remaining;
+    const actualUsedPaise = targetPaise - remainingPaise;
 
     await tx.customerCreditTransaction.create({
       data: {
         accountId: account.id,
         type: CreditTransactionType.REDEEMED,
-        amount: actualUsed,
+        amount: paiseToDecimalString(actualUsedPaise),
         bookingId,
       },
     });
 
-    return { actualUsed, fastQueFundedConsumed };
+    return { actualUsedPaise, fastQueFundedConsumedPaise };
   }
 
   /**
@@ -184,26 +215,32 @@ export class CustomerCreditsService {
    * original lot(s) funded the redemption: a customer should never lose restored money to an
    * expiry clock that kept ticking while it was tied up in a since-cancelled booking. See
    * CreditTransactionType.RESTORED's own doc comment.
+   *
+   * Part 11 precision hardening: `amountPaise` is exact integer paise (the caller reads
+   * Booking.creditsRedeemedAmount's own Decimal string directly into paise, never via
+   * Number(decimal)) — this method is a pure passthrough with zero arithmetic on it, so the
+   * restored amount can never drift from the original redemption by even a fraction of a paisa.
    */
   async restoreForCancelledBooking(
     tx: Prisma.TransactionClient,
     customerId: string,
     bookingId: string,
-    amount: number,
+    amountPaise: number,
   ): Promise<void> {
-    if (amount <= 0) return;
+    if (amountPaise <= 0) return;
 
     const account = await tx.customerCreditAccount.upsert({
       where: { userId: customerId },
       create: { userId: customerId },
       update: {},
     });
+    const amountDecimal = paiseToDecimalString(amountPaise);
     await tx.customerCreditTransaction.create({
       data: {
         accountId: account.id,
         type: CreditTransactionType.RESTORED,
-        amount,
-        remainingAmount: amount,
+        amount: amountDecimal,
+        remainingAmount: amountDecimal,
         bookingId,
       },
     });
@@ -241,6 +278,12 @@ export class CustomerCreditsService {
     }
 
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+    // Part 11 precision hardening: input.amount is already zod-validated to at most 2 decimal
+    // places (grantPromotionalCreditsSchema's multipleOf(0.01)) — numberToPaise re-validates that
+    // defensively and gives an exact decimal string to persist, rather than handing the raw JS
+    // number straight to Prisma's Decimal constructor.
+    const amountPaise = numberToPaise(input.amount);
+    const amountDecimal = paiseToDecimalString(amountPaise);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -253,8 +296,8 @@ export class CustomerCreditsService {
           data: {
             accountId: account.id,
             type: CreditTransactionType.PROMO_GRANT,
-            amount: input.amount,
-            remainingAmount: input.amount,
+            amount: amountDecimal,
+            remainingAmount: amountDecimal,
             campaignRef: input.campaignRef ?? null,
             fundingSource: input.fundingSource,
             expiresAt,
@@ -298,7 +341,7 @@ export class CustomerCreditsService {
         if (
           existing &&
           existing.type === CreditTransactionType.PROMO_GRANT &&
-          Number(existing.amount) === input.amount &&
+          decimalStringToPaise(existing.amount.toString()) === amountPaise &&
           existing.reason === input.reason &&
           existing.campaignRef === (input.campaignRef ?? null) &&
           existing.fundingSource === input.fundingSource &&
@@ -342,6 +385,9 @@ export class CustomerCreditsService {
     accountId: string,
     now: Date,
   ): Promise<number> {
+    // The SUM itself is computed by Postgres on the Decimal column (exact — no JS arithmetic
+    // involved at all). Converting through paise here is for representation consistency with the
+    // rest of this file, not because this specific aggregate was ever at risk.
     const result = await client.customerCreditTransaction.aggregate({
       where: {
         accountId,
@@ -350,7 +396,8 @@ export class CustomerCreditsService {
       },
       _sum: { remainingAmount: true },
     });
-    return Number(result._sum.remainingAmount ?? 0);
+    const sum = result._sum.remainingAmount;
+    return sum ? paiseToRupees(decimalStringToPaise(sum.toString())) : 0;
   }
 
   private toTransactionDto(t: {

@@ -116,12 +116,21 @@ describe('CustomerCreditsService', () => {
             .reduce((s, t) => s + (t.remainingAmount ?? 0), 0);
           return Promise.resolve({ _sum: { remainingAmount: sum } });
         }),
+        // Part 11 precision hardening: the real service now writes exact Decimal STRINGS (e.g.
+        // "12.00") to `amount`/`remainingAmount`, never a plain rupee number — Prisma normalizes
+        // that into its Decimal type internally. This mock normalizes the same way via Number(...)
+        // at the storage boundary (safe here: every string this mock ever receives is a short,
+        // exact 2-decimal literal produced by paiseToDecimalString, never a value at real risk of
+        // float error) so the rest of this file's plain-number-based fixtures/assertions keep
+        // working unchanged — this mock's job is to simulate Postgres's own Decimal storage, not to
+        // re-test the paise conversion utilities themselves (packages/shared's own money.test.ts
+        // already does that).
         create: jest.fn(
           (args: {
             data: Partial<TransactionRow> & {
               accountId: string;
               type: string;
-              amount: number;
+              amount: number | string;
             };
           }) => {
             if (
@@ -139,8 +148,11 @@ describe('CustomerCreditsService', () => {
               id: `tx-${nextId++}`,
               accountId: args.data.accountId,
               type: args.data.type,
-              amount: args.data.amount,
-              remainingAmount: args.data.remainingAmount ?? null,
+              amount: Number(args.data.amount),
+              remainingAmount:
+                args.data.remainingAmount !== undefined && args.data.remainingAmount !== null
+                  ? Number(args.data.remainingAmount)
+                  : null,
               bookingId: args.data.bookingId ?? null,
               campaignRef: args.data.campaignRef ?? null,
               fundingSource: args.data.fundingSource ?? null,
@@ -157,12 +169,12 @@ describe('CustomerCreditsService', () => {
         update: jest.fn(
           (args: {
             where: { id: string };
-            data: { remainingAmount: { decrement: number } };
+            data: { remainingAmount: { decrement: number | string } };
           }) => {
             const row = transactions.find((t) => t.id === args.where.id);
             if (!row) throw new Error('not found');
             row.remainingAmount =
-              (row.remainingAmount ?? 0) - args.data.remainingAmount.decrement;
+              (row.remainingAmount ?? 0) - Number(args.data.remainingAmount.decrement);
             return Promise.resolve(row);
           },
         ),
@@ -193,6 +205,21 @@ describe('CustomerCreditsService', () => {
       [1000, 200],
     ])('price ₹%d -> max redeemable ₹%d', (price, expected) => {
       expect(service.computeMaxRedeemable(price)).toBe(expected);
+    });
+
+    // Part 11 precision hardening — the exact fractional-price boundary cases from the audit,
+    // exercised against a Decimal-like fixture (a { toString() } stand-in, same as the real
+    // Prisma.Decimal call sites use) rather than a plain rupee number.
+    it.each([
+      ['50.01', 10],
+      ['99.99', 10],
+      ['100.00', 20],
+      ['100.01', 20],
+      ['75.99', 10],
+    ])('price ₹%s (fractional Decimal) -> max redeemable ₹%d, exactly', (priceDecimal, expected) => {
+      expect(service.computeMaxRedeemable({ toString: () => priceDecimal } as never)).toBe(
+        expected,
+      );
     });
   });
 
@@ -315,7 +342,7 @@ describe('CustomerCreditsService', () => {
         30,
         service.computeMaxRedeemable(500),
       );
-      expect(result.actualUsed).toBe(30);
+      expect(result.actualUsedPaise).toBe(3000);
       await expect(service.getBalance('u1')).resolves.toEqual({ balance: 0 });
     });
 
@@ -331,8 +358,8 @@ describe('CustomerCreditsService', () => {
         30,
         service.computeMaxRedeemable(500),
       );
-      expect(result.actualUsed).toBe(0);
-      expect(result.fastQueFundedConsumed).toBe(0);
+      expect(result.actualUsedPaise).toBe(0);
+      expect(result.fastQueFundedConsumedPaise).toBe(0);
       // The expired lot's own remainingAmount must be untouched — no phantom partial consumption.
       expect(transactions.find((t) => t.type === 'PROMO_GRANT')?.remainingAmount).toBe(30);
     });
@@ -346,7 +373,7 @@ describe('CustomerCreditsService', () => {
         500,
         service.computeMaxRedeemable(500),
       );
-      expect(result.actualUsed).toBe(100);
+      expect(result.actualUsedPaise).toBe(10000);
       await expect(service.getBalance('u1')).resolves.toEqual({
         balance: 400,
       });
@@ -361,7 +388,7 @@ describe('CustomerCreditsService', () => {
         100,
         service.computeMaxRedeemable(100),
       );
-      expect(result.actualUsed).toBe(20);
+      expect(result.actualUsedPaise).toBe(2000);
     });
 
     it('service ₹75, wallet large -> redeems only 10, never 15 (20% of 75)', async () => {
@@ -373,7 +400,7 @@ describe('CustomerCreditsService', () => {
         1000,
         service.computeMaxRedeemable(75),
       );
-      expect(result.actualUsed).toBe(10);
+      expect(result.actualUsedPaise).toBe(1000);
     });
 
     it('never rejects for exceeding balance — clamps to 0 when the customer has nothing', async () => {
@@ -384,7 +411,7 @@ describe('CustomerCreditsService', () => {
         50,
         service.computeMaxRedeemable(500),
       );
-      expect(result.actualUsed).toBe(0);
+      expect(result.actualUsedPaise).toBe(0);
     });
 
     it('draws from the soonest-expiring lot first', async () => {
@@ -413,7 +440,7 @@ describe('CustomerCreditsService', () => {
         15,
         service.computeMaxRedeemable(500),
       );
-      expect(result.actualUsed).toBe(15);
+      expect(result.actualUsedPaise).toBe(1500);
       await expect(service.getBalance('u1')).resolves.toEqual({
         balance: 10,
       });
@@ -428,7 +455,7 @@ describe('CustomerCreditsService', () => {
         30,
         service.computeMaxRedeemable(500),
       );
-      expect(result.fastQueFundedConsumed).toBe(30);
+      expect(result.fastQueFundedConsumedPaise).toBe(3000);
     });
 
     it('does NOT count a SHOP_FUNDED lot toward fastQueFundedConsumed (no subsidy liability for shop-funded credit)', async () => {
@@ -440,8 +467,8 @@ describe('CustomerCreditsService', () => {
         30,
         service.computeMaxRedeemable(500),
       );
-      expect(result.actualUsed).toBe(30);
-      expect(result.fastQueFundedConsumed).toBe(0);
+      expect(result.actualUsedPaise).toBe(3000);
+      expect(result.fastQueFundedConsumedPaise).toBe(0);
     });
 
     it('two concurrent redemptions against a shared balance never double-spend or go negative', async () => {
@@ -451,14 +478,49 @@ describe('CustomerCreditsService', () => {
         service.redeemUpTo(prisma as never, 'u1', 'b1', 30, cap),
         service.redeemUpTo(prisma as never, 'u1', 'b2', 30, cap),
       ]);
-      expect(a.actualUsed + b.actualUsed).toBe(30);
+      expect(a.actualUsedPaise + b.actualUsedPaise).toBe(3000);
       await expect(service.getBalance('u1')).resolves.toEqual({ balance: 0 });
+    });
+
+    // Part 11 precision hardening — the exact multi-lot consumption example from the audit: two
+    // fractional-paisa lots, a redemption that doesn't evenly divide either one. No intermediate
+    // value may show float drift (e.g. 15.029999999999999 or 0.000000001).
+    it('Lot A Rs.10.01 + Lot B Rs.20.02, redeem Rs.15.03 -> A empty, B left with exactly Rs.15.00', async () => {
+      const lotA = grantLot('u1', 10.01);
+      const lotB = grantLot('u1', 20.02);
+      const result = await service.redeemUpTo(
+        prisma as never,
+        'u1',
+        'b1',
+        15.03,
+        service.computeMaxRedeemable(1000), // cap of Rs.200, not the binding constraint here
+      );
+      expect(result.actualUsedPaise).toBe(1503);
+      expect(transactions.find((t) => t.id === lotA.id)?.remainingAmount).toBe(0);
+      expect(transactions.find((t) => t.id === lotB.id)?.remainingAmount).toBe(15);
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 15 });
+    });
+
+    // Part 11 — fractional service prices at the exact cap boundary, redemption + payable both
+    // exact. Service Rs.75.99 caps at Rs.10.00 (floor(75.99/50)*10); redeeming the full cap must
+    // leave a customer payable of exactly Rs.65.99, never Rs.65.98999999999999 or Rs.66.00.
+    it('service Rs.75.99, redeem the max Rs.10.00 cap -> exact actualUsed, matching the payable invariant', async () => {
+      grantLot('u1', 50);
+      const cap = service.computeMaxRedeemable({ toString: () => '75.99' } as never);
+      expect(cap).toBe(10);
+      const result = await service.redeemUpTo(prisma as never, 'u1', 'b1', 50, cap);
+      expect(result.actualUsedPaise).toBe(1000);
+      const servicePricePaise = 7599;
+      const payablePaise = servicePricePaise - result.actualUsedPaise;
+      expect(payablePaise).toBe(6599); // Rs.65.99
     });
   });
 
   describe('restoreForCancelledBooking', () => {
+    // Part 11 precision hardening: this method's amount parameter is now exact integer PAISE
+    // (never rupees) — 3000 paise = Rs.30.
     it('mints a brand-new, never-expiring lot for exactly the restored amount', async () => {
-      await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 30);
+      await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 3000);
       await expect(service.getBalance('u1')).resolves.toEqual({ balance: 30 });
       const restored = transactions.find((t) => t.type === 'RESTORED')!;
       expect(restored.expiresAt).toBeNull();
@@ -468,6 +530,15 @@ describe('CustomerCreditsService', () => {
     it('does nothing for a zero amount', async () => {
       await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 0);
       expect(transactions).toHaveLength(0);
+    });
+
+    // Part 11 — a fractional original redemption (Rs.10.01) must restore as exactly Rs.10.01, not
+    // Rs.10.00 or Rs.10.0100001.
+    it('restores a fractional amount (Rs.10.01) exactly', async () => {
+      await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 1001);
+      const restored = transactions.find((t) => t.type === 'RESTORED')!;
+      expect(restored.remainingAmount).toBe(10.01);
+      await expect(service.getBalance('u1')).resolves.toEqual({ balance: 10.01 });
     });
 
     it('a restored lot remains redeemable even if the original grant has since expired', async () => {
@@ -489,7 +560,7 @@ describe('CustomerCreditsService', () => {
         note: null,
         createdAt: new Date(Date.now() - 100_000),
       });
-      await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 30);
+      await service.restoreForCancelledBooking(prisma as never, 'u1', 'b1', 3000);
       await expect(service.getBalance('u1')).resolves.toEqual({ balance: 30 });
     });
   });
@@ -515,6 +586,21 @@ describe('CustomerCreditsService', () => {
         balance: 100,
       });
     });
+
+    // Part 11 precision hardening — a grant amount must persist exactly, with no binary-float
+    // drift, for every 2-decimal amount from a single paisa up to a near-slab-boundary value.
+    it.each([0.01, 0.1, 1.1, 10.01, 99.99])(
+      'grants Rs.%s exactly (amount and remainingAmount both, no float drift)',
+      async (amount) => {
+        const result = await service.grantPromotionalCredits('admin-1', 'idem-1', {
+          ...input,
+          amount,
+        });
+        expect(result.amount).toBe(amount);
+        expect(result.remainingAmount).toBe(amount);
+        await expect(service.getBalance('u1')).resolves.toEqual({ balance: amount });
+      },
+    );
 
     it('throws CUSTOMER_NOT_FOUND for a nonexistent customerId, writing nothing', async () => {
       prisma.user.findUnique.mockResolvedValueOnce(null);

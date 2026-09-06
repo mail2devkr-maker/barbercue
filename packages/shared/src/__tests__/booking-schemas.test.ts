@@ -31,6 +31,23 @@ describe('createBookingSchema', () => {
   it('rejects a non-ISO slotStart', () => {
     expect(createBookingSchema.safeParse({ ...valid, slotStart: '05-08-2026' }).success).toBe(false);
   });
+
+  // Part 11 (FastQue Credits precision audit) — creditsToRedeem must reject anything with more
+  // than 2 fractional digits. Tested against the actual schema (not zod's multipleOf in the
+  // abstract), since that's what a real request body goes through.
+  describe('creditsToRedeem precision', () => {
+    it.each([0, 10, 10.1, 10.10, 10.01, 0.01, 999.99])('accepts %s (at most 2 decimal places)', (amount) => {
+      expect(createBookingSchema.safeParse({ ...valid, creditsToRedeem: amount }).success).toBe(true);
+    });
+
+    it.each([10.001, 10.999, 0.001, 10.005])('rejects %s (more than 2 decimal places)', (amount) => {
+      expect(createBookingSchema.safeParse({ ...valid, creditsToRedeem: amount }).success).toBe(false);
+    });
+
+    it('rejects a negative amount', () => {
+      expect(createBookingSchema.safeParse({ ...valid, creditsToRedeem: -10 }).success).toBe(false);
+    });
+  });
 });
 
 describe('availabilityQuerySchema', () => {
