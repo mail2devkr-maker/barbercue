@@ -98,6 +98,14 @@ export function CustomerHeader() {
                     My bookings
                   </Link>
                   <Link
+                    href="/account/credits"
+                    role="menuitem"
+                    className={styles.accountDropdownItem}
+                    onClick={() => setAccountMenuOpen(false)}
+                  >
+                    FastQue Credits
+                  </Link>
+                  <Link
                     href="/account/profile"
                     role="menuitem"
                     className={styles.accountDropdownItem}
@@ -164,6 +172,9 @@ export function CustomerHeader() {
           ))}
           {isAuthenticated ? (
             <>
+              <Link href="/account/credits" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                FastQue Credits
+              </Link>
               <Link href="/account/profile" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
                 Profile & security
               </Link>
