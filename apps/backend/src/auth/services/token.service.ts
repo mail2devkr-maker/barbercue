@@ -6,6 +6,7 @@ import {
   AuthSession,
   AuthTokens,
   Role,
+  SessionAudience,
 } from '@barbercue/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -16,7 +17,21 @@ const REFRESH_TOKEN_TTL_DAYS = 30;
 export interface JwtPayload {
   sub: string;
   roles: Role[];
+  audience: SessionAudience;
 }
+
+// Auth security fix (session-audience scoping) — the ONLY place that decides which roles a given
+// audience's session may ever carry. A User row can legitimately hold multiple roles (the same
+// real person can be a CUSTOMER and a PLATFORM_ADMIN), but a session's audience — which login
+// surface actually authenticated it — caps what that specific session is allowed to assert,
+// regardless of what else the User row holds. CUSTOMER sessions can never carry PLATFORM_ADMIN or
+// staff roles; STAFF sessions (owner/staff password or Google) can never carry PLATFORM_ADMIN;
+// only an ADMIN session (TOTP-verified admin login) can ever carry PLATFORM_ADMIN.
+const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<Record<SessionAudience, ReadonlySet<Role>>> = {
+  [SessionAudience.CUSTOMER]: new Set([Role.CUSTOMER]),
+  [SessionAudience.STAFF]: new Set([Role.SALON_STAFF, Role.SALON_OWNER]),
+  [SessionAudience.ADMIN]: new Set([Role.PLATFORM_ADMIN]),
+};
 
 function hashToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
@@ -38,14 +53,34 @@ export class TokenService {
     private readonly prisma: PrismaService,
   ) {}
 
-  signAccessToken(userId: string, roles: Role[]): string {
-    const payload: JwtPayload = { sub: userId, roles };
+  /**
+   * The single choke point every login/refresh path must go through to turn a raw DB roles list
+   * into what a session of a given audience may actually assert. Filters by role TYPE only — the
+   * extra "PLATFORM_ADMIN must also be salonId: null" invariant is re-checked separately wherever
+   * the raw UserRole rows (not just role types) are available, since a plain Role[] has already
+   * discarded salonId by the time it would reach this function.
+   */
+  scopeRolesToAudience(roles: Role[], audience: SessionAudience): Role[] {
+    const allowed = ROLES_ALLOWED_FOR_AUDIENCE[audience];
+    return roles.filter((role) => allowed.has(role));
+  }
+
+  signAccessToken(userId: string, roles: Role[], audience: SessionAudience): string {
+    // Defense in depth: re-scope here too, even though every caller is expected to already pass a
+    // scoped list — a token can never be signed with a role outside its own audience's allowance,
+    // no matter what a future call site gets wrong.
+    const payload: JwtPayload = {
+      sub: userId,
+      roles: this.scopeRolesToAudience(roles, audience),
+      audience,
+    };
     return this.jwt.sign(payload, { expiresIn: ACCESS_TOKEN_TTL_SECONDS });
   }
 
   async issueTokenPair(
     userId: string,
     roles: Role[],
+    audience: SessionAudience,
     deviceInfo?: string,
   ): Promise<AuthTokens> {
     const rawRefreshToken = randomBytes(64).toString('hex');
@@ -57,13 +92,14 @@ export class TokenService {
       data: {
         userId,
         tokenHash: hashToken(rawRefreshToken),
+        audience,
         deviceInfo: deviceInfo ?? null,
         expiresAt,
       },
     });
 
     return {
-      accessToken: this.signAccessToken(userId, roles),
+      accessToken: this.signAccessToken(userId, roles, audience),
       refreshToken: rawRefreshToken,
       expiresIn: ACCESS_TOKEN_TTL_SECONDS,
     };
@@ -142,11 +178,44 @@ export class TokenService {
     }
 
     // Roles are re-fetched from the DB, never trusted from the old token's era — a role change
-    // (e.g. staff offboarded) takes effect on the very next refresh, not just on next login.
-    const roles = claimed.user.roles.map((r) => r.role);
+    // (e.g. staff offboarded) takes effect on the very next refresh, not just on next login. But
+    // the audience is READ from the persisted token, never re-derived from the current role set —
+    // that is the whole point of the security fix this method exists to enforce (see this class's
+    // own ROLES_ALLOWED_FOR_AUDIENCE doc comment): a CUSTOMER session refreshing for a user who
+    // also holds PLATFORM_ADMIN must keep getting a CUSTOMER-scoped token, forever, never upgrade.
+    const audience = claimed.audience;
+    let scopedRoles = this.scopeRolesToAudience(
+      claimed.user.roles.map((r) => r.role),
+      audience,
+    );
+
+    // ADMIN is additionally re-verified against the raw UserRole rows (which still carry salonId,
+    // unlike the flattened Role[] above) — PLATFORM_ADMIN must still be a GLOBAL role at refresh
+    // time, not merely present. A malformed salon-scoped PLATFORM_ADMIN row must never grant admin
+    // authority here, matching the same invariant the admin login paths enforce.
+    if (audience === SessionAudience.ADMIN) {
+      const hasGlobalAdmin = claimed.user.roles.some(
+        (r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null,
+      );
+      if (!hasGlobalAdmin) scopedRoles = [];
+    }
+
+    // A session whose audience no longer maps to ANY currently-held role (the backing role was
+    // removed, or — for ADMIN — was demoted to salon-scoped) is dead, not merely weaker. Refreshing
+    // it must fail outright rather than silently mint a role-less token that still looks like a
+    // live session to the client.
+    if (scopedRoles.length === 0) {
+      throw new AppException(
+        AuthErrorCode.REFRESH_TOKEN_INVALID,
+        'This session is no longer valid. Please log in again.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
     return this.issueTokenPair(
       claimed.userId,
-      roles,
+      scopedRoles,
+      audience,
       deviceInfo ?? claimed.deviceInfo ?? undefined,
     );
   }

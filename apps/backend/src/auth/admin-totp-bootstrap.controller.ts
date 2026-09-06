@@ -51,7 +51,13 @@ export class AdminTotpBootstrapController {
           })
         : null);
 
-    if (!user || !user.roles.some(({ role }) => role === Role.PLATFORM_ADMIN)) {
+    // Global-admin-scope fix: PLATFORM_ADMIN is only ever a global role (salonId: null) — a
+    // salon-scoped PLATFORM_ADMIN row must never be treated as eligible to bootstrap TOTP for the
+    // one credential the admin login flows are gated on.
+    if (
+      !user ||
+      !user.roles.some(({ role, salonId }) => role === Role.PLATFORM_ADMIN && salonId === null)
+    ) {
       throw new AppException(
         AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
         'This Google account is not registered as a platform administrator.',

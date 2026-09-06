@@ -1,5 +1,5 @@
 import { AdminCreditsController } from './admin-credits.controller';
-import type { AuthenticatedUser } from '@barbercue/shared';
+import { SessionAudience, type AuthenticatedUser } from '@barbercue/shared';
 
 describe('AdminCreditsController', () => {
   let controller: AdminCreditsController;
@@ -11,7 +11,7 @@ describe('AdminCreditsController', () => {
   });
 
   function admin(id: string): AuthenticatedUser {
-    return { id, roles: ['PLATFORM_ADMIN'] as never };
+    return { id, roles: ['PLATFORM_ADMIN'] as never, audience: SessionAudience.ADMIN };
   }
 
   function req(idempotencyKey: string | undefined) {

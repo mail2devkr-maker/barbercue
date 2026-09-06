@@ -1,5 +1,5 @@
 import { PremiumController } from './premium.controller';
-import type { AuthenticatedUser } from '@barbercue/shared';
+import { SessionAudience, type AuthenticatedUser } from '@barbercue/shared';
 
 describe('PremiumController', () => {
   let controller: PremiumController;
@@ -20,7 +20,7 @@ describe('PremiumController', () => {
   });
 
   function user(id: string): AuthenticatedUser {
-    return { id, roles: ['CUSTOMER'] as never };
+    return { id, roles: ['CUSTOMER'] as never, audience: SessionAudience.CUSTOMER };
   }
 
   it('me() looks up only the calling user\'s own entitlement — never a client-supplied id', async () => {

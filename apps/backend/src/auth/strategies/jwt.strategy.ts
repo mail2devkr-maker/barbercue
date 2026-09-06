@@ -38,6 +38,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    return { id: user.id, roles: payload.roles };
+    // payload.audience is undefined at runtime for any access token signed before this security
+    // fix — RolesGuard's PLATFORM_ADMIN check treats anything other than a literal 'ADMIN' match
+    // as untrusted, so a pre-fix token surfacing here degrades to "no admin authority" rather than
+    // silently being treated as one audience or another.
+    return { id: user.id, roles: payload.roles, audience: payload.audience };
   }
 }

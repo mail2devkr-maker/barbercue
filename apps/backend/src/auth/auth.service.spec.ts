@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { AuthErrorCode, Language, Role, UserStatus } from '@barbercue/shared';
+import { AuthErrorCode, Language, Role, SessionAudience, UserStatus } from '@barbercue/shared';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from './services/password.service';
@@ -42,6 +42,7 @@ describe('AuthService', () => {
     rotateRefreshToken: jest.Mock;
     revokeRefreshToken: jest.Mock;
     revokeAllForUser: jest.Mock;
+    scopeRolesToAudience: jest.Mock;
   };
   let otpService: { requestOtp: jest.Mock; verifyOtp: jest.Mock };
   let totpService: { verifyToken: jest.Mock };
@@ -91,6 +92,17 @@ describe('AuthService', () => {
       rotateRefreshToken: jest.fn(),
       revokeRefreshToken: jest.fn(),
       revokeAllForUser: jest.fn(),
+      // Mirrors TokenService's real ROLES_ALLOWED_FOR_AUDIENCE mapping (not just a passthrough) so
+      // these tests actually exercise the audience-scoping boundary AuthService depends on, rather
+      // than trivially passing because the mock echoes back whatever roles it was given.
+      scopeRolesToAudience: jest.fn((roles: Role[], audience: SessionAudience) => {
+        const allowed: Record<SessionAudience, Role[]> = {
+          [SessionAudience.CUSTOMER]: [Role.CUSTOMER],
+          [SessionAudience.STAFF]: [Role.SALON_STAFF, Role.SALON_OWNER],
+          [SessionAudience.ADMIN]: [Role.PLATFORM_ADMIN],
+        };
+        return roles.filter((role) => allowed[audience].includes(role));
+      }),
     };
     otpService = { requestOtp: jest.fn(), verifyOtp: jest.fn() };
     totpService = { verifyToken: jest.fn() };
@@ -136,6 +148,32 @@ describe('AuthService', () => {
       expect(prisma.user.create).toHaveBeenCalled();
       expect(result.user.roles).toEqual([Role.CUSTOMER]);
       expect(result.tokens).toBe(fakeTokens);
+    });
+
+    it('[Test B] a user holding CUSTOMER + PLATFORM_ADMIN never receives PLATFORM_ADMIN via customer OTP login', async () => {
+      otpService.verifyOtp.mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u1',
+        phone: '+919876543210',
+        email: null,
+        phoneVerifiedAt: new Date(),
+        status: UserStatus.ACTIVE,
+        roles: [
+          { role: Role.CUSTOMER },
+          { role: Role.PLATFORM_ADMIN, salonId: null },
+        ],
+      });
+
+      const result = await service.verifyCustomerOtp('+919876543210', '123456');
+
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'u1',
+        [Role.CUSTOMER],
+        SessionAudience.CUSTOMER,
+        undefined,
+      );
     });
 
     it('reuses the existing user on a returning customer and does not create a duplicate', async () => {
@@ -224,6 +262,34 @@ describe('AuthService', () => {
       expect(prisma.userRole.create).not.toHaveBeenCalled();
     });
 
+    it('[Test A] a user holding CUSTOMER + PLATFORM_ADMIN never receives PLATFORM_ADMIN via customer Google login, even using the same Google identity as the admin account', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'ai1',
+        user: {
+          id: 'u1',
+          phone: null,
+          email: 'alex@example.com',
+          status: UserStatus.ACTIVE,
+          roles: [
+            { role: Role.CUSTOMER },
+            { role: Role.PLATFORM_ADMIN, salonId: null },
+          ],
+        },
+      });
+
+      const result = await service.googleLogin('id-token');
+
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'u1',
+        [Role.CUSTOMER],
+        SessionAudience.CUSTOMER,
+        undefined,
+      );
+    });
+
     it('logs in as the existing linked user on a repeat Google login — never creates a duplicate', async () => {
       googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
       prisma.authIdentity.findUnique.mockResolvedValue({
@@ -271,7 +337,7 @@ describe('AuthService', () => {
       expect(prisma.userRole.create).not.toHaveBeenCalled();
     });
 
-    it('links to an existing staff account by verified email and grants CUSTOMER too, without touching the staff role', async () => {
+    it('links to an existing staff account by verified email and grants CUSTOMER at the DB level, but the resulting session is CUSTOMER-audience only — it never carries SALON_STAFF', async () => {
       googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
       prisma.authIdentity.findUnique.mockResolvedValue(null);
       prisma.user.findUnique.mockResolvedValue({
@@ -290,9 +356,11 @@ describe('AuthService', () => {
       expect(prisma.userRole.create).toHaveBeenCalledWith({
         data: { userId: 'existing-staff', role: Role.CUSTOMER },
       });
-      expect(result.user.roles).toEqual(
-        expect.arrayContaining([Role.SALON_STAFF, Role.CUSTOMER]),
-      );
+      // "Sign in with Google as a customer" is a CUSTOMER-audience session (same rationale as
+      // Test A) — the underlying User row keeps its SALON_STAFF role untouched in the DB, but
+      // this login surface must never assert it into the session/token.
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
     });
 
     it('propagates an invalid Google token without touching the database or issuing tokens', async () => {
@@ -558,7 +626,7 @@ describe('AuthService', () => {
       status: UserStatus.ACTIVE,
       twoFactorEnabled: true,
       totpSecret: 'encrypted-secret',
-      roles: [{ role: Role.PLATFORM_ADMIN }],
+      roles: [{ role: Role.PLATFORM_ADMIN, salonId: null }],
     };
 
     it('requires a TOTP code even with a correct password', async () => {
@@ -587,7 +655,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('logs in with a correct password and correct TOTP code', async () => {
+    it('[Test F] logs in with a correct password and correct TOTP code, issuing an ADMIN-audience session with PLATFORM_ADMIN', async () => {
       prisma.user.findUnique.mockResolvedValue(adminUser);
       passwordService.compare.mockResolvedValue(true);
       cryptoService.decrypt.mockReturnValue('plain-secret');
@@ -598,6 +666,13 @@ describe('AuthService', () => {
         '123456',
       );
       expect(result.user.roles).toEqual([Role.PLATFORM_ADMIN]);
+      expect(result.user.audience).toBe(SessionAudience.ADMIN);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'admin1',
+        [Role.PLATFORM_ADMIN],
+        SessionAudience.ADMIN,
+        undefined,
+      );
     });
 
     it('refuses to bypass 2FA even if somehow disabled on an admin account', async () => {
@@ -617,6 +692,20 @@ describe('AuthService', () => {
         code: AuthErrorCode.TOTP_SETUP_REQUIRED,
       });
     });
+
+    it('[Test I] rejects a malformed salon-scoped PLATFORM_ADMIN row — the role only grants admin-login eligibility when global', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...adminUser,
+        roles: [{ role: Role.PLATFORM_ADMIN, salonId: 's1' }],
+      });
+      passwordService.compare.mockResolvedValue(true);
+      await expect(
+        service.adminLogin('admin@barbercue.app', 'correct-password', '123456'),
+      ).rejects.toMatchObject({
+        code: AuthErrorCode.INVALID_CREDENTIALS,
+      });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
   });
 
   describe('adminGoogleLogin', () => {
@@ -630,7 +719,7 @@ describe('AuthService', () => {
       status: UserStatus.ACTIVE,
       twoFactorEnabled: true,
       totpSecret: 'encrypted-secret',
-      roles: [{ role: Role.PLATFORM_ADMIN }],
+      roles: [{ role: Role.PLATFORM_ADMIN, salonId: null }],
     };
 
     beforeEach(() => {
@@ -638,7 +727,7 @@ describe('AuthService', () => {
       cryptoService.decrypt.mockReturnValue('plain-secret');
     });
 
-    it('never issues a session before the mandatory authenticator code', async () => {
+    it('[Test D] never issues a session before the mandatory authenticator code', async () => {
       prisma.authIdentity.findUnique.mockResolvedValue({ user: admin });
       await expect(
         service.adminGoogleLogin('id-token', undefined),
@@ -655,14 +744,16 @@ describe('AuthService', () => {
       expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
     });
 
-    it('signs in a linked active admin only after valid TOTP', async () => {
+    it('[Test E] signs in a linked active admin only after valid TOTP, issuing an ADMIN-audience session with PLATFORM_ADMIN', async () => {
       prisma.authIdentity.findUnique.mockResolvedValue({ user: admin });
       totpService.verifyToken.mockResolvedValue(true);
       const result = await service.adminGoogleLogin('id-token', '123456');
       expect(result.user.roles).toEqual([Role.PLATFORM_ADMIN]);
+      expect(result.user.audience).toBe(SessionAudience.ADMIN);
       expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
         'admin1',
         [Role.PLATFORM_ADMIN],
+        SessionAudience.ADMIN,
         undefined,
       );
     });
@@ -734,6 +825,16 @@ describe('AuthService', () => {
       await expect(
         service.adminGoogleLogin('id-token', '123456'),
       ).rejects.toMatchObject({ code: AuthErrorCode.TOTP_SETUP_REQUIRED });
+    });
+
+    it('[Test I] rejects a malformed salon-scoped PLATFORM_ADMIN row via Google login too — the role only grants admin eligibility when global', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        user: { ...admin, roles: [{ role: Role.PLATFORM_ADMIN, salonId: 's1' }] },
+      });
+      await expect(
+        service.adminGoogleLogin('id-token', '123456'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
     });
   });
 
@@ -832,7 +933,11 @@ describe('AuthService', () => {
       });
       passwordService.hash.mockResolvedValue('new-hash');
       prisma.user.updateMany.mockResolvedValue({ count: 1 });
-      const result = await service.setInitialPassword('google-owner', 'longenough');
+      const result = await service.setInitialPassword(
+        'google-owner',
+        SessionAudience.CUSTOMER,
+        'longenough',
+      );
       expect(prisma.user.updateMany).toHaveBeenCalledWith({
         where: { id: 'google-owner', passwordHash: null },
         data: { passwordHash: 'new-hash' },
@@ -850,7 +955,7 @@ describe('AuthService', () => {
         roles: [{ role: Role.SALON_OWNER }],
       });
       await expect(
-        service.setInitialPassword('owner', 'newpassword'),
+        service.setInitialPassword('owner', SessionAudience.STAFF, 'newpassword'),
       ).rejects.toMatchObject({ code: AuthErrorCode.PASSWORD_ALREADY_CONFIGURED });
       expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
@@ -864,8 +969,9 @@ describe('AuthService', () => {
         email: null,
         preferredLanguage: 'HI',
       });
-      const result = await service.me('u1', [Role.CUSTOMER]);
+      const result = await service.me('u1', [Role.CUSTOMER], SessionAudience.CUSTOMER);
       expect(result.preferredLanguage).toBe('HI');
+      expect(result.audience).toBe(SessionAudience.CUSTOMER);
     });
 
     it('updates preferredLanguage and returns it in the response, without touching roles', async () => {
@@ -875,7 +981,12 @@ describe('AuthService', () => {
         email: null,
         preferredLanguage: 'HI',
       });
-      const result = await service.setLanguage('u1', [Role.SALON_OWNER], Language.HI);
+      const result = await service.setLanguage(
+        'u1',
+        [Role.SALON_OWNER],
+        SessionAudience.STAFF,
+        Language.HI,
+      );
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'u1' },
         data: { preferredLanguage: 'HI' },
@@ -883,6 +994,7 @@ describe('AuthService', () => {
       expect(result).toEqual({
         id: 'u1',
         roles: [Role.SALON_OWNER],
+        audience: SessionAudience.STAFF,
         phone: '+919876543210',
         email: null,
         preferredLanguage: 'HI',

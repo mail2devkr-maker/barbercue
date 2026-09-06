@@ -2,8 +2,9 @@ import { ExecutionContext, HttpStatus, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
   AuthErrorCode,
+  Role,
+  SessionAudience,
   type AuthenticatedUser,
-  type Role,
 } from '@barbercue/shared';
 import type { Request } from 'express';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -15,6 +16,17 @@ import { ROLES_KEY } from '../decorators/roles.decorator';
  * to hold at least one of the listed roles. This is the RBAC enforcement mechanism required for
  * Customer/SalonStaff/SalonOwner/PlatformAdmin per ARCHITECTURE.md §5 — server-side only, never
  * trusted from the client.
+ *
+ * Auth security fix (defense in depth): a matched PLATFORM_ADMIN role is not, by itself, treated
+ * as sufficient here — it must ALSO come from an ADMIN-audience session (TokenService only ever
+ * sets that audience after the TOTP-gated admin login paths succeed). This is deliberately
+ * redundant with issuance-time scoping (TokenService.issueTokenPair/rotateRefreshToken already
+ * guarantee a non-ADMIN session's token can never carry PLATFORM_ADMIN at all) — the point is that
+ * a future bug in some other issuance path could otherwise leak the role again exactly like the
+ * defect this fix closes, and this second, independent check would still catch it at every
+ * PLATFORM_ADMIN-protected route. Every other role is unaffected — this never runs for a route
+ * that doesn't require PLATFORM_ADMIN, and a mixed route (e.g. SALON_OWNER or PLATFORM_ADMIN)
+ * still admits a legitimate STAFF-audience owner exactly as before.
  */
 @Injectable()
 export class RolesGuard {
@@ -31,7 +43,14 @@ export class RolesGuard {
       .switchToHttp()
       .getRequest<Request & { user?: AuthenticatedUser }>();
     const user = request.user;
-    if (!user || !requiredRoles.some((role) => user.roles.includes(role))) {
+    const hasValidMatch = !!user && requiredRoles.some((role) => {
+      if (!user.roles.includes(role)) return false;
+      if (role === Role.PLATFORM_ADMIN) {
+        return user.audience === SessionAudience.ADMIN;
+      }
+      return true;
+    });
+    if (!hasValidMatch) {
       throw new AppException(
         AuthErrorCode.FORBIDDEN_ROLE,
         'You do not have permission to perform this action.',

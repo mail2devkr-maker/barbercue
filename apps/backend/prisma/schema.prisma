@@ -28,6 +28,19 @@ enum Role {
   PLATFORM_ADMIN
 }
 
+// Auth security fix (session-audience scoping): which login SURFACE a session was authenticated
+// through — never inferred from which roles a User row happens to hold. A single real person can
+// legitimately hold CUSTOMER + PLATFORM_ADMIN on the same User row (the fix is not to forbid that),
+// but a session created via the ordinary customer OTP/Google flow must never carry PLATFORM_ADMIN
+// authority just because the same account also has that role — only a session created via the
+// TOTP-gated admin login path may. See TokenService.issueTokenPair/rotateRefreshToken, the only
+// places that decide which roles are actually scoped into a token for a given audience.
+enum SessionAudience {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
 enum UserStatus {
   ACTIVE
   SUSPENDED
@@ -273,6 +286,13 @@ model User {
   @@map("users")
 }
 
+// salonId is nullable and null is the documented convention for a GLOBAL role — PLATFORM_ADMIN is
+// always global (see SalonAccessService's own doc comment); SALON_OWNER/SALON_STAFF always carry a
+// real salonId. A raw DB CHECK constraint (added outside this file — Prisma's schema DSL has no
+// multi-column CHECK support — see migration 20260906020000's migration.sql) enforces
+// `role != 'PLATFORM_ADMIN' OR "salonId" IS NULL` as defense in depth: a salon-scoped PLATFORM_ADMIN
+// row cannot be persisted at all, regardless of what application code does. No other role is
+// constrained by it.
 model UserRole {
   id        String   @id @default(uuid())
   userId    String
@@ -314,6 +334,12 @@ model RefreshToken {
   userId     String
   user       User      @relation(fields: [userId], references: [id])
   tokenHash  String
+  // Auth security fix — the session audience this token was originally issued for (CUSTOMER/
+  // STAFF/ADMIN), persisted so rotation can re-scope roles to it rather than re-deriving privilege
+  // from every role the User row currently holds. Every row created before this column existed was
+  // revoked in the same migration that added it (see migration.sql) — its true audience is unknown
+  // and is never guessed.
+  audience   SessionAudience
   deviceInfo String?
   expiresAt  DateTime
   revokedAt  DateTime?

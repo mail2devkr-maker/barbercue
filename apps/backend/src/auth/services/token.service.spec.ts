@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { Test } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
-import { AuthErrorCode, Role } from '@barbercue/shared';
+import { AuthErrorCode, Role, SessionAudience } from '@barbercue/shared';
 import { TokenService } from './token.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app.exception';
@@ -15,11 +15,12 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     id: 'rt1',
     userId: 'user1',
     tokenHash: hashToken('raw-token'),
+    audience: SessionAudience.CUSTOMER,
     deviceInfo: null,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60_000),
     revokedAt: null,
     createdAt: new Date(),
-    user: { roles: [{ role: Role.CUSTOMER }] },
+    user: { roles: [{ role: Role.CUSTOMER, salonId: null }] },
     ...overrides,
   };
 }
@@ -62,6 +63,34 @@ describe('TokenService', () => {
     service = moduleRef.get(TokenService);
   });
 
+  describe('scopeRolesToAudience — the single choke point for session-audience scoping', () => {
+    it.each([
+      [SessionAudience.CUSTOMER, [Role.CUSTOMER, Role.PLATFORM_ADMIN], [Role.CUSTOMER]],
+      [SessionAudience.STAFF, [Role.SALON_OWNER, Role.PLATFORM_ADMIN], [Role.SALON_OWNER]],
+      [SessionAudience.STAFF, [Role.SALON_STAFF, Role.CUSTOMER], [Role.SALON_STAFF]],
+      [SessionAudience.ADMIN, [Role.PLATFORM_ADMIN, Role.CUSTOMER], [Role.PLATFORM_ADMIN]],
+      [SessionAudience.CUSTOMER, [Role.SALON_OWNER, Role.PLATFORM_ADMIN], []],
+    ])('audience %s keeps only its own allowed roles out of %j -> %j', (audience, input, expected) => {
+      expect(service.scopeRolesToAudience(input, audience)).toEqual(expected);
+    });
+  });
+
+  describe('signAccessToken / issueTokenPair — never sign a role outside the given audience', () => {
+    it('signAccessToken re-scopes defensively even if the caller passes an unscoped list', () => {
+      service.signAccessToken('u1', [Role.CUSTOMER, Role.PLATFORM_ADMIN], SessionAudience.CUSTOMER);
+      const jwt = (service as unknown as { jwt: { sign: jest.Mock } }).jwt;
+      const payload = jwt.sign.mock.calls[0][0];
+      expect(payload.roles).toEqual([Role.CUSTOMER]);
+      expect(payload.audience).toBe(SessionAudience.CUSTOMER);
+    });
+
+    it('issueTokenPair persists the audience onto the created RefreshToken row', async () => {
+      await service.issueTokenPair('u1', [Role.CUSTOMER], SessionAudience.CUSTOMER, 'some-device');
+      const createCall = prisma.refreshToken.create.mock.calls[0][0];
+      expect(createCall.data.audience).toBe(SessionAudience.CUSTOMER);
+    });
+  });
+
   describe('rotateRefreshToken — happy path', () => {
     it('atomically claims the token via a conditional updateMany, then issues a new pair', async () => {
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
@@ -87,7 +116,15 @@ describe('TokenService', () => {
     it('re-fetches roles from the DB rather than trusting any cached value', async () => {
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
       prisma.refreshToken.findFirst.mockResolvedValue(
-        makeRow({ user: { roles: [{ role: Role.SALON_OWNER }, { role: Role.SALON_STAFF }] } }),
+        makeRow({
+          audience: SessionAudience.STAFF,
+          user: {
+            roles: [
+              { role: Role.SALON_OWNER, salonId: 's1' },
+              { role: Role.SALON_STAFF, salonId: 's1' },
+            ],
+          },
+        }),
       );
 
       await service.rotateRefreshToken('raw-token');
@@ -104,6 +141,115 @@ describe('TokenService', () => {
 
       const createCall = prisma.refreshToken.create.mock.calls[0][0];
       expect(createCall.data.deviceInfo).toBe('iPhone Safari');
+    });
+  });
+
+  // Security fix (session-audience scoping) — the entire reason TokenService.rotateRefreshToken
+  // was rewritten: refresh must preserve the ORIGINAL session's audience and re-scope roles to it,
+  // never re-derive privilege from every role the User row currently holds.
+  describe('rotateRefreshToken — audience scoping (auth security fix)', () => {
+    it('C. a CUSTOMER refresh token never gains PLATFORM_ADMIN even when the DB user also holds it', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({
+          audience: SessionAudience.CUSTOMER,
+          user: {
+            roles: [
+              { role: Role.CUSTOMER, salonId: null },
+              { role: Role.PLATFORM_ADMIN, salonId: null },
+            ],
+          },
+        }),
+      );
+
+      await service.rotateRefreshToken('raw-token');
+
+      const jwt = (service as unknown as { jwt: { sign: jest.Mock } }).jwt;
+      const payload = jwt.sign.mock.calls[0][0];
+      expect(payload.roles).toEqual([Role.CUSTOMER]);
+      expect(payload.roles).not.toContain(Role.PLATFORM_ADMIN);
+      expect(payload.audience).toBe(SessionAudience.CUSTOMER);
+    });
+
+    it('a STAFF refresh token never gains PLATFORM_ADMIN even when the DB user also holds it', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({
+          audience: SessionAudience.STAFF,
+          user: {
+            roles: [
+              { role: Role.SALON_OWNER, salonId: 's1' },
+              { role: Role.PLATFORM_ADMIN, salonId: null },
+            ],
+          },
+        }),
+      );
+
+      await service.rotateRefreshToken('raw-token');
+
+      const jwt = (service as unknown as { jwt: { sign: jest.Mock } }).jwt;
+      const payload = jwt.sign.mock.calls[0][0];
+      expect(payload.roles).toEqual([Role.SALON_OWNER]);
+    });
+
+    it('G. an ADMIN refresh preserves admin authority when the user still holds a valid GLOBAL PLATFORM_ADMIN role', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({
+          audience: SessionAudience.ADMIN,
+          user: { roles: [{ role: Role.PLATFORM_ADMIN, salonId: null }] },
+        }),
+      );
+
+      await service.rotateRefreshToken('raw-token');
+
+      const jwt = (service as unknown as { jwt: { sign: jest.Mock } }).jwt;
+      const payload = jwt.sign.mock.calls[0][0];
+      expect(payload.roles).toEqual([Role.PLATFORM_ADMIN]);
+      expect(payload.audience).toBe(SessionAudience.ADMIN);
+    });
+
+    it('H. removing PLATFORM_ADMIN entirely: an ADMIN refresh is rejected safely, no token issued', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({
+          audience: SessionAudience.ADMIN,
+          user: { roles: [{ role: Role.CUSTOMER, salonId: null }] },
+        }),
+      );
+
+      await expect(service.rotateRefreshToken('raw-token')).rejects.toMatchObject({
+        code: AuthErrorCode.REFRESH_TOKEN_INVALID,
+      } as Partial<AppException>);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    });
+
+    it('a malformed salon-scoped PLATFORM_ADMIN row cannot grant admin authority on refresh', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({
+          audience: SessionAudience.ADMIN,
+          // PLATFORM_ADMIN is present, but salon-scoped — must not count as global admin.
+          user: { roles: [{ role: Role.PLATFORM_ADMIN, salonId: 's1' }] },
+        }),
+      );
+
+      await expect(service.rotateRefreshToken('raw-token')).rejects.toMatchObject({
+        code: AuthErrorCode.REFRESH_TOKEN_INVALID,
+      } as Partial<AppException>);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    });
+
+    it('a CUSTOMER session whose CUSTOMER role was fully removed fails the refresh rather than issuing a role-less token', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({ audience: SessionAudience.CUSTOMER, user: { roles: [] } }),
+      );
+
+      await expect(service.rotateRefreshToken('raw-token')).rejects.toMatchObject({
+        code: AuthErrorCode.REFRESH_TOKEN_INVALID,
+      } as Partial<AppException>);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
     });
   });
 
@@ -134,6 +280,29 @@ describe('TokenService', () => {
       prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
       prisma.refreshToken.findFirst.mockResolvedValue(
         makeRow({ revokedAt: new Date() }),
+      );
+
+      await expect(service.rotateRefreshToken('raw-token')).rejects.toMatchObject({
+        code: AuthErrorCode.REFRESH_TOKEN_INVALID,
+        message: 'This refresh token has already been used.',
+      } as Partial<AppException>);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    });
+
+    // K. Legacy tokens (issued before this security fix) were all revoked by the migration that
+    // added the audience column (see migration.sql) — this is what that revocation looks like from
+    // rotateRefreshToken's own perspective: `revokedAt` is already set, so the atomic claim's
+    // `WHERE revokedAt IS NULL` can never select the row, and rotation fails exactly like any
+    // other already-revoked token. There is no code path by which a legacy token's (backfilled,
+    // meaningless) audience value could ever be read as a privilege decision.
+    it('K. a legacy (pre-fix, now-revoked) refresh token cannot be rotated or recover any authority', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 0 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({
+          audience: SessionAudience.CUSTOMER, // the migration's inert backfill placeholder
+          revokedAt: new Date('2026-09-06T00:00:00.000Z'), // revoked by the migration itself
+          user: { roles: [{ role: Role.PLATFORM_ADMIN, salonId: null }] }, // even if the DB user IS an admin
+        }),
       );
 
       await expect(service.rotateRefreshToken('raw-token')).rejects.toMatchObject({

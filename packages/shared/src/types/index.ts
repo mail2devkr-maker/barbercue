@@ -17,6 +17,7 @@ import type {
   Role,
   SalonStaffRole,
   SalonStatus,
+  SessionAudience,
   StaffMemberStatus,
   SubscriptionStatus,
   CustomerSubscriptionStatus,
@@ -31,7 +32,17 @@ import type {
 
 export interface AuthenticatedUser {
   id: string;
+  // Always the session-scoped subset of the User's roles (see TokenService.issueTokenPair) —
+  // never every role the underlying User row happens to hold. A session's `audience` is what
+  // determined that scoping; a route requiring PLATFORM_ADMIN should not treat this array as
+  // sufficient proof by itself where the extra guarantee matters (see RolesGuard's own
+  // audience-aware check for PLATFORM_ADMIN specifically).
   roles: Role[];
+  // Auth security fix — which login surface this session was authenticated through. Present on
+  // every token issued after the fix; absent (undefined at runtime) on a token issued before it,
+  // which is exactly why RolesGuard's PLATFORM_ADMIN check treats anything other than a literal
+  // `'ADMIN'` match as untrusted rather than defaulting/guessing.
+  audience: SessionAudience;
 }
 
 // GET /auth/me response — deliberately does not include salon associations (ARCHITECTURE.md §4:

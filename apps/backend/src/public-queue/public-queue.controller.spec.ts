@@ -1,5 +1,5 @@
 import { PublicQueueController } from './public-queue.controller';
-import type { AuthenticatedUser } from '@barbercue/shared';
+import { SessionAudience, type AuthenticatedUser } from '@barbercue/shared';
 
 describe('PublicQueueController', () => {
   let controller: PublicQueueController;
@@ -30,7 +30,7 @@ describe('PublicQueueController', () => {
   });
 
   function user(id: string): AuthenticatedUser {
-    return { id, roles: ['CUSTOMER'] as never };
+    return { id, roles: ['CUSTOMER'] as never, audience: SessionAudience.CUSTOMER };
   }
 
   describe('getInfo — token resolution & privacy', () => {

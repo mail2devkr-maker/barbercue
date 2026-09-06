@@ -57,8 +57,11 @@ export class SalonAccessService {
     });
     if (ownerMembership) return 'OWNER';
 
+    // Global-admin-scope fix: PLATFORM_ADMIN is only ever a global role — explicitly required here
+    // rather than assumed, so a hypothetical salon-scoped PLATFORM_ADMIN row (which a DB CHECK
+    // constraint now also makes impossible to persist at all) could never grant delegated access.
     const adminMembership = await this.prisma.userRole.findFirst({
-      where: { userId, role: Role.PLATFORM_ADMIN },
+      where: { userId, role: Role.PLATFORM_ADMIN, salonId: null },
     });
     if (adminMembership) {
       const salon = await this.prisma.salon.findUnique({

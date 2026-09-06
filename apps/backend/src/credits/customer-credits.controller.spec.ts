@@ -1,5 +1,5 @@
 import { CustomerCreditsController } from './customer-credits.controller';
-import type { AuthenticatedUser } from '@barbercue/shared';
+import { SessionAudience, type AuthenticatedUser } from '@barbercue/shared';
 
 describe('CustomerCreditsController', () => {
   let controller: CustomerCreditsController;
@@ -11,7 +11,7 @@ describe('CustomerCreditsController', () => {
   });
 
   function user(id: string): AuthenticatedUser {
-    return { id, roles: ['CUSTOMER'] as never };
+    return { id, roles: ['CUSTOMER'] as never, audience: SessionAudience.CUSTOMER };
   }
 
   it('getBalance() looks up only the calling user’s own balance — never a client-supplied id', async () => {

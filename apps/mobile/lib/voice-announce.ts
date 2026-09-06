@@ -42,6 +42,16 @@ export function __resetVoiceCacheForTests(): void {
   cachedVoicesHadHindi = false;
 }
 
+// Auth-security-branch privacy fix: these diagnostics carry bookingId, the full spoken booking
+// text, and voice identifiers — useful while developing/debugging Hindi TTS, but not something
+// production logs should ever contain. __DEV__ is the same RN/Expo global already used elsewhere
+// in this app (see lib/api.ts) to distinguish a dev build from a production one.
+function debugVoiceLog(message: string, meta?: Record<string, unknown>): void {
+  if (__DEV__) {
+    console.warn(message, meta);
+  }
+}
+
 function primarySubtagOf(bcp47: string): string {
   return bcp47.split(/[-_]/)[0]?.toLowerCase() ?? '';
 }
@@ -212,7 +222,7 @@ export function speakBooking(
       // The core Hindi-blocker fix: never knowingly speak Hindi with an unmatched (English/
       // default) voice. Skip entirely rather than call Speech.speak and hope.
       if (candidates.length === 0) {
-        console.warn(
+        debugVoiceLog(
           '[voice] Hindi requested but no installed Hindi-family voice found on this device — skipping speech rather than risking an English/default-voice fallback',
           { event, bookingId, requestedLocale, availableVoiceLanguages: voices.map((v) => v.language) },
         );
@@ -220,7 +230,7 @@ export function speakBooking(
         return;
       }
 
-      console.warn('[voice] speaking', {
+      debugVoiceLog('[voice] speaking', {
         event,
         bookingId,
         effectiveLanguage: language,
@@ -237,11 +247,11 @@ export function speakBooking(
         Speech.speak(text, {
           language: candidate.language ?? requestedLocale,
           voice: candidate.identifier,
-          onStart: () => console.warn('[voice] onStart', { event, bookingId, voiceIdentifier: candidate.identifier }),
-          onDone: () => console.warn('[voice] onDone', { event, bookingId, voiceIdentifier: candidate.identifier }),
-          onStopped: () => console.warn('[voice] onStopped', { event, bookingId, voiceIdentifier: candidate.identifier }),
+          onStart: () => debugVoiceLog('[voice] onStart', { event, bookingId, voiceIdentifier: candidate.identifier }),
+          onDone: () => debugVoiceLog('[voice] onDone', { event, bookingId, voiceIdentifier: candidate.identifier }),
+          onStopped: () => debugVoiceLog('[voice] onStopped', { event, bookingId, voiceIdentifier: candidate.identifier }),
           onError: (error) => {
-            console.warn('[voice] onError for a Hindi voice candidate', {
+            debugVoiceLog('[voice] onError for a Hindi voice candidate', {
               event,
               bookingId,
               voiceIdentifier: candidate.identifier,
@@ -251,14 +261,14 @@ export function speakBooking(
             });
             candidateIndex += 1;
             if (candidateIndex < candidates.length) {
-              console.warn('[voice] trying the next genuine Hindi voice candidate', {
+              debugVoiceLog('[voice] trying the next genuine Hindi voice candidate', {
                 event,
                 bookingId,
                 nextVoiceIdentifier: candidates[candidateIndex].identifier,
               });
               attemptHindiCandidate();
             } else {
-              console.warn('[voice] every Hindi voice candidate failed — stopping speech rather than falling back', {
+              debugVoiceLog('[voice] every Hindi voice candidate failed — stopping speech rather than falling back', {
                 event,
                 bookingId,
               });
@@ -275,7 +285,7 @@ export function speakBooking(
     // passed with exactly this behavior: speak with the requested locale tag (with a matched voice
     // id when one exists), retry once with the bare primary subtag on a genuine engine error.
     const matchedVoice = findMatchingVoice(voices, requestedLocale);
-    console.warn('[voice] speaking', {
+    debugVoiceLog('[voice] speaking', {
       event,
       bookingId,
       effectiveLanguage: language,
@@ -290,11 +300,11 @@ export function speakBooking(
       Speech.speak(text, {
         language: languageTag,
         ...(matchedVoice ? { voice: matchedVoice.identifier } : {}),
-        onStart: () => console.warn('[voice] onStart', { event, bookingId, languageTag }),
-        onDone: () => console.warn('[voice] onDone', { event, bookingId, languageTag }),
-        onStopped: () => console.warn('[voice] onStopped', { event, bookingId, languageTag }),
+        onStart: () => debugVoiceLog('[voice] onStart', { event, bookingId, languageTag }),
+        onDone: () => debugVoiceLog('[voice] onDone', { event, bookingId, languageTag }),
+        onStopped: () => debugVoiceLog('[voice] onStopped', { event, bookingId, languageTag }),
         onError: (error) => {
-          console.warn('[voice] onError — TTS engine reported a failure', {
+          debugVoiceLog('[voice] onError — TTS engine reported a failure', {
             event,
             bookingId,
             languageTag,
@@ -303,7 +313,7 @@ export function speakBooking(
           });
           if (!retried && primarySubtag && primarySubtag !== languageTag) {
             retried = true;
-            console.warn('[voice] retrying once with the bare primary language subtag', { event, bookingId, primarySubtag });
+            debugVoiceLog('[voice] retrying once with the bare primary language subtag', { event, bookingId, primarySubtag });
             attempt(primarySubtag);
           }
         },

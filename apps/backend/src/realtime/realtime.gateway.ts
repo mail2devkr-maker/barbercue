@@ -59,6 +59,7 @@ export class RealtimeGateway implements OnGatewayConnection {
       const authenticatedUser: AuthenticatedUser = {
         id: user.id,
         roles: payload.roles,
+        audience: payload.audience,
       };
 
       (client.data as { user: AuthenticatedUser }).user = authenticatedUser;

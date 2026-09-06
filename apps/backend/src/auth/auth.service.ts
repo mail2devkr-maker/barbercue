@@ -4,6 +4,7 @@ import {
   AuthErrorCode,
   AuthProvider,
   Role,
+  SessionAudience,
   UserStatus,
   type AuthSession,
   type AuthTokens,
@@ -78,16 +79,25 @@ export class AuthService {
     }
 
     this.assertActive(user.status);
-    const roles = user.roles.map((r) => r.role);
+    // Security fix: customer OTP login is a CUSTOMER-audience session — this User row may also
+    // hold PLATFORM_ADMIN/staff roles (same real person, different login surface), but this login
+    // path must never assert them. scopeRolesToAudience is the single choke point that enforces
+    // that, so the value used here and the value actually signed into the token can never diverge.
+    const roles = this.tokenService.scopeRolesToAudience(
+      user.roles.map((r) => r.role),
+      SessionAudience.CUSTOMER,
+    );
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
       roles,
+      SessionAudience.CUSTOMER,
       deviceInfo,
     );
     return {
       user: this.toMeResponse(
         user.id,
         roles,
+        SessionAudience.CUSTOMER,
         user.phone,
         user.email,
         user.preferredLanguage,
@@ -169,7 +179,9 @@ export class AuthService {
 
     // Ensure CUSTOMER access exists even for a linked staff/owner/admin account (see the method
     // doc above) — a no-op for the common case (brand-new user or an existing customer), and
-    // never removes or alters any role the user already has.
+    // never removes or alters any role the user already has. `roles` here is deliberately the
+    // FULL, unscoped set (needed to correctly decide whether a CUSTOMER row must be created) — it
+    // is never what gets issued into the token; see sessionRoles below for that.
     let roles = user.roles.map((r) => r.role);
     if (!roles.includes(Role.CUSTOMER)) {
       await this.prisma.userRole.create({
@@ -178,15 +190,25 @@ export class AuthService {
       roles = [...roles, Role.CUSTOMER];
     }
 
+    // Security fix: "sign in with Google as a customer" is a CUSTOMER-audience session — it must
+    // never assert PLATFORM_ADMIN/staff roles even when this exact User row also holds them (the
+    // whole point of the method doc above: this path only ever GUARANTEES customer access, never
+    // grants anything more).
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
+      SessionAudience.CUSTOMER,
+    );
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
-      roles,
+      sessionRoles,
+      SessionAudience.CUSTOMER,
       deviceInfo,
     );
     return {
       user: this.toMeResponse(
         user.id,
-        roles,
+        sessionRoles,
+        SessionAudience.CUSTOMER,
         user.phone,
         user.email,
         user.preferredLanguage,
@@ -235,15 +257,23 @@ export class AuthService {
     }
     this.assertActive(user.status);
 
+    // Security fix: staff/owner password login is a STAFF-audience session — it must never assert
+    // PLATFORM_ADMIN even if this same User row also holds it.
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
+      SessionAudience.STAFF,
+    );
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
-      roles,
+      sessionRoles,
+      SessionAudience.STAFF,
       deviceInfo,
     );
     return {
       user: this.toMeResponse(
         user.id,
-        roles,
+        sessionRoles,
+        SessionAudience.STAFF,
         user.phone,
         user.email,
         user.preferredLanguage,
@@ -336,15 +366,23 @@ export class AuthService {
     }
     this.assertActive(user.status);
 
+    // Security fix: staff/owner Google login is a STAFF-audience session — never PLATFORM_ADMIN,
+    // even if this same User row also holds it.
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
+      SessionAudience.STAFF,
+    );
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
-      roles,
+      sessionRoles,
+      SessionAudience.STAFF,
       deviceInfo,
     );
     return {
       user: this.toMeResponse(
         user.id,
-        roles,
+        sessionRoles,
+        SessionAudience.STAFF,
         user.phone,
         user.email,
         user.preferredLanguage,
@@ -379,9 +417,15 @@ export class AuthService {
         where: { email: identity.email },
         include: { roles: true },
       });
+      // Global-admin-scope fix: PLATFORM_ADMIN is only ever a global role (salonId: null — see
+      // UserRole's own doc comment); a salon-scoped PLATFORM_ADMIN row (which should never exist —
+      // enforced by a DB CHECK constraint as of this fix — but must never be trusted regardless)
+      // must not grant admin-login eligibility here.
       if (
         !candidate ||
-        !candidate.roles.some((role) => role.role === Role.PLATFORM_ADMIN)
+        !candidate.roles.some(
+          (role) => role.role === Role.PLATFORM_ADMIN && role.salonId === null,
+        )
       ) {
         return null;
       }
@@ -396,8 +440,12 @@ export class AuthService {
       return candidate;
     });
 
-    const roles = user?.roles.map((role) => role.role) ?? [];
-    if (!user || !roles.includes(Role.PLATFORM_ADMIN)) {
+    const isGlobalAdmin =
+      !!user &&
+      user.roles.some(
+        (role) => role.role === Role.PLATFORM_ADMIN && role.salonId === null,
+      );
+    if (!user || !isGlobalAdmin) {
       throw new AppException(
         AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
         'This Google account is not registered as a platform administrator.',
@@ -407,15 +455,23 @@ export class AuthService {
     this.assertActive(user.status);
     await this.assertAdminTotp(user, totpCode);
 
+    // Security fix: admin Google login is an ADMIN-audience session — the only login surface
+    // allowed to ever assert PLATFORM_ADMIN, and only after the TOTP check just above succeeded.
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      user.roles.map((role) => role.role),
+      SessionAudience.ADMIN,
+    );
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
-      roles,
+      sessionRoles,
+      SessionAudience.ADMIN,
       deviceInfo,
     );
     return {
       user: this.toMeResponse(
         user.id,
-        roles,
+        sessionRoles,
+        SessionAudience.ADMIN,
         user.phone,
         user.email,
         user.preferredLanguage,
@@ -437,8 +493,13 @@ export class AuthService {
       where: { email },
       include: { roles: true },
     });
-    const roles = user?.roles.map((r) => r.role) ?? [];
-    const isAdmin = roles.includes(Role.PLATFORM_ADMIN);
+    // Global-admin-scope fix: PLATFORM_ADMIN is only ever a global role (salonId: null) — a
+    // salon-scoped PLATFORM_ADMIN row must never grant admin-login eligibility.
+    const isAdmin =
+      !!user &&
+      user.roles.some(
+        (r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null,
+      );
 
     const passwordHash =
       user?.passwordHash ??
@@ -459,15 +520,23 @@ export class AuthService {
 
     await this.assertAdminTotp(user, totpCode);
 
+    // Security fix: admin password login is an ADMIN-audience session — the only login surface
+    // allowed to ever assert PLATFORM_ADMIN, and only after the TOTP check just above succeeded.
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      user.roles.map((r) => r.role),
+      SessionAudience.ADMIN,
+    );
     const tokens = await this.tokenService.issueTokenPair(
       user.id,
-      roles,
+      sessionRoles,
+      SessionAudience.ADMIN,
       deviceInfo,
     );
     return {
       user: this.toMeResponse(
         user.id,
-        roles,
+        sessionRoles,
+        SessionAudience.ADMIN,
         user.phone,
         user.email,
         user.preferredLanguage,
@@ -502,7 +571,11 @@ export class AuthService {
     return this.tokenService.revokeSession(userId, sessionId);
   }
 
-  async me(userId: string, tokenRoles: Role[]): Promise<MeResponse> {
+  async me(
+    userId: string,
+    tokenRoles: Role[],
+    tokenAudience: SessionAudience,
+  ): Promise<MeResponse> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       throw new AppException(
@@ -514,6 +587,7 @@ export class AuthService {
     return this.toMeResponse(
       user.id,
       tokenRoles,
+      tokenAudience,
       user.phone,
       user.email,
       user.preferredLanguage,
@@ -521,11 +595,12 @@ export class AuthService {
     );
   }
 
-  /** PATCH auth/language (Phase 14) — the caller's own tokenRoles are reused as-is; changing
-   * language never affects role membership. */
+  /** PATCH auth/language (Phase 14) — the caller's own tokenRoles/audience are reused as-is;
+   * changing language never affects role or audience membership. */
   async setLanguage(
     userId: string,
     tokenRoles: Role[],
+    tokenAudience: SessionAudience,
     language: Language,
   ): Promise<MeResponse> {
     const user = await this.prisma.user.update({
@@ -535,6 +610,7 @@ export class AuthService {
     return this.toMeResponse(
       user.id,
       tokenRoles,
+      tokenAudience,
       user.phone,
       user.email,
       user.preferredLanguage,
@@ -544,6 +620,7 @@ export class AuthService {
 
   async setInitialPassword(
     userId: string,
+    tokenAudience: SessionAudience,
     password: string,
   ): Promise<MeResponse> {
     const user = await this.prisma.user.findUnique({
@@ -585,10 +662,16 @@ export class AuthService {
         HttpStatus.CONFLICT,
       );
     }
-    const roles = user.roles.map((role) => role.role);
+    // Scoped to the caller's own session audience — this response must never show a role the
+    // caller's actual JWT doesn't carry, even if the underlying User row holds more.
+    const roles = this.tokenService.scopeRolesToAudience(
+      user.roles.map((role) => role.role),
+      tokenAudience,
+    );
     return this.toMeResponse(
       user.id,
       roles,
+      tokenAudience,
       user.phone,
       user.email,
       user.preferredLanguage,
@@ -737,6 +820,7 @@ export class AuthService {
   private toMeResponse(
     id: string,
     roles: Role[],
+    audience: SessionAudience,
     phone: string | null,
     email: string | null,
     preferredLanguage: Language,
@@ -745,6 +829,7 @@ export class AuthService {
     return {
       id,
       roles,
+      audience,
       phone,
       email,
       preferredLanguage,

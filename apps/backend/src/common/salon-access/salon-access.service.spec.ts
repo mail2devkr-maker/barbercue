@@ -159,6 +159,26 @@ describe('SalonAccessService', () => {
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
     });
 
+    it('[Test J] denies delegated shop management to a malformed salon-scoped PLATFORM_ADMIN row — the admin lookup requires salonId: null so a scoped row can never match', async () => {
+      // A real Prisma query with `salonId: null` in its where-clause never matches a row whose
+      // actual salonId is a real string (e.g. 's1') — the DB CHECK constraint added alongside this
+      // fix makes such a row impossible to persist in the first place, but this UserRole.findFirst
+      // filter is the independent application-level guard. Simulate a Prisma call that correctly
+      // finds nothing by asserting the exact where-clause this method sends, rather than assuming
+      // the mock enforces it (the mock, like the real DB, would only return this row for a query
+      // that didn't filter on salonId at all).
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null) // not the owner
+        .mockResolvedValueOnce(null); // salonId: null admin lookup finds no match for a scoped row
+      await expect(
+        service.assertOwnerOrAdminAccess('malformed-admin-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.userRole.findFirst).toHaveBeenNthCalledWith(2, {
+        where: { userId: 'malformed-admin-1', role: Role.PLATFORM_ADMIN, salonId: null },
+      });
+      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+    });
+
     it("an unrelated SALON_OWNER (owner of a different salon) is denied — cannot manage another owner's salon", async () => {
       // This owner's UserRole row exists, but for a different salonId — findFirst is scoped by
       // salonId in the where-clause, so a real Prisma call would already return null here; the

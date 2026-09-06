@@ -352,12 +352,16 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() body: InitialPasswordInput,
   ) {
-    return this.authService.setInitialPassword(user.id, body.password);
+    return this.authService.setInitialPassword(
+      user.id,
+      user.audience,
+      body.password,
+    );
   }
 
   @Get(AUTH_PATHS.me)
   me(@CurrentUser() user: AuthenticatedUser) {
-    return this.authService.me(user.id, user.roles);
+    return this.authService.me(user.id, user.roles, user.audience);
   }
 
   @Patch(AUTH_PATHS.language)
@@ -365,6 +369,11 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(setLanguageSchema)) body: SetLanguageInput,
   ) {
-    return this.authService.setLanguage(user.id, user.roles, body.language);
+    return this.authService.setLanguage(
+      user.id,
+      user.roles,
+      user.audience,
+      body.language,
+    );
   }
 }

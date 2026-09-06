@@ -16,6 +16,19 @@ export const Role = {
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
 
+// Auth security fix (session-audience scoping) — which login SURFACE a session was authenticated
+// through, never inferred from which Role rows a User happens to hold. Mirrors the backend's own
+// Prisma `SessionAudience` enum (apps/backend/prisma/schema.prisma); kept as an independent
+// declaration here the same way `Role` above is, since packages/shared has no Prisma dependency.
+// A session's audience caps which roles that session's token may ever carry — see
+// TokenService.issueTokenPair/rotateRefreshToken, the only places that decide this.
+export const SessionAudience = {
+  CUSTOMER: 'CUSTOMER',
+  STAFF: 'STAFF',
+  ADMIN: 'ADMIN',
+} as const;
+export type SessionAudience = (typeof SessionAudience)[keyof typeof SessionAudience];
+
 export const UserStatus = {
   ACTIVE: 'ACTIVE',
   SUSPENDED: 'SUSPENDED',

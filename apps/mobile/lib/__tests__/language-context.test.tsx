@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 import { act, createElement } from 'react';
 import TestRenderer from 'react-test-renderer';
-import { Language, Role, type MeResponse, type UiStrings } from '@barbercue/shared';
+import { Language, Role, SessionAudience, type MeResponse, type UiStrings } from '@barbercue/shared';
 import { LanguageProvider, useLanguage } from '../language-context';
 
 // The exact scenario a Build 9 physical-device test raised: an owner switches language, then
@@ -22,6 +22,7 @@ const mockRefreshMe = jest.fn().mockResolvedValue(undefined);
 const mockUser: MeResponse = {
   id: 'owner-1',
   roles: [Role.SALON_OWNER],
+  audience: SessionAudience.STAFF,
   phone: '+919876543210',
   email: null,
   preferredLanguage: Language.EN,

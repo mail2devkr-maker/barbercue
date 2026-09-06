@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import {
   Role,
+  SessionAudience,
   StaffMemberStatus,
   type AuthenticatedUser,
 } from '@barbercue/shared';
@@ -65,6 +66,7 @@ describe('StaffStatusService', () => {
     const owner: AuthenticatedUser = {
       id: 'owner1',
       roles: [Role.SALON_OWNER],
+      audience: SessionAudience.STAFF,
     };
     await expect(
       service.updateStatus(owner, 'missing', StaffMemberStatus.ACTIVE),
@@ -79,6 +81,7 @@ describe('StaffStatusService', () => {
     const owner: AuthenticatedUser = {
       id: 'owner1',
       roles: [Role.SALON_OWNER],
+      audience: SessionAudience.STAFF,
     };
 
     const result = await service.updateStatus(
@@ -103,6 +106,7 @@ describe('StaffStatusService', () => {
     const owner: AuthenticatedUser = {
       id: 'other-owner',
       roles: [Role.SALON_OWNER],
+      audience: SessionAudience.STAFF,
     };
 
     await expect(
@@ -121,6 +125,7 @@ describe('StaffStatusService', () => {
     const ownerAtAStaffAtB: AuthenticatedUser = {
       id: 'mixed-role-user',
       roles: [Role.SALON_OWNER, Role.SALON_STAFF],
+      audience: SessionAudience.STAFF,
     };
 
     await expect(
@@ -145,6 +150,7 @@ describe('StaffStatusService', () => {
     const self: AuthenticatedUser = {
       id: 'user-staff1',
       roles: [Role.SALON_STAFF],
+      audience: SessionAudience.STAFF,
     };
 
     await service.updateStatus(self, 'staff1', StaffMemberStatus.ACTIVE);
@@ -161,6 +167,7 @@ describe('StaffStatusService', () => {
     const otherStaff: AuthenticatedUser = {
       id: 'someone-else',
       roles: [Role.SALON_STAFF],
+      audience: SessionAudience.STAFF,
     };
 
     await expect(
