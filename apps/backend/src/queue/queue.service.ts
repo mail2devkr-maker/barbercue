@@ -34,7 +34,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 // Allowed from 15 minutes before slotStart onward, no upper bound — the automatic no-show sweep
 // that would otherwise cap lateness isn't built in this phase (see the plan's explicit scoping).
-const EARLY_CHECKIN_WINDOW_MINUTES = 15;
+// Exported (Part 5 completion, arrival guidance): bookings.service.ts snapshots this exact value
+// onto Booking.checkInOpensMinutesBefore at creation time, so a customer's "check in from HH:MM"
+// guidance always matches what this service will actually accept — never a second, potentially
+// drifting hardcoded copy.
+export const EARLY_CHECKIN_WINDOW_MINUTES = 15;
 // Same generous window as bookings.service.ts's TRANSACTION_OPTIONS, for the same reason (Neon
 // serverless cold-start latency can exceed Prisma's default 5s interactive-transaction timeout).
 const TRANSACTION_OPTIONS = { timeout: 15_000 };

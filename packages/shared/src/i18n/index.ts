@@ -768,6 +768,17 @@ export interface UiStrings {
    */
   shopLocalTimeSuffix: string;
 
+  /**
+   * Part 5 completion (arrival guidance) — labels for BookingDetailDto's checkInOpensAt/
+   * checkInDueBy. appointmentTimePrefix relabels what used to be a bare arrival-time line;
+   * checkInBetweenPrefix introduces the full window (ConfirmBookingScreen success state,
+   * BookingDetailScreen); checkInByPrefix is the compact, single-boundary form for space-limited
+   * cards (MyBookingsScreen). All include a trailing ": " like the other *Prefix strings above.
+   */
+  appointmentTimePrefix: string;
+  checkInBetweenPrefix: string;
+  checkInByPrefix: string;
+
   // FastQue Credits / Wallet V1
   fastQueCreditsLabel: string;
   walletBalanceLabel: string;
@@ -1327,6 +1338,10 @@ const enUi: UiStrings = {
 
   shopLocalTimeSuffix: " (shop's local time)",
 
+  appointmentTimePrefix: 'Appointment time: ',
+  checkInBetweenPrefix: 'Check in between ',
+  checkInByPrefix: 'Check in by ',
+
   fastQueCreditsLabel: 'FastQue Credits',
   walletBalanceLabel: 'Your FastQue Credits balance',
   redeemCreditsLabel: 'Redeem FastQue Credits',
@@ -1884,6 +1899,10 @@ const hiUi: UiStrings = {
   atConnector: ' में ',
 
   shopLocalTimeSuffix: ' (दुकान के स्थानीय समय पर)',
+
+  appointmentTimePrefix: 'अपॉइंटमेंट का समय: ',
+  checkInBetweenPrefix: 'चेक-इन विंडो: ',
+  checkInByPrefix: 'इससे पहले चेक-इन करें: ',
 
   fastQueCreditsLabel: 'FastQue Credits',
   walletBalanceLabel: 'आपका FastQue Credits बैलेंस',

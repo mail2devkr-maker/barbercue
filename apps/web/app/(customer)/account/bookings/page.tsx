@@ -5,6 +5,7 @@ import Link from "next/link";
 import { BOOKING_PATHS, QUEUE_ENTRIES_PATH,
   formatBookingArrivalTime,
   formatMoney,
+  formatZonedDateTime,
   zonedDateKey,
 } from "@barbercue/shared";
 import type {
@@ -64,6 +65,19 @@ function formatWhen(slotStart: string, salonTimezone: string | null): string {
   return `${arrival.date} · ${arrival.time}${suffix}`;
 }
 
+// Part 5 completion (arrival guidance) — compact single-line form for a dense list row; the full
+// "Check in between X – Y" window is shown on the primary "Next chair" card below instead, per the
+// "don't clutter compact cards" guidance. Both null (see BookingDetailDto's doc comment) means no
+// guidance applies, so this returns null rather than fabricating one.
+function checkInByLabel(booking: BookingDetailDto): string | null {
+  if (!booking.checkInDueBy) return null;
+  const time = formatZonedDateTime(booking.checkInDueBy, booking.salonTimezone, undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `Check in by ${time}`;
+}
+
 function BookingRow({
   booking,
   onCancel,
@@ -86,6 +100,7 @@ function BookingRow({
       <p className={styles.bookingRowSalon}>
         {booking.salonName} — {formatWhen(booking.slotStart, booking.salonTimezone)}
       </p>
+      {checkInByLabel(booking) && <p className={styles.bookingRowMeta}>{checkInByLabel(booking)}</p>}
       {booking.preferredStaffName && (
         <p className={styles.bookingRowMeta}>Preferred barber: {booking.preferredStaffName}</p>
       )}
@@ -227,6 +242,23 @@ export default function MyBookingsPage() {
             <span className={styles.nextChairWhen}>{formatWhen(nextBooking.slotStart, nextBooking.salonTimezone)}</span>
             <span className={styles.nextChairSalon}>{nextBooking.salonName}</span>
             <span className={styles.nextChairMeta}>{nextBooking.serviceName}</span>
+            {/* Part 5 completion (arrival guidance) — the full check-in window, since this is the
+                one prominent "detail-like" card on web (there is no separate per-booking detail
+                page); the compact list rows below show only the terser checkInByLabel instead. */}
+            {nextBooking.checkInOpensAt && nextBooking.checkInDueBy && (
+              <span className={styles.nextChairMeta}>
+                Check in between{" "}
+                {formatZonedDateTime(nextBooking.checkInOpensAt, nextBooking.salonTimezone, undefined, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+                {" – "}
+                {formatZonedDateTime(nextBooking.checkInDueBy, nextBooking.salonTimezone, undefined, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
             {nextBooking.preferredStaffName && (
               <span className={styles.nextChairMeta}>With {nextBooking.preferredStaffName}</span>
             )}

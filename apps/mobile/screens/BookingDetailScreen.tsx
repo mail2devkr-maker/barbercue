@@ -205,6 +205,7 @@ export default function BookingDetailScreen({ route }: Props) {
             never the device's — a customer booking a shop outside their own city/timezone must
             never be shown a silently-wrong arrival time. */}
         <Text style={styles.line}>
+          {t.appointmentTimePrefix}
           {formatZonedDateTime(booking.slotStart, booking.salonTimezone, dateLocaleFor(language), {
             weekday: 'long',
             month: 'long',
@@ -224,6 +225,22 @@ export default function BookingDetailScreen({ route }: Props) {
           {!formatBookingArrivalTime(booking.slotStart, booking.salonTimezone).isDeviceLocalTimezone &&
             t.shopLocalTimeSuffix}
         </Text>
+        {/* Part 5 completion (arrival guidance) — derived server-side from the booking's own
+            checkInOpensAt/checkInDueBy snapshot; both null means no guidance applies
+            (cancelled/completed/already checked in/no policy snapshot recorded). */}
+        {booking.checkInOpensAt && booking.checkInDueBy && (
+          <Text style={styles.line}>
+            {t.checkInBetweenPrefix}
+            {formatZonedDateTime(booking.checkInOpensAt, booking.salonTimezone, dateLocaleFor(language), {
+              hour: '2-digit',
+              minute: '2-digit',
+            })} –{' '}
+            {formatZonedDateTime(booking.checkInDueBy, booking.salonTimezone, dateLocaleFor(language), {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </Text>
+        )}
         <Text style={styles.line}>{formatMoney(booking.servicePrice, booking.currency)}</Text>
         {booking.preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{booking.preferredStaffName}</Text>}
         {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}

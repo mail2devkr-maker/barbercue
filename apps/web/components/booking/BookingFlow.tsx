@@ -18,6 +18,7 @@ import {
   type StaffOptionDto,
   formatBookingArrivalTime,
   formatMoney,
+  formatZonedDateTime,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
@@ -338,9 +339,29 @@ export function BookingFlow({
             <strong>{booking.serviceName}</strong> at {booking.salonName}
           </p>
           <p className={styles.summaryLine}>
-            Arrival time: <strong>{arrival.date}, {arrival.time}</strong>
+            Appointment time: <strong>{arrival.date}, {arrival.time}</strong>
             {!arrival.isDeviceLocalTimezone && " (shop's local time)"}
           </p>
+          {/* Part 5 completion (arrival guidance) — derived server-side from the booking's own
+              checkInOpensAt/checkInDueBy snapshot (see BookingDetailDto's doc comment); both null
+              means no arrival guidance applies (cancelled/completed/already checked in/no policy
+              snapshot recorded), so nothing renders rather than a fabricated window. */}
+          {booking.checkInOpensAt && booking.checkInDueBy && (
+            <p className={styles.summaryLine}>
+              Check in between:{" "}
+              <strong>
+                {formatZonedDateTime(booking.checkInOpensAt, booking.salonTimezone, undefined, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+                {" – "}
+                {formatZonedDateTime(booking.checkInDueBy, booking.salonTimezone, undefined, {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </strong>
+            </p>
+          )}
           {booking.selectedStyleName && <p className={styles.summaryLine}>Style: {booking.selectedStyleName}</p>}
           <p className={styles.summaryLine}>
             <span className={`${styles.statusBadge} ${statusClass}`}>{booking.status.replace(/_/g, " ")}</span>

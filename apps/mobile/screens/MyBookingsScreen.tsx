@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BOOKING_PATHS, formatBookingArrivalTime, formatMoney } from '@barbercue/shared';
+import { BOOKING_PATHS, formatBookingArrivalTime, formatMoney, formatZonedDateTime } from '@barbercue/shared';
 import type { BookingDetailDto, PaginatedResult } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { openDirections } from '../lib/booking-actions';
@@ -80,6 +80,18 @@ function BookingCard({
         {arrival.date} · {arrival.time}
         {!arrival.isDeviceLocalTimezone && t.shopLocalTimeSuffix}
       </Text>
+      {/* Part 5 completion (arrival guidance) — compact single-boundary form only, per "don't
+          clutter compact cards"; the full window shows on BookingDetailScreen instead. Both null
+          means no guidance applies (cancelled/completed/already checked in/no snapshot). */}
+      {booking.checkInDueBy && (
+        <Text style={styles.cardMeta}>
+          {t.checkInByPrefix}
+          {formatZonedDateTime(booking.checkInDueBy, booking.salonTimezone, dateLocaleFor(language), {
+            hour: 'numeric',
+            minute: '2-digit',
+          })}
+        </Text>
+      )}
 
       {booking.preferredStaffName && <Text style={styles.cardMeta}>{t.barberPrefix}{booking.preferredStaffName}</Text>}
       {booking.selectedStyleName && <Text style={styles.cardMeta}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}

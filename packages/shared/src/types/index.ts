@@ -459,6 +459,17 @@ export interface BookingDetailDto extends BookingDto {
   // the appointment time whenever the customer isn't in the same zone as the shop. Null means the
   // zone genuinely could not be resolved; clients degrade to formatting with no explicit zone.
   salonTimezone: string | null;
+  // Part 5 completion (arrival guidance) — pre-computed absolute instants (ISO 8601, format
+  // through salonTimezone exactly like slotStart/slotEnd), derived server-side from slotStart plus
+  // the Booking.checkInOpensMinutesBefore/checkInDueGraceMinutes snapshot captured at creation
+  // time (see schema.prisma). Both null together means no arrival guidance should be shown: either
+  // the booking predates this feature (no snapshot recorded), or its current status makes arrival
+  // guidance meaningless (CANCELLED/COMPLETED/NO_SHOW) — a client must never fabricate one from the
+  // salon's CURRENT live policy, which could differ from what was actually promised at booking
+  // time. When present, checkInOpensAt is when check-in becomes available and checkInDueBy is the
+  // latest check-in time before the booking is eligible to be marked NO_SHOW.
+  checkInOpensAt: string | null;
+  checkInDueBy: string | null;
   serviceName: string;
   serviceDurationMinutes: number;
   servicePrice: number;

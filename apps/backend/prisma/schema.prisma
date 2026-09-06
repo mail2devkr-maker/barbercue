@@ -833,6 +833,16 @@ model Booking {
   // automatically grant credits in this product (see CreditTransactionType.PROMO_GRANT) — credits
   // only ever enter a wallet through an authorized promotional grant or a redemption restoration.
   creditsRedeemedAmount    Decimal?      @db.Decimal(10, 2)
+  // Part 5 completion (arrival guidance) — same snapshot rationale as prepaymentRequiredAmount/
+  // cancellationChargeAmount/creditsRedeemedAmount above: captured once, at creation time, from
+  // whatever rule was actually in effect then, so a later change to the salon's
+  // CancellationPolicy.appointmentArrivalGraceMinutes (or, in principle, the platform-wide
+  // EARLY_CHECKIN_WINDOW_MINUTES constant) can never retroactively change what a past booking's
+  // "please arrive by" / "check in from" guidance displays. Null on any booking created before
+  // this column existed — such a booking shows no arrival guidance at all rather than guessing
+  // from the CURRENT policy, which could be wrong for what the customer was actually told.
+  checkInOpensMinutesBefore Int?
+  checkInDueGraceMinutes    Int?
 
   queueEntries       QueueEntry[]
   payments           Payment[]

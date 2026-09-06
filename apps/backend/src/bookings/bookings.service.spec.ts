@@ -42,6 +42,11 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     prepaymentRequiredAmount: null,
     cancellationChargeAmount: null,
     creditsRedeemedAmount: null,
+    // Part 5 completion (arrival guidance) — a normal booking's snapshot, so every existing test
+    // that doesn't care about arrival guidance still exercises the real derivation path (rather
+    // than the "no snapshot" null case) unless it explicitly overrides these.
+    checkInOpensMinutesBefore: 15,
+    checkInDueGraceMinutes: 10,
     salon: {
       name: 'BarberCue Demo Salon',
       slug: 'barbercue-demo',
@@ -54,6 +59,7 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
     preferredStaff: null,
     reviews: [],
+    queueEntries: [],
     ...overrides,
   };
 }
@@ -195,7 +201,18 @@ describe('BookingsService', () => {
         .mockResolvedValue(2),
     };
     cancellationPolicy = {
-      getEffectivePolicy: jest.fn<Promise<unknown>, [string]>(),
+      // Part 5 completion (arrival guidance): create() now also calls getEffectivePolicy to
+      // snapshot appointmentArrivalGraceMinutes onto the new booking, so every create() test needs
+      // a sane default here too, not just the cancel()-path tests that override it explicitly below.
+      getEffectivePolicy: jest.fn<Promise<unknown>, [string]>().mockResolvedValue({
+        freeCancellationWindowMinutes: 60,
+        lateCancellationChargeType: 'PERCENTAGE',
+        lateCancellationChargeValue: 50,
+        noShowChargeType: 'PERCENTAGE',
+        noShowChargeValue: 100,
+        appointmentArrivalGraceMinutes: 10,
+        queueCallResponseGraceMinutes: 3,
+      }),
     };
     realtime = {
       emitBookingCreated: jest.fn(),
@@ -810,6 +827,70 @@ describe('BookingsService', () => {
         );
         const result = await service.getOne('c1', 'b1');
         expect(result.salonTimezone).toBeNull();
+      });
+    });
+
+    // Part 5 completion (arrival guidance) — derived from the booking's own snapshotted
+    // checkInOpensMinutesBefore/checkInDueGraceMinutes, never a live policy lookup.
+    describe('arrival guidance', () => {
+      it('derives checkInOpensAt/checkInDueBy for a normal CONFIRMED booking from its snapshot', async () => {
+        const slotStart = new Date('2026-06-15T16:00:00.000Z');
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({
+            slotStart,
+            status: 'CONFIRMED',
+            checkInOpensMinutesBefore: 15,
+            checkInDueGraceMinutes: 10,
+          }),
+        );
+        const result = await service.getOne('c1', 'b1');
+        expect(result.checkInOpensAt).toBe('2026-06-15T15:45:00.000Z');
+        expect(result.checkInDueBy).toBe('2026-06-15T16:10:00.000Z');
+      });
+
+      it.each(['CANCELLED', 'COMPLETED', 'NO_SHOW'])(
+        'shows no arrival guidance for a resolved %s booking',
+        async (status) => {
+          prisma.booking.findFirst.mockResolvedValue(makeBookingRow({ status }));
+          const result = await service.getOne('c1', 'b1');
+          expect(result.checkInOpensAt).toBeNull();
+          expect(result.checkInDueBy).toBeNull();
+        },
+      );
+
+      it('shows no arrival guidance once the customer has already checked in', async () => {
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({ queueEntries: [{ id: 'qe1' }] }),
+        );
+        const result = await service.getOne('c1', 'b1');
+        expect(result.checkInOpensAt).toBeNull();
+        expect(result.checkInDueBy).toBeNull();
+      });
+
+      it('shows no fabricated arrival guidance for a booking with no recorded snapshot (pre-feature history)', async () => {
+        prisma.booking.findFirst.mockResolvedValue(
+          makeBookingRow({ checkInOpensMinutesBefore: null, checkInDueGraceMinutes: null }),
+        );
+        const result = await service.getOne('c1', 'b1');
+        expect(result.checkInOpensAt).toBeNull();
+        expect(result.checkInDueBy).toBeNull();
+      });
+
+      it('still derives guidance for a PENDING_PAYMENT booking', async () => {
+        prisma.booking.findFirst.mockResolvedValue(makeBookingRow({ status: 'PENDING_PAYMENT' }));
+        const result = await service.getOne('c1', 'b1');
+        expect(result.checkInOpensAt).not.toBeNull();
+        expect(result.checkInDueBy).not.toBeNull();
+      });
+
+      // WALK_IN bookings (staff-created, still a real scheduled slot — distinct from a queue-only
+      // walk-in join, which never produces a Booking at all) reuse the exact same DTO and
+      // derivation, with no special-casing.
+      it('derives guidance identically for a WALK_IN-sourced booking', async () => {
+        prisma.booking.findFirst.mockResolvedValue(makeBookingRow({ source: 'WALK_IN' }));
+        const result = await service.getOne('c1', 'b1');
+        expect(result.checkInOpensAt).not.toBeNull();
+        expect(result.checkInDueBy).not.toBeNull();
       });
     });
   });

@@ -11,6 +11,7 @@ import {
   computeMaxRedeemableCredits,
   formatBookingArrivalTime,
   formatMoney,
+  formatZonedDateTime,
 } from '@barbercue/shared';
 import type {
   BookingDetailDto,
@@ -158,10 +159,29 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
               dateLocaleFor(language),
             );
             return (
-              <Text style={styles.line}>
-                {arrival.date}, {arrival.time}
-                {!arrival.isDeviceLocalTimezone && t.shopLocalTimeSuffix}
-              </Text>
+              <>
+                <Text style={styles.line}>
+                  {t.appointmentTimePrefix}{arrival.date}, {arrival.time}
+                  {!arrival.isDeviceLocalTimezone && t.shopLocalTimeSuffix}
+                </Text>
+                {/* Part 5 completion (arrival guidance) — derived server-side from the booking's
+                    own checkInOpensAt/checkInDueBy snapshot; both null means no guidance applies
+                    (cancelled/completed/already checked in/no policy snapshot recorded). */}
+                {booking.checkInOpensAt && booking.checkInDueBy && (
+                  <Text style={styles.line}>
+                    {t.checkInBetweenPrefix}
+                    {formatZonedDateTime(booking.checkInOpensAt, booking.salonTimezone, dateLocaleFor(language), {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                    {' – '}
+                    {formatZonedDateTime(booking.checkInDueBy, booking.salonTimezone, dateLocaleFor(language), {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                )}
+              </>
             );
           })()}
           {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}

@@ -24,6 +24,10 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     createdAt: new Date('2026-05-20T09:00:00.000Z'),
     updatedAt: new Date('2026-05-20T09:00:00.000Z'),
     cancelledAt: null,
+    // Part 5 completion (arrival guidance) — a normal booking's snapshot, so every existing test
+    // that doesn't care about arrival guidance still exercises the real derivation path.
+    checkInOpensMinutesBefore: 15,
+    checkInDueGraceMinutes: 10,
     salon: {
       name: 'BarberCue Demo Salon',
       slug: 'barbercue-demo',
@@ -436,6 +440,55 @@ describe('DashboardBookingsService', () => {
         );
         const dto = await service.getOne('owner1', 's1', 'b1');
         expect(dto.salonTimezone).toBeNull();
+      });
+    });
+
+    // Part 5 completion (arrival guidance) — same derivation as the customer-facing
+    // bookings.service.ts, from the booking's own snapshot, never a live policy lookup.
+    describe('arrival guidance', () => {
+      it('derives checkInOpensAt/checkInDueBy for a normal CONFIRMED booking from its snapshot', async () => {
+        const slotStart = new Date('2026-06-15T16:00:00.000Z');
+        prisma.booking.findFirst.mockResolvedValueOnce(
+          makeBookingRow({
+            slotStart,
+            status: 'CONFIRMED',
+            checkInOpensMinutesBefore: 15,
+            checkInDueGraceMinutes: 10,
+          }),
+        );
+        const dto = await service.getOne('owner1', 's1', 'b1');
+        expect(dto.checkInOpensAt).toBe('2026-06-15T15:45:00.000Z');
+        expect(dto.checkInDueBy).toBe('2026-06-15T16:10:00.000Z');
+      });
+
+      it.each(['CANCELLED', 'COMPLETED', 'NO_SHOW'])(
+        'shows no arrival guidance for a resolved %s booking',
+        async (status) => {
+          prisma.booking.findFirst.mockResolvedValueOnce(makeBookingRow({ status }));
+          const dto = await service.getOne('owner1', 's1', 'b1');
+          expect(dto.checkInOpensAt).toBeNull();
+          expect(dto.checkInDueBy).toBeNull();
+        },
+      );
+
+      it('shows no arrival guidance once the customer has already checked in', async () => {
+        prisma.booking.findFirst.mockResolvedValueOnce(
+          makeBookingRow({
+            queueEntries: [{ assignedStaffId: null, assignedStaff: null }],
+          }),
+        );
+        const dto = await service.getOne('owner1', 's1', 'b1');
+        expect(dto.checkInOpensAt).toBeNull();
+        expect(dto.checkInDueBy).toBeNull();
+      });
+
+      it('shows no fabricated arrival guidance for a booking with no recorded snapshot (pre-feature history)', async () => {
+        prisma.booking.findFirst.mockResolvedValueOnce(
+          makeBookingRow({ checkInOpensMinutesBefore: null, checkInDueGraceMinutes: null }),
+        );
+        const dto = await service.getOne('owner1', 's1', 'b1');
+        expect(dto.checkInOpensAt).toBeNull();
+        expect(dto.checkInDueBy).toBeNull();
       });
     });
   });

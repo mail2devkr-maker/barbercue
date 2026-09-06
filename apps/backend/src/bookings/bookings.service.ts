@@ -25,10 +25,11 @@ import { resolveSalonTimeZone } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
-import { QueueService } from '../queue/queue.service';
+import { QueueService, EARLY_CHECKIN_WINDOW_MINUTES } from '../queue/queue.service';
 import { CustomerCreditsService } from '../credits/customer-credits.service';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
+import { computeArrivalGuidance } from './arrival-guidance';
 
 // A booking-triggered cancellation may only auto-cancel a linked queue entry that has not yet
 // genuinely started service — WAITING (never called) or CALLED (called but not yet assigned a
@@ -74,6 +75,10 @@ const bookingDetailInclude = {
   // Phase 16 (Ratings & Reviews) — id only, just to derive hasReview below; the review's own
   // content is fetched separately by ReviewsService, never duplicated onto BookingDetailDto.
   reviews: { select: { id: true } },
+  // Part 5 completion (arrival guidance) — id only, just to derive "has already checked in" below
+  // (a QueueEntry existing at all means so, regardless of its own current status) so arrival
+  // guidance stops being shown the moment it stops applying.
+  queueEntries: { select: { id: true }, take: 1 },
 } satisfies Prisma.BookingInclude;
 
 type BookingWithDetails = Prisma.BookingGetPayload<{
@@ -187,6 +192,12 @@ export class BookingsService {
     const paymentPolicy = await this.prisma.salonPaymentPolicy.findUnique({
       where: { salonId: input.salonId },
     });
+
+    // Part 5 completion (arrival guidance): snapshot the arrival-window rule in effect right now,
+    // onto the booking itself — see schema.prisma's doc comment on
+    // checkInOpensMinutesBefore/checkInDueGraceMinutes for why this must never be a live join to
+    // CancellationPolicy at read time.
+    const arrivalPolicy = await this.cancellationPolicy.getEffectivePolicy(input.salonId);
 
     // FastQue Credits / Wallet V1: an ONLINE (APP/WEB-sourced) booking needs the shop's payment QR
     // to actually be shown to the customer for payment — there is no live payment gateway (see
@@ -305,6 +316,8 @@ export class BookingsService {
           preferredStaffId: input.preferredStaffId ?? null,
           prepaymentRequiredAmount,
           selectedStyleName: input.selectedStyleName ?? null,
+          checkInOpensMinutesBefore: EARLY_CHECKIN_WINDOW_MINUTES,
+          checkInDueGraceMinutes: arrivalPolicy.appointmentArrivalGraceMinutes,
         },
       });
 
@@ -782,6 +795,13 @@ export class BookingsService {
       salonTimezone: resolveSalonTimeZone({
         timezone: booking.salon.timezone,
         countryCode: booking.salon.city.countryCode,
+      }),
+      ...computeArrivalGuidance({
+        status: booking.status,
+        slotStart: booking.slotStart,
+        checkInOpensMinutesBefore: booking.checkInOpensMinutesBefore,
+        checkInDueGraceMinutes: booking.checkInDueGraceMinutes,
+        hasCheckedIn: booking.queueEntries.length > 0,
       }),
       serviceName: booking.service.name,
       serviceDurationMinutes: booking.service.durationMinutes,

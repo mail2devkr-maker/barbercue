@@ -15,6 +15,7 @@ import {
   resolveSalonTimeZone,
   zonedDayBounds,
 } from '../common/timezone/timezone';
+import { computeArrivalGuidance } from '../bookings/arrival-guidance';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -267,6 +268,13 @@ export class DashboardBookingsService {
       salonTimezone: resolveSalonTimeZone({
         timezone: booking.salon.timezone,
         countryCode: booking.salon.city.countryCode,
+      }),
+      ...computeArrivalGuidance({
+        status: booking.status,
+        slotStart: booking.slotStart,
+        checkInOpensMinutesBefore: booking.checkInOpensMinutesBefore,
+        checkInDueGraceMinutes: booking.checkInDueGraceMinutes,
+        hasCheckedIn: booking.queueEntries.length > 0,
       }),
       serviceName: booking.service.name,
       serviceDurationMinutes: booking.service.durationMinutes,
