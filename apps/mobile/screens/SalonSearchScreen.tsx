@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import { DISCOVERY_PATHS, formatMoney } from '@barbercue/shared';
@@ -11,6 +11,33 @@ import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
+
+// Part 8/9 — distance chips. Only meaningful alongside "Near Me" coordinates (radiusKm is ignored
+// server-side without a query point — see salonSearchQuerySchema's own doc comment), so this row
+// only renders once `nearMe` is set. `null` = "Any distance" (clears the filter, never a
+// fabricated cap).
+const DISTANCE_OPTIONS: { value: number | null; labelKey: 'distanceFilterAny' | 'distanceFilter2km' | 'distanceFilter5km' | 'distanceFilter10km' | 'distanceFilter25km' }[] = [
+  { value: null, labelKey: 'distanceFilterAny' },
+  { value: 2, labelKey: 'distanceFilter2km' },
+  { value: 5, labelKey: 'distanceFilter5km' },
+  { value: 10, labelKey: 'distanceFilter10km' },
+  { value: 25, labelKey: 'distanceFilter25km' },
+];
+
+// Price buckets — plain numbers (no currency symbol baked into the label) since a salon's currency
+// isn't known before the results come back; matches the existing "starting from" price display's
+// own currency-agnostic fallback. `null` bounds mean "no floor"/"no ceiling" respectively.
+const PRICE_OPTIONS: {
+  min: number | null;
+  max: number | null;
+  labelKey: 'priceFilterAny' | 'priceFilterUnder300' | 'priceFilter300to600' | 'priceFilter600to1000' | 'priceFilterOver1000';
+}[] = [
+  { min: null, max: null, labelKey: 'priceFilterAny' },
+  { min: null, max: 300, labelKey: 'priceFilterUnder300' },
+  { min: 300, max: 600, labelKey: 'priceFilter300to600' },
+  { min: 600, max: 1000, labelKey: 'priceFilter600to1000' },
+  { min: 1000, max: null, labelKey: 'priceFilterOver1000' },
+];
 
 // Public discovery endpoint — no auth required, mirrors apps/web's search page.
 export default function SalonSearchScreen({ navigation, route }: Props) {
@@ -27,8 +54,20 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null,
   );
   const [locating, setLocating] = useState(false);
+  // Part 8/9 (distance + price filters).
+  const [radiusKm, setRadiusKm] = useState<number | null>(null);
+  const [priceMin, setPriceMin] = useState<number | null>(null);
+  const [priceMax, setPriceMax] = useState<number | null>(null);
 
-  async function runSearch(isRefresh: boolean, coords: { lat: number; lng: number } | null) {
+  async function runSearch(
+    isRefresh: boolean,
+    coords: { lat: number; lng: number } | null,
+    filters: { radiusKm: number | null; priceMin: number | null; priceMax: number | null } = {
+      radiusKm,
+      priceMin,
+      priceMax,
+    },
+  ) {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
     setSearched(true);
@@ -38,7 +77,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       if (coords) {
         params.set('lat', String(coords.lat));
         params.set('lng', String(coords.lng));
+        // radiusKm is meaningless without a query point, so it only ever gets sent alongside one.
+        if (filters.radiusKm !== null) params.set('radiusKm', String(filters.radiusKm));
       }
+      if (filters.priceMin !== null) params.set('priceMin', String(filters.priceMin));
+      if (filters.priceMax !== null) params.set('priceMax', String(filters.priceMax));
       const result = await apiFetch<PaginatedResult<SalonListItemDto>>(
         `${DISCOVERY_PATHS.salons}?${params.toString()}`,
       );
@@ -53,6 +96,17 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
 
   function handleSearch(isRefresh = false) {
     return runSearch(isRefresh, nearMe);
+  }
+
+  function selectRadius(value: number | null) {
+    setRadiusKm(value);
+    void runSearch(false, nearMe, { radiusKm: value, priceMin, priceMax });
+  }
+
+  function selectPrice(min: number | null, max: number | null) {
+    setPriceMin(min);
+    setPriceMax(max);
+    void runSearch(false, nearMe, { radiusKm, priceMin: min, priceMax: max });
   }
 
   // Home's search card / Popular Services chips hand off a query (and, when already known,
@@ -118,6 +172,54 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         loading={locating}
         style={styles.nearMeButton}
       />
+
+      {/* Part 8/9 — distance filter. Only shown once a query point exists; radiusKm is otherwise
+          meaningless (see salonSearchQuerySchema's own doc comment) and would silently do nothing
+          if sent without lat/lng. */}
+      {nearMe && (
+        <View style={styles.filterGroup}>
+          <Text style={styles.filterLabel}>{t.distanceFilterLabel}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {DISTANCE_OPTIONS.map((option) => {
+              const active = radiusKm === option.value;
+              return (
+                <Pressable
+                  key={String(option.value)}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => selectRadius(option.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{t[option.labelKey]}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Part 8/9 — price filter. Always available (unlike distance, price never depends on a
+          query point). Independent of the text/service search, per SalonsService.search's own
+          doc comment on why priceMin/priceMax don't require the same matched service. */}
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>{t.priceFilterLabel}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          {PRICE_OPTIONS.map((option) => {
+            const active = priceMin === option.min && priceMax === option.max;
+            return (
+              <Pressable
+                key={option.labelKey}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => selectPrice(option.min, option.max)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{t[option.labelKey]}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {error && <InlineError message={error} />}
 
@@ -199,6 +301,29 @@ const styles = StyleSheet.create({
   },
   searchButton: { flexBasis: 110, flexGrow: 0 },
   nearMeButton: { marginBottom: space[4] },
+  // Part 8/9 — distance/price filter chips.
+  filterGroup: { marginBottom: space[4] },
+  filterLabel: {
+    fontFamily: font.bodyBold,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: color.muted,
+    marginBottom: space[2],
+  },
+  chipRow: { flexDirection: 'row', gap: space[2] },
+  chip: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: space[3],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: '#ffffff',
+  },
+  chipActive: { backgroundColor: color.ink, borderColor: color.ink },
+  chipText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
+  chipTextActive: { color: color.accentContrast },
   skeletonStack: { gap: space[3] },
   skeletonCard: { height: 84, borderRadius: radius.lg },
   listContent: { paddingBottom: space[6] },

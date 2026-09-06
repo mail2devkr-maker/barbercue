@@ -195,6 +195,74 @@ describe('SalonsService', () => {
       );
     });
 
+    // Part 8/9 — price filter.
+    describe('price filter (priceMin/priceMax)', () => {
+      it('adds a services.some price condition via where.AND when only priceMin is given', async () => {
+        prisma.salon.findMany.mockResolvedValue([]);
+        await service.search({ priceMin: 200 });
+        const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+          where: { AND?: Record<string, unknown>[] };
+        };
+        expect(where.AND).toEqual([
+          { services: { some: { isActive: true, price: { gte: 200 } } } },
+        ]);
+      });
+
+      it('adds a services.some price condition via where.AND when only priceMax is given', async () => {
+        prisma.salon.findMany.mockResolvedValue([]);
+        await service.search({ priceMax: 800 });
+        const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+          where: { AND?: Record<string, unknown>[] };
+        };
+        expect(where.AND).toEqual([
+          { services: { some: { isActive: true, price: { lte: 800 } } } },
+        ]);
+      });
+
+      it('combines priceMin and priceMax into a single range condition', async () => {
+        prisma.salon.findMany.mockResolvedValue([]);
+        await service.search({ priceMin: 200, priceMax: 800 });
+        const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+          where: { AND?: Record<string, unknown>[] };
+        };
+        expect(where.AND).toEqual([
+          { services: { some: { isActive: true, price: { gte: 200, lte: 800 } } } },
+        ]);
+      });
+
+      // The price condition must never overwrite `service`'s own where.services key — Part 8/9
+      // combines them as two independent services.some checks (possibly different services),
+      // not a single narrower one.
+      it('combines with a service text filter without either clause clobbering the other', async () => {
+        prisma.salon.findMany.mockResolvedValue([]);
+        await service.search({ service: 'Haircut', priceMin: 200, priceMax: 800 });
+        const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+          where: { services?: unknown; AND?: Record<string, unknown>[] };
+        };
+        expect(where.services).toEqual({
+          some: {
+            isActive: true,
+            OR: [
+              { name: { contains: 'Haircut', mode: 'insensitive' } },
+              { category: { contains: 'Haircut', mode: 'insensitive' } },
+            ],
+          },
+        });
+        expect(where.AND).toEqual([
+          { services: { some: { isActive: true, price: { gte: 200, lte: 800 } } } },
+        ]);
+      });
+
+      it('adds no price condition at all when neither priceMin nor priceMax is given', async () => {
+        prisma.salon.findMany.mockResolvedValue([]);
+        await service.search({});
+        const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+          where: { AND?: unknown };
+        };
+        expect(where.AND).toBeUndefined();
+      });
+    });
+
     it('returns no nextCursor when results fit within the limit', async () => {
       prisma.salon.findMany.mockResolvedValue([makeSalon()]);
       const result = await service.search({ limit: 20 });
@@ -413,6 +481,44 @@ describe('SalonsService', () => {
         // Same tie-break result regardless of which order Prisma happened to return the rows in.
         expect(first.items.map((i) => i.id)).toEqual(['a-salon', 'b-salon']);
         expect(second.items.map((i) => i.id)).toEqual(['a-salon', 'b-salon']);
+      });
+
+      // Part 8/9 — distance filter (radiusKm).
+      describe('radiusKm', () => {
+        it('excludes a salon farther than the requested radius, even though it is inside the coordinate bounding box', async () => {
+          // The mock can't simulate a real box exclusion (see the "cannot let a salon outside the
+          // bounding box crowd out..." test above), so this proves the *other* half of radiusKm:
+          // the hard Haversine cutoff applied after candidates come back, which is what actually
+          // enforces "farther than the box's rectangle corners" cases too.
+          const near = makeSalon({ id: 'near', lat: 12.98, lng: 77.65 }); // ~1.5km from query point
+          const justOutside = makeSalon({ id: 'far', lat: 13.1, lng: 77.8 }); // tens of km away
+          prisma.salon.findMany.mockResolvedValue([near, justOutside]);
+          const result = await service.search({ lat: 12.9716, lng: 77.6412, radiusKm: 5 });
+          expect(result.items.map((i) => i.id)).toEqual(['near']);
+        });
+
+        it('tries exactly one bounding box sized to radiusKm, never widening past what the caller asked for', async () => {
+          // Fewer than `limit` candidates would normally trigger NEAR_ME_RADII_KM's widening
+          // retry loop — an explicit radiusKm must not widen past the caller's own hard cap.
+          prisma.salon.findMany.mockResolvedValue([]);
+          await service.search({ lat: 12.9716, lng: 77.6412, radiusKm: 5, limit: 20 });
+          expect(prisma.salon.findMany).toHaveBeenCalledTimes(1);
+        });
+
+        it('is ignored when lat/lng are not both supplied (no query point to measure a radius from)', async () => {
+          prisma.salon.findMany.mockResolvedValue([makeSalon()]);
+          const result = await service.search({ radiusKm: 5 });
+          // Falls through to the ordinary cursor-paginated path — distanceKm stays null, nothing
+          // is dropped for being "too far" when there is no distance to compare against.
+          expect(result.items[0].distanceKm).toBeNull();
+        });
+
+        it('does not affect the default (no-radius) near-me path at all', async () => {
+          const far = makeSalon({ id: 'far', lat: 13.5, lng: 78.5 });
+          prisma.salon.findMany.mockResolvedValue([far]);
+          const result = await service.search({ lat: 12.9716, lng: 77.6412 });
+          expect(result.items.map((i) => i.id)).toEqual(['far']);
+        });
       });
     });
   });

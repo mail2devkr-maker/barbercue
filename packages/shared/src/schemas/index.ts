@@ -144,23 +144,39 @@ export type RegisterSalonInput = z.infer<typeof registerSalonSchema>;
 
 // GET /salons query params — validated the same way on backend (ZodValidationPipe on @Query())
 // and client (search form) so both agree on shape before a request is ever made.
-export const salonSearchQuerySchema = z.object({
-  city: z.string().optional(),
-  // ISO-3166-1 alpha-2, scopes `city` to an exact (countryCode, slug) match — see B9. Optional:
-  // not every caller has a country in hand (free-text/service search), so omitting it falls back
-  // to matching `city` by slug alone, exactly as before this field existed.
-  countryCode: z.string().length(2).optional(),
-  locality: z.string().optional(),
-  service: z.string().optional(),
-  q: z.string().optional(),
-  cursor: z.string().uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(50).optional(),
-  // "Near Me" (Phase 4) — the device's current position, from the browser/RN geolocation API, not
-  // a paid geocoding service. Both-or-neither: a lone lat/lng is meaningless, so the service
-  // ignores either one supplied without its pair rather than guessing 0 for the other.
-  lat: z.coerce.number().min(-90).max(90).optional(),
-  lng: z.coerce.number().min(-180).max(180).optional(),
-});
+export const salonSearchQuerySchema = z
+  .object({
+    city: z.string().optional(),
+    // ISO-3166-1 alpha-2, scopes `city` to an exact (countryCode, slug) match — see B9. Optional:
+    // not every caller has a country in hand (free-text/service search), so omitting it falls back
+    // to matching `city` by slug alone, exactly as before this field existed.
+    countryCode: z.string().length(2).optional(),
+    locality: z.string().optional(),
+    service: z.string().optional(),
+    q: z.string().optional(),
+    cursor: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(50).optional(),
+    // "Near Me" (Phase 4) — the device's current position, from the browser/RN geolocation API, not
+    // a paid geocoding service. Both-or-neither: a lone lat/lng is meaningless, so the service
+    // ignores either one supplied without its pair rather than guessing 0 for the other.
+    lat: z.coerce.number().min(-90).max(90).optional(),
+    lng: z.coerce.number().min(-180).max(180).optional(),
+    // Distance filter (Part 8/9) — a hard maximum, only meaningful alongside lat/lng: without a
+    // query point there is nothing to measure a radius from, so SalonsService.search ignores this
+    // exactly like a lone lat/lng today rather than erroring. Capped at 500km — larger than any of
+    // NEAR_ME_RADII_KM's fallback boxes, since a hard cutoff should never need to exceed the widest
+    // box the "no explicit radius" path already tries.
+    radiusKm: z.coerce.number().positive().max(500).optional(),
+    // Price filter (Part 8/9) — independent of `service`/`q` text search: matches any salon with at
+    // least one active Service priced in [priceMin, priceMax], regardless of what (if anything) the
+    // text search matched. Both ends optional so a caller can give just a floor or just a ceiling.
+    priceMin: z.coerce.number().nonnegative().optional(),
+    priceMax: z.coerce.number().nonnegative().optional(),
+  })
+  .refine((data) => data.priceMin === undefined || data.priceMax === undefined || data.priceMin <= data.priceMax, {
+    message: 'priceMin must not be greater than priceMax.',
+    path: ['priceMin'],
+  });
 export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
 
 // GET /cities/search query params (Phase 6A — Country -> Region -> City-search selection flow).

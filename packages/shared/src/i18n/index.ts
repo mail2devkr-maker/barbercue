@@ -345,6 +345,11 @@ export interface UiStrings {
   trustExperienceLabel: string;
   trustRealTimeLabel: string;
   trustOffersLabel: string;
+  // Part 8/9 (Home discovery information) — appended after the real activeShopCount from
+  // GET salons/live-stats, replacing the static trustShopsLabel once that real number has loaded
+  // (see HomeScreen.tsx). Never shown with a fabricated count; trustShopsLabel remains the
+  // fallback while live stats are still loading or the request fails. Includes a leading space.
+  trustShopsCountSuffix: string;
   fastQueCreditsShortcut: string;
   startingPricePrefix: string;
 
@@ -505,6 +510,22 @@ export interface UiStrings {
   openNowLabel: string;
   closedNowLabel: string;
   kmAwaySuffix: string;
+  // Part 8/9 (distance + price filters), SalonSearchScreen. Distance chips only render once "Near
+  // Me" coordinates are known (radiusKm is meaningless without a query point — see
+  // salonSearchQuerySchema's own doc comment); price chips are always available. "Any" clears that
+  // filter back to unset, never a fabricated 0 value.
+  distanceFilterLabel: string;
+  distanceFilterAny: string;
+  distanceFilter2km: string;
+  distanceFilter5km: string;
+  distanceFilter10km: string;
+  distanceFilter25km: string;
+  priceFilterLabel: string;
+  priceFilterAny: string;
+  priceFilterUnder300: string;
+  priceFilter300to600: string;
+  priceFilter600to1000: string;
+  priceFilterOver1000: string;
   couldNotLoadSalon: string;
   salonNotFound: string;
   photoGalleryHint: string;
@@ -949,6 +970,7 @@ const enUi: UiStrings = {
   trustExperienceLabel: 'Better Experience',
   trustRealTimeLabel: 'Real-time Updates',
   trustOffersLabel: 'Great Offers',
+  trustShopsCountSuffix: ' Trusted Shops',
   fastQueCreditsShortcut: 'FastQue Credits',
   startingPricePrefix: 'From ',
 
@@ -1101,6 +1123,18 @@ const enUi: UiStrings = {
   openNowLabel: 'Open now',
   closedNowLabel: 'Closed now',
   kmAwaySuffix: ' km away',
+  distanceFilterLabel: 'Distance',
+  distanceFilterAny: 'Any distance',
+  distanceFilter2km: '2 km',
+  distanceFilter5km: '5 km',
+  distanceFilter10km: '10 km',
+  distanceFilter25km: '25 km',
+  priceFilterLabel: 'Price',
+  priceFilterAny: 'Any price',
+  priceFilterUnder300: 'Under 300',
+  priceFilter300to600: '300 – 600',
+  priceFilter600to1000: '600 – 1000',
+  priceFilterOver1000: '1000+',
   couldNotLoadSalon: 'Could not load this salon.',
   salonNotFound: 'Salon not found.',
   photoGalleryHint: 'Opens full-screen photo gallery',
@@ -1511,6 +1545,7 @@ const hiUi: UiStrings = {
   trustExperienceLabel: 'बेहतर अनुभव',
   trustRealTimeLabel: 'रीयल-टाइम अपडेट्स',
   trustOffersLabel: 'शानदार ऑफ़र',
+  trustShopsCountSuffix: ' विश्वसनीय दुकानें',
   fastQueCreditsShortcut: 'FastQue क्रेडिट्स',
   startingPricePrefix: 'शुरुआत ',
 
@@ -1663,6 +1698,18 @@ const hiUi: UiStrings = {
   openNowLabel: 'अभी खुला है',
   closedNowLabel: 'अभी बंद है',
   kmAwaySuffix: ' किमी दूर',
+  distanceFilterLabel: 'दूरी',
+  distanceFilterAny: 'कोई भी दूरी',
+  distanceFilter2km: '2 किमी',
+  distanceFilter5km: '5 किमी',
+  distanceFilter10km: '10 किमी',
+  distanceFilter25km: '25 किमी',
+  priceFilterLabel: 'कीमत',
+  priceFilterAny: 'कोई भी कीमत',
+  priceFilterUnder300: '300 से कम',
+  priceFilter300to600: '300 – 600',
+  priceFilter600to1000: '600 – 1000',
+  priceFilterOver1000: '1000+',
   couldNotLoadSalon: 'यह सैलून लोड नहीं हो सका।',
   salonNotFound: 'सैलून नहीं मिला।',
   photoGalleryHint: 'पूर्ण-स्क्रीन फ़ोटो गैलरी खोलता है',

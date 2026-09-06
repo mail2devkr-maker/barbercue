@@ -178,6 +178,31 @@ export class SalonsService {
       ];
     }
 
+    // Price filter (Part 8/9) — deliberately independent of `service`/`q`: "has an active service
+    // priced in this range" rather than requiring the SAME service to also match the text search
+    // (a customer filtering "haircut" + "under ₹500" plausibly means either a ₹500 haircut, or a
+    // salon offering both a haircut and something else in range — the pricier, more specific
+    // interpretation isn't obviously "more correct", so this takes the simpler, more permissive
+    // one). Uses `where.AND` rather than a second `where.services` key: `query.service` above may
+    // already have claimed that key, and a second assignment on the same `where` object would
+    // silently overwrite the first instead of combining with it.
+    if (query.priceMin !== undefined || query.priceMax !== undefined) {
+      const priceCondition: Prisma.SalonWhereInput = {
+        services: {
+          some: {
+            isActive: true,
+            price: {
+              ...(query.priceMin !== undefined ? { gte: query.priceMin } : {}),
+              ...(query.priceMax !== undefined ? { lte: query.priceMax } : {}),
+            },
+          },
+        },
+      };
+      where.AND = where.AND
+        ? [...(Array.isArray(where.AND) ? where.AND : [where.AND]), priceCondition]
+        : [priceCondition];
+    }
+
     // "Near Me" (Phase 4): sorting by a computed haversine distance isn't something Prisma/Postgres
     // can do without a geo extension (PostGIS earthdistance), which isn't set up here. Rather than
     // fake a stable cursor over an in-memory sort, distance mode fetches a capped batch, sorts it
@@ -199,13 +224,18 @@ export class SalonsService {
     const nearMe = query.lat !== undefined && query.lng !== undefined;
     if (nearMe) {
       const from = { lat: query.lat!, lng: query.lng! };
+      // Distance filter (Part 8/9): an explicit radiusKm is a hard cap the caller asked for, not a
+      // "find me enough results" hint — widening past it (the way the no-radius path below
+      // deliberately does) would silently return salons farther away than requested. So this tries
+      // exactly one box, sized to the requested radius, instead of walking NEAR_ME_RADII_KM.
+      const radiiToTry = query.radiusKm !== undefined ? [query.radiusKm] : NEAR_ME_RADII_KM;
       // A salon with no lat/lng can never get a distance and is always dropped by the
       // distanceKm-not-null filter below — fetching it into the capped candidate set would only
       // ever waste one of the NEAR_ME_CANDIDATE_CAP slots. Filtering coordinates at the DB level
       // (on top of the bounding box) spends every one of the capped rows on a salon that can
       // actually appear in the sorted result.
       let candidates: SalonWithListRelations[] = [];
-      for (const radiusKm of NEAR_ME_RADII_KM) {
+      for (const radiusKm of radiiToTry) {
         const box = boundingBoxDegrees(from.lat, from.lng, radiusKm);
         candidates = await this.prisma.salon.findMany({
           where: {
@@ -227,6 +257,11 @@ export class SalonsService {
       );
       const sorted = withDistance
         .filter((s) => s.distanceKm !== null)
+        // The bounding box is a rectangle approximation of a circle (see boundingBoxDegrees), so a
+        // corner of the box can sit slightly beyond the true requested radius — this is the actual
+        // hard cutoff a caller-supplied radiusKm promises, checked against the real Haversine
+        // distance, never just "was it inside the prefilter box."
+        .filter((s) => query.radiusKm === undefined || s.distanceKm! <= query.radiusKm)
         // Tie-broken by id: the candidate query has no explicit orderBy, so two salons at an
         // identical distance would otherwise sort in whatever incidental row order Postgres
         // happened to return them in — never guaranteed, and not something a client can rely on
