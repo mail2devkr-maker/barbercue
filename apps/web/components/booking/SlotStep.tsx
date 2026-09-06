@@ -1,6 +1,6 @@
 "use client";
 
-import type { AvailabilitySlotDto } from "@barbercue/shared";
+import { formatZonedDateTime, type AvailabilitySlotDto } from "@barbercue/shared";
 import styles from "./booking.module.css";
 
 export function SlotStep({
@@ -8,11 +8,15 @@ export function SlotStep({
   selectedSlot,
   onSelect,
   loading,
+  salonTimezone,
 }: {
   slots: AvailabilitySlotDto[];
   selectedSlot: AvailabilitySlotDto | null;
   onSelect: (slot: AvailabilitySlotDto) => void;
   loading: boolean;
+  // Pre-confirmation timezone fix — every slot time renders in the salon's own zone, never the
+  // customer device's. Null degrades to the device zone via formatZonedDateTime's own fallback.
+  salonTimezone: string | null;
 }) {
   if (loading)
     return (
@@ -48,9 +52,9 @@ export function SlotStep({
               disabled={occupied}
               onClick={() => onSelect(slot)}
               className={`${styles.slotChip} ${occupied ? styles.slotChipOccupied : ""} ${selected ? styles.slotChipSelected : ""}`}
-              aria-label={`${new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}, ${selected ? "your selection" : occupied ? "occupied" : "available"}`}
+              aria-label={`${formatZonedDateTime(slot.slotStart, salonTimezone, undefined, { hour: "2-digit", minute: "2-digit" })}, ${selected ? "your selection" : occupied ? "occupied" : "available"}`}
             >
-              {new Date(slot.slotStart).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+              {formatZonedDateTime(slot.slotStart, salonTimezone, undefined, { hour: "2-digit", minute: "2-digit" })}
             </button>
           );
         })}

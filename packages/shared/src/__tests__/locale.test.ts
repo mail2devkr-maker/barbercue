@@ -1,15 +1,18 @@
 import {
   INDIAN_PIN_CODE_REGEX,
+  addZonedCalendarDays,
   currencyForCountry,
   formatBookingArrivalTime,
   formatDistance,
   formatMoney,
+  formatZonedCalendarDate,
   formatZonedDateTime,
   isValidPostalCode,
   phonePlaceholderForCountry,
   postalCodeRuleFor,
   usesImperialDistance,
   zonedDateKey,
+  zonedDateToDayOfWeek,
 } from '../index';
 
 describe('postal codes', () => {
@@ -257,6 +260,51 @@ describe('zonedDateKey', () => {
 
   it('degrades to the runtime default zone rather than throwing on an invalid timezone', () => {
     expect(() => zonedDateKey('2026-01-15T02:00:00.000Z', 'Not/AZone')).not.toThrow();
+  });
+
+  // Pre-confirmation timezone fix — the exact cross-timezone date-bucketing example: a UTC instant
+  // that is one calendar day in the salon's zone and a different one in the customer's device zone.
+  // Slot grouping/labeling must follow the SALON's key, never the customer's.
+  it('a slot instant that crosses the date boundary buckets under the salon calendar date, not the customer device date', () => {
+    const slotStart = '2026-09-07T01:00:00.000Z';
+    const salonKey = zonedDateKey(slotStart, 'America/Chicago'); // salon: Dallas
+    const customerKey = zonedDateKey(slotStart, 'Asia/Kolkata'); // customer device
+    expect(salonKey).toBe('2026-09-06'); // still Sep 6 evening in Chicago (UTC-5 CDT)
+    expect(customerKey).toBe('2026-09-07'); // already Sep 7 morning in Kolkata
+    expect(salonKey).not.toBe(customerKey);
+  });
+});
+
+describe('addZonedCalendarDays / zonedDateToDayOfWeek / formatZonedCalendarDate (pre-confirmation timezone fix)', () => {
+  it('adds calendar days without any timezone re-entry', () => {
+    expect(addZonedCalendarDays('2026-09-06', 1)).toBe('2026-09-07');
+    expect(addZonedCalendarDays('2026-09-06', 30)).toBe('2026-10-06');
+  });
+
+  it('correctly rolls over a month/year boundary', () => {
+    expect(addZonedCalendarDays('2026-12-31', 1)).toBe('2027-01-01');
+  });
+
+  it('computes the correct day-of-week for a known date', () => {
+    // 2026-09-06 is a Sunday.
+    expect(zonedDateToDayOfWeek('2026-09-06')).toBe(0);
+    expect(zonedDateToDayOfWeek('2026-09-07')).toBe(1); // Monday
+  });
+
+  it('formats a calendar date label using only its own Y-M-D, never a timezone', () => {
+    expect(formatZonedCalendarDate('2026-09-07', 'en-US', { weekday: 'short' })).toBe('Mon');
+    expect(formatZonedCalendarDate('2026-09-07', 'en-US', { month: 'short', day: 'numeric' })).toBe('Sep 7');
+  });
+
+  it('a salon-local "today" seeded via zonedDateKey differs from the customer device\'s own date near a day boundary', () => {
+    // A fixed instant where Kolkata has already rolled to the next calendar day but Chicago hasn't.
+    const nowIso = '2026-09-07T19:00:00.000Z'; // 2026-09-08 00:30 IST, 2026-09-07 14:00 CDT
+    const salonToday = zonedDateKey(nowIso, 'America/Chicago');
+    const customerToday = zonedDateKey(nowIso, 'Asia/Kolkata');
+    expect(salonToday).toBe('2026-09-07');
+    expect(customerToday).toBe('2026-09-08');
+    // The date-picker's day-1 chip must be salon-day-1, not customer-day-1.
+    expect(addZonedCalendarDays(salonToday, 1)).toBe('2026-09-08');
   });
 });
 

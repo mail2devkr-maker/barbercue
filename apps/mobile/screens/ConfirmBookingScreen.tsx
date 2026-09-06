@@ -58,6 +58,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
     serviceId,
     serviceName,
     servicePrice,
+    salonTimezone,
     preferredStaffId,
     preferredStaffName,
     slotStart,
@@ -231,10 +232,23 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
         <Text style={styles.line}>
           {serviceName}{t.atConnector}{salonName}
         </Text>
-        <Text style={styles.line}>
-          {new Date(slotStart).toLocaleString(dateLocaleFor(language))} –{' '}
-          {new Date(slotEnd).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+        {(() => {
+          // Pre-confirmation timezone fix — the exact same formatter/zone the confirmed-booking
+          // view below uses (formatBookingArrivalTime + booking.salonTimezone), so this summary
+          // can never show a different-looking time than what appears the instant after the
+          // customer actually confirms.
+          const arrival = formatBookingArrivalTime(slotStart, salonTimezone, dateLocaleFor(language));
+          const endTime = formatZonedDateTime(slotEnd, salonTimezone, dateLocaleFor(language), {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          return (
+            <Text style={styles.line}>
+              {arrival.date}, {arrival.time} – {endTime}
+              {!arrival.isDeviceLocalTimezone && t.shopLocalTimeSuffix}
+            </Text>
+          );
+        })()}
         {preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{preferredStaffName}</Text>}
         {selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{selectedStyleName}</Text>}
         {cancellationPolicy && (

@@ -4,6 +4,11 @@ import {
   BOOKING_PATHS,
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
+  addZonedCalendarDays,
+  formatBookingArrivalTime,
+  formatZonedCalendarDate,
+  formatZonedDateTime,
+  zonedDateKey,
   type AvailabilitySlotDto,
   type BookingDetailDto,
   type Language,
@@ -17,15 +22,17 @@ import { Button, Card, InlineError } from './ui';
 
 const DAYS_AHEAD = 14;
 
-function nextDays(language: Language): { date: string; label: string }[] {
+// Pre-confirmation timezone fix — same salon-local "today + N days" construction as
+// DateSelectScreen, seeded from the booking's own salonTimezone (already resolved server-side).
+function nextDays(language: Language, salonTimezone: string | null): { date: string; label: string }[] {
   const result: { date: string; label: string }[] = [];
   const locale = dateLocaleFor(language);
+  const today = zonedDateKey(new Date().toISOString(), salonTimezone);
   for (let i = 0; i < DAYS_AHEAD; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
+    const date = addZonedCalendarDays(today, i);
     result.push({
-      date: d.toISOString().slice(0, 10),
-      label: d.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' }),
+      date,
+      label: formatZonedCalendarDate(date, locale, { weekday: 'short', month: 'short', day: 'numeric' }),
     });
   }
   return result;
@@ -50,7 +57,7 @@ export function RescheduleSheet({
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const days = nextDays(language);
+  const days = nextDays(language, booking.salonTimezone);
 
   useEffect(() => {
     if (!selectedDate) return;
@@ -113,7 +120,11 @@ export function RescheduleSheet({
     <Card style={styles.card}>
       <Text style={styles.title}>{t.rescheduleBookingTitle}</Text>
       <Text style={styles.subtitle}>
-        {t.currentlyPrefix}{new Date(booking.slotStart).toLocaleString(dateLocaleFor(language))}
+        {t.currentlyPrefix}
+        {(() => {
+          const current = formatBookingArrivalTime(booking.slotStart, booking.salonTimezone, dateLocaleFor(language));
+          return `${current.date}, ${current.time}${!current.isDeviceLocalTimezone ? t.shopLocalTimeSuffix : ''}`;
+        })()}
       </Text>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
@@ -156,7 +167,7 @@ export function RescheduleSheet({
                       selectedSlot?.slotStart === slot.slotStart && styles.slotChipTextActive,
                     ]}
                   >
-                    {new Date(slot.slotStart).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
+                    {formatZonedDateTime(slot.slotStart, booking.salonTimezone, dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </Pressable>
               ))}

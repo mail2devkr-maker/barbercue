@@ -195,6 +195,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
                 servicePrice: item.price,
                 serviceDurationMinutes: item.durationMinutes,
                 operatingHours: salon.operatingHours,
+                salonTimezone: salon.salonTimezone,
                 selectedStyleName,
               })
             }

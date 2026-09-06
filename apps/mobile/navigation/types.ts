@@ -23,6 +23,11 @@ export type SearchStackParamList = {
     servicePrice: number;
     serviceDurationMinutes: number;
     operatingHours: OperatingHoursDto[];
+    // Pre-confirmation timezone fix — the salon's resolved IANA zone (SalonProfileDto.
+    // salonTimezone), carried forward step-to-step the same way operatingHours already is, so
+    // every date/slot render from here through ConfirmBooking uses the salon's own local time
+    // rather than the device's. Null degrades to the device zone, same convention as elsewhere.
+    salonTimezone: string | null;
     selectedStyleName?: string;
   };
   DateSelect: {
@@ -33,6 +38,7 @@ export type SearchStackParamList = {
     servicePrice: number;
     serviceDurationMinutes: number;
     operatingHours: OperatingHoursDto[];
+    salonTimezone: string | null;
     preferredStaffId: string | null;
     preferredStaffName: string | null;
     selectedStyleName?: string;
@@ -43,6 +49,7 @@ export type SearchStackParamList = {
     serviceId: string;
     serviceName: string;
     servicePrice: number;
+    salonTimezone: string | null;
     preferredStaffId: string | null;
     preferredStaffName: string | null;
     date: string;
@@ -54,6 +61,7 @@ export type SearchStackParamList = {
     serviceId: string;
     serviceName: string;
     servicePrice: number;
+    salonTimezone: string | null;
     preferredStaffId: string | null;
     preferredStaffName: string | null;
     slotStart: string;

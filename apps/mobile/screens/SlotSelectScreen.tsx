@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS } from '@barbercue/shared';
+import { DISCOVERY_PATHS, SALON_BOOKING_INFO_PATHS, formatZonedDateTime } from '@barbercue/shared';
 import type { AvailabilitySlotDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { dateLocaleFor } from '../lib/date-locale';
@@ -15,7 +15,7 @@ type Props = NativeStackScreenProps<SearchStackParamList, 'SlotSelect'>;
 
 export default function SlotSelectScreen({ route, navigation }: Props) {
   const { t, language } = useLanguage();
-  const { salonId, serviceId, preferredStaffId, date, ...rest } = route.params;
+  const { salonId, serviceId, preferredStaffId, salonTimezone, date, ...rest } = route.params;
   const [slots, setSlots] = useState<AvailabilitySlotDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,12 +77,13 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
                   disabled={occupied}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: occupied }}
-                  accessibilityLabel={`${new Date(item.slotStart).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}, ${occupied ? t.occupiedWord : t.availableWord}`}
+                  accessibilityLabel={`${formatZonedDateTime(item.slotStart, salonTimezone, dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}, ${occupied ? t.occupiedWord : t.availableWord}`}
                   onPress={() =>
                     navigation.navigate('ConfirmBooking', {
                       salonId,
                       serviceId,
                       preferredStaffId,
+                      salonTimezone,
                       ...rest,
                       slotStart: item.slotStart,
                       slotEnd: item.slotEnd,
@@ -90,7 +91,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
                   }
                 >
                   <Text style={[styles.slotText, occupied && styles.slotTextOccupied]}>
-                    {new Date(item.slotStart).toLocaleTimeString(dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
+                    {formatZonedDateTime(item.slotStart, salonTimezone, dateLocaleFor(language), { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </Pressable>
               );

@@ -48,6 +48,7 @@ export function useRebook() {
           servicePrice: booking.servicePrice,
           serviceDurationMinutes: booking.serviceDurationMinutes,
           operatingHours: salon.operatingHours,
+          salonTimezone: salon.salonTimezone,
           preferredStaffId: booking.preferredStaffId,
           preferredStaffName: booking.preferredStaffName,
         },

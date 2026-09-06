@@ -245,6 +245,54 @@ export function zonedDateKey(iso: string, timezone: string | null | undefined): 
   }
 }
 
+// ---------- Zoned calendar-date arithmetic (pre-confirmation timezone fix) ----------
+//
+// The date picker on both web and mobile used to generate its candidate date list from the
+// DEVICE's own `new Date()`/`getDate()`/`getDay()` — correct only when the customer happens to be
+// in the same zone as the salon. These three helpers let a client build the same "next N days"
+// list from the SALON's own local "today" (via zonedDateKey) instead, without re-implementing
+// timezone-inference logic per client. They mirror pure, dependency-free functions the backend
+// already has in apps/backend/src/common/timezone/timezone.ts (addZonedCalendarDays,
+// zonedDateToDayOfWeek) — kept as parallel copies here rather than a shared import across the
+// backend/frontend boundary, since these are trivial calendar-string arithmetic (no timezone
+// *lookup*/inference judgment calls at all, unlike resolveSalonTimeZone itself, which stays
+// server-only and is never reimplemented client-side).
+
+/**
+ * Adds `days` calendar days to a 'YYYY-MM-DD' date string. UTC-anchored Date construction is a
+ * pure calendar computation — once a caller already has the correct starting calendar date (e.g.
+ * via zonedDateKey), advancing it by whole days needs no further timezone involvement.
+ */
+export function addZonedCalendarDays(dateStr: string, days: number): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const result = new Date(Date.UTC(year, month - 1, day + days));
+  return `${result.getUTCFullYear()}-${String(result.getUTCMonth() + 1).padStart(2, '0')}-${String(result.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** Day-of-week (0=Sunday..6=Saturday) for a 'YYYY-MM-DD' calendar date — for matching against
+ * OperatingHoursDto.dayOfWeek. Same UTC-anchored technique as addZonedCalendarDays above. */
+export function zonedDateToDayOfWeek(dateStr: string): number {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+/**
+ * Formats a 'YYYY-MM-DD' calendar date's weekday/month/day (e.g. a date-picker chip label) — this
+ * takes no timezone parameter, deliberately: `dateStr` is already the correct salon-local calendar
+ * date (produced via zonedDateKey + addZonedCalendarDays), so rendering its weekday/month/day name
+ * is pure calendar formatting, not a second zone conversion of an instant.
+ */
+export function formatZonedCalendarDate(
+  dateStr: string,
+  locale: string | undefined,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' }).format(
+    new Date(Date.UTC(year, month - 1, day)),
+  );
+}
+
 export interface BookingArrivalTime {
   /** e.g. "Fri, Sep 12" */
   date: string;

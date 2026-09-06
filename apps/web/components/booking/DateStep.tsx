@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import type { OperatingHoursDto } from "@barbercue/shared";
+import {
+  addZonedCalendarDays,
+  formatZonedCalendarDate,
+  zonedDateKey,
+  zonedDateToDayOfWeek,
+  type OperatingHoursDto,
+} from "@barbercue/shared";
 import styles from "./booking.module.css";
 
 const DAYS_AHEAD = 30;
@@ -10,29 +16,37 @@ export function DateStep({
   operatingHours,
   selectedDate,
   onSelect,
+  salonTimezone,
 }: {
   operatingHours: OperatingHoursDto[];
   selectedDate: string | null;
   onSelect: (date: string) => void;
+  // Pre-confirmation timezone fix — "today" and every subsequent chip are the salon's own
+  // calendar dates, never the customer device's (which can genuinely differ near a day boundary
+  // when the two are in different zones). Null degrades to the device's own zone via
+  // zonedDateKey's own documented fallback, same "incomplete beats wrong" convention as elsewhere.
+  salonTimezone: string | null;
 }) {
   // Client-side convenience only (which days to grey out) — the server's availability endpoint
   // is the sole authority on what's actually bookable, so day-boundary fuzziness here is cosmetic.
+  // The date STRING itself, though, is authoritative input to that endpoint (its `date` query
+  // param is interpreted in the salon's own zone server-side) — so unlike the "cosmetic" closed
+  // flag, getting the right calendar date here isn't optional.
   const days = useMemo(() => {
     const result: { date: string; weekday: string; dayLabel: string; closed: boolean }[] = [];
+    const today = zonedDateKey(new Date().toISOString(), salonTimezone);
     for (let i = 0; i < DAYS_AHEAD; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
-      const hours = operatingHours.find((h) => h.dayOfWeek === d.getDay());
+      const date = addZonedCalendarDays(today, i);
+      const hours = operatingHours.find((h) => h.dayOfWeek === zonedDateToDayOfWeek(date));
       result.push({
-        date: iso,
-        weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
-        dayLabel: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        date,
+        weekday: formatZonedCalendarDate(date, undefined, { weekday: "short" }),
+        dayLabel: formatZonedCalendarDate(date, undefined, { month: "short", day: "numeric" }),
         closed: !hours || hours.isClosed,
       });
     }
     return result;
-  }, [operatingHours]);
+  }, [operatingHours, salonTimezone]);
 
   return (
     <section className={styles.stepCard}>

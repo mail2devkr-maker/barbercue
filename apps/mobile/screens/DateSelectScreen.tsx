@@ -1,6 +1,12 @@
 import { useMemo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import {
+  addZonedCalendarDays,
+  formatZonedCalendarDate,
+  zonedDateKey,
+  zonedDateToDayOfWeek,
+} from '@barbercue/shared';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader } from '../components/ui';
 import { dateLocaleFor } from '../lib/date-locale';
@@ -13,26 +19,28 @@ const DAYS_AHEAD = 30;
 
 export default function DateSelectScreen({ route, navigation }: Props) {
   const { t, language } = useLanguage();
-  const { operatingHours, ...rest } = route.params;
+  const { operatingHours, salonTimezone, ...rest } = route.params;
 
-  // Client-side convenience only, same as apps/web's DateStep — the server's availability
-  // endpoint is the sole authority on what's actually bookable.
+  // Client-side convenience only (which days to grey out), same as apps/web's DateStep — the
+  // server's availability endpoint is the sole authority on what's actually bookable. The date
+  // STRING itself, though, is authoritative input to that endpoint (interpreted in the salon's own
+  // zone server-side), so unlike the "cosmetic" closed flag, the salon-local calendar date here
+  // isn't optional — this must never be the device's own "today"/day-of-week.
   const days = useMemo(() => {
     const result: { date: string; label: string; closed: boolean }[] = [];
     const locale = dateLocaleFor(language);
+    const today = zonedDateKey(new Date().toISOString(), salonTimezone);
     for (let i = 0; i < DAYS_AHEAD; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      const iso = d.toISOString().slice(0, 10);
-      const hours = operatingHours.find((h) => h.dayOfWeek === d.getDay());
+      const date = addZonedCalendarDays(today, i);
+      const hours = operatingHours.find((h) => h.dayOfWeek === zonedDateToDayOfWeek(date));
       result.push({
-        date: iso,
-        label: d.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' }),
+        date,
+        label: formatZonedCalendarDate(date, locale, { weekday: 'short', month: 'short', day: 'numeric' }),
         closed: !hours || hours.isClosed,
       });
     }
     return result;
-  }, [operatingHours, language]);
+  }, [operatingHours, salonTimezone, language]);
 
   return (
     <Screen scroll={false} contentStyle={styles.screenContent}>
@@ -45,7 +53,7 @@ export default function DateSelectScreen({ route, navigation }: Props) {
           <Pressable
             style={[styles.card, item.closed && styles.cardDisabled]}
             disabled={item.closed}
-            onPress={() => navigation.navigate('SlotSelect', { ...rest, date: item.date })}
+            onPress={() => navigation.navigate('SlotSelect', { ...rest, salonTimezone, date: item.date })}
           >
             <Text style={styles.cardTitle}>{item.label}</Text>
             {item.closed && <Text style={styles.cardSubtitle}>{t.slotsClosedLabel}</Text>}

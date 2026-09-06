@@ -380,6 +380,15 @@ export class SalonsService {
       // — the customer already navigated here, distance is no longer the decision being made.
       distanceKm: null,
       isOpenNow: isOpenNow(salon.operatingHours, salon),
+      // Pre-confirmation timezone fix: the salon's resolved IANA zone, so the booking flow (date
+      // picker, slot times, pre-confirm summary) can render in the SALON's local time instead of
+      // the customer device's, the same way BookingDetailDto.salonTimezone already does for
+      // post-booking screens (Part 5). Public scheduling metadata, safe on the public profile DTO
+      // — never the raw owner-only Salon.timezone override flags, just the resolved zone string.
+      salonTimezone: resolveSalonTimeZone({
+        timezone: salon.timezone,
+        countryCode: salon.city.countryCode,
+      }),
       verified: salon.verification?.status === VerificationStatus.APPROVED,
       waitingCount: await this.prisma.queueEntry.count({
         where: {

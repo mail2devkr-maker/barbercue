@@ -54,6 +54,7 @@ export function BookingFlow({
   selectedStyleName,
   currency,
   countryCode,
+  salonTimezone,
   initialServiceId,
   initialStaffId,
 }: {
@@ -63,6 +64,11 @@ export function BookingFlow({
   // From the salon this flow belongs to — every amount shown here is in its currency.
   currency: string | null;
   countryCode?: string | null;
+  // Pre-confirmation timezone fix — SalonProfileDto's resolved IANA zone (server-side, via
+  // resolveSalonTimeZone). Every pre-confirm date/slot render in this flow uses this, never the
+  // customer device's zone, so the displayed appointment time never silently jumps once the
+  // booking actually confirms (BookingDetailDto.salonTimezone is the exact same resolution).
+  salonTimezone: string | null;
   // AI Style Advisor hand-off (major-upgrade phase) — set only when this flow was reached via
   // "Try This Look"; threaded straight into the booking-creation body when present.
   selectedStyleName?: string;
@@ -470,11 +476,22 @@ export function BookingFlow({
       )}
 
       {selectedServiceId && selectedStaffId !== undefined && (
-        <DateStep operatingHours={operatingHours} selectedDate={selectedDate} onSelect={handleSelectDate} />
+        <DateStep
+          operatingHours={operatingHours}
+          selectedDate={selectedDate}
+          onSelect={handleSelectDate}
+          salonTimezone={salonTimezone}
+        />
       )}
 
       {selectedDate && (
-        <SlotStep slots={slots} selectedSlot={selectedSlot} onSelect={setSelectedSlot} loading={slotsLoading} />
+        <SlotStep
+          slots={slots}
+          selectedSlot={selectedSlot}
+          onSelect={setSelectedSlot}
+          loading={slotsLoading}
+          salonTimezone={salonTimezone}
+        />
       )}
 
       {selectedSlot && (
@@ -482,11 +499,21 @@ export function BookingFlow({
           <h2 className={styles.stepHeading}>
             <span className={styles.stepNumber}>5</span> Confirm
           </h2>
-          <p className={styles.summaryLine}>
-            <strong>{services.find((s) => s.id === selectedServiceId)?.name}</strong> —{" "}
-            {new Date(selectedSlot.slotStart).toLocaleString()}
-            {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
-          </p>
+          {(() => {
+            // Pre-confirmation timezone fix — the exact same formatter/zone the confirmed-booking
+            // view above uses (formatBookingArrivalTime + booking.salonTimezone), so this summary
+            // can never show a different-looking time than what the customer sees the instant
+            // after they actually confirm.
+            const arrival = formatBookingArrivalTime(selectedSlot.slotStart, salonTimezone);
+            return (
+              <p className={styles.summaryLine}>
+                <strong>{services.find((s) => s.id === selectedServiceId)?.name}</strong> —{" "}
+                {arrival.date}, {arrival.time}
+                {!arrival.isDeviceLocalTimezone && " (shop's local time)"}
+                {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
+              </p>
+            );
+          })()}
           {selectedStyleName && <p className={styles.summaryLine}>Style: {selectedStyleName}</p>}
           {cancellationPolicy && (
             <p className={styles.summaryLine}>

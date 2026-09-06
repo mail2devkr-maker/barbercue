@@ -309,6 +309,11 @@ export interface SalonProfileDto extends SalonListItemDto {
   photos: PhotoDto[];
   reviews: ReviewSummaryDto[]; // most recent, capped server-side (see API.md)
   team: TeamMemberDto[]; // Phase 17 — "Meet the team", ACTIVE staff only
+  // Pre-confirmation timezone fix — the salon's resolved IANA zone (server-side, via
+  // resolveSalonTimeZone; same convention as BookingDetailDto.salonTimezone for post-booking
+  // screens). Null when it genuinely could not be resolved — clients degrade to their own device
+  // zone in that case, never a guess. Public scheduling metadata only; carries no owner/admin data.
+  salonTimezone: string | null;
 }
 
 /**

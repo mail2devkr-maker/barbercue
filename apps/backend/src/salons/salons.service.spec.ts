@@ -1116,6 +1116,62 @@ describe('SalonsService', () => {
         expect(profile.isOpenNow).toBeNull();
       });
     });
+
+    // Pre-confirmation timezone fix — SalonProfileDto now exposes the same resolved IANA zone
+    // BookingDetailDto.salonTimezone already does, so the booking flow can render dates/slots in
+    // the salon's own local time before a booking even exists.
+    describe('salonTimezone', () => {
+      it("exposes the salon's own explicit IANA zone", async () => {
+        citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
+          id: 'c1',
+          slug: 'dallas',
+          countryCode: 'US',
+        });
+        prisma.salon.findFirst.mockResolvedValue(
+          makeSalon({
+            city: { slug: 'dallas', countryCode: 'US' },
+            timezone: 'America/Chicago',
+            services: [],
+            operatingHours: [],
+            reviews: [],
+          }),
+        );
+        const profile = await service.getProfile('US', 'dallas', 'barbercue-demo');
+        expect(profile.salonTimezone).toBe('America/Chicago');
+      });
+
+      it('falls back to Asia/Kolkata for an India salon with no explicit timezone stored', async () => {
+        citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
+          id: 'c1',
+          slug: 'bengaluru',
+          countryCode: 'IN',
+        });
+        prisma.salon.findFirst.mockResolvedValue(
+          makeSalon({ services: [], operatingHours: [], reviews: [] }),
+        );
+        const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
+        expect(profile.salonTimezone).toBe('Asia/Kolkata');
+      });
+
+      it('is null — never guessed — for a non-India salon with no explicit or resolvable timezone', async () => {
+        citiesService.findCityByCountryAndSlugOrThrow.mockResolvedValue({
+          id: 'c1',
+          slug: 'newyork',
+          countryCode: 'US',
+        });
+        prisma.salon.findFirst.mockResolvedValue(
+          makeSalon({
+            city: { slug: 'newyork', countryCode: 'US' },
+            timezone: null,
+            services: [],
+            operatingHours: [],
+            reviews: [],
+          }),
+        );
+        const profile = await service.getProfile('US', 'newyork', 'barbercue-demo');
+        expect(profile.salonTimezone).toBeNull();
+      });
+    });
   });
 
   describe('registerSalon', () => {
