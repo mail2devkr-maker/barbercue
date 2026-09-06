@@ -34,9 +34,14 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
                 </Link>
               ))}
             </div>
-            <Link href="/style-advisor" className={styles.styleAdvisorLink}>
-              AI Style Advisor <span aria-hidden="true">→</span>
-            </Link>
+            <div className={styles.secondaryLinks}>
+              <Link href="/owner/login" className={styles.ownerDashboardLink}>
+                Owner Dashboard <span aria-hidden="true">→</span>
+              </Link>
+              <Link href="/style-advisor" className={styles.styleAdvisorLink}>
+                AI Style Advisor <span aria-hidden="true">→</span>
+              </Link>
+            </div>
           </nav>
           <div className={styles.content}>{children}</div>
         </main>

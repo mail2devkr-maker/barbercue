@@ -24,8 +24,15 @@
   gap: 4px;
 }
 
+.secondaryLinks {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .accountLink,
-.styleAdvisorLink {
+.styleAdvisorLink,
+.ownerDashboardLink {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
@@ -62,8 +69,29 @@
   transform: translateY(-1px);
 }
 
+/* Own shop management is a different surface entirely (its own login, its own session audience —
+   see the auth-security branch) — styled as a plain outlined pill rather than the gold "AI Style
+   Advisor" CTA so it doesn't compete with that feature's own marketing accent. Shown to every
+   authenticated customer regardless of whether this particular account also owns a shop: a
+   CUSTOMER-audience session's roles are always scoped to just [CUSTOMER] (by design, so this page
+   can never learn "is this account also an owner" from the token itself), and StaffLoginForm/
+   OwnerLoginForm harmlessly reject anyone who isn't actually staff/owner. */
+.ownerDashboardLink {
+  padding: 10px 16px;
+  gap: 8px;
+  border: 1px solid var(--bc-border);
+  color: var(--bc-ink);
+  background: transparent;
+}
+
+.ownerDashboardLink:hover {
+  background: var(--bc-surface);
+  transform: translateY(-1px);
+}
+
 .accountLink:focus-visible,
-.styleAdvisorLink:focus-visible {
+.styleAdvisorLink:focus-visible,
+.ownerDashboardLink:focus-visible {
   outline: 2px solid var(--bc-ink);
   outline-offset: 2px;
 }
@@ -97,18 +125,26 @@
     line-height: 1.25;
   }
 
-  .styleAdvisorLink {
+  .secondaryLinks {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .styleAdvisorLink,
+  .ownerDashboardLink {
     width: 100%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .accountLink,
-  .styleAdvisorLink {
+  .styleAdvisorLink,
+  .ownerDashboardLink {
     transition: none;
   }
 
-  .styleAdvisorLink:hover {
+  .styleAdvisorLink:hover,
+  .ownerDashboardLink:hover {
     transform: none;
   }
 }
