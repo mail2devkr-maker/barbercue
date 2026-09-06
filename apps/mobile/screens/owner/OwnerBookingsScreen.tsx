@@ -112,6 +112,10 @@ export default function OwnerBookingsScreen({ route }: Props) {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(null);
   const [cancelNotice, setCancelNotice] = useState(false);
+  // Build 10 physical-device retest (Hindi TTS blocker) — set (throttled, see voice-announce.ts)
+  // when Hindi is the active language but this device has no installed Hindi voice, so
+  // speakBooking skipped speaking rather than risking an English/default-voice fallback.
+  const [hindiVoiceWarning, setHindiVoiceWarning] = useState(false);
 
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const filterRef = useRef(filter);
@@ -231,6 +235,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
             salonName: detail.salonName ?? null,
             date,
             time,
+            onHindiVoiceMissing: () => setHindiVoiceWarning(true),
           });
         })
         .catch((err: unknown) => {
@@ -249,7 +254,12 @@ export default function OwnerBookingsScreen({ route }: Props) {
       }
       notifiedIdsRef.current.add(dedupeKey);
       setCancelNotice(true);
-      speakBooking({ event: 'booking.cancelled', bookingId: payload.bookingId, language: preferredLanguageRef.current });
+      speakBooking({
+        event: 'booking.cancelled',
+        bookingId: payload.bookingId,
+        language: preferredLanguageRef.current,
+        onHindiVoiceMissing: () => setHindiVoiceWarning(true),
+      });
     }
 
     socket.on('booking.created', onCreated);
@@ -296,6 +306,14 @@ export default function OwnerBookingsScreen({ route }: Props) {
       {cancelNotice && (
         <Pressable style={[styles.noticeBanner, styles.cancelBanner]} onPress={() => setCancelNotice(false)}>
           <Text style={styles.noticeTitle}>{t.bookingCancelledBanner}</Text>
+        </Pressable>
+      )}
+      {hindiVoiceWarning && (
+        <Pressable
+          style={[styles.noticeBanner, styles.warningBanner]}
+          onPress={() => setHindiVoiceWarning(false)}
+        >
+          <Text style={styles.noticeBody}>{t.hindiVoiceUnavailableWarning}</Text>
         </Pressable>
       )}
 
@@ -373,6 +391,7 @@ const styles = StyleSheet.create({
     marginBottom: space[3],
   },
   cancelBanner: { backgroundColor: color.goldSoft, borderColor: color.border },
+  warningBanner: { backgroundColor: color.accentSoft, borderColor: 'rgba(179, 107, 0, 0.32)' },
   noticeTitle: { fontFamily: font.bodyBold, fontSize: fontSize.sm, color: color.ink },
   noticeBody: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
   filterScroll: { marginBottom: space[3] },

@@ -374,6 +374,11 @@ export interface UiStrings {
   bookingsTitle: string;
   newBookingReceivedBanner: string;
   bookingCancelledBanner: string;
+  // Build 10 physical-device retest (Hindi TTS blocker) — shown, throttled, when Hindi is the
+  // active language but the device has no installed Hindi voice, so voice-announce.ts skips
+  // speaking rather than silently using an English/default voice. Actionable: tells the owner
+  // exactly what to go do, not just that something failed.
+  hindiVoiceUnavailableWarning: string;
   noShopSelected: string;
   selectShopHint: string;
   noBookingsTitle: string;
@@ -1003,6 +1008,8 @@ const enUi: UiStrings = {
   bookingsTitle: 'Bookings',
   newBookingReceivedBanner: 'New booking received',
   bookingCancelledBanner: 'Booking cancelled',
+  hindiVoiceUnavailableWarning:
+    "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings to fix this.",
   noShopSelected: 'No shop selected',
   selectShopHint: 'Select a shop from the Dashboard tab to see its bookings.',
   noBookingsTitle: 'No bookings',
@@ -1581,6 +1588,8 @@ const hiUi: UiStrings = {
   bookingsTitle: 'बुकिंग्स',
   newBookingReceivedBanner: 'नई बुकिंग प्राप्त हुई',
   bookingCancelledBanner: 'बुकिंग रद्द हुई',
+  hindiVoiceUnavailableWarning:
+    'इस डिवाइस पर हिंदी आवाज़ इंस्टॉल नहीं है, इसलिए आवाज़ में सूचनाएं नहीं सुनाई देंगी। इसे ठीक करने के लिए अपने फ़ोन की सेटिंग्स में हिंदी टेक्स्ट-टू-स्पीच आवाज़ इंस्टॉल करें।',
   noShopSelected: 'कोई दुकान चयनित नहीं',
   selectShopHint: 'इसकी बुकिंग्स देखने के लिए डैशबोर्ड टैब से एक दुकान चुनें।',
   noBookingsTitle: 'कोई बुकिंग नहीं',
