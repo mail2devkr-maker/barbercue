@@ -33,7 +33,7 @@
 }
 
 .fast {
-  color: #10172a;
+  color: currentColor;
 }
 
 .que {
@@ -46,7 +46,7 @@
 
 .tagline {
   margin-top: 5px;
-  color: #10172a;
+  color: currentColor;
   opacity: 0.66;
   font-family: var(--font-body);
   font-size: 0.43rem;
@@ -54,15 +54,6 @@
   line-height: 1;
   letter-spacing: 0.18em;
   white-space: nowrap;
-}
-
-.onDark .fast,
-.onDark .tagline {
-  color: #ffffff;
-}
-
-.onDark .tagline {
-  opacity: 0.7;
 }
 
 .compact {
