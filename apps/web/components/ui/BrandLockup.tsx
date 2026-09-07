@@ -1,10 +1,10 @@
 import styles from "./brand-lockup.module.css";
 
-// Pixel-faithful web rendering of the owner-approved premium FastQue identity. The artwork is
-// served as a lossless PNG derived directly from the approved source rather than reconstructed
-// with CSS/text, so the sculpted FQ emblem, dimensional FastQue lettering, ribbon-Q treatment,
-// trademark and gold tagline remain visually consistent everywhere BrandLockup is used.
-const FASTQUE_APPROVED_PREMIUM_LOCKUP_SRC = "/brand/fastque-premium-lockup.png";
+// Pixel-faithful web rendering of the owner-approved premium FastQue identity. Keep a versioned
+// URL so browsers/CDNs cannot keep serving an older cached raster after the approved artwork is
+// replaced under the same public path.
+const FASTQUE_APPROVED_PREMIUM_LOCKUP_SRC =
+  "/brand/fastque-premium-lockup.png?v=20260908-watermark";
 
 export function BrandLockup({
   compact = false,
