@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Fraunces, Work_Sans } from "next/font/google";
 import { FASTQUE_BRAND_ICON_DATA_URI } from "@barbercue/shared";
 import "./globals.css";
+import "./premium-header.css";
 import { AuthProvider } from "../lib/auth-context";
 
 // next/font self-hosts these at build time (no runtime request to Google, no layout shift) and
