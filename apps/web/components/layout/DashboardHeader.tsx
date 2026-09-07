@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { SalonWorkplaceDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
+import { BrandLockup } from "../ui/BrandLockup";
 import { NotificationBell } from "./NotificationBell";
 import styles from "./dashboard-shell.module.css";
 
@@ -52,8 +53,7 @@ export function DashboardHeader() {
     <header className={styles.header}>
       <div className={styles.inner}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-          <span className={styles.mark} aria-hidden="true">FQ</span>
-          <span>FastQue</span>
+          <BrandLockup compact />
         </Link>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
