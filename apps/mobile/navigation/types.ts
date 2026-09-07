@@ -90,6 +90,9 @@ export type AccountStackParamList = {
   StyleAdvisor: undefined;
   Notifications: undefined;
   CreditsHistory: undefined;
+  // Mobile Shop Owner Onboarding mission — reachable directly from Account ("List your shop") and
+  // via the pending-intent replay from the signed-out CTAs (see shop-registration-intent.ts).
+  RegisterShop: undefined;
 };
 
 // Bottom-tab level — each tab owns its own native stack. NavigatorScreenParams lets a caller

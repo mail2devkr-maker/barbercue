@@ -5,8 +5,11 @@ import {
   Param,
   Post,
   Query,
+  Req,
+  Res,
   UsePipes,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import {
   DISCOVERY_PATHS,
   Role,
@@ -21,6 +24,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Idempotent } from '../common/decorators/idempotent.decorator';
+import { setRefreshCookie } from '../common/refresh-cookie';
 import { SalonsService } from './salons.service';
 
 // GET routes are public/unauthenticated, SEO-facing per API.md's Discovery section; POST (shop
@@ -38,14 +42,25 @@ export class SalonsController {
     return this.salonsService.search(query);
   }
 
+  // @Res({passthrough: true}) + setRefreshCookie: registerSalon mints a fresh STAFF-audience
+  // session (see its own doc comment) — the web client needs the same httpOnly refresh cookie
+  // every login endpoint sets, not just the JSON body mobile reads its tokens from.
   @Roles(Role.CUSTOMER, Role.SALON_OWNER)
   @Post()
   @Idempotent()
-  register(
+  async register(
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(registerSalonSchema)) body: RegisterSalonInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.salonsService.registerSalon(user.id, body);
+    const result = await this.salonsService.registerSalon(
+      user.id,
+      body,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
   }
 
   // `mine` is a single literal segment vs. the three-segment :countryCode/:citySlug/:salonSlug

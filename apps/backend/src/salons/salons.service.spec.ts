@@ -4,6 +4,7 @@ import { SalonsService } from './salons.service';
 import { CitiesService } from './cities.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { TokenService } from '../auth/services/token.service';
 
 function uniqueConstraintError() {
   return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
@@ -54,6 +55,7 @@ describe('SalonsService', () => {
     queueEntry: { count: jest.Mock };
     locality: { findUnique: jest.Mock };
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
+    user: { findUniqueOrThrow: jest.Mock };
     $transaction: jest.Mock;
   };
   let citiesService: {
@@ -61,6 +63,7 @@ describe('SalonsService', () => {
     findCityByCountryAndSlugOrThrow: jest.Mock;
   };
   let salonAccess: { assertAccess: jest.Mock; assertOwnerOrAdminAccess: jest.Mock };
+  let tokenService: { scopeRolesToAudience: jest.Mock; issueTokenPair: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -87,6 +90,21 @@ describe('SalonsService', () => {
         upsert: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
+      // registerSalon's post-grant re-read — default shape carries exactly the newly-granted
+      // SALON_OWNER role so existing registerSalon tests (which don't care about the minted
+      // session) keep passing without each needing to stub this individually.
+      user: {
+        findUniqueOrThrow: jest.fn((args: { where: { id: string } }) =>
+          Promise.resolve({
+            id: args.where.id,
+            roles: [{ role: 'SALON_OWNER' }],
+            phone: null,
+            email: null,
+            preferredLanguage: 'EN',
+            passwordHash: null,
+          }),
+        ),
+      },
       $transaction: jest.fn((fn: (tx: unknown) => Promise<unknown>) =>
         fn(prisma),
       ),
@@ -99,6 +117,14 @@ describe('SalonsService', () => {
       assertAccess: jest.fn().mockResolvedValue(undefined),
       assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('PLATFORM_ADMIN'),
     };
+    tokenService = {
+      scopeRolesToAudience: jest.fn((roles: string[]) =>
+        roles.filter((r) => r === 'SALON_OWNER' || r === 'SALON_STAFF'),
+      ),
+      issueTokenPair: jest
+        .fn()
+        .mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh', expiresIn: 900 }),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -106,6 +132,7 @@ describe('SalonsService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: CitiesService, useValue: citiesService },
         { provide: SalonAccessService, useValue: salonAccess },
+        { provide: TokenService, useValue: tokenService },
       ],
     }).compile();
     service = moduleRef.get(SalonsService);
@@ -1224,12 +1251,112 @@ describe('SalonsService', () => {
         update: {},
         create: { userId: 'owner-1', role: 'SALON_OWNER', salonId: 's1' },
       });
-      expect(result).toEqual({
+      expect(result.salon).toEqual({
         id: 's1',
         publicId: 'BC-SHOP-000001',
         slug: 'fresh-cuts-co',
         name: 'Fresh Cuts & Co.',
         status: 'PENDING',
+      });
+    });
+
+    // Auth-security-branch fix: a CUSTOMER-audience session must never be left unable to reach
+    // the very shop it just registered. See registerSalon's own doc comment.
+    describe('the minted STAFF-audience session', () => {
+      beforeEach(() => {
+        prisma.salon.create.mockResolvedValue({
+          id: 's1',
+          publicId: 'BC-SHOP-000001',
+          slug: 'fresh-cuts-co',
+          name: 'Fresh Cuts & Co.',
+          status: 'PENDING',
+        });
+      });
+
+      it('re-reads the caller\'s roles AFTER the SALON_OWNER grant, not the pre-registration set', async () => {
+        await service.registerSalon('owner-1', input);
+        expect(prisma.user.findUniqueOrThrow).toHaveBeenCalledWith({
+          where: { id: 'owner-1' },
+          include: { roles: true },
+        });
+      });
+
+      it('mints a fresh token pair via TokenService, scoped to STAFF audience, including the just-granted SALON_OWNER role', async () => {
+        await service.registerSalon('owner-1', input, 'test-device');
+        expect(tokenService.scopeRolesToAudience).toHaveBeenCalledWith(
+          ['SALON_OWNER'],
+          'STAFF',
+        );
+        expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+          'owner-1',
+          ['SALON_OWNER'],
+          'STAFF',
+          'test-device',
+        );
+      });
+
+      it('returns a MeResponse-shaped user with STAFF audience and the tokens from TokenService — never the old session\'s shape', async () => {
+        const result = await service.registerSalon('owner-1', input);
+        expect(result.user).toEqual({
+          id: 'owner-1',
+          roles: ['SALON_OWNER'],
+          audience: 'STAFF',
+          phone: null,
+          email: null,
+          preferredLanguage: 'EN',
+          passwordConfigured: false,
+        });
+        expect(result.tokens).toEqual({
+          accessToken: 'access',
+          refreshToken: 'refresh',
+          expiresIn: 900,
+        });
+      });
+
+      it('never leaks a PLATFORM_ADMIN role into the minted STAFF session even if the User row also holds it', async () => {
+        // Real filtering behavior, not the simplified per-test mock — proves this call site
+        // actually benefits from TokenService's own audience-scoping rule, not just that this
+        // spec's mock happens to agree with it.
+        const realTokenService = {
+          scopeRolesToAudience: (roles: string[], audience: string) => {
+            const allowed: Record<string, string[]> = {
+              CUSTOMER: ['CUSTOMER'],
+              STAFF: ['SALON_STAFF', 'SALON_OWNER'],
+              ADMIN: ['PLATFORM_ADMIN'],
+            };
+            return roles.filter((r) => allowed[audience]?.includes(r));
+          },
+          issueTokenPair: tokenService.issueTokenPair,
+        };
+        const moduleRef = await Test.createTestingModule({
+          providers: [
+            SalonsService,
+            { provide: PrismaService, useValue: prisma },
+            { provide: CitiesService, useValue: citiesService },
+            { provide: SalonAccessService, useValue: salonAccess },
+            { provide: TokenService, useValue: realTokenService },
+          ],
+        }).compile();
+        const realService = moduleRef.get(SalonsService);
+        prisma.user.findUniqueOrThrow.mockResolvedValueOnce({
+          id: 'owner-1',
+          roles: [{ role: 'SALON_OWNER' }, { role: 'PLATFORM_ADMIN' }],
+          phone: null,
+          email: null,
+          preferredLanguage: 'EN',
+          passwordHash: null,
+        });
+
+        const result = await realService.registerSalon('owner-1', input);
+
+        expect(result.user.roles).toEqual(['SALON_OWNER']);
+        expect(result.user.roles).not.toContain('PLATFORM_ADMIN');
+        expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+          'owner-1',
+          ['SALON_OWNER'],
+          'STAFF',
+          undefined,
+        );
       });
     });
 
@@ -1275,7 +1402,7 @@ describe('SalonsService', () => {
           lng: null,
         }),
       });
-      expect(result.id).toBe('s1');
+      expect(result.salon.id).toBe('s1');
     });
 
     // The client sends countryCode so postal validation can run before any DB lookup. If that
@@ -1422,7 +1549,7 @@ describe('SalonsService', () => {
       expect(prisma.salon.create).toHaveBeenNthCalledWith(2, {
         data: expect.objectContaining({ slug: 'fresh-cuts-co-2' }),
       });
-      expect(result.slug).toBe('fresh-cuts-co-2');
+      expect(result.salon.slug).toBe('fresh-cuts-co-2');
     });
 
     it('gives up after MAX_SLUG_ATTEMPTS collisions with a clear error', async () => {

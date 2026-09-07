@@ -39,6 +39,13 @@ interface AuthContextValue {
   // Reloads auth/me and applies the result to state — used after a change that doesn't rotate
   // tokens (e.g. PATCH auth/language), mirroring apps/web/lib/auth-context.tsx's own refreshMe.
   refreshMe: () => Promise<void>;
+  // Applies a {user, tokens} result exactly like a fresh login would. Shop registration uses this
+  // to move a CUSTOMER-audience session into the genuinely new STAFF-audience one POST /salons
+  // returns — there is no "upgrade this session in place" endpoint (TokenService.rotateRefreshToken
+  // deliberately preserves a token's original audience forever), so this is the same
+  // apply-a-fresh-session path verifyCustomerOtp/staffLogin/etc. already use internally, just
+  // exposed for a non-login endpoint that also mints a session.
+  applySession: (result: { user: MeResponse; tokens: AuthTokens }) => Promise<MeResponse>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -159,8 +166,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout, refreshMe }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout, refreshMe],
+    () => ({
+      user,
+      status,
+      verifyCustomerOtp,
+      googleLogin,
+      staffLogin,
+      staffGoogleLogin,
+      logout,
+      refreshMe,
+      applySession: applyAuthResult,
+    }),
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout, refreshMe, applyAuthResult],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

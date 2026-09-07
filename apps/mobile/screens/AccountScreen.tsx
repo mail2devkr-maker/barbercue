@@ -154,6 +154,17 @@ export default function AccountScreen() {
         </View>
       </Card>
 
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>{t.listYourShopCta}</Text>
+        <Text style={styles.noteText}>{t.registerShopSubtitle}</Text>
+        <Button
+          title={t.listYourShopCta}
+          variant="outline"
+          onPress={() => navigation.navigate('RegisterShop')}
+          style={styles.revokeAllButton}
+        />
+      </Card>
+
       <View style={styles.shortcutGrid}>
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('BookingsTab', { screen: 'MyBookings' })}>
           <Text style={styles.shortcutTitle}>{t.myBookings}</Text>

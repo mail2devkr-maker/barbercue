@@ -28,11 +28,17 @@ interface AuthContextValue {
   setInitialPassword: (input: InitialPasswordInput) => Promise<MeResponse>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
-  // Rotates the refresh token to mint a fresh access token, then reloads /auth/me — unlike
-  // refreshMe() alone, this picks up ROLE changes that happened server-side after the current
-  // access token was issued (e.g. just-completed shop registration granting SALON_OWNER), since
-  // TokenService.rotateRefreshToken re-reads roles from the DB on every rotation.
+  // Rotates the refresh token to mint a fresh access token, then reloads /auth/me. Cannot upgrade
+  // a session to a NEW audience — TokenService.rotateRefreshToken deliberately preserves whatever
+  // audience the token already has forever (see its own doc comment); it only re-scopes roles
+  // WITHIN that audience against the DB's current state. Use applySession below for any endpoint
+  // that mints a genuinely new session (a different audience), e.g. shop registration.
   refreshSession: () => Promise<void>;
+  // Applies a {user, tokens} result exactly like a fresh login would — the shared endpoint for
+  // any action that mints a brand-new session rather than reusing/rotating the current one. Shop
+  // registration uses this to move a CUSTOMER-audience session into the STAFF-audience one its
+  // response returns, since refreshSession() above can never do that upgrade itself.
+  applySession: (result: { user: MeResponse; tokens: AuthTokens }) => MeResponse;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -207,8 +213,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       refreshMe,
       refreshSession,
+      applySession: handleAuthResult,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, adminLogin, adminGoogleLogin, setInitialPassword, logout, refreshMe, refreshSession],
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, adminLogin, adminGoogleLogin, setInitialPassword, logout, refreshMe, refreshSession, handleAuthResult],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

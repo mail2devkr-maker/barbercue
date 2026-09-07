@@ -337,3 +337,23 @@ export function formatBookingArrivalTime(
   const isDeviceLocalTimezone = !timezone || !deviceTimezone || timezone === deviceTimezone;
   return { date, time, isDeviceLocalTimezone };
 }
+
+const INDIA_COUNTRY_CODE = 'IN';
+const countryNameCollator = new Intl.Collator('en', { sensitivity: 'base' });
+
+/**
+ * Presents India first for FastQue's launch market while keeping every other API country in
+ * alphabetical order. Moved here (Mobile Shop Owner Onboarding mission) from apps/web's own
+ * lib/country-order.ts so RegisterShopScreen (mobile) and RegisterSalonForm (web) share one
+ * implementation rather than two copies that could silently drift — web now re-exports this.
+ */
+export function orderCountriesForDisplay<T extends { isoCode2: string; name: string }>(
+  countries: readonly T[],
+): T[] {
+  const india = countries.find((country) => country.isoCode2 === INDIA_COUNTRY_CODE);
+  const others = countries
+    .filter((country) => country.isoCode2 !== INDIA_COUNTRY_CODE)
+    .sort((a, b) => countryNameCollator.compare(a.name, b.name));
+
+  return india ? [india, ...others] : others;
+}

@@ -368,6 +368,27 @@ export interface RegisterSalonResultDto {
 }
 
 /**
+ * Auth-security-branch fix: registering a shop grants the caller SALON_OWNER in the DB, but a
+ * CUSTOMER-audience session (phone OTP / customer Google) can never carry that role no matter how
+ * many times its refresh token is rotated — TokenService.rotateRefreshToken deliberately preserves
+ * the session's original audience forever, by design (see its own doc comment). Without this, a
+ * plain customer who registers a shop is left holding a token that still can't reach their own new
+ * shop's dashboard.
+ *
+ * So registerSalon mints a genuine fresh STAFF-audience token pair (the same
+ * TokenService.issueTokenPair every staff/owner login already uses) as part of a successful,
+ * already-authenticated registration — not a patched-in role on the existing token. `user` is the
+ * same MeResponse shape every login returns, scoped to that new STAFF audience, so the client can
+ * apply this exactly like any other login result (see AuthContext's own handleAuthResult-style
+ * helper on web/mobile).
+ */
+export interface RegisterSalonResponseDto {
+  salon: RegisterSalonResultDto;
+  user: MeResponse;
+  tokens: AuthTokens;
+}
+
+/**
  * A salon the caller may operate, from GET salons/workplaces. Resolved from UserRole membership —
  * the same rule SalonAccessService.assertAccess enforces — so "what I can see listed" and "what I
  * can actually open" can never drift apart.

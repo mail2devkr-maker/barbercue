@@ -9,6 +9,7 @@ import AccountStack from './AccountStack';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
+import { takePendingShopRegistrationIntent } from '../lib/shop-registration-intent';
 import { navigationRef } from './navigation-ref';
 import { color, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
@@ -37,6 +38,20 @@ function GuestBookingHandoffBridge() {
   return null;
 }
 
+/**
+ * Replays a signed-out "Register your shop" tap (RoleSelectScreen's menu, OwnerStaffLoginScreen's
+ * "New to FastQue?" link) once the customer sign-in it required has completed and this navigator
+ * has mounted — same shape as GuestBookingHandoffBridge above, applied to
+ * shop-registration-intent.ts's stash instead of guest-booking-handoff.ts's.
+ */
+function ShopRegistrationHandoffBridge() {
+  useEffect(() => {
+    if (!takePendingShopRegistrationIntent() || !navigationRef.isReady()) return;
+    navigationRef.navigate('AccountTab', { screen: 'RegisterShop' });
+  }, []);
+  return null;
+}
+
 // Mounted only when authenticated (see App.tsx) — every screen here assumes a logged-in
 // customer, matching the web app's book/layout.tsx + account/layout.tsx RequireRole gates.
 // Text-only tab labels (no icon library added) — active tab reads via color + weight, matching
@@ -49,6 +64,7 @@ export default function RootNavigator() {
   return (
     <>
       <GuestBookingHandoffBridge />
+      <ShopRegistrationHandoffBridge />
       <Tab.Navigator
         screenOptions={{
         headerShown: false,

@@ -3,6 +3,7 @@ import AccountScreen from '../screens/AccountScreen';
 import StyleAdvisorScreen from '../screens/StyleAdvisorScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import CreditsHistoryScreen from '../screens/CreditsHistoryScreen';
+import RegisterShopScreen from '../screens/RegisterShopScreen';
 import { styleAdvisorHeaderOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
@@ -22,6 +23,7 @@ export default function AccountStack() {
       />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: t.notifications }} />
       <Stack.Screen name="CreditsHistory" component={CreditsHistoryScreen} options={{ title: t.fastQueCreditsLabel }} />
+      <Stack.Screen name="RegisterShop" component={RegisterShopScreen} options={{ title: t.registerShopTitle }} />
     </Stack.Navigator>
   );
 }

@@ -5,6 +5,7 @@ import { staffLoginSchema } from '@barbercue/shared';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
+import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, InlineError } from '../components/ui';
@@ -135,6 +136,18 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
       </View>
 
       <Button title={t.signInTitle} onPress={() => void handleSubmit()} loading={submitting} style={styles.submitButton} />
+
+      {role === 'OWNER' && (
+        <Pressable
+          style={styles.registerShopLink}
+          onPress={() => {
+            stashPendingShopRegistrationIntent();
+            navigation.navigate('CustomerLogin');
+          }}
+        >
+          <Text style={styles.registerShopLinkText}>{t.newToFastQueRegisterShop}</Text>
+        </Pressable>
+      )}
     </Screen>
   );
 }
@@ -157,6 +170,8 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
   },
   submitButton: { marginTop: space[2] },
+  registerShopLink: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: space[4] },
+  registerShopLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent },
   googleButton: {
     minHeight: 50,
     backgroundColor: color.surface,

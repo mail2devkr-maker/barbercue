@@ -3,13 +3,16 @@ import { Prisma } from '@prisma/client';
 import {
   Role,
   SalonStatus,
+  SessionAudience,
   ChairStatus,
   QueueEntryStatus,
   currencyForCountry,
   haversineDistanceKm,
+  type MeResponse,
   type PaginatedResult,
   type RegisterSalonInput,
   type RegisterSalonResultDto,
+  type RegisterSalonResponseDto,
   StaffMemberStatus,
   VerificationStatus,
   type LiveStatsDto,
@@ -23,6 +26,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { TokenService } from '../auth/services/token.service';
 import { CitiesService } from './cities.service';
 import { isOpenAt, resolveSalonTimeZone } from '../common/timezone/timezone';
 import { resolveAutoTimezone } from '../common/timezone/timezone-resolution';
@@ -105,6 +109,7 @@ export class SalonsService {
     private readonly prisma: PrismaService,
     private readonly citiesService: CitiesService,
     private readonly salonAccess: SalonAccessService,
+    private readonly tokenService: TokenService,
   ) {}
 
   // Issue #13 Mission G — two cheap, independent count queries, no joins. Real zeros on a genuinely
@@ -512,11 +517,24 @@ export class SalonsService {
    * whatever roles they already have. Requires an existing City (by slug) rather than accepting
    * free-text state/country, so a typo can't silently create a duplicate/junk City row — city
    * curation stays CitiesService's existing, separate concern.
+   *
+   * Auth-security-branch fix: the caller's EXISTING session's audience is never upgraded in
+   * place — TokenService.rotateRefreshToken deliberately preserves a token's original audience
+   * forever (a CUSTOMER session must never become able to mint SALON_OWNER just because the DB
+   * role now exists). So a customer registering their first shop would otherwise be left holding
+   * a CUSTOMER-scoped token that can never reach the very shop they just created, no matter how
+   * many times they refresh. This method closes that gap the same way every other login does:
+   * mints a genuine new STAFF-audience token pair via TokenService.issueTokenPair, scoped to
+   * whatever roles the user now actually holds (including the SALON_OWNER just granted) —
+   * never a patched-in role on the old token, never a bypass of TOTP/owner auth (there is no
+   * separate "owner credential" to bypass; STAFF-audience login has never required one beyond
+   * the role itself, same as this).
    */
   async registerSalon(
     ownerUserId: string,
     input: RegisterSalonInput,
-  ): Promise<RegisterSalonResultDto> {
+    deviceInfo?: string,
+  ): Promise<RegisterSalonResponseDto> {
     const city = await this.citiesService.findCityBySlugOrThrow(input.citySlug);
 
     // The client sends countryCode so postal validation can run before any lookup. Re-check it
@@ -612,12 +630,43 @@ export class SalonsService {
           return created;
         });
 
+        // Fresh read, not the pre-grant roles we started this call with — this is the exact
+        // point of the fix: the newly-granted SALON_OWNER must actually make it into the minted
+        // token, which only a real re-read (not the caller's stale in-memory role list) can see.
+        const freshUser = await this.prisma.user.findUniqueOrThrow({
+          where: { id: ownerUserId },
+          include: { roles: true },
+        });
+        const scopedRoles = this.tokenService.scopeRolesToAudience(
+          freshUser.roles.map((r) => r.role),
+          SessionAudience.STAFF,
+        );
+        const tokens = await this.tokenService.issueTokenPair(
+          ownerUserId,
+          scopedRoles,
+          SessionAudience.STAFF,
+          deviceInfo,
+        );
+        const user: MeResponse = {
+          id: freshUser.id,
+          roles: scopedRoles,
+          audience: SessionAudience.STAFF,
+          phone: freshUser.phone,
+          email: freshUser.email,
+          preferredLanguage: freshUser.preferredLanguage,
+          passwordConfigured: Boolean(freshUser.passwordHash),
+        };
+
         return {
-          id: salon.id,
-          publicId: salon.publicId,
-          slug: salon.slug,
-          name: salon.name,
-          status: salon.status,
+          salon: {
+            id: salon.id,
+            publicId: salon.publicId,
+            slug: salon.slug,
+            name: salon.name,
+            status: salon.status,
+          },
+          user,
+          tokens,
         };
       } catch (err) {
         // Only retry on the specific (cityId, slug) collision — anything else is a real failure.

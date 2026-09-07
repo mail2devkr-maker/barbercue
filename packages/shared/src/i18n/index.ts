@@ -400,6 +400,71 @@ export interface UiStrings {
   addCoverPhoto: string;
   addGalleryPhoto: string;
 
+  // Mobile Shop Owner Onboarding mission — signed-out/no-shop-yet entry points.
+  registerShopCta: string;
+  listYourShopCta: string;
+  newToFastQueRegisterShop: string;
+  noShopYetRouteToRegistration: string;
+
+  // RegisterShopScreen.
+  registerShopTitle: string;
+  registerShopSubtitle: string;
+  shopNameLabel: string;
+  shopNamePlaceholder: string;
+  shopCountryLabel: string;
+  selectCountryPlaceholder: string;
+  loadingCountriesHint: string;
+  shopCityLabel: string;
+  citySearchPlaceholder: string;
+  citySearchTooShortHint: string;
+  citySearchNoResults: string;
+  citySearchFailedHint: string;
+  changeCityAction: string;
+  shopLocalityLabel: string;
+  shopLocalityOptionalHint: string;
+  noLocalityOption: string;
+  shopAddressLabel: string;
+  shopAddressPlaceholder: string;
+  shopPostalCodeOptionalSuffix: string;
+  shopPhoneLabel: string;
+  shopEmailLabel: string;
+  useCurrentLocationAction: string;
+  detectingLocationEllipsis: string;
+  locationDetectedLabel: string;
+  locationSkippedHint: string;
+  chooseCountryFirstError: string;
+  chooseCityFirstError: string;
+  registerShopAction: string;
+  registeringShopEllipsis: string;
+  couldNotRegisterShop: string;
+
+  // OwnerOnboardingScreen — 7-step setup wizard chrome (Mobile Shop Owner Onboarding mission).
+  onboardingStepOf(step: number, total: number): string;
+  onboardingWelcomeTitle: string;
+  onboardingWelcomeHint: string;
+  onboardingServicesStepTitle: string;
+  onboardingHoursStepTitle: string;
+  onboardingPhotosStepTitle: string;
+  onboardingChairsStepTitle: string;
+  onboardingStaffStepTitle: string;
+  onboardingPaymentQrStepTitle: string;
+  onboardingPaymentQrStepHint: string;
+  onboardingGoLiveStepTitle: string;
+  saveAndNextAction: string;
+  previousAction: string;
+  skipForNowAction: string;
+  goLiveAction: string;
+  goingLiveEllipsis: string;
+  setupIncompleteTitle: string;
+  setupIncompleteMissingService: string;
+  setupIncompleteMissingChair: string;
+  setupIncompleteMissingStaff: string;
+  couldNotGoLive: string;
+  shopIsLiveTitle: string;
+  shopIsLiveHint: string;
+  continueToDashboardAction: string;
+  resumeSetupBanner: string;
+
   // StaffTodayScreen.
   noShopYetTitle: string;
   noShopYetHint: string;
@@ -1032,6 +1097,68 @@ const enUi: UiStrings = {
   addCoverPhoto: 'Add cover photo',
   addGalleryPhoto: 'Add gallery photo',
 
+  registerShopCta: 'Register your shop',
+  listYourShopCta: 'List your shop on FastQue',
+  newToFastQueRegisterShop: 'New to FastQue? Register your shop',
+  noShopYetRouteToRegistration: "You don't have a shop yet. Register one to get started.",
+
+  registerShopTitle: 'Register your shop',
+  registerShopSubtitle: 'Tell us about your shop. You can add services, hours, photos and staff next.',
+  shopNameLabel: 'Shop name',
+  shopNamePlaceholder: 'e.g. Sharma Hair Studio',
+  shopCountryLabel: 'Country',
+  selectCountryPlaceholder: 'Select a country…',
+  loadingCountriesHint: 'Loading countries…',
+  shopCityLabel: 'City',
+  citySearchPlaceholder: 'Search for your city',
+  citySearchTooShortHint: 'Keep typing to search…',
+  citySearchNoResults: 'No cities found. Try a different spelling.',
+  citySearchFailedHint: 'Could not search cities. Please try again.',
+  changeCityAction: 'Change',
+  shopLocalityLabel: 'Area / locality (optional)',
+  shopLocalityOptionalHint: 'Helps customers in a big city find you faster.',
+  noLocalityOption: 'No specific area',
+  shopAddressLabel: 'Shop address',
+  shopAddressPlaceholder: 'Shop no., building, street',
+  shopPostalCodeOptionalSuffix: ' (optional)',
+  shopPhoneLabel: 'Business phone (optional)',
+  shopEmailLabel: 'Business email (optional)',
+  useCurrentLocationAction: 'Use my current location',
+  detectingLocationEllipsis: 'Detecting location…',
+  locationDetectedLabel: 'Location detected',
+  locationSkippedHint: "No problem — your address and city are enough to register.",
+  chooseCountryFirstError: 'Please choose the country your shop is in.',
+  chooseCityFirstError: "Please search for and select your shop's city.",
+  registerShopAction: 'Register shop',
+  registeringShopEllipsis: 'Registering…',
+  couldNotRegisterShop: 'Could not register this shop. Please try again.',
+
+  onboardingStepOf: (step: number, total: number) => `Step ${step} of ${total}`,
+  onboardingWelcomeTitle: "You're in! Let's set up your shop.",
+  onboardingWelcomeHint: 'A few quick steps and customers will be able to find and book you.',
+  onboardingServicesStepTitle: 'Add your services',
+  onboardingHoursStepTitle: 'Set your opening hours',
+  onboardingPhotosStepTitle: 'Add photos',
+  onboardingChairsStepTitle: 'Add your chairs',
+  onboardingStaffStepTitle: 'Add your barbers',
+  onboardingPaymentQrStepTitle: 'Add a payment QR',
+  onboardingPaymentQrStepHint: 'Shown to customers paying for an app or website booking. Walk-ins can still pay you directly without one.',
+  onboardingGoLiveStepTitle: 'Go live',
+  saveAndNextAction: 'Save & Next',
+  previousAction: 'Previous',
+  skipForNowAction: 'Skip for now',
+  goLiveAction: 'Go live',
+  goingLiveEllipsis: 'Going live…',
+  setupIncompleteTitle: 'A few things are still missing before you can open your shop:',
+  setupIncompleteMissingService: 'Add at least one service',
+  setupIncompleteMissingChair: 'Add at least one chair',
+  setupIncompleteMissingStaff: 'Add at least one barber',
+  couldNotGoLive: 'Could not open your shop. Please try again.',
+  shopIsLiveTitle: "You're live!",
+  shopIsLiveHint: 'Customers can now find and book your shop on FastQue.',
+  continueToDashboardAction: 'Continue to dashboard',
+  resumeSetupBanner: 'Pick up where you left off — finish setting up your shop.',
+
   noShopYetTitle: 'No shop yet',
   noShopYetHint: 'Ask your shop owner to add you as staff on the FastQue web dashboard.',
   todaysQueue: "Today's queue",
@@ -1612,6 +1739,68 @@ const hiUi: UiStrings = {
   replaceCoverPhoto: 'कवर फ़ोटो बदलें',
   addCoverPhoto: 'कवर फ़ोटो जोड़ें',
   addGalleryPhoto: 'गैलरी फ़ोटो जोड़ें',
+
+  registerShopCta: 'अपनी दुकान रजिस्टर करें',
+  listYourShopCta: 'FastQue पर अपनी दुकान सूचीबद्ध करें',
+  newToFastQueRegisterShop: 'FastQue पर नए हैं? अपनी दुकान रजिस्टर करें',
+  noShopYetRouteToRegistration: 'अभी आपकी कोई दुकान नहीं है। शुरू करने के लिए एक रजिस्टर करें।',
+
+  registerShopTitle: 'अपनी दुकान रजिस्टर करें',
+  registerShopSubtitle: 'हमें अपनी दुकान के बारे में बताएं। इसके बाद आप सेवाएं, समय, फ़ोटो और स्टाफ जोड़ सकते हैं।',
+  shopNameLabel: 'दुकान का नाम',
+  shopNamePlaceholder: 'जैसे शर्मा हेयर स्टूडियो',
+  shopCountryLabel: 'देश',
+  selectCountryPlaceholder: 'एक देश चुनें…',
+  loadingCountriesHint: 'देश लोड हो रहे हैं…',
+  shopCityLabel: 'शहर',
+  citySearchPlaceholder: 'अपना शहर खोजें',
+  citySearchTooShortHint: 'खोजने के लिए टाइप करते रहें…',
+  citySearchNoResults: 'कोई शहर नहीं मिला। कोई अलग वर्तनी आज़माएं।',
+  citySearchFailedHint: 'शहर खोजे नहीं जा सके। कृपया फिर से प्रयास करें।',
+  changeCityAction: 'बदलें',
+  shopLocalityLabel: 'क्षेत्र / इलाका (वैकल्पिक)',
+  shopLocalityOptionalHint: 'इससे बड़े शहर में ग्राहकों को आपको जल्दी खोजने में मदद मिलती है।',
+  noLocalityOption: 'कोई विशेष इलाका नहीं',
+  shopAddressLabel: 'दुकान का पता',
+  shopAddressPlaceholder: 'दुकान नंबर, इमारत, सड़क',
+  shopPostalCodeOptionalSuffix: ' (वैकल्पिक)',
+  shopPhoneLabel: 'व्यवसाय फ़ोन (वैकल्पिक)',
+  shopEmailLabel: 'व्यवसाय ईमेल (वैकल्पिक)',
+  useCurrentLocationAction: 'मेरा वर्तमान स्थान उपयोग करें',
+  detectingLocationEllipsis: 'स्थान का पता लगाया जा रहा है…',
+  locationDetectedLabel: 'स्थान मिल गया',
+  locationSkippedHint: 'कोई बात नहीं — रजिस्टर करने के लिए आपका पता और शहर काफी है।',
+  chooseCountryFirstError: 'कृपया वह देश चुनें जहाँ आपकी दुकान है।',
+  chooseCityFirstError: 'कृपया अपनी दुकान का शहर खोजें और चुनें।',
+  registerShopAction: 'दुकान रजिस्टर करें',
+  registeringShopEllipsis: 'रजिस्टर किया जा रहा है…',
+  couldNotRegisterShop: 'यह दुकान रजिस्टर नहीं हो सकी। कृपया फिर से प्रयास करें।',
+
+  onboardingStepOf: (step: number, total: number) => `चरण ${step} / ${total}`,
+  onboardingWelcomeTitle: 'आप शामिल हो गए! चलिए आपकी दुकान सेट करते हैं।',
+  onboardingWelcomeHint: 'कुछ आसान चरणों के बाद ग्राहक आपको खोज और बुक कर सकेंगे।',
+  onboardingServicesStepTitle: 'अपनी सेवाएं जोड़ें',
+  onboardingHoursStepTitle: 'अपने खुलने का समय सेट करें',
+  onboardingPhotosStepTitle: 'फ़ोटो जोड़ें',
+  onboardingChairsStepTitle: 'अपनी कुर्सियां जोड़ें',
+  onboardingStaffStepTitle: 'अपने बार्बर जोड़ें',
+  onboardingPaymentQrStepTitle: 'भुगतान QR जोड़ें',
+  onboardingPaymentQrStepHint: 'ऐप या वेबसाइट बुकिंग के लिए भुगतान करने वाले ग्राहकों को दिखाया जाता है। वॉक-इन ग्राहक इसके बिना भी सीधे आपको भुगतान कर सकते हैं।',
+  onboardingGoLiveStepTitle: 'लाइव जाएं',
+  saveAndNextAction: 'सेव करें और आगे बढ़ें',
+  previousAction: 'पिछला',
+  skipForNowAction: 'अभी के लिए छोड़ें',
+  goLiveAction: 'लाइव जाएं',
+  goingLiveEllipsis: 'लाइव किया जा रहा है…',
+  setupIncompleteTitle: 'अपनी दुकान खोलने से पहले कुछ चीज़ें अभी बाकी हैं:',
+  setupIncompleteMissingService: 'कम से कम एक सेवा जोड़ें',
+  setupIncompleteMissingChair: 'कम से कम एक कुर्सी जोड़ें',
+  setupIncompleteMissingStaff: 'कम से कम एक बार्बर जोड़ें',
+  couldNotGoLive: 'आपकी दुकान लाइव नहीं हो सकी। कृपया फिर से प्रयास करें।',
+  shopIsLiveTitle: 'आप लाइव हैं!',
+  shopIsLiveHint: 'ग्राहक अब FastQue पर आपकी दुकान खोज और बुक कर सकते हैं।',
+  continueToDashboardAction: 'डैशबोर्ड पर जारी रखें',
+  resumeSetupBanner: 'जहां आपने छोड़ा था वहीं से जारी रखें — अपनी दुकान सेटअप पूरा करें।',
 
   noShopYetTitle: 'अभी कोई दुकान नहीं',
   noShopYetHint: 'अपने दुकान मालिक से FastQue वेब डैशबोर्ड पर आपको स्टाफ के रूप में जोड़ने के लिए कहें।',

@@ -15,7 +15,7 @@ import type {
   CountryDto,
   LocalityDto,
   RegionDto,
-  RegisterSalonResultDto,
+  RegisterSalonResponseDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
@@ -79,7 +79,7 @@ function round5(n: number): number {
  */
 export function RegisterSalonForm() {
   const router = useRouter();
-  const { refreshSession } = useAuth();
+  const { applySession } = useAuth();
   const [countries, setCountries] = useState<CountryDto[]>([]);
   // The country's database id, kept alongside form.countryCode (its ISO-3166-1 alpha-2). Both are
   // needed and neither replaces the other: the id scopes the regions/city-search lookups, while
@@ -274,15 +274,17 @@ export function RegisterSalonForm() {
 
     setSubmitting(true);
     try {
-      const result = await apiFetch<RegisterSalonResultDto>(DISCOVERY_PATHS.salons, {
+      const result = await apiFetch<RegisterSalonResponseDto>(DISCOVERY_PATHS.salons, {
         method: "POST",
         headers: { "Idempotency-Key": newIdempotencyKey() },
         body: JSON.stringify(parsed.data),
       });
-      // Grants SALON_OWNER server-side, but the access token we're still holding was issued
-      // before that — refreshSession() rotates it so /dashboard/salons's role check passes.
-      await refreshSession();
-      router.push(`/dashboard/salons/${result.id}/settings`);
+      // Grants SALON_OWNER server-side and mints a genuine new STAFF-audience session in the same
+      // response — the caller's OLD token (whatever audience it had, e.g. a plain customer's) can
+      // never be upgraded in place (see RegisterSalonResponseDto's own doc comment), so this
+      // applies the new session exactly like a fresh login would, not a mere token refresh.
+      applySession(result);
+      router.push(`/dashboard/salons/${result.salon.id}/settings`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not register this shop. Please try again.");
     } finally {

@@ -13,6 +13,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../lib/language-context';
 import { resolveHomeLocation } from '../lib/home-location';
+import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
 import { color, font, lineHeightFor, radius, space } from '../lib/theme';
 import { GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
@@ -103,6 +104,17 @@ export default function RoleSelectScreen({ navigation }: Props) {
     }
   }
 
+  // Mobile Shop Owner Onboarding mission — there is no standalone "create an owner account"
+  // endpoint (POST salons grants SALON_OWNER to an already-authenticated user; see
+  // RegisterSalonResponseDto's doc comment), so this routes through the same customer sign-in
+  // every other visitor uses and replays the registration intent once it completes (see
+  // shop-registration-intent.ts / RootNavigator's ShopRegistrationHandoffBridge).
+  function registerShop() {
+    setMenuOpen(false);
+    stashPendingShopRegistrationIntent();
+    navigation.navigate('CustomerLogin');
+  }
+
   return (
     <View style={styles.root}>
       <View style={[styles.header, compactHeader && styles.headerCompact, { paddingTop: insets.top + 8 }]}>
@@ -152,6 +164,10 @@ export default function RoleSelectScreen({ navigation }: Props) {
           <Pressable style={styles.menuItem} onPress={() => choose('STAFF')}>
             <Text style={styles.menuItemTitle}>{t.roleStaff}</Text>
             <Text style={styles.menuItemSubtitle}>{t.roleStaffSubtitle}</Text>
+          </Pressable>
+          <Pressable style={styles.menuItem} onPress={registerShop}>
+            <Text style={styles.menuItemTitle}>{t.registerShopCta}</Text>
+            <Text style={styles.menuItemSubtitle}>{t.listYourShopCta}</Text>
           </Pressable>
         </View>
       )}
