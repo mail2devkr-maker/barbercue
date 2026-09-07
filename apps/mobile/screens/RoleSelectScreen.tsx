@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,6 +43,7 @@ const POPULAR_SERVICE_CATEGORIES = [
  */
 export default function RoleSelectScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { t, language } = useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchMode, setSearchMode] = useState<'barber' | 'salon'>('barber');
@@ -52,6 +54,18 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
   const savedLabel = language === 'HI' ? 'सहेजे गए' : 'Saved';
   const profileLabel = language === 'HI' ? 'प्रोफ़ाइल' : 'Profile';
+  // Keep labels readable rather than clipping a long phrase inside half a segmented control on
+  // very narrow Android handsets. The full approved labels resume as soon as they fit.
+  const compactCopy = windowWidth < 420;
+  const compactHeader = windowWidth < 365;
+  const showTagline = windowWidth >= 400;
+  const barberModeLabel = compactCopy ? (language === 'HI' ? 'बार्बर' : 'Find barber') : t.searchModeBarber;
+  const salonModeLabel = compactCopy ? (language === 'HI' ? 'सैलून' : 'Salon & more') : t.searchModeSalon;
+  const searchPlaceholder = compactCopy
+    ? language === 'HI'
+      ? 'हेयरकट, फेड, बियर्ड…'
+      : 'Haircut, fade, beard…'
+    : t.shopOrServiceExample;
 
   async function handleChooseLocation() {
     setLocating(true);
@@ -91,19 +105,19 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.brandRow}>
-          <GradientView colors={GRADIENT_COLORS} style={styles.brandBadge}>
+      <View style={[styles.header, compactHeader && styles.headerCompact, { paddingTop: insets.top + 8 }]}>
+        <View style={[styles.brandRow, compactHeader && styles.brandRowCompact]}>
+          <GradientView colors={GRADIENT_COLORS} style={[styles.brandBadge, compactHeader && styles.brandBadgeCompact]}>
             <Text style={styles.brandBadgeText}>FQ</Text>
           </GradientView>
           <View>
-            <Text style={styles.brandWordmark}>FastQue</Text>
-            <Text style={styles.brandTagline}>BOOK AHEAD. WALK IN SMARTER.</Text>
+            <Text style={[styles.brandWordmark, compactHeader && styles.brandWordmarkCompact]}>FastQue</Text>
+            {showTagline && <Text style={styles.brandTagline}>BOOK AHEAD. WALK IN SMARTER.</Text>}
           </View>
         </View>
 
         <View style={styles.headerActions}>
-          <Pressable style={styles.locationPill} onPress={handleChooseLocation} disabled={locating}>
+          <Pressable style={[styles.locationPill, compactHeader && styles.locationPillCompact]} onPress={handleChooseLocation} disabled={locating}>
             <View style={styles.locationPin} />
             <Text style={styles.locationText} numberOfLines={1}>
               {locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction}
@@ -169,19 +183,19 @@ export default function RoleSelectScreen({ navigation }: Props) {
             <View style={styles.benefitRow}>
               <View style={styles.benefitItem}>
                 <View style={[styles.benefitIconWrap, styles.benefitPurple]}>
-                  <TabIcon name="bookings" color={color.surface} size={18} />
+                  <TabIcon name="bookings" color={color.surface} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.bookAheadKicker}</Text>
               </View>
               <View style={styles.benefitItem}>
                 <View style={[styles.benefitIconWrap, styles.benefitBlue]}>
-                  <TabIcon name="queue" color={color.surface} size={18} />
+                  <TabIcon name="queue" color={color.surface} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
               </View>
               <View style={styles.benefitItem}>
                 <View style={[styles.benefitIconWrap, styles.benefitGold]}>
-                  <TabIcon name="offer" color={color.surface} size={18} />
+                  <TabIcon name="offer" color={color.surface} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
               </View>
@@ -198,16 +212,16 @@ export default function RoleSelectScreen({ navigation }: Props) {
               accessibilityState={{ selected: searchMode === 'barber' }}
             >
               {searchMode === 'barber' ? (
-                <GradientView colors={GRADIENT_COLORS} style={styles.segment}>
-                  <TabIcon name="scissors" color={color.surface} size={17} />
+                <GradientView colors={GRADIENT_COLORS} style={[styles.segment, compactCopy && styles.segmentCompact]}>
+                  <TabIcon name="scissors" color={color.surface} size={compactCopy ? 14 : 16} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
-                    {t.searchModeBarber}
+                    {barberModeLabel}
                   </Text>
                 </GradientView>
               ) : (
-                <View style={styles.segment}>
-                  <TabIcon name="scissors" color={color.muted} size={17} />
-                  <Text style={styles.segmentText} numberOfLines={1}>{t.searchModeBarber}</Text>
+                <View style={[styles.segment, compactCopy && styles.segmentCompact]}>
+                  <TabIcon name="scissors" color={color.muted} size={compactCopy ? 14 : 16} />
+                  <Text style={styles.segmentText} numberOfLines={1}>{barberModeLabel}</Text>
                 </View>
               )}
             </Pressable>
@@ -219,16 +233,16 @@ export default function RoleSelectScreen({ navigation }: Props) {
               accessibilityState={{ selected: searchMode === 'salon' }}
             >
               {searchMode === 'salon' ? (
-                <GradientView colors={GRADIENT_COLORS} style={styles.segment}>
-                  <TabIcon name="salon" color={color.surface} size={17} />
+                <GradientView colors={GRADIENT_COLORS} style={[styles.segment, compactCopy && styles.segmentCompact]}>
+                  <TabIcon name="salon" color={color.surface} size={compactCopy ? 14 : 16} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
-                    {t.searchModeSalon}
+                    {salonModeLabel}
                   </Text>
                 </GradientView>
               ) : (
-                <View style={styles.segment}>
-                  <TabIcon name="salon" color={color.muted} size={17} />
-                  <Text style={styles.segmentText} numberOfLines={1}>{t.searchModeSalon}</Text>
+                <View style={[styles.segment, compactCopy && styles.segmentCompact]}>
+                  <TabIcon name="salon" color={color.muted} size={compactCopy ? 14 : 16} />
+                  <Text style={styles.segmentText} numberOfLines={1}>{salonModeLabel}</Text>
                 </View>
               )}
             </Pressable>
@@ -240,7 +254,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
               <Text style={styles.fieldLabel}>{t.shopOrServiceLabel}</Text>
               <TextInput
                 style={styles.searchInput}
-                placeholder={t.shopOrServiceExample}
+                placeholder={searchPlaceholder}
                 placeholderTextColor={color.muted}
                 value={query}
                 onChangeText={setQuery}
@@ -348,7 +362,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
 
   header: {
-    minHeight: 66,
+    minHeight: 64,
     paddingHorizontal: space[4],
     paddingBottom: 9,
     backgroundColor: color.surface,
@@ -358,7 +372,9 @@ const styles = StyleSheet.create({
     gap: space[2],
     zIndex: 20,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
+  headerCompact: { paddingHorizontal: 12, paddingBottom: 7 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, minWidth: 0 },
+  brandRowCompact: { gap: 7 },
   brandBadge: {
     width: 42,
     height: 42,
@@ -367,26 +383,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
+  brandBadgeCompact: { width: 36, height: 36, borderRadius: 18 },
   brandBadgeText: { color: color.surface, fontFamily: font.bodyBold, fontSize: 16, letterSpacing: 0.3 },
   brandWordmark: { fontFamily: font.bodyBold, fontSize: 22, lineHeight: 24, color: color.ink, letterSpacing: -0.7 },
+  brandWordmarkCompact: { fontSize: 19, lineHeight: 22 },
   brandTagline: { fontFamily: font.bodyBold, fontSize: 6.5, letterSpacing: 1.25, color: color.muted, marginTop: 1 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
   locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: 116,
-    minHeight: 38,
-    paddingHorizontal: 12,
+    width: 134,
+    minHeight: 36,
+    paddingHorizontal: 10,
     borderRadius: radius.pill,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: color.border,
     gap: 6,
   },
+  locationPillCompact: { width: 116, minHeight: 34, paddingHorizontal: 8 },
   locationPin: { width: 7, height: 7, borderRadius: 4, backgroundColor: color.brandCoral, flexShrink: 0 },
   locationText: { fontFamily: font.bodySemiBold, fontSize: 12, color: color.ink, flexShrink: 1 },
-  menuButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', gap: 5 },
-  menuLine: { width: 23, height: 2.5, borderRadius: 2, backgroundColor: color.ink },
+  menuButton: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  menuLine: { width: 21, height: 2, borderRadius: 2, backgroundColor: color.ink },
 
   menuPanel: {
     position: 'absolute',
@@ -409,10 +428,10 @@ const styles = StyleSheet.create({
   menuItemTitle: { fontFamily: font.bodyBold, fontSize: 14, color: color.ink },
   menuItemSubtitle: { fontFamily: font.bodyRegular, fontSize: 11, color: color.muted, marginTop: 2 },
 
-  hero: { height: HERO_HEIGHT, justifyContent: 'flex-end' },
+  hero: { height: HERO_HEIGHT, justifyContent: 'flex-end', overflow: 'hidden' },
   heroImage: { resizeMode: 'cover' },
-  heroBaseScrim: { backgroundColor: 'rgba(5, 8, 28, 0.26)' },
-  heroContent: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: 76 },
+  heroBaseScrim: { backgroundColor: 'rgba(5, 8, 28, 0.52)' },
+  heroContent: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: 62 },
   heroEyebrow: {
     fontFamily: font.bodyBold,
     fontSize: 10.5,
@@ -422,69 +441,70 @@ const styles = StyleSheet.create({
     color: color.goldSoft,
     marginBottom: 8,
   },
-  heroHeadline: { fontFamily: font.bodyBold, fontSize: 40, lineHeight: 42, color: color.surface, letterSpacing: -1.4 },
+  heroHeadline: { fontFamily: font.bodyBold, fontSize: 36, lineHeight: 39, color: color.surface, letterSpacing: -1.05 },
   heroHeadlineAccent: { color: color.brandGradientEnd },
   heroSubcopy: {
     fontFamily: font.bodyRegular,
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 20,
     color: 'rgba(255,255,255,0.88)',
     marginTop: 10,
     maxWidth: 310,
   },
-  benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: 18 },
-  benefitItem: { flexDirection: 'row', alignItems: 'center', gap: 7, flexShrink: 1 },
-  benefitIconWrap: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 14 },
+  benefitItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  benefitIconWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   benefitPurple: { backgroundColor: '#6C2BFF' },
   benefitBlue: { backgroundColor: '#2D9CDB' },
   benefitGold: { backgroundColor: '#D6A700' },
-  benefitLabel: { fontFamily: font.bodyMedium, fontSize: 10.5, lineHeight: 13, color: color.surface, maxWidth: 56 },
+  benefitLabel: { fontFamily: font.bodyMedium, fontSize: 9.5, lineHeight: 12, color: color.surface, maxWidth: 52 },
 
   searchCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: space[4],
-    marginTop: -56,
-    borderRadius: 26,
-    padding: 14,
+    marginTop: -44,
+    borderRadius: 24,
+    padding: 12,
     shadowColor: color.ink,
     shadowOpacity: 0.16,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
-  segmentRow: { flexDirection: 'row', backgroundColor: '#f5f5f8', borderRadius: radius.pill, padding: 3, marginBottom: 12, gap: 3 },
+  segmentRow: { flexDirection: 'row', backgroundColor: '#f5f5f8', borderRadius: radius.pill, padding: 3, marginBottom: 8, gap: 3 },
   segmentPressable: { flex: 1 },
-  segment: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 42, borderRadius: radius.pill, paddingHorizontal: 8 },
+  segment: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, borderRadius: radius.pill, paddingHorizontal: 7 },
+  segmentCompact: { minHeight: 38, gap: 5, paddingHorizontal: 5 },
   segmentText: { fontFamily: font.bodySemiBold, fontSize: 12.5, color: color.ink },
   segmentTextActive: { color: color.surface },
   inputRow: {
-    minHeight: 60,
+    minHeight: 54,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     borderWidth: 1,
     borderColor: color.border,
     borderRadius: 13,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
     backgroundColor: '#ffffff',
   },
-  inputCopy: { flex: 1 },
+  inputCopy: { flex: 1, minWidth: 0 },
   fieldLabel: { fontFamily: font.bodyBold, fontSize: 11, color: color.ink, marginBottom: 1 },
-  searchInput: { padding: 0, margin: 0, fontFamily: font.bodyRegular, fontSize: 13.5, color: color.ink },
+  searchInput: { flex: 1, width: '100%', minWidth: 0, padding: 0, margin: 0, fontFamily: font.bodyRegular, fontSize: 13, color: color.ink },
   cityValueText: { fontFamily: font.bodyMedium, fontSize: 13.5, color: color.ink },
   cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: 13.5, color: color.muted },
   chevron: { fontFamily: font.bodyBold, fontSize: 22, color: color.ink, marginLeft: 4 },
-  ctaButton: { minHeight: 54, alignItems: 'center', justifyContent: 'center', borderRadius: 14, marginTop: 2 },
-  ctaButtonText: { fontFamily: font.bodyBold, fontSize: 16, color: color.surface },
+  ctaButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 14, marginTop: 1 },
+  ctaButtonText: { fontFamily: font.bodyBold, fontSize: 15, color: color.surface },
 
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[5], marginTop: 26 },
   sectionTitle: { fontFamily: font.bodyBold, fontSize: 20, color: color.brandNavy },
   viewAllText: { fontFamily: font.bodySemiBold, fontSize: 12, color: color.brandCoral },
-  categoryRow: { paddingHorizontal: space[5], gap: 14, marginTop: 12 },
-  categoryChip: { width: 68, alignItems: 'center', gap: 7 },
-  categoryThumb: { width: 62, height: 62, borderRadius: 15, backgroundColor: color.surfaceTint },
-  categoryLabel: { fontFamily: font.bodyMedium, fontSize: 11.5, color: color.ink, textAlign: 'center' },
+  categoryRow: { paddingHorizontal: space[5], gap: 12, marginTop: 12 },
+  categoryChip: { width: 76, alignItems: 'center', gap: 6 },
+  categoryThumb: { width: 64, height: 64, borderRadius: 15, backgroundColor: color.surfaceTint },
+  categoryLabel: { fontFamily: font.bodyMedium, fontSize: 10.5, color: color.ink, textAlign: 'center' },
 
   queueBanner: {
     flexDirection: 'row',
@@ -512,19 +532,19 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    minHeight: 68,
+    minHeight: 72,
     flexDirection: 'row',
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: color.border,
-    paddingTop: 8,
+    paddingTop: 7,
     shadowColor: color.ink,
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: -5 },
     elevation: 12,
   },
-  bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  bottomLabel: { fontFamily: font.bodyMedium, fontSize: 10.5, color: color.muted },
+  bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  bottomLabel: { fontFamily: font.bodyMedium, fontSize: 10, color: color.muted },
   bottomLabelActive: { color: color.brandCoral, fontFamily: font.bodyBold },
 });
