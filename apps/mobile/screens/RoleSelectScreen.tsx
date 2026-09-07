@@ -12,7 +12,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../lib/language-context';
 import { resolveHomeLocation } from '../lib/home-location';
-import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
+import { color, font, lineHeightFor, radius, space } from '../lib/theme';
 import { GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
