@@ -10,26 +10,30 @@ header[class*="landingHeader"] {
   right: 0 !important;
   width: 100% !important;
   z-index: 1000 !important;
-  /* Tuned down from ~72-82% to a genuine watermark range (~56-64%) — the previous values read as
-     a near-opaque dark strip rather than translucent glass; the lockup itself is now served as
-     an alpha-transparent PNG (see BrandLockup's `transparent` prop) so it no longer contributes
-     its own opaque dark canvas on top of this. */
+  /* Keep the host genuinely translucent. The approved 3D lockup itself is no longer alpha-cut;
+     preserving its original dark support canvas keeps the gloss, highlights, ribbon-Q depth and
+     barber silhouette intact. */
   background:
-    linear-gradient(90deg, rgba(8, 9, 20, 0.64), rgba(16, 11, 24, 0.56) 48%, rgba(8, 9, 20, 0.6)) !important;
-  border-bottom: 1px solid rgba(255, 190, 112, 0.16) !important;
-  -webkit-backdrop-filter: saturate(150%) blur(20px) !important;
-  backdrop-filter: saturate(150%) blur(20px) !important;
-  box-shadow: 0 8px 26px rgba(8, 9, 18, 0.16), 0 1px 0 rgba(255, 73, 143, 0.05);
+    linear-gradient(90deg, rgba(8, 9, 20, 0.50), rgba(16, 11, 24, 0.42) 48%, rgba(8, 9, 20, 0.48)) !important;
+  border-bottom: 1px solid rgba(255, 190, 112, 0.14) !important;
+  -webkit-backdrop-filter: saturate(160%) blur(18px) !important;
+  backdrop-filter: saturate(160%) blur(18px) !important;
+  box-shadow: 0 7px 22px rgba(8, 9, 18, 0.13), 0 1px 0 rgba(255, 73, 143, 0.045);
 }
 
 /* Because a fixed header leaves normal document flow, reserve its visual height before the hero.
-   120px (was 104px) matches .headerInner's min-height growing from 72px to 88px. */
+   120px matches .headerInner's 88px min-height and keeps the hero clear of the fixed glass layer. */
 header[class*="landingHeader"] ~ main {
   padding-top: 120px;
 }
 
+/* Slight watermark transparency is applied to the COMPLETE approved artwork, never by deleting
+   dark pixels. A tiny saturation/contrast lift retains the Codex glossy/3D character at 94% opacity.
+   The -2px optical nudge corrects the previous bottom-heavy placement without changing aspect ratio. */
 header[class*="landingHeader"] img {
-  opacity: 1 !important;
+  opacity: 0.94 !important;
+  transform: translateY(-2px);
+  filter: saturate(1.06) contrast(1.03) brightness(1.01);
 }
 
 header[class*="landingHeader"] nav,
