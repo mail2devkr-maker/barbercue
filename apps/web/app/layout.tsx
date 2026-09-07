@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Work_Sans } from "next/font/google";
-import { FASTQUE_BRAND_ICON_DATA_URI } from "@barbercue/shared";
 import "./globals.css";
 import "./premium-header.css";
 import { AuthProvider } from "../lib/auth-context";
@@ -33,11 +32,9 @@ export const metadata: Metadata = {
     template: "%s | FastQue",
   },
   description: "Find nearby barbershops, check the wait, and book your chair.",
-  // Keep the browser tab / shortcut mark on the exact same shared artwork as mobile and every
-  // FastQue header. A data URI avoids introducing a second binary copy that can silently drift.
   icons: {
-    icon: FASTQUE_BRAND_ICON_DATA_URI,
-    apple: FASTQUE_BRAND_ICON_DATA_URI,
+    icon: "/brand/fastque-premium-3d-mark.png",
+    apple: "/brand/fastque-premium-3d-mark.png",
   },
 };
 

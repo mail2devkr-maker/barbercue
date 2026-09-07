@@ -1,8 +1,6 @@
-import { Children, isValidElement } from 'react';
 import type { ReactNode } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { FASTQUE_BRAND_ICON_DATA_URI } from '@barbercue/shared';
 
 /**
  * A real two-stop linear gradient with zero new dependencies.
@@ -16,10 +14,6 @@ import { FASTQUE_BRAND_ICON_DATA_URI } from '@barbercue/shared';
  * the hero scrims. The strip fallback remains only for uncommon gradients that do not match these
  * production tokens.
  *
- * Legacy landing/Home headers historically built the brand mark as this same gradient with one
- * literal `FQ` Text child. Until every old call-site is migrated to BrandLockup, recognise that
- * exact legacy signature here and render the approved shared FastQue mark instead. CTA/segment
- * gradients are unaffected because they contain different children.
  */
 const STOPS = 24;
 
@@ -58,13 +52,6 @@ function continuousGradientUri(
   return null;
 }
 
-function isLegacyBrandBadge(children: ReactNode): boolean {
-  const items = Children.toArray(children);
-  if (items.length !== 1) return false;
-  const child = items[0];
-  return isValidElement<{ children?: ReactNode }>(child) && child.props.children === 'FQ';
-}
-
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.replace('#', ''), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -98,7 +85,6 @@ function resolveStop(color: string, other: string, useAlpha: boolean, t: number)
 
 export function GradientView({ colors, direction = 'horizontal', style, children }: GradientViewProps) {
   const continuousUri = continuousGradientUri(colors, direction);
-  const useApprovedBrandMark = continuousUri === BRAND_GRADIENT_DATA_URI && isLegacyBrandBadge(children);
   const useAlpha = colors.some((c) => c === 'transparent' || c.startsWith('rgba'));
   let stops: string[];
 
@@ -114,15 +100,8 @@ export function GradientView({ colors, direction = 'horizontal', style, children
   }
 
   return (
-    <View style={[styles.wrap, useApprovedBrandMark && styles.brandMarkWrap, style]}>
-      {useApprovedBrandMark ? (
-        <Image
-          source={{ uri: FASTQUE_BRAND_ICON_DATA_URI }}
-          resizeMode="contain"
-          style={StyleSheet.absoluteFill}
-          accessibilityIgnoresInvertColors
-        />
-      ) : continuousUri ? (
+    <View style={[styles.wrap, style]}>
+      {continuousUri ? (
         <Image source={{ uri: continuousUri }} resizeMode="stretch" style={StyleSheet.absoluteFill} />
       ) : (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -133,14 +112,13 @@ export function GradientView({ colors, direction = 'horizontal', style, children
           </View>
         </View>
       )}
-      {!useApprovedBrandMark && children}
+      {children}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { overflow: 'hidden' },
-  brandMarkWrap: { overflow: 'visible' },
   row: { flex: 1, flexDirection: 'row' },
   column: { flex: 1, flexDirection: 'column' },
   stop: { flex: 1 },

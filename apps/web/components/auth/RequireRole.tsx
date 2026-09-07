@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { Role } from "@barbercue/shared";
 import { useAuth } from "../../lib/auth-context";
 import { withNextParam } from "../../lib/safe-next-path";
+import { BrandLockup } from "../ui/BrandLockup";
 import styles from "./require-role.module.css";
 
 /**
@@ -49,7 +50,7 @@ export function RequireRole({
     return (
       <main className={styles.loadingPage}>
         <div className={styles.loadingCard} role="status">
-          <span className={styles.loadingMark} aria-hidden="true">FQ</span>
+          <BrandLockup compact markOnly />
           <div>
             <strong>Preparing your FastQue</strong>
             <p>Restoring your secure session…</p>

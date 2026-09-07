@@ -8,7 +8,7 @@ import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin
 import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Button, InlineError } from '../components/ui';
+import { BrandLockup, Screen, SectionHeader, Button, InlineError } from '../components/ui';
 import type { UiStrings } from '@barbercue/shared';
 import type { AuthStackParamList } from '../navigation/AuthStack';
 
@@ -78,6 +78,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
   return (
     <Screen contentStyle={styles.screenContent}>
+      <BrandLockup compact style={styles.brandLockup} />
       <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle={t.useYourDashboardAccount} />
 
       {error && <InlineError message={error} />}
@@ -154,6 +155,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   screenContent: { padding: space[5] },
+  brandLockup: { alignSelf: 'center', marginBottom: space[5] },
   field: { marginBottom: space[4] },
   recoveryLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[1] },
   recoveryLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent },

@@ -35,7 +35,7 @@ import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { resolveHomeLocation } from '../lib/home-location';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
-import { Card, Button, Skeleton, NotificationBell, LanguageSwitcher, SafeImage, GradientView } from '../components/ui';
+import { BrandLockup, Card, Button, Skeleton, NotificationBell, LanguageSwitcher, SafeImage, GradientView } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
@@ -236,15 +236,7 @@ export default function HomeScreen({ navigation }: Props) {
     <View style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top + space[2] }]}>
         <View style={styles.headerTopRow}>
-          <View style={styles.brandRow}>
-            <GradientView colors={GRADIENT_COLORS} style={styles.brandBadge}>
-              <Text style={styles.brandBadgeText}>FQ</Text>
-            </GradientView>
-            {/* Never truncated (no numberOfLines/flexShrink) — the brand name must always read in
-                full; a narrow header instead gives location+language their own row below rather
-                than fighting this one for space. */}
-            <Text style={styles.brandWordmark}>FastQue</Text>
-          </View>
+          <BrandLockup compact={isNarrowHeader} markOnly={isNarrowHeader} style={styles.brandLockup} />
           {isNarrowHeader ? (
             bell
           ) : (
@@ -527,18 +519,7 @@ const styles = StyleSheet.create({
   // has more than two items competing for space, so the wordmark never needs to shrink at all.
   headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2] },
   headerBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
-  brandBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: color.brandCoral,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  brandBadgeText: { color: color.surface, fontFamily: font.bodyBold, fontSize: 12, letterSpacing: 0.3 },
-  brandWordmark: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
+  brandLockup: { marginRight: space[1] },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
   locationPill: {
     flexDirection: 'row',
