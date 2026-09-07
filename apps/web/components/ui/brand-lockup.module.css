@@ -3,38 +3,53 @@
   align-items: center;
   min-width: 0;
   line-height: 0;
+  padding: 3px 8px 3px 3px;
+  border: 1px solid rgba(255, 178, 94, 0.28);
+  border-radius: 14px;
+  background: #080912;
+  box-shadow:
+    0 8px 24px rgba(238, 42, 91, 0.14),
+    0 0 0 1px rgba(255, 165, 86, 0.05) inset;
 }
 
 .art {
   display: block;
-  width: 198px;
+  width: 214px;
   height: auto;
-  max-width: 42vw;
+  max-width: 46vw;
   border-radius: 10px;
-  box-shadow: 0 7px 22px rgba(238, 42, 91, 0.18), 0 0 0 1px rgba(255, 165, 86, 0.12);
+}
+
+.compact {
+  padding: 2px 6px 2px 2px;
+  border-radius: 12px;
 }
 
 .compact .art {
-  width: 160px;
+  width: 168px;
   border-radius: 8px;
-  box-shadow: 0 5px 16px rgba(238, 42, 91, 0.14), 0 0 0 1px rgba(255, 165, 86, 0.1);
 }
 
 @media (max-width: 760px) {
+  .root {
+    padding-right: 6px;
+    border-radius: 12px;
+  }
+
   .art {
-    width: 184px;
+    width: 188px;
     max-width: 58vw;
   }
 
   .compact .art {
-    width: 150px;
+    width: 152px;
     max-width: 48vw;
   }
 }
 
 @media (max-width: 360px) {
   .art {
-    width: 170px;
+    width: 174px;
     max-width: 56vw;
   }
 
