@@ -3,43 +3,54 @@
   align-items: center;
   min-width: 0;
   line-height: 0;
-  border-radius: 12px;
   background: transparent;
 }
 
 .art {
   display: block;
-  width: 214px;
+  width: 300px;
   height: auto;
-  max-width: 46vw;
-  border-radius: 9px;
-  filter: drop-shadow(0 6px 14px rgba(238, 42, 91, 0.14));
+  max-width: 38vw;
+  filter: drop-shadow(0 7px 18px rgba(238, 42, 91, 0.18));
+  image-rendering: auto;
 }
 
 .compact .art {
-  width: 168px;
-  border-radius: 8px;
+  width: 220px;
+  max-width: 34vw;
+}
+
+@media (max-width: 1100px) {
+  .art {
+    width: 260px;
+    max-width: 34vw;
+  }
+
+  .compact .art {
+    width: 205px;
+  }
 }
 
 @media (max-width: 760px) {
   .art {
-    width: 188px;
+    width: 230px;
     max-width: 58vw;
   }
 
   .compact .art {
-    width: 152px;
-    max-width: 48vw;
+    width: 190px;
+    max-width: 50vw;
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 420px) {
   .art {
-    width: 174px;
+    width: 205px;
     max-width: 56vw;
   }
 
   .compact .art {
-    width: 144px;
+    width: 172px;
+    max-width: 48vw;
   }
 }
