@@ -17,8 +17,8 @@
 
 /*
  * Public landing header: compose the already-proven full FQ mark with the wordmark/tagline portion
- * of the canonical glossy lockup. This avoids the separately generated header bitmap that fetched
- * successfully in production but rendered blank, and it keeps the complete rounded FQ lower glow.
+ * of the canonical glossy lockup. The crop starts after the lockup's own FQ mark so only one FQ is
+ * visible, while the complete separately-rendered mark keeps its rounded lower glow intact.
  */
 .headerComposite {
   display: inline-flex;
@@ -43,17 +43,17 @@
   position: relative;
   display: block;
   width: 210px;
-  height: 78px;
+  height: 82px;
   flex: 0 0 auto;
   overflow: hidden;
 }
 
 .headerWordArt {
   position: absolute;
-  top: 4px;
-  left: -78px;
+  top: 2px;
+  left: -97px;
   display: block;
-  width: 288px;
+  width: 307px;
   height: auto;
   max-width: none;
   image-rendering: auto;
@@ -96,13 +96,13 @@
 
   .headerWordCrop {
     width: 181px;
-    height: 68px;
+    height: 72px;
   }
 
   .headerWordArt {
-    top: 3px;
-    left: -68px;
-    width: 249px;
+    top: 2px;
+    left: -83px;
+    width: 264px;
   }
 }
 
@@ -128,13 +128,13 @@
 
   .headerWordCrop {
     width: 150px;
-    height: 58px;
+    height: 62px;
   }
 
   .headerWordArt {
-    top: 3px;
-    left: -57px;
-    width: 207px;
+    top: 2px;
+    left: -69px;
+    width: 219px;
   }
 }
 
@@ -165,12 +165,12 @@
 
   .headerWordCrop {
     width: 134px;
-    height: 52px;
+    height: 56px;
   }
 
   .headerWordArt {
-    top: 3px;
-    left: -51px;
-    width: 185px;
+    top: 2px;
+    left: -62px;
+    width: 196px;
   }
 }
