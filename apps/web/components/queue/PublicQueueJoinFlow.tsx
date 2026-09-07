@@ -18,6 +18,7 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { Button } from "../ui/Button";
+import { BrandLockup } from "../ui/BrandLockup";
 import { GoogleIdentityButton } from "../auth/GoogleIdentityButton";
 import authStyles from "../auth/customer-auth.module.css";
 import { QueueStatusPanel } from "./QueueStatusPanel";
@@ -216,7 +217,7 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
     return (
       <div className={styles.publicWrap}>
         <div className={styles.publicCard}>
-          <p className={styles.publicWordmark}>FastQue</p>
+          <BrandLockup compact className={styles.publicWordmark} />
           <h1 className={styles.publicTitle}>{info.salonName}</h1>
           <p className={styles.publicIntro}>The queue is currently unavailable. Please check with the shop.</p>
         </div>
@@ -228,7 +229,7 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
     return (
       <div className={styles.publicWrap}>
         <div className={styles.publicCard}>
-          <p className={styles.publicWordmark}>FastQue</p>
+          <BrandLockup compact className={styles.publicWordmark} />
           <h1 className={styles.publicTitle}>{info.salonName}</h1>
           <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
         </div>
@@ -239,7 +240,7 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
   return (
     <div className={styles.publicWrap}>
       <div className={styles.publicCard}>
-        <p className={styles.publicWordmark}>FastQue</p>
+        <BrandLockup compact className={styles.publicWordmark} />
         <h1 className={styles.publicTitle}>{info.salonName}</h1>
         <p className={styles.publicIntro}>Join the queue for your next visit.</p>
 

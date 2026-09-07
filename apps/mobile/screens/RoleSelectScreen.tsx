@@ -15,7 +15,7 @@ import { useLanguage } from '../lib/language-context';
 import { resolveHomeLocation } from '../lib/home-location';
 import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
 import { color, font, lineHeightFor, radius, space } from '../lib/theme';
-import { GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
+import { BrandLockup, GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import type { AuthStackParamList } from '../navigation/AuthStack';
@@ -59,7 +59,6 @@ export default function RoleSelectScreen({ navigation }: Props) {
   // very narrow Android handsets. The full approved labels resume as soon as they fit.
   const compactCopy = windowWidth < 420;
   const compactHeader = windowWidth < 365;
-  const showTagline = windowWidth >= 400;
   const barberModeLabel = compactCopy ? (language === 'HI' ? 'बार्बर' : 'Find barber') : t.searchModeBarber;
   const salonModeLabel = compactCopy ? (language === 'HI' ? 'सैलून' : 'Salon & more') : t.searchModeSalon;
   const searchPlaceholder = compactCopy
@@ -118,15 +117,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
   return (
     <View style={styles.root}>
       <View style={[styles.header, compactHeader && styles.headerCompact, { paddingTop: insets.top + 8 }]}>
-        <View style={[styles.brandRow, compactHeader && styles.brandRowCompact]}>
-          <GradientView colors={GRADIENT_COLORS} style={[styles.brandBadge, compactHeader && styles.brandBadgeCompact]}>
-            <Text style={styles.brandBadgeText}>FQ</Text>
-          </GradientView>
-          <View>
-            <Text style={[styles.brandWordmark, compactHeader && styles.brandWordmarkCompact]}>FastQue</Text>
-            {showTagline && <Text style={styles.brandTagline}>BOOK AHEAD. WALK IN SMARTER.</Text>}
-          </View>
-        </View>
+        <BrandLockup compact={compactHeader} markOnly={compactHeader} style={styles.brandLockup} />
 
         <View style={styles.headerActions}>
           <Pressable style={[styles.locationPill, compactHeader && styles.locationPillCompact]} onPress={handleChooseLocation} disabled={locating}>
@@ -389,21 +380,7 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   headerCompact: { paddingHorizontal: 12, paddingBottom: 7 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1, minWidth: 0 },
-  brandRowCompact: { gap: 7 },
-  brandBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  brandBadgeCompact: { width: 36, height: 36, borderRadius: 18 },
-  brandBadgeText: { color: color.surface, fontFamily: font.bodyBold, fontSize: 16, letterSpacing: 0.3 },
-  brandWordmark: { fontFamily: font.bodyBold, fontSize: 22, lineHeight: 24, color: color.ink, letterSpacing: -0.7 },
-  brandWordmarkCompact: { fontSize: 19, lineHeight: 22 },
-  brandTagline: { fontFamily: font.bodyBold, fontSize: 6.5, letterSpacing: 1.25, color: color.muted, marginTop: 1 },
+  brandLockup: { flexShrink: 1, minWidth: 0 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
   locationPill: {
     flexDirection: 'row',

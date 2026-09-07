@@ -24,6 +24,7 @@ import { useAuth } from '../lib/auth-context';
 import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
+import { BrandLockup } from '../components/ui';
 
 type Step = 'phone' | 'otp';
 
@@ -210,14 +211,7 @@ export default function PhoneOtpLoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brandRow}>
-            <View style={styles.badgeHalo}>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>FQ</Text>
-              </View>
-            </View>
-            <Text style={styles.wordmark}>FastQue</Text>
-          </View>
+          <BrandLockup style={styles.brandLockup} />
 
           <Text style={styles.eyebrow}>{t.signInTitle}</Text>
           <Text style={styles.subtitle}>
@@ -339,42 +333,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.accentSoft,
   },
 
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: space[6],
-  },
-  badgeHalo: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 121, 31, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: space[3],
-  },
-  badge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: color.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: {
-    color: color.surface,
-    fontFamily: font.bodyBold,
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
-  wordmark: {
-    fontFamily: font.displaySemiBold,
-    fontSize: fontSize.xl,
-    color: color.ink,
-    letterSpacing: -0.3,
-  },
+  brandLockup: { alignSelf: 'center', marginBottom: space[6] },
 
   eyebrow: {
     fontFamily: font.bodyBold,
