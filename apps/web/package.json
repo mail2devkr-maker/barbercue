@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@barbercue/shared": "*",
-    "next": "16.2.12",
+    "next": "16.3.4",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -22,7 +22,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.3.4",
     "typescript": "^5"
   }
 }
