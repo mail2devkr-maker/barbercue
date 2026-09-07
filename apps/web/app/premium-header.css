@@ -1,40 +1,77 @@
-/* FastQue premium sticky header treatment.
-   Keep public/customer headers fixed in view with a translucent glass layer so page content
-   remains subtly visible beneath the brand/navigation while scrolling. */
+/* FastQue premium header treatment.
+   The public landing header is deliberately FIXED (not sticky) so it cannot be defeated by an
+   ancestor scroll/overflow context. A translucent dark-glass layer lets the page remain subtly
+   visible beneath it while the owner-approved 3D FastQue identity stays anchored in the viewport. */
 
 header[class*="landingHeader"] {
-  position: sticky !important;
-  top: 0;
-  z-index: 80 !important;
-  background: rgba(255, 253, 249, 0.72) !important;
-  border-bottom-color: rgba(29, 26, 23, 0.07) !important;
-  -webkit-backdrop-filter: saturate(145%) blur(22px) !important;
-  backdrop-filter: saturate(145%) blur(22px) !important;
-  box-shadow: 0 10px 34px rgba(25, 20, 17, 0.055);
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  z-index: 1000 !important;
+  background:
+    linear-gradient(90deg, rgba(7, 8, 17, 0.82), rgba(15, 10, 23, 0.72) 48%, rgba(7, 8, 17, 0.78)) !important;
+  border-bottom: 1px solid rgba(255, 190, 112, 0.18) !important;
+  -webkit-backdrop-filter: saturate(150%) blur(20px) !important;
+  backdrop-filter: saturate(150%) blur(20px) !important;
+  box-shadow: 0 12px 38px rgba(8, 9, 18, 0.22), 0 1px 0 rgba(255, 73, 143, 0.06);
 }
 
-header[class*="landingHeader"] a,
-header[class*="landingHeader"] nav,
+/* Because a fixed header leaves normal document flow, reserve its visual height before the hero. */
+header[class*="landingHeader"] ~ main {
+  padding-top: 104px;
+}
+
 header[class*="landingHeader"] img {
-  opacity: 0.94;
+  opacity: 1 !important;
 }
 
+header[class*="landingHeader"] nav,
+header[class*="landingHeader"] a:not([class*="headerPrimary"]) {
+  color: rgba(255, 239, 218, 0.9) !important;
+}
+
+header[class*="landingHeader"] nav a:hover,
+header[class*="landingHeader"] a:not([class*="headerPrimary"]):hover {
+  color: #ffb96f !important;
+}
+
+header[class*="landingHeader"] a[class*="headerPrimary"] {
+  color: #fff !important;
+  background: linear-gradient(105deg, #f2186d 0%, #ff713f 100%) !important;
+  box-shadow: 0 8px 24px rgba(242, 24, 109, 0.22);
+}
+
+/* Shared discovery/customer header keeps its platform layout but uses the requested frosted
+   watermark feel so content remains subtly visible while scrolling. */
 header[class*="customer-shell-module"][class*="header"],
 header[class*="customer-shell"][class*="header"] {
   position: sticky !important;
   top: 0;
   z-index: 70 !important;
-  background: rgba(255, 255, 255, 0.76) !important;
-  -webkit-backdrop-filter: saturate(140%) blur(20px) !important;
-  backdrop-filter: saturate(140%) blur(20px) !important;
-  box-shadow: 0 8px 28px rgba(25, 20, 17, 0.05);
+  background: rgba(255, 253, 249, 0.74) !important;
+  -webkit-backdrop-filter: saturate(145%) blur(20px) !important;
+  backdrop-filter: saturate(145%) blur(20px) !important;
+  box-shadow: 0 8px 28px rgba(25, 20, 17, 0.055);
+}
+
+@media (max-width: 760px) {
+  header[class*="landingHeader"] ~ main {
+    padding-top: 92px;
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  header[class*="landingHeader"],
+  header[class*="landingHeader"] {
+    background: rgba(8, 9, 18, 0.96) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
   header[class*="customer-shell-module"][class*="header"],
   header[class*="customer-shell"][class*="header"] {
-    background: rgba(255, 253, 249, 0.96) !important;
+    background: rgba(255, 253, 249, 0.97) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
