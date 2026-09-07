@@ -33,7 +33,7 @@ function organizationJsonLd() {
     potentialAction: {
       "@type": "SearchAction",
       target: `${SITE_URL}/search?q={search_term_string}`,
-      "query-input": "required name=search_term_string",
+      "query-input": "required name=string",
     },
   };
 }
@@ -67,7 +67,7 @@ export default async function HomePage() {
       <header className={styles.landingHeader}>
         <div className={styles.headerInner}>
           <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-            <BrandLockup showTagline transparent />
+            <BrandLockup showTagline transparent headerArtwork />
           </Link>
           <nav className={styles.headerNav} aria-label="Primary">
             <Link href="/search">Find a barber</Link>
