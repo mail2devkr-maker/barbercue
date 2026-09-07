@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLockup } from "../ui/BrandLockup";
 import styles from "./customer-shell.module.css";
 
 // Only routes that actually exist in the app — no invented Terms/Privacy links.
@@ -6,7 +7,7 @@ export function CustomerFooter() {
   return (
     <footer className={styles.footer}>
       <div className={styles.footerInner}>
-        <span className={styles.footerWordmark}>FastQue</span>
+        <BrandLockup compact />
         <nav className={styles.footerLinks} aria-label="Footer">
           <Link href="/search">Find a Barber</Link>
           <Link href="/account/bookings">My Bookings</Link>
