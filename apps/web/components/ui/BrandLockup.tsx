@@ -1,6 +1,12 @@
 import styles from "./brand-lockup.module.css";
 
 const LOCKUP_SRC = "/brand/fastque-premium-3d-lockup.png";
+// Same approved artwork, same pixels — only the canonical PNG's flat dark canvas removed in favor
+// of real alpha transparency (derived losslessly, never redrawn/recompressed/flattened). Used only
+// where the lockup sits on a dark, non-opaque surface (the public landing header's glass nav) —
+// every other call site keeps the canonical opaque-canvas asset unchanged, since the wordmark's
+// lighter tones were designed against a solid dark backing and untested elsewhere.
+const LOCKUP_TRANSPARENT_SRC = "/brand/fastque-premium-3d-lockup-transparent.png";
 const MARK_SRC = "/brand/fastque-premium-3d-mark.png";
 
 /**
@@ -12,14 +18,17 @@ export function BrandLockup({
   compact = false,
   showTagline = false,
   markOnly = false,
+  transparent = false,
   className = "",
 }: {
   compact?: boolean;
   showTagline?: boolean;
   markOnly?: boolean;
+  /** Use the alpha-transparent lockup variant instead of the canonical opaque-canvas one. */
+  transparent?: boolean;
   className?: string;
 }) {
-  const src = markOnly ? MARK_SRC : LOCKUP_SRC;
+  const src = markOnly ? MARK_SRC : transparent ? LOCKUP_TRANSPARENT_SRC : LOCKUP_SRC;
   const alt = markOnly ? "FastQue" : "FastQue — Good Looks, Less Waiting";
 
   return (
