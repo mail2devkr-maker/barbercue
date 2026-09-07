@@ -56,6 +56,15 @@
   white-space: nowrap;
 }
 
+.onDark .fast,
+.onDark .tagline {
+  color: #ffffff;
+}
+
+.onDark .tagline {
+  opacity: 0.7;
+}
+
 .compact {
   gap: 7px;
 }
