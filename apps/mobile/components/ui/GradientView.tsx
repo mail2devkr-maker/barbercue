@@ -101,12 +101,7 @@ export function GradientView({ colors, direction = 'horizontal', style, children
   return (
     <View style={[styles.wrap, style]}>
       {continuousUri ? (
-        <Image
-          source={{ uri: continuousUri }}
-          resizeMode="stretch"
-          pointerEvents="none"
-          style={StyleSheet.absoluteFill}
-        />
+        <Image source={{ uri: continuousUri }} resizeMode="stretch" style={StyleSheet.absoluteFill} />
       ) : (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <View style={direction === 'horizontal' ? styles.row : styles.column}>
