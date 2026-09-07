@@ -7,7 +7,7 @@
 
 .art {
   display: block;
-  width: 220px;
+  width: 198px;
   height: auto;
   max-width: 42vw;
   border-radius: 10px;
@@ -15,30 +15,30 @@
 }
 
 .compact .art {
-  width: 176px;
+  width: 160px;
   border-radius: 8px;
   box-shadow: 0 5px 16px rgba(238, 42, 91, 0.14), 0 0 0 1px rgba(255, 165, 86, 0.1);
 }
 
 @media (max-width: 760px) {
   .art {
-    width: 198px;
+    width: 184px;
     max-width: 58vw;
   }
 
   .compact .art {
-    width: 158px;
+    width: 150px;
     max-width: 48vw;
   }
 }
 
 @media (max-width: 360px) {
   .art {
-    width: 178px;
+    width: 170px;
     max-width: 56vw;
   }
 
   .compact .art {
-    width: 148px;
+    width: 144px;
   }
 }
