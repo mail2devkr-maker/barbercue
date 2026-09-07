@@ -1,0 +1,41 @@
+/* FastQue premium sticky header treatment.
+   Keep public/customer headers fixed in view with a translucent glass layer so page content
+   remains subtly visible beneath the brand/navigation while scrolling. */
+
+header[class*="landingHeader"] {
+  position: sticky !important;
+  top: 0;
+  z-index: 80 !important;
+  background: rgba(255, 253, 249, 0.72) !important;
+  border-bottom-color: rgba(29, 26, 23, 0.07) !important;
+  -webkit-backdrop-filter: saturate(145%) blur(22px) !important;
+  backdrop-filter: saturate(145%) blur(22px) !important;
+  box-shadow: 0 10px 34px rgba(25, 20, 17, 0.055);
+}
+
+header[class*="landingHeader"] a,
+header[class*="landingHeader"] nav,
+header[class*="landingHeader"] img {
+  opacity: 0.94;
+}
+
+header[class*="customer-shell-module"][class*="header"],
+header[class*="customer-shell"][class*="header"] {
+  position: sticky !important;
+  top: 0;
+  z-index: 70 !important;
+  background: rgba(255, 255, 255, 0.76) !important;
+  -webkit-backdrop-filter: saturate(140%) blur(20px) !important;
+  backdrop-filter: saturate(140%) blur(20px) !important;
+  box-shadow: 0 8px 28px rgba(25, 20, 17, 0.05);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  header[class*="landingHeader"],
+  header[class*="customer-shell-module"][class*="header"],
+  header[class*="customer-shell"][class*="header"] {
+    background: rgba(255, 253, 249, 0.96) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
