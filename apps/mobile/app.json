@@ -26,7 +26,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#1C1A17",
-        "foregroundImage": "./assets/android-icon-foreground.png"
+        "foregroundImage": "./assets/android-icon-foreground-3d.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -58,7 +58,8 @@
         {
           "locationWhenInUsePermission": "FastQue uses your location to show nearby barbershops."
         }
-      ]
+      ],
+      "expo-video"
     ]
   }
 }

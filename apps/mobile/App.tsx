@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
@@ -15,8 +15,10 @@ import {
 import { Role } from '@barbercue/shared';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { LanguageProvider } from './lib/language-context';
+import { hasIntroPlayed, markIntroPlayed } from './lib/startup-intro';
 import { color } from './lib/theme';
 import { OfflineBanner } from './components/OfflineBanner';
+import { StartupIntro, StartupIntroErrorBoundary } from './components/StartupIntro';
 import AuthStack from './navigation/AuthStack';
 import RootNavigator from './navigation/RootNavigator';
 import OwnerNavigator from './navigation/OwnerNavigator';
@@ -106,6 +108,21 @@ function Root() {
 export default function App() {
   useAppUpdates();
 
+  // Cold-start brand intro (P0 mobile app opening brand intro mission) — a centralized gate at
+  // the root, above every navigator, so it never needs duplicating inside signed-out/customer/
+  // owner/staff shells and works identically regardless of which one the session resolves to.
+  // Initialized from hasIntroPlayed() (not a hardcoded false) so a state update elsewhere in this
+  // same process — e.g. a fast-refresh in dev — can never replay it either; only a genuinely new
+  // process re-evaluates the module and gets false again. Deliberately checked before fontsLoaded
+  // below: the video needs no custom font, so gating it on font-load would only delay "immediately
+  // transition into the intro" for no reason.
+  const [introDone, setIntroDone] = useState(hasIntroPlayed());
+
+  function finishIntro(): void {
+    markIntroPlayed();
+    setIntroDone(true);
+  }
+
   // Loaded once for the whole app — Fraunces (display/headings) + Work Sans (body/UI), matching
   // apps/web's --font-display / --font-body. Gated behind the same loading view already used for
   // the auth-status check below, rather than a second splash/loading mechanism.
@@ -118,21 +135,30 @@ export default function App() {
     WorkSans_700Bold,
   });
 
-  if (!fontsLoaded) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={color.accent} size="large" />
-      </View>
-    );
-  }
-
   return (
     <SafeAreaProvider>
       <AuthProvider>
         <LanguageProvider>
-          <PushNotificationCoordinator />
-          <Root />
-          <StatusBar style="dark" />
+          {!introDone ? (
+            // AuthProvider above already started session restoration on mount — it continues
+            // running behind the intro, not blocked by it (see the mission's own requirement).
+            <>
+              <StartupIntroErrorBoundary onError={finishIntro}>
+                <StartupIntro onFinish={finishIntro} />
+              </StartupIntroErrorBoundary>
+              <StatusBar style="light" />
+            </>
+          ) : !fontsLoaded ? (
+            <View style={styles.loading}>
+              <ActivityIndicator color={color.accent} size="large" />
+            </View>
+          ) : (
+            <>
+              <PushNotificationCoordinator />
+              <Root />
+              <StatusBar style="dark" />
+            </>
+          )}
         </LanguageProvider>
       </AuthProvider>
     </SafeAreaProvider>
