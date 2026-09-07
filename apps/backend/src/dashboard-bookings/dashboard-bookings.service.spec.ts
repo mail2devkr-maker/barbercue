@@ -58,7 +58,7 @@ describe('DashboardBookingsService', () => {
   let service: DashboardBookingsService;
   let prisma: PrismaMock;
   let salonAccess: {
-    assertOwnerAccess: jest.Mock<Promise<void>, [string, string]>;
+    assertOwnerOrAdminAccess: jest.Mock<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
   };
 
   beforeEach(async () => {
@@ -77,9 +77,9 @@ describe('DashboardBookingsService', () => {
       },
     };
     salonAccess = {
-      assertOwnerAccess: jest
-        .fn<Promise<void>, [string, string]>()
-        .mockResolvedValue(undefined),
+      assertOwnerOrAdminAccess: jest
+        .fn<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>()
+        .mockResolvedValue('OWNER'),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -104,14 +104,14 @@ describe('DashboardBookingsService', () => {
         undefined,
         undefined,
       );
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
         'owner1',
         's1',
       );
     });
 
     it('rejects an owner who does not operate this salon (cross-owner access)', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -129,13 +129,24 @@ describe('DashboardBookingsService', () => {
     });
 
     it('rejects a booking-detail request for a booking in a different salon', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
         service.getOne('owner-b', 's-other', 'b1'),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(prisma.booking.findFirst).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — delegated shop management. Read-only endpoint: no AuditLog row for a successful
+    // delegated read, unlike salon-setup's admin-mutation paths.
+    it('a delegated PLATFORM_ADMIN on an ACTIVE salon can list bookings too', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      prisma.booking.findMany.mockResolvedValueOnce([]);
+      await expect(
+        service.list('admin-1', 's1', undefined, undefined, undefined, undefined, undefined),
+      ).resolves.toBeDefined();
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('admin-1', 's1');
     });
 
     it('scopes getOne to the given salonId, not just the booking id', async () => {

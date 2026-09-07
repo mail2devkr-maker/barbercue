@@ -56,10 +56,41 @@ export class SalonAccessService {
       where: { userId, salonId, role: Role.SALON_OWNER },
     });
     if (ownerMembership) return 'OWNER';
+    return this.assertGlobalAdminAccess(userId, salonId);
+  }
 
-    // Global-admin-scope fix: PLATFORM_ADMIN is only ever a global role — explicitly required here
-    // rather than assumed, so a hypothetical salon-scoped PLATFORM_ADMIN row (which a DB CHECK
-    // constraint now also makes impossible to persist at all) could never grant delegated access.
+  /**
+   * Part 2 (admin delegated shop management) — the Live Queue equivalent of
+   * assertOwnerOrAdminAccess above: queue operations (call/assign/reassign/no-show/cancel/
+   * complete/getDashboardQueue/getCapacitySummary) are legitimately run by ordinary SALON_STAFF
+   * too, not just the owner — see assertAccess above, which this mirrors — so the owner-only
+   * variant would incorrectly reject a real barber. Same ACTIVE-only + global-admin rule for the
+   * delegated path.
+   */
+  async assertAccessOrAdminAccess(
+    userId: string,
+    salonId: string,
+  ): Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'> {
+    const membership = await this.prisma.userRole.findFirst({
+      where: { userId, salonId, role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] } },
+    });
+    if (membership) return 'STAFF_OR_OWNER';
+    return this.assertGlobalAdminAccess(userId, salonId);
+  }
+
+  /**
+   * Global-admin-scope fix: PLATFORM_ADMIN is only ever a global role — explicitly required here
+   * rather than assumed, so a hypothetical salon-scoped PLATFORM_ADMIN row (which a DB CHECK
+   * constraint now also makes impossible to persist at all) could never grant delegated access.
+   * The ACTIVE-only rule is the real gate here: a PENDING or SUSPENDED salon is never
+   * delegated-manageable, regardless of admin status (see Part 2's own "no moderation backdoor"
+   * instruction). Shared by both assertOwnerOrAdminAccess and assertAccessOrAdminAccess above —
+   * the two differ only in which non-admin membership they accept first.
+   */
+  private async assertGlobalAdminAccess(
+    userId: string,
+    salonId: string,
+  ): Promise<'PLATFORM_ADMIN'> {
     const adminMembership = await this.prisma.userRole.findFirst({
       where: { userId, role: Role.PLATFORM_ADMIN, salonId: null },
     });

@@ -38,6 +38,7 @@ describe('VerificationService', () => {
   let prisma: {
     salon: { findUnique: jest.Mock };
     salonStaff: { findFirst: jest.Mock };
+    userRole: { findFirst: jest.Mock };
     verificationRequest: typeof tx.verificationRequest;
     auditLog: typeof tx.auditLog;
     $transaction: jest.Mock;
@@ -55,6 +56,7 @@ describe('VerificationService', () => {
     prisma = {
       salon: { findUnique: jest.fn() },
       salonStaff: { findFirst: jest.fn() },
+      userRole: { findFirst: jest.fn().mockResolvedValue(null) },
       ...tx,
       $transaction: jest.fn((callback: (transaction: typeof tx) => unknown) =>
         callback(tx),
@@ -79,6 +81,22 @@ describe('VerificationService', () => {
           evidenceNotes: 'notes',
         }),
       ).rejects.toMatchObject({ code: 'SALON_NOT_FOUND' });
+    });
+
+    // Part 2 — delegated shop management is deliberately NOT extended to submission: seeking
+    // verification is the owner's own business decision/attestation, never something an admin
+    // submits as if they were the owner (see this class's own doc comment). A genuine global
+    // PLATFORM_ADMIN on an ACTIVE salon still gets the exact same SALON_NOT_FOUND a non-owner
+    // always gets — submitForSalon has no admin branch to take at all.
+    it('a global PLATFORM_ADMIN can never submit verification on the owner\'s behalf', async () => {
+      prisma.salon.findUnique.mockResolvedValue(
+        makeSalon({ ownerUserId: 'owner-1', status: 'ACTIVE' }),
+      );
+      prisma.userRole.findFirst.mockResolvedValue({ role: 'PLATFORM_ADMIN' });
+      await expect(
+        service.submitForSalon('admin-1', 'salon-1', { evidenceNotes: 'notes' }),
+      ).rejects.toMatchObject({ code: 'SALON_NOT_FOUND' });
+      expect(tx.verificationRequest.create).not.toHaveBeenCalled();
     });
 
     it('creates a new SUBMITTED request and logs an audit entry when none exists', async () => {
@@ -287,6 +305,40 @@ describe('VerificationService', () => {
         code: 'SALON_NOT_FOUND',
       });
       expect(prisma.verificationRequest.findUnique).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — delegated shop management, read-only oversight only.
+    it('a global PLATFORM_ADMIN on an ACTIVE salon can read verification status', async () => {
+      prisma.salon.findUnique.mockResolvedValue(
+        makeSalon({ ownerUserId: 'owner-1', status: 'ACTIVE' }),
+      );
+      prisma.userRole.findFirst.mockResolvedValue({ role: 'PLATFORM_ADMIN' });
+      prisma.verificationRequest.findUnique.mockResolvedValue(makeRow());
+      const result = await service.getForSalon('admin-1', 'salon-1');
+      expect(result).not.toBeNull();
+      expect(prisma.userRole.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'admin-1', role: 'PLATFORM_ADMIN', salonId: null },
+      });
+    });
+
+    it('rejects a non-owner even if globally PLATFORM_ADMIN when the salon is not ACTIVE — same SALON_NOT_FOUND privacy contract as a real non-owner', async () => {
+      prisma.salon.findUnique.mockResolvedValue(
+        makeSalon({ ownerUserId: 'owner-1', status: 'PENDING' }),
+      );
+      await expect(
+        service.getForSalon('admin-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_NOT_FOUND' });
+      expect(prisma.userRole.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-owner, non-admin caller on an ACTIVE salon the same as always', async () => {
+      prisma.salon.findUnique.mockResolvedValue(
+        makeSalon({ ownerUserId: 'owner-1', status: 'ACTIVE' }),
+      );
+      prisma.userRole.findFirst.mockResolvedValue(null);
+      await expect(
+        service.getForSalon('someone-else', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_NOT_FOUND' });
     });
   });
 });

@@ -2,6 +2,8 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   BookingErrorCode,
+  Role,
+  SalonStatus,
   VerificationErrorCode,
   VerificationStatus,
   VerificationSubjectType,
@@ -35,6 +37,31 @@ type VerificationRow = {
 @Injectable()
 export class VerificationService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Part 2 — delegated shop management, read-only oversight only (see this class's own doc
+  // comment: submitForSalon/submitForStaff stay owner-only, deliberately not extended here).
+  // Deliberately NOT SalonAccessService.assertOwnerOrAdminAccess: that throws a distinct
+  // SALON_ACCESS_DENIED for "exists but not yours", where this module's own existing contract
+  // (see submitForSalon below, unchanged) always throws the same SALON_NOT_FOUND regardless of
+  // which is true, so a caller can never learn a salon they don't own even exists. Preserving that
+  // for the new admin-read path means checking admin eligibility inline rather than delegating.
+  private async assertOwnerOrGlobalAdmin(
+    userId: string,
+    salon: { ownerUserId: string; status: SalonStatus },
+  ): Promise<void> {
+    if (salon.ownerUserId === userId) return;
+    if (salon.status === SalonStatus.ACTIVE) {
+      const isGlobalAdmin = await this.prisma.userRole.findFirst({
+        where: { userId, role: Role.PLATFORM_ADMIN, salonId: null },
+      });
+      if (isGlobalAdmin) return;
+    }
+    throw new AppException(
+      VerificationErrorCode.SALON_NOT_FOUND,
+      'Salon not found.',
+      HttpStatus.NOT_FOUND,
+    );
+  }
 
   async submitForSalon(
     userId: string,
@@ -97,20 +124,28 @@ export class VerificationService {
     return this.toDto(row);
   }
 
+  // Part 2 — delegated shop management. Read-only oversight for a global PLATFORM_ADMIN on an
+  // ACTIVE salon (viewing a shop's current verification status is what "assist an ACTIVE shop's
+  // owner" requires) via assertOwnerOrGlobalAdmin above. Deliberately NOT extended to
+  // submitForSalon/submitForStaff below — see this class's own doc comment: seeking verification
+  // is the owner's own business decision/attestation, never something an admin submits as if they
+  // were the owner.
   async getForSalon(
     userId: string,
     salonId: string,
   ): Promise<VerificationRequestDto | null> {
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
+      select: { ownerUserId: true, status: true },
     });
-    if (!salon || salon.ownerUserId !== userId) {
+    if (!salon) {
       throw new AppException(
         VerificationErrorCode.SALON_NOT_FOUND,
         'Salon not found.',
         HttpStatus.NOT_FOUND,
       );
     }
+    await this.assertOwnerOrGlobalAdmin(userId, salon);
     const row = await this.prisma.verificationRequest.findUnique({
       where: { salonId },
     });
@@ -124,14 +159,16 @@ export class VerificationService {
   ): Promise<VerificationRequestDto | null> {
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
+      select: { ownerUserId: true, status: true },
     });
-    if (!salon || salon.ownerUserId !== userId) {
+    if (!salon) {
       throw new AppException(
         VerificationErrorCode.SALON_NOT_FOUND,
         'Salon not found.',
         HttpStatus.NOT_FOUND,
       );
     }
+    await this.assertOwnerOrGlobalAdmin(userId, salon);
     const staff = await this.prisma.salonStaff.findFirst({
       where: { id: staffId, salonId },
     });

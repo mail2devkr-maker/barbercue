@@ -106,7 +106,7 @@ describe('DashboardCustomersService', () => {
     $transaction: jest.Mock;
   };
   let salonAccess: {
-    assertOwnerAccess: jest.Mock<Promise<void>, [string, string]>;
+    assertOwnerOrAdminAccess: jest.Mock<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
   };
 
   function setup(overrides: {
@@ -154,9 +154,9 @@ describe('DashboardCustomersService', () => {
     // against `prisma` itself since every model method it touches is already mocked above.
     prisma.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
     salonAccess = {
-      assertOwnerAccess: jest
-        .fn<Promise<void>, [string, string]>()
-        .mockResolvedValue(undefined),
+      assertOwnerOrAdminAccess: jest
+        .fn<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>()
+        .mockResolvedValue('OWNER'),
     };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -172,14 +172,14 @@ describe('DashboardCustomersService', () => {
     it('checks salon access before reading anything', async () => {
       setup({ pageRows: [] });
       await service.list('owner1', 's1', undefined, undefined);
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
         'owner1',
         's1',
       );
     });
 
     it('rejects an owner who does not operate this salon', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -468,7 +468,7 @@ describe('DashboardCustomersService', () => {
 
     it('7. an owner who does not operate this salon is forbidden', async () => {
       makeLedgerFake({ id: 'l1', salonId: 's1', customerId: 'c1', reason: 'NO_SHOW_CHARGE', status: 'OUTSTANDING', amount: 150 });
-      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(service.waiveNoShowDue('owner-b', 's1', 'c1', 'l1')).rejects.toMatchObject({
@@ -525,6 +525,22 @@ describe('DashboardCustomersService', () => {
               newStatus: 'WAIVED',
             }),
           }),
+        }),
+      );
+    });
+
+    // Part 2 — delegated shop management. This ledger action already unconditionally audits the
+    // real actorUserId (see test 14 above) regardless of role, so a delegated PLATFORM_ADMIN
+    // waiving a due is automatically attributed correctly with no extra admin-only branch needed.
+    it('a delegated PLATFORM_ADMIN waiving a due is attributed to the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      makeLedgerFake({ id: 'l1', salonId: 's1', customerId: 'c1', reason: 'NO_SHOW_CHARGE', status: 'OUTSTANDING', amount: 150, bookingId: 'b1' });
+      prisma.booking.count.mockResolvedValue(1);
+      await service.waiveNoShowDue('admin-1', 's1', 'c1', 'l1');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('admin-1', 's1');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ actorUserId: 'admin-1' }),
         }),
       );
     });

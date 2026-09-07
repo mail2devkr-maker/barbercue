@@ -130,7 +130,7 @@ export class DashboardCustomersService {
     offsetRaw: string | undefined,
     limitRaw: string | undefined,
   ): Promise<PaginatedResult<OwnerCustomerSummaryDto>> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
 
     const offset = this.resolveOffset(offsetRaw);
     const limit = this.resolveLimit(limitRaw);
@@ -170,7 +170,7 @@ export class DashboardCustomersService {
     salonId: string,
     customerId: string,
   ): Promise<OwnerCustomerSummaryDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const [summary] = await this.buildSummaries(salonId, [customerId]);
     if (!summary) {
       throw new AppException(
@@ -435,7 +435,7 @@ export class DashboardCustomersService {
     customerId: string,
     ledgerEntryId: string,
   ): Promise<LedgerActionResultDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const entry = await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId);
 
     if (entry.reason !== LedgerReason.NO_SHOW_CHARGE) {
@@ -524,7 +524,7 @@ export class DashboardCustomersService {
     customerId: string,
     ledgerEntryId: string,
   ): Promise<LedgerActionResultDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const entry = await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId);
 
     if (entry.status === LedgerStatus.OUTSTANDING) {

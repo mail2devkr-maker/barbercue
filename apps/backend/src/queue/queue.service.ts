@@ -264,7 +264,9 @@ export class QueueService {
     userId: string,
     salonId: string,
   ): Promise<DashboardQueueDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    // Part 2 — delegated shop management. Read-only: no AuditLog write for a successful delegated
+    // read, unlike the mutation methods below.
+    await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
 
     // Same freshness rationale as getActiveForCustomer above — the owner dashboard shouldn't show
     // a stale ETA for an overrunning service until some unrelated mutation happens to trigger one.
@@ -345,7 +347,8 @@ export class QueueService {
     userId: string,
     salonId: string,
   ): Promise<CapacitySummaryDto> {
-    await this.salonAccess.assertAccess(userId, salonId);
+    // Part 2 — delegated shop management. Read-only, same as getDashboardQueue above.
+    await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
 
     const timeZone = await this.availability.getSalonTimeZone(salonId);
     const bounds = timeZone ? zonedDayBounds(new Date(), timeZone) : null;
@@ -457,7 +460,7 @@ export class QueueService {
 
   async call(userId: string, entryId: string): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    await this.salonAccess.assertAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
 
     // A conditional UPDATE (WHERE id AND status) is atomic in Postgres — no separate row lock
     // needed for a plain status transition, unlike the ServiceSession insert in assign() below,
@@ -473,6 +476,9 @@ export class QueueService {
         HttpStatus.CONFLICT,
       );
     }
+    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_CALLED', entryId, {
+      salonId: entry.salonId,
+    });
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitEntryCalled(entry.salonId, entryId, entry.customerId);
@@ -486,7 +492,7 @@ export class QueueService {
     input: AssignQueueEntryInput,
   ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    await this.salonAccess.assertAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
 
     const serviceId = input.serviceId ?? entry.serviceId;
     if (!serviceId) {
@@ -589,6 +595,12 @@ export class QueueService {
         throw err;
       }
     }, TRANSACTION_OPTIONS);
+    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_ASSIGNED', entryId, {
+      salonId: entry.salonId,
+      staffId: input.staffId,
+      chairId: input.chairId,
+      serviceId,
+    });
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitQueueUpdated(entry.salonId);
@@ -621,7 +633,7 @@ export class QueueService {
     input: ReassignQueueEntryInput,
   ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    await this.salonAccess.assertAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
     if (entry.status !== QueueEntryStatus.IN_SERVICE) {
       throw new AppException(
         QueueErrorCode.INVALID_QUEUE_TRANSITION,
@@ -741,6 +753,11 @@ export class QueueService {
       }
       throw error;
     }
+    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_REASSIGNED', entryId, {
+      salonId: entry.salonId,
+      staffId,
+      chairId,
+    });
 
     this.realtime.emitQueueEntryReassigned(entry.salonId, entryId);
     this.realtime.emitQueueUpdated(entry.salonId);
@@ -762,7 +779,10 @@ export class QueueService {
         HttpStatus.NOT_FOUND,
       );
     }
-    await this.salonAccess.assertAccess(userId, session.queueEntry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      session.queueEntry.salonId,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       const claim = await tx.serviceSession.updateMany({
@@ -801,6 +821,13 @@ export class QueueService {
         });
       }
     }, TRANSACTION_OPTIONS);
+    await this.logAdminQueueAction(
+      actor,
+      userId,
+      'ADMIN_QUEUE_SESSION_COMPLETED',
+      session.queueEntryId,
+      { salonId: session.queueEntry.salonId, sessionId },
+    );
 
     await this.recomputeEtas(session.queueEntry.salonId);
     this.realtime.emitQueueUpdated(session.queueEntry.salonId);
@@ -809,7 +836,7 @@ export class QueueService {
 
   async noShow(userId: string, entryId: string): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    await this.salonAccess.assertAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
 
     const claim = await this.prisma.queueEntry.updateMany({
       where: { id: entryId, status: QueueEntryStatus.CALLED },
@@ -822,6 +849,9 @@ export class QueueService {
         HttpStatus.CONFLICT,
       );
     }
+    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_NO_SHOW', entryId, {
+      salonId: entry.salonId,
+    });
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitQueueUpdated(entry.salonId);
@@ -833,7 +863,7 @@ export class QueueService {
     entryId: string,
   ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    await this.salonAccess.assertAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
 
     const cancellableStatuses = [
       QueueEntryStatus.WAITING,
@@ -860,6 +890,9 @@ export class QueueService {
         data: { status: ServiceSessionStatus.CANCELLED, endedAt: new Date() },
       });
     }, TRANSACTION_OPTIONS);
+    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_CANCELLED', entryId, {
+      salonId: entry.salonId,
+    });
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitQueueUpdated(entry.salonId);
@@ -1027,6 +1060,29 @@ export class QueueService {
       orderBy: { tokenNumber: 'desc' },
     });
     return (last?.tokenNumber ?? 0) + 1;
+  }
+
+  // Part 2 — delegated shop management. Called only after a queue mutation's core write has
+  // already committed successfully (never inside the same transaction the write itself needs to
+  // roll back cleanly on conflict) — a no-op for a real staff/owner actor, an AuditLog row with the
+  // real admin actor otherwise.
+  private async logAdminQueueAction(
+    actor: 'STAFF_OR_OWNER' | 'PLATFORM_ADMIN',
+    userId: string,
+    action: string,
+    entityId: string,
+    metadata: Prisma.InputJsonValue,
+  ): Promise<void> {
+    if (actor !== 'PLATFORM_ADMIN') return;
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: userId,
+        action,
+        entityType: 'QueueEntry',
+        entityId,
+        metadata,
+      },
+    });
   }
 
   private async getEntryOrThrow(entryId: string) {

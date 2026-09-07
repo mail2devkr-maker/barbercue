@@ -39,7 +39,7 @@ describe('CancellationCourtesyWaiverService', () => {
     auditLog: { create: jest.Mock };
     $transaction: jest.Mock;
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -55,7 +55,7 @@ describe('CancellationCourtesyWaiverService', () => {
       $transaction: jest.fn(),
     };
     prisma.$transaction.mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -69,7 +69,7 @@ describe('CancellationCourtesyWaiverService', () => {
 
   it('keeps salon-owner authorization in front of every waiver', async () => {
     await service.waive('owner-1', 'salon-1', 'customer-1', 'ledger-1');
-    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
+    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
   });
 
   it('waives an outstanding cancellation charge and writes a reason-specific audit row', async () => {

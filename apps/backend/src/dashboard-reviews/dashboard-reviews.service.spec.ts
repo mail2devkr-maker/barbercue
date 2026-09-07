@@ -25,8 +25,9 @@ describe('DashboardReviewsService', () => {
   let service: DashboardReviewsService;
   let prisma: {
     review: { findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
+    auditLog: { create: jest.Mock };
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -35,8 +36,9 @@ describe('DashboardReviewsService', () => {
         findFirst: jest.fn(),
         update: jest.fn(),
       },
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
     const moduleRef = await Test.createTestingModule({
       providers: [
         DashboardReviewsService,
@@ -50,11 +52,11 @@ describe('DashboardReviewsService', () => {
   describe('list', () => {
     it('checks salon access before listing', async () => {
       await service.list('u1', 's1', undefined, undefined);
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith('u1', 's1');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('u1', 's1');
     });
 
     it('does not query reviews when salon-scoped ownership is denied', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValueOnce(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
 
@@ -100,7 +102,31 @@ describe('DashboardReviewsService', () => {
         makeReviewRow({ ownerResponse: 'Thank you!' }),
       );
       await service.respond('u1', 's1', 'r1', 'Thank you!');
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith('u1', 's1');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('u1', 's1');
+    });
+
+    it('an owner responding to their own review writes no AuditLog row', async () => {
+      prisma.review.findFirst.mockResolvedValue(makeReviewRow());
+      prisma.review.update.mockResolvedValue(makeReviewRow({ ownerResponse: 'Thanks!' }));
+      await service.respond('owner-1', 's1', 'r1', 'Thanks!');
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — delegated shop management.
+    it('a delegated PLATFORM_ADMIN responding to a review is recorded under the real admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      prisma.review.findFirst.mockResolvedValue(makeReviewRow());
+      prisma.review.update.mockResolvedValue(makeReviewRow({ ownerResponse: 'On behalf of the shop, thank you!' }));
+      await service.respond('admin-1', 's1', 'r1', 'On behalf of the shop, thank you!');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: {
+          actorUserId: 'admin-1',
+          action: 'ADMIN_REVIEW_RESPONDED',
+          entityType: 'Review',
+          entityId: 'r1',
+          metadata: { salonId: 's1' },
+        },
+      });
     });
 
     it('rejects responding to a review that does not belong to this salon', async () => {

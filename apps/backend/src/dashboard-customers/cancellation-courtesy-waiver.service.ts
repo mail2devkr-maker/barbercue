@@ -76,7 +76,7 @@ export class CancellationCourtesyWaiverService {
     customerId: string,
     ledgerEntryId: string,
   ): Promise<LedgerActionResultDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const entry = await this.getOwnedCancellationEntry(salonId, customerId, ledgerEntryId);
 
     // Idempotent retry: this exact charge is already waived.
@@ -176,7 +176,7 @@ export class CancellationCourtesyWaiverService {
     customerId: string,
     ledgerEntryId: string,
   ): Promise<LedgerActionResultDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const entry = await this.getOwnedCancellationEntry(salonId, customerId, ledgerEntryId);
 
     if (entry.status === LedgerStatus.OUTSTANDING) return { ledgerEntry: entry };

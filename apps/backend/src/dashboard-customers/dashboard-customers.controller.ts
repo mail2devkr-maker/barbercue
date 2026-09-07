@@ -4,11 +4,15 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { DashboardCustomersService } from './dashboard-customers.service';
 
-// Owner-only, same reasoning as DashboardBookingsController: customer contact details and visit
-// history are not given to ordinary staff by default. SalonAccessService.assertAccess inside the
-// service re-checks this specific user operates *this* salonId.
+// Owner-only for ordinary staff, same reasoning as DashboardBookingsController: customer contact
+// details and visit history are not given to ordinary staff by default.
+// SalonAccessService.assertOwnerOrAdminAccess inside the service re-checks this specific user
+// operates *this* salonId. PLATFORM_ADMIN is additionally allowed at the route level (Part 2
+// delegated shop management) — the ledger mutations below already write an AuditLog row for every
+// actor unconditionally (real actorUserId, whoever that is), so no extra admin-only branch is
+// needed to keep the waive/restore actions attributable.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class DashboardCustomersController {
   constructor(private readonly customers: DashboardCustomersService) {}
 

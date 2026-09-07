@@ -4,8 +4,11 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CancellationCourtesyWaiverService } from './cancellation-courtesy-waiver.service';
 
+// PLATFORM_ADMIN allowed at the route level (Part 2 delegated shop management) — the service's own
+// assertOwnerOrAdminAccess enforces ACTIVE-only + global-admin, and both actions already audit the
+// real actorUserId unconditionally, so no separate admin-only branch is needed for attribution.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class CancellationCourtesyWaiverController {
   constructor(private readonly courtesy: CancellationCourtesyWaiverService) {}
 

@@ -43,7 +43,7 @@ export class DashboardReviewsService {
     cursor: string | undefined,
     limitRaw: string | undefined,
   ): Promise<PaginatedResult<OwnerReviewDto>> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const limit = this.resolveLimit(limitRaw);
 
     const reviews = await this.prisma.review.findMany({
@@ -67,7 +67,7 @@ export class DashboardReviewsService {
     reviewId: string,
     ownerResponse: string,
   ): Promise<OwnerReviewDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     // Scoped by salonId, not just id — a staff/owner at salon A must never respond to a review
     // that belongs to salon B even if they somehow know its id.
     const existing = await this.prisma.review.findFirst({
@@ -85,6 +85,19 @@ export class DashboardReviewsService {
       data: { ownerResponse },
       include: reviewInclude,
     });
+    // Part 2 — every delegated admin mutation gets an AuditLog row with the real actor; an owner
+    // responding to their own shop's review is unchanged (no new logging for that path).
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_REVIEW_RESPONDED',
+          entityType: 'Review',
+          entityId: reviewId,
+          metadata: { salonId },
+        },
+      });
+    }
     return this.toOwnerDto(updated);
   }
 

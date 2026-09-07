@@ -25,8 +25,11 @@ const PEAK_SLOW_HOUR_COUNT = 5;
 
 /**
  * Owner operational analytics (Phase 9) — real DB aggregates only, no external analytics provider
- * and no invented numbers. Every query is scoped by salonId via SalonAccessService.assertAccess,
- * same isolation guarantee as every other owner dashboard endpoint.
+ * and no invented numbers. Every query is scoped by salonId via
+ * SalonAccessService.assertOwnerOrAdminAccess (Part 2: also admits a delegated PLATFORM_ADMIN on
+ * an ACTIVE salon), same isolation guarantee as every other owner dashboard endpoint. Read-only —
+ * no mutation happens here, so unlike the salon-setup services there is nothing to attribute to an
+ * AuditLog row for the admin path.
  *
  * estimatedServiceValue is a clearly-labeled estimate (listed price x completed bookings) — never
  * a record of money actually collected, since BarberCue does not process payment. See its own doc
@@ -46,7 +49,7 @@ export class DashboardAnalyticsService {
     fromRaw: string | undefined,
     toRaw: string | undefined,
   ): Promise<OwnerAnalyticsDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
 
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },

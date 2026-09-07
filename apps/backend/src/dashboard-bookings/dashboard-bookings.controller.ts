@@ -8,13 +8,15 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { DashboardBookingsService } from './dashboard-bookings.service';
 
-// Owner-only — deliberately narrower than DashboardQueueController's
+// Owner-only for ordinary staff — deliberately narrower than DashboardQueueController's
 // @Roles(SALON_STAFF, SALON_OWNER): booking history exposes customer contact details, so ordinary
-// staff don't get it by default. SalonAccessService.assertAccess inside the service still
-// re-checks that this specific user actually operates *this* salonId (never just "is an owner of
-// some salon somewhere") — same two-layer pattern as DashboardQueueController.
+// staff don't get it by default. SalonAccessService.assertOwnerOrAdminAccess inside the service
+// still re-checks that this specific user actually operates *this* salonId (never just "is an
+// owner of some salon somewhere") — same two-layer pattern as DashboardQueueController.
+// PLATFORM_ADMIN is additionally allowed at the route level (Part 2 delegated shop management);
+// read-only here, so no AuditLog write is needed for the admin path.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class DashboardBookingsController {
   constructor(private readonly bookingsService: DashboardBookingsService) {}
 

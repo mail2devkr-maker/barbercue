@@ -83,6 +83,9 @@ interface PrismaMock {
     update: jest.Mock<Promise<unknown>, [unknown]>;
     count: jest.Mock<Promise<number>, [unknown]>;
   };
+  auditLog: {
+    create: jest.Mock<Promise<unknown>, [unknown]>;
+  };
   $executeRaw: jest.Mock<Promise<unknown>, [unknown]>;
   $transaction: jest.Mock;
 }
@@ -98,7 +101,9 @@ describe('QueueService', () => {
     getSalonTimeZone: jest.Mock<Promise<string | null>, [string]>;
     resolveTimeZoneOrThrow: jest.Mock<Promise<string>, [string]>;
   };
-  let salonAccess: { assertAccess: jest.Mock<Promise<void>, [string, string]> };
+  let salonAccess: {
+    assertAccessOrAdminAccess: jest.Mock<Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
+  };
   let realtime: {
     emitQueueUpdated: jest.Mock;
     emitEntryCalled: jest.Mock;
@@ -164,6 +169,9 @@ describe('QueueService', () => {
         update: jest.fn<Promise<unknown>, [unknown]>(),
         count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
       },
+      auditLog: {
+        create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+      },
       $executeRaw: jest
         .fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue(undefined),
@@ -198,9 +206,9 @@ describe('QueueService', () => {
         .mockResolvedValue('Asia/Kolkata'),
     };
     salonAccess = {
-      assertAccess: jest
-        .fn<Promise<void>, [string, string]>()
-        .mockResolvedValue(undefined),
+      assertAccessOrAdminAccess: jest
+        .fn<Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'>, [string, string]>()
+        .mockResolvedValue('STAFF_OR_OWNER'),
     };
     realtime = {
       emitQueueUpdated: jest.fn(),
@@ -276,7 +284,7 @@ describe('QueueService', () => {
 
     it('enforces salon access before calling an entry', async () => {
       prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
-      salonAccess.assertAccess.mockRejectedValueOnce(
+      salonAccess.assertAccessOrAdminAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(service.call('staff1', 'q1')).rejects.toMatchObject({
@@ -294,9 +302,31 @@ describe('QueueService', () => {
 
       await service.call('staff1', 'q1');
 
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith('staff1', 's1');
+      expect(salonAccess.assertAccessOrAdminAccess).toHaveBeenCalledWith('staff1', 's1');
       expect(realtime.emitEntryCalled).toHaveBeenCalledWith('s1', 'q1', 'c1');
       expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    // Part 2 — delegated shop management.
+    it('a delegated PLATFORM_ADMIN calling an entry is recorded under the real admin actor', async () => {
+      salonAccess.assertAccessOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry())
+        .mockResolvedValueOnce(makeDetailEntry({ status: QueueEntryStatus.CALLED }));
+
+      await service.call('admin1', 'q1');
+
+      expect(salonAccess.assertAccessOrAdminAccess).toHaveBeenCalledWith('admin1', 's1');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: {
+          actorUserId: 'admin1',
+          action: 'ADMIN_QUEUE_ENTRY_CALLED',
+          entityType: 'QueueEntry',
+          entityId: 'q1',
+          metadata: { salonId: 's1' },
+        },
+      });
     });
   });
 
@@ -641,11 +671,30 @@ describe('QueueService', () => {
         },
       );
     });
+
+    // Part 2 — delegated shop management. This mutation is transaction-wrapped (unlike call()'s
+    // plain updateMany above) — the audit write still only happens after the transaction commits.
+    it('a delegated PLATFORM_ADMIN cancelling an entry is recorded under the real admin actor', async () => {
+      salonAccess.assertAccessOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(
+        makeRawEntry({ status: QueueEntryStatus.WAITING }),
+      );
+      await service.cancelByStaff('admin1', 'q1');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: {
+          actorUserId: 'admin1',
+          action: 'ADMIN_QUEUE_ENTRY_CANCELLED',
+          entityType: 'QueueEntry',
+          entityId: 'q1',
+          metadata: { salonId: 's1' },
+        },
+      });
+    });
   });
 
   describe('getDashboardQueue', () => {
     it('enforces salon access (UserRole-based, not SalonStaff-based)', async () => {
-      salonAccess.assertAccess.mockRejectedValueOnce(
+      salonAccess.assertAccessOrAdminAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -804,7 +853,7 @@ describe('QueueService', () => {
 
   describe('getCapacitySummary (Phase 6 — Owner Capacity Dashboard)', () => {
     it('checks salon access before returning anything', async () => {
-      salonAccess.assertAccess.mockRejectedValueOnce(
+      salonAccess.assertAccessOrAdminAccess.mockRejectedValueOnce(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(

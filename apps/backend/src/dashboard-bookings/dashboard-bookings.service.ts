@@ -75,7 +75,7 @@ export class DashboardBookingsService {
     to: string | undefined,
     date?: string,
   ): Promise<PaginatedResult<OwnerBookingDetailDto>> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
 
     const filter = this.resolveFilter(filterRaw);
     const limit = this.resolveLimit(limitRaw);
@@ -132,7 +132,7 @@ export class DashboardBookingsService {
     salonId: string,
     bookingId: string,
   ): Promise<OwnerBookingDetailDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     // Scoped by salonId, not just id — an owner of salon A must never fetch a booking that
     // belongs to salon B even if they somehow know its id.
     const booking = await this.prisma.booking.findFirst({

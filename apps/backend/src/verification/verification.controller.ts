@@ -11,10 +11,16 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { VerificationService } from './verification.service';
 
-// Owner-only — seeking verification (for the shop or for one barber) is a business decision, not
-// an operational one. Mirrors DashboardReviewsController's own role restriction and rationale.
+// Owner-only for ordinary staff — seeking verification (for the shop or for one barber) is a
+// business decision, not an operational one. Mirrors DashboardReviewsController's own role
+// restriction and rationale. PLATFORM_ADMIN is additionally allowed at the route level (Part 2
+// delegated shop management) for the GET routes' oversight value; the two submit routes stay
+// functionally owner-only regardless — VerificationService's own ownerUserId check (never
+// extended to admin) rejects an admin's submit attempt with the same SALON_NOT_FOUND it always
+// throws for a non-owner, so a real submission as/for the owner is genuinely impossible, not just
+// hidden by the UI.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class VerificationController {
   constructor(private readonly verification: VerificationService) {}
 

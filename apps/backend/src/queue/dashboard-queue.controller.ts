@@ -17,8 +17,12 @@ import { Idempotent } from '../common/decorators/idempotent.decorator';
 import { QueueService } from './queue.service';
 import { StaffStatusService } from './staff-status.service';
 
+// PLATFORM_ADMIN allowed at the route level (Part 2 delegated shop management) —
+// SalonAccessService.assertAccessOrAdminAccess inside every method below enforces ACTIVE-only +
+// global-admin, and each mutation writes an AuditLog row under the real admin actor
+// (QueueService.logAdminQueueAction) — a no-op for the ordinary staff/owner path.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_STAFF, Role.SALON_OWNER)
+@Roles(Role.SALON_STAFF, Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class DashboardQueueController {
   constructor(
     private readonly queueService: QueueService,

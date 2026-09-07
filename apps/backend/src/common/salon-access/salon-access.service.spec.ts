@@ -189,4 +189,65 @@ describe('SalonAccessService', () => {
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
     });
   });
+
+  // Part 2 — PLATFORM_ADMIN delegated Live Queue access. Mirrors assertOwnerOrAdminAccess's own
+  // test matrix above, but accepting SALON_STAFF too (not just SALON_OWNER) as the real-membership
+  // path, matching assertAccess's own broader staff-capable rule.
+  describe('assertAccessOrAdminAccess', () => {
+    it('grants access to a real SALON_STAFF member without checking for a global admin role', async () => {
+      prisma.userRole.findFirst.mockResolvedValueOnce({ role: Role.SALON_STAFF });
+      await expect(
+        service.assertAccessOrAdminAccess('staff-1', 'salon-1'),
+      ).resolves.toBe('STAFF_OR_OWNER');
+      expect(prisma.userRole.findFirst).toHaveBeenCalledTimes(1);
+      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('grants access to the real owner too, without checking for a global admin role', async () => {
+      prisma.userRole.findFirst.mockResolvedValueOnce({ role: Role.SALON_OWNER });
+      await expect(
+        service.assertAccessOrAdminAccess('owner-1', 'salon-1'),
+      ).resolves.toBe('STAFF_OR_OWNER');
+      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('grants a PLATFORM_ADMIN access to an ACTIVE salon when neither staff nor owner', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null) // not staff or owner
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
+      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.ACTIVE });
+      await expect(
+        service.assertAccessOrAdminAccess('admin-1', 'salon-1'),
+      ).resolves.toBe('PLATFORM_ADMIN');
+    });
+
+    it('denies a PLATFORM_ADMIN a PENDING salon — no moderation backdoor for lifecycle-incomplete shops', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
+      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.PENDING });
+      await expect(
+        service.assertAccessOrAdminAccess('admin-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+    });
+
+    it('denies a malformed salon-scoped PLATFORM_ADMIN row — the role only grants delegated access when global', async () => {
+      prisma.userRole.findFirst.mockResolvedValue(null);
+      await expect(
+        service.assertAccessOrAdminAccess('malformed-admin-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.userRole.findFirst).toHaveBeenNthCalledWith(2, {
+        where: { userId: 'malformed-admin-1', role: Role.PLATFORM_ADMIN, salonId: null },
+      });
+      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('denies a normal CUSTOMER with neither staff/owner membership nor a global PLATFORM_ADMIN row', async () => {
+      prisma.userRole.findFirst.mockResolvedValue(null);
+      await expect(
+        service.assertAccessOrAdminAccess('customer-1', 'salon-1'),
+      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+    });
+  });
 });

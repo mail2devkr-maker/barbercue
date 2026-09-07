@@ -4,10 +4,13 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { DashboardAnalyticsService } from './dashboard-analytics.service';
 
-// Owner-only — same reasoning as dashboard-bookings/dashboard-customers: operational analytics is
-// not given to ordinary staff by default.
+// Owner-only for ordinary staff — same reasoning as dashboard-bookings/dashboard-customers:
+// operational analytics is not given to ordinary staff by default. PLATFORM_ADMIN is additionally
+// allowed (Part 2 delegated shop management) so admin can assist an ACTIVE shop's owner; the
+// service's own assertOwnerOrAdminAccess is what actually enforces the ACTIVE-only + global-admin
+// invariants — this decorator only proves "a real admin session," never salon-specific authority.
 @Controller(DASHBOARD_PATHS.dashboard)
-@Roles(Role.SALON_OWNER)
+@Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class DashboardAnalyticsController {
   constructor(private readonly analytics: DashboardAnalyticsService) {}
 

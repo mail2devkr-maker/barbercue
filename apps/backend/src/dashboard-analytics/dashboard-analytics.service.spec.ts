@@ -16,7 +16,7 @@ describe('DashboardAnalyticsService', () => {
     serviceSession: { findMany: jest.Mock };
   };
   let salonAccess: {
-    assertOwnerAccess: jest.Mock<Promise<void>, [string, string]>;
+    assertOwnerOrAdminAccess: jest.Mock<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
   };
 
   beforeEach(async () => {
@@ -40,9 +40,9 @@ describe('DashboardAnalyticsService', () => {
       serviceSession: { findMany: jest.fn().mockResolvedValue([]) },
     };
     salonAccess = {
-      assertOwnerAccess: jest
-        .fn<Promise<void>, [string, string]>()
-        .mockResolvedValue(undefined),
+      assertOwnerOrAdminAccess: jest
+        .fn<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>()
+        .mockResolvedValue('OWNER'),
     };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -56,17 +56,27 @@ describe('DashboardAnalyticsService', () => {
 
   it('checks salon access before reading anything', async () => {
     await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
-    expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith('owner1', 's1');
+    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner1', 's1');
   });
 
   it('rejects an owner who does not operate this salon', async () => {
-    salonAccess.assertOwnerAccess.mockRejectedValueOnce(
+    salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
       Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
     );
     await expect(
       service.getAnalytics('owner-b', 's1', 'today', undefined, undefined),
     ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
     expect(prisma.booking.groupBy).not.toHaveBeenCalled();
+  });
+
+  // Part 2 — delegated shop management. Read-only endpoint: a successful delegated read needs no
+  // AuditLog row (nothing here mutates), unlike salon-setup's admin-mutation paths.
+  it('a delegated PLATFORM_ADMIN on an ACTIVE salon can read analytics too', async () => {
+    salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+    await expect(
+      service.getAnalytics('admin-1', 's1', 'today', undefined, undefined),
+    ).resolves.toBeDefined();
+    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('admin-1', 's1');
   });
 
   it('defaults to "today" for an unrecognized/missing range value', async () => {
