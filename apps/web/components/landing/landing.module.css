@@ -19,7 +19,9 @@
 
 .headerInner {
   width: min(100% - 48px, 1180px);
-  min-height: 72px;
+  /* 88px (was 72px) gives the lockup real breathing room above/below at desktop widths, where it
+     renders ~70px tall — align-items: center does the rest, no crop or stretch needed. */
+  min-height: 88px;
   margin: 0 auto;
   display: flex;
   align-items: center;
