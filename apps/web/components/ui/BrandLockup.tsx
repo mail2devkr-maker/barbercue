@@ -7,18 +7,14 @@ import styles from "./brand-lockup.module.css";
 export function BrandLockup({
   compact = false,
   showTagline = false,
-  onDark = false,
   className = "",
 }: {
   compact?: boolean;
   showTagline?: boolean;
-  onDark?: boolean;
   className?: string;
 }) {
   return (
-    <span
-      className={`${styles.root} ${compact ? styles.compact : ""} ${onDark ? styles.onDark : ""} ${className}`.trim()}
-    >
+    <span className={`${styles.root} ${compact ? styles.compact : ""} ${className}`.trim()}>
       {/* The icon is a small shared data URI so web and mobile render the exact same approved
           artwork; no browser image optimisation is useful for an inline 128px brand mark. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
