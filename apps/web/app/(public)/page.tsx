@@ -10,6 +10,7 @@ import { SalonCard } from "../../components/discovery/SalonCard";
 import { HeroVisual } from "../../components/landing/HeroVisual";
 import { LandingHeaderActions } from "../../components/landing/LandingHeaderActions";
 import { EditorialImage } from "../../components/editorial/EditorialImage";
+import { BrandLockup } from "../../components/ui/BrandLockup";
 import styles from "../../components/landing/landing.module.css";
 
 const TITLE = "Find a barbershop, salon or spa near you";
@@ -66,8 +67,7 @@ export default async function HomePage() {
       <header className={styles.landingHeader}>
         <div className={styles.headerInner}>
           <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-            <span className={styles.wordmarkMark} aria-hidden="true">FQ</span>
-            <span>FastQue</span>
+            <BrandLockup showTagline />
           </Link>
           <nav className={styles.headerNav} aria-label="Primary">
             <Link href="/search">Find a barber</Link>
@@ -325,7 +325,7 @@ export default async function HomePage() {
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerBrand}>
-            <strong>FastQue</strong>
+            <BrandLockup compact />
             <p>Purpose-built for modern barbershops.</p>
           </div>
           <nav className={styles.footerLinks} aria-label="Footer">
