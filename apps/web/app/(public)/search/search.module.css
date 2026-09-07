@@ -334,6 +334,12 @@
   margin-bottom: 6px;
 }
 
+.filterGroupHint {
+  font-size: 0.78rem;
+  color: var(--bc-muted);
+  margin: 0 0 8px;
+}
+
 .filterChips {
   display: flex;
   flex-wrap: wrap;

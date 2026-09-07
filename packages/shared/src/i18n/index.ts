@@ -526,6 +526,8 @@ export interface UiStrings {
   // are metric display only (formatDistance handles imperial elsewhere) since the chips apply to
   // the whole result set, not one salon with its own country.
   distanceFilterLabel: string;
+  /** Shown only while no location is set yet — explains that picking a radius will ask for it. */
+  distanceFilterLocationHint: string;
   distanceFilterAny: string;
   distanceFilter100m: string;
   distanceFilter200m: string;
@@ -1140,6 +1142,7 @@ const enUi: UiStrings = {
   closedNowLabel: 'Closed now',
   awaySuffix: ' away',
   distanceFilterLabel: 'Distance',
+  distanceFilterLocationHint: 'Choose a radius to use your current location.',
   distanceFilterAny: 'Any distance',
   distanceFilter100m: '100 m',
   distanceFilter200m: '200 m',
@@ -1720,6 +1723,7 @@ const hiUi: UiStrings = {
   closedNowLabel: 'अभी बंद है',
   awaySuffix: ' दूर',
   distanceFilterLabel: 'दूरी',
+  distanceFilterLocationHint: 'अपनी वर्तमान लोकेशन का उपयोग करने के लिए एक दूरी चुनें।',
   distanceFilterAny: 'कोई भी दूरी',
   distanceFilter100m: '100 मी',
   distanceFilter200m: '200 मी',

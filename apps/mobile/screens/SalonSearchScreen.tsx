@@ -116,7 +116,31 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     return runSearch(isRefresh, nearMe);
   }
 
-  function selectRadius(value: number | null) {
+  // Owner-reported discoverability fix: Distance is visible before "Near me" has ever been used —
+  // picking an actual radius here is itself a location request, applied to the same search in one
+  // step, rather than requiring a separate prior tap on "Near me" first.
+  async function selectRadius(value: number | null) {
+    if (!nearMe && value !== null) {
+      setLocating(true);
+      setError(null);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setError(t.locationDenied);
+          return;
+        }
+        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setNearMe(coords);
+        setRadiusKm(value);
+        await runSearch(false, coords, { radiusKm: value, priceMin, priceMax });
+      } catch {
+        setError(t.couldNotGetLocation);
+      } finally {
+        setLocating(false);
+      }
+      return;
+    }
     setRadiusKm(value);
     void runSearch(false, nearMe, { radiusKm: value, priceMin, priceMax });
   }
@@ -191,30 +215,30 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         style={styles.nearMeButton}
       />
 
-      {/* Part 8/9 — distance filter. Only shown once a query point exists; radiusKm is otherwise
-          meaningless (see salonSearchQuerySchema's own doc comment) and would silently do nothing
-          if sent without lat/lng. */}
-      {nearMe && (
-        <View style={styles.filterGroup}>
-          <Text style={styles.filterLabel}>{t.distanceFilterLabel}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            {DISTANCE_OPTIONS.map((option) => {
-              const active = radiusKm === option.value;
-              return (
-                <Pressable
-                  key={String(option.value)}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => selectRadius(option.value)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{t[option.labelKey]}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
+      {/* Owner-reported discoverability fix: always visible, not gated behind "Near me" already
+          being set — selectRadius itself requests location the moment a real radius is picked, so
+          the filter is reachable from the very first visit to this screen. */}
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>{t.distanceFilterLabel}</Text>
+        {!nearMe && <Text style={styles.filterHint}>{t.distanceFilterLocationHint}</Text>}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+          {DISTANCE_OPTIONS.map((option) => {
+            const active = radiusKm === option.value;
+            return (
+              <Pressable
+                key={String(option.value)}
+                style={[styles.chip, active && styles.chipActive]}
+                onPress={() => void selectRadius(option.value)}
+                disabled={locating}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{t[option.labelKey]}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* Part 8/9 — price filter. Always available (unlike distance, price never depends on a
           query point). Independent of the text/service search, per SalonsService.search's own
@@ -326,6 +350,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',
+    color: color.muted,
+    marginBottom: space[2],
+  },
+  filterHint: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.sm,
     color: color.muted,
     marginBottom: space[2],
   },

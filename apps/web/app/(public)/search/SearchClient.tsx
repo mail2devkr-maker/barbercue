@@ -73,7 +73,47 @@ export default function SearchClient() {
   const activePriceMin = priceMinParam !== null ? Number(priceMinParam) : null;
   const activePriceMax = priceMaxParam !== null ? Number(priceMaxParam) : null;
 
+  // Shared by handleNearMe and selectRadius below — both need "ask the browser for a position,
+  // then either apply it directly or bail out with the same locationError copy".
+  function requestLocationThen(onSuccess: (lat: number, lng: number) => void) {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationError("Location isn't available in this browser. Try searching by city instead.");
+      return;
+    }
+    setLocating(true);
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        onSuccess(position.coords.latitude, position.coords.longitude);
+      },
+      (err) => {
+        setLocating(false);
+        setLocationError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission was denied. Try searching by city instead."
+            : "Couldn't get your location. Try searching by city instead.",
+        );
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
+    );
+  }
+
+  // Distance is visible before "Near me" has ever been pressed (owner-reported discoverability
+  // fix) — picking an actual radius here is itself a request for location, applied in one step,
+  // rather than requiring a separate prior tap on "Near me". "Any distance" needs no location (it
+  // is a no-op once one isn't already set) and never triggers the geolocation prompt.
   function selectRadius(value: number | null) {
+    if (!nearMeActive && value !== null) {
+      requestLocationThen((lat, lng) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("lat", String(lat));
+        params.set("lng", String(lng));
+        params.set("radiusKm", String(value));
+        router.push(`/search?${params.toString()}`);
+      });
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     if (value === null) params.delete("radiusKm");
     else params.set("radiusKm", String(value));
@@ -153,30 +193,12 @@ export default function SearchClient() {
   // denial/unavailability this degrades gracefully to the existing city/text search rather than
   // blocking the page; nothing here claims a location the browser didn't actually provide.
   function handleNearMe() {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setLocationError("Location isn't available in this browser. Try searching by city instead.");
-      return;
-    }
-    setLocating(true);
-    setLocationError(null);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocating(false);
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("lat", String(position.coords.latitude));
-        params.set("lng", String(position.coords.longitude));
-        router.push(`/search?${params.toString()}`);
-      },
-      (err) => {
-        setLocating(false);
-        setLocationError(
-          err.code === err.PERMISSION_DENIED
-            ? "Location permission was denied. Try searching by city instead."
-            : "Couldn't get your location. Try searching by city instead.",
-        );
-      },
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
-    );
+    requestLocationThen((lat, lng) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("lat", String(lat));
+      params.set("lng", String(lng));
+      router.push(`/search?${params.toString()}`);
+    });
   }
 
   function clearNearMe() {
@@ -231,28 +253,31 @@ export default function SearchClient() {
           </button>
         )}
 
-        {/* Part 8/9 correction — distance filter. Only shown once a query point exists; radiusKm
-            is otherwise meaningless server-side (see salonSearchQuerySchema's own doc comment). If
-            location is unavailable, this simply doesn't render — the existing "Near me" button's
-            own locationError message above already explains why. */}
-        {nearMeActive && (
-          <div className={styles.filterGroup}>
-            <span className={styles.filterGroupLabel}>Distance</span>
-            <div className={styles.filterChips}>
-              {DISTANCE_OPTIONS.map((option) => (
-                <button
-                  key={String(option.value)}
-                  type="button"
-                  className={`${styles.filterChip} ${activeRadiusKm === option.value ? styles.filterChipActive : ""}`}
-                  aria-pressed={activeRadiusKm === option.value}
-                  onClick={() => selectRadius(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+        {/* Owner-reported discoverability fix: always visible, not gated behind "Near me" already
+            being active — radiusKm is meaningless server-side without a query point (see
+            salonSearchQuerySchema's own doc comment), so picking an actual radius here is itself a
+            location request; selectRadius applies the radius the moment it gets a position, in one
+            step, rather than requiring a separate prior "Near me" tap. */}
+        <div className={styles.filterGroup}>
+          <span className={styles.filterGroupLabel}>Distance</span>
+          {!nearMeActive && (
+            <p className={styles.filterGroupHint}>Choose a radius to use your current location.</p>
+          )}
+          <div className={styles.filterChips}>
+            {DISTANCE_OPTIONS.map((option) => (
+              <button
+                key={String(option.value)}
+                type="button"
+                className={`${styles.filterChip} ${activeRadiusKm === option.value ? styles.filterChipActive : ""}`}
+                aria-pressed={activeRadiusKm === option.value}
+                disabled={locating}
+                onClick={() => selectRadius(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* Price filter — always available (unlike distance, price never depends on a query
             point). Independent of the service/q text search only when no `service`/`q` matched a
