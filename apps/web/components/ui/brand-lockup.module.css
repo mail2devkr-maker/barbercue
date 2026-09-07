@@ -1,0 +1,77 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: inherit;
+}
+
+.icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(242, 41, 92, 0.16));
+}
+
+.copy {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  font-family: var(--font-body);
+  font-size: 1.42rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.055em;
+  white-space: nowrap;
+}
+
+.fast {
+  color: #10172a;
+}
+
+.que {
+  color: #f2295c;
+  background: linear-gradient(105deg, #f2295c 2%, #ff7a3d 95%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.tagline {
+  margin-top: 5px;
+  color: #10172a;
+  opacity: 0.66;
+  font-family: var(--font-body);
+  font-size: 0.43rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+}
+
+.compact {
+  gap: 7px;
+}
+
+.compact .icon {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+}
+
+.compact .wordmark {
+  font-size: 1.18rem;
+}
+
+.compact .tagline {
+  margin-top: 4px;
+  font-size: 0.37rem;
+  letter-spacing: 0.15em;
+}

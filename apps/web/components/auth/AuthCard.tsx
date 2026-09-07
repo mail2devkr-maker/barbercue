@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLockup } from "../ui/BrandLockup";
 import styles from "./customer-auth.module.css";
 
 export type AuthAudience = "customer" | "owner" | "staff" | "admin" | "recovery";
@@ -56,8 +57,7 @@ export function AuthCard({
     <main className={styles.page}>
       <header className={styles.topBar}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-          <span className={styles.wordmarkMark} aria-hidden="true">FQ</span>
-          <span>FastQue</span>
+          <BrandLockup showTagline />
         </Link>
         <Link href="/" className={styles.homeLink}>Home</Link>
       </header>

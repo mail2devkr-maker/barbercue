@@ -9,5 +9,6 @@ export { SafeImage } from './SafeImage';
 export { NotificationBell } from './NotificationBell';
 export { LanguageSwitcher } from './LanguageSwitcher';
 export { GradientView } from './GradientView';
+export { BrandLockup } from './BrandLockup';
 export { PhotoGalleryViewer } from './PhotoGalleryViewer';
 export type { GalleryPhoto } from './PhotoGalleryViewer';

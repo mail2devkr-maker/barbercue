@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
+import { BrandLockup } from "../ui/BrandLockup";
 import { NotificationBell } from "./NotificationBell";
 import styles from "./customer-shell.module.css";
 
@@ -58,7 +59,7 @@ export function CustomerHeader() {
     <header className={styles.header}>
       <div className={styles.headerInner}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-          FastQue
+          <BrandLockup showTagline />
         </Link>
 
         <nav className={styles.nav} aria-label="Primary">
