@@ -1,18 +1,27 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 /**
- * A real two-stop linear gradient with zero new dependencies: neither react-native-svg nor
- * expo-linear-gradient is installed in this app, and either would be a new NATIVE dependency,
- * forcing a rebuild before the next OTA update (see lib/theme.ts's brandGradientStart/End comment
- * — this codebase already made the identical call for RoleSelectScreen's hero scrim). A row of
- * STOPS thin, incrementally-interpolated solid-color strips reads as a smooth gradient at the
- * button/badge/pill sizes this app actually renders it at (nothing screen-width-scale). Left-to-
- * right only, matching the reference's pink->orange direction — this app has no vertical/diagonal
- * gradient usage to justify the extra complexity of a second axis.
+ * A real two-stop linear gradient with zero new dependencies. Android rendered the former row of
+ * adjacent solid-color Views with fractional-width rounding gaps, visible as vertical seams in
+ * the FastQue segmented selector and primary CTA. The standard brand gradient is therefore a
+ * single 512-pixel raster layer, stretched by the native image renderer: one continuous surface,
+ * no independently-rounded child edges, and no native dependency/build change. The vertical,
+ * alpha-only hero scrim keeps its strips because it is not affected by horizontal rounding and
+ * its transparent/dark inputs cannot use the opaque brand bitmap.
  */
 const STOPS = 24;
+
+// 512 × 2 px PNG: #f2295c → #ff7a3d. It is deliberately embedded rather than added as a binary
+// asset so this UI-only correction can ship through the existing compatible OTA. Keep this in sync
+// with the two standard FastQue brand stops in lib/theme.ts.
+const BRAND_GRADIENT_DATA_URI =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAgAAAAACCAYAAAAuL2TYAAABIklEQVR42u3WZVYDMRQG0G4Hd6fu7l5cirsvu5RSioQT5kyTzOR7G2B+3D1cV2ekxRSjOk3WGQPGVa+yCVNDNQlMEabrejPArFWNdbk5wjywYKqqFglLOhXWXQZWKuwNWZWVhTVgneAu6XkAr6GnKLKej+AHAqaCKkgIAeH80LssQojKckIMiBMSXNYuadfnUjoZ1k8TMkBWlhZyhLzeRyGlVySUZEmhDFQIVS5hV0uwgU5dJ84GDUITaMliwgZhU/iUbUX1tgk7VhHDLrBH2OfCQ1+mA+AQaIewI+BYFhRO9L65U+CMC9idEy6s/IZL4Ipw7Wc/f3yqG+AWuPNi98CDlcfwKDCrJ+CZc9u9qFxOAJwAOAFwAuAEwAmAE4D/F4BftnxWlzC6E3YAAAAASUVORK5CYII=';
+
+function isStandardBrandGradient(colors: readonly [string, string], direction: 'horizontal' | 'vertical'): boolean {
+  return direction === 'horizontal' && colors[0] === '#f2295c' && colors[1] === '#ff7a3d';
+}
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.replace('#', ''), 16);
@@ -51,6 +60,7 @@ function resolveStop(color: string, other: string, useAlpha: boolean, t: number)
 
 export function GradientView({ colors, direction = 'horizontal', style, children }: GradientViewProps) {
   const useAlpha = colors.some((c) => c === 'transparent' || c.startsWith('rgba'));
+  const useContinuousBrandBitmap = !useAlpha && isStandardBrandGradient(colors, direction);
   let stops: string[];
   if (useAlpha) {
     stops = Array.from({ length: STOPS }, (_, i) => resolveStop(colors[0], colors[1], true, i / (STOPS - 1)));
@@ -65,13 +75,21 @@ export function GradientView({ colors, direction = 'horizontal', style, children
 
   return (
     <View style={[styles.wrap, style]}>
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <View style={direction === 'horizontal' ? styles.row : styles.column}>
-          {stops.map((backgroundColor, i) => (
-            <View key={i} style={[styles.stop, { backgroundColor }]} />
-          ))}
+      {useContinuousBrandBitmap ? (
+        <Image
+          source={{ uri: BRAND_GRADIENT_DATA_URI }}
+          resizeMode="stretch"
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <View style={direction === 'horizontal' ? styles.row : styles.column}>
+            {stops.map((backgroundColor, i) => (
+              <View key={i} style={[styles.stop, { backgroundColor }]} />
+            ))}
+          </View>
         </View>
-      </View>
+      )}
       {children}
     </View>
   );
