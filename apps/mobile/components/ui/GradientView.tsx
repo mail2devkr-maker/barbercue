@@ -98,7 +98,7 @@ function resolveStop(color: string, other: string, useAlpha: boolean, t: number)
 
 export function GradientView({ colors, direction = 'horizontal', style, children }: GradientViewProps) {
   const continuousUri = continuousGradientUri(colors, direction);
-  const useApprovedBrandMark = direction === 'horizontal' && isLegacyBrandBadge(children);
+  const useApprovedBrandMark = continuousUri === BRAND_GRADIENT_DATA_URI && isLegacyBrandBadge(children);
   const useAlpha = colors.some((c) => c === 'transparent' || c.startsWith('rgba'));
   let stops: string[];
 
