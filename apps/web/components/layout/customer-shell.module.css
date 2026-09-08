@@ -234,6 +234,13 @@
   gap: 20px;
 }
 
+.footerLogoFrame {
+  display: inline-flex;
+  overflow: hidden;
+  border-radius: 18px;
+  line-height: 0;
+}
+
 .footerWordmark {
   font-family: var(--font-display);
   font-weight: 600;
@@ -267,4 +274,8 @@
   font-size: 0.78rem;
   width: 100%;
   margin-top: 12px;
+}
+
+@media (max-width: 420px) {
+  .footerLogoFrame { border-radius: 16px; }
 }
