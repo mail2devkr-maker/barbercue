@@ -15,7 +15,7 @@ import {
   type SalonChairDto,
   type SalonPaymentQrDto,
 } from '@barbercue/shared';
-import { apiFetch, apiFetchMultipart, ApiError } from '../../lib/api';
+import { apiFetch, apiUploadImage, ApiError, NativeUploadError } from '../../lib/api';
 import {
   IMAGE_UPLOAD_PREPARATION_MESSAGE,
   ImageUploadPreparationError,
@@ -309,8 +309,8 @@ export function AddPhotoButton({
     }
     setUploading(true);
     try {
-      await uploadImageAsset(asset, 'photo.jpg', { type }, (bodyFactory) =>
-        apiFetchMultipart(`${scope(salonId, DASHBOARD_PATHS.photos)}/${DASHBOARD_PATHS.photoUpload}`, { method: 'POST' }, bodyFactory),
+      await uploadImageAsset(asset, 'photo.jpg', (prepared) =>
+        apiUploadImage(`${scope(salonId, DASHBOARD_PATHS.photos)}/${DASHBOARD_PATHS.photoUpload}`, prepared, { type }),
       );
       onAdded();
     } catch (err) {
@@ -319,6 +319,8 @@ export function AddPhotoButton({
           ? IMAGE_UPLOAD_PREPARATION_MESSAGE
           : err instanceof ApiError
             ? err.message
+            : err instanceof NativeUploadError
+              ? err.message
             : 'Could not upload that photo.',
       );
     } finally {
@@ -416,8 +418,8 @@ export function PaymentQrSection({
     }
     setSaving(true);
     try {
-      await uploadImageAsset(asset, 'payment-qr.jpg', {}, (bodyFactory) =>
-        apiFetchMultipart(`${scope(salonId, DASHBOARD_PATHS.paymentQr)}/${DASHBOARD_PATHS.photoUpload}`, { method: 'POST' }, bodyFactory),
+      await uploadImageAsset(asset, 'payment-qr.jpg', (prepared) =>
+        apiUploadImage(`${scope(salonId, DASHBOARD_PATHS.paymentQr)}/${DASHBOARD_PATHS.photoUpload}`, prepared),
       );
       onChanged();
     } catch (err) {
@@ -426,6 +428,8 @@ export function PaymentQrSection({
           ? IMAGE_UPLOAD_PREPARATION_MESSAGE
           : err instanceof ApiError
             ? err.message
+            : err instanceof NativeUploadError
+              ? err.message
             : t.couldNotSavePaymentQr,
       );
     } finally {
