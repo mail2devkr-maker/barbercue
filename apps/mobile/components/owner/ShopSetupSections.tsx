@@ -15,7 +15,12 @@ import {
   type SalonChairDto,
   type SalonPaymentQrDto,
 } from '@barbercue/shared';
-import { apiFetch, ApiError } from '../../lib/api';
+import { apiFetch, apiFetchMultipart, ApiError } from '../../lib/api';
+import {
+  IMAGE_UPLOAD_PREPARATION_MESSAGE,
+  ImageUploadPreparationError,
+  uploadImageAsset,
+} from '../../lib/image-upload';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError, SafeImage } from '../ui';
@@ -304,20 +309,18 @@ export function AddPhotoButton({
     }
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append('image', {
-        uri: asset.uri,
-        name: asset.fileName ?? 'photo.jpg',
-        type: asset.mimeType ?? 'image/jpeg',
-      } as unknown as Blob);
-      form.append('type', type);
-      await apiFetch(`${scope(salonId, DASHBOARD_PATHS.photos)}/${DASHBOARD_PATHS.photoUpload}`, {
-        method: 'POST',
-        body: form,
-      });
+      await uploadImageAsset(asset, 'photo.jpg', { type }, (bodyFactory) =>
+        apiFetchMultipart(`${scope(salonId, DASHBOARD_PATHS.photos)}/${DASHBOARD_PATHS.photoUpload}`, { method: 'POST' }, bodyFactory),
+      );
       onAdded();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not upload that photo.');
+      setError(
+        err instanceof ImageUploadPreparationError
+          ? IMAGE_UPLOAD_PREPARATION_MESSAGE
+          : err instanceof ApiError
+            ? err.message
+            : 'Could not upload that photo.',
+      );
     } finally {
       setUploading(false);
     }
@@ -413,19 +416,18 @@ export function PaymentQrSection({
     }
     setSaving(true);
     try {
-      const form = new FormData();
-      form.append('image', {
-        uri: asset.uri,
-        name: asset.fileName ?? 'payment-qr.jpg',
-        type: asset.mimeType ?? 'image/jpeg',
-      } as unknown as Blob);
-      await apiFetch(`${scope(salonId, DASHBOARD_PATHS.paymentQr)}/${DASHBOARD_PATHS.photoUpload}`, {
-        method: 'POST',
-        body: form,
-      });
+      await uploadImageAsset(asset, 'payment-qr.jpg', {}, (bodyFactory) =>
+        apiFetchMultipart(`${scope(salonId, DASHBOARD_PATHS.paymentQr)}/${DASHBOARD_PATHS.photoUpload}`, { method: 'POST' }, bodyFactory),
+      );
       onChanged();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.couldNotSavePaymentQr);
+      setError(
+        err instanceof ImageUploadPreparationError
+          ? IMAGE_UPLOAD_PREPARATION_MESSAGE
+          : err instanceof ApiError
+            ? err.message
+            : t.couldNotSavePaymentQr,
+      );
     } finally {
       setSaving(false);
     }

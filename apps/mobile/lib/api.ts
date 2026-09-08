@@ -105,10 +105,35 @@ async function fetchOrOffline(path: string, options: RequestInit): Promise<Respo
     const res = await rawFetch(path, options);
     reportNetworkSuccess();
     return res;
-  } catch {
+  } catch (error) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      // Transport diagnostics are development-only and deliberately exclude headers/bodies, so
+      // access tokens, refresh tokens, image bytes and QR contents can never reach the console.
+      console.warn('[api] transport request failed', {
+        path,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     reportNetworkFailure();
     throw networkOfflineError();
   }
+}
+
+function parseApiResponse<T>(res: Response): Promise<T> {
+  return res.text().then((text) => {
+    let body: unknown = null;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = null;
+      }
+    }
+    if (!res.ok) {
+      throw new ApiError(res.status, (body ?? {}) as ApiErrorBody);
+    }
+    return body as T;
+  });
 }
 
 /**
@@ -127,20 +152,29 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   // A controller returning null sends a genuinely empty body (not the literal text "null") —
-  // res.json() throws on that, and blindly falling back to `{}` would turn every such response
-  // into a truthy empty object, breaking any caller checking the result for null (e.g. "do I have
-  // an active queue entry?"). Parse the raw text instead so an empty body correctly becomes null.
-  const text = await res.text();
-  let body: unknown = null;
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = null;
+  // parseApiResponse preserves that existing behavior while also being shared by multipart calls.
+  return parseApiResponse<T>(res);
+}
+
+/**
+ * Multipart equivalent of apiFetch. A FormData body is created separately for every attempt so an
+ * expired access token can be refreshed without reusing a native file body that may already have
+ * been consumed by the first fetch. The factory runs outside fetchOrOffline, so local body
+ * construction failures are never converted into NETWORK_OFFLINE.
+ */
+export async function apiFetchMultipart<T>(
+  path: string,
+  options: Omit<RequestInit, 'body'>,
+  bodyFactory: () => FormData,
+): Promise<T> {
+  let res = await fetchOrOffline(path, { ...options, body: bodyFactory() });
+
+  if (res.status === 401 && path !== REFRESH_PATH) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      res = await fetchOrOffline(path, { ...options, body: bodyFactory() });
     }
   }
-  if (!res.ok) {
-    throw new ApiError(res.status, (body ?? {}) as ApiErrorBody);
-  }
-  return body as T;
+
+  return parseApiResponse<T>(res);
 }
