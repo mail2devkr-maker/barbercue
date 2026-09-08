@@ -17,6 +17,7 @@ export function BrandLockup({
   markOnly = false,
   transparent = false,
   headerArtwork = false,
+  canonicalArtwork = false,
   className = "",
 }: {
   compact?: boolean;
@@ -26,9 +27,11 @@ export function BrandLockup({
   transparent?: boolean;
   /** Use the single owner-approved canonical header artwork. */
   headerArtwork?: boolean;
+  /** Select the approved header asset without changing the host's presentation. */
+  canonicalArtwork?: boolean;
   className?: string;
 }) {
-  const src = markOnly ? MARK_SRC : headerArtwork ? HEADER_LOCKUP_SRC : LOCKUP_SRC;
+  const src = markOnly ? MARK_SRC : headerArtwork || canonicalArtwork ? HEADER_LOCKUP_SRC : LOCKUP_SRC;
   const alt = markOnly ? "FastQue" : "FastQue — Good Looks, Less Waiting";
 
   return (

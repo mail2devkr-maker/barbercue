@@ -7,7 +7,7 @@ export function CustomerFooter() {
   return (
     <footer className={styles.footer}>
       <div className={styles.footerInner}>
-        <BrandLockup compact />
+        <BrandLockup compact canonicalArtwork />
         <nav className={styles.footerLinks} aria-label="Footer">
           <Link href="/search">Find a Barber</Link>
           <Link href="/account/bookings">My Bookings</Link>
