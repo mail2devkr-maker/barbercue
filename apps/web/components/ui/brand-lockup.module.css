@@ -15,49 +15,12 @@
   image-rendering: auto;
 }
 
-/*
- * Public landing header: compose the already-proven full FQ mark with the wordmark/tagline portion
- * of the canonical glossy lockup. The crop starts after the lockup's own FQ mark so only one FQ is
- * visible, while the complete separately-rendered mark keeps its rounded lower glow intact.
- */
-.headerComposite {
-  display: inline-flex;
-  align-items: center;
-  width: 296px;
-  height: 82px;
-  flex: 0 0 auto;
-  overflow: visible;
-}
-
-.headerMarkArt {
-  display: block;
-  width: 86px;
+/* Public landing header: one owner-approved canonical image only. */
+.headerArtwork .art {
+  width: 244px;
+  max-width: 244px;
   height: auto;
-  max-width: none;
-  flex: 0 0 auto;
-  image-rendering: auto;
-  filter: drop-shadow(0 7px 18px rgba(238, 42, 91, 0.22));
-}
-
-.headerWordCrop {
-  position: relative;
-  display: block;
-  width: 210px;
-  height: 82px;
-  flex: 0 0 auto;
-  overflow: hidden;
-}
-
-.headerWordArt {
-  position: absolute;
-  top: 2px;
-  left: -97px;
-  display: block;
-  width: 307px;
-  height: auto;
-  max-width: none;
-  image-rendering: auto;
-  filter: drop-shadow(0 7px 18px rgba(238, 42, 91, 0.22));
+  filter: drop-shadow(0 8px 22px rgba(238, 42, 91, 0.24));
 }
 
 .compact .art {
@@ -85,24 +48,9 @@
     width: 180px;
   }
 
-  .headerComposite {
-    width: 255px;
-    height: 72px;
-  }
-
-  .headerMarkArt {
-    width: 74px;
-  }
-
-  .headerWordCrop {
-    width: 181px;
-    height: 72px;
-  }
-
-  .headerWordArt {
-    top: 2px;
-    left: -83px;
-    width: 264px;
+  .headerArtwork .art {
+    width: 216px;
+    max-width: 216px;
   }
 }
 
@@ -117,24 +65,9 @@
     max-width: 50vw;
   }
 
-  .headerComposite {
-    width: 214px;
-    height: 62px;
-  }
-
-  .headerMarkArt {
-    width: 64px;
-  }
-
-  .headerWordCrop {
-    width: 150px;
-    height: 62px;
-  }
-
-  .headerWordArt {
-    top: 2px;
-    left: -69px;
-    width: 219px;
+  .headerArtwork .art {
+    width: 186px;
+    max-width: 186px;
   }
 }
 
@@ -154,23 +87,8 @@
     max-width: 42px;
   }
 
-  .headerComposite {
-    width: 190px;
-    height: 56px;
-  }
-
-  .headerMarkArt {
-    width: 56px;
-  }
-
-  .headerWordCrop {
-    width: 134px;
-    height: 56px;
-  }
-
-  .headerWordArt {
-    top: 2px;
-    left: -62px;
-    width: 196px;
+  .headerArtwork .art {
+    width: 168px;
+    max-width: 168px;
   }
 }
