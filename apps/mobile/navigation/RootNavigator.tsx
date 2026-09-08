@@ -9,7 +9,7 @@ import AccountStack from './AccountStack';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
-import { takePendingShopRegistrationIntent } from '../lib/shop-registration-intent';
+import { takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { navigationRef } from './navigation-ref';
 import { color, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
@@ -38,16 +38,16 @@ function GuestBookingHandoffBridge() {
   return null;
 }
 
-/**
- * Replays a signed-out "Register your shop" tap (RoleSelectScreen's menu, OwnerStaffLoginScreen's
- * "New to FastQue?" link) once the customer sign-in it required has completed and this navigator
- * has mounted — same shape as GuestBookingHandoffBridge above, applied to
- * shop-registration-intent.ts's stash instead of guest-booking-handoff.ts's.
- */
-function ShopRegistrationHandoffBridge() {
+/** Replays the one signed-out customer CTA that was most recently selected after auth. */
+function CustomerDestinationHandoffBridge() {
   useEffect(() => {
-    if (!takePendingShopRegistrationIntent() || !navigationRef.isReady()) return;
-    navigationRef.navigate('AccountTab', { screen: 'RegisterShop' });
+    const intent = takePendingCustomerDestination();
+    if (!intent || !navigationRef.isReady()) return;
+    if (intent.kind === 'credits') {
+      navigationRef.navigate('AccountTab', { screen: 'CreditsHistory' });
+    } else if (intent.kind === 'registerShop') {
+      navigationRef.navigate('AccountTab', { screen: 'RegisterShop' });
+    }
   }, []);
   return null;
 }
@@ -64,7 +64,7 @@ export default function RootNavigator() {
   return (
     <>
       <GuestBookingHandoffBridge />
-      <ShopRegistrationHandoffBridge />
+      <CustomerDestinationHandoffBridge />
       <Tab.Navigator
         screenOptions={{
         headerShown: false,
