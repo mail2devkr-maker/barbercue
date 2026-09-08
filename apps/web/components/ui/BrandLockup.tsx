@@ -2,7 +2,7 @@ import styles from "./brand-lockup.module.css";
 
 const LOCKUP_SRC = "/brand/fastque-premium-3d-lockup.png";
 const MARK_SRC = "/brand/fastque-premium-3d-mark.png";
-const HEADER_LOCKUP_SRC = "/brand/fastque-final-canonical-logo.png";
+const HEADER_LOCKUP_SRC = "/brand/fastque-final-canonical-logo-v2.webp";
 
 /**
  * FastQue branding uses the owner-approved glossy 3D artwork from /public/brand.
