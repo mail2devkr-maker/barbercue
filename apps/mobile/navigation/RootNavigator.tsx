@@ -9,6 +9,7 @@ import AccountStack from './AccountStack';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
+import { takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { takePendingShopRegistrationIntent } from '../lib/shop-registration-intent';
 import { navigationRef } from './navigation-ref';
 import { color, font } from '../lib/theme';
@@ -52,6 +53,18 @@ function ShopRegistrationHandoffBridge() {
   return null;
 }
 
+/** Replays a signed-out customer CTA after the authenticated customer tab navigator exists. */
+function CustomerDestinationHandoffBridge() {
+  useEffect(() => {
+    const intent = takePendingCustomerDestination();
+    if (!intent || !navigationRef.isReady()) return;
+    if (intent.kind === 'credits') {
+      navigationRef.navigate('AccountTab', { screen: 'CreditsHistory' });
+    }
+  }, []);
+  return null;
+}
+
 // Mounted only when authenticated (see App.tsx) — every screen here assumes a logged-in
 // customer, matching the web app's book/layout.tsx + account/layout.tsx RequireRole gates.
 // Text-only tab labels (no icon library added) — active tab reads via color + weight, matching
@@ -65,6 +78,7 @@ export default function RootNavigator() {
     <>
       <GuestBookingHandoffBridge />
       <ShopRegistrationHandoffBridge />
+      <CustomerDestinationHandoffBridge />
       <Tab.Navigator
         screenOptions={{
         headerShown: false,

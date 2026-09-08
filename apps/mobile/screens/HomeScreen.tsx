@@ -34,6 +34,7 @@ import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { resolveHomeLocation } from '../lib/home-location';
+import { createAuthenticatedHeroCommand, type HeroAction } from '../lib/hero-action-commands';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { BrandLockup, Card, Button, Skeleton, NotificationBell, LanguageSwitcher, SafeImage, GradientView } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
@@ -211,6 +212,17 @@ export default function HomeScreen({ navigation }: Props) {
     goSearch({ initialQuery: query.trim() || undefined });
   }
 
+  function handleHeroAction(action: HeroAction) {
+    const command = createAuthenticatedHeroCommand(action, locationCoords);
+    if (command.destination === 'search') {
+      navigation.navigate('SearchTab', { screen: 'SalonSearch', params: command.params });
+    } else if (command.destination === 'queue') {
+      navigation.navigate('QueueTab', { screen: 'QueueHome' });
+    } else {
+      navigation.navigate('AccountTab', { screen: 'CreditsHistory' });
+    }
+  }
+
   const locationText = locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction;
   const locationPill = (wide: boolean) => (
     <Pressable
@@ -277,24 +289,42 @@ export default function HomeScreen({ navigation }: Props) {
             </Text>
             <Text style={styles.heroSubcopy}>{t.homeHeroSubcopy}</Text>
             <View style={styles.benefitRow}>
-              <View style={styles.benefitItem}>
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('bookAhead')}
+                accessibilityRole="button"
+                accessibilityLabel={t.bookAheadKicker}
+                hitSlop={8}
+              >
                 <View style={styles.benefitIconWrap}>
                   <TabIcon name="bookings" color={color.surface} size={18} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.bookAheadKicker}</Text>
-              </View>
-              <View style={styles.benefitItem}>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('joinLive')}
+                accessibilityRole="button"
+                accessibilityLabel={t.joinLiveKicker}
+                hitSlop={8}
+              >
                 <View style={styles.benefitIconWrap}>
                   <TabIcon name="queue" color={color.surface} size={18} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
-              </View>
-              <View style={styles.benefitItem}>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('greatOffers')}
+                accessibilityRole="button"
+                accessibilityLabel={t.trustOffersLabel}
+                hitSlop={8}
+              >
                 <View style={styles.benefitIconWrap}>
                   <TabIcon name="offer" color={color.surface} size={18} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
-              </View>
+              </Pressable>
             </View>
           </View>
         </ImageBackground>
@@ -572,6 +602,7 @@ const styles = StyleSheet.create({
   },
   benefitRow: { flexDirection: 'row', gap: space[4], marginTop: space[4] },
   benefitItem: { alignItems: 'center', gap: space[1] },
+  benefitItemPressed: { opacity: 0.72 },
   benefitIconWrap: {
     width: 36,
     height: 36,

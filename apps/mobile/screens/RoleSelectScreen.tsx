@@ -13,6 +13,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../lib/language-context';
 import { resolveHomeLocation } from '../lib/home-location';
+import { createSignedOutHeroCommand, type HeroAction } from '../lib/hero-action-commands';
+import { stashPendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
 import { color, font, lineHeightFor, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
@@ -92,6 +94,17 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
   function handleFindPress() {
     goSearch(query.trim() || undefined);
+  }
+
+  function handleHeroAction(action: HeroAction) {
+    const command = createSignedOutHeroCommand(action, locationCoords);
+    if (command.destination === 'guestSearch') {
+      navigation.navigate('GuestBrowse', { screen: 'SalonSearch', params: command.params });
+      return;
+    }
+
+    stashPendingCustomerDestination({ kind: 'credits' });
+    navigation.navigate('CustomerLogin');
   }
 
   function choose(role: 'CUSTOMER' | 'OWNER' | 'STAFF') {
@@ -188,24 +201,42 @@ export default function RoleSelectScreen({ navigation }: Props) {
             </Text>
             <Text style={styles.heroSubcopy}>{t.homeHeroSubcopy}</Text>
             <View style={styles.benefitRow}>
-              <View style={styles.benefitItem}>
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('bookAhead')}
+                accessibilityRole="button"
+                accessibilityLabel={t.bookAheadKicker}
+                hitSlop={8}
+              >
                 <View style={[styles.benefitIconWrap, styles.benefitPurple]}>
                   <TabIcon name="bookings" color={color.surface} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.bookAheadKicker}</Text>
-              </View>
-              <View style={styles.benefitItem}>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('joinLive')}
+                accessibilityRole="button"
+                accessibilityLabel={t.joinLiveKicker}
+                hitSlop={8}
+              >
                 <View style={[styles.benefitIconWrap, styles.benefitBlue]}>
                   <TabIcon name="queue" color={color.surface} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
-              </View>
-              <View style={styles.benefitItem}>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                onPress={() => handleHeroAction('greatOffers')}
+                accessibilityRole="button"
+                accessibilityLabel={t.trustOffersLabel}
+                hitSlop={8}
+              >
                 <View style={[styles.benefitIconWrap, styles.benefitGold]}>
                   <TabIcon name="offer" color={color.surface} size={15} />
                 </View>
                 <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
-              </View>
+              </Pressable>
             </View>
           </View>
         </ImageBackground>
@@ -446,6 +477,7 @@ const styles = StyleSheet.create({
   },
   benefitRow: { flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 14 },
   benefitItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  benefitItemPressed: { opacity: 0.72 },
   benefitIconWrap: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   benefitPurple: { backgroundColor: '#6C2BFF' },
   benefitBlue: { backgroundColor: '#2D9CDB' },
