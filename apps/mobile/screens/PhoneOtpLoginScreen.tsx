@@ -211,7 +211,7 @@ export default function PhoneOtpLoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <BrandLockup style={styles.brandLockup} />
+          <BrandLockup variant="auth" style={styles.brandLockup} />
 
           <Text style={styles.eyebrow}>{t.signInTitle}</Text>
           <Text style={styles.subtitle}>
