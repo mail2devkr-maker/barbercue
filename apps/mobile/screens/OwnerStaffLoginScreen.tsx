@@ -78,7 +78,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
   return (
     <Screen contentStyle={styles.screenContent}>
-      <BrandLockup compact style={styles.brandLockup} />
+      <BrandLockup variant="auth" style={styles.brandLockup} />
       <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle={t.useYourDashboardAccount} />
 
       {error && <InlineError message={error} />}
