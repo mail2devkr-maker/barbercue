@@ -17,7 +17,7 @@
   background: #fff;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
-  box-shadow: var(--bc-shadow-lg);
+  box-shadow: var(--bc-shadow-card);
 }
 
 .cover {
@@ -39,7 +39,8 @@
   flex-direction: column;
   padding: clamp(30px, 5vw, 58px);
   background:
-    radial-gradient(circle at 95% 5%, rgba(168, 121, 31, 0.14), transparent 15rem),
+    radial-gradient(circle at 95% 5%, rgba(242, 41, 92, 0.12), transparent 15rem),
+    radial-gradient(circle at 14% 80%, rgba(255, 122, 61, 0.08), transparent 14rem),
     #fffdf9;
 }
 
@@ -173,8 +174,8 @@
   padding: clamp(24px, 4vw, 36px);
   background: #fff;
   border: 1px solid var(--bc-border);
-  border-radius: var(--bc-radius-md);
-  box-shadow: var(--bc-shadow-sm);
+  border-radius: var(--bc-radius-lg);
+  box-shadow: var(--bc-shadow-card);
 }
 
 .sectionHeading {
@@ -223,8 +224,8 @@
 .queueNote {
   padding: 22px;
   color: #fff;
-  background: var(--bc-ink);
-  border-radius: var(--bc-radius-md);
+  background: linear-gradient(145deg, var(--bc-brand-navy), #30255f);
+  border-radius: var(--bc-radius-lg);
 }
 
 .queueNote strong {

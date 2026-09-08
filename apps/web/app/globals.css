@@ -23,6 +23,17 @@
   --bc-gold: #a8791f;
   --bc-gold-soft: #f7ecd3;
 
+  /* FastQue marketplace accents mirrored from apps/mobile/lib/theme.ts. These are additive:
+     semantic success/warning/danger colors remain independent from brand actions. */
+  --bc-brand-pink: #f2295c;
+  --bc-brand-coral: #f2542d;
+  --bc-brand-orange: #ff7a3d;
+  --bc-brand-navy: #1a1533;
+  --bc-brand-gradient: linear-gradient(105deg, var(--bc-brand-pink) 0%, var(--bc-brand-coral) 54%, var(--bc-brand-orange) 100%);
+  --bc-surface-tint: #f8f1e6;
+  --bc-radius-xl: 26px;
+  --bc-shadow-card: 0 12px 32px rgba(26, 21, 51, 0.1), 0 2px 8px rgba(28, 26, 23, 0.05);
+
   /* Typography — next/font exposes each family as a variable (see app/layout.tsx); the fallback
      stacks here are what renders for the ~0ms before the webfont swaps in, chosen to be metrically
      close so that swap doesn't visibly reflow. */

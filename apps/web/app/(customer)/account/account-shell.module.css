@@ -13,9 +13,9 @@
   justify-content: space-between;
   gap: 16px;
   border: 1px solid var(--bc-border);
-  border-radius: var(--bc-radius-md);
+  border-radius: var(--bc-radius-lg);
   background: rgba(255, 255, 255, 0.78);
-  box-shadow: var(--bc-shadow-sm);
+  box-shadow: var(--bc-shadow-card);
 }
 
 .accountLinks {
@@ -54,7 +54,7 @@
 }
 
 .accountLink[aria-current="page"] {
-  background: var(--bc-ink);
+  background: var(--bc-brand-gradient);
   color: #ffffff;
 }
 

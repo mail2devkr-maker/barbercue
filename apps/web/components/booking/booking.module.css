@@ -83,8 +83,9 @@
 .stepCard {
   background: #ffffff;
   border: 1px solid var(--bc-border);
-  border-radius: var(--bc-radius-md);
+  border-radius: var(--bc-radius-lg);
   padding: var(--bc-space-5);
+  box-shadow: 0 4px 16px rgba(26, 21, 51, 0.045);
 }
 
 .stepHeading {
@@ -105,7 +106,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--bc-gold-soft);
+  background: linear-gradient(135deg, rgba(242, 41, 92, 0.08), rgba(255, 122, 61, 0.11));
   color: var(--bc-gold);
   font-size: 0.75rem;
   font-weight: 700;
@@ -213,8 +214,8 @@
 }
 
 .chipSelected {
-  border-color: var(--bc-accent);
-  background: var(--bc-gold-soft);
+  border-color: var(--bc-brand-coral);
+  background: linear-gradient(135deg, rgba(242, 41, 92, 0.08), rgba(255, 122, 61, 0.11));
   color: var(--bc-ink);
 }
 
@@ -298,8 +299,8 @@
 }
 
 .dateChipSelected {
-  border-color: var(--bc-accent);
-  background: var(--bc-gold-soft);
+  border-color: var(--bc-brand-coral);
+  background: linear-gradient(135deg, rgba(242, 41, 92, 0.08), rgba(255, 122, 61, 0.11));
 }
 
 .dateChip:disabled {

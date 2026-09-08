@@ -173,7 +173,7 @@
 
 .row {
   border: 1px solid var(--bc-border);
-  border-radius: var(--bc-radius-md);
+  border-radius: var(--bc-radius-lg);
   padding: 14px 16px;
   display: flex;
   justify-content: space-between;
@@ -181,6 +181,7 @@
   gap: 12px;
   flex-wrap: wrap;
   background: #ffffff;
+  box-shadow: 0 4px 16px rgba(26, 21, 51, 0.045);
 }
 
 .rowTitle {
@@ -264,9 +265,10 @@
 
 .shopCard {
   border: 1px solid var(--bc-border);
-  border-radius: var(--bc-radius-md);
+  border-radius: var(--bc-radius-lg);
   padding: 16px 18px;
   background: #ffffff;
+  box-shadow: 0 4px 16px rgba(26, 21, 51, 0.045);
 }
 
 .shopCardHead {
@@ -318,14 +320,14 @@
    apart from the owner-only setup links, which stay outline-only so the card doesn't read as a
    wall of equally-weighted actions. */
 .shopCardLinks a:first-child {
-  border-color: var(--bc-ink);
-  background: var(--bc-ink);
+  border-color: transparent;
+  background: var(--bc-brand-gradient);
   color: #ffffff;
 }
 
 .shopCardLinks a:first-child:hover {
-  border-color: var(--bc-accent);
-  background: var(--bc-accent);
+  border-color: transparent;
+  background: var(--bc-brand-gradient);
   color: #ffffff;
 }
 
@@ -392,9 +394,9 @@
 }
 
 .toggleActive {
-  background: var(--bc-ink);
+  background: var(--bc-brand-gradient);
   color: #ffffff;
-  border-color: var(--bc-ink);
+  border-color: transparent;
   font-weight: 600;
 }
 
@@ -485,8 +487,8 @@
 }
 
 .setupStepCurrent {
-  border-color: var(--bc-ink);
-  background: var(--bc-ink);
+  border-color: transparent;
+  background: var(--bc-brand-gradient);
   color: #ffffff;
 }
 
@@ -562,8 +564,8 @@
 }
 
 .shopNavItemCurrent {
-  border-color: var(--bc-ink);
-  background: var(--bc-ink);
+  border-color: transparent;
+  background: var(--bc-brand-gradient);
   color: #ffffff;
 }
 

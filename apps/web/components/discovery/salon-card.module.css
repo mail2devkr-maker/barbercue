@@ -6,8 +6,8 @@
   flex-direction: column;
   background: #fff;
   border: 1px solid var(--bc-border);
-  border-radius: var(--bc-radius-md);
-  box-shadow: var(--bc-shadow-sm);
+  border-radius: var(--bc-radius-lg);
+  box-shadow: var(--bc-shadow-card);
   transition: box-shadow 180ms ease, transform 180ms ease;
 }
 
@@ -35,7 +35,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  padding: 20px;
+  padding: 18px;
 }
 
 .titleRow {
@@ -129,7 +129,7 @@
   justify-content: center;
   padding: 0 14px;
   border: 1px solid var(--bc-ink);
-  border-radius: var(--bc-radius-sm);
+  border-radius: 999px;
   font-size: var(--bc-text-sm);
   font-weight: 700;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
@@ -137,17 +137,19 @@
 
 .primaryAction {
   color: #fff;
-  background: var(--bc-ink);
+  background: var(--bc-brand-gradient);
+  border-color: transparent;
 }
 
 .secondaryAction {
-  color: var(--bc-accent);
-  border-color: #d7a19b;
+  color: var(--bc-brand-coral);
+  border-color: rgba(242, 84, 45, 0.38);
+  background: #fff;
 }
 
 .primaryAction:hover {
-  background: var(--bc-accent);
-  border-color: var(--bc-accent);
+  background: var(--bc-brand-gradient);
+  border-color: transparent;
 }
 
 .secondaryAction:hover {
