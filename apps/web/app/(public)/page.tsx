@@ -325,7 +325,9 @@ export default async function HomePage() {
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerBrand}>
-            <BrandLockup compact canonicalArtwork />
+            <span className={styles.footerLogoFrame}>
+              <BrandLockup compact canonicalArtwork />
+            </span>
             <p>Purpose-built for modern barbershops.</p>
           </div>
           <nav className={styles.footerLinks} aria-label="Footer">
