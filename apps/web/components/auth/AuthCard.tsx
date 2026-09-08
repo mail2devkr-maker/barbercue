@@ -57,7 +57,7 @@ export function AuthCard({
     <main className={styles.page}>
       <header className={styles.topBar}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-          <BrandLockup showTagline />
+          <BrandLockup showTagline canonicalArtwork />
         </Link>
         <Link href="/" className={styles.homeLink}>Home</Link>
       </header>

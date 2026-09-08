@@ -53,7 +53,7 @@ export function DashboardHeader() {
     <header className={styles.header}>
       <div className={styles.inner}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-          <BrandLockup compact />
+          <BrandLockup compact canonicalArtwork />
         </Link>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

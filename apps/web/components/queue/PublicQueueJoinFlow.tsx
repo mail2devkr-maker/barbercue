@@ -217,7 +217,7 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
     return (
       <div className={styles.publicWrap}>
         <div className={styles.publicCard}>
-          <BrandLockup compact className={styles.publicWordmark} />
+          <BrandLockup compact canonicalArtwork className={styles.publicWordmark} />
           <h1 className={styles.publicTitle}>{info.salonName}</h1>
           <p className={styles.publicIntro}>The queue is currently unavailable. Please check with the shop.</p>
         </div>
@@ -229,7 +229,7 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
     return (
       <div className={styles.publicWrap}>
         <div className={styles.publicCard}>
-          <BrandLockup compact className={styles.publicWordmark} />
+          <BrandLockup compact canonicalArtwork className={styles.publicWordmark} />
           <h1 className={styles.publicTitle}>{info.salonName}</h1>
           <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
         </div>
@@ -240,7 +240,7 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
   return (
     <div className={styles.publicWrap}>
       <div className={styles.publicCard}>
-        <BrandLockup compact className={styles.publicWordmark} />
+        <BrandLockup compact canonicalArtwork className={styles.publicWordmark} />
         <h1 className={styles.publicTitle}>{info.salonName}</h1>
         <p className={styles.publicIntro}>Join the queue for your next visit.</p>
 
