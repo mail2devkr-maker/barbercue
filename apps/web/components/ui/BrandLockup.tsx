@@ -36,7 +36,7 @@ export function BrandLockup({
 
   return (
     <span
-      className={`${styles.root} ${compact ? styles.compact : ""} ${markOnly ? styles.markOnly : ""} ${headerArtwork ? styles.headerArtwork : ""} ${className}`.trim()}
+      className={`${styles.root} ${compact ? styles.compact : ""} ${markOnly ? styles.markOnly : ""} ${headerArtwork ? styles.headerArtwork : ""} ${canonicalArtwork ? styles.canonicalArtwork : ""} ${className}`.trim()}
       data-show-tagline={showTagline ? "true" : "false"}
       data-glass-host={transparent ? "true" : "false"}
     >

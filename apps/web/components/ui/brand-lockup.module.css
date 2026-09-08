@@ -24,6 +24,12 @@
   filter: saturate(1.08) contrast(1.04) drop-shadow(0 8px 22px rgba(238, 42, 91, 0.24));
 }
 
+/* Other canonical lockups share only the approved artwork's corner finish. Keep headerArtwork
+   isolated because it also owns the public-header sizing, contrast, shadow, and glass treatment. */
+.canonicalArtwork .art {
+  border-radius: 18px;
+}
+
 /* Watermark presentation only: keep the approved artwork pixels intact while letting the sticky
    glass header read through enough to feel premium rather than like a pasted opaque banner. */
 .headerArtwork[data-glass-host="true"] .art {
@@ -77,6 +83,10 @@
     max-width: 186px;
     border-radius: 16px;
   }
+
+  .canonicalArtwork .art {
+    border-radius: 16px;
+  }
 }
 
 @media (max-width: 420px) {
@@ -98,6 +108,10 @@
   .headerArtwork .art {
     width: 168px;
     max-width: 168px;
+    border-radius: 14px;
+  }
+
+  .canonicalArtwork .art {
     border-radius: 14px;
   }
 }
