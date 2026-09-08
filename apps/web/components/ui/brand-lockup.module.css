@@ -20,7 +20,14 @@
   width: 244px;
   max-width: 244px;
   height: auto;
-  filter: drop-shadow(0 8px 22px rgba(238, 42, 91, 0.24));
+  border-radius: 18px;
+  filter: saturate(1.08) contrast(1.04) drop-shadow(0 8px 22px rgba(238, 42, 91, 0.24));
+}
+
+/* Watermark presentation only: keep the approved artwork pixels intact while letting the sticky
+   glass header read through enough to feel premium rather than like a pasted opaque banner. */
+.headerArtwork[data-glass-host="true"] .art {
+  opacity: 0.78;
 }
 
 .compact .art {
@@ -68,6 +75,7 @@
   .headerArtwork .art {
     width: 186px;
     max-width: 186px;
+    border-radius: 16px;
   }
 }
 
@@ -90,5 +98,6 @@
   .headerArtwork .art {
     width: 168px;
     max-width: 168px;
+    border-radius: 14px;
   }
 }
