@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../../lib/auth-context";
+import { isWorkspaceUser, workspaceLandingPath, workspaceNavigationLabel } from "../../lib/workspace-route";
 import { BrandLockup } from "../ui/BrandLockup";
 import { NotificationBell } from "./NotificationBell";
 import styles from "./customer-shell.module.css";
@@ -17,9 +18,9 @@ const NAV_LINKS = [
 
 // Renders on both public discovery pages (search/city/locality/salon-profile — reachable by
 // anonymous visitors) and authenticated customer pages, so it has to work correctly in both
-// states: nav links are always visible (clicking one while signed out hits the existing
-// RequireRole redirect on the destination page, same as today), only the account area on the
-// right swaps between "Sign in" and the Account menu.
+// states. Public browsing is role-aware: customer sessions retain the customer account menu,
+// while owner/staff and platform-admin sessions get a direct link back to their own protected
+// workspace instead of being sent through customer-only /account routes.
 export function CustomerHeader() {
   const { user, status, logout } = useAuth();
   const pathname = usePathname();
@@ -54,16 +55,20 @@ export function CustomerHeader() {
   }
 
   const isAuthenticated = status === "authenticated" && user !== null;
+  const workspaceUser = user && isWorkspaceUser(user) ? user : null;
+  const visibleNavLinks = workspaceUser
+    ? NAV_LINKS.filter((link) => link.href === "/" || link.href === "/search")
+    : NAV_LINKS;
 
   return (
     <header className={styles.header}>
       <div className={styles.headerInner}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-          <BrandLockup showTagline />
+          <BrandLockup showTagline canonicalArtwork />
         </Link>
 
         <nav className={styles.nav} aria-label="Primary">
-          {NAV_LINKS.map((link) => (
+          {visibleNavLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -76,7 +81,15 @@ export function CustomerHeader() {
 
         <div className={styles.accountArea} ref={accountAreaRef} style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {isAuthenticated && <NotificationBell />}
-          {isAuthenticated ? (
+          {isAuthenticated ? workspaceUser ? (
+            <Link
+              href={workspaceLandingPath(workspaceUser)}
+              className={styles.accountButton}
+              aria-label={workspaceNavigationLabel(workspaceUser)}
+            >
+              {workspaceNavigationLabel(workspaceUser)}
+            </Link>
+          ) : (
             <>
               <button
                 type="button"
@@ -173,7 +186,7 @@ export function CustomerHeader() {
 
       {mobileMenuOpen && (
         <nav className={styles.mobileNav} aria-label="Mobile">
-          {NAV_LINKS.map((link) => (
+          {visibleNavLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -185,18 +198,30 @@ export function CustomerHeader() {
           ))}
           {isAuthenticated ? (
             <>
-              <Link href="/account/credits" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                FastQue Credits
-              </Link>
-              <Link href="/account/profile" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                Profile & security
-              </Link>
-              <Link href="/account/premium" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                Premium
-              </Link>
-              <Link href="/owner/login" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                Owner Dashboard
-              </Link>
+              {workspaceUser ? (
+                <Link
+                  href={workspaceLandingPath(workspaceUser)}
+                  className={styles.mobileNavLink}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {workspaceNavigationLabel(workspaceUser)}
+                </Link>
+              ) : (
+                <>
+                  <Link href="/account/credits" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                    FastQue Credits
+                  </Link>
+                  <Link href="/account/profile" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                    Profile &amp; security
+                  </Link>
+                  <Link href="/account/premium" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                    Premium
+                  </Link>
+                  <Link href="/owner/login" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                    Owner Dashboard
+                  </Link>
+                </>
+              )}
               <button type="button" className={styles.mobileNavLink} onClick={() => void handleLogout()}>
                 Log out
               </button>

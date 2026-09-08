@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "../../lib/auth-context";
+import { workspaceLandingPath, workspaceNavigationLabel } from "../../lib/workspace-route";
 import styles from "./landing.module.css";
 
 /**
@@ -13,13 +14,14 @@ import styles from "./landing.module.css";
  * "Sign in" link.
  */
 export function LandingHeaderActions() {
-  const { status } = useAuth();
+  const { user, status } = useAuth();
+  const authenticatedUser = status === "authenticated" ? user : null;
 
   return (
     <div className={styles.headerActions}>
-      {status === "authenticated" ? (
-        <Link href="/account/bookings" className={styles.headerSignIn}>
-          My account
+      {authenticatedUser ? (
+        <Link href={workspaceLandingPath(authenticatedUser)} className={styles.headerSignIn}>
+          {workspaceNavigationLabel(authenticatedUser)}
         </Link>
       ) : status === "unauthenticated" ? (
         <Link href="/login" className={styles.headerSignIn}>
