@@ -9,7 +9,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import {
   IMAGE_UPLOAD_PREPARATION_MESSAGE,
   ImageUploadPreparationError,
-  createImageFormData,
   prepareImageUpload,
   uploadImageAsset,
 } from '../image-upload';
@@ -84,31 +83,27 @@ describe('mobile image upload preparation', () => {
 
   it('rebuilds a fresh multipart body for the upload sender and cleans up afterward', async () => {
     getInfoMock.mockResolvedValue({ exists: true, isDirectory: false, size: 1024 });
-    const send = jest.fn(async (bodyFactory: () => FormData) => {
-      const form = bodyFactory();
-      expect(form).toBeInstanceOf(FormData);
+    const send = jest.fn(async (prepared: { uri: string; name: string; type: string }) => {
+      expect(prepared).toMatchObject({
+        uri: 'file:///picked/qr.png',
+        name: 'payment-qr.png',
+        type: 'image/png',
+      });
       return { uploaded: true };
     });
 
-    await expect(uploadImageAsset(asset({ uri: 'file:///picked/qr.png' }), 'payment-qr.jpg', {}, send)).resolves.toEqual({ uploaded: true });
+    await expect(uploadImageAsset(asset({ uri: 'file:///picked/qr.png' }), 'payment-qr.jpg', send)).resolves.toEqual({ uploaded: true });
     expect(send).toHaveBeenCalledTimes(1);
     expect(deleteMock).not.toHaveBeenCalled();
   });
 
-  it('includes the image part and additional multipart fields without changing server validation', () => {
-    const append = jest.spyOn(FormData.prototype, 'append');
+  it('cleans a temporary content URI after a native sender failure', async () => {
+    getInfoMock
+      .mockResolvedValueOnce({ exists: true, isDirectory: false, size: 1024 })
+      .mockResolvedValueOnce({ exists: true, isDirectory: false, size: 1024 });
+    const send = jest.fn().mockRejectedValue(new Error('native upload failed'));
 
-    createImageFormData(
-      { uri: 'file:///picked/photo.jpg', name: 'photo.jpg', type: 'image/jpeg' },
-      { type: 'GALLERY' },
-    );
-
-    expect(append).toHaveBeenNthCalledWith(1, 'image', {
-      uri: 'file:///picked/photo.jpg',
-      name: 'photo.jpg',
-      type: 'image/jpeg',
-    });
-    expect(append).toHaveBeenNthCalledWith(2, 'type', 'GALLERY');
-    append.mockRestore();
+    await expect(uploadImageAsset(asset(), 'payment-qr.jpg', send)).rejects.toThrow('native upload failed');
+    expect(deleteMock).toHaveBeenCalledWith(expect.stringMatching(/^file:\/\/\/cache\/barbercue-upload-/), { idempotent: true });
   });
 });

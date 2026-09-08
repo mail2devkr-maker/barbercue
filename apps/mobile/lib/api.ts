@@ -1,4 +1,5 @@
 import { AUTH_PATHS } from '@barbercue/shared';
+import * as FileSystem from 'expo-file-system/legacy';
 import { deleteItem, getItem, setItem } from './secure-storage';
 import { reportNetworkFailure, reportNetworkSuccess } from './network-status';
 import { getCurrentUiStrings } from './current-language';
@@ -119,21 +120,38 @@ async function fetchOrOffline(path: string, options: RequestInit): Promise<Respo
   }
 }
 
+/**
+ * Raised when the native file uploader fails before it receives an HTTP response, but an ordinary
+ * authenticated backend probe proves that the device can still reach the API. This must remain
+ * separate from NETWORK_OFFLINE so a local/native upload problem cannot poison global network
+ * state.
+ */
+export class NativeUploadError extends Error {
+  readonly code = 'NATIVE_UPLOAD_FAILED';
+
+  constructor() {
+    super('Could not upload this image. Please try again.');
+    this.name = 'NativeUploadError';
+  }
+}
+
+function parseApiPayload<T>(status: number, text: string): T {
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = null;
+    }
+  }
+  if (status < 200 || status >= 300) {
+    throw new ApiError(status, (body ?? {}) as ApiErrorBody);
+  }
+  return body as T;
+}
+
 function parseApiResponse<T>(res: Response): Promise<T> {
-  return res.text().then((text) => {
-    let body: unknown = null;
-    if (text) {
-      try {
-        body = JSON.parse(text);
-      } catch {
-        body = null;
-      }
-    }
-    if (!res.ok) {
-      throw new ApiError(res.status, (body ?? {}) as ApiErrorBody);
-    }
-    return body as T;
-  });
+  return res.text().then((text) => parseApiPayload<T>(res.status, text));
 }
 
 /**
@@ -156,25 +174,67 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return parseApiResponse<T>(res);
 }
 
-/**
- * Multipart equivalent of apiFetch. A FormData body is created separately for every attempt so an
- * expired access token can be refreshed without reusing a native file body that may already have
- * been consumed by the first fetch. The factory runs outside fetchOrOffline, so local body
- * construction failures are never converted into NETWORK_OFFLINE.
- */
-export async function apiFetchMultipart<T>(
-  path: string,
-  options: Omit<RequestInit, 'body'>,
-  bodyFactory: () => FormData,
-): Promise<T> {
-  let res = await fetchOrOffline(path, { ...options, body: bodyFactory() });
+async function probeBackendReachability(): Promise<boolean> {
+  try {
+    // A 2xx/4xx/5xx response all prove transport reachability. auth/me is deliberately used as a
+    // small existing endpoint rather than introducing a new health API or changing auth behavior.
+    await rawFetch('auth/me', { method: 'GET' });
+    reportNetworkSuccess();
+    return true;
+  } catch {
+    reportNetworkFailure();
+    return false;
+  }
+}
 
-  if (res.status === 401 && path !== REFRESH_PATH) {
-    const refreshed = await tryRefresh();
-    if (refreshed) {
-      res = await fetchOrOffline(path, { ...options, body: bodyFactory() });
+async function nativeMultipartUpload(
+  path: string,
+  file: { uri: string; name: string; type: string },
+  parameters: Record<string, string>,
+): Promise<FileSystem.FileSystemUploadResult> {
+  const headers: Record<string, string> = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  try {
+    const result = await FileSystem.uploadAsync(`${API_BASE_URL}/${path}`, file.uri, {
+      httpMethod: 'POST',
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName: 'image',
+      mimeType: file.type,
+      parameters,
+      headers,
+    });
+    reportNetworkSuccess();
+    return result;
+  } catch (error) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      // Never include the local URI, headers, tokens, request body, or image/QR data in logs.
+      console.warn('[api] native image upload failed', {
+        path,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
+    if (await probeBackendReachability()) throw new NativeUploadError();
+    throw networkOfflineError();
+  }
+}
+
+/**
+ * Upload a verified local image with Expo's native multipart transport. The same file URI is held
+ * by the caller across this method, and the native upload is invoked once more only after a
+ * successful refresh-token rotation. No multipart boundary is manufactured in JavaScript.
+ */
+export async function apiUploadImage<T>(
+  path: string,
+  file: { uri: string; name: string; type: string },
+  parameters: Record<string, string> = {},
+): Promise<T> {
+  let result = await nativeMultipartUpload(path, file, parameters);
+
+  if (result.status === 401 && path !== REFRESH_PATH) {
+    const refreshed = await tryRefresh();
+    if (refreshed) result = await nativeMultipartUpload(path, file, parameters);
   }
 
-  return parseApiResponse<T>(res);
+  return parseApiPayload<T>(result.status, result.body);
 }

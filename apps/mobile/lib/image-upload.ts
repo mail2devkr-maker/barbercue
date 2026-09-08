@@ -153,37 +153,18 @@ export async function prepareImageUpload(asset: ImagePickerAsset, fallbackName: 
   }
 }
 
-export function createImageFormData(prepared: Pick<PreparedImageUpload, 'uri' | 'name' | 'type'>, fields: Record<string, string> = {}): FormData {
-  const form = new FormData();
-  form.append('image', {
-    uri: prepared.uri,
-    name: prepared.name,
-    type: prepared.type,
-  } as unknown as Blob);
-  Object.entries(fields).forEach(([key, value]) => form.append(key, value));
-  return form;
-}
-
 /**
  * Keeps a copied picker file alive until the request (including an auth-refresh retry) is done.
- * `bodyFactory` is intentionally called by the API layer once per network attempt.
+ * The native sender receives the verified file URI and controls the multipart transport.
  */
 export async function uploadImageAsset<T>(
   asset: ImagePickerAsset,
   fallbackName: string,
-  fields: Record<string, string>,
-  send: (bodyFactory: () => FormData) => Promise<T>,
+  send: (prepared: Pick<PreparedImageUpload, 'uri' | 'name' | 'type'>) => Promise<T>,
 ): Promise<T> {
   const prepared = await prepareImageUpload(asset, fallbackName);
   try {
-    return await send(() => {
-      try {
-        return createImageFormData(prepared, fields);
-      } catch (error) {
-        reportPreparationFailure(asset, error);
-        throw new ImageUploadPreparationError(error);
-      }
-    });
+    return await send(prepared);
   } finally {
     await prepared.cleanup();
   }
