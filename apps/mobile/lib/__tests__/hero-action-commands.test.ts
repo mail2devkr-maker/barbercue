@@ -3,10 +3,22 @@ import {
   createSignedOutHeroCommand,
   type HeroCoordinates,
 } from '../hero-action-commands';
+import {
+  stashPendingCustomerDestination,
+  takePendingCustomerDestination,
+} from '../customer-navigation-intent';
+import {
+  stashPendingShopRegistrationIntent,
+  takePendingShopRegistrationIntent,
+} from '../shop-registration-intent';
 
 const location: HeroCoordinates = { lat: 12.9716, lng: 77.5946 };
 
 describe('mobile Home hero actions', () => {
+  beforeEach(() => {
+    takePendingCustomerDestination();
+  });
+
   it('opens guest discovery for Book ahead and preserves known location', () => {
     expect(createSignedOutHeroCommand('bookAhead', location)).toEqual({
       destination: 'guestSearch',
@@ -38,5 +50,21 @@ describe('mobile Home hero actions', () => {
 
   it('opens authenticated Great offers in the existing Credits experience', () => {
     expect(createAuthenticatedHeroCommand('greatOffers', null)).toEqual({ destination: 'credits' });
+  });
+
+  it('supersedes Great offers when the cancelled login flow is replaced by Register Shop', () => {
+    stashPendingCustomerDestination({ kind: 'credits' });
+    stashPendingShopRegistrationIntent();
+
+    expect(takePendingCustomerDestination()).toEqual({ kind: 'registerShop' });
+    expect(takePendingShopRegistrationIntent()).toBe(false);
+  });
+
+  it('supersedes Register Shop when the later Great offers flow wins', () => {
+    stashPendingShopRegistrationIntent();
+    stashPendingCustomerDestination({ kind: 'credits' });
+
+    expect(takePendingCustomerDestination()).toEqual({ kind: 'credits' });
+    expect(takePendingShopRegistrationIntent()).toBe(false);
   });
 });
