@@ -44,18 +44,20 @@
    variant here intentionally matches, not a new accent. A soft lifted shadow on hover is the only
    new behavior; the color itself is unchanged. */
 .primary {
-  background: var(--bc-accent);
+  background: var(--bc-brand-gradient);
   color: var(--bc-accent-contrast);
+  border-color: transparent;
+  box-shadow: 0 8px 20px rgba(242, 41, 92, 0.18);
 }
 
 .primary:hover:not(:disabled) {
-  box-shadow: 0 6px 16px rgba(176, 65, 62, 0.28);
+  box-shadow: 0 9px 22px rgba(242, 41, 92, 0.28);
 }
 
 /* Matches the landing page's own primary CTA color (near-black), used here for the secondary
    weight of action within the customer app shell. */
 .secondary {
-  background: var(--bc-ink);
+  background: var(--bc-brand-navy);
   color: #ffffff;
 }
 

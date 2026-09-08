@@ -316,9 +316,10 @@
 }
 
 .primaryButton {
-  border: 1px solid var(--bc-ink);
-  background: var(--bc-ink);
+  border: 1px solid transparent;
+  background: var(--bc-brand-gradient);
   color: #ffffff;
+  box-shadow: 0 8px 20px rgba(242, 41, 92, 0.16);
 }
 
 .secondaryButton {
