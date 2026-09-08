@@ -1041,9 +1041,19 @@
 
 .footerLogoFrame {
   display: inline-flex;
-  overflow: hidden;
-  border-radius: 18px;
   line-height: 0;
+}
+
+.footerLogoFrame :global(img) {
+  border-radius: 18px;
+}
+
+@media (max-width: 760px) {
+  .footerLogoFrame :global(img) { border-radius: 16px; }
+}
+
+@media (max-width: 420px) {
+  .footerLogoFrame :global(img) { border-radius: 14px; }
 }
 
 .footerBrand p {
@@ -1270,8 +1280,6 @@
 }
 
 @media (max-width: 390px) {
-  .footerLogoFrame { border-radius: 16px; }
-
   .wordmark { font-size: 1.08rem; }
 
   .wordmarkMark {
