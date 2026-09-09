@@ -38,7 +38,7 @@ export function BookingUpiAction({ booking, paymentInfo }: {
   return (
     <View style={{ gap: 8, marginVertical: 8 }}>
       {canLaunchBookingUpi(booking, paymentInfo) && (
-        <Button title="Pay Now with UPI" loading={opening} onPress={() => void pay()} />
+        <Button title="Tap to Pay with UPI" loading={opening} onPress={() => void pay()} />
       )}
       {paymentInfo.upiVpa && <Text selectable accessibilityLabel="Shop UPI ID">UPI ID: {paymentInfo.upiVpa}</Text>}
       {paymentInfo.upiPayeeName && <Text>Payee: {paymentInfo.upiPayeeName}</Text>}

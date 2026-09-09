@@ -10,7 +10,7 @@ describe('BookingPaymentInfoService', () => {
       onlinePaymentAvailable: true,
       paymentMethod: 'UPI_QR',
       paymentQrImageUrl: 'https://cdn.example/qr.png',
-      upiVpa: null, upiPayeeName: null, currency: 'INR',
+      upiVpa: null, upiPayeeName: null, upiQrDecoded: false, currency: 'INR',
       prepaymentRequirement: PrepaymentRequirement.NONE,
       prepaymentPercentage: null,
     });

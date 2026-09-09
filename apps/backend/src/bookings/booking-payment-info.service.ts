@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrepaymentRequirement, type BookingPaymentInfoDto } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AvailabilityService } from './availability.service';
+import { paymentQrRouting } from '../salon-setup/payment-qr-routing';
 
 @Injectable()
 export class BookingPaymentInfoService {
@@ -20,8 +21,7 @@ export class BookingPaymentInfoService {
       onlinePaymentAvailable: Boolean(policy?.paymentQrImageUrl),
       paymentMethod: 'UPI_QR',
       paymentQrImageUrl: policy?.paymentQrImageUrl ?? null,
-      upiVpa: policy?.upiVpa ?? null,
-      upiPayeeName: policy?.upiPayeeName ?? null,
+      ...paymentQrRouting(salonId, policy),
       currency: salon.currency ?? (city?.countryCode === 'IN' ? 'INR' : null),
       prepaymentRequirement: policy?.prepaymentRequirement ?? PrepaymentRequirement.NONE,
       prepaymentPercentage: policy?.prepaymentPercentage ?? null,

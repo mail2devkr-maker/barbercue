@@ -63,7 +63,7 @@ describe('SalonPaymentQrService', () => {
       await expect(service.get('owner-1', 'salon-1')).resolves.toEqual({
         salonId: 'salon-1',
         paymentQrImageUrl: null,
-        upiVpa: null, upiPayeeName: null,
+        upiVpa: null, upiPayeeName: null, upiQrDecoded: false,
       });
     });
 
@@ -74,7 +74,7 @@ describe('SalonPaymentQrService', () => {
       await expect(service.get('owner-1', 'salon-1')).resolves.toEqual({
         salonId: 'salon-1',
         paymentQrImageUrl: 'https://cdn.test/existing-qr.png',
-        upiVpa: null, upiPayeeName: null,
+        upiVpa: null, upiPayeeName: null, upiQrDecoded: false,
       });
     });
   });
@@ -86,9 +86,9 @@ describe('SalonPaymentQrService', () => {
       });
       expect(prisma.salonPaymentPolicy.upsert).toHaveBeenCalledWith({
         where: { salonId: 'salon-1' },
-        create: { salonId: 'salon-1', paymentQrImageUrl: 'https://cdn.test/qr.png' },
-        update: { paymentQrImageUrl: 'https://cdn.test/qr.png' },
-        select: { paymentQrImageUrl: true },
+        create: { salonId: 'salon-1', paymentQrImageUrl: 'https://cdn.test/qr.png', upiVpa: null, upiPayeeName: null },
+        update: { paymentQrImageUrl: 'https://cdn.test/qr.png', upiVpa: null, upiPayeeName: null },
+        select: { paymentQrImageUrl: true, upiVpa: true, upiPayeeName: true },
       });
       expect(result.paymentQrImageUrl).toBe('https://cdn.test/qr.png');
     });
@@ -138,7 +138,7 @@ describe('SalonPaymentQrService', () => {
       expect(contentType).toBe('image/jpeg');
       expect(prisma.salonPaymentPolicy.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
-          create: { salonId: 'salon-1', paymentQrImageUrl: 'https://cdn.test/qr.jpg' },
+          create: { salonId: 'salon-1', paymentQrImageUrl: 'https://cdn.test/qr.jpg', upiVpa: null, upiPayeeName: null },
         }),
       );
     });
@@ -190,7 +190,7 @@ describe('SalonPaymentQrService', () => {
       await service.remove('owner-1', 'salon-1');
       expect(prisma.salonPaymentPolicy.update).toHaveBeenCalledWith({
         where: { salonId: 'salon-1' },
-        data: { paymentQrImageUrl: null },
+        data: { paymentQrImageUrl: null, upiVpa: null, upiPayeeName: null },
       });
       expect(storage.deleteObject).toHaveBeenCalledWith(
         'https://cdn.test/qr.png',

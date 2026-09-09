@@ -839,6 +839,7 @@ export interface BookingPaymentInfoDto {
   // Optional for older servers/QR-only clients; direct intent is disabled without these.
   upiVpa?: string | null;
   upiPayeeName?: string | null;
+  upiQrDecoded?: boolean;
   currency?: string | null;
   prepaymentRequirement: PrepaymentRequirement;
   prepaymentPercentage: number | null;
@@ -1055,6 +1056,7 @@ export interface SalonPaymentQrDto {
   paymentQrImageUrl: string | null;
   upiVpa?: string | null;
   upiPayeeName?: string | null;
+  upiQrDecoded?: boolean;
 }
 
 // GET credits/balance response — the single number a booking-time redemption UI needs. Always

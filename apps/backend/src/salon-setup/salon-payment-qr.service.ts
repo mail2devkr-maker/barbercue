@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import type { SalonPaymentQrDto, SetSalonPaymentQrInput } from '@barbercue/shared';
-import { setSalonUpiSchema, type SetSalonUpiInput } from '@barbercue/shared';
+import type { SetSalonUpiInput } from '@barbercue/shared';
+import { decodePaymentQr } from './payment-qr-decoder';
+import { DECODED_UPI_KEY_PREFIX, paymentQrRouting } from './payment-qr-routing';
 import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
@@ -36,32 +38,15 @@ export class SalonPaymentQrService {
       select: { paymentQrImageUrl: true, upiVpa: true, upiPayeeName: true },
     });
     return { salonId, paymentQrImageUrl: policy?.paymentQrImageUrl ?? null,
-      upiVpa: policy?.upiVpa ?? null, upiPayeeName: policy?.upiPayeeName ?? null };
+      ...paymentQrRouting(salonId, policy) };
   }
 
-  async setUpi(userId: string, salonId: string, input: SetSalonUpiInput): Promise<SalonPaymentQrDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    const parsed = setSalonUpiSchema.safeParse(input);
-    if (!parsed.success) {
-      throw new AppException('INVALID_UPI_DETAILS', parsed.error.issues[0].message, HttpStatus.BAD_REQUEST);
-    }
-    // Keep delegated mutation and its audit atomic. Never touches QR, prepayment or settlement.
-    return this.prisma.$transaction(async (tx) => {
-      const before = actor === 'PLATFORM_ADMIN'
-        ? await tx.salonPaymentPolicy.findUnique({ where: { salonId }, select: { upiVpa: true, upiPayeeName: true } })
-        : null;
-      const updated = await tx.salonPaymentPolicy.upsert({
-        where: { salonId }, create: { salonId, ...parsed.data }, update: parsed.data,
-        select: { paymentQrImageUrl: true, upiVpa: true, upiPayeeName: true },
-      });
-      if (actor === 'PLATFORM_ADMIN') {
-        await tx.auditLog.create({ data: {
-          actorUserId: userId, action: 'ADMIN_PAYMENT_QR_UPDATED', entityType: 'Salon', entityId: salonId,
-          metadata: { via: 'upi-routing', before, after: parsed.data },
-        } });
-      }
-      return { salonId, ...updated };
-    });
+  async setUpi(userId: string, salonId: string, _input: SetSalonUpiInput): Promise<SalonPaymentQrDto> {
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    // Old installed clients get an actionable error, not a way to override decoded routing.
+    throw new AppException('UPI_QR_UPLOAD_REQUIRED',
+      'Upload your shop UPI QR image to detect the account automatically. Manual UPI details are no longer accepted.',
+      HttpStatus.CONFLICT);
   }
 
   /** Route 1: link an image the owner already hosts. */
@@ -105,9 +90,10 @@ export class SalonPaymentQrService {
     }
 
     const before = actor === 'PLATFORM_ADMIN' ? await this.currentUrl(salonId) : null;
-    const key = `salons/${salonId}/payment-qr/${randomUUID()}.${extensionForMimeType(detected)}`;
+    const routing = await decodePaymentQr(file.buffer);
+    const key = `salons/${salonId}/payment-qr/${routing ? DECODED_UPI_KEY_PREFIX : ''}${randomUUID()}.${extensionForMimeType(detected)}`;
     const url = await this.storage.putPublicObject(key, file.buffer, detected);
-    const result = await this.upsert(salonId, url);
+    const result = await this.upsert(salonId, url, routing);
     if (actor === 'PLATFORM_ADMIN') {
       await this.logAdminAudit(userId, salonId, 'upload', before, result.paymentQrImageUrl);
     }
@@ -120,16 +106,16 @@ export class SalonPaymentQrService {
       where: { salonId },
       select: { paymentQrImageUrl: true },
     });
-    if (!policy?.paymentQrImageUrl) return;
+    if (!policy) return;
     await this.prisma.salonPaymentPolicy.update({
       where: { salonId },
-      data: { paymentQrImageUrl: null },
+      data: { paymentQrImageUrl: null, upiVpa: null, upiPayeeName: null },
     });
     if (actor === 'PLATFORM_ADMIN') {
       await this.logAdminAudit(userId, salonId, 'remove', policy.paymentQrImageUrl, null);
     }
     try {
-      await this.storage.deleteObject(policy.paymentQrImageUrl);
+      if (policy.paymentQrImageUrl) await this.storage.deleteObject(policy.paymentQrImageUrl);
     } catch {
       // Best-effort, same contract as SalonPhotosService.remove — the row is already updated.
     }
@@ -167,13 +153,17 @@ export class SalonPaymentQrService {
   private async upsert(
     salonId: string,
     url: string,
+    routing: SetSalonUpiInput | null = null,
   ): Promise<SalonPaymentQrDto> {
+    // One atomic row write: QR and routing can never belong to different replacements.
+    // Link/failed-decode defaults explicitly clear BOTH old routing fields.
+    const data = { paymentQrImageUrl: url, upiVpa: routing?.upiVpa ?? null, upiPayeeName: routing?.upiPayeeName ?? null };
     const updated = await this.prisma.salonPaymentPolicy.upsert({
       where: { salonId },
-      create: { salonId, paymentQrImageUrl: url },
-      update: { paymentQrImageUrl: url },
-      select: { paymentQrImageUrl: true },
+      create: { salonId, ...data },
+      update: data,
+      select: { paymentQrImageUrl: true, upiVpa: true, upiPayeeName: true },
     });
-    return { salonId, paymentQrImageUrl: updated.paymentQrImageUrl };
+    return { salonId, paymentQrImageUrl: updated.paymentQrImageUrl, ...paymentQrRouting(salonId, updated) };
   }
 }

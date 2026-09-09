@@ -49,7 +49,7 @@ export function BookingUpiAction({ booking, paymentInfo }: {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, overflowWrap: "anywhere" }}>
       {mobileBrowser && canLaunchBookingUpi(booking, paymentInfo) && (
-        <Button type="button" onClick={pay}>Pay Now with UPI</Button>
+        <Button type="button" onClick={pay}>Tap to Pay with UPI</Button>
       )}
       {!mobileBrowser && <span>Pay from your phone: scan the shop QR or use the UPI ID in your UPI app.</span>}
       {paymentInfo.upiVpa && <span>UPI ID: <strong>{paymentInfo.upiVpa}</strong>{" "}

@@ -23,7 +23,7 @@ jest.mock('../../components/ui', () => {
 });
 
 const qrUrl = 'https://cdn.example/qr.png';
-const info = { onlinePaymentAvailable: true, paymentQrImageUrl: qrUrl, upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons', currency: 'INR' };
+const info = { onlinePaymentAvailable: true, paymentQrImageUrl: qrUrl, upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons', currency: 'INR', upiQrDecoded: true };
 const booking = { id: 'booking1', status: 'CONFIRMED', payableAmount: 419.25, servicePrice: 500, creditsRedeemedAmount: 80.75,
   serviceName: 'Haircut', salonName: 'Test Shop', slotStart: '2026-10-10T10:00:00Z', salonTimezone: 'Asia/Kolkata' };
 const props = { route: { params: { salonId: 's', salonName: 'Test Shop', serviceId: 'svc', serviceName: 'Haircut', servicePrice: 500,
@@ -33,7 +33,7 @@ type TestNode = { props: Record<string, any> };
 let createBooking: () => Promise<unknown>;
 let paymentInfo: typeof info;
 const qrImages = () => tree.root.findAllByType(Image).filter((image: TestNode) => image.props.source?.uri === qrUrl);
-const payButtons = () => tree.root.findAllByType(Button).filter((button: TestNode) => button.props.title === 'Pay Now with UPI');
+const payButtons = () => tree.root.findAllByType(Button).filter((button: TestNode) => button.props.title === 'Tap to Pay with UPI');
 const screenText = () => JSON.stringify(tree.toJSON());
 async function render() { await act(async () => { tree = TestRenderer.create(createElement(ConfirmBookingScreen, props as never)); }); }
 async function confirm() {

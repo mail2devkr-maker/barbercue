@@ -21,7 +21,7 @@ jest.mock('../BookingActionsBar', () => ({ BookingActionsBar: () => null }));
 jest.mock('../../queue/CheckInPanel', () => ({ canCheckIn: () => false, CheckInPanel: () => null }));
 
 const qr = 'https://cdn.example/qr.png';
-const info = { onlinePaymentAvailable: true, paymentQrImageUrl: qr, upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons', currency: 'INR' };
+const info = { onlinePaymentAvailable: true, paymentQrImageUrl: qr, upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons', currency: 'INR', upiQrDecoded: true };
 const booking = { id: 'booking1', status: 'CONFIRMED', payableAmount: 419.25, servicePrice: 500, creditsRedeemedAmount: 80.75,
   serviceName: 'Haircut', salonName: 'Shop', slotStart: '2026-10-10T10:00:00Z', salonTimezone: 'Asia/Kolkata' };
 let tree; let paymentInfo; let createBooking;
@@ -49,30 +49,30 @@ beforeEach(() => {
 });
 afterEach(async () => { if (tree) await act(async () => tree.unmount()); });
 it('pre-booking hides QR/direct intent and does not label any final payable amount', async () => {
-  await renderFlow(); expect(qrImages()).toHaveLength(0); expect(buttons('Pay Now with UPI')).toHaveLength(0);
+  await renderFlow(); expect(qrImages()).toHaveLength(0); expect(buttons('Tap to Pay with UPI')).toHaveLength(0);
   expect(text()).not.toContain('Amount payable:'); expect(window.location.assign).not.toHaveBeenCalled();
 });
 it('post-booking uses exact returned amount in mobile web intent and retains QR', async () => {
   await renderFlow(); await click('Confirm booking'); expect(qrImages()).toHaveLength(1);
-  expect(text()).toContain(formatMoney(419.25, 'INR', 'IN')); await click('Pay Now with UPI');
+  expect(text()).toContain(formatMoney(419.25, 'INR', 'IN')); await click('Tap to Pay with UPI');
   expect(window.location.assign).toHaveBeenCalledWith(expect.stringMatching(/^upi:\/\/pay\?.*am=419\.25&cu=INR$/));
   expect(text()).toContain('does not automatically verify'); expect(text()).not.toContain('Payment successful');
   expect(apiFetch.mock.calls.filter(([, opts]) => opts?.method)).toHaveLength(1);
 });
 it('desktop never launches a payment app and offers QR + copyable VPA instead', async () => {
   navigator.userAgent = 'Windows desktop'; await renderFlow(); await click('Confirm booking');
-  expect(buttons('Pay Now with UPI')).toHaveLength(0); expect(qrImages()).toHaveLength(1); expect(text()).toContain('Pay from your phone');
+  expect(buttons('Tap to Pay with UPI')).toHaveLength(0); expect(qrImages()).toHaveLength(1); expect(text()).toContain('Pay from your phone');
   await click('Copy UPI ID'); expect(navigator.clipboard.writeText).toHaveBeenCalledWith('merchant@bank');
   expect(window.location.assign).not.toHaveBeenCalled();
 });
 it('unsupported mobile browser keeps QR with truthful no-handler instructions', async () => {
   window.location.assign.mockImplementation(() => { throw new Error('unsupported'); });
-  await renderFlow(); await click('Confirm booking'); await click('Pay Now with UPI');
+  await renderFlow(); await click('Confirm booking'); await click('Tap to Pay with UPI');
   expect(qrImages()).toHaveLength(1); expect(text()).toContain('If no UPI app opens');
 });
 it('QR-only salon remains bookable with QR fallback and no direct intent', async () => {
   paymentInfo = { ...info, upiVpa: null }; await renderFlow(); await click('Confirm booking');
-  expect(qrImages()).toHaveLength(1); expect(buttons('Pay Now with UPI')).toHaveLength(0);
+  expect(qrImages()).toHaveLength(1); expect(buttons('Tap to Pay with UPI')).toHaveLength(0);
 });
 it('missing QR disables confirm without exposing routing', async () => {
   paymentInfo = { ...info, onlinePaymentAvailable: false, paymentQrImageUrl: null }; await renderFlow();
@@ -81,11 +81,11 @@ it('missing QR disables confirm without exposing routing', async () => {
 it('server PAYMENT_QR_REQUIRED after stale read preserves pre-booking safety', async () => {
   createBooking = async () => { throw new ApiError('Shop payment QR is required'); };
   await renderFlow(); await click('Confirm booking'); expect(text()).toContain('Shop payment QR is required');
-  expect(qrImages()).toHaveLength(0); expect(buttons('Pay Now with UPI')).toHaveLength(0);
+  expect(qrImages()).toHaveLength(0); expect(buttons('Tap to Pay with UPI')).toHaveLength(0);
 });
 it('in-flight booking never exposes QR or intent', async () => {
   let resolve; createBooking = () => new Promise((r) => { resolve = r; });
-  await renderFlow(); await click('Confirm booking'); expect(qrImages()).toHaveLength(0); expect(buttons('Pay Now with UPI')).toHaveLength(0);
+  await renderFlow(); await click('Confirm booking'); expect(qrImages()).toHaveLength(0); expect(buttons('Tap to Pay with UPI')).toHaveLength(0);
   await act(async () => resolve(booking)); expect(qrImages()).toHaveLength(1);
 });
 it('missing/cancelled booking action is inert', async () => {
