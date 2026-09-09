@@ -125,7 +125,7 @@ function EntryRow({
           </View>
           <Text style={styles.assignLabel}>{t.chairLabel}</Text>
           <View style={styles.chipRow}>
-            {chairs.map((c) => (
+            {chairs.filter((c) => (c.occupancy ?? 'FREE') === 'FREE').map((c) => (
               <Pressable key={c.id} style={[styles.chip, chairId === c.id && styles.chipActive]} onPress={() => setChairId(c.id)}>
                 <Text style={[styles.chipText, chairId === c.id && styles.chipTextActive]}>{c.label}</Text>
               </Pressable>
@@ -174,6 +174,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   const [data, setData] = useState<DashboardQueueDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [chairBusyId, setChairBusyId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -208,6 +209,33 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     };
   }, [salonId, load]);
 
+  async function updateLocalChair(chair: ChairOptionDto, occupy: boolean) {
+    setChairBusyId(chair.id);
+    setError(null);
+    try {
+      const action = occupy ? DASHBOARD_PATHS.occupyLocal : DASHBOARD_PATHS.freeLocal;
+      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairOccupancy}/${chair.id}/${action}`, { method: 'POST' });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
+    } finally {
+      setChairBusyId(null);
+    }
+  }
+
+  async function freeAllLocalChairs() {
+    setChairBusyId('all-local');
+    setError(null);
+    try {
+      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairOccupancy}/${DASHBOARD_PATHS.freeAllLocal}`, { method: 'POST' });
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
+    } finally {
+      setChairBusyId(null);
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -223,12 +251,27 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   const activeStaff = data.staffRoster.filter((s) => s.status === 'ACTIVE');
   const activeEntries = data.entries.filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED' && e.status !== 'NO_SHOW');
 
+  const chairStatus = (
+    <Card style={styles.entryCard}>
+      <View style={styles.entryHeaderRow}><Text style={styles.token}>Chair status</Text>{data.chairs.some((c) => c.occupancy === 'LOCAL') && <Button title="Free all local" variant="outline" onPress={() => void freeAllLocalChairs()} loading={chairBusyId === 'all-local'} />}</View>
+      {data.chairs.map((chair) => {
+        const occupancy = chair.occupancy ?? 'FREE';
+        return <View key={chair.id} style={styles.chairRow}>
+          <View style={styles.chairText}><Text style={styles.assignLabel}>{chair.label}</Text><Text style={styles.meta}>{occupancy === 'FREE' ? 'FREE' : occupancy === 'LOCAL' ? 'OCCUPIED — Local customer' : `OCCUPIED — Token #${chair.tokenNumber ?? '?'}`}</Text></View>
+          {occupancy === 'FREE' && <Button title="Seat local" variant="outline" onPress={() => void updateLocalChair(chair, true)} loading={chairBusyId === chair.id} />}
+          {occupancy === 'LOCAL' && <Button title="Mark free" variant="outline" onPress={() => void updateLocalChair(chair, false)} loading={chairBusyId === chair.id} />}
+        </View>;
+      })}
+    </Card>
+  );
+
   if (activeEntries.length === 0) {
-    return <EmptyState title={t.queueIsEmptyTitle} message={t.queueIsEmptyHint} />;
+    return <>{chairStatus}<EmptyState title={t.queueIsEmptyTitle} message={t.queueIsEmptyHint} /></>;
   }
 
   return (
     <>
+      {chairStatus}
       {activeEntries.map((entry) => (
         <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} onAction={() => void load()} />
       ))}
@@ -254,6 +297,8 @@ const styles = StyleSheet.create({
   actionButton: { flex: 1 },
   fullButton: { marginTop: space[3] },
   assignPanel: { marginTop: space[3] },
+  chairRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[2], borderTopWidth: 1, borderTopColor: color.border },
+  chairText: { flex: 1 },
   assignLabel: {
     fontFamily: font.bodySemiBold,
     fontSize: fontSize.xs,

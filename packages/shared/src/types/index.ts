@@ -690,9 +690,18 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
 }
 
 // GET /dashboard/salons/:salonId/booking/staff mirror for the live queue's chair dropdown.
+export type ChairOccupancyKind = 'FREE' | 'LOCAL' | 'FASTQUE';
+
 export interface ChairOptionDto {
   id: string;
   label: string;
+  // Optional for wire/backward compatibility with older cached clients; current backend always
+  // populates these fields. Missing occupancy is treated as FREE by clients.
+  occupancy?: ChairOccupancyKind;
+  manualOccupancyId?: string | null;
+  activeServiceSessionId?: string | null;
+  tokenNumber?: number | null;
+  assignedStaffName?: string | null;
 }
 
 // A walk-in that joined without picking a service (QueueEntry.serviceId is null) needs one
@@ -818,6 +827,15 @@ export interface StaffStatusDto {
 
 export interface SalonPaymentPolicyDto {
   salonId: string;
+  prepaymentRequirement: PrepaymentRequirement;
+  prepaymentPercentage: number | null;
+}
+
+/** Public customer-booking payment capability. No provider secret or storage internals. */
+export interface BookingPaymentInfoDto {
+  onlinePaymentAvailable: boolean;
+  paymentMethod: 'UPI_QR';
+  paymentQrImageUrl: string | null;
   prepaymentRequirement: PrepaymentRequirement;
   prepaymentPercentage: number | null;
 }

@@ -110,7 +110,7 @@ function AssignForm({
         <span>Chair</span>
         <select value={chairId} onChange={(e) => setChairId(e.target.value)} className={styles.assignSelect}>
         <option value="">Chair…</option>
-        {chairs.map((c) => (
+        {chairs.filter((c) => (c.occupancy ?? 'FREE') === 'FREE').map((c) => (
           <option key={c.id} value={c.id}>
             {c.label}
           </option>
@@ -179,7 +179,7 @@ function ReassignForm({
       <label className={styles.assignField}>
         <span>Move to chair</span>
         <select value={chairId} onChange={(event) => setChairId(event.target.value)} className={styles.assignSelect}>
-          {chairs.map((chair) => <option key={chair.id} value={chair.id}>{chair.label}</option>)}
+          {chairs.filter((chair) => chair.id === entry.assignedChairId || (chair.occupancy ?? 'FREE') === 'FREE').map((chair) => <option key={chair.id} value={chair.id}>{chair.label}</option>)}
         </select>
       </label>
       <Button type="button" variant="outline" onClick={() => void handleReassign()} disabled={submitting || !staffId || !chairId || !changed}>
@@ -198,6 +198,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [staffBusyId, setStaffBusyId] = useState<string | null>(null);
+  const [chairBusyId, setChairBusyId] = useState<string | null>(null);
   const [newEntryIds, setNewEntryIds] = useState<string[]>([]);
   const [newEntryNotice, setNewEntryNotice] = useState<QueueEntryDetailDto | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -368,6 +369,33 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     }
   }
 
+  async function handleLocalChair(chair: ChairOptionDto, occupy: boolean) {
+    setChairBusyId(chair.id);
+    setError(null);
+    try {
+      const action = occupy ? DASHBOARD_PATHS.occupyLocal : DASHBOARD_PATHS.freeLocal;
+      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairOccupancy}/${chair.id}/${action}`, { method: "POST" });
+      await refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update this chair.");
+    } finally {
+      setChairBusyId(null);
+    }
+  }
+
+  async function handleFreeAllLocalChairs() {
+    setChairBusyId('all-local');
+    setError(null);
+    try {
+      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairOccupancy}/${DASHBOARD_PATHS.freeAllLocal}`, { method: "POST" });
+      await refetch();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not free local chairs.");
+    } finally {
+      setChairBusyId(null);
+    }
+  }
+
   async function handleToggleStaffStatus(staff: StaffStatusDto) {
     setStaffBusyId(staff.id);
     try {
@@ -483,6 +511,31 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
             </div>
           ))}
           {data.staffRoster.length === 0 && <p className={styles.emptyState}>No staff on the roster.</p>}
+        </div>
+      </section>
+
+      <section className={styles.dashSection}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <h2 className={styles.dashHeading}>Chair status</h2>
+          {data.chairs.some((chair) => chair.occupancy === 'LOCAL') && (
+            <Button type="button" variant="outline" onClick={() => void handleFreeAllLocalChairs()} disabled={chairBusyId !== null}>
+              Free all local chairs
+            </Button>
+          )}
+        </div>
+        <div className={styles.staffRow}>
+          {data.chairs.map((chair) => {
+            const occupancy = chair.occupancy ?? 'FREE';
+            return (
+              <div key={chair.id} className={styles.staffChip}>
+                <span className={styles.staffChipName}>{chair.label}</span>
+                <span className={styles.staffChipStatus}>{occupancy === 'FREE' ? 'FREE' : occupancy === 'LOCAL' ? 'OCCUPIED — Local customer' : `OCCUPIED — Token #${chair.tokenNumber ?? '?'}`}</span>
+                {occupancy === 'FREE' && <Button type="button" variant="outline" onClick={() => void handleLocalChair(chair, true)} disabled={chairBusyId !== null}>Seat local customer</Button>}
+                {occupancy === 'LOCAL' && <Button type="button" variant="outline" onClick={() => void handleLocalChair(chair, false)} disabled={chairBusyId !== null}>Mark free</Button>}
+                {occupancy === 'FASTQUE' && <span className={styles.entryMeta}>{chair.assignedStaffName ?? 'FastQue service'}</span>}
+              </div>
+            );
+          })}
         </div>
       </section>
 
