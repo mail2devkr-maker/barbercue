@@ -35,31 +35,39 @@ Secrets never committed; `.env.example` files per app document required keys wit
 
 This table intentionally avoids naming one "final" vendor per row as a locked commitment — it names the cost-conscious V1 default per your instruction, on infrastructure standard enough (Docker, Postgres, S3 API) that switching later costs a config change, not an architecture change.
 
-### Mobile app identifier — `com.dcw.fastque` (Android build currently blocked)
+### Mobile app identifier — `com.dcw.fastque`
 
-`apps/mobile/app.json` now declares `com.dcw.fastque` for both `android.package` and
+`apps/mobile/app.json` declares `com.dcw.fastque` for both `android.package` and
 `ios.bundleIdentifier`, renamed from the original `com.dcw.barbercue` so the shipped identifier
 matches the FastQue brand. This was done before the first Play Console submission on purpose: an
 Android `applicationId` is immutable once published, so this was the last free moment to change it.
+No iOS build had ever run either, so that identifier moved at zero cost.
 
-**An Android build will fail until Firebase is updated.** `apps/mobile/google-services.json` still
-registers only `com.dcw.barbercue`, and the Google Services Gradle plugin fails the build when no
-client in that file matches the applied `applicationId`. Before the next Android build, the
-following must exist — none of it can be generated from this repo:
+Google-side configuration is in place, all inside the **existing** `barbercue` Firebase project
+(project number `871155185690`) so the FCM credential and the web OAuth client carry over
+untouched:
 
-1. A Firebase **Android app** for `com.dcw.fastque` inside the existing `barbercue` Firebase
-   project (keeping the project preserves the FCM credential and the web OAuth client), and its
-   downloaded `google-services.json` committed over the current file.
-2. A Google **Android OAuth client** for package `com.dcw.fastque` with the signing certificate
-   SHA-1 `04:AC:C1:4A:78:60:3C:10:98:4F:82:1E:4B:8A:C8:39:FA:12:AA:DD`. Android OAuth clients bind
-   to (package + SHA-1), so the existing `com.dcw.barbercue` client does not cover the new package
-   and Google Sign-In fails without this. The **web** OAuth client is unchanged — the mobile app
-   passes it as `serverClientId` and the backend accepts it as the token audience, so no backend
-   change is needed for this rename.
-3. The existing EAS Android keystore explicitly assigned to the new `applicationId`. EAS keys
-   Android credentials by application identifier, so `com.dcw.fastque` starts as an empty
-   credentials slot and a build would otherwise generate a fresh keystore — which would invalidate
-   the SHA-1 above and break step 2.
+- Firebase **Android app** `com.dcw.fastque` ("FastQue Android") is registered, and
+  `apps/mobile/google-services.json` is the genuine file downloaded from it. That file now carries
+  **both** packages — the old app is deliberately still registered so the currently-installed
+  build keeps working until the renamed build is verified on a device.
+- The app's signing SHA-1 `04:AC:C1:4A:78:60:3C:10:98:4F:82:1E:4B:8A:C8:39:FA:12:AA:DD` is
+  registered on that Firebase app, and a matching Google **Android OAuth client** ("FastQue
+  Android") exists for `com.dcw.fastque` + that SHA-1.
+- The **web** OAuth client is unchanged, and no backend change was needed: the app passes the web
+  client ID as `serverClientId` and the backend accepts it as the token audience, neither of which
+  the package rename touches. (Note that the pre-existing `com.dcw.barbercue` app has no SHA-1
+  registered in Firebase at all and Google Sign-In still works, which confirms this flow does not
+  depend on the package/SHA-1 binding — the Android OAuth client is registered for correctness and
+  future-proofing, not because auth requires it.)
+
+**Remaining step before any Android build — assign the existing keystore.** EAS keys Android
+credentials by application identifier, so `com.dcw.fastque` starts as an empty credentials slot and
+a build would otherwise generate a *fresh* keystore, changing the SHA-1 above and invalidating the
+OAuth client. Run `eas credentials -p android` (interactive only — the CLI has no non-interactive
+path for this), select the `com.dcw.fastque` application id, and assign the same keystore already
+used by `com.dcw.barbercue` rather than letting EAS generate one. Verify afterwards that a built
+APK still reports the SHA-1 above.
 
 Do not delete the old Firebase Android app or the old OAuth client until the renamed build is
 verified on a device.
