@@ -35,6 +35,8 @@ export interface VoiceAnnouncements {
     date: string | null,
     time: string | null,
   ): string;
+  /** Owner/staff: a booking on this salon was moved to a new slot. */
+  bookingRescheduled(date: string | null, time: string | null): string;
   /** Owner/staff: a booking on this salon was just cancelled. */
   bookingCancelled(): string;
   /** Owner/staff: a walk-in just joined the live queue. */
@@ -55,6 +57,10 @@ const en: VoiceAnnouncements = {
     const whenClause = when ? ` ${when}` : '';
     const sentence = `${service}${who}${where}${whenClause}.`;
     return barberName ? sentence : `${sentence} Barber not assigned yet.`;
+  },
+  bookingRescheduled: (date, time) => {
+    const when = [date ? `to ${date}` : null, time ? `at ${time}` : null].filter(Boolean).join(' ');
+    return when ? `Booking rescheduled ${when}.` : 'Booking rescheduled.';
   },
   bookingCancelled: () => 'Booking cancelled.',
   newCustomerJoined: (tokenNumber, serviceName) =>
@@ -80,6 +86,10 @@ const hi: VoiceAnnouncements = {
     parts.push('बुक हुई।');
     const sentence = parts.join(' ');
     return barberName ? sentence : `${sentence} अभी तक बार्बर तय नहीं हुआ है।`;
+  },
+  bookingRescheduled: (date, time) => {
+    const when = [date ? `${date} को` : null, time ? `${time} बजे` : null].filter(Boolean).join(' ');
+    return when ? `बुकिंग पुनर्निर्धारित की गई है। नया समय ${when}।` : 'बुकिंग पुनर्निर्धारित की गई है।';
   },
   bookingCancelled: () => 'बुकिंग रद्द कर दी गई है।',
   newCustomerJoined: (tokenNumber, serviceName) =>
@@ -2272,6 +2282,7 @@ export function notificationTypeLabel(
  */
 export interface PushCopy {
   newBooking(serviceName: string | null): { title: string; body: string };
+  bookingRescheduled(serviceName: string | null): { title: string; body: string };
   bookingCancelled(serviceName: string | null): { title: string; body: string };
 }
 
@@ -2279,6 +2290,10 @@ const enPush: PushCopy = {
   newBooking: (serviceName) => ({
     title: 'New booking',
     body: serviceName ? `${serviceName} booked for your shop.` : 'A new booking was made for your shop.',
+  }),
+  bookingRescheduled: (serviceName) => ({
+    title: 'Booking rescheduled',
+    body: serviceName ? `${serviceName} booking was rescheduled.` : 'A booking at your shop was rescheduled.',
   }),
   bookingCancelled: (serviceName) => ({
     title: 'Booking cancelled',
@@ -2290,6 +2305,10 @@ const hiPush: PushCopy = {
   newBooking: (serviceName) => ({
     title: 'नई बुकिंग',
     body: serviceName ? `आपकी दुकान के लिए ${serviceName} बुक हुई।` : 'आपकी दुकान के लिए एक नई बुकिंग हुई।',
+  }),
+  bookingRescheduled: (serviceName) => ({
+    title: 'बुकिंग पुनर्निर्धारित हुई',
+    body: serviceName ? `${serviceName} बुकिंग का समय बदल दिया गया।` : 'आपकी दुकान की एक बुकिंग का समय बदल दिया गया।',
   }),
   bookingCancelled: (serviceName) => ({
     title: 'बुकिंग रद्द हुई',

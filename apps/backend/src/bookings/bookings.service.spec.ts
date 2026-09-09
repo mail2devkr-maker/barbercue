@@ -1280,6 +1280,12 @@ describe('BookingsService', () => {
         entityId: 'b1',
       });
       expect(realtime.emitBookingRescheduled).toHaveBeenCalledWith('s1', 'b1');
+      expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledWith(
+        'owner1',
+        'bookingRescheduled',
+        'Haircut',
+        { type: 'booking.rescheduled', salonId: 's1', bookingId: 'b1' },
+      );
     });
 
     it("re-checks the existing preferred barber's working hours against the new slot (Phase 7)", async () => {

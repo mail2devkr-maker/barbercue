@@ -61,6 +61,21 @@ describe('voice-announce.android — Expo SDK 57 Locale(String) workaround', () 
     expect(options.voice).toBe('hi-in-voice');
   });
 
+  it('speaks a Hindi reschedule announcement with the new slot using the same Android Hindi voice path', async () => {
+    getVoicesMock.mockResolvedValue([
+      { identifier: 'hi-in-voice', name: 'Hindi India', language: 'hi-IN', quality: 'Default' },
+    ]);
+
+    speakBooking({ event: 'booking.rescheduled', bookingId: 'b-rescheduled', language: Language.HI, date: '10th September', time: '4 PM' });
+    await flush();
+
+    expect(speakMock).toHaveBeenCalledTimes(1);
+    expect(speakMock.mock.calls[0][0]).toContain('बुकिंग पुनर्निर्धारित की गई है');
+    expect(speakMock.mock.calls[0][0]).toContain('10th September');
+    expect(speakMock.mock.calls[0][0]).toContain('4 PM');
+    expect(speakMock.mock.calls[0][1]).toEqual(expect.objectContaining({ language: 'hi', voice: 'hi-in-voice' }));
+  });
+
   it('also uses bare hi with an underscore-form Hindi voice returned by an Android engine', async () => {
     getVoicesMock.mockResolvedValue([
       { identifier: 'hi-underscore', name: 'Hindi India', language: 'hi_IN', quality: 'Default' },
