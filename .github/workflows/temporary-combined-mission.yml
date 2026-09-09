@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+env:
+  # Prisma validate/generate require DATABASE_URL to exist syntactically, but these steps do not
+  # connect to it. This is a deliberately unreachable non-production placeholder, never a secret.
+  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/fastque_validation
+
 jobs:
   patch-and-validate:
     if: github.actor != 'github-actions[bot]'
