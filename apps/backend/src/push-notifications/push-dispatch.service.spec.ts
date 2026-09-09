@@ -154,6 +154,13 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     expect(messages[0].body).not.toContain('Haircut booked for your shop');
   });
 
+  it('localizes a reschedule push independently of create/cancel', async () => {
+    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.HI });
+    await service.dispatchLocalizedToUser('owner-1', 'bookingRescheduled', 'Haircut', { type: 'booking.rescheduled' });
+    const [[messages]] = expo.send.mock.calls;
+    expect(messages[0].title).not.toBe('Booking rescheduled');
+  });
+
   it('localizes a cancellation push independently of a new-booking push', async () => {
     prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.HI });
     await service.dispatchLocalizedToUser('owner-1', 'bookingCancelled', 'Haircut', {

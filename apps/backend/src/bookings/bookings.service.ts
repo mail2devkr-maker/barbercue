@@ -774,6 +774,12 @@ export class BookingsService {
     }, TRANSACTION_OPTIONS);
 
     this.realtime.emitBookingRescheduled(booking.salonId, bookingId);
+    void this.pushDispatch.dispatchLocalizedToUser(
+      booking.salon.ownerUserId,
+      'bookingRescheduled',
+      updated.service.name,
+      { type: 'booking.rescheduled', salonId: booking.salonId, bookingId },
+    );
 
     return this.toDetailDto(updated);
   }

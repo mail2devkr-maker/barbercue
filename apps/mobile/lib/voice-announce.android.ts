@@ -233,6 +233,14 @@ export function speakBooking(params: {
   onHindiVoiceMissing?: () => void;
 }): void;
 export function speakBooking(params: {
+  event: 'booking.rescheduled';
+  bookingId: string;
+  language: Language;
+  date: string | null;
+  time: string | null;
+  onHindiVoiceMissing?: () => void;
+}): void;
+export function speakBooking(params: {
   event: 'booking.cancelled';
   bookingId: string;
   language: Language;
@@ -252,6 +260,14 @@ export function speakBooking(
         onHindiVoiceMissing?: () => void;
       }
     | {
+        event: 'booking.rescheduled';
+        bookingId: string;
+        language: Language;
+        date: string | null;
+        time: string | null;
+        onHindiVoiceMissing?: () => void;
+      }
+    | {
         event: 'booking.cancelled';
         bookingId: string;
         language: Language;
@@ -262,7 +278,9 @@ export function speakBooking(
   const text =
     params.event === 'booking.created'
       ? t.newBookingReceived(params.serviceName, params.barberName, params.salonName, params.date, params.time)
-      : t.bookingCancelled();
+      : params.event === 'booking.rescheduled'
+        ? t.bookingRescheduled(params.date, params.time)
+        : t.bookingCancelled();
   const requestedLocale = SPEECH_LOCALE[params.language] ?? SPEECH_LOCALE[Language.EN];
 
   if (params.language === Language.HI) {

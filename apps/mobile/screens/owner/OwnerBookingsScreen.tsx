@@ -19,6 +19,7 @@ import { useLanguage } from '../../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { useSalon } from '../../lib/salon-context';
 import { speakBooking } from '../../lib/voice-announce';
+import { claimBookingVoiceEvent } from '../../lib/booking-voice-dedupe';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
@@ -226,6 +227,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
           const { date, time } = detail.slotStart && timeZone
             ? formatVoiceDateTime(detail.slotStart, timeZone)
             : { date: null, time: null };
+          if (!claimBookingVoiceEvent('booking.created', payload.bookingId)) return;
           speakBooking({
             event: 'booking.created',
             bookingId: payload.bookingId,
@@ -254,15 +256,52 @@ export default function OwnerBookingsScreen({ route }: Props) {
       }
       notifiedIdsRef.current.add(dedupeKey);
       setCancelNotice(true);
-      speakBooking({
-        event: 'booking.cancelled',
-        bookingId: payload.bookingId,
-        language: preferredLanguageRef.current,
-        onHindiVoiceMissing: () => setHindiVoiceWarning(true),
-      });
+      if (claimBookingVoiceEvent('booking.cancelled', payload.bookingId)) {
+        speakBooking({
+          event: 'booking.cancelled',
+          bookingId: payload.bookingId,
+          language: preferredLanguageRef.current,
+          onHindiVoiceMissing: () => setHindiVoiceWarning(true),
+        });
+      }
+    }
+
+    function onRescheduled(payload: { salonId: string; bookingId: string }) {
+      if (payload.salonId !== selectedSalonId) return;
+      void loadPage(filterRef.current, undefined, false);
+      console.warn('[voice] booking.rescheduled received, fetching updated detail to announce', payload.bookingId);
+      apiFetch<OwnerBookingDetailDto>(`${bookingsPath(selectedSalonId)}/${payload.bookingId}`)
+        .then((detail) => {
+          const timeZone = detail.salonTimezone ?? salonTimeZoneRef.current;
+          const { date, time } = detail.slotStart && timeZone
+            ? formatVoiceDateTime(detail.slotStart, timeZone)
+            : { date: null, time: null };
+          if (!claimBookingVoiceEvent('booking.rescheduled', payload.bookingId, detail.slotStart)) return;
+          speakBooking({
+            event: 'booking.rescheduled',
+            bookingId: payload.bookingId,
+            language: preferredLanguageRef.current,
+            date,
+            time,
+            onHindiVoiceMissing: () => setHindiVoiceWarning(true),
+          });
+        })
+        .catch((err: unknown) => {
+          console.warn('[voice] could not fetch rescheduled booking detail for announcement', err);
+          if (!claimBookingVoiceEvent('booking.rescheduled', payload.bookingId, 'detail-unavailable')) return;
+          speakBooking({
+            event: 'booking.rescheduled',
+            bookingId: payload.bookingId,
+            language: preferredLanguageRef.current,
+            date: null,
+            time: null,
+            onHindiVoiceMissing: () => setHindiVoiceWarning(true),
+          });
+        });
     }
 
     socket.on('booking.created', onCreated);
+    socket.on('booking.rescheduled', onRescheduled);
     socket.on('booking.cancelled', onCancelled);
     // Phase 15: resync once the socket reconnects — a missed booking.created/cancelled while
     // offline is never replayed by the backend, so the list catches up but any voice/toast for
@@ -276,6 +315,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
     });
     return () => {
       socket.off('booking.created', onCreated);
+      socket.off('booking.rescheduled', onRescheduled);
       socket.off('booking.cancelled', onCancelled);
       unsubscribeReconnect();
     };
