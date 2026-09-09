@@ -26,7 +26,9 @@ jobs:
           cache: npm
 
       - name: Apply focused patch
-        run: python3 .github/scripts/tmp_booking_reschedule_voice_fix.py
+        run: |
+          python3 .github/scripts/tmp_booking_reschedule_voice_fix.py
+          python3 .github/scripts/tmp_booking_reschedule_voice_typefix.py
 
       - name: Install dependencies
         run: npm ci
@@ -60,7 +62,7 @@ jobs:
         shell: bash
         run: |
           rm -rf apps/mobile/dist-voice-fix
-          git rm .github/workflows/tmp-booking-reschedule-voice-fix.yml .github/scripts/tmp_booking_reschedule_voice_fix.py
+          git rm .github/workflows/tmp-booking-reschedule-voice-fix.yml .github/scripts/tmp_booking_reschedule_voice_fix.py .github/scripts/tmp_booking_reschedule_voice_typefix.py
           git add packages/shared/src/i18n/index.ts apps/mobile apps/backend/src/bookings/bookings.service.ts apps/backend/src/bookings/bookings.service.spec.ts apps/backend/src/push-notifications/push-dispatch.service.ts apps/backend/src/push-notifications/push-dispatch.service.spec.ts
           git diff --cached --check
           git config user.name "FastQue delegated automation"
