@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DASHBOARD_PATHS, salonPhotoUrlSchema, setSalonUpiSchema } from "@barbercue/shared";
+import { DASHBOARD_PATHS, salonPhotoUrlSchema } from "@barbercue/shared";
 import type { SalonPaymentQrDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
+import { UpiRoutingStatus } from './UpiRoutingStatus';
 import styles from "./dashboard.module.css";
 
 /**
@@ -27,8 +28,7 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [upiVpa, setUpiVpa] = useState("");
-  const [upiPayeeName, setUpiPayeeName] = useState("");
+  const [routing, setRouting] = useState<SalonPaymentQrDto | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,8 +36,7 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
       .then((result) => {
         if (!cancelled) {
           setCurrent(result.paymentQrImageUrl);
-          setUpiVpa(result.upiVpa ?? "");
-          setUpiPayeeName(result.upiPayeeName ?? "");
+          setRouting(result);
         }
       })
       .catch((err: unknown) => {
@@ -64,6 +63,7 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
         body: JSON.stringify({ url: parsed.data }),
       });
       setCurrent(result.paymentQrImageUrl);
+      setRouting(result);
       setLinkUrl("");
       setSaved(true);
     } catch (err) {
@@ -71,17 +71,6 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
     } finally {
       setSaving(false);
     }
-  }
-
-  async function saveUpi() {
-    const parsed = setSalonUpiSchema.safeParse({ upiVpa, upiPayeeName });
-    if (!parsed.success) { setError(parsed.error.issues[0].message); return; }
-    setError(null); setSaved(false); setSaving(true);
-    try {
-      const result = await apiFetch<SalonPaymentQrDto>(base, { method: "PATCH", body: JSON.stringify(parsed.data) });
-      setUpiVpa(result.upiVpa ?? ""); setUpiPayeeName(result.upiPayeeName ?? ""); setSaved(true);
-    } catch (err) { setError(err instanceof ApiError ? err.message : "Could not save UPI details."); }
-    finally { setSaving(false); }
   }
 
   async function uploadFile() {
@@ -100,6 +89,7 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
         body: form,
       });
       setCurrent(result.paymentQrImageUrl);
+      setRouting(result);
       setFile(null);
       setSaved(true);
     } catch (err) {
@@ -116,6 +106,7 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
     try {
       await apiFetch(base, { method: "DELETE" });
       setCurrent(null);
+      setRouting(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not remove the payment QR.");
     } finally {
@@ -135,17 +126,7 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
       {current === undefined && !error && <p className={styles.loadingText}>Loading…</p>}
       {current !== undefined && (
         <>
-          <fieldset disabled={saving} style={{ display: "grid", gap: 8, minWidth: 0, marginBottom: 16 }}>
-            <legend>Optional direct UPI payment</legend>
-            <p>Enter the UPI ID belonging to the same account as your QR, and its business/payee name. Verify both carefully. Leave UPI ID blank for QR-only payment.</p>
-            <label htmlFor="shop-upi-vpa">UPI ID / VPA</label>
-            <input id="shop-upi-vpa" value={upiVpa} maxLength={255} autoCapitalize="none" spellCheck={false} placeholder="merchant@bank"
-              onChange={(e) => { setUpiVpa(e.target.value); setSaved(false); }} style={{ minWidth: 0, padding: 10 }} />
-            <label htmlFor="shop-upi-payee">UPI payee / business name</label>
-            <input id="shop-upi-payee" value={upiPayeeName} maxLength={100}
-              onChange={(e) => { setUpiPayeeName(e.target.value); setSaved(false); }} style={{ minWidth: 0, padding: 10 }} />
-            <Button type="button" onClick={() => void saveUpi()}>Save UPI details</Button>
-          </fieldset>
+          <UpiRoutingStatus current={routing} />
           {current ? (
             <div style={{ marginBottom: 14 }}>
               {/* eslint-disable-next-line @next/next/no-img-element -- an owner-linked or uploaded

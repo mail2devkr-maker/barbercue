@@ -1,10 +1,23 @@
-import { buildBookingUpiUri, canLaunchBookingUpi, setSalonUpiSchema } from '../upi';
+import { buildBookingUpiUri, canLaunchBookingUpi, setSalonUpiSchema, parseUpiQrPayload } from '../upi';
 import { BookingStatus, PrepaymentRequirement } from '../enums';
 const booking = { id: 'abc12345-booking', status: BookingStatus.CONFIRMED, payableAmount: 419.25 };
 const info = { onlinePaymentAvailable: true, paymentMethod: 'UPI_QR' as const, paymentQrImageUrl: 'https://cdn.example/qr.png',
-  upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons / नाम', currency: 'INR', prepaymentRequirement: PrepaymentRequirement.NONE, prepaymentPercentage: null };
+  upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons / नाम', currency: 'INR', upiQrDecoded: true, prepaymentRequirement: PrepaymentRequirement.NONE, prepaymentPercentage: null };
 const attempt = '12345678-1234-4567-8910-123456789012';
 describe('UPI intent contract (not settlement)', () => {
+  it('requires explicit QR-decoded provenance, not legacy manual values', () => {
+    expect(canLaunchBookingUpi(booking, { ...info, upiQrDecoded: undefined })).toBe(false);
+    expect(canLaunchBookingUpi(booking, { ...info, upiQrDecoded: false })).toBe(false);
+  });
+  it('extracts decoded routing only, ignoring QR amount/reference', () => {
+    expect(parseUpiQrPayload('upi://pay?pa=shop%40bank&pn=Shop%20%26%20Sons&am=9999&tr=untrusted'))
+      .toEqual({ upiVpa: 'shop@bank', upiPayeeName: 'Shop & Sons' });
+  });
+  it.each(['https://example.com/?pa=x@bank&pn=Shop', 'upi://pay?pa=x@bank', 'upi://pay?pn=Shop',
+    'upi://pay?pa=x@bank&pa=y@bank&pn=Shop', 'upi://pay?pa=x@bank&pn=One&pn=Two',
+    'upi://pay?pa=x@bank&pn=%ZZ', 'upi://pay?pa=x@bank&pn=%FF', 'upi://pay?pa=x@bank&pn=Shop#fragment',
+    'upi://pay/path?pa=x@bank&pn=Shop', 'upi://pay?pa=bad@@bank&pn=Shop', 'upi://pay?pa=x@bank&pn=%00'])
+    ('rejects ambiguous/malformed routing: %s', (payload) => expect(parseUpiQrPayload(payload)).toBeNull());
   it('no booking means no payment URI', () => expect(buildBookingUpiUri(null, info, attempt)).toBeNull());
   it('QR-only works without an intent', () => expect(canLaunchBookingUpi(booking, { ...info, upiVpa: null })).toBe(false));
   it('uses and encodes authoritative credits-adjusted payable amount, not a service estimate', () => {
