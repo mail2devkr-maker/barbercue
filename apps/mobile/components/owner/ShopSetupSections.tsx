@@ -24,6 +24,7 @@ import {
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 import { Button, InlineError, SafeImage } from '../ui';
+import { UpiRoutingForm } from './UpiRoutingForm';
 
 /**
  * Shared shop-management form pieces — originally OwnerShopScreen's own inline components,
@@ -454,6 +455,7 @@ export function PaymentQrSection({
     <>
       <Text style={styles.sectionTitle}>{t.paymentQrSectionTitle}</Text>
       <Text style={styles.hint}>{t.paymentQrSectionHint}</Text>
+      <UpiRoutingForm key={`${salonId}:${paymentQr?.upiVpa}:${paymentQr?.upiPayeeName}`} salonId={salonId} current={paymentQr} onSaved={onChanged} />
       {paymentQr?.paymentQrImageUrl ? (
         <View style={styles.photoTile}>
           <SafeImage url={paymentQr.paymentQrImageUrl} alt={t.paymentQrSectionTitle} style={styles.photoImage} />

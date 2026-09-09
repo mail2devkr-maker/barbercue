@@ -33,6 +33,7 @@ import { SlotStep } from "./SlotStep";
 import { CancelBookingDialog } from "./CancelBookingDialog";
 import { RescheduleBookingDialog } from "./RescheduleBookingDialog";
 import { BookingActionsBar } from "./BookingActionsBar";
+import { BookingUpiAction } from "./BookingUpiAction";
 import { CheckInPanel, canCheckIn } from "../queue/CheckInPanel";
 import styles from "./booking.module.css";
 
@@ -391,6 +392,7 @@ export function BookingFlow({
             <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--bc-border)", borderRadius: 12 }}>
               <strong>Pay Online with UPI</strong>
               <span>Amount payable: {formatMoney(booking.payableAmount, currency, countryCode)}</span>
+              <BookingUpiAction booking={booking} paymentInfo={paymentInfo} />
               {paymentInfo.paymentQrImageUrl && <img src={paymentInfo.paymentQrImageUrl} alt="Shop UPI payment QR" width={220} height={220} style={{ maxWidth: "100%", objectFit: "contain" }} />}
               <span>Scan this shop QR with your UPI app. Opening/scanning the QR does not make FastQue mark payment as paid; settlement is not automatically verified in V1.</span>
             </div>

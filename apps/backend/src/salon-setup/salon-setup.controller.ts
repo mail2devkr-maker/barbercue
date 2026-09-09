@@ -23,6 +23,7 @@ import {
   createSalonStaffSchema,
   setOperatingHoursSchema,
   setSalonPaymentQrSchema,
+  setSalonUpiSchema,
   setStaffWorkingHoursSchema,
   updateSalonChairSchema,
   updateSalonProfileSchema,
@@ -38,6 +39,7 @@ import {
   type CreateSalonStaffInput,
   type SetOperatingHoursInput,
   type SetSalonPaymentQrInput,
+  type SetSalonUpiInput,
   type SetStaffWorkingHoursInput,
   type UpdateSalonChairInput,
   type UpdateSalonProfileInput,
@@ -173,6 +175,15 @@ export class SalonSetupController {
     body: SetSalonPaymentQrInput,
   ) {
     return this.paymentQr.setLink(user.id, salonId, body);
+  }
+
+  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}`)
+  setUpiRouting(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(setSalonUpiSchema)) body: SetSalonUpiInput,
+  ) {
+    return this.paymentQr.setUpi(user.id, salonId, body);
   }
 
   // Multipart sibling of the JSON route above — same shape as photos' upload/link pair.

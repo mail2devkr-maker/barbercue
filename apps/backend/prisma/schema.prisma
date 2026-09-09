@@ -658,6 +658,9 @@ model SalonPaymentPolicy {
   // Photo.url, with the same link-or-upload dual path as SalonPhotosService — one column, two ways
   // to fill it.
   paymentQrImageUrl     String?
+  // Optional direct UPI routing. QR-only salons remain valid; no settlement verification.
+  upiVpa                String? @db.VarChar(255)
+  upiPayeeName          String? @db.VarChar(100)
 
   @@map("salon_payment_policies")
 }

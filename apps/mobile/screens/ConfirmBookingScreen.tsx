@@ -27,6 +27,7 @@ import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { stashPendingGuestIntent } from '../lib/guest-booking-handoff';
 import { GoogleSignInGate } from '../components/auth/GoogleSignInGate';
+import { BookingUpiAction } from '../components/booking/BookingUpiAction';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError } from '../components/ui';
 import type { SearchStackParamList, TabParamList } from '../navigation/types';
@@ -202,6 +203,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
             <View style={styles.paymentBox}>
               <Text style={styles.paymentTitle}>Pay Online with UPI</Text>
               <Text style={styles.line}>Amount payable: {formatMoney(booking.payableAmount, null)}</Text>
+              <BookingUpiAction booking={booking} paymentInfo={paymentInfo} />
               {paymentInfo.paymentQrImageUrl && <Image source={{ uri: paymentInfo.paymentQrImageUrl }} style={styles.paymentQr} resizeMode="contain" />}
               <Text style={styles.hint}>Scan this shop QR with your UPI app. FastQue does not automatically mark the payment as paid just because the QR was opened or scanned.</Text>
             </View>

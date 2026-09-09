@@ -9,3 +9,4 @@ export * from './i18n';
 export * from './brand';
 export * from './catalog/service-catalog';
 export * from './cancellation-courtesy';
+export * from './upi';

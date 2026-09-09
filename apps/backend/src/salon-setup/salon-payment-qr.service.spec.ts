@@ -63,6 +63,7 @@ describe('SalonPaymentQrService', () => {
       await expect(service.get('owner-1', 'salon-1')).resolves.toEqual({
         salonId: 'salon-1',
         paymentQrImageUrl: null,
+        upiVpa: null, upiPayeeName: null,
       });
     });
 
@@ -73,6 +74,7 @@ describe('SalonPaymentQrService', () => {
       await expect(service.get('owner-1', 'salon-1')).resolves.toEqual({
         salonId: 'salon-1',
         paymentQrImageUrl: 'https://cdn.test/existing-qr.png',
+        upiVpa: null, upiPayeeName: null,
       });
     });
   });

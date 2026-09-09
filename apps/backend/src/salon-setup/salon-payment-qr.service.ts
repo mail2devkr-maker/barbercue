@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import type { SalonPaymentQrDto, SetSalonPaymentQrInput } from '@barbercue/shared';
+import { setSalonUpiSchema, type SetSalonUpiInput } from '@barbercue/shared';
 import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
@@ -32,9 +33,35 @@ export class SalonPaymentQrService {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const policy = await this.prisma.salonPaymentPolicy.findUnique({
       where: { salonId },
-      select: { paymentQrImageUrl: true },
+      select: { paymentQrImageUrl: true, upiVpa: true, upiPayeeName: true },
     });
-    return { salonId, paymentQrImageUrl: policy?.paymentQrImageUrl ?? null };
+    return { salonId, paymentQrImageUrl: policy?.paymentQrImageUrl ?? null,
+      upiVpa: policy?.upiVpa ?? null, upiPayeeName: policy?.upiPayeeName ?? null };
+  }
+
+  async setUpi(userId: string, salonId: string, input: SetSalonUpiInput): Promise<SalonPaymentQrDto> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const parsed = setSalonUpiSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppException('INVALID_UPI_DETAILS', parsed.error.issues[0].message, HttpStatus.BAD_REQUEST);
+    }
+    // Keep delegated mutation and its audit atomic. Never touches QR, prepayment or settlement.
+    return this.prisma.$transaction(async (tx) => {
+      const before = actor === 'PLATFORM_ADMIN'
+        ? await tx.salonPaymentPolicy.findUnique({ where: { salonId }, select: { upiVpa: true, upiPayeeName: true } })
+        : null;
+      const updated = await tx.salonPaymentPolicy.upsert({
+        where: { salonId }, create: { salonId, ...parsed.data }, update: parsed.data,
+        select: { paymentQrImageUrl: true, upiVpa: true, upiPayeeName: true },
+      });
+      if (actor === 'PLATFORM_ADMIN') {
+        await tx.auditLog.create({ data: {
+          actorUserId: userId, action: 'ADMIN_PAYMENT_QR_UPDATED', entityType: 'Salon', entityId: salonId,
+          metadata: { via: 'upi-routing', before, after: parsed.data },
+        } });
+      }
+      return { salonId, ...updated };
+    });
   }
 
   /** Route 1: link an image the owner already hosts. */
