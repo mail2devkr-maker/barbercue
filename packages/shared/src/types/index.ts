@@ -836,6 +836,10 @@ export interface BookingPaymentInfoDto {
   onlinePaymentAvailable: boolean;
   paymentMethod: 'UPI_QR';
   paymentQrImageUrl: string | null;
+  // Optional for older servers/QR-only clients; direct intent is disabled without these.
+  upiVpa?: string | null;
+  upiPayeeName?: string | null;
+  currency?: string | null;
   prepaymentRequirement: PrepaymentRequirement;
   prepaymentPercentage: number | null;
 }
@@ -1049,6 +1053,8 @@ export interface SalonProfileDetailDto {
 export interface SalonPaymentQrDto {
   salonId: string;
   paymentQrImageUrl: string | null;
+  upiVpa?: string | null;
+  upiPayeeName?: string | null;
 }
 
 // GET credits/balance response — the single number a booking-time redemption UI needs. Always
