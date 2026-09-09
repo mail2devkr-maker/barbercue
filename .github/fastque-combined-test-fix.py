@@ -44,4 +44,12 @@ replace_once(
     "const USER: AuthenticatedUser = { id: 'u1', roles: [], audience: SessionAudience.CUSTOMER };\n",
 )
 
-print('Combined mission test mocks aligned successfully.')
+# Mobile design system has no `danger` token; terracotta `accent` is the existing error/action red.
+# Keep the payment error text inside the established palette instead of inventing a new token.
+replace_once(
+    'apps/mobile/screens/ConfirmBookingScreen.tsx',
+    "  paymentError: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.danger, marginTop: space[1] },",
+    "  paymentError: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.accent, marginTop: space[1] },",
+)
+
+print('Combined mission test mocks and mobile token alignment applied successfully.')
