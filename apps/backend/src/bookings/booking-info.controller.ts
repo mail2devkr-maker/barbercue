@@ -9,6 +9,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
+import { BookingPaymentInfoService } from './booking-payment-info.service';
 
 /**
  * Mounted at `salons/:salonId/booking/...` — deliberately NOT a bare `salons/:salonId/staff`
@@ -35,6 +36,7 @@ export class BookingInfoController {
   constructor(
     private readonly availability: AvailabilityService,
     private readonly cancellationPolicyService: CancellationPolicyService,
+    private readonly paymentInfoService: BookingPaymentInfoService,
   ) {}
 
   // The zod pipe is scoped to the @Query() parameter specifically, not applied via a method-level
@@ -73,6 +75,12 @@ export class BookingInfoController {
   }
 
   // Issue #13 Mission H — the public salon profile's "last 30 minutes" activity ticker.
+  @Public()
+  @Get('payment-info')
+  getPaymentInfo(@Param('salonId') salonId: string) {
+    return this.paymentInfoService.get(salonId);
+  }
+
   @Public()
   @Get('recent-activity')
   getRecentActivity(@Param('salonId') salonId: string) {

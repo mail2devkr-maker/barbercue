@@ -110,6 +110,8 @@ export const SALON_BOOKING_INFO_PATHS = {
   staff: 'staff',
   availability: 'availability',
   cancellationPolicy: 'cancellation-policy',
+  // Public, read-only shop payment capability for the customer booking review/confirmation UI.
+  paymentInfo: 'payment-info',
 } as const;
 
 // BookingsController's `@Controller('bookings')` prefix.
@@ -246,6 +248,11 @@ export const DASHBOARD_PATHS = {
   noShow: 'no-show',
   cancel: 'cancel',
   complete: 'complete',
+  // Manual/local customer chair occupancy. Never aliases Chair ACTIVE/INACTIVE.
+  chairOccupancy: 'chair-occupancy',
+  occupyLocal: 'occupy-local',
+  freeLocal: 'free-local',
+  freeAllLocal: 'free-all-local',
   status: 'status',
   // Owner-set weekly opening times. AvailabilityService treats a day with no OperatingHours row
   // as closed and returns zero bookable slots, so until an owner sets these their shop can take

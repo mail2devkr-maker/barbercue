@@ -1,8 +1,9 @@
 import { Test } from '@nestjs/testing';
+import { SessionAudience, type AuthenticatedUser } from '@barbercue/shared';
 import { PushNotificationsController } from './push-notifications.controller';
 import { PushDeviceService } from './push-device.service';
 
-const USER = { id: 'u1', roles: [] } as { id: string; roles: [] };
+const USER: AuthenticatedUser = { id: 'u1', roles: [], audience: SessionAudience.CUSTOMER };
 
 describe('PushNotificationsController', () => {
   let controller: PushNotificationsController;

@@ -69,6 +69,11 @@ interface PrismaMock {
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
     count: jest.Mock<Promise<number>, [unknown]>;
   };
+  manualChairOccupancy: {
+    findFirst: jest.Mock<Promise<unknown>, [unknown]>;
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+    count: jest.Mock<Promise<number>, [unknown]>;
+  };
   salonStaff: {
     count: jest.Mock<Promise<number>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
@@ -146,6 +151,11 @@ describe('QueueService', () => {
           .fn<Promise<unknown[]>, [unknown]>()
           .mockResolvedValue([]),
         count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(4),
+      },
+      manualChairOccupancy: {
+        findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(null),
+        findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+        count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
       },
       salonStaff: {
         count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(3),

@@ -9,6 +9,8 @@ import { DashboardQueueController } from './dashboard-queue.controller';
 import { QueueService } from './queue.service';
 import { StaffStatusService } from './staff-status.service';
 import { QueueEntryExpiryService } from './queue-entry-expiry.service';
+import { ManualChairOccupancyController } from './manual-chair-occupancy.controller';
+import { ManualChairOccupancyService } from './manual-chair-occupancy.service';
 
 @Module({
   // forwardRef: BookingsService now also depends back on QueueService (Issue 3 — a cancelled
@@ -25,8 +27,9 @@ import { QueueEntryExpiryService } from './queue-entry-expiry.service';
     QueueEntriesController,
     BookingCheckInController,
     DashboardQueueController,
+    ManualChairOccupancyController,
   ],
-  providers: [QueueService, StaffStatusService, QueueEntryExpiryService],
+  providers: [QueueService, StaffStatusService, QueueEntryExpiryService, ManualChairOccupancyService],
   // Phase 9: PublicQueueModule reuses this exact QueueService (joinWalkIn) for the QR flow rather
   // than duplicating queue logic — no other change to this module.
   exports: [QueueService],

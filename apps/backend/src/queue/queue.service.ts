@@ -220,13 +220,16 @@ export class QueueService {
     const waitingCount = await this.prisma.queueEntry.count({
       where: { salonId, status: QueueEntryStatus.WAITING },
     });
-    const [staffCount, chairCount, avgDuration, activeSessions] =
+    const [staffCount, chairCount, manualOccupiedCount, avgDuration, activeSessions] =
       await Promise.all([
         this.prisma.salonStaff.count({
           where: { salonId, status: StaffMemberStatus.ACTIVE },
         }),
         this.prisma.chair.count({
           where: { salonId, status: ChairStatus.ACTIVE },
+        }),
+        this.prisma.manualChairOccupancy.count({
+          where: { salonId, endedAt: null },
         }),
         this.prisma.service.aggregate({
           where: { salonId, isActive: true },
@@ -240,7 +243,7 @@ export class QueueService {
           },
         }),
       ]);
-    const serverCount = computeSlotCapacity(staffCount, chairCount);
+    const serverCount = computeSlotCapacity(staffCount, Math.max(0, chairCount - manualOccupiedCount));
     const avgServiceDurationMinutes =
       avgDuration._avg.durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES;
     const activeRemaining = this.averageRemainingMinutes(activeSessions);
@@ -301,7 +304,7 @@ export class QueueService {
     // Full roster (both statuses) — an ACTIVE-only filter would make an off-duty staff member
     // invisible here and unable to clock themselves back in via this same dashboard. The assign
     // action itself still separately re-validates ACTIVE + qualified via AvailabilityService.
-    const [staffRoster, chairs, services] = await Promise.all([
+    const [staffRoster, chairs, services, manualOccupancies, activeChairSessions] = await Promise.all([
       this.prisma.salonStaff.findMany({
         where: { salonId },
         orderBy: { displayName: 'asc' },
@@ -317,7 +320,18 @@ export class QueueService {
         where: { salonId, isActive: true },
         orderBy: { name: 'asc' },
       }),
+      this.prisma.manualChairOccupancy.findMany({
+        where: { salonId, endedAt: null },
+        select: { id: true, chairId: true },
+      }),
+      this.prisma.serviceSession.findMany({
+        where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
+        select: { id: true, chairId: true, queueEntry: { select: { tokenNumber: true } }, staff: { select: { displayName: true } } },
+      }),
     ]);
+
+    const manualByChair = new Map(manualOccupancies.map((row) => [row.chairId, row]));
+    const fastQueByChair = new Map(activeChairSessions.map((row) => [row.chairId, row]));
 
     return {
       entries: detailed,
@@ -326,7 +340,19 @@ export class QueueService {
         displayName: s.displayName,
         status: s.status,
       })),
-      chairs: chairs.map((c): ChairOptionDto => ({ id: c.id, label: c.label })),
+      chairs: chairs.map((c): ChairOptionDto => {
+        const fastQue = fastQueByChair.get(c.id);
+        const manual = manualByChair.get(c.id);
+        return {
+          id: c.id,
+          label: c.label,
+          occupancy: fastQue ? 'FASTQUE' : manual ? 'LOCAL' : 'FREE',
+          manualOccupancyId: manual?.id ?? null,
+          activeServiceSessionId: fastQue?.id ?? null,
+          tokenNumber: fastQue?.queueEntry.tokenNumber ?? null,
+          assignedStaffName: fastQue?.staff.displayName ?? null,
+        };
+      }),
       services: services.map((s): ServiceOptionDto => ({
         id: s.id,
         name: s.name,
@@ -357,6 +383,7 @@ export class QueueService {
       chairs,
       staff,
       activeSessions,
+      activeManualOccupancies,
       waitingCount,
       queueSize,
       waitingEstimates,
@@ -374,6 +401,10 @@ export class QueueService {
       this.prisma.serviceSession.findMany({
         where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
         select: { chairId: true, staffId: true },
+      }),
+      this.prisma.manualChairOccupancy.findMany({
+        where: { salonId, endedAt: null },
+        select: { chairId: true },
       }),
       this.prisma.queueEntry.count({
         where: { salonId, status: QueueEntryStatus.WAITING },
@@ -415,7 +446,10 @@ export class QueueService {
         : Promise.resolve(null),
     ]);
 
-    const busyChairIds = new Set(activeSessions.map((s) => s.chairId));
+    const busyChairIds = new Set([
+      ...activeSessions.map((s) => s.chairId),
+      ...activeManualOccupancies.map((s) => s.chairId),
+    ]);
     const busyStaffIds = new Set(activeSessions.map((s) => s.staffId));
     const activeChairs = chairs.filter((c) => c.status === ChairStatus.ACTIVE);
     const activeStaff = staff.filter(
@@ -527,6 +561,14 @@ export class QueueService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${input.chairId}`}))`);
+      const manualOccupancy = await tx.manualChairOccupancy.findFirst({
+        where: { chairId: input.chairId, endedAt: null },
+        select: { id: true },
+      });
+      if (manualOccupancy) {
+        throw new AppException(QueueErrorCode.CHAIR_ALREADY_OCCUPIED, 'This chair is occupied by a local customer.', HttpStatus.CONFLICT);
+      }
       // Claim the entry first — if this UPDATE affects 0 rows, someone else already
       // called/assigned/cancelled it, and we bail out before ever touching ServiceSession.
       const claim = await tx.queueEntry.updateMany({
@@ -685,6 +727,11 @@ export class QueueService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${chairId}`}))`);
+        const manualOccupancy = await tx.manualChairOccupancy.findFirst({ where: { chairId, endedAt: null }, select: { id: true } });
+        if (manualOccupancy) {
+          throw new AppException(QueueErrorCode.CHAIR_ALREADY_OCCUPIED, 'This chair is occupied by a local customer.', HttpStatus.CONFLICT);
+        }
         const sessionClaim = await tx.serviceSession.updateMany({
           where: {
             id: session.id,
@@ -899,6 +946,12 @@ export class QueueService {
     return this.getDetailOrThrow(entryId);
   }
 
+  /** Recompute wait estimates + notify all owner/staff clients after a local chair changes. */
+  async onChairOccupancyChanged(salonId: string): Promise<void> {
+    await this.recomputeEtas(salonId);
+    this.realtime.emitQueueUpdated(salonId);
+  }
+
   // ---------- Shared internals ----------
 
   private async assertNotAlreadyInQueue(customerId: string): Promise<void> {
@@ -965,14 +1018,16 @@ export class QueueService {
     });
     if (waiting.length === 0) return;
 
-    const activeSessions = await this.prisma.serviceSession.findMany({
-      where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
-      select: {
-        startedAt: true,
-        service: { select: { durationMinutes: true } },
-      },
-    });
+    const [activeSessions, manualOccupiedCount, activeChairCount] = await Promise.all([
+      this.prisma.serviceSession.findMany({
+        where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
+        select: { startedAt: true, service: { select: { durationMinutes: true } } },
+      }),
+      this.prisma.manualChairOccupancy.count({ where: { salonId, endedAt: null } }),
+      this.prisma.chair.count({ where: { salonId, status: ChairStatus.ACTIVE } }),
+    ]);
     const activeRemaining = this.averageRemainingMinutes(activeSessions);
+    const availableOperationalChairs = Math.max(0, activeChairCount - manualOccupiedCount);
 
     for (let i = 0; i < waiting.length; i++) {
       const entry = waiting[i];
@@ -980,23 +1035,19 @@ export class QueueService {
       let serverCount: number;
       let avgServiceDurationMinutes: number;
       if (entry.serviceId) {
-        serverCount = await this.availability.getSlotCapacity(
+        const configuredCapacity = await this.availability.getSlotCapacity(
           this.prisma,
           salonId,
           entry.serviceId,
         );
+        serverCount = Math.min(configuredCapacity, availableOperationalChairs);
         avgServiceDurationMinutes =
           entry.service?.durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES;
       } else {
-        const [staffCount, chairCount] = await Promise.all([
-          this.prisma.salonStaff.count({
-            where: { salonId, status: StaffMemberStatus.ACTIVE },
-          }),
-          this.prisma.chair.count({
-            where: { salonId, status: ChairStatus.ACTIVE },
-          }),
-        ]);
-        serverCount = computeSlotCapacity(staffCount, chairCount);
+        const staffCount = await this.prisma.salonStaff.count({
+          where: { salonId, status: StaffMemberStatus.ACTIVE },
+        });
+        serverCount = computeSlotCapacity(staffCount, availableOperationalChairs);
         avgServiceDurationMinutes = DEFAULT_SERVICE_DURATION_MINUTES;
       }
       const eta = estimateWaitMinutes(

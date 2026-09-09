@@ -282,6 +282,8 @@ model User {
   reviewedVerifications   VerificationRequest[]    @relation("VerificationReviewer")
   pushDevices             PushDevice[]
   creditAccount           CustomerCreditAccount?
+  manualChairOccupanciesStarted ManualChairOccupancy[] @relation("ManualChairOccupancyStartedBy")
+  manualChairOccupanciesEnded   ManualChairOccupancy[] @relation("ManualChairOccupancyEndedBy")
 
   @@map("users")
 }
@@ -634,6 +636,7 @@ model Salon {
   // PROFESSIONAL-type requests, are unaffected by that constraint under Postgres NULLS DISTINCT).
   verification          VerificationRequest?
   subsidyEntries        PlatformShopSubsidyEntry[]
+  manualChairOccupancies ManualChairOccupancy[]
 
   @@unique([cityId, slug])
   @@map("salons")
@@ -766,8 +769,36 @@ model Chair {
   assignments          StaffChairAssignment[]
   serviceSessions      ServiceSession[]
   queueEntriesAssigned QueueEntry[]           @relation("AssignedChair")
+  manualOccupancies    ManualChairOccupancy[]
 
   @@map("chairs")
+}
+
+// A local/off-platform customer can physically occupy a chair without having a FastQue
+// QueueEntry/ServiceSession. This record is deliberately separate from Chair.status: ACTIVE /
+// INACTIVE / MAINTENANCE describes whether the chair is usable at all, not whether someone is
+// sitting in it right now. endedAt NULL means currently occupied. A partial unique index in
+// the migration enforces one active manual occupancy per chair; QueueService and
+// ManualChairOccupancyService additionally share a per-chair Postgres advisory lock so an
+// ACTIVE ServiceSession and a manual occupancy cannot win a cross-table race simultaneously.
+model ManualChairOccupancy {
+  id              String   @id @default(uuid())
+  salonId         String
+  salon           Salon    @relation(fields: [salonId], references: [id])
+  chairId         String
+  chair           Chair    @relation(fields: [chairId], references: [id])
+  startedByUserId String
+  startedBy       User     @relation("ManualChairOccupancyStartedBy", fields: [startedByUserId], references: [id])
+  endedByUserId   String?
+  endedBy         User?    @relation("ManualChairOccupancyEndedBy", fields: [endedByUserId], references: [id])
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([salonId, endedAt])
+  @@index([chairId, endedAt])
+  @@map("manual_chair_occupancies")
 }
 
 model StaffChairAssignment {

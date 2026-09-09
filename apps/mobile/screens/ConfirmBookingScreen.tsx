@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -15,6 +15,7 @@ import {
 } from '@barbercue/shared';
 import type {
   BookingDetailDto,
+  BookingPaymentInfoDto,
   CancellationPolicyDto,
   CustomerCreditBalanceDto,
   UiStrings,
@@ -69,6 +70,8 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<BookingPaymentInfoDto | null>(null);
+  const [paymentInfoError, setPaymentInfoError] = useState(false);
   const { t, language } = useLanguage();
   const { status } = useAuth();
 
@@ -93,6 +96,15 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
     return () => {
       cancelled = true;
     };
+  }, [salonId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPaymentInfoError(false);
+    apiFetch<BookingPaymentInfoDto>(`${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.paymentInfo}`)
+      .then((info) => { if (!cancelled) setPaymentInfo(info); })
+      .catch(() => { if (!cancelled) setPaymentInfoError(true); });
+    return () => { cancelled = true; };
   }, [salonId]);
 
   useEffect(() => {
@@ -186,6 +198,14 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
             );
           })()}
           {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
+          {paymentInfo?.onlinePaymentAvailable && (
+            <View style={styles.paymentBox}>
+              <Text style={styles.paymentTitle}>Pay Online with UPI</Text>
+              <Text style={styles.line}>Amount payable: {formatMoney(booking.payableAmount, null)}</Text>
+              {paymentInfo.paymentQrImageUrl && <Image source={{ uri: paymentInfo.paymentQrImageUrl }} style={styles.paymentQr} resizeMode="contain" />}
+              <Text style={styles.hint}>Scan this shop QR with your UPI app. FastQue does not automatically mark the payment as paid just because the QR was opened or scanned.</Text>
+            </View>
+          )}
           {booking.creditsRedeemedAmount !== null && booking.creditsRedeemedAmount > 0 && (
             <Text style={styles.line}>
               {t.creditsRedeemedLabel}: {formatMoney(booking.creditsRedeemedAmount, null)} · {t.payableAmountLabel}:{' '}
@@ -293,6 +313,22 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           </Text>
         </Card>
       )}
+      <Card style={styles.card}>
+        <Text style={styles.paymentTitle}>Payment</Text>
+        <Text style={styles.line}>Pay Online with UPI</Text>
+        {paymentInfo?.onlinePaymentAvailable ? (
+          <>
+            <Text style={styles.hint}>Shop payment QR is ready. The server confirms the final amount after any FastQue Credits are applied.</Text>
+            {paymentInfo.paymentQrImageUrl && <Image source={{ uri: paymentInfo.paymentQrImageUrl }} style={styles.paymentQrSmall} resizeMode="contain" />}
+          </>
+        ) : paymentInfoError ? (
+          <Text style={styles.hint}>Payment information could not be loaded. FastQue will still verify the shop payment setup when you confirm.</Text>
+        ) : paymentInfo ? (
+          <Text style={styles.paymentError}>Online booking is unavailable because this shop has not configured online payment yet.</Text>
+        ) : (
+          <Text style={styles.hint}>Checking shop payment setup…</Text>
+        )}
+      </Card>
       {error && <InlineError message={error} />}
       {/* The summary above (service/salon/time) already functions as the confirmation step —
           matching apps/web's BookingFlow, which also has no separate "are you sure" dialog.
@@ -300,7 +336,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           Web (found while verifying this screen through the web target), which would silently
           make this button do nothing. */}
       {status === 'authenticated' ? (
-        <Button title={t.confirm} onPress={() => void handleConfirm()} loading={submitting} style={styles.actionButton} />
+        <Button title={t.confirm} onPress={() => void handleConfirm()} loading={submitting} disabled={paymentInfo !== null && !paymentInfo.onlinePaymentAvailable} style={styles.actionButton} />
       ) : (
         // Issue 2 (mobile launch mission) — browse-first, auth-last: a guest reaches this exact
         // screen with a real slot already chosen. Signing in here (not earlier) is what makes
@@ -324,6 +360,11 @@ const styles = StyleSheet.create({
   line: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginBottom: space[1] },
   policyLine: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
   status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent, marginTop: space[2] },
+  paymentBox: { marginTop: space[3], paddingTop: space[3], borderTopWidth: 1, borderTopColor: color.border },
+  paymentTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink, marginBottom: space[2] },
+  paymentQr: { width: 220, height: 220, alignSelf: 'center', marginVertical: space[2] },
+  paymentQrSmall: { width: 160, height: 160, alignSelf: 'center', marginVertical: space[2] },
+  paymentError: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.accent, marginTop: space[1] },
   actionButton: { marginTop: space[2] },
   hint: {
     fontFamily: font.bodyRegular,

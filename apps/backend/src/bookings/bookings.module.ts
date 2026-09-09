@@ -11,6 +11,7 @@ import { CancellationPolicyService } from './cancellation-policy.service';
 import { BookingsService } from './bookings.service';
 import { BookingExpiryService } from './booking-expiry.service';
 import { BookingNoShowService } from './booking-no-show.service';
+import { BookingPaymentInfoService } from './booking-payment-info.service';
 
 @Module({
   // forwardRef: QueueModule already imports BookingsModule (for AvailabilityService/
@@ -30,6 +31,7 @@ import { BookingNoShowService } from './booking-no-show.service';
     BookingsService,
     BookingExpiryService,
     BookingNoShowService,
+    BookingPaymentInfoService,
   ],
   // AvailabilityService is reused by Phase 3C's queue module (qualified-staff-pool logic for live
   // assignment) — exported so QueueModule can inject it without duplicating the StaffService rule.

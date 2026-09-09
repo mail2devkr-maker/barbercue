@@ -10,6 +10,7 @@ import {
   computeMaxRedeemableCredits,
   type AvailabilitySlotDto,
   type BookingDetailDto,
+  type BookingPaymentInfoDto,
   type CancellationPolicyDto,
   type CancelBookingResponseDto,
   type CustomerCreditBalanceDto,
@@ -100,6 +101,8 @@ export function BookingFlow({
   const [cancelResult, setCancelResult] = useState<CancelBookingResponseDto | null>(null);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<BookingPaymentInfoDto | null>(null);
+  const [paymentInfoError, setPaymentInfoError] = useState(false);
 
   // FastQue Credits / Wallet V1 — the customer's live wallet balance, fetched once they're signed
   // in and reach the Confirm step (never before: an anonymous visitor has no balance to show).
@@ -125,6 +128,15 @@ export function BookingFlow({
     return () => {
       cancelled = true;
     };
+  }, [salonId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPaymentInfoError(false);
+    apiFetch<BookingPaymentInfoDto>(`${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.paymentInfo}`)
+      .then((info) => { if (!cancelled) setPaymentInfo(info); })
+      .catch(() => { if (!cancelled) setPaymentInfoError(true); });
+    return () => { cancelled = true; };
   }, [salonId]);
 
   // FastQue Credits / Wallet V1 — only fetched once signed in; an anonymous visitor has no wallet.
@@ -375,6 +387,14 @@ export function BookingFlow({
               <> — prepayment of {formatMoney(booking.prepaymentRequiredAmount, currency, countryCode)} required</>
             )}
           </p>
+          {!cancelled && paymentInfo?.onlinePaymentAvailable && (
+            <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--bc-border)", borderRadius: 12 }}>
+              <strong>Pay Online with UPI</strong>
+              <span>Amount payable: {formatMoney(booking.payableAmount, currency, countryCode)}</span>
+              {paymentInfo.paymentQrImageUrl && <img src={paymentInfo.paymentQrImageUrl} alt="Shop UPI payment QR" width={220} height={220} style={{ maxWidth: "100%", objectFit: "contain" }} />}
+              <span>Scan this shop QR with your UPI app. Opening/scanning the QR does not make FastQue mark payment as paid; settlement is not automatically verified in V1.</span>
+            </div>
+          )}
           {booking.creditsRedeemedAmount !== null && booking.creditsRedeemedAmount > 0 && (
             <p className={styles.summaryLine}>
               {formatMoney(booking.creditsRedeemedAmount, currency, countryCode)} in FastQue Credits applied —
@@ -556,10 +576,26 @@ export function BookingFlow({
               </div>
             );
           })()}
+          <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--bc-border)", borderRadius: 12 }}>
+            <strong>Payment</strong>
+            <span>Pay Online with UPI</span>
+            {paymentInfo?.onlinePaymentAvailable ? (
+              <>
+                <span>Shop payment QR is ready. Final amount is confirmed by the server after any FastQue Credits are applied.</span>
+                {paymentInfo.paymentQrImageUrl && <img src={paymentInfo.paymentQrImageUrl} alt="Shop UPI payment QR" width={180} height={180} style={{ maxWidth: "100%", objectFit: "contain" }} />}
+              </>
+            ) : paymentInfoError ? (
+              <span>Payment information could not be loaded. FastQue will still verify the shop payment setup when you confirm.</span>
+            ) : paymentInfo ? (
+              <span className={styles.errorText}>Online booking is unavailable because this shop has not configured online payment yet.</span>
+            ) : (
+              <span>Checking shop payment setup…</span>
+            )}
+          </div>
           {submitError && <p className={styles.errorText}>{submitError}</p>}
           <div className={styles.confirmActions}>
             {authStatus === "authenticated" ? (
-              <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting}>
+              <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting || (paymentInfo !== null && !paymentInfo.onlinePaymentAvailable)}>
                 {submitting ? "Booking…" : "Confirm booking"}
               </Button>
             ) : authStatus === "loading" ? (
