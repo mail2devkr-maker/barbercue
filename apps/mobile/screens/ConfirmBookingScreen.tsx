@@ -308,19 +308,18 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
               <Text style={styles.maxButtonText}>{formatMoney(maxRedeemable, null)}</Text>
             </Pressable>
           </View>
-          <Text style={styles.policyLine}>
-            {t.payableAmountLabel}: {formatMoney(Math.max(0, servicePrice - creditsToRedeem), null)}
-          </Text>
+          {creditsToRedeem > 0 && (
+            <Text style={styles.policyLine}>
+              {formatMoney(creditsToRedeem, null)} in FastQue Credits selected. The final payable amount is confirmed by FastQue after the booking is created.
+            </Text>
+          )}
         </Card>
       )}
       <Card style={styles.card}>
         <Text style={styles.paymentTitle}>Payment</Text>
         <Text style={styles.line}>Pay Online with UPI</Text>
         {paymentInfo?.onlinePaymentAvailable ? (
-          <>
-            <Text style={styles.hint}>Shop payment QR is ready. The server confirms the final amount after any FastQue Credits are applied.</Text>
-            {paymentInfo.paymentQrImageUrl && <Image source={{ uri: paymentInfo.paymentQrImageUrl }} style={styles.paymentQrSmall} resizeMode="contain" />}
-          </>
+          <Text style={styles.hint}>Online UPI payment is available. FastQue will show the shop QR and the exact server-confirmed amount after your booking is created.</Text>
         ) : paymentInfoError ? (
           <Text style={styles.hint}>Payment information could not be loaded. FastQue will still verify the shop payment setup when you confirm.</Text>
         ) : paymentInfo ? (
@@ -363,7 +362,6 @@ const styles = StyleSheet.create({
   paymentBox: { marginTop: space[3], paddingTop: space[3], borderTopWidth: 1, borderTopColor: color.border },
   paymentTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink, marginBottom: space[2] },
   paymentQr: { width: 220, height: 220, alignSelf: 'center', marginVertical: space[2] },
-  paymentQrSmall: { width: 160, height: 160, alignSelf: 'center', marginVertical: space[2] },
   paymentError: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.accent, marginTop: space[1] },
   actionButton: { marginTop: space[2] },
   hint: {

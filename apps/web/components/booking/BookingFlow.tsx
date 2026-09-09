@@ -552,7 +552,6 @@ export function BookingFlow({
             // slider sends.
             const maxRedeemable = Math.min(creditsBalance, computeMaxRedeemableCredits(servicePrice));
             if (maxRedeemable <= 0) return null;
-            const payable = Math.max(0, servicePrice - creditsToRedeem);
             return (
               <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <label htmlFor="credits-redeem">
@@ -570,7 +569,7 @@ export function BookingFlow({
                 />
                 <p>
                   {creditsToRedeem > 0
-                    ? `Applying ${formatMoney(creditsToRedeem, currency, countryCode)} — you pay ${formatMoney(payable, currency, countryCode)}`
+                    ? `Applying ${formatMoney(creditsToRedeem, currency, countryCode)} in FastQue Credits — the final payable amount is confirmed by FastQue after the booking is created.`
                     : "Slide to apply credits"}
                 </p>
               </div>
@@ -580,10 +579,7 @@ export function BookingFlow({
             <strong>Payment</strong>
             <span>Pay Online with UPI</span>
             {paymentInfo?.onlinePaymentAvailable ? (
-              <>
-                <span>Shop payment QR is ready. Final amount is confirmed by the server after any FastQue Credits are applied.</span>
-                {paymentInfo.paymentQrImageUrl && <img src={paymentInfo.paymentQrImageUrl} alt="Shop UPI payment QR" width={180} height={180} style={{ maxWidth: "100%", objectFit: "contain" }} />}
-              </>
+              <span>Online UPI payment is available. FastQue will show the shop QR and the exact server-confirmed amount after your booking is created.</span>
             ) : paymentInfoError ? (
               <span>Payment information could not be loaded. FastQue will still verify the shop payment setup when you confirm.</span>
             ) : paymentInfo ? (
