@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BrandLockup } from "../ui/BrandLockup";
 import styles from "./customer-shell.module.css";
 
-// Only routes that actually exist in the app — no invented Terms/Privacy links.
+// Keep the public legal notice reachable from customer and discovery surfaces.
 export function CustomerFooter() {
   return (
     <footer className={styles.footer}>
@@ -15,6 +15,7 @@ export function CustomerFooter() {
           <Link href="/account/bookings">My Bookings</Link>
           <Link href="/style-advisor">Style Advisor</Link>
           <Link href="/account/profile">Account</Link>
+          <Link href="/privacy-policy">Privacy Policy</Link>
         </nav>
         <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue. · Created by Devdutta Kumar Pandey</p>
       </div>
