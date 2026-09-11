@@ -91,46 +91,130 @@
   white-space: nowrap;
 }
 
-.categoryChips {
+.filterBar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   max-width: 900px;
   margin-top: 22px;
 }
 
-.categoryChip {
-  display: inline-flex;
+.filterDropdown {
+  position: relative;
+  min-width: 176px;
+  flex: 1 1 176px;
+  max-width: 260px;
+}
+
+.filterDropdownLabel {
+  display: block;
+  margin: 0 0 6px 4px;
+  color: var(--bc-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.filterDropdownTrigger {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px 6px 8px;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 48px;
+  gap: 12px;
+  padding: 10px 14px;
   color: var(--bc-ink);
   background: #fff;
   border: 1px solid var(--bc-border);
-  border-radius: 999px;
+  border-radius: var(--bc-radius-sm);
   box-shadow: 0 2px 8px rgba(26, 21, 51, 0.04);
-  font-size: 0.82rem;
+  font: inherit;
+  font-size: 0.92rem;
   font-weight: 600;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
-.categoryChip:hover,
-.categoryChip:focus-visible {
+.filterDropdownTrigger:hover,
+.filterDropdownTrigger:focus-visible {
   border-color: var(--bc-accent);
+  box-shadow: 0 0 0 3px rgba(176, 65, 62, 0.12);
+}
+
+.filterDropdownTrigger:hover {
   transform: translateY(-1px);
 }
 
-.categoryChipArt {
-  display: inline-flex;
-  overflow: hidden;
-  border-radius: 999px;
-  flex-shrink: 0;
+.filterDropdownTrigger:focus-visible,
+.filterDropdownOption:focus-visible {
+  outline: 3px solid rgba(176, 65, 62, 0.24);
+  outline-offset: 1px;
 }
 
-.categoryChipArt :global(img) {
-  width: 32px;
-  height: 24px;
-  object-fit: cover;
+.filterDropdownChevron {
+  flex: none;
+  color: var(--bc-accent);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.filterDropdownMenu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 7px);
+  left: 0;
+  width: max(100%, 220px);
+  max-width: min(320px, calc(100vw - 40px));
+  max-height: min(320px, calc(100vh - 150px));
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+  border: 1px solid var(--bc-border);
+  border-radius: var(--bc-radius-sm);
+  box-shadow: var(--bc-shadow-card);
+}
+
+.filterDropdownOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  gap: 16px;
+  padding: 9px 10px;
+  color: var(--bc-ink);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--bc-radius-sm) - 4px);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.filterDropdownOption:hover,
+.filterDropdownOption:focus-visible {
+  background: var(--bc-surface-tint);
+}
+
+.filterDropdownOptionSelected {
+  color: var(--bc-accent);
+  font-weight: 700;
+}
+
+.filterDropdownOption:disabled {
+  color: var(--bc-muted);
+  cursor: wait;
+}
+
+.filterBarHint {
+  max-width: 900px;
+  margin: 8px 0 0;
+  color: var(--bc-muted);
+  font-size: 0.78rem;
 }
 
 .styleNotice {
@@ -321,51 +405,18 @@
   text-decoration: underline;
 }
 
-/* Part 8/9 correction — distance/price filter chips, same visual language as .categoryChip above. */
-.filterGroup {
-  margin-top: 14px;
-}
+@media (max-width: 600px) {
+  .filterBar {
+    gap: 10px;
+  }
 
-.filterGroupLabel {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--bc-muted);
-  margin-bottom: 6px;
-}
+  .filterDropdown {
+    min-width: min(100%, 160px);
+    max-width: none;
+  }
 
-.filterGroupHint {
-  font-size: 0.78rem;
-  color: var(--bc-muted);
-  margin: 0 0 8px;
-}
-
-.filterChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.filterChip {
-  padding: 6px 14px;
-  color: var(--bc-ink);
-  background: #fff;
-  border: 1px solid var(--bc-border);
-  border-radius: 999px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.filterChip:hover,
-.filterChip:focus-visible {
-  border-color: var(--bc-accent);
-}
-
-.filterChipActive {
-  background: var(--bc-brand-gradient);
-  border-color: transparent;
-  color: #fff;
+  .filterDropdownMenu {
+    width: 100%;
+    max-width: 100%;
+  }
 }
