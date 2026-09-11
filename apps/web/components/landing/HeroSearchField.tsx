@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { COUNTRY_PATHS, DISCOVERY_PATHS } from "@barbercue/shared";
-import type { CitySearchResultDto, CountryDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
+import type { CityDto, CitySearchResultDto, CountryDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
 import { LocationIcon, SearchIcon } from "./icons";
 import styles from "./landing.module.css";
@@ -38,16 +38,25 @@ type Suggestion =
  * Locality-level ("area") resolution is intentionally not wired in here: there is no free-text
  * locality search across a country, only GET cities/:countryCode/:citySlug/localities, which
  * requires already knowing the city. Adding one would be a new backend endpoint, not a fix to an
- * existing one, so the placeholder's "area" promise is covered by city + shop-name results only.
+ * existing one — the placeholder is worded to match (city + shop/service name only).
+ *
+ * City suggestions are scoped to whichever countries actually have real FastQue cities, derived
+ * from `cities` (the same already-fetched, real "cities with an active salon" list the homepage
+ * renders its city-browse chips from — see HomePage), never a hard-coded country. `GET /countries`
+ * is a ~250-row world reference list used for registration's country picker, not "countries
+ * FastQue operates in", and `cities/search` requires a countryId — so this maps the real cities'
+ * `countryCode`s onto their matching `Country` row and fans a search out across exactly that small
+ * real set. This is honestly worldwide: as real data appears in more countries, this picks them up
+ * automatically with no code change, and it never queries countries FastQue has no data in.
  */
-export function HeroSearchField() {
+export function HeroSearchField({ cities: operatingCities }: { cities: CityDto[] | null }) {
   const router = useRouter();
   const listboxId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const requestSeqRef = useRef(0);
 
   const [value, setValue] = useState("");
-  const [countryId, setCountryId] = useState("");
+  const [countryIds, setCountryIds] = useState<string[]>([]);
   const [cities, setCities] = useState<CitySearchResultDto[]>([]);
   const [shops, setShops] = useState<SalonListItemDto[]>([]);
   const [open, setOpen] = useState(false);
@@ -56,16 +65,28 @@ export function HeroSearchField() {
   const trimmed = value.trim();
   const tooShort = trimmed.length < MIN_QUERY_LENGTH;
 
+  // Real countries only: whichever ISO codes actually appear on a real city, up to a handful (the
+  // product operates in very few countries today) so a search keystroke never fans out further
+  // than the real footprint — never the full ~250-row world reference list.
+  const operatingCountryCodes = useMemo(() => {
+    const codes = new Set<string>();
+    for (const city of operatingCities ?? []) codes.add(city.countryCode);
+    return Array.from(codes).slice(0, 5);
+  }, [operatingCities]);
+
   useEffect(() => {
+    if (operatingCountryCodes.length === 0) return;
     apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
       .then((countries) => {
-        const india = countries.find((c) => c.isoCode2 === "IN");
-        if (india) setCountryId(india.id);
+        const ids = operatingCountryCodes
+          .map((code) => countries.find((c) => c.isoCode2 === code)?.id)
+          .filter((id): id is string => Boolean(id));
+        setCountryIds(ids);
       })
       .catch(() => {
         /* City suggestions just stay empty — shop/service suggestions and plain q search still work */
       });
-  }, []);
+  }, [operatingCountryCodes]);
 
   useEffect(() => {
     // tooShort is handled by hiding the list at render time (see `expanded` below) rather than by
@@ -76,14 +97,23 @@ export function HeroSearchField() {
     const timer = setTimeout(() => {
       const seq = (requestSeqRef.current += 1);
 
-      const cityRequest = countryId
-        ? apiFetch<CitySearchResultDto[]>(
-            `${DISCOVERY_PATHS.cities}/${DISCOVERY_PATHS.citySearch}?${new URLSearchParams({
-              countryId,
-              q: trimmed,
-              limit: String(CITY_RESULT_LIMIT),
-            })}`,
-          ).catch(() => [] as CitySearchResultDto[])
+      const cityRequest = countryIds.length
+        ? Promise.all(
+            countryIds.map((countryId) =>
+              apiFetch<CitySearchResultDto[]>(
+                `${DISCOVERY_PATHS.cities}/${DISCOVERY_PATHS.citySearch}?${new URLSearchParams({
+                  countryId,
+                  q: trimmed,
+                  limit: String(CITY_RESULT_LIMIT),
+                })}`,
+              ).catch(() => [] as CitySearchResultDto[]),
+            ),
+          ).then((perCountry) =>
+            perCountry
+              .flat()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .slice(0, CITY_RESULT_LIMIT),
+          )
         : Promise.resolve<CitySearchResultDto[]>([]);
 
       const shopRequest = apiFetch<PaginatedResult<SalonListItemDto>>(
@@ -104,7 +134,7 @@ export function HeroSearchField() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [trimmed, tooShort, countryId]);
+  }, [trimmed, tooShort, countryIds]);
 
   const suggestions: Suggestion[] = [
     ...cities.map((city): Suggestion => ({ kind: "city", city })),
@@ -171,7 +201,7 @@ export function HeroSearchField() {
         aria-autocomplete="list"
         aria-activedescendant={expanded ? `${listboxId}-${activeIndex}` : undefined}
         autoComplete="off"
-        placeholder="Search by city, area or shop name"
+        placeholder="Search by city or shop name"
         value={value}
         onChange={(event) => {
           setValue(event.target.value);

@@ -52,6 +52,22 @@ const OWNER_POINTS = [
   "Get a permanent, shareable FastQue Shop ID",
 ];
 
+/**
+ * Header location-chip labels, driven only by `cities` — the real "cities with an active salon"
+ * list HomePage already fetches for its city-browse chips further down the page, never a
+ * hard-coded country/city. Real when there's a real single answer, neutral otherwise: FastQue
+ * genuinely operates in one country/city today, so this shows that country/city's real name, but
+ * the label degrades to a neutral "Worldwide"/"All cities" the moment that's no longer true
+ * (multiple countries/cities, or the discovery fetch failed) rather than keep asserting a specific
+ * place that may no longer be the only one.
+ */
+function operatingLocationLabels(cities: CityDto[] | null): { country: string; city: string } {
+  const countryCodes = new Set((cities ?? []).map((c) => c.countryCode));
+  const country = cities && countryCodes.size === 1 ? cities[0].country : "Worldwide";
+  const city = cities && cities.length === 1 ? cities[0].name : "All cities";
+  return { country, city };
+}
+
 export default async function HomePage() {
   const [cities, featured, liveStats] = await Promise.all([
     fetchDiscoveryOrNull<CityDto[]>(DISCOVERY_PATHS.cities, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
@@ -64,6 +80,7 @@ export default async function HomePage() {
       DISCOVERY_REVALIDATE_SECONDS,
     ).catch(() => null),
   ]);
+  const { country: countryLabel, city: cityLabel } = operatingLocationLabels(cities);
 
   return (
     <div className={styles.page}>
@@ -75,11 +92,12 @@ export default async function HomePage() {
         <div className={styles.utilityBar}>
           <div className={styles.utilityInner}>
             <div className={styles.utilityLeft}>
-              {/* No real country switcher exists (FastQue is India-only today) — a plain label,
-                  not a dropdown affordance with nothing behind it. */}
+              {/* No real country switcher exists — a plain label, not a dropdown affordance with
+                  nothing behind it — and its text is the real operating country (or a neutral
+                  "Worldwide") derived from actual city data, never a hard-coded guess. */}
               <span className={styles.locationChip}>
                 <LocationIcon className={styles.locationIcon} />
-                India
+                {countryLabel}
               </span>
               <span className={styles.utilityTagline}>
                 Good Looks<span className={styles.utilityDot} aria-hidden="true" />Less Waiting
@@ -109,12 +127,13 @@ export default async function HomePage() {
               <Link href="#site-footer" className={styles.headerNavAbout}>About</Link>
             </nav>
 
-            {/* Reference A's wide-tier actions: location + Sign In + List Your Shop. No real
-                city switcher exists on this page, so this is a plain label, not a dropdown. */}
+            {/* Reference A's wide-tier actions: location + Sign In + List Your Shop. No real city
+                switcher exists on this page, so this is a plain label (real city name, or a
+                neutral "All cities"), not a dropdown. */}
             <div className={styles.headerWideRow}>
               <span className={styles.locationChip}>
                 <LocationIcon className={styles.locationIcon} />
-                Bengaluru
+                {cityLabel}
               </span>
               <LandingHeaderActions variant="wide" />
             </div>
@@ -155,7 +174,7 @@ export default async function HomePage() {
                 pair above. Suggests real cities and real shops as you type; picking one submits
                 the canonical params those results actually need (see HeroSearchField's own
                 comment), free text still searches shop/service via the real "q" param. */}
-            <HeroSearchField />
+            <HeroSearchField cities={cities} />
 
             <HeroFeatureRow />
 
