@@ -10,5 +10,6 @@ export { NotificationBell } from './NotificationBell';
 export { LanguageSwitcher } from './LanguageSwitcher';
 export { GradientView } from './GradientView';
 export { BrandLockup } from './BrandLockup';
+export { PremiumScreen, PremiumCard, PremiumButton, PremiumSectionHeader, PremiumTextField } from './Premium';
 export { PhotoGalleryViewer } from './PhotoGalleryViewer';
 export type { GalleryPhoto } from './PhotoGalleryViewer';

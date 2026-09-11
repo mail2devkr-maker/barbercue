@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import { DISCOVERY_PATHS, formatDistance, formatMoney } from '@barbercue/shared';
 import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, SafeImage } from '../components/ui';
+import { color, fastQue, font, fontSize, premiumShadow, radius, space } from '../lib/theme';
+import { EmptyState, Skeleton, InlineError, SafeImage, PremiumButton, PremiumScreen, PremiumSectionHeader, PremiumTextField } from '../components/ui';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
 
@@ -186,8 +186,8 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   }
 
   return (
-    <Screen scroll={false} contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow={t.discoveryEyebrow} title={t.findASalonSearchTitle} />
+    <PremiumScreen scroll={false} contentStyle={styles.screenContent}>
+      <PremiumSectionHeader eyebrow={t.discoveryEyebrow} title={t.findASalonSearchTitle} />
       {selectedStyleName && (
         <Text style={styles.styleNote}>
           {t.bookingForTheLookPrefix}<Text style={styles.styleNoteBold}>{selectedStyleName}</Text>{t.bookingForTheLookSuffix}
@@ -195,21 +195,21 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       )}
 
       <View style={styles.searchRow}>
-        <TextInput
+        <PremiumTextField
           style={styles.input}
           placeholder={t.searchByNamePlaceholder}
-          placeholderTextColor={color.muted}
+          placeholderTextColor={fastQue.textMuted}
           value={q}
           onChangeText={setQ}
           onSubmitEditing={() => void handleSearch()}
           returnKeyType="search"
         />
-        <Button title={t.searchAction} onPress={() => void handleSearch()} loading={loading} style={styles.searchButton} />
+        <PremiumButton title={t.searchAction} onPress={() => void handleSearch()} loading={loading} style={styles.searchButton} />
       </View>
 
-      <Button
+      <PremiumButton
         title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
-        variant="outline"
+        variant="quiet"
         onPress={() => void handleNearMe()}
         loading={locating}
         style={styles.nearMeButton}
@@ -320,23 +320,23 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           )}
         />
       )}
-    </Screen>
+    </PremiumScreen>
   );
 }
 
 const styles = StyleSheet.create({
   screenContent: { padding: space[5] },
-  styleNote: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: -space[2], marginBottom: space[3] },
-  styleNoteBold: { fontFamily: font.bodySemiBold, color: color.ink },
+  styleNote: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, marginTop: -space[2], marginBottom: space[3] },
+  styleNoteBold: { fontFamily: font.bodySemiBold, color: fastQue.text },
   searchRow: { flexDirection: 'row', gap: space[2], marginBottom: space[4] },
   input: {
     flex: 1,
     minHeight: 50,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.input,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
-    color: color.ink,
+    color: fastQue.text,
     fontFamily: font.bodyRegular,
     paddingHorizontal: space[4],
     fontSize: fontSize.base,
@@ -350,13 +350,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: color.muted,
+    color: fastQue.textMuted,
     marginBottom: space[2],
   },
   filterHint: {
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,
-    color: color.muted,
+    color: fastQue.textMuted,
     marginBottom: space[2],
   },
   chipRow: { flexDirection: 'row', gap: space[2] },
@@ -366,33 +366,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[3],
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: '#ffffff',
+    borderColor: fastQue.border,
+    backgroundColor: fastQue.card,
   },
-  chipActive: { backgroundColor: color.ink, borderColor: color.ink },
-  chipText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
-  chipTextActive: { color: color.accentContrast },
+  chipActive: { backgroundColor: fastQue.cardStrong, borderColor: fastQue.borderStrong },
+  chipText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.textSecondary },
+  chipTextActive: { color: fastQue.pink },
   skeletonStack: { gap: space[3] },
   skeletonCard: { height: 84, borderRadius: radius.lg },
   listContent: { paddingBottom: space[6] },
   card: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.lg,
     padding: space[3],
     marginBottom: space[3],
-    shadowColor: color.ink,
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    ...premiumShadow,
   },
   cardImage: { width: 84, height: 84, borderRadius: radius.md, marginRight: space[3] },
   cardBody: { flex: 1, justifyContent: 'center' },
-  cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
+  cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: fastQue.text },
   verifiedMark: { color: color.success, fontFamily: font.bodyBold },
-  cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
-  cardMeta: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.gold, marginTop: space[1] },
+  cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: space[1] },
+  cardMeta: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: fastQue.orange, marginTop: space[1] },
 });

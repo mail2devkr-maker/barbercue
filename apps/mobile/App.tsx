@@ -156,7 +156,7 @@ export default function App() {
             <>
               <PushNotificationCoordinator />
               <Root />
-              <StatusBar style="dark" />
+              <StatusBar style="light" />
             </>
           )}
         </LanguageProvider>

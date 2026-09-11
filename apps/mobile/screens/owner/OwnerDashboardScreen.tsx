@@ -18,8 +18,8 @@ import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtim
 import { useSalon } from '../../lib/salon-context';
 import { useUnreadNotificationCount } from '../../lib/notifications';
 import { useLanguage } from '../../lib/language-context';
-import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
-import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
+import { fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../../lib/theme';
+import { EmptyState, Skeleton, InlineError, NotificationBell, PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../../components/ui';
 import { CapacitySummaryPanel } from '../../components/dashboard/CapacitySummaryPanel';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 
@@ -200,30 +200,30 @@ export default function OwnerDashboardScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <PremiumScreen>
         <Skeleton style={styles.skeleton} />
-      </Screen>
+      </PremiumScreen>
     );
   }
   if (error) {
     return (
-      <Screen scroll={false}>
+      <PremiumScreen scroll={false}>
         <InlineError message={error} />
-      </Screen>
+      </PremiumScreen>
     );
   }
   if (workplaces.length === 0) {
     return (
-      <Screen scroll={false}>
+      <PremiumScreen scroll={false}>
         <EmptyState title={t.noShopsYetTitle} message={t.registerShopHint} />
-      </Screen>
+      </PremiumScreen>
     );
   }
 
   return (
-    <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
+    <PremiumScreen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
       <View style={styles.headerRow}>
-        <SectionHeader eyebrow={t.ownerEyebrow} title={t.dashboardTitle} />
+        <PremiumSectionHeader eyebrow={t.ownerEyebrow} title={t.dashboardTitle} />
         <NotificationBell
           unreadCount={unreadCount}
           onPress={() => navigation.navigate('OwnerAccountTab', { screen: 'Notifications' })}
@@ -245,7 +245,7 @@ export default function OwnerDashboardScreen() {
       )}
 
       {selectedSalon && (
-        <Card style={styles.card}>
+        <PremiumCard strong style={styles.card}>
           <Text style={styles.salonName}>{selectedSalon.name}</Text>
           <Text style={styles.salonStatus}>{t.statusPrefix}{status ?? selectedSalon.status}</Text>
 
@@ -259,11 +259,11 @@ export default function OwnerDashboardScreen() {
           )}
 
           {(status ?? selectedSalon.status) === SalonStatus.ACTIVE ? (
-            <Button title={t.closeShop} variant="secondary" onPress={() => void toggleStatus('SUSPENDED')} loading={updating} style={styles.actionButton} />
+            <PremiumButton title={t.closeShop} variant="secondary" onPress={() => void toggleStatus('SUSPENDED')} loading={updating} style={styles.actionButton} />
           ) : (
-            <Button title={t.openShop} onPress={() => void toggleStatus('ACTIVE')} loading={updating} style={styles.actionButton} />
+            <PremiumButton title={t.openShop} onPress={() => void toggleStatus('ACTIVE')} loading={updating} style={styles.actionButton} />
           )}
-        </Card>
+        </PremiumCard>
       )}
 
       {selectedSalonId && <CapacitySummaryPanel salonId={selectedSalonId} />}
@@ -314,7 +314,7 @@ export default function OwnerDashboardScreen() {
           <Text style={styles.quickLinkText}>{t.manageShop}</Text>
         </Pressable>
       </View>
-    </Screen>
+    </PremiumScreen>
   );
 }
 
@@ -325,14 +325,14 @@ const styles = StyleSheet.create({
   summaryTile: {
     flexBasis: '47%',
     flexGrow: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
     padding: space[3],
   },
-  summaryValue: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, lineHeight: lineHeightFor(fontSize.xl), color: color.ink },
-  summaryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted, marginTop: 2 },
+  summaryValue: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, lineHeight: lineHeightFor(fontSize.xl), color: fastQue.text },
+  summaryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: fastQue.textMuted, marginTop: 2 },
   pickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[4] },
   pickerChip: {
     minHeight: 40,
@@ -342,18 +342,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[3],
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
   },
-  pickerChipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
-  pickerChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted },
-  pickerChipTextActive: { color: color.accent },
+  pickerChipActive: { borderColor: fastQue.borderStrong, backgroundColor: 'rgba(242,41,125,0.14)' },
+  pickerChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: fastQue.textMuted },
+  pickerChipTextActive: { color: fastQue.pink },
   card: { marginBottom: space[4] },
-  salonName: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink },
-  salonStatus: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.muted, marginTop: space[1], marginBottom: space[3] },
+  salonName: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: fastQue.text },
+  salonStatus: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.textSecondary, marginTop: space[1], marginBottom: space[3] },
   readinessList: { marginBottom: space[3] },
-  readinessItem: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: 2 },
+  readinessItem: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textSecondary, marginBottom: 2 },
   actionButton: { marginTop: space[1] },
   quickLinks: { gap: space[2] },
-  quickLink: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: color.border, borderRadius: radius.sm, padding: space[4] },
-  quickLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  quickLink: { backgroundColor: fastQue.card, borderWidth: 1, borderColor: fastQue.border, borderRadius: radius.sm, padding: space[4], ...premiumShadow },
+  quickLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
 });

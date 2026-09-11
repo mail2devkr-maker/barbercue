@@ -67,6 +67,42 @@ export const radius = {
 } as const;
 
 /**
+ * FastQue's native premium surface system.  It intentionally sits beside the legacy BarberCue
+ * tokens while screens migrate: the legacy palette is still used by functional flows that have
+ * not yet been visually rebuilt, so changing its meaning globally would make a harmless visual
+ * pass capable of breaking contrast in those flows.
+ */
+export const fastQue = {
+  background: '#090812',
+  backgroundRaised: '#11101c',
+  card: '#171522',
+  cardStrong: '#211b2d',
+  input: '#151321',
+  border: 'rgba(255,255,255,0.12)',
+  borderStrong: 'rgba(255,126,181,0.42)',
+  text: '#fffaff',
+  textSecondary: '#c9c1d1',
+  textMuted: '#91899e',
+  gradientStart: '#f2297d',
+  gradientEnd: '#ff7a3d',
+  orange: '#ff934d',
+  pink: '#ff68ad',
+  success: '#72d59a',
+  warning: '#ffc368',
+  error: '#ff8b9a',
+  glass: 'rgba(29,24,43,0.84)',
+  glassStrong: 'rgba(20,17,31,0.94)',
+} as const;
+
+export const premiumShadow = {
+  shadowColor: '#000000',
+  shadowOpacity: 0.34,
+  shadowRadius: 22,
+  shadowOffset: { width: 0, height: 12 },
+  elevation: 10,
+} as const;
+
+/**
  * Font family names as registered with expo-font's useFonts() in App.tsx — must match those keys
  * exactly. Fraunces is the display face (headings/wordmark); Work Sans is body/UI, mirroring
  * web's --font-display / --font-body.

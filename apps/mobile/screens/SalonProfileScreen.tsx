@@ -5,8 +5,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from '@barbercue/shared';
 import type { PublicSalonStatusDto, SalonProfileDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
-import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Screen, Button, Skeleton, ErrorState, SafeImage, PhotoGalleryViewer } from '../components/ui';
+import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
+import { Skeleton, ErrorState, SafeImage, PhotoGalleryViewer, PremiumButton, PremiumScreen } from '../components/ui';
 import { PublicSalonStatus } from '../components/PublicSalonStatus';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from '../navigation/types';
@@ -83,23 +83,23 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <Screen>
+      <PremiumScreen>
         <Skeleton style={styles.heroSkeleton} />
         <Skeleton style={styles.lineSkeleton} />
         <Skeleton style={[styles.lineSkeleton, { width: '60%' }]} />
-      </Screen>
+      </PremiumScreen>
     );
   }
   if (error || !salon) {
     return (
-      <Screen scroll={false}>
+      <PremiumScreen scroll={false}>
         <ErrorState message={error ?? t.salonNotFound} onRetry={() => void load(false)} />
-      </Screen>
+      </PremiumScreen>
     );
   }
 
   return (
-    <Screen scroll={false} contentStyle={styles.screenContent}>
+    <PremiumScreen scroll={false} contentStyle={styles.screenContent}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={color.accent} />}
@@ -174,7 +174,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
 
         {publicStatus && <PublicSalonStatus status={publicStatus} />}
 
-        <Button
+        <PremiumButton
           title={t.joinQueueNow}
           variant="secondary"
           onPress={() => navigation.navigate('WalkInJoin', { salonId: salon.id, salonName: salon.name, services: salon.services })}
@@ -262,12 +262,12 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
           </>
         )}
       </ScrollView>
-    </Screen>
+    </PremiumScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screenContent: { paddingHorizontal: space[5], paddingTop: space[5] },
+  screenContent: { paddingHorizontal: space[4] },
   scrollContent: { paddingBottom: space[8] },
   heroSkeleton: { height: 180, borderRadius: radius.lg, marginBottom: space[4] },
   heroWrap: { borderRadius: radius.lg, overflow: 'hidden', marginBottom: space[4] },
@@ -285,16 +285,16 @@ const styles = StyleSheet.create({
   },
   heroOverlay: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: space[4] },
   heroName: { fontFamily: font.displaySemiBold, fontSize: fontSize.xl, color: '#ffffff' },
-  heroNameOnLight: { color: color.ink },
+  heroNameOnLight: { color: fastQue.text },
   heroAddress: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: 'rgba(255,255,255,0.85)', marginTop: space[1] },
-  heroAddressOnLight: { color: color.muted },
+  heroAddressOnLight: { color: fastQue.textSecondary },
   lineSkeleton: { height: 18, borderRadius: 6, marginBottom: space[2] },
 
   photoStrip: { marginBottom: space[2] },
   photo: { width: PHOTO_TILE_WIDTH, height: PHOTO_TILE_HEIGHT, borderRadius: radius.lg, marginRight: space[3] },
-  photoCount: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: space[4] },
+  photoCount: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginBottom: space[4] },
 
-  rating: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.gold, marginTop: -space[2], marginBottom: space[2] },
+  rating: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.orange, marginTop: -space[2], marginBottom: space[2] },
   verifiedBadge: {
     alignSelf: 'flex-start',
     backgroundColor: color.successSoft,
@@ -304,29 +304,29 @@ const styles = StyleSheet.create({
     marginBottom: space[2],
   },
   verifiedBadgeText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.success },
-  description: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 20, color: color.muted, marginBottom: space[3] },
+  description: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 20, color: fastQue.textSecondary, marginBottom: space[3] },
   queueButton: { marginBottom: space[5] },
 
-  sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginTop: space[2], marginBottom: space[3] },
+  sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: fastQue.text, marginTop: space[2], marginBottom: space[3] },
 
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.md,
     padding: space[4],
     marginBottom: space[3],
   },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  cardTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: color.ink },
-  cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
+  cardTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: fastQue.text },
+  cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: space[1] },
 
   teamStrip: { marginBottom: space[2] },
   teamCard: {
     width: 140,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.md,
     padding: space[3],
     marginRight: space[3],
@@ -334,31 +334,31 @@ const styles = StyleSheet.create({
   teamPhoto: { width: 56, height: 56, borderRadius: radius.pill, marginBottom: space[2] },
   teamPhotoPlaceholder: { backgroundColor: color.goldSoft, alignItems: 'center', justifyContent: 'center' },
   teamPhotoInitial: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.gold },
-  teamName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  teamName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
   verifiedMark: { color: color.success, fontFamily: font.bodyBold },
-  teamMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
-  teamBio: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1], lineHeight: 16 },
+  teamMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: 2 },
+  teamBio: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: space[1], lineHeight: 16 },
 
   hoursCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.md,
     padding: space[4],
     marginBottom: space[4],
   },
   hoursRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: space[1] },
-  hoursDay: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
-  hoursValue: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted },
+  hoursDay: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.text },
+  hoursValue: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted },
 
   reviewCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.md,
     padding: space[4],
     marginBottom: space[3],
   },
   reviewRating: { color: color.gold, fontSize: fontSize.sm, marginBottom: space[1] },
-  reviewComment: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, lineHeight: 20 },
+  reviewComment: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, lineHeight: 20 },
 });
