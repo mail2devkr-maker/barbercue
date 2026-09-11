@@ -15,14 +15,21 @@
   image-rendering: auto;
 }
 
-/* Public landing header: one owner-approved canonical image only. Sized by height (not width) so
-   the transparent artwork's own padding doesn't change how tall the mark reads inside the header —
-   no border-radius/rectangle here, since there is no baked-in card left to round. */
+/* Public landing header (and every other header sharing this canonical artwork): one
+   owner-approved image only, no border-radius/rectangle since there is no baked-in card left to
+   round on the transparent asset.
+   Sized by WIDTH with height: auto, not a fixed height — the artwork's own bbox is ~3.86:1
+   (mark + "FastQue" + the "GOOD LOOKS | LESS WAITING" tagline all sharing the image's full
+   height), so constraining it to a small fixed height shrank the whole thing, including the
+   tagline line, down to a couple of illegible pixels. A single clamp() keeps it responsive
+   without a separate fixed height per breakpoint: min 200px keeps the tagline legible even on
+   the narrowest phones (390px viewport comfortably fits 200px next to the hamburger button),
+   max 260px caps it at a natural size on wide desktop headers. */
 .headerArtwork .art,
 .canonicalArtwork .art {
-  width: auto;
-  height: 46px;
-  max-width: none;
+  width: clamp(200px, 24vw, 260px);
+  height: auto;
+  max-width: 260px;
   filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
@@ -32,13 +39,13 @@
 }
 
 /* compact + canonicalArtwork (footer, dashboard header, staff/owner shells) shares the same
-   transparent, height-based sizing as the main header, just smaller — .compact alone would
-   otherwise win on source order and reintroduce a fixed width against a transparent asset. */
+   transparent, width-clamped sizing as the main header, just smaller — .compact alone would
+   otherwise win on source order and reintroduce a fixed width tuned for the old opaque asset. */
 .compact.canonicalArtwork .art,
 .compact.headerArtwork .art {
-  width: auto;
-  height: 34px;
-  max-width: none;
+  width: clamp(150px, 18vw, 190px);
+  height: auto;
+  max-width: 190px;
 }
 
 .markOnly .art {
@@ -60,17 +67,6 @@
   .compact .art {
     width: 180px;
   }
-
-  .headerArtwork .art,
-  .canonicalArtwork .art {
-    height: 42px;
-  }
-
-  .compact.canonicalArtwork .art,
-  .compact.headerArtwork .art {
-    width: auto;
-    height: 32px;
-  }
 }
 
 @media (max-width: 760px) {
@@ -82,17 +78,6 @@
   .compact .art {
     width: 165px;
     max-width: 50vw;
-  }
-
-  .headerArtwork .art,
-  .canonicalArtwork .art {
-    height: 36px;
-  }
-
-  .compact.canonicalArtwork .art,
-  .compact.headerArtwork .art {
-    width: auto;
-    height: 28px;
   }
 }
 
@@ -110,16 +95,5 @@
   .markOnly .art {
     width: 42px;
     max-width: 42px;
-  }
-
-  .headerArtwork .art,
-  .canonicalArtwork .art {
-    height: 32px;
-  }
-
-  .compact.canonicalArtwork .art,
-  .compact.headerArtwork .art {
-    width: auto;
-    height: 24px;
   }
 }
