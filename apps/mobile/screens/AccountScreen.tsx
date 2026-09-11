@@ -273,7 +273,7 @@ export default function AccountScreen() {
             <>
               <Text style={styles.noteText}>
                 Permanently remove this account&apos;s sign-in details and revoke active sessions. Some de-identified booking,
-                review, credit and security records may be retained where required.
+                credit, subscription, ledger and security records may be retained where required.
               </Text>
               <Button title="Delete my account" variant="outline" onPress={() => setDeletionConfirming(true)} style={styles.deleteButton} />
             </>
