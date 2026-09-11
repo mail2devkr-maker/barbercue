@@ -140,6 +140,10 @@ export default function PrivacyPolicyPage() {
                 device push token and notification delivery request.
               </li>
               <li>
+                <strong>Resend transactional email:</strong> FastQue uses Resend to send transactional email where
+                applicable, such as password-reset and staff-invitation messages.
+              </li>
+              <li>
                 <strong>Your UPI app and salon:</strong> when you use a UPI payment option, the payment is handled by the
                 UPI app and the salon&apos;s payment account. FastQue does not receive an automatic settlement confirmation.
               </li>
@@ -154,14 +158,23 @@ export default function PrivacyPolicyPage() {
           <section id="retention">
             <h2>Retention and deletion</h2>
             <p>
-              FastQue retains account, booking, queue, review, notification-preference, credit and authorised
+              FastQue retains account, booking, queue, credit and authorised
               operational records while they are needed to operate the service, maintain security and meet applicable
               record-keeping obligations. The current FastQue implementation does not use one universal automatic
               deletion schedule for all account and operational records.
             </p>
             <p>
               Salon operators can remove salon and payment-QR images through the relevant shop-management controls.
-              FastQue does not currently provide a customer self-service account-deletion control.
+              Authenticated customer accounts can be deleted in the FastQue mobile app from Account &gt; Delete account.
+              That flow removes direct account identifiers, linked sign-in methods, refresh-session records, phone-keyed OTP requests,
+              customer reviews and attached owner responses, push-device registrations, notification preferences and in-app notifications.
+              Booking, credit, subscription
+              and security records may remain only in de-identified form where necessary for transaction integrity,
+              security and applicable record-keeping obligations.
+            </p>
+            <p>
+              If you no longer have the app, see <Link href="/account-deletion">FastQue account deletion</Link> for a
+              support-assisted request path. FastQue does not publish one universal automatic deletion period.
             </p>
           </section>
 

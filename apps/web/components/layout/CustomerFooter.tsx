@@ -16,6 +16,7 @@ export function CustomerFooter() {
           <Link href="/style-advisor">Style Advisor</Link>
           <Link href="/account/profile">Account</Link>
           <Link href="/privacy-policy">Privacy Policy</Link>
+          <Link href="/account-deletion">Account Deletion</Link>
         </nav>
         <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue. · Created by Devdutta Kumar Pandey</p>
       </div>

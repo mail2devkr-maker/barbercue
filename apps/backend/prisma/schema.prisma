@@ -257,6 +257,11 @@ model User {
   // initial state. Defaults to EN, so every existing/new user behaves exactly as before this field
   // existed until they explicitly change it.
   preferredLanguage Language   @default(EN)
+  // A customer deletion is an irreversible anonymization rather than a physical User-row delete:
+  // necessary booking/accounting/security records may retain FK integrity in de-identified form,
+  // while direct identity, authentication data and customer-authored reviews are removed.
+  // Non-null only after the one-way deletion transaction.
+  deletedAt         DateTime?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
