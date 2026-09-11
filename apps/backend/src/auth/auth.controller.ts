@@ -17,6 +17,7 @@ import type { Request, Response } from 'express';
 import {
   AUTH_PATHS,
   REFRESH_TOKEN_COOKIE_NAME,
+  Role,
   type AuthMethodsDto,
   adminGoogleLoginSchema,
   adminLoginSchema,
@@ -28,6 +29,7 @@ import {
   refreshRequestSchema,
   resetPasswordSchema,
   initialPasswordSchema,
+  deleteAccountSchema,
   setLanguageSchema,
   staffLoginSchema,
   type AdminGoogleLoginInput,
@@ -36,6 +38,7 @@ import {
   type ForgotPasswordInput,
   type GoogleLoginInput,
   type InitialPasswordInput,
+  type DeleteAccountInput,
   type LogoutRequestInput,
   type OtpRequestInput,
   type OtpVerifyInput,
@@ -48,6 +51,7 @@ import { AuthService } from './auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { Roles } from './decorators/roles.decorator';
 import { setRefreshCookie, clearRefreshCookie } from '../common/refresh-cookie';
 
 // Auth endpoints are deliberately rate-limited tighter than the app-wide default (see
@@ -304,6 +308,21 @@ export class AuthController {
       user.audience,
       body.password,
     );
+  }
+
+  /** Customer-only deletion. No target user id is accepted: the JWT subject is authoritative. */
+  @Delete(AUTH_PATHS.accountDeletion)
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.CUSTOMER)
+  @UsePipes(new ZodValidationPipe(deleteAccountSchema))
+  async deleteAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() _body: DeleteAccountInput,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.authService.deleteCustomerAccount(user.id, user.audience);
+    clearRefreshCookie(res);
+    return { success: true };
   }
 
   @Get(AUTH_PATHS.me)

@@ -424,6 +424,14 @@ export const setLanguageSchema = z.object({
 });
 export type SetLanguageInput = z.infer<typeof setLanguageSchema>;
 
+// DELETE auth/account is intentionally confirmation-gated even though the server derives the
+// account from the current JWT. This prevents an accidental UI/API call from irreversibly
+// removing the caller's credentials and direct identifiers.
+export const deleteAccountSchema = z.object({
+  confirmation: z.literal('DELETE'),
+});
+export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>;
+
 // Salon photo by URL. Binary upload is not wired (no object storage is configured), so an owner
 // points at an image they already host — their Google Business profile, Instagram, or a CDN.
 //

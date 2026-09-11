@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   AUTH_PATHS,
   LANGUAGE_LABELS,
@@ -54,6 +54,9 @@ export default function AccountScreen() {
 
   const [premium, setPremium] = useState<PremiumEntitlementDto | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [deletionConfirming, setDeletionConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deletionError, setDeletionError] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     setSessionsError(null);
@@ -114,7 +117,29 @@ export default function AccountScreen() {
     }
   }
 
+  async function deleteAccount() {
+    setDeleting(true);
+    setDeletionError(null);
+    try {
+      await apiFetch(`auth/${AUTH_PATHS.accountDeletion}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmation: 'DELETE' }),
+      });
+      // The server has already revoked every session and stripped credentials. logout() still
+      // clears this device's secure storage even when its best-effort server call is rejected.
+      await logout();
+    } catch (err) {
+      setDeletionError(err instanceof ApiError ? err.message : 'Could not delete your account. Please try again.');
+      setDeleting(false);
+    }
+  }
+
+  async function openPrivacyPolicy() {
+    await Linking.openURL('https://fastque.com/privacy-policy');
+  }
+
   const otherSessionCount = sessions.filter((s) => !s.current).length;
+  const isCustomerOnly = user?.roles.length === 1 && user.roles[0] === Role.CUSTOMER;
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
@@ -228,6 +253,50 @@ export default function AccountScreen() {
         )}
       </Card>
 
+      <Card style={styles.card}>
+        <Text style={styles.cardTitle}>Privacy</Text>
+        <Text style={styles.noteText}>Read how FastQue handles account, booking, location and notification information.</Text>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Open FastQue Privacy Policy"
+          onPress={() => void openPrivacyPolicy()}
+          style={styles.privacyLink}
+        >
+          <Text style={styles.revokeText}>Open Privacy Policy</Text>
+        </Pressable>
+      </Card>
+
+      {isCustomerOnly && (
+        <Card style={styles.deleteCard}>
+          <Text style={styles.cardTitle}>Delete account</Text>
+          {!deletionConfirming ? (
+            <>
+              <Text style={styles.noteText}>
+                Permanently remove this account&apos;s sign-in details and revoke active sessions. Some de-identified booking,
+                review, credit and security records may be retained where required.
+              </Text>
+              <Button title="Delete my account" variant="outline" onPress={() => setDeletionConfirming(true)} style={styles.deleteButton} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.deleteWarning}>
+                This cannot be undone. Your email or phone sign-in and linked Google sign-in will be removed, and active sessions will be revoked.
+              </Text>
+              {deletionError && <InlineError message={deletionError} />}
+              <Button
+                title={deleting ? 'Deleting account…' : 'Permanently delete my account'}
+                onPress={() => void deleteAccount()}
+                disabled={deleting}
+                style={styles.deleteButton}
+              />
+              <Pressable disabled={deleting} onPress={() => { setDeletionConfirming(false); setDeletionError(null); }}>
+                <Text style={styles.cancelDeletion}>Keep my account</Text>
+              </Pressable>
+            </>
+          )}
+        </Card>
+      )}
+
       <Button title={t.signOutThisDevice} variant="secondary" onPress={() => void logout()} style={styles.logoutButton} />
     </Screen>
   );
@@ -236,6 +305,7 @@ export default function AccountScreen() {
 const styles = StyleSheet.create({
   card: { marginBottom: space[4] },
   cardTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink, marginBottom: space[3] },
+  privacyLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[2] },
 
   fieldRow: {
     flexDirection: 'row',
@@ -316,6 +386,11 @@ const styles = StyleSheet.create({
   revokeText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.accent },
   noteText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted },
   revokeAllButton: { marginTop: space[3] },
+
+  deleteCard: { marginTop: space[2], marginBottom: space[4] },
+  deleteButton: { marginTop: space[3] },
+  deleteWarning: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.accent, lineHeight: lineHeightFor(fontSize.sm) },
+  cancelDeletion: { marginTop: space[3], textAlign: 'center', fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
 
   logoutButton: { marginTop: space[2] },
 });

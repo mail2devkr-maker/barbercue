@@ -8,7 +8,7 @@ import {
   UserStatus,
   type AuthSession,
   type AuthTokens,
-  type Language,
+  Language,
   type MeResponse,
   type PasswordAudience,
 } from '@barbercue/shared';
@@ -573,6 +573,100 @@ export class AuthService {
 
   logoutAll(userId: string): Promise<void> {
     return this.tokenService.revokeAllForUser(userId);
+  }
+
+  /**
+   * Irreversibly removes a customer account's direct identity and login surface while retaining
+   * only de-identified operational/accounting records that cannot safely lose referential
+   * integrity (bookings, reviews, credit/subscription and security records). This deliberately
+   * refuses every owner, staff, admin, salon-linked, or mixed-role account: those relationships
+   * require a separately reviewed support process and can never be deleted through customer UI.
+   */
+  async deleteCustomerAccount(
+    userId: string,
+    audience: SessionAudience,
+  ): Promise<{ success: true }> {
+    if (audience !== SessionAudience.CUSTOMER) {
+      throw new AppException(
+        AuthErrorCode.FORBIDDEN_ROLE,
+        'Only a customer account can be deleted here.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+        include: {
+          roles: true,
+          ownedSalons: { select: { id: true } },
+          staffMemberships: { select: { id: true } },
+        },
+      });
+      if (!user || user.status !== UserStatus.ACTIVE || user.deletedAt) {
+        throw new AppException(
+          AuthErrorCode.UNAUTHENTICATED,
+          'This account is no longer active.',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      const hasOnlyCustomerRoles =
+        user.roles.length > 0 && user.roles.every(({ role }) => role === Role.CUSTOMER);
+      if (!hasOnlyCustomerRoles || user.ownedSalons.length > 0 || user.staffMemberships.length > 0) {
+        throw new AppException(
+          AuthErrorCode.FORBIDDEN_ROLE,
+          'This account cannot be deleted through the customer account flow.',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      const deletedAt = new Date();
+      await tx.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: deletedAt },
+      });
+      await tx.passwordResetToken.deleteMany({ where: { userId } });
+      await tx.authIdentity.deleteMany({ where: { userId } });
+      await tx.pushDevice.deleteMany({ where: { userId } });
+      await tx.notificationPreference.deleteMany({ where: { userId } });
+      await tx.notification.deleteMany({ where: { userId } });
+      // Queue membership is not an accounting record. Clearing this optional relation prevents
+      // an operational queue from carrying a deleted customer's stable account identifier.
+      await tx.queueEntry.updateMany({ where: { customerId: userId }, data: { customerId: null } });
+      // Audit history is retained for security, but its actor link and request metadata are
+      // de-identified before the account row is stripped of direct identifiers.
+      await tx.auditLog.updateMany({
+        where: { actorUserId: userId },
+        data: { actorUserId: null, metadata: { accountDeleted: true } },
+      });
+      await tx.userRole.deleteMany({ where: { userId } });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          phone: null,
+          email: null,
+          passwordHash: null,
+          phoneVerifiedAt: null,
+          emailVerifiedAt: null,
+          twoFactorEnabled: false,
+          totpSecret: null,
+          preferredLanguage: Language.EN,
+          status: UserStatus.SUSPENDED,
+          deletedAt,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: 'CUSTOMER_ACCOUNT_DELETED',
+          entityType: 'User',
+          entityId: userId,
+          metadata: { accountDeleted: true },
+        },
+      });
+    });
+
+    return { success: true };
   }
 
   listSessions(

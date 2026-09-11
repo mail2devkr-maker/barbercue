@@ -23,17 +23,25 @@ describe('AuthService', () => {
     authIdentity: {
       findUnique: jest.Mock;
       create: jest.Mock;
+      deleteMany: jest.Mock;
     };
     userRole: {
       create: jest.Mock;
+      deleteMany: jest.Mock;
     };
     passwordResetToken: {
       create: jest.Mock;
       findUnique: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
+      deleteMany: jest.Mock;
     };
     refreshToken: { updateMany: jest.Mock };
+    pushDevice: { deleteMany: jest.Mock };
+    notificationPreference: { deleteMany: jest.Mock };
+    notification: { deleteMany: jest.Mock };
+    queueEntry: { updateMany: jest.Mock };
+    auditLog: { updateMany: jest.Mock; create: jest.Mock };
     $transaction: jest.Mock;
   };
   let passwordService: { hash: jest.Mock; compare: jest.Mock };
@@ -68,15 +76,21 @@ describe('AuthService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
-      authIdentity: { findUnique: jest.fn(), create: jest.fn() },
-      userRole: { create: jest.fn() },
+      authIdentity: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
+      userRole: { create: jest.fn(), deleteMany: jest.fn() },
       passwordResetToken: {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: jest.fn(),
       },
       refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      pushDevice: { deleteMany: jest.fn() },
+      notificationPreference: { deleteMany: jest.fn() },
+      notification: { deleteMany: jest.fn() },
+      queueEntry: { updateMany: jest.fn() },
+      auditLog: { updateMany: jest.fn(), create: jest.fn() },
       // Supports both call shapes AuthService actually uses: the array form
       // (resetPassword's batch of writes) and the interactive-callback form (googleLogin's
       // find-or-create) — same dual-mode mock pattern as the rest of this backend's test suite.
@@ -1058,6 +1072,68 @@ describe('AuthService', () => {
         preferredLanguage: 'HI',
         passwordConfigured: false,
       });
+    });
+  });
+
+  describe('deleteCustomerAccount', () => {
+    const customer = {
+      id: 'customer-1',
+      status: UserStatus.ACTIVE,
+      deletedAt: null,
+      roles: [{ role: Role.CUSTOMER }],
+      ownedSalons: [],
+      staffMemberships: [],
+    };
+
+    it('anonymizes only the authenticated customer, revokes sessions, and removes direct identity data', async () => {
+      prisma.user.findUnique.mockResolvedValue(customer);
+      await expect(service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER)).resolves.toEqual({ success: true });
+
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { userId: 'customer-1', revokedAt: null },
+      }));
+      expect(prisma.authIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
+      expect(prisma.pushDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
+      expect(prisma.queueEntry.updateMany).toHaveBeenCalledWith({
+        where: { customerId: 'customer-1' }, data: { customerId: null },
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'customer-1' },
+        data: expect.objectContaining({
+          phone: null, email: null, passwordHash: null, status: UserStatus.SUSPENDED,
+          deletedAt: expect.any(Date),
+        }),
+      }));
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ action: 'CUSTOMER_ACCOUNT_DELETED', entityId: 'customer-1' }),
+      }));
+    });
+
+    it('rejects a non-customer audience before looking up or mutating an account', async () => {
+      await expect(service.deleteCustomerAccount('owner-1', SessionAudience.STAFF)).rejects.toMatchObject({
+        code: AuthErrorCode.FORBIDDEN_ROLE,
+      });
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('refuses a mixed customer/owner account so a customer token cannot delete business data', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...customer,
+        roles: [{ role: Role.CUSTOMER }, { role: Role.SALON_OWNER }],
+        ownedSalons: [{ id: 'salon-1' }],
+      });
+      await expect(service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER)).rejects.toMatchObject({
+        code: AuthErrorCode.FORBIDDEN_ROLE,
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('fails closed for an already deleted or otherwise inactive account', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...customer, status: UserStatus.SUSPENDED, deletedAt: new Date() });
+      await expect(service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER)).rejects.toMatchObject({
+        code: AuthErrorCode.UNAUTHENTICATED,
+      });
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 });
