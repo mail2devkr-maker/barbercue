@@ -4,6 +4,7 @@ import { CustomerShell } from "../../../components/layout/CustomerShell";
 import { absoluteUrl } from "../../../lib/seo";
 import styles from "../privacy-policy/privacy-policy.module.css";
 
+// Public FastQue account-deletion resource used for Google Play compliance.
 const TITLE = "Account Deletion";
 const DESCRIPTION = "How to delete a FastQue customer account or request deletion when you no longer have the app.";
 
