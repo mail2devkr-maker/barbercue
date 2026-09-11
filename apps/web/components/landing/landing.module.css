@@ -322,9 +322,11 @@
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  /* Top padding reserves space for the fixed header above (utility bar + main nav row ≈ 118px at
-     this tier) since .landingHeader is position: fixed and out of flow — see its own comment. */
-  padding: 132px 24px 64px;
+  /* Top padding reserves space for the fixed header above (utility bar ~41px + main nav row, which
+     grows past its own 76px min-height to fit the logo's own rendered height at this tier's width
+     — up to ~97px at the widest point of this tier's own clamp range) since .landingHeader is
+     position: fixed and out of flow — see its own comment. */
+  padding: 156px 24px 64px;
   background: var(--fq-void);
   color: var(--fq-text);
 }
@@ -697,8 +699,9 @@
   }
 
   .hero {
-    /* Utility bar is hidden at this tier, so the fixed header is just the ~77px main nav row. */
-    padding: 100px 24px 96px;
+    /* Utility bar is hidden at this tier, so the fixed header is just the main nav row — but at
+       this tier's own clamp ceiling the logo's rendered height grows the row to ~100px. */
+    padding: 120px 24px 96px;
   }
 
   .heroInner {
