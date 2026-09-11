@@ -52,9 +52,9 @@ export default function AccountDeletionPage() {
           <section>
             <h2>What deletion removes or retains</h2>
             <p>
-              Account deletion removes direct account identifiers, linked sign-in methods, password material, active
-              sessions are revoked, and device push registrations, notification preferences and in-app notifications are removed. FastQue keeps a
-              de-identified account record only where required to preserve booking, review, promotional-credit,
+              Account deletion removes direct account identifiers, linked sign-in methods, password material, refresh-session records,
+              phone-keyed OTP requests, customer reviews and attached owner responses, device push registrations, notification preferences
+              and in-app notifications. FastQue keeps a de-identified account record only where required to preserve booking, promotional-credit,
               subscription, transaction-integrity or security records. FastQue does not publish a single automatic
               retention period for those records.
             </p>

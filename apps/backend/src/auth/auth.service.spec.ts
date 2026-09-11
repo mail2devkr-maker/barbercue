@@ -36,11 +36,13 @@ describe('AuthService', () => {
       updateMany: jest.Mock;
       deleteMany: jest.Mock;
     };
-    refreshToken: { updateMany: jest.Mock };
+    refreshToken: { updateMany: jest.Mock; deleteMany: jest.Mock };
+    otpRequest: { deleteMany: jest.Mock };
     pushDevice: { deleteMany: jest.Mock };
     notificationPreference: { deleteMany: jest.Mock };
     notification: { deleteMany: jest.Mock };
     queueEntry: { updateMany: jest.Mock };
+    review: { deleteMany: jest.Mock };
     auditLog: { updateMany: jest.Mock; create: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -85,11 +87,13 @@ describe('AuthService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         deleteMany: jest.fn(),
       },
-      refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), deleteMany: jest.fn() },
+      otpRequest: { deleteMany: jest.fn() },
       pushDevice: { deleteMany: jest.fn() },
       notificationPreference: { deleteMany: jest.fn() },
       notification: { deleteMany: jest.fn() },
       queueEntry: { updateMany: jest.fn() },
+      review: { deleteMany: jest.fn() },
       auditLog: { updateMany: jest.fn(), create: jest.fn() },
       // Supports both call shapes AuthService actually uses: the array form
       // (resetPassword's batch of writes) and the interactive-callback form (googleLogin's
@@ -1078,6 +1082,7 @@ describe('AuthService', () => {
   describe('deleteCustomerAccount', () => {
     const customer = {
       id: 'customer-1',
+      phone: '+919876543210',
       status: UserStatus.ACTIVE,
       deletedAt: null,
       roles: [{ role: Role.CUSTOMER }],
@@ -1085,18 +1090,18 @@ describe('AuthService', () => {
       staffMemberships: [],
     };
 
-    it('anonymizes only the authenticated customer, revokes sessions, and removes direct identity data', async () => {
+    it('anonymizes only the authenticated customer, removes direct identity data, and deletes session/OTP/review records', async () => {
       prisma.user.findUnique.mockResolvedValue(customer);
       await expect(service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER)).resolves.toEqual({ success: true });
 
-      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: { userId: 'customer-1', revokedAt: null },
-      }));
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
+      expect(prisma.otpRequest.deleteMany).toHaveBeenCalledWith({ where: { phone: '+919876543210' } });
       expect(prisma.authIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
       expect(prisma.pushDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
       expect(prisma.queueEntry.updateMany).toHaveBeenCalledWith({
         where: { customerId: 'customer-1' }, data: { customerId: null },
       });
+      expect(prisma.review.deleteMany).toHaveBeenCalledWith({ where: { customerId: 'customer-1' } });
       expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
         where: { id: 'customer-1' },
         data: expect.objectContaining({
@@ -1107,6 +1112,63 @@ describe('AuthService', () => {
       expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({ action: 'CUSTOMER_ACCOUNT_DELETED', entityId: 'customer-1' }),
       }));
+    });
+
+    it('removes only the authenticated phone OTP rows and never accepts a client-supplied target', async () => {
+      let otpRows = [
+        { id: 'otp-customer', phone: customer.phone },
+        { id: 'otp-unrelated', phone: '+919999999999' },
+      ];
+      prisma.otpRequest.deleteMany.mockImplementation(({ where: { phone } }: { where: { phone: string } }) => {
+        const before = otpRows.length;
+        otpRows = otpRows.filter((row) => row.phone !== phone);
+        return Promise.resolve({ count: before - otpRows.length });
+      });
+      prisma.user.findUnique.mockResolvedValue(customer);
+      await service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER);
+
+      expect(prisma.otpRequest.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prisma.otpRequest.deleteMany).toHaveBeenCalledWith({ where: { phone: customer.phone } });
+      expect(prisma.otpRequest.deleteMany).not.toHaveBeenCalledWith({ where: { phone: '+919999999999' } });
+      expect(otpRows).toEqual([{ id: 'otp-unrelated', phone: '+919999999999' }]);
+    });
+
+    it('deletes only the authenticated customer review rows, preserving other customers\' reviews', async () => {
+      let reviews = [
+        { id: 'review-customer', customerId: 'customer-1', comment: 'Customer review', ownerResponse: 'Thanks' },
+        { id: 'review-unrelated', customerId: 'customer-2', comment: 'Other review', ownerResponse: null },
+      ];
+      prisma.review.deleteMany.mockImplementation(({ where: { customerId } }: { where: { customerId: string } }) => {
+        const before = reviews.length;
+        reviews = reviews.filter((review) => review.customerId !== customerId);
+        return Promise.resolve({ count: before - reviews.length });
+      });
+      prisma.user.findUnique.mockResolvedValue(customer);
+      await service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER);
+
+      expect(prisma.review.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prisma.review.deleteMany).toHaveBeenCalledWith({ where: { customerId: 'customer-1' } });
+      expect(prisma.review.deleteMany).not.toHaveBeenCalledWith({ where: { customerId: 'customer-2' } });
+      expect(reviews).toEqual([
+        { id: 'review-unrelated', customerId: 'customer-2', comment: 'Other review', ownerResponse: null },
+      ]);
+    });
+
+    it('removes all customer refresh session records so no device metadata or refresh credential remains', async () => {
+      let sessions = [
+        { id: 'session-customer', userId: 'customer-1', deviceInfo: 'Android' },
+        { id: 'session-unrelated', userId: 'customer-2', deviceInfo: 'Other device' },
+      ];
+      prisma.refreshToken.deleteMany.mockImplementation(({ where: { userId } }: { where: { userId: string } }) => {
+        const before = sessions.length;
+        sessions = sessions.filter((session) => session.userId !== userId);
+        return Promise.resolve({ count: before - sessions.length });
+      });
+      prisma.user.findUnique.mockResolvedValue(customer);
+      await service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER);
+
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
+      expect(sessions).toEqual([{ id: 'session-unrelated', userId: 'customer-2', deviceInfo: 'Other device' }]);
     });
 
     it('rejects a non-customer audience before looking up or mutating an account', async () => {

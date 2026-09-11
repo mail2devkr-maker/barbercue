@@ -578,7 +578,9 @@ export class AuthService {
   /**
    * Irreversibly removes a customer account's direct identity and login surface while retaining
    * only de-identified operational/accounting records that cannot safely lose referential
-   * integrity (bookings, reviews, credit/subscription and security records). This deliberately
+   * integrity (bookings, credit/subscription and security records). Customer reviews are deleted
+   * because their optional text and owner response are user-generated content, not required for
+   * those retained-record purposes. This deliberately
    * refuses every owner, staff, admin, salon-linked, or mixed-role account: those relationships
    * require a separately reviewed support process and can never be deleted through customer UI.
    */
@@ -621,16 +623,22 @@ export class AuthService {
         );
       }
 
+      // Capture the stored value before identity fields are cleared. OtpRequest deliberately has
+      // no User relation, so its phone key must be explicitly removed in this same transaction.
+      const deletedPhone = user.phone;
       const deletedAt = new Date();
-      await tx.refreshToken.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: deletedAt },
-      });
+      await tx.refreshToken.deleteMany({ where: { userId } });
       await tx.passwordResetToken.deleteMany({ where: { userId } });
+      if (deletedPhone) {
+        await tx.otpRequest.deleteMany({ where: { phone: deletedPhone } });
+      }
       await tx.authIdentity.deleteMany({ where: { userId } });
       await tx.pushDevice.deleteMany({ where: { userId } });
       await tx.notificationPreference.deleteMany({ where: { userId } });
       await tx.notification.deleteMany({ where: { userId } });
+      // A review owns optional customer-written content and the attached owner response. Neither
+      // is needed to preserve its booking, so deleting the review row removes both safely.
+      await tx.review.deleteMany({ where: { customerId: userId } });
       // Queue membership is not an accounting record. Clearing this optional relation prevents
       // an operational queue from carrying a deleted customer's stable account identifier.
       await tx.queueEntry.updateMany({ where: { customerId: userId }, data: { customerId: null } });
