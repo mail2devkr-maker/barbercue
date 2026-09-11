@@ -15,21 +15,24 @@
   image-rendering: auto;
 }
 
-/* Public landing header (and every other header sharing this canonical artwork): one
+/* Public landing header (and every other header sharing this NEW premium artwork): one
    owner-approved image only, no border-radius/rectangle since there is no baked-in card left to
    round on the transparent asset.
-   Sized by WIDTH with height: auto, not a fixed height — the artwork's own bbox is ~3.86:1
-   (mark + "FastQue" + the "GOOD LOOKS | LESS WAITING" tagline all sharing the image's full
-   height), so constraining it to a small fixed height shrank the whole thing, including the
-   tagline line, down to a couple of illegible pixels. A single clamp() keeps it responsive
-   without a separate fixed height per breakpoint: min 200px keeps the tagline legible even on
-   the narrowest phones (390px viewport comfortably fits 200px next to the hamburger button),
-   max 260px caps it at a natural size on wide desktop headers. */
+   Sized by WIDTH with height: auto, not a fixed height — never object-fit, a transform, or a mask
+   that could crop it. This asset's own canvas is ~3.86:1 (mark + "FastQue" + the "GOOD LOOKS |
+   LESS WAITING" tagline all sharing the image's full height), so the tagline's rendered size is a
+   fixed fraction of however wide the whole lockup renders. Earlier attempts made the tagline
+   legible by shrinking the render only a little (200-260px) or by swapping in a different, older
+   logo design at more favorable proportions — both wrong: an owner review asked for the SAME
+   approved artwork rendered with real breathing room instead. This clamp renders it meaningfully
+   bigger (min 230px, up to 340px) so the tagline is comfortably legible at every required
+   viewport, including 390px phones (230px + the hamburger button + gap still comfortably fits the
+   header's own inner width there) without touching the artwork itself. */
 .headerArtwork .art,
 .canonicalArtwork .art {
-  width: clamp(200px, 24vw, 260px);
+  width: clamp(230px, 24vw, 340px);
   height: auto;
-  max-width: 260px;
+  max-width: 340px;
   filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
@@ -43,9 +46,9 @@
    otherwise win on source order and reintroduce a fixed width tuned for the old opaque asset. */
 .compact.canonicalArtwork .art,
 .compact.headerArtwork .art {
-  width: clamp(150px, 18vw, 190px);
+  width: clamp(165px, 16vw, 220px);
   height: auto;
-  max-width: 190px;
+  max-width: 220px;
 }
 
 .markOnly .art {

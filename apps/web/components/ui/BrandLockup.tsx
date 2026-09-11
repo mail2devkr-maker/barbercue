@@ -2,10 +2,12 @@ import styles from "./brand-lockup.module.css";
 
 const LOCKUP_SRC = "/brand/fastque-premium-3d-lockup.png";
 const MARK_SRC = "/brand/fastque-premium-3d-mark.png";
-// The v3 canonical asset bakes its own near-black rectangle into the pixels, which reads as a
-// pasted image card on every light or glass header that uses it. This artwork carries the same
-// approved 3D mark, wordmark and tagline with a real alpha channel instead, so it sits directly in
-// a header with no visible bounding box regardless of what's behind it.
+// This is the owner-approved NEW premium FastQue lockup (mark + wordmark + tagline, real alpha
+// channel, no baked-in rectangle) — the correct source of truth for the header. A prior revision
+// briefly swapped this for the older fastque-final-canonical-logo-v3.webp design while chasing a
+// tagline-legibility complaint; an owner review corrected that as a regression (the old design,
+// not the approved new one) and asked for the same fix via sizing/breathing room instead — see
+// brand-lockup.module.css's own comment on the width clamp used here.
 const HEADER_LOCKUP_SRC = "/brand/fastque-premium-3d-lockup-transparent.png";
 
 /**
