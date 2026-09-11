@@ -10,9 +10,10 @@ import { SalonCard } from "../../components/discovery/SalonCard";
 import { HeroVisual } from "../../components/landing/HeroVisual";
 import { HeroBookingCard } from "../../components/landing/HeroBookingCard";
 import { HeroFeatureRow } from "../../components/landing/HeroFeatureRow";
+import { HeroSearchField } from "../../components/landing/HeroSearchField";
 import { LandingHeaderActions } from "../../components/landing/LandingHeaderActions";
 import { LandingMobileNav } from "../../components/landing/LandingMobileNav";
-import { LocationIcon, ChevronDownIcon, SearchIcon, PlayIcon } from "../../components/landing/icons";
+import { LocationIcon, SearchIcon, PlayIcon } from "../../components/landing/icons";
 import { EditorialImage } from "../../components/editorial/EditorialImage";
 import { BrandLockup } from "../../components/ui/BrandLockup";
 import styles from "../../components/landing/landing.module.css";
@@ -74,10 +75,11 @@ export default async function HomePage() {
         <div className={styles.utilityBar}>
           <div className={styles.utilityInner}>
             <div className={styles.utilityLeft}>
+              {/* No real country switcher exists (FastQue is India-only today) — a plain label,
+                  not a dropdown affordance with nothing behind it. */}
               <span className={styles.locationChip}>
                 <LocationIcon className={styles.locationIcon} />
                 India
-                <ChevronDownIcon className={styles.chevronIcon} />
               </span>
               <span className={styles.utilityTagline}>
                 Good Looks<span className={styles.utilityDot} aria-hidden="true" />Less Waiting
@@ -107,12 +109,12 @@ export default async function HomePage() {
               <Link href="#site-footer" className={styles.headerNavAbout}>About</Link>
             </nav>
 
-            {/* Reference A's wide-tier actions: location + Sign In + List Your Shop. */}
+            {/* Reference A's wide-tier actions: location + Sign In + List Your Shop. No real
+                city switcher exists on this page, so this is a plain label, not a dropdown. */}
             <div className={styles.headerWideRow}>
               <span className={styles.locationChip}>
                 <LocationIcon className={styles.locationIcon} />
                 Bengaluru
-                <ChevronDownIcon className={styles.chevronIcon} />
               </span>
               <LandingHeaderActions variant="wide" />
             </div>
@@ -150,14 +152,10 @@ export default async function HomePage() {
             </div>
 
             {/* Reference B's search bar — shown at the standard/mobile tiers instead of the CTA
-                pair above. Same real /search route and "q" param the search page already reads. */}
-            <form className={styles.heroSearch} action="/search" method="get" aria-label="Find a barbershop">
-              <SearchIcon className={styles.heroSearchIcon} />
-              <input name="q" type="search" placeholder="Search by city, area or shop name" />
-              <button type="submit" className={styles.heroSearchButton}>
-                <SearchIcon className={styles.ctaIcon} /> Search
-              </button>
-            </form>
+                pair above. Suggests real cities and real shops as you type; picking one submits
+                the canonical params those results actually need (see HeroSearchField's own
+                comment), free text still searches shop/service via the real "q" param. */}
+            <HeroSearchField />
 
             <HeroFeatureRow />
 
