@@ -53,6 +53,7 @@ type DropdownOption = {
 function FilterDropdown({ label, value, options }: { label: string; value: string; options: DropdownOption[] }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
 
   useEffect(() => {
@@ -61,7 +62,10 @@ function FilterDropdown({ label, value, options }: { label: string; value: strin
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
     }
 
     document.addEventListener("pointerdown", dismiss);
@@ -82,12 +86,23 @@ function FilterDropdown({ label, value, options }: { label: string; value: strin
     items[nextIndex].focus();
   }
 
+  function openAndFocusOption(direction: "first" | "last") {
+    setOpen(true);
+    requestAnimationFrame(() => {
+      const items = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]:not(:disabled)") ?? []);
+      if (!items.length) return;
+      const selected = items.find((item) => item.getAttribute("aria-selected") === "true");
+      (direction === "first" ? selected ?? items[0] : selected ?? items[items.length - 1]).focus();
+    });
+  }
+
   return (
     <div className={styles.filterDropdown} ref={rootRef}>
       <span className={styles.filterDropdownLabel}>{label}</span>
       <button
         type="button"
         className={styles.filterDropdownTrigger}
+        ref={triggerRef}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={menuId}
@@ -95,7 +110,7 @@ function FilterDropdown({ label, value, options }: { label: string; value: strin
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            setOpen(true);
+            openAndFocusOption(event.key === "ArrowDown" ? "first" : "last");
           }
         }}
       >
