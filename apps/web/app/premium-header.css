@@ -1,56 +1,7 @@
-/* FastQue premium header treatment.
-   The public landing header is deliberately FIXED (not sticky) so it cannot be defeated by an
-   ancestor scroll/overflow context. A translucent dark-glass layer lets the page remain subtly
-   visible beneath it while the owner-approved 3D FastQue identity stays anchored in the viewport. */
-
-header[class*="landingHeader"] {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  width: 100% !important;
-  z-index: 1000 !important;
-  /* Keep the host genuinely translucent. The approved 3D lockup itself is no longer alpha-cut;
-     preserving its original dark support canvas keeps the gloss, highlights, ribbon-Q depth and
-     barber silhouette intact. */
-  background:
-    linear-gradient(90deg, rgba(8, 9, 20, 0.50), rgba(16, 11, 24, 0.42) 48%, rgba(8, 9, 20, 0.48)) !important;
-  border-bottom: 1px solid rgba(255, 190, 112, 0.14) !important;
-  -webkit-backdrop-filter: saturate(160%) blur(18px) !important;
-  backdrop-filter: saturate(160%) blur(18px) !important;
-  box-shadow: 0 7px 22px rgba(8, 9, 18, 0.13), 0 1px 0 rgba(255, 73, 143, 0.045);
-}
-
-/* Because a fixed header leaves normal document flow, reserve its visual height before the hero.
-   120px matches .headerInner's 88px min-height and keeps the hero clear of the fixed glass layer. */
-header[class*="landingHeader"] ~ main {
-  padding-top: 120px;
-}
-
-/* Slight watermark transparency is applied to the COMPLETE approved artwork, never by deleting
-   dark pixels. A tiny saturation/contrast lift retains the Codex glossy/3D character at 94% opacity.
-   The -2px optical nudge corrects the previous bottom-heavy placement without changing aspect ratio. */
-header[class*="landingHeader"] img {
-  opacity: 0.94 !important;
-  transform: translateY(-2px);
-  filter: saturate(1.06) contrast(1.03) brightness(1.01);
-}
-
-header[class*="landingHeader"] nav,
-header[class*="landingHeader"] a:not([class*="headerPrimary"]) {
-  color: rgba(255, 239, 218, 0.9) !important;
-}
-
-header[class*="landingHeader"] nav a:hover,
-header[class*="landingHeader"] a:not([class*="headerPrimary"]):hover {
-  color: #ffb96f !important;
-}
-
-header[class*="landingHeader"] a[class*="headerPrimary"] {
-  color: #fff !important;
-  background: linear-gradient(105deg, #f2186d 0%, #ff713f 100%) !important;
-  box-shadow: 0 8px 24px rgba(242, 24, 109, 0.22);
-}
+/* FastQue premium header treatment for the shared authenticated/discovery shell (CustomerHeader).
+   The public landing page's own header is fully owned by landing.module.css — it no longer needs
+   (or wants) a global !important override here, since that override was fighting its own sticky
+   positioning, background, image treatment and nav colors during the pixel-match rebuild. */
 
 /* Shared discovery/customer header keeps its platform layout but uses the requested frosted
    watermark feel so content remains subtly visible while scrolling. */
@@ -65,19 +16,7 @@ header[class*="customer-shell"][class*="header"] {
   box-shadow: 0 8px 28px rgba(25, 20, 17, 0.055);
 }
 
-@media (max-width: 760px) {
-  header[class*="landingHeader"] ~ main {
-    padding-top: 92px;
-  }
-}
-
 @media (prefers-reduced-transparency: reduce) {
-  header[class*="landingHeader"] {
-    background: rgba(8, 9, 18, 0.96) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
-
   header[class*="customer-shell-module"][class*="header"],
   header[class*="customer-shell"][class*="header"] {
     background: rgba(255, 253, 249, 0.97) !important;

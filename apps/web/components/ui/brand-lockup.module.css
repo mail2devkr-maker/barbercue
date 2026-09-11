@@ -15,30 +15,30 @@
   image-rendering: auto;
 }
 
-/* Public landing header: one owner-approved canonical image only. */
-.headerArtwork .art {
-  width: 244px;
-  max-width: 244px;
-  height: auto;
-  border-radius: 18px;
-  filter: saturate(1.08) contrast(1.04) drop-shadow(0 8px 22px rgba(238, 42, 91, 0.24));
-}
-
-/* Other canonical lockups share only the approved artwork's corner finish. Keep headerArtwork
-   isolated because it also owns the public-header sizing, contrast, shadow, and glass treatment. */
+/* Public landing header: one owner-approved canonical image only. Sized by height (not width) so
+   the transparent artwork's own padding doesn't change how tall the mark reads inside the header —
+   no border-radius/rectangle here, since there is no baked-in card left to round. */
+.headerArtwork .art,
 .canonicalArtwork .art {
-  border-radius: 18px;
-}
-
-/* Watermark presentation only: keep the approved artwork pixels intact while letting the sticky
-   glass header read through enough to feel premium rather than like a pasted opaque banner. */
-.headerArtwork[data-glass-host="true"] .art {
-  opacity: 0.78;
+  width: auto;
+  height: 46px;
+  max-width: none;
+  filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
 .compact .art {
   width: 200px;
   max-width: min(34vw, 200px);
+}
+
+/* compact + canonicalArtwork (footer, dashboard header, staff/owner shells) shares the same
+   transparent, height-based sizing as the main header, just smaller — .compact alone would
+   otherwise win on source order and reintroduce a fixed width against a transparent asset. */
+.compact.canonicalArtwork .art,
+.compact.headerArtwork .art {
+  width: auto;
+  height: 34px;
+  max-width: none;
 }
 
 .markOnly .art {
@@ -61,9 +61,15 @@
     width: 180px;
   }
 
-  .headerArtwork .art {
-    width: 216px;
-    max-width: 216px;
+  .headerArtwork .art,
+  .canonicalArtwork .art {
+    height: 42px;
+  }
+
+  .compact.canonicalArtwork .art,
+  .compact.headerArtwork .art {
+    width: auto;
+    height: 32px;
   }
 }
 
@@ -78,14 +84,15 @@
     max-width: 50vw;
   }
 
-  .headerArtwork .art {
-    width: 186px;
-    max-width: 186px;
-    border-radius: 16px;
+  .headerArtwork .art,
+  .canonicalArtwork .art {
+    height: 36px;
   }
 
-  .canonicalArtwork .art {
-    border-radius: 16px;
+  .compact.canonicalArtwork .art,
+  .compact.headerArtwork .art {
+    width: auto;
+    height: 28px;
   }
 }
 
@@ -105,13 +112,14 @@
     max-width: 42px;
   }
 
-  .headerArtwork .art {
-    width: 168px;
-    max-width: 168px;
-    border-radius: 14px;
+  .headerArtwork .art,
+  .canonicalArtwork .art {
+    height: 32px;
   }
 
-  .canonicalArtwork .art {
-    border-radius: 14px;
+  .compact.canonicalArtwork .art,
+  .compact.headerArtwork .art {
+    width: auto;
+    height: 24px;
   }
 }

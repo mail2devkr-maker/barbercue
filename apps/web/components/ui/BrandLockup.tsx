@@ -2,14 +2,19 @@ import styles from "./brand-lockup.module.css";
 
 const LOCKUP_SRC = "/brand/fastque-premium-3d-lockup.png";
 const MARK_SRC = "/brand/fastque-premium-3d-mark.png";
-const HEADER_LOCKUP_SRC = "/brand/fastque-final-canonical-logo-v3.webp";
+// The v3 canonical asset bakes its own near-black rectangle into the pixels, which reads as a
+// pasted image card on every light or glass header that uses it. This artwork carries the same
+// approved 3D mark, wordmark and tagline with a real alpha channel instead, so it sits directly in
+// a header with no visible bounding box regardless of what's behind it.
+const HEADER_LOCKUP_SRC = "/brand/fastque-premium-3d-lockup-transparent.png";
 
 /**
  * FastQue branding uses the owner-approved glossy 3D artwork from /public/brand.
  *
  * The public landing header intentionally renders ONE canonical image only. No separate FQ mark,
  * no CSS crop and no layered composition: this permanently avoids the old/new FQ overlap while
- * preserving the approved 3D shadow, glow, rounded corners and tagline exactly as one artwork.
+ * preserving the approved 3D shadow, glow and tagline exactly as one artwork, now on a transparent
+ * background instead of a baked-in rectangle.
  */
 export function BrandLockup({
   compact = false,
