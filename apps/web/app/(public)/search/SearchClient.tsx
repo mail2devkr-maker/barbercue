@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useId, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   CitySearchResultDto,
   CountryDto,
   PaginatedResult,
+  PriceRangeValidationError,
   SalonListItemDto,
 } from "@barbercue/shared";
-import { COUNTRY_PATHS, DISCOVERY_PATHS } from "@barbercue/shared";
+import { COUNTRY_PATHS, DISCOVERY_PATHS, PRICE_FILTER_PRESETS, formatPriceFilterLabel, validatePriceRange } from "@barbercue/shared";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
-import { EditorialImage } from "../../../components/editorial/EditorialImage";
 import { SalonCard } from "../../../components/discovery/SalonCard";
 import { ShopServiceSearchField } from "../../../components/discovery/ShopServiceSearchField";
 import { CitySearchField } from "../../../components/salons/CitySearchField";
@@ -36,13 +36,263 @@ const DISTANCE_OPTIONS: { value: number | null; label: string }[] = [
   { value: 5, label: "5 km" },
 ];
 
-const PRICE_OPTIONS: { min: number | null; max: number | null; label: string }[] = [
-  { min: null, max: null, label: "Any price" },
-  { min: null, max: 300, label: "Under 300" },
-  { min: 300, max: 600, label: "300 – 600" },
-  { min: 600, max: 1000, label: "600 – 1000" },
-  { min: 1000, max: null, label: "1000+" },
-];
+const PRICE_VALIDATION_MESSAGES: Record<PriceRangeValidationError, string> = {
+  "negative-min": "Minimum price cannot be negative.",
+  "negative-max": "Maximum price cannot be negative.",
+  "min-exceeds-max": "Minimum price cannot exceed maximum price.",
+};
+
+/** Shared outside-click/Escape dismissal for every dropdown below — factored out once both
+ * FilterDropdown and PriceFilterDropdown needed the identical behavior. */
+function useDropdownDismiss(
+  open: boolean,
+  close: () => void,
+  rootRef: RefObject<HTMLDivElement | null>,
+  triggerRef: RefObject<HTMLButtonElement | null>,
+) {
+  useEffect(() => {
+    if (!open) return undefined;
+    function dismiss(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) close();
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        close();
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+}
+
+type DropdownOption = {
+  id: string;
+  label: string;
+  selected: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+};
+
+function FilterDropdown({ label, value, options }: { label: string; value: string; options: DropdownOption[] }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+  useDropdownDismiss(open, () => setOpen(false), rootRef, triggerRef);
+
+  function moveFocus(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
+    const items = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]:not(:disabled)") ?? []);
+    const current = items.indexOf(event.currentTarget);
+    if (!items.length) return;
+    event.preventDefault();
+    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items[nextIndex].focus();
+  }
+
+  function openAndFocusOption(direction: "first" | "last") {
+    setOpen(true);
+    requestAnimationFrame(() => {
+      const items = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>("[role=option]:not(:disabled)") ?? []);
+      if (!items.length) return;
+      const selected = items.find((item) => item.getAttribute("aria-selected") === "true");
+      (direction === "first" ? selected ?? items[0] : selected ?? items[items.length - 1]).focus();
+    });
+  }
+
+  return (
+    <div className={styles.filterDropdown} ref={rootRef}>
+      <span className={styles.filterDropdownLabel}>{label}</span>
+      <button
+        type="button"
+        className={styles.filterDropdownTrigger}
+        ref={triggerRef}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            openAndFocusOption(event.key === "ArrowDown" ? "first" : "last");
+          }
+        }}
+      >
+        <span>{value}</span>
+        <span className={styles.filterDropdownChevron} aria-hidden="true">⌄</span>
+      </button>
+      {open && (
+        <div id={menuId} className={styles.filterDropdownMenu} role="listbox" aria-label={`${label} options`}>
+          {options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="option"
+              className={`${styles.filterDropdownOption} ${option.selected ? styles.filterDropdownOptionSelected : ""}`}
+              aria-selected={option.selected}
+              disabled={option.disabled}
+              onClick={() => {
+                option.onSelect();
+                setOpen(false);
+              }}
+              onKeyDown={moveFocus}
+            >
+              <span>{option.label}</span>
+              {option.selected && <span aria-hidden="true">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Price is its own dropdown (not a `FilterDropdown` instance) because it has two views: the
+ * scrollable preset list (49 "Up to ₹X" rows plus Any/1000+) and, once "Custom…" is picked, a
+ * two-field min/max form in the same popover rather than a second modal. */
+function PriceFilterDropdown({
+  activeMin,
+  activeMax,
+  onApply,
+}: {
+  activeMin: number | null;
+  activeMax: number | null;
+  onApply: (min: number | null, max: number | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [minInput, setMinInput] = useState("");
+  const [maxInput, setMaxInput] = useState("");
+  const [customError, setCustomError] = useState<PriceRangeValidationError | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+
+  function close() {
+    setOpen(false);
+    setCustomOpen(false);
+    setCustomError(null);
+  }
+  useDropdownDismiss(open, close, rootRef, triggerRef);
+
+  const activePreset = PRICE_FILTER_PRESETS.find((preset) => preset.min === activeMin && preset.max === activeMax);
+  const triggerLabel = activePreset ? activePreset.label : formatPriceFilterLabel(activeMin, activeMax);
+
+  function openCustomForm() {
+    setMinInput(activeMin === null ? "" : String(activeMin));
+    setMaxInput(activeMax === null ? "" : String(activeMax));
+    setCustomError(null);
+    setCustomOpen(true);
+  }
+
+  function applyCustom() {
+    const min = minInput.trim() === "" ? null : Number(minInput);
+    const max = maxInput.trim() === "" ? null : Number(maxInput);
+    const error = validatePriceRange(min, max);
+    if (error) {
+      setCustomError(error);
+      return;
+    }
+    onApply(min, max);
+    close();
+  }
+
+  function clearCustom() {
+    setMinInput("");
+    setMaxInput("");
+    setCustomError(null);
+    onApply(null, null);
+    close();
+  }
+
+  return (
+    <div className={styles.filterDropdown} ref={rootRef}>
+      <span className={styles.filterDropdownLabel}>Price</span>
+      <button
+        type="button"
+        className={styles.filterDropdownTrigger}
+        ref={triggerRef}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{triggerLabel}</span>
+        <span className={styles.filterDropdownChevron} aria-hidden="true">⌄</span>
+      </button>
+      {open && !customOpen && (
+        <div id={menuId} className={styles.filterDropdownMenu} role="listbox" aria-label="Price options">
+          {PRICE_FILTER_PRESETS.map((preset) => {
+            const selected = activeMin === preset.min && activeMax === preset.max;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                role="option"
+                className={`${styles.filterDropdownOption} ${selected ? styles.filterDropdownOptionSelected : ""}`}
+                aria-selected={selected}
+                onClick={() => {
+                  onApply(preset.min, preset.max);
+                  close();
+                }}
+              >
+                <span>{preset.label}</span>
+                {selected && <span aria-hidden="true">✓</span>}
+              </button>
+            );
+          })}
+          <button type="button" className={styles.filterDropdownOption} onClick={openCustomForm}>
+            <span>Custom…</span>
+          </button>
+        </div>
+      )}
+      {open && customOpen && (
+        <div id={menuId} className={styles.filterDropdownMenu}>
+          <button type="button" className={styles.filterDropdownBack} onClick={() => setCustomOpen(false)}>
+            ‹ Back to presets
+          </button>
+          <label className={styles.filterCustomField}>
+            <span>Minimum price</span>
+            <input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={minInput}
+              onChange={(event) => setMinInput(event.target.value)}
+              placeholder="No minimum"
+            />
+          </label>
+          <label className={styles.filterCustomField}>
+            <span>Maximum price</span>
+            <input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={maxInput}
+              onChange={(event) => setMaxInput(event.target.value)}
+              placeholder="No maximum"
+            />
+          </label>
+          {customError && <p className={styles.filterCustomError}>{PRICE_VALIDATION_MESSAGES[customError]}</p>}
+          <div className={styles.filterCustomActions}>
+            <Button type="button" variant="outline" onClick={clearCustom}>
+              Clear
+            </Button>
+            <Button type="button" variant="primary" onClick={applyCustom}>
+              Apply
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SearchClient() {
   const router = useRouter();
@@ -72,6 +322,8 @@ export default function SearchClient() {
   const priceMaxParam = searchParams.get("priceMax");
   const activePriceMin = priceMinParam !== null ? Number(priceMinParam) : null;
   const activePriceMax = priceMaxParam !== null ? Number(priceMaxParam) : null;
+  const activeService = searchParams.get("service");
+  const activeServiceCategory = SERVICE_CATEGORIES.find((category) => category.query === activeService);
 
   // Shared by handleNearMe and selectRadius below — both need "ask the browser for a position,
   // then either apply it directly or bail out with the same locationError copy".
@@ -127,6 +379,18 @@ export default function SearchClient() {
     if (max === null) params.delete("priceMax");
     else params.set("priceMax", String(max));
     router.push(`/search?${params.toString()}`);
+  }
+
+  // Category links were single-select and intentionally navigated to a service-only search. Keep
+  // that URL behavior exactly intact while presenting the choices in a compact dropdown.
+  function selectService(service: string | null) {
+    if (service !== null) {
+      router.push(`/search?service=${encodeURIComponent(service)}`);
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("service");
+    router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
   }
 
   useEffect(() => {
@@ -253,70 +517,34 @@ export default function SearchClient() {
           </button>
         )}
 
-        {/* Owner-reported discoverability fix: always visible, not gated behind "Near me" already
-            being active — radiusKm is meaningless server-side without a query point (see
-            salonSearchQuerySchema's own doc comment), so picking an actual radius here is itself a
-            location request; selectRadius applies the radius the moment it gets a position, in one
-            step, rather than requiring a separate prior "Near me" tap. */}
-        <div className={styles.filterGroup}>
-          <span className={styles.filterGroupLabel}>Distance</span>
-          {!nearMeActive && (
-            <p className={styles.filterGroupHint}>Choose a radius to use your current location.</p>
-          )}
-          <div className={styles.filterChips}>
-            {DISTANCE_OPTIONS.map((option) => (
-              <button
-                key={String(option.value)}
-                type="button"
-                className={`${styles.filterChip} ${activeRadiusKm === option.value ? styles.filterChipActive : ""}`}
-                aria-pressed={activeRadiusKm === option.value}
-                disabled={locating}
-                onClick={() => selectRadius(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+        <div className={styles.filterBar} role="group" aria-label="Search filters">
+          <FilterDropdown
+            label="Distance"
+            value={DISTANCE_OPTIONS.find((option) => option.value === activeRadiusKm)?.label ?? "Any distance"}
+            options={DISTANCE_OPTIONS.map((option) => ({
+              id: String(option.value),
+              label: option.label,
+              selected: activeRadiusKm === option.value,
+              disabled: locating,
+              onSelect: () => selectRadius(option.value),
+            }))}
+          />
+          <PriceFilterDropdown activeMin={activePriceMin} activeMax={activePriceMax} onApply={selectPrice} />
+          <FilterDropdown
+            label="Service"
+            value={activeServiceCategory?.label ?? "All services"}
+            options={[
+              { id: "all-services", label: "All services", selected: !activeService, onSelect: () => selectService(null) },
+              ...SERVICE_CATEGORIES.map((category) => ({
+                id: category.id,
+                label: category.label,
+                selected: category.query === activeService,
+                onSelect: () => selectService(category.query),
+              })),
+            ]}
+          />
         </div>
-
-        {/* Price filter — always available (unlike distance, price never depends on a query
-            point). Independent of the service/q text search only when no `service`/`q` matched a
-            specific service — see SalonsService.search's own doc comment on the same-service
-            requirement this now enforces when both are present. */}
-        <div className={styles.filterGroup}>
-          <span className={styles.filterGroupLabel}>Price</span>
-          <div className={styles.filterChips}>
-            {PRICE_OPTIONS.map((option) => {
-              const active = activePriceMin === option.min && activePriceMax === option.max;
-              return (
-                <button
-                  key={option.label}
-                  type="button"
-                  className={`${styles.filterChip} ${active ? styles.filterChipActive : ""}`}
-                  aria-pressed={active}
-                  onClick={() => selectPrice(option.min, option.max)}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <nav className={styles.categoryChips} aria-label="Browse by category">
-          {SERVICE_CATEGORIES.map((category) => (
-            <Link
-              key={category.id}
-              href={`/search?service=${encodeURIComponent(category.query)}`}
-              className={styles.categoryChip}
-            >
-              <span className={styles.categoryChipArt}>
-                <EditorialImage id={category.assetId} width={32} height={24} />
-              </span>
-              {category.label}
-            </Link>
-          ))}
-        </nav>
+        {!nearMeActive && <p className={styles.filterBarHint}>Choose a distance to use your current location.</p>}
       </section>
 
       {styleName && (
