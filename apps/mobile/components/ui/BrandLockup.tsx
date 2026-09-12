@@ -1,26 +1,39 @@
 import { Image, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-// Mobile brand closure mission — the full lockup is now a byte-for-byte lossless PNG re-encode of
-// the exact canonical web artwork (apps/web/public/brand/fastque-final-canonical-logo-v3.webp,
-// the same file apps/web/components/ui/BrandLockup.tsx's `headerArtwork` path renders), copied in
-// rather than redesigned: verified pixel-identical after decode (both files raw-decode to the same
-// byte buffer). Converted to PNG only because it's the format this app's plain <Image> already
-// renders everywhere else — React Native's WebP support requires extra native linking this app
-// doesn't carry, so it is not a build-safe choice for OTA-delivered branding. Never edit this file
-// directly; if the web canonical artwork changes, re-run the same lossless conversion.
-const lockupAsset = require('../../assets/brand/fastque-canonical-lockup.png');
-const markAsset = require('../../assets/brand/fastque-premium-3d-mark.png');
-// Natural pixel size of fastque-canonical-lockup.png (488x163) — used below to size the rendered
-// box so contain-fit shows it at its real ~2.99:1 aspect ratio instead of a mismatched box, which
-// would otherwise letterbox this artwork with dead space on either side.
-const LOCKUP_ASPECT_RATIO = 488 / 163;
+// Brand closure mission (round 2): the web identity moved to a NEW clean, unboxed lockup — no
+// square/card/rim around the FQ monogram, see apps/web/components/ui/BrandLockup.tsx's
+// `HEADER_LOCKUP_SRC`. This mobile copy was still on the OLD boxed asset (a rounded-square card
+// baked into the pixels behind FQ), which an owner review correctly flagged as a branding
+// regression once the web lockup moved on. `fastque-clean-lockup.png` is a byte-for-byte copy of
+// apps/web/public/brand/fastque-clean-lockup-transparent.png (verified identical via `cmp`) — not
+// redrawn, recolored, or reinterpreted. Already a PNG with real alpha, so no format conversion was
+// needed this time (unlike the old webp source, this one was already React-Native-safe).
+//
+// `fastque-clean-mark.png` is a plain rectangular CROP of that same file's own pixels (the FQ
+// monogram's own bounding box, x:[97,313] y:[78,232] in the source) — used where the narrow-header
+// layout needs an icon-only presentation instead of the full wordmark. Cropping, not deriving a
+// separate "mark" design, is what keeps this the same artwork the mission requires: the old
+// fastque-premium-3d-mark.png this replaces was itself a separately-boxed square-card asset (the
+// same regression, just in icon form), not a crop of the canonical lockup.
+//
+// Never edit either file directly; if the web canonical artwork changes again, re-copy/re-crop it
+// the same way.
+const lockupAsset = require('../../assets/brand/fastque-clean-lockup.png');
+const markAsset = require('../../assets/brand/fastque-clean-mark.png');
+// Natural pixel size of fastque-clean-lockup.png (958x259) — used below to size the rendered box
+// so contain-fit shows it at its real ~3.70:1 aspect ratio instead of a mismatched box, which would
+// otherwise letterbox this artwork with dead space on either side.
+const LOCKUP_ASPECT_RATIO = 958 / 259;
+// Natural pixel size of fastque-clean-mark.png (216x154, ~1.40:1 — the monogram's own bounding box
+// is wider than tall, unlike the old square icon-card asset it replaces).
+const MARK_ASPECT_RATIO = 216 / 154;
+const MARK_HEIGHT = 42;
 
-// Presentation-only rounding (mobile auth logo sizing/rounding hotfix) — the canonical PNG's own
-// pixels are never touched; corners are clipped by a wrapper View's overflow:'hidden', not the
-// Image's own borderRadius, which Android does not always honor reliably on its own. Applies only
-// to the full lockup, never to markOnly (the FQ-only mark and the app icon keep their existing
-// square-cut presentation untouched, per that mission's explicit scope).
+// Presentation-only rounding, left from when this wrapped the OLD boxed asset (rounding a real
+// opaque card's corners). The clean asset has no fill behind FQ, so overflow:'hidden' now clips
+// nothing visible — kept anyway so a future asset swap can't silently reintroduce square corners
+// without this wrapper already being in place.
 const LOCKUP_RADIUS = 14;
 const AUTH_LOCKUP_RADIUS = 18;
 // Auth variant's responsive width: ~78% of screen width lands at ~280px on the owner's reference
@@ -109,7 +122,9 @@ const styles = StyleSheet.create({
   root: { alignItems: 'center', flexShrink: 1, minWidth: 0 },
   rootCompact: {},
   markOnly: { flexShrink: 0 },
-  markArt: { width: 42, height: 42 },
+  // Width follows MARK_ASPECT_RATIO at a fixed height so contain-fit renders the real crop with no
+  // letterboxed dead space (the monogram's own bounding box is ~1.40:1, not square).
+  markArt: { width: MARK_HEIGHT * MARK_ASPECT_RATIO, height: MARK_HEIGHT },
 
   // Height held at the same visual size the pre-rounding asset used at each density; width
   // follows LOCKUP_ASPECT_RATIO so contain-fit renders the real artwork with no letterboxed dead
