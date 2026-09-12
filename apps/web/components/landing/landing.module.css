@@ -342,17 +342,20 @@
      the whole full-bleed hero width, scaling the customer's head far beyond its intended size —
      "over-zoomed / stretched". Rendered at its own intrinsic ratio instead (no `fill`, real
      width/height from the manifest — see HeroVisual.tsx): position absolute within .heroMedia,
-     anchored to the right edge, height matched to the hero's own height with width: auto so the
-     browser derives width purely from the image's natural aspect ratio — never object-fit, never
-     an independently-set width, so it can't stretch. Whatever width that leaves unfilled on the
+   anchored to the right edge with a bounded contain-sized width. The browser still derives height
+   purely from the image's natural aspect ratio, but the photo no longer grows to match a tall
+   hero. Whatever width that leaves unfilled on the
      left stays empty within this transparent layer, revealing .heroScrim/.hero's own dark
      background beneath it, matching the reference's dark, empty left side behind the copy. */
   position: absolute;
   top: 0;
   right: 0;
-  height: 100%;
-  width: auto;
-  max-width: none;
+  width: min(54vw, 760px);
+  height: auto;
+  max-width: 60%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: right center;
   filter: saturate(0.85) brightness(0.7) contrast(1.08);
   /* Owner direction: mirror only the photo layer so the barber/customer composition matches the
      approved reference — .heroScrim and every text/UI layer sit in separate sibling elements and

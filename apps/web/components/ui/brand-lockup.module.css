@@ -33,11 +33,18 @@
   aspect-ratio: 1800 / 530;
 }
 
-.headerArtwork .art,
+.headerArtwork .art {
+  /* Owner asked for the public-header artwork to read ~8-12% more confidently without growing
+     the header — 200-300px (was 185-280px), exactly filling the unchanged footprint above. */
+  width: clamp(200px, 21vw, 300px);
+  height: auto;
+  max-width: 300px;
+  filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
+}
+
+/* Other uses of the clean asset (footer, auth, customer/dashboard surfaces) are deliberately
+   untouched by the landing-header size adjustment. */
 .canonicalArtwork .art {
-  /* Owner asked for the visible mark to read ~8-12% more confidently without growing the header —
-     185-280px (was 170-255px), still comfortably inside the unchanged 200-300px footprint above,
-     so the header/nav position never moves. */
   width: clamp(185px, 19.5vw, 280px);
   height: auto;
   max-width: 280px;
