@@ -65,7 +65,13 @@ export function PremiumButton({ title, onPress, variant = 'primary', loading, di
   const content = loading ? <ActivityIndicator color={fastQue.text} /> : <Text style={[styles.buttonText, variant !== 'primary' && styles.secondaryButtonText]}>{title}</Text>;
   return (
     <Pressable onPress={onPress} disabled={inactive} accessibilityRole="button" style={({ pressed }) => [styles.buttonHit, inactive && styles.disabled, pressed && styles.pressed, style]}>
-      {variant === 'primary' ? <GradientView colors={[fastQue.gradientStart, fastQue.gradientEnd]} style={styles.primaryButton}>{content}</GradientView> : <View style={[styles.secondaryButton, variant === 'quiet' && styles.quietButton]}>{content}</View>}
+      {variant === 'primary' ? (
+        <GradientView colors={[fastQue.gradientStart, fastQue.gradientMid, fastQue.gradientEnd]} stops={[0, 0.55, 1]} style={styles.primaryButton}>
+          {content}
+        </GradientView>
+      ) : (
+        <View style={[styles.secondaryButton, variant === 'quiet' && styles.quietButton]}>{content}</View>
+      )}
     </Pressable>
   );
 }

@@ -12,7 +12,7 @@ import DashboardAccountStack, { type DashboardAccountStackParamList } from './Da
 import { SalonProvider } from '../lib/salon-context';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
-import { color, fastQue, font } from '../lib/theme';
+import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import { useEffect } from 'react';
 import { useSalon } from '../lib/salon-context';
@@ -66,7 +66,7 @@ function OwnerNavigatorGate() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={color.accent} size="large" />
+        <ActivityIndicator color={fastQue.pink} size="large" />
       </View>
     );
   }
@@ -163,5 +163,5 @@ function tabOptions(label: string, icon: TabIconName) {
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: fastQue.background },
 });

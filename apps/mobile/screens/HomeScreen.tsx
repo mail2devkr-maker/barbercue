@@ -60,7 +60,10 @@ const POPULAR_SERVICE_CATEGORIES = [
   { key: 'categorySpa', value: 'Spa', imageUrl: EDITORIAL_ASSET_URL.categorySpa },
 ] as const;
 
-const GRADIENT_COLORS = [color.brandGradientStart, color.brandGradientEnd] as const;
+// Exact website 3-stop brand gradient (pink 0% -> coral 55% -> orange 100%, matching
+// apps/web/components/landing/landing.module.css's `--fq-gradient` on master).
+const GRADIENT_COLORS = [color.brandGradientStart, color.brandGradientMid, color.brandGradientEnd] as const;
+const GRADIENT_STOPS = [0, 0.55, 1] as const;
 
 // Below this width, one header row can't fit brand + location + language + bell without
 // truncating the "FastQue" wordmark itself (observed at 320px) — the header splits into two rows
@@ -276,7 +279,7 @@ export default function HomeScreen({ navigation }: Props) {
         <ImageBackground source={{ uri: EDITORIAL_ASSET_URL.heroBand }} style={styles.hero} imageStyle={styles.heroImage}>
           <View style={[StyleSheet.absoluteFill, styles.heroBaseScrim]} />
           <GradientView
-            colors={['transparent', 'rgba(15, 12, 25, 0.86)']}
+            colors={['transparent', 'rgba(13, 13, 18, 0.86)']}
             direction="vertical"
             style={StyleSheet.absoluteFill}
           />
@@ -338,7 +341,7 @@ export default function HomeScreen({ navigation }: Props) {
               accessibilityState={{ selected: searchMode === 'barber' }}
             >
               {searchMode === 'barber' ? (
-                <GradientView colors={GRADIENT_COLORS} style={styles.segment}>
+                <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.segment}>
                   <TabIcon name="scissors" color={color.surface} size={15} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {t.searchModeBarber}
@@ -360,7 +363,7 @@ export default function HomeScreen({ navigation }: Props) {
               accessibilityState={{ selected: searchMode === 'salon' }}
             >
               {searchMode === 'salon' ? (
-                <GradientView colors={GRADIENT_COLORS} style={styles.segment}>
+                <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.segment}>
                   <TabIcon name="salon" color={color.surface} size={15} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {t.searchModeSalon}
@@ -396,7 +399,7 @@ export default function HomeScreen({ navigation }: Props) {
           </Pressable>
 
           <Pressable onPress={handleFindPress} accessibilityRole="button">
-            <GradientView colors={GRADIENT_COLORS} style={styles.ctaButton}>
+            <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.ctaButton}>
               <Text style={styles.ctaButtonText}>{searchMode === 'barber' ? t.findABarberAction : t.findShopsAction}</Text>
             </GradientView>
           </Pressable>
@@ -477,7 +480,7 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={styles.queueBannerHeadline}>{t.queuePromoHeadlineLine2}</Text>
             <Text style={styles.queueBannerSubcopy}>{t.queuePromoSubcopy}</Text>
           </View>
-          <GradientView colors={GRADIENT_COLORS} style={styles.queueBannerIconWrap}>
+          <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.queueBannerIconWrap}>
             <TabIcon name="queue" color={color.surface} size={24} />
           </GradientView>
         </Pressable>
@@ -575,7 +578,7 @@ const styles = StyleSheet.create({
   // A light base tint (the gradient above handles the actual top->bottom legibility ramp) — keeps
   // the upper portion of the photo still clearly a real photo, not fully washed out, closer to the
   // reference's "imagery visible strongly" note than a single flat dark overlay was.
-  heroBaseScrim: { backgroundColor: 'rgba(10, 8, 20, 0.22)' },
+  heroBaseScrim: { backgroundColor: 'rgba(9, 9, 12, 0.22)' },
   heroContent: { padding: space[5], paddingTop: space[4], paddingBottom: space[5] },
   heroEyebrow: {
     fontFamily: font.bodyBold,

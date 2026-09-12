@@ -24,17 +24,19 @@ export const color = {
   // additive to the palette above rather than replacing it: `accent` (terracotta) remains the one
   // action color everywhere else in the app.
   //
-  // The reference design's pink->orange gradient is rendered as a REAL two-stop gradient (see
-  // components/ui/GradientView.tsx) via a row of interpolated solid-color strips, not an image or
-  // native gradient library — neither react-native-svg nor expo-linear-gradient is installed, and
-  // either would be a new NATIVE dependency that forces a rebuild before the next OTA (this
-  // codebase already made the identical call for RoleSelectScreen's hero scrim). brandGradientStart
-  // /End are that gradient's two stops; brandCoral is kept as a cheap non-gradient fallback (small
-  // dots/dividers where a full GradientView would be overkill).
-  brandGradientStart: '#f2295c',
-  brandGradientEnd: '#ff7a3d',
-  brandCoral: '#f2542d',
-  brandNavy: '#1a1533',
+  // Owner visual-direction pass (2026-09): these three stops are now the EXACT website gradient
+  // colors (apps/web/components/landing/landing.module.css `--fq-pink`/`--fq-coral`/`--fq-orange`
+  // on master), not an approximation — see GradientView.tsx for the 3-stop pink->coral->orange
+  // rendering this feeds. brandGradientStart/Mid/End are that gradient's three stops; brandCoral is
+  // kept as a cheap non-gradient fallback (small dots/dividers where a full GradientView would be
+  // overkill) and is now literally the same coral as the gradient's middle stop, not a separate hue.
+  brandGradientStart: '#f20a83',
+  brandGradientMid: '#ff3e57',
+  brandGradientEnd: '#ff7a45',
+  brandCoral: '#ff3e57',
+  // Website-parity charcoal raised-surface tone (`--fq-utility-bg`), replacing the old purple-navy
+  // fill — used for dark accent cards/banners floating on otherwise-light legacy screens.
+  brandNavy: '#171314',
 } as const;
 
 /** Matches web's 1.25-ratio type scale (`--bc-text-*`). */
@@ -71,27 +73,55 @@ export const radius = {
  * tokens while screens migrate: the legacy palette is still used by functional flows that have
  * not yet been visually rebuilt, so changing its meaning globally would make a harmless visual
  * pass capable of breaking contrast in those flows.
+ *
+ * Owner visual-direction pass (2026-09): these values are website-parity, taken directly from
+ * `apps/web/components/landing/landing.module.css`'s `--fq-*` custom properties on `master` (the
+ * dark header/hero tokens for the current live homepage) — not a "similar" dark theme, the SAME
+ * hex/rgba values. The old palette here was purple-tinted (`#090812`/`#11101c`/`#171522`/
+ * `#211b2d`) and never matched the website; this replaces it one-for-one so every mobile surface
+ * that already reads from `fastQue.*` picks up the website's exact canvas/charcoal/utility/text/
+ * brand colors with no per-screen changes. Mapping used:
+ *   background        -> --fq-void        #09090c  (page root)
+ *   backgroundRaised   -> --fq-charcoal    #0d0d12  (header/nav bars, one step up from void)
+ *   card / input       -> --fq-utility-bg  #171314  (cards, search panels, form fields)
+ *   cardStrong         -> --fq-utility-bg  #171314  (no separate "extra raised" tone on the
+ *                                                     website; emphasis instead comes from
+ *                                                     borderStrong, matching the site's own
+ *                                                     active/selected treatment)
+ *   border             -> --fq-hairline    rgba(255,255,255,0.10)
+ *   borderStrong       -> --fq-glass-border rgba(255,62,87,0.28) (coral-tinted emphasis border)
+ *   text               -> --fq-text        #f7f5f4
+ *   textSecondary      -> --fq-text-muted  rgba(255,255,255,0.72)
+ *   textMuted          -> --fq-text-faint  rgba(255,255,255,0.50)
+ *   pink/coral/orange  -> --fq-pink/--fq-coral/--fq-orange (exact website gradient stops)
+ *   glass/glassStrong  -> void/charcoal-tinted translucency (same alphas as before, recolored off
+ *                          the old purple hue onto the website's near-black)
+ *
+ * success/warning/error are functional status colors with no website equivalent (the landing page
+ * has no status UI) and are intentionally left unchanged — this pass is brand/surface parity only.
  */
 export const fastQue = {
-  background: '#090812',
-  backgroundRaised: '#11101c',
-  card: '#171522',
-  cardStrong: '#211b2d',
-  input: '#151321',
-  border: 'rgba(255,255,255,0.12)',
-  borderStrong: 'rgba(255,126,181,0.42)',
-  text: '#fffaff',
-  textSecondary: '#c9c1d1',
-  textMuted: '#91899e',
-  gradientStart: '#f2297d',
-  gradientEnd: '#ff7a3d',
-  orange: '#ff934d',
-  pink: '#ff68ad',
+  background: '#09090c',
+  backgroundRaised: '#0d0d12',
+  card: '#171314',
+  cardStrong: '#171314',
+  input: '#171314',
+  border: 'rgba(255,255,255,0.10)',
+  borderStrong: 'rgba(255,62,87,0.28)',
+  text: '#f7f5f4',
+  textSecondary: 'rgba(255,255,255,0.72)',
+  textMuted: 'rgba(255,255,255,0.50)',
+  gradientStart: '#f20a83',
+  gradientMid: '#ff3e57',
+  gradientEnd: '#ff7a45',
+  orange: '#ff7a45',
+  pink: '#f20a83',
+  coral: '#ff3e57',
   success: '#72d59a',
   warning: '#ffc368',
   error: '#ff8b9a',
-  glass: 'rgba(29,24,43,0.84)',
-  glassStrong: 'rgba(20,17,31,0.94)',
+  glass: 'rgba(9,9,12,0.84)',
+  glassStrong: 'rgba(13,13,18,0.94)',
 } as const;
 
 export const premiumShadow = {
