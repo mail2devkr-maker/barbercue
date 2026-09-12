@@ -2,13 +2,16 @@ import styles from "./brand-lockup.module.css";
 
 const LOCKUP_SRC = "/brand/fastque-premium-3d-lockup.png";
 const MARK_SRC = "/brand/fastque-premium-3d-mark.png";
-// This is the owner-approved NEW premium FastQue lockup (mark + wordmark + tagline, real alpha
-// channel, no baked-in rectangle) — the correct source of truth for the header. A prior revision
-// briefly swapped this for the older fastque-final-canonical-logo-v3.webp design while chasing a
-// tagline-legibility complaint; an owner review corrected that as a regression (the old design,
-// not the approved new one) and asked for the same fix via sizing/breathing room instead — see
-// brand-lockup.module.css's own comment on the width clamp used here.
-const HEADER_LOCKUP_SRC = "/brand/fastque-premium-3d-lockup-transparent.png";
+// The owner-approved CLEAN FastQue lockup — mark + wordmark + tagline, no square/card/rim around
+// FQ. Derived mechanically (background-removal only, no redraw) from an owner-supplied reference
+// image that already had no square baked in — see the sibling PNG's own history for the prior
+// fastque-premium-3d-lockup-transparent.png, which had the FQ mark boxed in a rounded-square card
+// that could never be cleanly separated from the mark's own pixels (confirmed after four separate
+// extraction attempts, all documented on PR #61). This asset needed none of that: the reference
+// had a plain near-black background around an already-unboxed monogram, so the same
+// corner-to-center alpha keying used elsewhere in this file's history worked cleanly on the first
+// try. Same mark/face artwork, wordmark and tagline as every prior approved version.
+const HEADER_LOCKUP_SRC = "/brand/fastque-clean-lockup-transparent.png";
 
 /**
  * FastQue branding uses the owner-approved glossy 3D artwork from /public/brand.
