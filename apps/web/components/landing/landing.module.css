@@ -341,6 +341,10 @@
   object-fit: cover;
   object-position: 74% 34%;
   filter: saturate(0.85) brightness(0.7) contrast(1.08);
+  /* Owner direction: mirror only the photo layer so the barber/customer composition matches the
+     approved reference — .heroScrim and every text/UI layer sit in separate sibling elements and
+     are untouched by this transform. */
+  transform: scaleX(-1);
 }
 
 .heroScrim {
