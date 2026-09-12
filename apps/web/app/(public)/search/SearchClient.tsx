@@ -281,7 +281,7 @@ function PriceFilterDropdown({
           </label>
           {customError && <p className={styles.filterCustomError}>{PRICE_VALIDATION_MESSAGES[customError]}</p>}
           <div className={styles.filterCustomActions}>
-            <Button type="button" variant="outline" onClick={clearCustom}>
+            <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={clearCustom}>
               Clear
             </Button>
             <Button type="button" variant="primary" onClick={applyCustom}>
@@ -506,7 +506,7 @@ export default function SearchClient() {
           <Button type="submit" variant="primary">
             Find shops
           </Button>
-          <Button type="button" variant="outline" onClick={handleNearMe} disabled={locating}>
+          <Button type="button" variant="outline" className={styles.outlineOnDark} onClick={handleNearMe} disabled={locating}>
             {locating ? "Locating…" : nearMeActive ? "Near me ✓" : "Near me"}
           </Button>
         </form>

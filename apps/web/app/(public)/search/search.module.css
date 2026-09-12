@@ -1,10 +1,16 @@
+/* Owner correction: /search must match the approved landing page's premium dark system, not the
+   legacy cream/editorial canvas. `composes` pulls in the exact same --fq-* token declarations
+   landing.module.css's own .page defines (its own background/color are NOT inherited — only the
+   custom property values are reused, guaranteeing this page can never invent a parallel palette),
+   then this rule sets the real dark background/text for the whole page below. */
 .page {
+  composes: page from "../../../components/landing/landing.module.css";
   min-height: 72vh;
   background:
-    radial-gradient(circle at 86% 7%, rgba(242, 41, 92, 0.14), transparent 24rem),
-    radial-gradient(circle at 4% 42%, rgba(255, 122, 61, 0.08), transparent 22rem),
-    var(--bc-surface);
-  color: var(--bc-ink);
+    radial-gradient(circle at 86% 7%, rgba(242, 10, 131, 0.16), transparent 24rem),
+    radial-gradient(circle at 4% 42%, rgba(255, 122, 69, 0.1), transparent 22rem),
+    var(--fq-void);
+  color: var(--fq-text);
 }
 
 .intro,
@@ -19,7 +25,7 @@
 
 .eyebrow {
   margin: 0 0 12px;
-  color: var(--bc-accent);
+  color: var(--fq-orange);
   font-size: var(--bc-text-xs);
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -37,7 +43,7 @@
 .lead {
   max-width: 610px;
   margin: 22px 0 0;
-  color: var(--bc-muted);
+  color: var(--fq-text-muted);
   font-size: clamp(1rem, 1.8vw, 1.18rem);
 }
 
@@ -49,10 +55,10 @@
   max-width: 900px;
   margin-top: 36px;
   padding: 12px;
-  background: #fff;
-  border: 1px solid var(--bc-border);
+  background: var(--fq-charcoal);
+  border: 1px solid var(--fq-hairline);
   border-radius: var(--bc-radius-xl);
-  box-shadow: var(--bc-shadow-card);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
 }
 
 .field {
@@ -62,7 +68,7 @@
 
 .field span {
   padding-left: 4px;
-  color: var(--bc-muted);
+  color: var(--fq-text-muted);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -73,17 +79,21 @@
   width: 100%;
   min-height: 48px;
   padding: 0 14px;
-  color: var(--bc-ink);
-  background: var(--bc-surface-tint);
-  border: 1px solid transparent;
+  color: var(--fq-text);
+  background: var(--fq-utility-bg);
+  border: 1px solid var(--fq-hairline);
   border-radius: var(--bc-radius-sm);
   font: inherit;
 }
 
+.field input::placeholder {
+  color: var(--fq-text-faint);
+}
+
 .field input:focus-visible {
-  outline: 3px solid rgba(176, 65, 62, 0.24);
+  outline: 3px solid var(--fq-glass-border);
   outline-offset: 1px;
-  border-color: var(--bc-accent);
+  border-color: var(--fq-coral);
 }
 
 .searchForm button {
@@ -109,7 +119,7 @@
 .filterDropdownLabel {
   display: block;
   margin: 0 0 6px 4px;
-  color: var(--bc-muted);
+  color: var(--fq-text-muted);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -124,11 +134,11 @@
   min-height: 48px;
   gap: 12px;
   padding: 10px 14px;
-  color: var(--bc-ink);
-  background: #fff;
-  border: 1px solid var(--bc-border);
+  color: var(--fq-text);
+  background: var(--fq-charcoal);
+  border: 1px solid var(--fq-hairline);
   border-radius: var(--bc-radius-sm);
-  box-shadow: 0 2px 8px rgba(26, 21, 51, 0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   font: inherit;
   font-size: 0.92rem;
   font-weight: 600;
@@ -139,8 +149,8 @@
 
 .filterDropdownTrigger:hover,
 .filterDropdownTrigger:focus-visible {
-  border-color: var(--bc-accent);
-  box-shadow: 0 0 0 3px rgba(176, 65, 62, 0.12);
+  border-color: var(--fq-coral);
+  box-shadow: 0 0 0 3px var(--fq-glass-border);
 }
 
 .filterDropdownTrigger:hover {
@@ -149,13 +159,13 @@
 
 .filterDropdownTrigger:focus-visible,
 .filterDropdownOption:focus-visible {
-  outline: 3px solid rgba(176, 65, 62, 0.24);
+  outline: 3px solid var(--fq-glass-border);
   outline-offset: 1px;
 }
 
 .filterDropdownChevron {
   flex: none;
-  color: var(--bc-accent);
+  color: var(--fq-coral);
   font-size: 1.25rem;
   line-height: 1;
 }
@@ -171,10 +181,10 @@
   padding: 6px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: #fff;
-  border: 1px solid var(--bc-border);
+  background: var(--fq-charcoal);
+  border: 1px solid var(--fq-hairline);
   border-radius: var(--bc-radius-sm);
-  box-shadow: var(--bc-shadow-card);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
 }
 
 .filterDropdownOption {
@@ -185,7 +195,7 @@
   min-height: 44px;
   gap: 16px;
   padding: 9px 10px;
-  color: var(--bc-ink);
+  color: var(--fq-text);
   background: transparent;
   border: 0;
   border-radius: calc(var(--bc-radius-sm) - 4px);
@@ -197,16 +207,16 @@
 
 .filterDropdownOption:hover,
 .filterDropdownOption:focus-visible {
-  background: var(--bc-surface-tint);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .filterDropdownOptionSelected {
-  color: var(--bc-accent);
+  color: var(--fq-coral);
   font-weight: 700;
 }
 
 .filterDropdownOption:disabled {
-  color: var(--bc-muted);
+  color: var(--fq-text-faint);
   cursor: wait;
 }
 
@@ -215,10 +225,10 @@
   width: 100%;
   margin-bottom: 4px;
   padding: 8px 10px;
-  color: var(--bc-muted);
+  color: var(--fq-text-muted);
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--bc-border);
+  border-bottom: 1px solid var(--fq-hairline);
   font: inherit;
   font-size: 0.82rem;
   font-weight: 600;
@@ -228,7 +238,7 @@
 
 .filterDropdownBack:hover,
 .filterDropdownBack:focus-visible {
-  color: var(--bc-accent);
+  color: var(--fq-coral);
 }
 
 .filterCustomField {
@@ -239,7 +249,7 @@
 }
 
 .filterCustomField span {
-  color: var(--bc-muted);
+  color: var(--fq-text-muted);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -249,16 +259,20 @@
 .filterCustomField input {
   min-height: 42px;
   padding: 0 10px;
-  color: var(--bc-ink);
-  background: var(--bc-surface-tint);
-  border: 1px solid var(--bc-border);
+  color: var(--fq-text);
+  background: var(--fq-utility-bg);
+  border: 1px solid var(--fq-hairline);
   border-radius: var(--bc-radius-sm);
   font: inherit;
 }
 
+.filterCustomField input::placeholder {
+  color: var(--fq-text-faint);
+}
+
 .filterCustomError {
   margin: 4px 10px 0;
-  color: var(--bc-warn, #b36b00);
+  color: var(--fq-orange);
   font-size: 0.8rem;
 }
 
@@ -273,10 +287,24 @@
   min-height: 40px;
 }
 
+/* Robust override for the shared Button component's `.outline` variant (white bg/dark text,
+   meant for light pages) — CSS-module class-name collision order between button.module.css and
+   this file isn't guaranteed, so `!important` here is a deliberate, narrowly-scoped exception, not
+   a general pattern. Only used on this page's "Near me" and price-Custom "Clear" buttons. */
+.outlineOnDark {
+  background: transparent !important;
+  color: var(--fq-text) !important;
+  border-color: var(--fq-hairline) !important;
+}
+
+.outlineOnDark:hover:not(:disabled) {
+  border-color: var(--fq-coral) !important;
+}
+
 .filterBarHint {
   max-width: 900px;
   margin: 8px 0 0;
-  color: var(--bc-muted);
+  color: var(--fq-text-muted);
   font-size: 0.78rem;
 }
 
@@ -287,14 +315,14 @@
   width: min(1180px, calc(100% - 40px));
   margin: -20px auto 48px;
   padding: 16px 18px;
-  color: #5d4317;
-  background: var(--bc-gold-soft);
-  border: 1px solid #e8d2a5;
+  color: var(--fq-text);
+  background: var(--fq-charcoal);
+  border: 1px solid var(--fq-glass-border);
   border-radius: var(--bc-radius-sm);
 }
 
 .styleNotice > span {
-  color: var(--bc-gold);
+  color: var(--fq-orange);
   font-size: 1.35rem;
 }
 
@@ -309,16 +337,17 @@
   gap: 24px;
   margin-bottom: 28px;
   padding-bottom: 20px;
-  border-bottom: 1px solid var(--bc-border);
+  border-bottom: 1px solid var(--fq-hairline);
 }
 
 .resultsHeading h2 {
   margin: 0;
+  color: var(--fq-text);
   font-size: clamp(1.8rem, 3.5vw, 2.7rem);
 }
 
 .resultsHeading > p {
-  color: var(--bc-muted);
+  color: var(--fq-text-muted);
   font-size: var(--bc-text-sm);
 }
 
@@ -331,15 +360,15 @@
 .skeleton {
   min-height: 390px;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid var(--bc-border);
+  background: var(--fq-charcoal);
+  border: 1px solid var(--fq-hairline);
   border-radius: var(--bc-radius-md);
 }
 
 .skeleton span,
 .skeleton i {
   display: block;
-  background: linear-gradient(90deg, #efe9df 20%, #faf7f1 50%, #efe9df 80%);
+  background: linear-gradient(90deg, var(--fq-utility-bg) 20%, rgba(255, 255, 255, 0.08) 50%, var(--fq-utility-bg) 80%);
   background-size: 220% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
@@ -367,21 +396,22 @@
   margin: 32px auto;
   padding: clamp(36px, 7vw, 64px) 28px;
   text-align: center;
-  background: #fff;
-  border: 1px solid var(--bc-border);
+  background: var(--fq-charcoal);
+  border: 1px solid var(--fq-hairline);
   border-radius: var(--bc-radius-lg);
-  box-shadow: var(--bc-shadow-sm);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 .stateCard h2 {
   margin: 14px 0 8px;
+  color: var(--fq-text);
   font-size: 1.8rem;
 }
 
 .stateCard p {
   max-width: 440px;
   margin: 0 0 22px;
-  color: var(--bc-muted);
+  color: var(--fq-text-muted);
 }
 
 .stateIcon {
@@ -389,8 +419,8 @@
   place-items: center;
   width: 48px;
   height: 48px;
-  color: var(--bc-accent);
-  background: #f8e8e4;
+  color: var(--fq-coral);
+  background: var(--fq-glass-border);
   border-radius: 50%;
   font-family: var(--font-display);
   font-size: 1.5rem;
@@ -454,7 +484,7 @@
 .locationNotice {
   margin: 10px 0 0;
   font-size: 0.85rem;
-  color: var(--bc-warn, #b36b00);
+  color: var(--fq-orange);
 }
 
 .textLink {
@@ -463,7 +493,7 @@
   border: none;
   padding: 0;
   font-size: 0.85rem;
-  color: var(--bc-accent);
+  color: var(--fq-coral);
   cursor: pointer;
   text-decoration: underline;
 }

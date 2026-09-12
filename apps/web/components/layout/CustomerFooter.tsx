@@ -3,9 +3,9 @@ import { BrandLockup } from "../ui/BrandLockup";
 import styles from "./customer-shell.module.css";
 
 // Keep the public legal notice reachable from customer and discovery surfaces.
-export function CustomerFooter() {
+export function CustomerFooter({ dark }: { dark?: boolean }) {
   return (
-    <footer className={styles.footer}>
+    <footer className={dark ? `${styles.footer} ${styles.footerDark}` : styles.footer}>
       <div className={styles.footerInner}>
         <span className={styles.footerLogoFrame}>
           <BrandLockup compact canonicalArtwork />
