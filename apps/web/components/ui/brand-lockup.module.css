@@ -18,19 +18,26 @@
 /* Public landing header (and every other header sharing this NEW premium artwork): one
    owner-approved image only, no border-radius/rectangle since there is no baked-in card left to
    round on the transparent asset.
-   Sized by WIDTH with height: auto, not a fixed height — never object-fit, a transform, or a mask
-   that could crop it. The artwork's own canvas already has real transparent breathing room above
-   and below the tagline/glow (see the canvas-expansion fix), so this clamp is pure visual sizing,
-   not a legibility workaround: an owner pass found the previous clamp (230-340px) rendered the
-   lockup slightly too large/tall for comfortable header proportions, even though nothing was
-   actually clipped. Reduced ~13% (230->200px min, 340->300px max) — still comfortably legible,
-   including at 390px phones (200px + the hamburger button + gap fits the header's inner width
-   there with room to spare) — without touching the artwork itself. */
+   An owner pass asked for a visibly smaller logo WITHOUT the header/bar shrinking to follow it —
+   the header's own height and the nav's start position must stay exactly where they were. So
+   sizing is split across two elements: this rule fixes the FOOTPRINT (the .root span already
+   rendered here) at exactly the previous, larger clamp (200-300px wide) using aspect-ratio instead
+   of an actual bigger image — 1800/530 is this asset's own canvas ratio, so the footprint's
+   height matches what `width: clamp(...); height: auto` on the old, bigger render would have
+   measured, to the pixel. The .art rule below sizes the actual visible <img> smaller and centers
+   it inside this unchanged footprint (.root's own align-items: center, default flex-start on the
+   main axis) — so the ONLY visible difference is a smaller logo, never a smaller header. */
+.headerArtwork,
+.canonicalArtwork {
+  width: clamp(200px, 21vw, 300px);
+  aspect-ratio: 1800 / 530;
+}
+
 .headerArtwork .art,
 .canonicalArtwork .art {
-  width: clamp(200px, 21vw, 300px);
+  width: clamp(170px, 18vw, 255px);
   height: auto;
-  max-width: 300px;
+  max-width: 255px;
   filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
@@ -40,14 +47,19 @@
 }
 
 /* compact + canonicalArtwork (footer, dashboard header, staff/owner shells) shares the same
-   transparent, width-clamped sizing as the main header, just smaller, same ~13% reduction —
-   .compact alone would otherwise win on source order and reintroduce a fixed width tuned for the
-   old opaque asset. */
+   footprint-preserving treatment as the main header, just smaller — .compact alone would
+   otherwise win on source order and reintroduce a fixed width tuned for the old opaque asset. */
+.compact.headerArtwork,
+.compact.canonicalArtwork {
+  width: clamp(145px, 14vw, 195px);
+  aspect-ratio: 1800 / 530;
+}
+
 .compact.canonicalArtwork .art,
 .compact.headerArtwork .art {
-  width: clamp(145px, 14vw, 195px);
+  width: clamp(120px, 12vw, 150px);
   height: auto;
-  max-width: 195px;
+  max-width: 150px;
 }
 
 .markOnly .art {
