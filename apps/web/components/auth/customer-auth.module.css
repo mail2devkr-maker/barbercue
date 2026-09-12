@@ -7,6 +7,31 @@
   color: var(--bc-ink);
 }
 
+.customerPage {
+  /* Reuse the homepage's scoped premium tokens without changing other sign-in pages. */
+  composes: page from "../landing/landing.module.css";
+}
+
+.page.customerPage {
+  background: var(--fq-void);
+  color: var(--bc-ink);
+}
+
+.customerPage .homeLink {
+  background: var(--fq-charcoal);
+  border-color: var(--fq-hairline);
+  color: var(--fq-text);
+}
+
+.customerPage .homeLink:hover {
+  border-color: var(--fq-text-muted);
+}
+
+.customerPage .homeLink:focus-visible,
+.customerPage .wordmark:focus-visible {
+  outline-color: var(--fq-text);
+}
+
 .topBar {
   width: min(1120px, 100%);
   min-height: 60px;

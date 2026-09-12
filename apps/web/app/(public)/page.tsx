@@ -8,7 +8,12 @@ import { SERVICE_CATEGORIES } from "../../lib/editorial/manifest";
 import { JsonLd } from "../../components/discovery/JsonLd";
 import { SalonCard } from "../../components/discovery/SalonCard";
 import { HeroVisual } from "../../components/landing/HeroVisual";
+import { HeroBookingCard } from "../../components/landing/HeroBookingCard";
+import { HeroFeatureRow } from "../../components/landing/HeroFeatureRow";
+import { HeroSearchField } from "../../components/landing/HeroSearchField";
 import { LandingHeaderActions } from "../../components/landing/LandingHeaderActions";
+import { LandingMobileNav } from "../../components/landing/LandingMobileNav";
+import { LocationIcon, SearchIcon, PlayIcon } from "../../components/landing/icons";
 import { EditorialImage } from "../../components/editorial/EditorialImage";
 import { BrandLockup } from "../../components/ui/BrandLockup";
 import styles from "../../components/landing/landing.module.css";
@@ -47,6 +52,22 @@ const OWNER_POINTS = [
   "Get a permanent, shareable FastQue Shop ID",
 ];
 
+/**
+ * Header location-chip labels, driven only by `cities` — the real "cities with an active salon"
+ * list HomePage already fetches for its city-browse chips further down the page, never a
+ * hard-coded country/city. Real when there's a real single answer, neutral otherwise: FastQue
+ * genuinely operates in one country/city today, so this shows that country/city's real name, but
+ * the label degrades to a neutral "Worldwide"/"All cities" the moment that's no longer true
+ * (multiple countries/cities, or the discovery fetch failed) rather than keep asserting a specific
+ * place that may no longer be the only one.
+ */
+function operatingLocationLabels(cities: CityDto[] | null): { country: string; city: string } {
+  const countryCodes = new Set((cities ?? []).map((c) => c.countryCode));
+  const country = cities && countryCodes.size === 1 ? cities[0].country : "Worldwide";
+  const city = cities && cities.length === 1 ? cities[0].name : "All cities";
+  return { country, city };
+}
+
 export default async function HomePage() {
   const [cities, featured, liveStats] = await Promise.all([
     fetchDiscoveryOrNull<CityDto[]>(DISCOVERY_PATHS.cities, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
@@ -59,66 +80,104 @@ export default async function HomePage() {
       DISCOVERY_REVALIDATE_SECONDS,
     ).catch(() => null),
   ]);
+  const { country: countryLabel, city: cityLabel } = operatingLocationLabels(cities);
 
   return (
     <div className={styles.page}>
       <JsonLd data={organizationJsonLd()} />
 
       <header className={styles.landingHeader}>
-        <div className={styles.headerInner}>
-          <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-            <BrandLockup showTagline transparent headerArtwork />
-          </Link>
-          <nav className={styles.headerNav} aria-label="Primary">
-            <Link href="/search">Find a barber</Link>
-            <Link href="#services">Services</Link>
-            <Link href="#book-or-queue">How it works</Link>
-            <Link href="#for-shops">For shops</Link>
-          </nav>
-          <LandingHeaderActions />
+        {/* Reference B's top utility row — hidden at the wide/ultra-wide tier, where Reference A's
+            single consolidated row (below) has room for everything at once instead. */}
+        <div className={styles.utilityBar}>
+          <div className={styles.utilityInner}>
+            <div className={styles.utilityLeft}>
+              {/* No real country switcher exists — a plain label, not a dropdown affordance with
+                  nothing behind it — and its text is the real operating country (or a neutral
+                  "Worldwide") derived from actual city data, never a hard-coded guess. */}
+              <span className={styles.locationChip}>
+                <LocationIcon className={styles.locationIcon} />
+                {countryLabel}
+              </span>
+              <span className={styles.utilityTagline}>
+                Good Looks<span className={styles.utilityDot} aria-hidden="true" />Less Waiting
+              </span>
+            </div>
+            <div className={styles.utilityRight}>
+              <Link href="#book-or-queue">For Customers</Link>
+              <Link href="#for-shops">For Shops</Link>
+              <Link href="/dashboard/register-shop">Partner With Us</Link>
+              <span className={styles.utilityDivider} aria-hidden="true" />
+              <LandingHeaderActions variant="utility" />
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.mainNavBar}>
+          <div className={styles.headerInner}>
+            <Link href="/" className={styles.wordmark} aria-label="FastQue home">
+              <BrandLockup transparent headerArtwork />
+            </Link>
+
+            <nav className={styles.headerNav} aria-label="Primary">
+              <Link href="/search" className={styles.headerNavActive}>Find a barber</Link>
+              <Link href="#services">Services</Link>
+              <Link href="#book-or-queue">How it works</Link>
+              <Link href="#for-shops">For shops</Link>
+              <Link href="#site-footer" className={styles.headerNavAbout}>About</Link>
+            </nav>
+
+            {/* Reference A's wide-tier actions: location + Sign In + List Your Shop. No real city
+                switcher exists on this page, so this is a plain label (real city name, or a
+                neutral "All cities"), not a dropdown. */}
+            <div className={styles.headerWideRow}>
+              <span className={styles.locationChip}>
+                <LocationIcon className={styles.locationIcon} />
+                {cityLabel}
+              </span>
+              <LandingHeaderActions variant="wide" />
+            </div>
+
+            <LandingMobileNav />
+          </div>
         </div>
       </header>
 
       <main>
       <section className={styles.hero}>
+        <HeroVisual />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
             <p className={styles.heroEyebrow}>Book ahead · Walk in smarter</p>
-            <h1 className={styles.heroHeadline}>Your barber.<br /><em>Your time.</em></h1>
+            <h1 className={styles.heroHeadline}>
+              Your barber.
+              <br />
+              <em>Your time.</em>
+            </h1>
             <p className={styles.heroSub}>
               Discover barbers, hair salons, nail bars, spas and more — built around your day.
               Reserve a chair for later, or join a live queue now and follow your place before
               you leave.
             </p>
 
+            {/* Reference A's CTA pair — shown at the wide tier alongside the booking card. */}
             <div className={styles.heroCtaRow}>
               <Link href="/search" className={styles.primaryLink}>
-                Book an appointment <span aria-hidden="true">→</span>
+                <SearchIcon className={styles.ctaIcon} /> Find a Barber
               </Link>
-              <Link href="/search" className={styles.outlineLink}>
-                Join a live queue <span aria-hidden="true">→</span>
+              <Link href="#book-or-queue" className={styles.outlineLink}>
+                <PlayIcon className={styles.ctaIcon} /> How It Works
               </Link>
             </div>
 
-            <form className={styles.heroSearch} action="/search" method="get" aria-label="Find a barbershop">
-              <label className={styles.heroField}>
-                <span>Shop or service</span>
-                <input name="q" type="search" placeholder="Haircut, fade, FastQue…" />
-              </label>
-              <label className={styles.heroField}>
-                <span>City</span>
-                <input name="city" type="search" placeholder="Bengaluru" />
-              </label>
-              <button type="submit" className={styles.heroSearchButton}>
-                Find a barber <span aria-hidden="true">→</span>
-              </button>
-            </form>
+            {/* Reference B's search bar — shown at the standard/mobile tiers instead of the CTA
+                pair above. Suggests real cities and real shops as you type; picking one submits
+                the canonical params those results actually need (see HeroSearchField's own
+                comment), free text still searches shop/service via the real "q" param. */}
+            <HeroSearchField cities={cities} />
 
-            <div className={styles.heroMeta} aria-label="FastQue benefits">
-              <span>No app required</span>
-              <span>Book or join live</span>
-              <span>Real-time queue position</span>
-            </div>
+            <HeroFeatureRow />
+
             {liveStats && (liveStats.activeShopCount > 0 || liveStats.liveWaitingCount > 0) && (
               <p className={styles.liveStats} role="status">
                 {liveStats.activeShopCount > 0 && (
@@ -139,7 +198,8 @@ export default async function HomePage() {
               Run a barbershop? <Link href="/dashboard/register-shop">Register your shop</Link>
             </p>
           </div>
-          <HeroVisual />
+
+          <HeroBookingCard />
         </div>
       </section>
 
@@ -322,7 +382,7 @@ export default async function HomePage() {
 
       </main>
 
-      <footer className={styles.footer}>
+      <footer id="site-footer" className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerBrand}>
             <span className={styles.footerLogoFrame}>

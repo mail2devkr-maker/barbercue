@@ -2,14 +2,24 @@ import styles from "./brand-lockup.module.css";
 
 const LOCKUP_SRC = "/brand/fastque-premium-3d-lockup.png";
 const MARK_SRC = "/brand/fastque-premium-3d-mark.png";
-const HEADER_LOCKUP_SRC = "/brand/fastque-final-canonical-logo-v3.webp";
+// The owner-approved CLEAN FastQue lockup — mark + wordmark + tagline, no square/card/rim around
+// FQ. Derived mechanically (background-removal only, no redraw) from an owner-supplied reference
+// image that already had no square baked in — see the sibling PNG's own history for the prior
+// fastque-premium-3d-lockup-transparent.png, which had the FQ mark boxed in a rounded-square card
+// that could never be cleanly separated from the mark's own pixels (confirmed after four separate
+// extraction attempts, all documented on PR #61). This asset needed none of that: the reference
+// had a plain near-black background around an already-unboxed monogram, so the same
+// corner-to-center alpha keying used elsewhere in this file's history worked cleanly on the first
+// try. Same mark/face artwork, wordmark and tagline as every prior approved version.
+const HEADER_LOCKUP_SRC = "/brand/fastque-clean-lockup-transparent.png";
 
 /**
  * FastQue branding uses the owner-approved glossy 3D artwork from /public/brand.
  *
  * The public landing header intentionally renders ONE canonical image only. No separate FQ mark,
  * no CSS crop and no layered composition: this permanently avoids the old/new FQ overlap while
- * preserving the approved 3D shadow, glow, rounded corners and tagline exactly as one artwork.
+ * preserving the approved 3D shadow, glow and tagline exactly as one artwork, now on a transparent
+ * background instead of a baked-in rectangle.
  */
 export function BrandLockup({
   compact = false,

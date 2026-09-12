@@ -5,6 +5,20 @@
   background: var(--bc-surface);
 }
 
+/* Owner correction — opt-in premium dark variant (currently /search only, via CustomerShell's
+   `dark` prop). `composes` reuses the exact same --fq-* token values the approved landing page
+   declares (never a second, parallel palette); `.shell.dark`'s own compound selector then safely
+   overrides `.shell`'s plain background regardless of CSS source/bundle order, the same pattern
+   customer-auth.module.css already uses for its own dark canvas. */
+.dark {
+  composes: page from "../landing/landing.module.css";
+}
+
+.shell.dark {
+  background: var(--fq-void);
+  color: var(--fq-text);
+}
+
 .main {
   flex: 1;
 }
@@ -217,6 +231,48 @@
   }
 }
 
+/* ---------- Header (dark variant — see .dark's own comment above) ---------- */
+
+.headerDark {
+  background: var(--fq-charcoal);
+  border-bottom: 1px solid var(--fq-hairline);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.headerDark .wordmark { color: var(--fq-text); }
+.headerDark .navLink { color: var(--fq-text-muted); }
+.headerDark .navLink:hover { color: var(--fq-text); }
+.headerDark .navLinkActive { color: var(--fq-coral); border-bottom-color: var(--fq-coral); }
+.headerDark .signInLink { color: var(--fq-text); border-color: var(--fq-hairline); }
+.headerDark .accountButton { color: var(--fq-text); border-color: var(--fq-hairline); }
+.headerDark .accountDot { background: var(--fq-text); color: var(--fq-void); }
+
+.headerDark .accountDropdown {
+  background: var(--fq-charcoal);
+  border-color: var(--fq-hairline);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+}
+
+.headerDark .accountDropdownItem { color: var(--fq-text); }
+.headerDark .accountDropdownItem:hover { background: rgba(255, 255, 255, 0.06); }
+.headerDark .logoutItem { border-top-color: var(--fq-hairline); color: var(--fq-coral); }
+
+.headerDark .menuToggle {
+  background: var(--fq-charcoal);
+  border-color: var(--fq-hairline);
+  color: var(--fq-text);
+}
+
+.headerDark .mobileNav {
+  background: var(--fq-charcoal);
+  border-top-color: var(--fq-hairline);
+}
+
+.headerDark .mobileNavLink {
+  color: var(--fq-text);
+  border-bottom-color: var(--fq-hairline);
+}
+
 /* ---------- Footer ---------- */
 
 .footer {
@@ -285,3 +341,16 @@
 @media (max-width: 420px) {
   .footerLogoFrame :global(img) { border-radius: 14px; }
 }
+
+/* ---------- Footer (dark variant — see .dark's own comment near .shell) ---------- */
+
+.footerDark {
+  border-top: 1px solid var(--fq-hairline);
+  background: var(--fq-void);
+}
+
+.footerDark .footerWordmark { color: var(--fq-text); }
+.footerDark .footerLinks a { color: var(--fq-text-muted); }
+.footerDark .footerLinks a:hover { color: var(--fq-text); }
+.footerDark .footerLinks a:focus-visible { outline-color: var(--fq-text); }
+.footerDark .footerNote { color: var(--fq-text-faint); }

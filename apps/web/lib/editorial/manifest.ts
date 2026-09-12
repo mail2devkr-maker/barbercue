@@ -23,6 +23,8 @@
  *     any specific listed salon — see the truth-boundary note above.
  */
 
+import { SALON_DISCOVERY_CATEGORIES } from "@barbercue/shared";
+
 export type EditorialAssetKind = "hero" | "result" | "process" | "equipment" | "editorial";
 
 export type EditorialAssetSource = "abstract-placeholder" | "ai-generated";
@@ -255,6 +257,23 @@ export function getEditorialAssetsByCategory(category: EditorialAsset["category"
   return EDITORIAL_ASSETS.filter((asset) => asset.category === category);
 }
 
+// This category's flagship photo, keyed by the same `id` as `SALON_DISCOVERY_CATEGORIES` (the
+// canonical id/label/query list, shared with apps/mobile's Search screen so the two clients can
+// never drift onto two different category sets — see that module's own doc comment). `assetId` is
+// a purely visual, web-only concern (mobile renders these as plain dropdown rows, no artwork), so
+// it stays local here rather than in the shared list.
+const CATEGORY_ASSET_IDS: Record<string, string> = {
+  hair: "hair-flagship",
+  barber: "barber-flagship",
+  beard: "beard-flagship",
+  nails: "nails-flagship",
+  facial: "skincare-flagship",
+  makeup: "makeup-flagship",
+  "waxing-threading": "waxing-threading-flagship",
+  "spa-massage": "spa-massage-flagship",
+  "bridal-event": "bridal-event-flagship",
+};
+
 /**
  * The 8 principal customer-facing service categories, in landing/search discovery order. `query`
  * is the exact `service` search param this category's card/chip should link to — verified against
@@ -262,14 +281,7 @@ export function getEditorialAssetsByCategory(category: EditorialAsset["category"
  * case-insensitive contains), so every category is a truthful search, never a dead button, even
  * for a category with few or zero salons currently listed.
  */
-export const SERVICE_CATEGORIES = [
-  { id: "hair", label: "Hair", query: "hair", assetId: "hair-flagship" },
-  { id: "barber", label: "Barber", query: "haircut", assetId: "barber-flagship" },
-  { id: "beard", label: "Beard", query: "beard", assetId: "beard-flagship" },
-  { id: "nails", label: "Nails", query: "nail", assetId: "nails-flagship" },
-  { id: "facial", label: "Facial", query: "facial", assetId: "skincare-flagship" },
-  { id: "makeup", label: "Makeup", query: "makeup", assetId: "makeup-flagship" },
-  { id: "waxing-threading", label: "Waxing & Threading", query: "waxing", assetId: "waxing-threading-flagship" },
-  { id: "spa-massage", label: "Spa & Massage", query: "massage", assetId: "spa-massage-flagship" },
-  { id: "bridal-event", label: "Bridal & Event", query: "bridal", assetId: "bridal-event-flagship" },
-] as const;
+export const SERVICE_CATEGORIES = SALON_DISCOVERY_CATEGORIES.map((category) => ({
+  ...category,
+  assetId: CATEGORY_ASSET_IDS[category.id] ?? category.id,
+}));
