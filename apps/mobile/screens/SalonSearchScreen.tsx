@@ -603,7 +603,13 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
   },
   searchButton: { flexBasis: 110, flexGrow: 0 },
-  searchButtonStacked: { flexBasis: undefined, flexGrow: 1 },
+  // Owner correction, round 2: the first fix dropped `flexGrow: 1` but forgot that `searchButton`'s
+  // own `flexBasis: 110` (a WIDTH hint for row mode) is still merged in underneath this style and,
+  // once searchRow is a column, `flexBasis` sizes the main (vertical) axis instead — so the button
+  // rendered at a fixed 110px height even with flexGrow reset to 0. `flexBasis: 'auto'` here cancels
+  // that inherited value so height comes from PremiumButton's own minHeight (52) instead; `width:
+  // '100%'` is what makes it full-width in a column (flexBasis no longer does, on this axis).
+  searchButtonStacked: { flexBasis: 'auto', flexGrow: 0, width: '100%' },
   nearMeButton: { marginBottom: space[4] },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
   filterHint: {
