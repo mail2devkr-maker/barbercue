@@ -19,20 +19,18 @@
    owner-approved image only, no border-radius/rectangle since there is no baked-in card left to
    round on the transparent asset.
    Sized by WIDTH with height: auto, not a fixed height — never object-fit, a transform, or a mask
-   that could crop it. This asset's own canvas is ~3.86:1 (mark + "FastQue" + the "GOOD LOOKS |
-   LESS WAITING" tagline all sharing the image's full height), so the tagline's rendered size is a
-   fixed fraction of however wide the whole lockup renders. Earlier attempts made the tagline
-   legible by shrinking the render only a little (200-260px) or by swapping in a different, older
-   logo design at more favorable proportions — both wrong: an owner review asked for the SAME
-   approved artwork rendered with real breathing room instead. This clamp renders it meaningfully
-   bigger (min 230px, up to 340px) so the tagline is comfortably legible at every required
-   viewport, including 390px phones (230px + the hamburger button + gap still comfortably fits the
-   header's own inner width there) without touching the artwork itself. */
+   that could crop it. The artwork's own canvas already has real transparent breathing room above
+   and below the tagline/glow (see the canvas-expansion fix), so this clamp is pure visual sizing,
+   not a legibility workaround: an owner pass found the previous clamp (230-340px) rendered the
+   lockup slightly too large/tall for comfortable header proportions, even though nothing was
+   actually clipped. Reduced ~13% (230->200px min, 340->300px max) — still comfortably legible,
+   including at 390px phones (200px + the hamburger button + gap fits the header's inner width
+   there with room to spare) — without touching the artwork itself. */
 .headerArtwork .art,
 .canonicalArtwork .art {
-  width: clamp(230px, 24vw, 340px);
+  width: clamp(200px, 21vw, 300px);
   height: auto;
-  max-width: 340px;
+  max-width: 300px;
   filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
@@ -42,13 +40,14 @@
 }
 
 /* compact + canonicalArtwork (footer, dashboard header, staff/owner shells) shares the same
-   transparent, width-clamped sizing as the main header, just smaller — .compact alone would
-   otherwise win on source order and reintroduce a fixed width tuned for the old opaque asset. */
+   transparent, width-clamped sizing as the main header, just smaller, same ~13% reduction —
+   .compact alone would otherwise win on source order and reintroduce a fixed width tuned for the
+   old opaque asset. */
 .compact.canonicalArtwork .art,
 .compact.headerArtwork .art {
-  width: clamp(165px, 16vw, 220px);
+  width: clamp(145px, 14vw, 195px);
   height: auto;
-  max-width: 220px;
+  max-width: 195px;
 }
 
 .markOnly .art {
