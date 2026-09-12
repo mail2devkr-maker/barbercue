@@ -11,8 +11,8 @@ import type {
 import { apiFetch, ApiError } from '../lib/api';
 import { dateLocaleFor } from '../lib/date-locale';
 import { useLanguage } from '../lib/language-context';
-import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
-import { Screen, SectionHeader, Skeleton, EmptyState, InlineError, Button } from '../components/ui';
+import { color, fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../lib/theme';
+import { Skeleton, EmptyState, InlineError, PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 
 function loadPage(cursor?: string): Promise<PaginatedResult<CustomerCreditTransactionDto>> {
   const query = cursor ? `?cursor=${cursor}` : '';
@@ -58,7 +58,7 @@ function TransactionRow({ item }: { item: CustomerCreditTransactionDto }) {
         </Text>
         {item.reason && <Text style={styles.rowMeta}>{item.reason}</Text>}
       </View>
-      <Text style={[styles.rowAmount, { color: credit ? color.success : color.accent }]}>
+      <Text style={[styles.rowAmount, { color: credit ? fastQue.success : fastQue.pink }]}>
         {credit ? '+' : '−'}
         {formatMoney(item.amount, null)}
       </Text>
@@ -108,8 +108,8 @@ export default function CreditsHistoryScreen() {
   }
 
   return (
-    <Screen scroll={false} contentStyle={styles.screenContent}>
-      <SectionHeader eyebrow={t.fastQueCreditsLabel} title={t.walletBalanceLabel} />
+    <PremiumScreen scroll={false} contentStyle={styles.screenContent}>
+      <PremiumSectionHeader eyebrow={t.fastQueCreditsLabel} title={t.walletBalanceLabel} />
       {loading ? (
         <View style={styles.skeletonStack}>
           <Skeleton style={styles.skeletonCard} />
@@ -119,7 +119,7 @@ export default function CreditsHistoryScreen() {
         <InlineError message={error} />
       ) : (
         <>
-          <Text style={styles.balance}>{formatMoney(balance?.balance ?? 0, null)}</Text>
+          <PremiumCard strong style={styles.balanceCard}><Text style={styles.balance}>{formatMoney(balance?.balance ?? 0, null)}</Text></PremiumCard>
           <Text style={styles.sectionTitle}>{t.creditsHistoryTitle}</Text>
           {items.length === 0 ? (
             <EmptyState title={t.noCreditsHistoryYet} />
@@ -131,13 +131,13 @@ export default function CreditsHistoryScreen() {
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={color.accent} />}
               renderItem={({ item }) => <TransactionRow item={item} />}
               ListFooterComponent={
-                nextCursor ? <Button title={t.loadMore} variant="outline" onPress={() => void handleLoadMore()} style={styles.loadMore} /> : null
+                nextCursor ? <PremiumButton title={t.loadMore} variant="quiet" onPress={() => void handleLoadMore()} style={styles.loadMore} /> : null
               }
             />
           )}
         </>
       )}
-    </Screen>
+    </PremiumScreen>
   );
 }
 
@@ -145,18 +145,18 @@ const styles = StyleSheet.create({
   screenContent: { padding: space[5] },
   skeletonStack: { gap: space[3] },
   skeletonCard: { height: 72, borderRadius: radius.lg },
+  balanceCard: { marginBottom: space[4] },
   balance: {
     fontFamily: font.displaySemiBold,
     fontSize: fontSize['2xl'],
     lineHeight: lineHeightFor(fontSize['2xl']),
-    color: color.ink,
-    marginVertical: space[3],
+    color: fastQue.text,
   },
   sectionTitle: {
     fontFamily: font.bodySemiBold,
     fontSize: fontSize.sm,
     lineHeight: lineHeightFor(fontSize.sm),
-    color: color.ink,
+    color: fastQue.text,
     marginBottom: space[2],
   },
   listContent: { paddingTop: space[1] },
@@ -164,16 +164,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.lg,
     padding: space[3],
     marginBottom: space[2],
+    ...premiumShadow,
   },
   rowBody: { flex: 1, marginRight: space[2] },
-  rowTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
-  rowMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted, marginTop: 2 },
+  rowTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: fastQue.text },
+  rowMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: fastQue.textMuted, marginTop: 2 },
   rowAmount: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm) },
   loadMore: { marginTop: space[2] },
 });

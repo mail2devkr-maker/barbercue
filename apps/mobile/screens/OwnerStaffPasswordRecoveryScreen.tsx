@@ -4,8 +4,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AUTH_PATHS, forgotPasswordSchema } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useLanguage } from '../lib/language-context';
-import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Button, InlineError, Screen, SectionHeader } from '../components/ui';
+import { fastQue, font, fontSize, radius, space } from '../lib/theme';
+import { InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import type { AuthStackParamList } from '../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PasswordRecovery'>;
@@ -53,22 +53,22 @@ export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: 
 
   if (submitted) {
     return (
-      <Screen contentStyle={styles.screenContent}>
-        <SectionHeader eyebrow={t.passwordRecoveryTitle} title={t.checkYourInboxTitle} />
+      <PremiumScreen contentStyle={styles.screenContent}>
+        <PremiumSectionHeader eyebrow={t.passwordRecoveryTitle} title={t.checkYourInboxTitle} />
         <View style={styles.successCard}>
           <Text style={styles.successText}>
             {t.eligibleAccountPrefix}{roleLabel}{t.eligibleAccountSuffix}
           </Text>
           <Text style={styles.successHint}>{t.afterResetHint}</Text>
         </View>
-        <Button title={t.backToSignIn} onPress={() => navigation.goBack()} />
-      </Screen>
+        <PremiumButton title={t.backToSignIn} onPress={() => navigation.goBack()} />
+      </PremiumScreen>
     );
   }
 
   return (
-    <Screen contentStyle={styles.screenContent}>
-      <SectionHeader
+    <PremiumScreen contentStyle={styles.screenContent}>
+      <PremiumSectionHeader
         eyebrow={t.passwordRecoveryTitle}
         title={t.resetYourPasswordTitle}
         subtitle={`${t.enterEmailForAccountPrefix}${roleLabel}${t.enterEmailForAccountSuffix}`}
@@ -81,7 +81,7 @@ export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: 
         <TextInput
           style={styles.input}
           placeholder="you@example.com"
-          placeholderTextColor={color.muted}
+          placeholderTextColor={fastQue.textSecondary}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
@@ -93,39 +93,39 @@ export default function OwnerStaffPasswordRecoveryScreen({ navigation, route }: 
         />
       </View>
 
-      <Button title={t.sendResetLinkAction} onPress={() => void submit()} loading={submitting} />
+      <PremiumButton title={t.sendResetLinkAction} onPress={() => void submit()} loading={submitting} />
       <Pressable style={styles.backLink} onPress={() => navigation.goBack()} accessibilityRole="button">
         <Text style={styles.backLinkText}>{t.backToSignIn}</Text>
       </Pressable>
-    </Screen>
+    </PremiumScreen>
   );
 }
 
 const styles = StyleSheet.create({
   screenContent: { padding: space[5] },
   field: { marginBottom: space[4] },
-  label: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink, marginBottom: space[2] },
+  label: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.text, marginBottom: space[2] },
   input: {
     minHeight: 50,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.input,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
-    color: color.ink,
+    color: fastQue.text,
     fontFamily: font.bodyRegular,
     paddingHorizontal: space[4],
     fontSize: fontSize.base,
   },
   successCard: {
-    backgroundColor: color.successSoft,
+    backgroundColor: 'rgba(114, 213, 154, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(46, 125, 50, 0.24)',
+    borderColor: 'rgba(114, 213, 154, 0.35)',
     borderRadius: radius.sm,
     padding: space[4],
     marginBottom: space[4],
   },
-  successText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 21, color: color.ink },
-  successHint: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: 18, color: color.muted, marginTop: space[3] },
+  successText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 21, color: fastQue.text },
+  successHint: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: 18, color: fastQue.textSecondary, marginTop: space[3] },
   backLink: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: space[2] },
-  backLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent },
+  backLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.pink },
 });

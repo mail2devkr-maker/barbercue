@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { QUEUE_ENTRIES_PATH, type QueueEntryDetailDto } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
-import { Screen, SectionHeader, EmptyState, Skeleton, ErrorState } from '../components/ui';
+import { EmptyState, Skeleton, ErrorState, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import { QueueStatusPanel } from '../components/QueueStatusPanel';
 import { useLanguage } from '../lib/language-context';
 import type { TabParamList } from '../navigation/types';
@@ -39,8 +39,8 @@ export default function QueueScreen() {
   );
 
   return (
-    <Screen refreshing={refreshing} onRefresh={() => void load(true)}>
-      <SectionHeader eyebrow={t.liveQueue} title={t.queueStatusTitle} />
+    <PremiumScreen refreshing={refreshing} onRefresh={() => void load(true)}>
+      <PremiumSectionHeader eyebrow={t.liveQueue} title={t.queueStatusTitle} />
 
       {loading ? (
         <Skeleton style={{ height: 140, borderRadius: 20 }} />
@@ -56,6 +56,6 @@ export default function QueueScreen() {
           onAction={() => navigation.navigate('SearchTab', { screen: 'SalonSearch' })}
         />
       )}
-    </Screen>
+    </PremiumScreen>
   );
 }

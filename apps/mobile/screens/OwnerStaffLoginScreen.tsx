@@ -7,8 +7,8 @@ import { useAuth } from '../lib/auth-context';
 import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
 import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
 import { useLanguage } from '../lib/language-context';
-import { color, font, fontSize, radius, space } from '../lib/theme';
-import { BrandLockup, Screen, SectionHeader, Button, InlineError } from '../components/ui';
+import { fastQue, font, fontSize, radius, space } from '../lib/theme';
+import { BrandLockup, InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import type { UiStrings } from '@barbercue/shared';
 import type { AuthStackParamList } from '../navigation/AuthStack';
 
@@ -77,9 +77,9 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
   const copy = copyFor(t, role);
 
   return (
-    <Screen contentStyle={styles.screenContent}>
+    <PremiumScreen contentStyle={styles.screenContent}>
       <BrandLockup variant="auth" style={styles.brandLockup} />
-      <SectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle={t.useYourDashboardAccount} />
+      <PremiumSectionHeader eyebrow={copy.eyebrow} title={copy.title} subtitle={t.useYourDashboardAccount} />
 
       {error && <InlineError message={error} />}
 
@@ -87,7 +87,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
         <>
           <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={googleSubmitting}>
             {googleSubmitting ? (
-              <ActivityIndicator color={color.ink} />
+              <ActivityIndicator color={fastQue.text} />
             ) : (
               <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>
             )}
@@ -108,7 +108,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
         <TextInput
           style={styles.input}
           placeholder="you@example.com"
-          placeholderTextColor={color.muted}
+          placeholderTextColor={fastQue.textSecondary}
           autoCapitalize="none"
           keyboardType="email-address"
           value={email}
@@ -121,7 +121,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
         <TextInput
           style={styles.input}
           placeholder="••••••••"
-          placeholderTextColor={color.muted}
+          placeholderTextColor={fastQue.textSecondary}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -136,7 +136,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
         </Pressable>
       </View>
 
-      <Button title={t.signInTitle} onPress={() => void handleSubmit()} loading={submitting} style={styles.submitButton} />
+      <PremiumButton title={t.signInTitle} onPress={() => void handleSubmit()} loading={submitting} style={styles.submitButton} />
 
       {role === 'OWNER' && (
         <Pressable
@@ -149,7 +149,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
           <Text style={styles.registerShopLinkText}>{t.newToFastQueRegisterShop}</Text>
         </Pressable>
       )}
-    </Screen>
+    </PremiumScreen>
   );
 }
 
@@ -158,42 +158,42 @@ const styles = StyleSheet.create({
   brandLockup: { alignSelf: 'center', marginBottom: space[5] },
   field: { marginBottom: space[4] },
   recoveryLink: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', marginTop: space[1] },
-  recoveryLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent },
-  label: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink, marginBottom: space[2] },
+  recoveryLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.pink },
+  label: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.text, marginBottom: space[2] },
   input: {
     minHeight: 50,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.input,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
-    color: color.ink,
+    color: fastQue.text,
     fontFamily: font.bodyRegular,
     paddingHorizontal: space[4],
     fontSize: fontSize.base,
   },
   submitButton: { marginTop: space[2] },
   registerShopLink: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: space[4] },
-  registerShopLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent },
+  registerShopLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.pink },
   googleButton: {
     minHeight: 50,
-    backgroundColor: color.surface,
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.ink,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: space[3],
   },
-  googleButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
-  googleNote: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2], textAlign: 'center' },
+  googleButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
+  googleNote: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textSecondary, marginTop: space[2], textAlign: 'center' },
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: space[4] },
-  dividerLine: { flex: 1, height: 1, backgroundColor: color.border },
+  dividerLine: { flex: 1, height: 1, backgroundColor: fastQue.border },
   dividerText: {
     fontFamily: font.bodyBold,
     fontSize: 10,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: color.muted,
+    color: fastQue.textSecondary,
     marginHorizontal: space[3],
   },
 });

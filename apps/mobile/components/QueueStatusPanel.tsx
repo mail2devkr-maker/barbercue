@@ -6,7 +6,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../lib/realtime';
-import { color, font, fontSize, radius, space } from '../lib/theme';
+import { fastQue, font, fontSize, premiumShadow, radius, space } from '../lib/theme';
 
 const ACTIVE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
@@ -120,24 +120,25 @@ export function QueueStatusPanel({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.cardStrong,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.borderStrong,
     padding: space[5],
+    ...premiumShadow,
   },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  token: { fontFamily: font.displaySemiBold, color: color.ink, fontSize: fontSize.xl },
-  status: { fontFamily: font.bodySemiBold, color: color.muted, fontSize: fontSize.sm },
-  statusCalled: { color: color.accent },
-  detail: { fontFamily: font.bodyRegular, color: color.muted, fontSize: fontSize.xs, marginTop: space[2] },
+  token: { fontFamily: font.displaySemiBold, color: fastQue.text, fontSize: fontSize.xl },
+  status: { fontFamily: font.bodySemiBold, color: fastQue.textSecondary, fontSize: fontSize.sm },
+  statusCalled: { color: fastQue.pink },
+  detail: { fontFamily: font.bodyRegular, color: fastQue.textSecondary, fontSize: fontSize.xs, marginTop: space[2] },
   turnAlertBanner: {
-    backgroundColor: color.successSoft,
+    backgroundColor: 'rgba(114,213,154,0.13)',
     borderWidth: 1,
     borderColor: 'rgba(46, 125, 50, 0.3)',
     borderRadius: radius.sm,
     padding: space[3],
     marginBottom: space[3],
   },
-  turnAlertText: { fontFamily: font.bodyBold, fontSize: fontSize.xs, color: '#2e7d32' },
+  turnAlertText: { fontFamily: font.bodyBold, fontSize: fontSize.xs, color: fastQue.success },
 });

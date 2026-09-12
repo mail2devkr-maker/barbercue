@@ -35,8 +35,8 @@ import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { resolveHomeLocation } from '../lib/home-location';
 import { createAuthenticatedHeroCommand, type HeroAction } from '../lib/hero-action-commands';
-import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
-import { BrandLockup, Card, Button, Skeleton, NotificationBell, LanguageSwitcher, SafeImage, GradientView } from '../components/ui';
+import { color, fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../lib/theme';
+import { BrandLockup, Skeleton, NotificationBell, LanguageSwitcher, SafeImage, GradientView, PremiumButton, PremiumCard } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
 import type { HomeStackParamList, TabParamList } from '../navigation/types';
@@ -60,7 +60,10 @@ const POPULAR_SERVICE_CATEGORIES = [
   { key: 'categorySpa', value: 'Spa', imageUrl: EDITORIAL_ASSET_URL.categorySpa },
 ] as const;
 
-const GRADIENT_COLORS = [color.brandGradientStart, color.brandGradientEnd] as const;
+// Exact website 3-stop brand gradient (pink 0% -> coral 55% -> orange 100%, matching
+// apps/web/components/landing/landing.module.css's `--fq-gradient` on master).
+const GRADIENT_COLORS = [color.brandGradientStart, color.brandGradientMid, color.brandGradientEnd] as const;
+const GRADIENT_STOPS = [0, 0.55, 1] as const;
 
 // Below this width, one header row can't fit brand + location + language + bell without
 // truncating the "FastQue" wordmark itself (observed at 320px) — the header splits into two rows
@@ -269,14 +272,14 @@ export default function HomeScreen({ navigation }: Props) {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: insets.bottom + space[6] }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + space[6], backgroundColor: fastQue.background }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={color.accent} colors={[color.accent]} />}
         keyboardShouldPersistTaps="handled"
       >
         <ImageBackground source={{ uri: EDITORIAL_ASSET_URL.heroBand }} style={styles.hero} imageStyle={styles.heroImage}>
           <View style={[StyleSheet.absoluteFill, styles.heroBaseScrim]} />
           <GradientView
-            colors={['transparent', 'rgba(15, 12, 25, 0.86)']}
+            colors={['transparent', 'rgba(13, 13, 18, 0.86)']}
             direction="vertical"
             style={StyleSheet.absoluteFill}
           />
@@ -338,7 +341,7 @@ export default function HomeScreen({ navigation }: Props) {
               accessibilityState={{ selected: searchMode === 'barber' }}
             >
               {searchMode === 'barber' ? (
-                <GradientView colors={GRADIENT_COLORS} style={styles.segment}>
+                <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.segment}>
                   <TabIcon name="scissors" color={color.surface} size={15} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {t.searchModeBarber}
@@ -346,7 +349,7 @@ export default function HomeScreen({ navigation }: Props) {
                 </GradientView>
               ) : (
                 <View style={styles.segment}>
-                  <TabIcon name="scissors" color={color.muted} size={15} />
+                  <TabIcon name="scissors" color={fastQue.textMuted} size={15} />
                   <Text style={styles.segmentText} numberOfLines={1}>
                     {t.searchModeBarber}
                   </Text>
@@ -360,7 +363,7 @@ export default function HomeScreen({ navigation }: Props) {
               accessibilityState={{ selected: searchMode === 'salon' }}
             >
               {searchMode === 'salon' ? (
-                <GradientView colors={GRADIENT_COLORS} style={styles.segment}>
+                <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.segment}>
                   <TabIcon name="salon" color={color.surface} size={15} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {t.searchModeSalon}
@@ -368,7 +371,7 @@ export default function HomeScreen({ navigation }: Props) {
                 </GradientView>
               ) : (
                 <View style={styles.segment}>
-                  <TabIcon name="salon" color={color.muted} size={15} />
+                  <TabIcon name="salon" color={fastQue.textMuted} size={15} />
                   <Text style={styles.segmentText} numberOfLines={1}>
                     {t.searchModeSalon}
                   </Text>
@@ -381,7 +384,7 @@ export default function HomeScreen({ navigation }: Props) {
           <TextInput
             style={styles.searchInput}
             placeholder={t.shopOrServiceExample}
-            placeholderTextColor={color.muted}
+            placeholderTextColor={fastQue.textMuted}
             value={query}
             onChangeText={setQuery}
             onSubmitEditing={handleFindPress}
@@ -396,7 +399,7 @@ export default function HomeScreen({ navigation }: Props) {
           </Pressable>
 
           <Pressable onPress={handleFindPress} accessibilityRole="button">
-            <GradientView colors={GRADIENT_COLORS} style={styles.ctaButton}>
+            <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.ctaButton}>
               <Text style={styles.ctaButtonText}>{searchMode === 'barber' ? t.findABarberAction : t.findShopsAction}</Text>
             </GradientView>
           </Pressable>
@@ -410,7 +413,7 @@ export default function HomeScreen({ navigation }: Props) {
           ) : (
             <>
               {activeQueueEntry && (
-                <Card style={styles.statusCard}>
+                <PremiumCard strong style={styles.statusCard}>
                   <Text style={styles.statusEyebrow}>{t.liveQueueLabel}</Text>
                   <Text style={styles.statusTitle}>{t.tokenNumberPrefix}{activeQueueEntry.tokenNumber}</Text>
                   <Text style={styles.statusMeta}>
@@ -422,19 +425,19 @@ export default function HomeScreen({ navigation }: Props) {
                           ? `${t.positionPrefix}${activeQueueEntry.position}${t.positionSuffix}`
                           : activeQueueEntry.status}
                   </Text>
-                  <Button title={t.viewQueueStatus} variant="secondary" onPress={() => navigation.navigate('QueueTab', { screen: 'QueueHome' })} style={styles.cardAction} />
-                </Card>
+                  <PremiumButton title={t.viewQueueStatus} variant="secondary" onPress={() => navigation.navigate('QueueTab', { screen: 'QueueHome' })} style={styles.cardAction} />
+                </PremiumCard>
               )}
 
               {upcomingBooking && (
-                <Card style={styles.statusCard}>
+                <PremiumCard strong style={styles.statusCard}>
                   <Text style={styles.statusEyebrow}>{t.upcomingBookingLabel}</Text>
                   <Text style={styles.statusTitle}>{upcomingBooking.serviceName}</Text>
                   <Text style={styles.statusMeta}>
                     {upcomingBooking.salonName} · {formatSlot(upcomingBooking.slotStart, language)}
                   </Text>
                   <Text style={styles.statusMeta}>{formatMoney(upcomingBooking.servicePrice, upcomingBooking.currency)}</Text>
-                  <Button
+                  <PremiumButton
                     title={t.viewBookingAction}
                     variant="secondary"
                     onPress={() =>
@@ -442,7 +445,7 @@ export default function HomeScreen({ navigation }: Props) {
                     }
                     style={styles.cardAction}
                   />
-                </Card>
+                </PremiumCard>
               )}
             </>
           )}
@@ -477,7 +480,7 @@ export default function HomeScreen({ navigation }: Props) {
             <Text style={styles.queueBannerHeadline}>{t.queuePromoHeadlineLine2}</Text>
             <Text style={styles.queueBannerSubcopy}>{t.queuePromoSubcopy}</Text>
           </View>
-          <GradientView colors={GRADIENT_COLORS} style={styles.queueBannerIconWrap}>
+          <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.queueBannerIconWrap}>
             <TabIcon name="queue" color={color.surface} size={24} />
           </GradientView>
         </Pressable>
@@ -533,13 +536,13 @@ export default function HomeScreen({ navigation }: Props) {
 const HERO_HEIGHT = 336;
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.surface },
-  scroll: { flex: 1 },
+  root: { flex: 1, backgroundColor: fastQue.background },
+  scroll: { flex: 1, backgroundColor: fastQue.background },
 
   header: {
     paddingHorizontal: space[4],
     paddingBottom: space[2],
-    backgroundColor: color.surface,
+    backgroundColor: fastQue.background,
     gap: space[2],
   },
   // Row 1 always: brand (never shrinks, never truncates) + bell. Part 7 fix history: the previous
@@ -559,7 +562,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[2],
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
+    backgroundColor: fastQue.glass,
     gap: 4,
   },
   // The narrow-header second row: no fixed maxWidth (the single-row pill above still caps itself
@@ -567,14 +571,14 @@ const styles = StyleSheet.create({
   // doesn't need, comfortably fitting "Choose location" or a real city name without truncating.
   locationPillWide: { flex: 1, maxWidth: 9999 },
   locationDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: color.brandCoral, flexShrink: 0 },
-  locationPillText: { fontFamily: font.bodySemiBold, fontSize: 11, lineHeight: lineHeightFor(11), color: color.ink, flexShrink: 1 },
+  locationPillText: { fontFamily: font.bodySemiBold, fontSize: 11, lineHeight: lineHeightFor(11), color: fastQue.textSecondary, flexShrink: 1 },
 
   hero: { height: HERO_HEIGHT, justifyContent: 'flex-end' },
   heroImage: { resizeMode: 'cover' },
   // A light base tint (the gradient above handles the actual top->bottom legibility ramp) — keeps
   // the upper portion of the photo still clearly a real photo, not fully washed out, closer to the
   // reference's "imagery visible strongly" note than a single flat dark overlay was.
-  heroBaseScrim: { backgroundColor: 'rgba(10, 8, 20, 0.22)' },
+  heroBaseScrim: { backgroundColor: 'rgba(9, 9, 12, 0.22)' },
   heroContent: { padding: space[5], paddingTop: space[4], paddingBottom: space[5] },
   heroEyebrow: {
     fontFamily: font.bodyBold,
@@ -614,18 +618,16 @@ const styles = StyleSheet.create({
   benefitLabel: { fontFamily: font.bodyMedium, fontSize: 11, lineHeight: lineHeightFor(11), color: color.surface },
 
   searchCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.glassStrong,
     marginHorizontal: space[4],
     marginTop: -56,
     borderRadius: 26,
     padding: space[4],
-    shadowColor: color.ink,
-    shadowOpacity: 0.18,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: fastQue.borderStrong,
+    ...premiumShadow,
   },
-  segmentRow: { flexDirection: 'row', backgroundColor: color.surfaceTint, borderRadius: radius.pill, padding: 3, marginBottom: space[4], gap: 3 },
+  segmentRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: radius.pill, padding: 3, marginBottom: space[4], gap: 3 },
   segmentPressable: { flex: 1 },
   segment: {
     flexDirection: 'row',
@@ -636,31 +638,31 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     paddingHorizontal: space[2],
   },
-  segmentText: { fontFamily: font.bodySemiBold, fontSize: 12.5, lineHeight: lineHeightFor(12.5), color: color.muted },
+  segmentText: { fontFamily: font.bodySemiBold, fontSize: 12.5, lineHeight: lineHeightFor(12.5), color: fastQue.textMuted },
   segmentTextActive: { color: color.surface },
   fieldLabel: {
     fontFamily: font.bodyBold,
     fontSize: 10,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: color.muted,
+    color: fastQue.textMuted,
     marginBottom: space[1],
   },
   searchInput: {
     minHeight: 48,
     justifyContent: 'center',
-    backgroundColor: color.surface,
+    backgroundColor: fastQue.input,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
     paddingHorizontal: space[3],
-    color: color.ink,
+    color: fastQue.text,
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,
     marginBottom: space[3],
   },
-  cityValueText: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
-  cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted },
+  cityValueText: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: fastQue.text },
+  cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: fastQue.textMuted },
   ctaButton: {
     minHeight: 52,
     alignItems: 'center',
@@ -672,8 +674,8 @@ const styles = StyleSheet.create({
 
   section: { paddingHorizontal: space[5], marginTop: space[6] },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, lineHeight: lineHeightFor(fontSize.lg), color: color.ink },
-  viewAllText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.accent },
+  sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, lineHeight: lineHeightFor(fontSize.lg), color: fastQue.text },
+  viewAllText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: fastQue.pink },
 
   loadingStack: { gap: space[3] },
   skeletonCard: { height: 96, borderRadius: radius.lg },
@@ -683,11 +685,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: color.gold,
+    color: fastQue.orange,
     marginBottom: space[1],
   },
-  statusTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: color.ink },
-  statusMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: space[1] },
+  statusTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: fastQue.text },
+  statusMeta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, marginTop: space[1] },
   cardAction: { marginTop: space[3], alignSelf: 'flex-start', minHeight: 40, paddingHorizontal: space[4] },
 
   categoryRow: { paddingHorizontal: space[5], gap: space[4], marginTop: space[3] },
@@ -698,7 +700,7 @@ const styles = StyleSheet.create({
     borderRadius: 34,
     backgroundColor: color.surfaceTint,
   },
-  categoryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.ink, textAlign: 'center' },
+  categoryLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: fastQue.textSecondary, textAlign: 'center' },
 
   queueBanner: {
     flexDirection: 'row',
@@ -731,17 +733,17 @@ const styles = StyleSheet.create({
     gap: space[3],
   },
   trustItem: { flex: 1, alignItems: 'center', gap: space[2] },
-  trustLabel: { fontFamily: font.bodyMedium, fontSize: 10.5, lineHeight: lineHeightFor(10.5), color: color.muted, textAlign: 'center' },
+  trustLabel: { fontFamily: font.bodyMedium, fontSize: 10.5, lineHeight: lineHeightFor(10.5), color: fastQue.textMuted, textAlign: 'center' },
 
   shortcutRow: { paddingHorizontal: space[5], marginTop: space[6], gap: space[2] },
   shortcut: {
     minHeight: 48,
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
     paddingHorizontal: space[4],
   },
-  shortcutText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
+  shortcutText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: fastQue.textSecondary },
 });
