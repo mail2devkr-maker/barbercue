@@ -35,9 +35,12 @@
 
 .headerArtwork .art,
 .canonicalArtwork .art {
-  width: clamp(170px, 18vw, 255px);
+  /* Owner asked for the visible mark to read ~8-12% more confidently without growing the header —
+     185-280px (was 170-255px), still comfortably inside the unchanged 200-300px footprint above,
+     so the header/nav position never moves. */
+  width: clamp(185px, 19.5vw, 280px);
   height: auto;
-  max-width: 255px;
+  max-width: 280px;
   filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
@@ -57,9 +60,10 @@
 
 .compact.canonicalArtwork .art,
 .compact.headerArtwork .art {
-  width: clamp(120px, 12vw, 150px);
+  /* Same ~10% increase as the main header artwork, still inside the unchanged 145-195px footprint. */
+  width: clamp(130px, 13vw, 165px);
   height: auto;
-  max-width: 150px;
+  max-width: 165px;
 }
 
 .markOnly .art {
