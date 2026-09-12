@@ -340,22 +340,19 @@
 .heroPhotoImg {
   /* Owner direction: `fill` + `object-fit: cover` forced this 900x672 (4:3) photo to stretch-cover
      the whole full-bleed hero width, scaling the customer's head far beyond its intended size —
-     "over-zoomed / stretched". Rendered at its own intrinsic ratio instead (no `fill`, real
-     width/height from the manifest — see HeroVisual.tsx): position absolute within .heroMedia,
-   anchored to the right edge with a bounded contain-sized width. The browser still derives height
-   purely from the image's natural aspect ratio, but the photo no longer grows to match a tall
-   hero. Whatever width that leaves unfilled on the
-     left stays empty within this transparent layer, revealing .heroScrim/.hero's own dark
-     background beneath it, matching the reference's dark, empty left side behind the copy. */
+     "over-zoomed / stretched". This is a full-bleed layer with `object-fit: cover`: it preserves
+     the source ratio while cropping only what is necessary for each hero frame. The current
+     horizontal flip stays on the image alone so the customer remains naturally on the right and
+     the barber stays at the far-right edge. */
   position: absolute;
   top: 0;
   right: 0;
-  width: min(54vw, 760px);
-  height: auto;
-  max-width: 60%;
-  max-height: 100%;
-  object-fit: contain;
-  object-position: right center;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  object-position: center center;
   filter: saturate(0.85) brightness(0.7) contrast(1.08);
   /* Owner direction: mirror only the photo layer so the barber/customer composition matches the
      approved reference — .heroScrim and every text/UI layer sit in separate sibling elements and
@@ -1384,17 +1381,16 @@
   /* Utility bar is hidden at this tier too, so the fixed header is just the ~77px main nav row. */
   .hero { padding-top: 100px; }
 
-  /* height: 100% (the default, desktop rule above) over-zooms once the hero grows tall relative
-     to its own width at this tier — confirmed at 768x1024, where the hero's own height (~684px,
-     driven by the stacked mobile/tablet copy) rendered a height:100% photo *wider than the
-     viewport itself*. Switching the controlling dimension to width instead keeps the photo a
-     predictable, modest fraction of the frame regardless of how tall the hero gets, while height:
-     auto still derives purely from the same untouched intrinsic 900x672 ratio — never distorted. */
+  /* Keep the visual full bleed at tablet widths too; cover preserves the photo's source ratio
+     while the scrim maintains the dark reading space behind the unchanged copy. */
   .heroPhotoImg {
     top: 0;
-    height: auto;
-    width: 62%;
+    height: 100%;
+    width: 100%;
     max-width: none;
+    max-height: none;
+    object-fit: cover;
+    object-position: center center;
   }
 
   .advisorGrid,
@@ -1428,9 +1424,13 @@
   .heroInner { min-height: 0; gap: 28px; }
   .heroCopy { max-width: 100%; }
 
-  /* The 980px tier's 62% width still slightly overlapped the (multi-line, phone-scaled) headline
-     at the narrowest phones — smaller here so the photo clears the headline text. */
-  .heroPhotoImg { width: 46%; }
+  .heroPhotoImg {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    object-fit: cover;
+    object-position: center center;
+  }
   /* Build 11 physical retest: "extremely oversized headings on mobile" — 15vw mid-term put this
      at ~56px on a 375px phone (desktop-scale type squeezed onto a phone, not composed for one).
      Brought down to a still-bold-but-actually-phone-scaled range; still the display face, still

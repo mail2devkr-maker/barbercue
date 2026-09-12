@@ -39,6 +39,8 @@
   width: clamp(200px, 21vw, 300px);
   height: auto;
   max-width: 300px;
+  /* Lift only the pixels within the unchanged footprint; header and navigation geometry stay put. */
+  transform: translateY(-5px);
   filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
