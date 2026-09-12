@@ -21,7 +21,7 @@ const NAV_LINKS = [
 // states. Public browsing is role-aware: customer sessions retain the customer account menu,
 // while owner/staff and platform-admin sessions get a direct link back to their own protected
 // workspace instead of being sent through customer-only /account routes.
-export function CustomerHeader() {
+export function CustomerHeader({ dark }: { dark?: boolean }) {
   const { user, status, logout } = useAuth();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -61,7 +61,7 @@ export function CustomerHeader() {
     : NAV_LINKS;
 
   return (
-    <header className={styles.header}>
+    <header className={dark ? `${styles.header} ${styles.headerDark}` : styles.header}>
       <div className={styles.headerInner}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
           <BrandLockup showTagline canonicalArtwork />

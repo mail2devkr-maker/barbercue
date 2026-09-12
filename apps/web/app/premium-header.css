@@ -4,9 +4,13 @@
    positioning, background, image treatment and nav colors during the pixel-match rebuild. */
 
 /* Shared discovery/customer header keeps its platform layout but uses the requested frosted
-   watermark feel so content remains subtly visible while scrolling. */
-header[class*="customer-shell-module"][class*="header"],
-header[class*="customer-shell"][class*="header"] {
+   watermark feel so content remains subtly visible while scrolling.
+   `:not([class*="headerDark"])` excludes CustomerHeader's opt-in dark variant (currently /search
+   only, see CustomerShell's `dark` prop) — that variant needs its own charcoal background, not
+   this cream frost, and customer-shell.module.css's plain (non-!important) rule for it would
+   otherwise lose to this file's !important regardless of source order. */
+header[class*="customer-shell-module"][class*="header"]:not([class*="headerDark"]),
+header[class*="customer-shell"][class*="header"]:not([class*="headerDark"]) {
   position: sticky !important;
   top: 0;
   z-index: 70 !important;
@@ -17,8 +21,8 @@ header[class*="customer-shell"][class*="header"] {
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  header[class*="customer-shell-module"][class*="header"],
-  header[class*="customer-shell"][class*="header"] {
+  header[class*="customer-shell-module"][class*="header"]:not([class*="headerDark"]),
+  header[class*="customer-shell"][class*="header"]:not([class*="headerDark"]) {
     background: rgba(255, 253, 249, 0.97) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;

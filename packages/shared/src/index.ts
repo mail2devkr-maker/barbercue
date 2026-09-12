@@ -8,5 +8,6 @@ export * from './locale';
 export * from './i18n';
 export * from './brand';
 export * from './catalog/service-catalog';
+export * from './catalog/salon-discovery-filters';
 export * from './cancellation-courtesy';
 export * from './upi';

@@ -613,10 +613,34 @@ export interface UiStrings {
   distanceFilter5km: string;
   priceFilterLabel: string;
   priceFilterAny: string;
-  priceFilterUnder300: string;
-  priceFilter300to600: string;
-  priceFilter600to1000: string;
   priceFilterOver1000: string;
+  /** Rendered as `${priceFilterUpToPrefix}${maxRupees}${priceFilterUpToSuffix}` — a preset row
+   * like "Up to ₹50" (EN) / "₹50 तक" (HI), one per ₹20 step from ₹30 to ₹990. */
+  priceFilterUpToPrefix: string;
+  priceFilterUpToSuffix: string;
+  /** Same prefix/suffix pattern as above, for the Custom modal's "only a minimum was entered"
+   * display case (e.g. "From ₹450" / "₹450 से अधिक") — never a preset row, only a custom value. */
+  priceFilterFromPrefix: string;
+  priceFilterFromSuffix: string;
+  priceFilterCustomLabel: string;
+  priceFilterMinLabel: string;
+  priceFilterMaxLabel: string;
+  priceFilterApplyAction: string;
+  priceFilterClearAction: string;
+  priceFilterErrorNegative: string;
+  priceFilterErrorMinExceedsMax: string;
+  serviceFilterLabel: string;
+  serviceFilterAll: string;
+  serviceCategoryHair: string;
+  serviceCategoryBarber: string;
+  serviceCategoryBeard: string;
+  serviceCategoryNails: string;
+  serviceCategoryFacial: string;
+  serviceCategoryMakeup: string;
+  serviceCategoryWaxingThreading: string;
+  serviceCategorySpaMassage: string;
+  serviceCategoryBridalEvent: string;
+  closeFilterMenu: string;
   couldNotLoadSalon: string;
   salonNotFound: string;
   photoGalleryHint: string;
@@ -1290,10 +1314,30 @@ const enUi: UiStrings = {
   distanceFilter5km: '5 km',
   priceFilterLabel: 'Price',
   priceFilterAny: 'Any price',
-  priceFilterUnder300: 'Under 300',
-  priceFilter300to600: '300 – 600',
-  priceFilter600to1000: '600 – 1000',
-  priceFilterOver1000: '1000+',
+  priceFilterOver1000: '₹1000+',
+  priceFilterUpToPrefix: 'Up to ₹',
+  priceFilterUpToSuffix: '',
+  priceFilterFromPrefix: 'From ₹',
+  priceFilterFromSuffix: '',
+  priceFilterCustomLabel: 'Custom…',
+  priceFilterMinLabel: 'Minimum price',
+  priceFilterMaxLabel: 'Maximum price',
+  priceFilterApplyAction: 'Apply',
+  priceFilterClearAction: 'Clear',
+  priceFilterErrorNegative: 'Price cannot be negative.',
+  priceFilterErrorMinExceedsMax: 'Minimum price cannot exceed maximum price.',
+  serviceFilterLabel: 'Service',
+  serviceFilterAll: 'All services',
+  serviceCategoryHair: 'Hair',
+  serviceCategoryBarber: 'Barber',
+  serviceCategoryBeard: 'Beard',
+  serviceCategoryNails: 'Nails',
+  serviceCategoryFacial: 'Facial',
+  serviceCategoryMakeup: 'Makeup',
+  serviceCategoryWaxingThreading: 'Waxing & Threading',
+  serviceCategorySpaMassage: 'Spa & Massage',
+  serviceCategoryBridalEvent: 'Bridal & Event',
+  closeFilterMenu: 'Close menu',
   couldNotLoadSalon: 'Could not load this salon.',
   salonNotFound: 'Salon not found.',
   photoGalleryHint: 'Opens full-screen photo gallery',
@@ -1933,10 +1977,30 @@ const hiUi: UiStrings = {
   distanceFilter5km: '5 किमी',
   priceFilterLabel: 'कीमत',
   priceFilterAny: 'कोई भी कीमत',
-  priceFilterUnder300: '300 से कम',
-  priceFilter300to600: '300 – 600',
-  priceFilter600to1000: '600 – 1000',
-  priceFilterOver1000: '1000+',
+  priceFilterOver1000: '₹1000+',
+  priceFilterUpToPrefix: '₹',
+  priceFilterUpToSuffix: ' तक',
+  priceFilterFromPrefix: '₹',
+  priceFilterFromSuffix: ' से अधिक',
+  priceFilterCustomLabel: 'कस्टम…',
+  priceFilterMinLabel: 'न्यूनतम कीमत',
+  priceFilterMaxLabel: 'अधिकतम कीमत',
+  priceFilterApplyAction: 'लागू करें',
+  priceFilterClearAction: 'साफ़ करें',
+  priceFilterErrorNegative: 'कीमत नकारात्मक नहीं हो सकती।',
+  priceFilterErrorMinExceedsMax: 'न्यूनतम कीमत अधिकतम कीमत से अधिक नहीं हो सकती।',
+  serviceFilterLabel: 'सेवा',
+  serviceFilterAll: 'सभी सेवाएं',
+  serviceCategoryHair: 'बाल',
+  serviceCategoryBarber: 'बार्बर',
+  serviceCategoryBeard: 'दाढ़ी',
+  serviceCategoryNails: 'नाखून',
+  serviceCategoryFacial: 'फेशियल',
+  serviceCategoryMakeup: 'मेकअप',
+  serviceCategoryWaxingThreading: 'वैक्सिंग और थ्रेडिंग',
+  serviceCategorySpaMassage: 'स्पा और मालिश',
+  serviceCategoryBridalEvent: 'दुल्हन और इवेंट',
+  closeFilterMenu: 'मेनू बंद करें',
   couldNotLoadSalon: 'यह सैलून लोड नहीं हो सका।',
   salonNotFound: 'सैलून नहीं मिला।',
   photoGalleryHint: 'पूर्ण-स्क्रीन फ़ोटो गैलरी खोलता है',
