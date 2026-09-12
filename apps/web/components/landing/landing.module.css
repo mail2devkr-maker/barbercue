@@ -337,6 +337,15 @@
   z-index: 0;
 }
 
+.heroMedia::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--fq-void) url('/editorial/services/barber/precision-fade.webp') center center / cover no-repeat;
+  filter: saturate(0.85) brightness(0.7) contrast(1.08);
+  transform: scaleX(-1);
+}
+
 .heroPhotoImg {
   /* Owner direction: `fill` + `object-fit: cover` forced this 900x672 (4:3) photo to stretch-cover
      the whole full-bleed hero width, scaling the customer's head far beyond its intended size —
@@ -346,7 +355,10 @@
      the barber stays at the far-right edge. */
   position: absolute;
   top: 0;
-  right: 0;
+  /* The reference leaves the customer in the right half and only a narrow
+     silhouette at the far edge. Shift the same full-bleed crop instead of
+     stretching or replacing the source image. */
+  right: -16%;
   width: 100%;
   height: 100%;
   max-width: none;
@@ -354,6 +366,7 @@
   object-fit: cover;
   object-position: center center;
   filter: saturate(0.85) brightness(0.7) contrast(1.08);
+  z-index: 1;
   /* Owner direction: mirror only the photo layer so the barber/customer composition matches the
      approved reference — .heroScrim and every text/UI layer sit in separate sibling elements and
      are untouched by this transform. */
@@ -363,6 +376,7 @@
 .heroScrim {
   position: absolute;
   inset: 0;
+  z-index: 2;
   background:
     linear-gradient(100deg, rgba(9, 9, 12, 0.96) 0%, rgba(9, 9, 12, 0.86) 34%, rgba(9, 9, 12, 0.4) 64%, rgba(9, 9, 12, 0.18) 100%),
     linear-gradient(180deg, rgba(9, 9, 12, 0.2) 0%, transparent 26%, rgba(9, 9, 12, 0.55) 100%);
