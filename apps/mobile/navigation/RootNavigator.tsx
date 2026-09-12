@@ -11,7 +11,7 @@ import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
 import { takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { navigationRef } from './navigation-ref';
-import { color, font } from '../lib/theme';
+import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import type { TabParamList } from './types';
 
@@ -71,11 +71,11 @@ export default function RootNavigator() {
         // FastQue brand accent on the active tab (visual-fidelity checkpoint) — was plain ink,
         // indistinguishable from a default/unbranded tab bar; every tab (Home included) now reads
         // clearly as "selected" via the same brand accent the rest of Home's redesign uses.
-        tabBarActiveTintColor: color.brandCoral,
-        tabBarInactiveTintColor: color.muted,
+        tabBarActiveTintColor: fastQue.pink,
+        tabBarInactiveTintColor: fastQue.textMuted,
         tabBarStyle: {
-          backgroundColor: color.surface,
-          borderTopColor: color.border,
+          backgroundColor: fastQue.glassStrong,
+          borderTopColor: fastQue.border,
           borderTopWidth: 1,
           // A fixed height/padding here previously overrode React Navigation's own automatic
           // safe-area handling for the bottom tab bar (bumping into a phone's gesture-nav bar/home
@@ -84,10 +84,10 @@ export default function RootNavigator() {
           height: 60 + insets.bottom,
           paddingBottom: 8 + insets.bottom,
           paddingTop: 8,
-          shadowColor: color.ink,
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: -2 },
+          shadowColor: '#000000',
+          shadowOpacity: 0.3,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -4 },
           elevation: 8,
         },
         tabBarLabelStyle: { fontFamily: font.bodySemiBold, fontSize: 11, marginTop: 2 },

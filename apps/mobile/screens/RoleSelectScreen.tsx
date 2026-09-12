@@ -16,7 +16,7 @@ import { resolveHomeLocation } from '../lib/home-location';
 import { createSignedOutHeroCommand, type HeroAction } from '../lib/hero-action-commands';
 import { stashPendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
-import { color, font, lineHeightFor, radius, space } from '../lib/theme';
+import { color, fastQue, font, lineHeightFor, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
 import { EDITORIAL_ASSET_URL } from '../lib/editorial';
@@ -24,7 +24,10 @@ import type { AuthStackParamList } from '../navigation/AuthStack';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'RoleSelect'>;
 
-const GRADIENT_COLORS = [color.brandGradientStart, color.brandGradientEnd] as const;
+// Exact website 3-stop brand gradient (pink 0% -> coral 55% -> orange 100%, matching
+// apps/web/components/landing/landing.module.css's `--fq-gradient` on master).
+const GRADIENT_COLORS = [color.brandGradientStart, color.brandGradientMid, color.brandGradientEnd] as const;
+const GRADIENT_STOPS = [0, 0.55, 1] as const;
 const HERO_HEIGHT = 336;
 
 const POPULAR_SERVICE_CATEGORIES = [
@@ -188,7 +191,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
         >
           <View style={[StyleSheet.absoluteFill, styles.heroBaseScrim]} />
           <GradientView
-            colors={['transparent', 'rgba(8, 12, 40, 0.96)']}
+            colors={['transparent', 'rgba(9, 9, 12, 0.96)']}
             direction="vertical"
             style={StyleSheet.absoluteFill}
           />
@@ -250,7 +253,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
               accessibilityState={{ selected: searchMode === 'barber' }}
             >
               {searchMode === 'barber' ? (
-                <GradientView colors={GRADIENT_COLORS} style={[styles.segment, compactCopy && styles.segmentCompact]}>
+                <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={[styles.segment, compactCopy && styles.segmentCompact]}>
                   <TabIcon name="scissors" color={color.surface} size={compactCopy ? 14 : 16} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {barberModeLabel}
@@ -258,7 +261,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
                 </GradientView>
               ) : (
                 <View style={[styles.segment, compactCopy && styles.segmentCompact]}>
-                  <TabIcon name="scissors" color={color.muted} size={compactCopy ? 14 : 16} />
+                  <TabIcon name="scissors" color={fastQue.textSecondary} size={compactCopy ? 14 : 16} />
                   <Text style={styles.segmentText} numberOfLines={1}>{barberModeLabel}</Text>
                 </View>
               )}
@@ -271,7 +274,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
               accessibilityState={{ selected: searchMode === 'salon' }}
             >
               {searchMode === 'salon' ? (
-                <GradientView colors={GRADIENT_COLORS} style={[styles.segment, compactCopy && styles.segmentCompact]}>
+                <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={[styles.segment, compactCopy && styles.segmentCompact]}>
                   <TabIcon name="salon" color={color.surface} size={compactCopy ? 14 : 16} />
                   <Text style={[styles.segmentText, styles.segmentTextActive]} numberOfLines={1}>
                     {salonModeLabel}
@@ -279,7 +282,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
                 </GradientView>
               ) : (
                 <View style={[styles.segment, compactCopy && styles.segmentCompact]}>
-                  <TabIcon name="salon" color={color.muted} size={compactCopy ? 14 : 16} />
+                  <TabIcon name="salon" color={fastQue.textSecondary} size={compactCopy ? 14 : 16} />
                   <Text style={styles.segmentText} numberOfLines={1}>{salonModeLabel}</Text>
                 </View>
               )}
@@ -287,13 +290,13 @@ export default function RoleSelectScreen({ navigation }: Props) {
           </View>
 
           <View style={styles.inputRow}>
-            <TabIcon name="search" color={color.ink} size={22} />
+            <TabIcon name="search" color={fastQue.text} size={22} />
             <View style={styles.inputCopy}>
               <Text style={styles.fieldLabel}>{t.shopOrServiceLabel}</Text>
               <TextInput
                 style={styles.searchInput}
                 placeholder={searchPlaceholder}
-                placeholderTextColor={color.muted}
+                placeholderTextColor={fastQue.textSecondary}
                 value={query}
                 onChangeText={setQuery}
                 onSubmitEditing={handleFindPress}
@@ -303,7 +306,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
           </View>
 
           <Pressable style={styles.inputRow} onPress={handleChooseLocation} disabled={locating}>
-            <TabIcon name="shop" color={color.ink} size={22} />
+            <TabIcon name="shop" color={fastQue.text} size={22} />
             <View style={styles.inputCopy}>
               <Text style={styles.fieldLabel}>{t.cityLocationLabel}</Text>
               <Text style={locationLabel ? styles.cityValueText : styles.cityPlaceholderText} numberOfLines={1}>
@@ -314,7 +317,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
           </Pressable>
 
           <Pressable onPress={handleFindPress} accessibilityRole="button">
-            <GradientView colors={GRADIENT_COLORS} style={styles.ctaButton}>
+            <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.ctaButton}>
               <Text style={styles.ctaButtonText}>
                 {searchMode === 'barber' ? t.findABarberAction : t.findShopsAction} →
               </Text>
@@ -375,19 +378,19 @@ export default function RoleSelectScreen({ navigation }: Props) {
           <Text style={[styles.bottomLabel, styles.bottomLabelActive]}>{t.tabHome}</Text>
         </Pressable>
         <Pressable style={styles.bottomItem} onPress={() => goSearch()}>
-          <TabIcon name="search" color={color.ink} size={23} />
+          <TabIcon name="search" color={fastQue.textMuted} size={23} />
           <Text style={styles.bottomLabel}>{t.tabSearch}</Text>
         </Pressable>
         <Pressable style={styles.bottomItem} onPress={() => choose('CUSTOMER')}>
-          <TabIcon name="bookings" color={color.ink} size={23} />
+          <TabIcon name="bookings" color={fastQue.textMuted} size={23} />
           <Text style={styles.bottomLabel}>{t.tabBookings}</Text>
         </Pressable>
         <Pressable style={styles.bottomItem} onPress={() => choose('CUSTOMER')}>
-          <TabIcon name="offer" color={color.ink} size={23} />
+          <TabIcon name="offer" color={fastQue.textMuted} size={23} />
           <Text style={styles.bottomLabel}>{savedLabel}</Text>
         </Pressable>
         <Pressable style={styles.bottomItem} onPress={() => choose('CUSTOMER')}>
-          <TabIcon name="account" color={color.ink} size={23} />
+          <TabIcon name="account" color={fastQue.textMuted} size={23} />
           <Text style={styles.bottomLabel}>{profileLabel}</Text>
         </Pressable>
       </View>
@@ -396,14 +399,14 @@ export default function RoleSelectScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.surface },
+  root: { flex: 1, backgroundColor: fastQue.background },
   scroll: { flex: 1 },
 
   header: {
     minHeight: 64,
     paddingHorizontal: space[4],
     paddingBottom: 9,
-    backgroundColor: color.surface,
+    backgroundColor: fastQue.background,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -420,41 +423,41 @@ const styles = StyleSheet.create({
     minHeight: 36,
     paddingHorizontal: 10,
     borderRadius: radius.pill,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     gap: 6,
   },
   locationPillCompact: { width: 116, minHeight: 34, paddingHorizontal: 8 },
   locationPin: { width: 7, height: 7, borderRadius: 4, backgroundColor: color.brandCoral, flexShrink: 0 },
-  locationText: { fontFamily: font.bodySemiBold, fontSize: 12, color: color.ink, flexShrink: 1 },
+  locationText: { fontFamily: font.bodySemiBold, fontSize: 12, color: fastQue.text, flexShrink: 1 },
   menuButton: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  menuLine: { width: 21, height: 2, borderRadius: 2, backgroundColor: color.ink },
+  menuLine: { width: 21, height: 2, borderRadius: 2, backgroundColor: fastQue.text },
 
   menuPanel: {
     position: 'absolute',
     right: space[4],
     width: 250,
     zIndex: 40,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderRadius: 18,
     padding: 12,
     borderWidth: 1,
-    borderColor: color.border,
-    shadowColor: color.ink,
+    borderColor: fastQue.border,
+    shadowColor: '#000000',
     shadowOpacity: 0.18,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 12,
   },
-  menuLanguageRow: { alignItems: 'flex-end', paddingBottom: 8, marginBottom: 6, borderBottomWidth: 1, borderBottomColor: color.border },
+  menuLanguageRow: { alignItems: 'flex-end', paddingBottom: 8, marginBottom: 6, borderBottomWidth: 1, borderBottomColor: fastQue.border },
   menuItem: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10 },
-  menuItemTitle: { fontFamily: font.bodyBold, fontSize: 14, color: color.ink },
-  menuItemSubtitle: { fontFamily: font.bodyRegular, fontSize: 11, color: color.muted, marginTop: 2 },
+  menuItemTitle: { fontFamily: font.bodyBold, fontSize: 14, color: fastQue.text },
+  menuItemSubtitle: { fontFamily: font.bodyRegular, fontSize: 11, color: fastQue.textSecondary, marginTop: 2 },
 
   hero: { height: HERO_HEIGHT, justifyContent: 'flex-end', overflow: 'hidden' },
   heroImage: { resizeMode: 'cover' },
-  heroBaseScrim: { backgroundColor: 'rgba(5, 8, 28, 0.52)' },
+  heroBaseScrim: { backgroundColor: 'rgba(9, 9, 12, 0.52)' },
   heroContent: { paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: 62 },
   heroEyebrow: {
     fontFamily: font.bodyBold,
@@ -485,22 +488,22 @@ const styles = StyleSheet.create({
   benefitLabel: { fontFamily: font.bodyMedium, fontSize: 9.5, lineHeight: 12, color: color.surface, maxWidth: 52 },
 
   searchCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     marginHorizontal: space[4],
     marginTop: -44,
     borderRadius: 24,
     padding: 12,
-    shadowColor: color.ink,
+    shadowColor: '#000000',
     shadowOpacity: 0.16,
     shadowRadius: 22,
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
-  segmentRow: { flexDirection: 'row', backgroundColor: '#f5f5f8', borderRadius: radius.pill, padding: 3, marginBottom: 8, gap: 3 },
+  segmentRow: { flexDirection: 'row', backgroundColor: fastQue.input, borderRadius: radius.pill, padding: 3, marginBottom: 8, gap: 3 },
   segmentPressable: { flex: 1 },
   segment: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 40, borderRadius: radius.pill, paddingHorizontal: 7 },
   segmentCompact: { minHeight: 38, gap: 5, paddingHorizontal: 5 },
-  segmentText: { fontFamily: font.bodySemiBold, fontSize: 12.5, color: color.ink },
+  segmentText: { fontFamily: font.bodySemiBold, fontSize: 12.5, color: fastQue.text },
   segmentTextActive: { color: color.surface },
   inputRow: {
     minHeight: 54,
@@ -508,28 +511,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: 13,
     paddingHorizontal: 12,
     marginBottom: 8,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.input,
   },
   inputCopy: { flex: 1, minWidth: 0 },
-  fieldLabel: { fontFamily: font.bodyBold, fontSize: 11, color: color.ink, marginBottom: 1 },
-  searchInput: { flex: 1, width: '100%', minWidth: 0, padding: 0, margin: 0, fontFamily: font.bodyRegular, fontSize: 13, color: color.ink },
-  cityValueText: { fontFamily: font.bodyMedium, fontSize: 13.5, color: color.ink },
-  cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: 13.5, color: color.muted },
-  chevron: { fontFamily: font.bodyBold, fontSize: 22, color: color.ink, marginLeft: 4 },
+  fieldLabel: { fontFamily: font.bodyBold, fontSize: 11, color: fastQue.text, marginBottom: 1 },
+  searchInput: { flex: 1, width: '100%', minWidth: 0, padding: 0, margin: 0, fontFamily: font.bodyRegular, fontSize: 13, color: fastQue.text },
+  cityValueText: { fontFamily: font.bodyMedium, fontSize: 13.5, color: fastQue.text },
+  cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: 13.5, color: fastQue.textSecondary },
+  chevron: { fontFamily: font.bodyBold, fontSize: 22, color: fastQue.text, marginLeft: 4 },
   ctaButton: { minHeight: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 14, marginTop: 1 },
   ctaButtonText: { fontFamily: font.bodyBold, fontSize: 15, color: color.surface },
 
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space[5], marginTop: 26 },
-  sectionTitle: { fontFamily: font.bodyBold, fontSize: 20, color: color.brandNavy },
+  sectionTitle: { fontFamily: font.bodyBold, fontSize: 20, color: fastQue.text },
   viewAllText: { fontFamily: font.bodySemiBold, fontSize: 12, color: color.brandCoral },
   categoryRow: { paddingHorizontal: space[5], gap: 12, marginTop: 12 },
   categoryChip: { width: 76, alignItems: 'center', gap: 6 },
-  categoryThumb: { width: 64, height: 64, borderRadius: 15, backgroundColor: color.surfaceTint },
-  categoryLabel: { fontFamily: font.bodyMedium, fontSize: 10.5, color: color.ink, textAlign: 'center' },
+  categoryThumb: { width: 64, height: 64, borderRadius: 15, backgroundColor: fastQue.card },
+  categoryLabel: { fontFamily: font.bodyMedium, fontSize: 10.5, color: fastQue.textSecondary, textAlign: 'center' },
 
   queueBanner: {
     flexDirection: 'row',
@@ -550,7 +553,7 @@ const styles = StyleSheet.create({
 
   trustStrip: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: space[5], marginTop: 22, gap: 10 },
   trustItem: { flex: 1, alignItems: 'center', gap: 6 },
-  trustLabel: { fontFamily: font.bodyMedium, fontSize: 9.5, lineHeight: 12, color: color.ink, textAlign: 'center' },
+  trustLabel: { fontFamily: font.bodyMedium, fontSize: 9.5, lineHeight: 12, color: fastQue.textMuted, textAlign: 'center' },
 
   bottomBar: {
     position: 'absolute',
@@ -559,17 +562,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     minHeight: 72,
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.glassStrong,
     borderTopWidth: 1,
-    borderTopColor: color.border,
+    borderTopColor: fastQue.border,
     paddingTop: 7,
-    shadowColor: color.ink,
+    shadowColor: '#000000',
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: -5 },
     elevation: 12,
   },
   bottomItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  bottomLabel: { fontFamily: font.bodyMedium, fontSize: 10, color: color.muted },
+  bottomLabel: { fontFamily: font.bodyMedium, fontSize: 10, color: fastQue.textMuted },
   bottomLabelActive: { color: color.brandCoral, fontFamily: font.bodyBold },
 });

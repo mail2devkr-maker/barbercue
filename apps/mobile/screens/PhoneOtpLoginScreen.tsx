@@ -23,8 +23,13 @@ import { ApiError, apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
 import { useLanguage } from '../lib/language-context';
-import { color, font, fontSize, radius, space } from '../lib/theme';
-import { BrandLockup } from '../components/ui';
+import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
+import { BrandLockup, GradientView } from '../components/ui';
+
+// Exact website 3-stop brand gradient (pink 0% -> coral 55% -> orange 100%, matching
+// apps/web/components/landing/landing.module.css's `--fq-gradient` on master).
+const GRADIENT_COLORS = [fastQue.gradientStart, fastQue.gradientMid, fastQue.gradientEnd] as const;
+const GRADIENT_STOPS = [0, 0.55, 1] as const;
 
 type Step = 'phone' | 'otp';
 
@@ -61,7 +66,7 @@ function GoogleSignInButton() {
       )}
       <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={submitting}>
         {submitting ? (
-          <ActivityIndicator color={color.ink} />
+          <ActivityIndicator color={fastQue.text} />
         ) : (
           <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>
         )}
@@ -192,7 +197,7 @@ export default function PhoneOtpLoginScreen() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       {/* Restrained warmth without a gradient dependency — two soft, low-opacity tinted circles,
           not an illustration or photo. */}
       <View style={styles.blobGold} pointerEvents="none" />
@@ -244,23 +249,25 @@ export default function PhoneOtpLoginScreen() {
                     </Text>
                   </View>
                 ) : phoneOtpAvailable === null ? (
-                  <ActivityIndicator color={color.muted} />
+                  <ActivityIndicator color={fastQue.textSecondary} />
                 ) : (
                   <>
                     <TextInput
                       style={styles.input}
                       placeholder={t.phoneNumberPlaceholder}
-                      placeholderTextColor={color.muted}
+                      placeholderTextColor={fastQue.textSecondary}
                       keyboardType="phone-pad"
                       value={phone}
                       onChangeText={setPhone}
                     />
-                    <Pressable style={styles.primaryButton} onPress={() => void requestOtp()} disabled={submitting}>
-                      {submitting ? (
-                        <ActivityIndicator color={color.accentContrast} />
-                      ) : (
-                        <Text style={styles.primaryButtonText}>{t.sendOtpAction}</Text>
-                      )}
+                    <Pressable onPress={() => void requestOtp()} disabled={submitting}>
+                      <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.primaryButton}>
+                        {submitting ? (
+                          <ActivityIndicator color={color.accentContrast} />
+                        ) : (
+                          <Text style={styles.primaryButtonText}>{t.sendOtpAction}</Text>
+                        )}
+                      </GradientView>
                     </Pressable>
                   </>
                 )}
@@ -270,18 +277,20 @@ export default function PhoneOtpLoginScreen() {
                 <TextInput
                   style={styles.input}
                   placeholder={t.otpCodePlaceholder}
-                  placeholderTextColor={color.muted}
+                  placeholderTextColor={fastQue.textSecondary}
                   keyboardType="number-pad"
                   value={code}
                   onChangeText={setCode}
                   autoFocus
                 />
-                <Pressable style={styles.primaryButton} onPress={() => void verifyOtp()} disabled={submitting}>
-                  {submitting ? (
-                    <ActivityIndicator color={color.accentContrast} />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>{t.verifyAndContinueAction}</Text>
-                  )}
+                <Pressable onPress={() => void verifyOtp()} disabled={submitting}>
+                  <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.primaryButton}>
+                    {submitting ? (
+                      <ActivityIndicator color={color.accentContrast} />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>{t.verifyAndContinueAction}</Text>
+                    )}
+                  </GradientView>
                 </Pressable>
                 <Pressable
                   style={[styles.resendButton, (resendCooldown > 0 || resending) && styles.resendButtonDisabled]}
@@ -289,7 +298,7 @@ export default function PhoneOtpLoginScreen() {
                   disabled={resendCooldown > 0 || resending}
                 >
                   {resending ? (
-                    <ActivityIndicator color={color.ink} />
+                    <ActivityIndicator color={fastQue.text} />
                   ) : (
                     <Text style={styles.resendButtonText}>
                       {resendCooldown > 0 ? `${t.resendOtpInPrefix}${resendCooldown}${t.resendOtpInSuffix}` : t.resendOtpAction}
@@ -306,13 +315,14 @@ export default function PhoneOtpLoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: color.surface },
+  root: { flex: 1, backgroundColor: fastQue.background },
   flex: { flex: 1 },
   scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: space[5] },
 
-  // Restrained warmth — two soft, low-opacity tinted circles standing in for a gradient. Gold
-  // (decorative) top-left, terracotta (also decorative here, not an action) bottom-right, both
-  // subtle enough to read as texture, not decoration competing with the form.
+  // Restrained warmth — two soft, low-opacity tinted circles standing in for a gradient. Brand
+  // pink (decorative) top-left, brand orange (also decorative here, not an action) bottom-right —
+  // the website-parity `--fq-pink`/`--fq-orange` hues instead of the legacy gold/terracotta pair,
+  // both subtle enough to read as texture, not decoration competing with the form.
   blobGold: {
     position: 'absolute',
     top: -80,
@@ -320,8 +330,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: 110,
-    backgroundColor: color.goldSoft,
-    opacity: 0.6,
+    backgroundColor: 'rgba(242, 10, 131, 0.12)',
   },
   blobAccent: {
     position: 'absolute',
@@ -330,7 +339,7 @@ const styles = StyleSheet.create({
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: color.accentSoft,
+    backgroundColor: 'rgba(255, 122, 69, 0.10)',
   },
 
   brandLockup: { alignSelf: 'center', marginBottom: space[6] },
@@ -340,7 +349,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 2,
     textTransform: 'uppercase',
-    color: color.gold,
+    color: fastQue.orange,
     textAlign: 'center',
     marginBottom: space[2],
   },
@@ -348,49 +357,49 @@ const styles = StyleSheet.create({
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,
     lineHeight: 21,
-    color: color.muted,
+    color: fastQue.textSecondary,
     textAlign: 'center',
     marginBottom: space[5],
   },
 
   errorCard: {
     borderWidth: 1,
-    borderColor: 'rgba(176, 65, 62, 0.24)',
-    backgroundColor: color.accentSoft,
+    borderColor: 'rgba(255, 139, 154, 0.35)',
+    backgroundColor: 'rgba(255, 139, 154, 0.12)',
     borderRadius: radius.sm,
     paddingVertical: space[3],
     paddingHorizontal: space[4],
     marginBottom: space[4],
   },
-  errorCardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: '#8f302d', textAlign: 'center' },
+  errorCardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: fastQue.error, textAlign: 'center' },
 
   successCard: {
     borderWidth: 1,
-    borderColor: 'rgba(46, 125, 50, 0.24)',
-    backgroundColor: color.successSoft,
+    borderColor: 'rgba(114, 213, 154, 0.35)',
+    backgroundColor: 'rgba(114, 213, 154, 0.12)',
     borderRadius: radius.sm,
     paddingVertical: space[3],
     paddingHorizontal: space[4],
     marginBottom: space[4],
   },
-  successCardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: '#286d2c', textAlign: 'center' },
+  successCardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: fastQue.success, textAlign: 'center' },
 
   noticeCard: {
     borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.goldSoft,
+    borderColor: fastQue.border,
+    backgroundColor: fastQue.card,
     borderRadius: radius.sm,
     padding: space[4],
   },
-  noticeCardText: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: 19, color: color.muted },
+  noticeCardText: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: 19, color: fastQue.textSecondary },
 
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.card,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     padding: space[5],
-    shadowColor: color.ink,
+    shadowColor: '#000000',
     shadowOpacity: 0.06,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
@@ -399,11 +408,11 @@ const styles = StyleSheet.create({
 
   input: {
     minHeight: 52,
-    backgroundColor: '#ffffff',
+    backgroundColor: fastQue.input,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
-    color: color.ink,
+    color: fastQue.text,
     fontFamily: font.bodyRegular,
     paddingVertical: space[3],
     paddingHorizontal: space[4],
@@ -413,7 +422,6 @@ const styles = StyleSheet.create({
 
   primaryButton: {
     minHeight: 52,
-    backgroundColor: color.accent,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -423,24 +431,24 @@ const styles = StyleSheet.create({
 
   googleButton: {
     minHeight: 52,
-    backgroundColor: color.surface,
+    backgroundColor: fastQue.card,
     borderWidth: 1,
-    borderColor: color.ink,
+    borderColor: fastQue.border,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: space[3],
   },
-  googleButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  googleButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
 
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: space[4] },
-  dividerLine: { flex: 1, height: 1, backgroundColor: color.border },
+  dividerLine: { flex: 1, height: 1, backgroundColor: fastQue.border },
   dividerText: {
     fontFamily: font.bodyBold,
     fontSize: 10,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: color.muted,
+    color: fastQue.textSecondary,
     marginHorizontal: space[3],
   },
 
@@ -448,12 +456,12 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: color.ink,
+    borderColor: fastQue.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: space[2] + 4,
     marginTop: space[3],
   },
-  resendButtonDisabled: { borderColor: color.border },
-  resendButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink },
+  resendButtonDisabled: { borderColor: fastQue.border },
+  resendButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.text },
 });
