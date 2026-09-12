@@ -15,30 +15,64 @@
   image-rendering: auto;
 }
 
-/* Public landing header: one owner-approved canonical image only. */
+/* Public landing header (and every other header sharing this NEW premium artwork): one
+   owner-approved image only, no border-radius/rectangle since there is no baked-in card left to
+   round on the transparent asset.
+   An owner pass asked for a visibly smaller logo WITHOUT the header/bar shrinking to follow it —
+   the header's own height and the nav's start position must stay exactly where they were. So
+   sizing is split across two elements: this rule fixes the FOOTPRINT (the .root span already
+   rendered here) at exactly the previous, larger clamp (200-300px wide) using aspect-ratio instead
+   of an actual bigger image — 1800/530 is this asset's own canvas ratio, so the footprint's
+   height matches what `width: clamp(...); height: auto` on the old, bigger render would have
+   measured, to the pixel. The .art rule below sizes the actual visible <img> smaller and centers
+   it inside this unchanged footprint (.root's own align-items: center, default flex-start on the
+   main axis) — so the ONLY visible difference is a smaller logo, never a smaller header. */
+.headerArtwork,
+.canonicalArtwork {
+  width: clamp(200px, 21vw, 300px);
+  aspect-ratio: 1800 / 530;
+}
+
 .headerArtwork .art {
-  width: 244px;
-  max-width: 244px;
+  /* Owner asked for the public-header artwork to read ~8-12% more confidently without growing
+     the header — 200-300px (was 185-280px), exactly filling the unchanged footprint above. */
+  width: clamp(200px, 21vw, 300px);
   height: auto;
-  border-radius: 18px;
-  filter: saturate(1.08) contrast(1.04) drop-shadow(0 8px 22px rgba(238, 42, 91, 0.24));
+  max-width: 300px;
+  /* Lift only the pixels within the unchanged footprint; header and navigation geometry stay put. */
+  transform: translateY(-5px);
+  filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
-/* Other canonical lockups share only the approved artwork's corner finish. Keep headerArtwork
-   isolated because it also owns the public-header sizing, contrast, shadow, and glass treatment. */
+/* Other uses of the clean asset (footer, auth, customer/dashboard surfaces) are deliberately
+   untouched by the landing-header size adjustment. */
 .canonicalArtwork .art {
-  border-radius: 18px;
-}
-
-/* Watermark presentation only: keep the approved artwork pixels intact while letting the sticky
-   glass header read through enough to feel premium rather than like a pasted opaque banner. */
-.headerArtwork[data-glass-host="true"] .art {
-  opacity: 0.78;
+  width: clamp(185px, 19.5vw, 280px);
+  height: auto;
+  max-width: 280px;
+  filter: saturate(1.08) contrast(1.04) drop-shadow(0 6px 16px rgba(238, 42, 91, 0.22));
 }
 
 .compact .art {
   width: 200px;
   max-width: min(34vw, 200px);
+}
+
+/* compact + canonicalArtwork (footer, dashboard header, staff/owner shells) shares the same
+   footprint-preserving treatment as the main header, just smaller — .compact alone would
+   otherwise win on source order and reintroduce a fixed width tuned for the old opaque asset. */
+.compact.headerArtwork,
+.compact.canonicalArtwork {
+  width: clamp(145px, 14vw, 195px);
+  aspect-ratio: 1800 / 530;
+}
+
+.compact.canonicalArtwork .art,
+.compact.headerArtwork .art {
+  /* Same ~10% increase as the main header artwork, still inside the unchanged 145-195px footprint. */
+  width: clamp(130px, 13vw, 165px);
+  height: auto;
+  max-width: 165px;
 }
 
 .markOnly .art {
@@ -60,11 +94,6 @@
   .compact .art {
     width: 180px;
   }
-
-  .headerArtwork .art {
-    width: 216px;
-    max-width: 216px;
-  }
 }
 
 @media (max-width: 760px) {
@@ -76,16 +105,6 @@
   .compact .art {
     width: 165px;
     max-width: 50vw;
-  }
-
-  .headerArtwork .art {
-    width: 186px;
-    max-width: 186px;
-    border-radius: 16px;
-  }
-
-  .canonicalArtwork .art {
-    border-radius: 16px;
   }
 }
 
@@ -103,15 +122,5 @@
   .markOnly .art {
     width: 42px;
     max-width: 42px;
-  }
-
-  .headerArtwork .art {
-    width: 168px;
-    max-width: 168px;
-    border-radius: 14px;
-  }
-
-  .canonicalArtwork .art {
-    border-radius: 14px;
   }
 }
