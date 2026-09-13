@@ -30,6 +30,7 @@ import { GoogleSignInGate } from '../components/auth/GoogleSignInGate';
 import { BookingUpiAction } from '../components/booking/BookingUpiAction';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError } from '../components/ui';
+import { isCreditsEnabled } from '../lib/feature-flags';
 import type { SearchStackParamList, TabParamList } from '../navigation/types';
 
 // FastQue Credits / Wallet V1: steps by a flat ₹5 — fine-grained enough to reach any cap value
@@ -108,8 +109,10 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
     return () => { cancelled = true; };
   }, [salonId]);
 
+  // Google Play release gate (see lib/feature-flags.ts) — the redemption Card below is hidden
+  // entirely when disabled, so skip the balance fetch too rather than load a number nothing shows.
   useEffect(() => {
-    if (status !== 'authenticated') return;
+    if (status !== 'authenticated' || !isCreditsEnabled()) return;
     let cancelled = false;
     apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
       .then((result) => {
@@ -208,7 +211,10 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
               <Text style={styles.hint}>Scan this shop QR with your UPI app. FastQue does not automatically mark the payment as paid just because the QR was opened or scanned.</Text>
             </View>
           )}
-          {booking.creditsRedeemedAmount !== null && booking.creditsRedeemedAmount > 0 && (
+          {/* Google Play release gate (see lib/feature-flags.ts) — redemption can't be requested
+              in this build (the Card below is hidden), so this can't legitimately be non-zero;
+              the flag check is defense in depth against showing it regardless. */}
+          {isCreditsEnabled() && booking.creditsRedeemedAmount !== null && booking.creditsRedeemedAmount > 0 && (
             <Text style={styles.line}>
               {t.creditsRedeemedLabel}: {formatMoney(booking.creditsRedeemedAmount, null)} · {t.payableAmountLabel}:{' '}
               {formatMoney(booking.payableAmount, null)}
@@ -279,7 +285,9 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           </Text>
         )}
       </Card>
-      {status === 'authenticated' && maxRedeemable > 0 && (
+      {/* Google Play release gate (see lib/feature-flags.ts) — explicit, not just relying on
+          maxRedeemable staying 0 because the balance fetch above was skipped. */}
+      {isCreditsEnabled() && status === 'authenticated' && maxRedeemable > 0 && (
         <Card style={styles.card}>
           <Text style={styles.line}>{t.redeemCreditsLabel}</Text>
           <Text style={styles.line}>

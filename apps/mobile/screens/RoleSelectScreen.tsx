@@ -16,6 +16,7 @@ import { resolveHomeLocation } from '../lib/home-location';
 import { createSignedOutHeroCommand, type HeroAction } from '../lib/hero-action-commands';
 import { stashPendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
+import { isCreditsEnabled } from '../lib/feature-flags';
 import { color, fastQue, font, lineHeightFor, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
@@ -106,7 +107,10 @@ export default function RoleSelectScreen({ navigation }: Props) {
       return;
     }
 
-    stashPendingCustomerDestination({ kind: 'credits' });
+    // Google Play release gate (see lib/feature-flags.ts) — the button that reaches this branch
+    // is itself hidden below when disabled; this guard is defense in depth so a disabled build
+    // never stashes a 'credits' destination even if something else calls this handler.
+    if (isCreditsEnabled()) stashPendingCustomerDestination({ kind: 'credits' });
     navigation.navigate('CustomerLogin');
   }
 
@@ -228,18 +232,21 @@ export default function RoleSelectScreen({ navigation }: Props) {
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
               </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
-                onPress={() => handleHeroAction('greatOffers')}
-                accessibilityRole="button"
-                accessibilityLabel={t.trustOffersLabel}
-                hitSlop={8}
-              >
-                <View style={[styles.benefitIconWrap, styles.benefitGold]}>
-                  <TabIcon name="offer" color={color.surface} size={15} />
-                </View>
-                <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
-              </Pressable>
+              {/* Google Play release gate (see lib/feature-flags.ts) */}
+              {isCreditsEnabled() && (
+                <Pressable
+                  style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                  onPress={() => handleHeroAction('greatOffers')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.trustOffersLabel}
+                  hitSlop={8}
+                >
+                  <View style={[styles.benefitIconWrap, styles.benefitGold]}>
+                    <TabIcon name="offer" color={color.surface} size={15} />
+                  </View>
+                  <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         </ImageBackground>
@@ -365,10 +372,13 @@ export default function RoleSelectScreen({ navigation }: Props) {
             <TabIcon name="today" color="#2D9CDB" size={20} />
             <Text style={styles.trustLabel} numberOfLines={2}>{t.trustRealTimeLabel}</Text>
           </View>
-          <View style={styles.trustItem}>
-            <TabIcon name="offer" color="#F2994A" size={20} />
-            <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
-          </View>
+          {/* Google Play release gate (see lib/feature-flags.ts) */}
+          {isCreditsEnabled() && (
+            <View style={styles.trustItem}>
+              <TabIcon name="offer" color="#F2994A" size={20} />
+              <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 

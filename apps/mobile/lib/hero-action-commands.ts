@@ -1,3 +1,4 @@
+import { isCreditsEnabled } from './feature-flags';
 import type { SearchStackParamList } from '../navigation/types';
 
 export type HeroAction = 'bookAhead' | 'joinLive' | 'greatOffers';
@@ -26,5 +27,10 @@ export function createSignedOutHeroCommand(action: HeroAction, locationCoords: H
 export function createAuthenticatedHeroCommand(action: HeroAction, locationCoords: HeroCoordinates): AuthenticatedHeroCommand {
   if (action === 'bookAhead') return { destination: 'search', params: salonSearchParams(locationCoords) };
   if (action === 'joinLive') return { destination: 'queue' };
+  // Google Play release gate (see feature-flags.ts) — Great offers falls back to the same
+  // destination as Book ahead rather than ever resolving to Credits when the flag is off. The
+  // Home/RoleSelect hero already hides this action's button in that case; this is defense in
+  // depth against any other caller still passing 'greatOffers' through.
+  if (!isCreditsEnabled()) return { destination: 'search', params: salonSearchParams(locationCoords) };
   return { destination: 'credits' };
 }
