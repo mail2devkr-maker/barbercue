@@ -19,11 +19,16 @@ describe('mobile Home hero actions', () => {
   const originalCreditsEnv = process.env[CREDITS_ENV];
 
   beforeEach(() => {
+    process.env[CREDITS_ENV] = 'true';
     takePendingCustomerDestination();
   });
 
   afterEach(() => {
-    process.env[CREDITS_ENV] = originalCreditsEnv;
+    if (originalCreditsEnv === undefined) {
+      delete process.env[CREDITS_ENV];
+    } else {
+      process.env[CREDITS_ENV] = originalCreditsEnv;
+    }
   });
 
   it('opens guest discovery for Book ahead and preserves known location', () => {
@@ -59,9 +64,8 @@ describe('mobile Home hero actions', () => {
     expect(createAuthenticatedHeroCommand('greatOffers', null)).toEqual({ destination: 'credits' });
   });
 
-  // Google Play release gate (lib/feature-flags.ts) — the first closed-testing submission was
-  // rejected over the Financial Features declaration Credits triggers; the production build sets
-  // this env var to "false" (eas.json), and Great offers must never resolve to Credits then.
+  // Google Play release gate (lib/feature-flags.ts) — the owner-approved compliance response
+  // pins production to "false", and Great offers must never resolve to Credits in that build.
   it('never resolves authenticated Great offers to Credits when the release flag is off', () => {
     process.env[CREDITS_ENV] = 'false';
     expect(createAuthenticatedHeroCommand('greatOffers', location)).toEqual({
