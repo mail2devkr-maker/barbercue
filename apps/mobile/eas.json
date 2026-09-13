@@ -16,7 +16,10 @@
     "production": {
       "environment": "production",
       "channel": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false"
+      }
     }
   },
   "submit": {

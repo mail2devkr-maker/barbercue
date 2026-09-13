@@ -20,6 +20,7 @@ import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button } from '../components/ui';
 import { InlineError } from '../components/ui/ErrorState';
+import { isCreditsEnabled } from '../lib/feature-flags';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
 
 type Nav = CompositeNavigationProp<
@@ -203,9 +204,12 @@ export default function AccountScreen() {
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('Notifications')}>
           <Text style={styles.shortcutTitle}>{t.notifications}</Text>
         </Pressable>
-        <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('CreditsHistory')}>
-          <Text style={styles.shortcutTitle}>{t.fastQueCreditsLabel}</Text>
-        </Pressable>
+        {/* Google Play release gate (see lib/feature-flags.ts) */}
+        {isCreditsEnabled() && (
+          <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('CreditsHistory')}>
+            <Text style={styles.shortcutTitle}>{t.fastQueCreditsLabel}</Text>
+          </Pressable>
+        )}
         <View style={styles.shortcutCard}>
           <Text style={styles.shortcutTitle}>{t.premiumLabel}</Text>
           <Text style={styles.shortcutMeta}>

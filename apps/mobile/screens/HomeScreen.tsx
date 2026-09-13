@@ -35,6 +35,7 @@ import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
 import { resolveHomeLocation } from '../lib/home-location';
 import { createAuthenticatedHeroCommand, type HeroAction } from '../lib/hero-action-commands';
+import { isCreditsEnabled } from '../lib/feature-flags';
 import { color, fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../lib/theme';
 import { BrandLockup, Skeleton, NotificationBell, LanguageSwitcher, SafeImage, GradientView, PremiumButton, PremiumCard } from '../components/ui';
 import { TabIcon } from '../components/ui/TabIcon';
@@ -152,9 +153,12 @@ export default function HomeScreen({ navigation }: Props) {
 
   // FastQue Credits — only when signed in and loaded; never a fabricated balance for a guest or a
   // still-loading customer (the shortcut below shows just the label until this resolves).
+  // Google Play release gate (see lib/feature-flags.ts): the hero icon and shortcut that would
+  // show this balance are both hidden below, so skip the network call entirely rather than fetch
+  // a balance nothing on screen displays.
   useFocusEffect(
     useCallback(() => {
-      if (status !== 'authenticated') {
+      if (status !== 'authenticated' || !isCreditsEnabled()) {
         setCreditsBalance(null);
         return;
       }
@@ -316,18 +320,22 @@ export default function HomeScreen({ navigation }: Props) {
                 </View>
                 <Text style={styles.benefitLabel}>{t.joinLiveKicker}</Text>
               </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
-                onPress={() => handleHeroAction('greatOffers')}
-                accessibilityRole="button"
-                accessibilityLabel={t.trustOffersLabel}
-                hitSlop={8}
-              >
-                <View style={styles.benefitIconWrap}>
-                  <TabIcon name="offer" color={color.surface} size={18} />
-                </View>
-                <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
-              </Pressable>
+              {/* Google Play release gate (see lib/feature-flags.ts) — Great offers is FastQue
+                  Credits' hero entry point; hidden outright, not just disabled, in this build. */}
+              {isCreditsEnabled() && (
+                <Pressable
+                  style={({ pressed }) => [styles.benefitItem, pressed && styles.benefitItemPressed]}
+                  onPress={() => handleHeroAction('greatOffers')}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.trustOffersLabel}
+                  hitSlop={8}
+                >
+                  <View style={styles.benefitIconWrap}>
+                    <TabIcon name="offer" color={color.surface} size={18} />
+                  </View>
+                  <Text style={styles.benefitLabel}>{t.trustOffersLabel}</Text>
+                </Pressable>
+              )}
             </View>
           </View>
         </ImageBackground>
@@ -500,10 +508,14 @@ export default function HomeScreen({ navigation }: Props) {
             <TabIcon name="today" color={color.gold} size={20} />
             <Text style={styles.trustLabel} numberOfLines={2}>{t.trustRealTimeLabel}</Text>
           </View>
-          <View style={styles.trustItem}>
-            <TabIcon name="offer" color={color.gold} size={20} />
-            <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
-          </View>
+          {/* Google Play release gate (see lib/feature-flags.ts) — this bullet advertises the same
+              "Great offers" concept as the hero Credits shortcut above; hidden alongside it. */}
+          {isCreditsEnabled() && (
+            <View style={styles.trustItem}>
+              <TabIcon name="offer" color={color.gold} size={20} />
+              <Text style={styles.trustLabel} numberOfLines={2}>{t.trustOffersLabel}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.shortcutRow}>
@@ -513,7 +525,8 @@ export default function HomeScreen({ navigation }: Props) {
           <Pressable style={styles.shortcut} onPress={() => navigation.navigate('StyleAdvisor')}>
             <Text style={styles.shortcutText}>{t.aiStyleAdvisor}</Text>
           </Pressable>
-          {status === 'authenticated' && (
+          {/* Google Play release gate (see lib/feature-flags.ts) */}
+          {status === 'authenticated' && isCreditsEnabled() && (
             <Pressable style={styles.shortcut} onPress={() => navigation.navigate('AccountTab', { screen: 'CreditsHistory' })}>
               <Text style={styles.shortcutText} numberOfLines={1}>
                 {t.fastQueCreditsShortcut}

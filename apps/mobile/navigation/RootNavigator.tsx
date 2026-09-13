@@ -11,6 +11,7 @@ import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
 import { takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { navigationRef } from './navigation-ref';
+import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
 import type { TabParamList } from './types';
@@ -43,8 +44,12 @@ function CustomerDestinationHandoffBridge() {
   useEffect(() => {
     const intent = takePendingCustomerDestination();
     if (!intent || !navigationRef.isReady()) return;
+    // Google Play release gate (see lib/feature-flags.ts) — CreditsHistory isn't registered in
+    // AccountStack when disabled, so a stashed pre-auth 'credits' intent (RoleSelectScreen) has
+    // nothing to replay into; silently dropping it (rather than firing an unhandled navigate) is
+    // the correct outcome, since the button that stashed it is itself hidden in that build too.
     if (intent.kind === 'credits') {
-      navigationRef.navigate('AccountTab', { screen: 'CreditsHistory' });
+      if (isCreditsEnabled()) navigationRef.navigate('AccountTab', { screen: 'CreditsHistory' });
     } else if (intent.kind === 'registerShop') {
       navigationRef.navigate('AccountTab', { screen: 'RegisterShop' });
     }
