@@ -4,22 +4,31 @@ describe('FastQue Credits release gate', () => {
   const ORIGINAL = process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED;
 
   afterEach(() => {
-    process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED = ORIGINAL;
+    if (ORIGINAL === undefined) {
+      delete process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED;
+    } else {
+      process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED = ORIGINAL;
+    }
   });
 
-  it('is enabled by default when the var is unset (local dev, preview builds)', () => {
+  it('is disabled when the flag is unset', () => {
     delete process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED;
-    expect(isCreditsEnabled()).toBe(true);
+    expect(isCreditsEnabled()).toBe(false);
   });
 
-  it('is disabled only when explicitly set to the literal string "false" (eas.json production)', () => {
+  it('is disabled when explicitly set to "false"', () => {
     process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED = 'false';
     expect(isCreditsEnabled()).toBe(false);
   });
 
-  it('stays enabled for any other value, so a typo never silently disables it', () => {
-    process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED = 'False';
-    expect(isCreditsEnabled()).toBe(true);
+  it('is disabled for malformed values', () => {
+    for (const value of ['False', 'TRUE', 'enabled', '', ' true']) {
+      process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED = value;
+      expect(isCreditsEnabled()).toBe(false);
+    }
+  });
+
+  it('is enabled only when explicitly set to the literal string "true"', () => {
     process.env.EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED = 'true';
     expect(isCreditsEnabled()).toBe(true);
   });

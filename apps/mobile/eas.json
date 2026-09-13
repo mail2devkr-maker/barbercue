@@ -9,6 +9,9 @@
       "environment": "preview",
       "channel": "preview",
       "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true"
+      },
       "android": {
         "buildType": "apk"
       }
