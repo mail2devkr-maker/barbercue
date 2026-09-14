@@ -9,7 +9,7 @@ import AccountStack from './AccountStack';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
-import { takePendingCustomerDestination } from '../lib/customer-navigation-intent';
+import { resolvePostAuthCustomerNavigation, takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { navigationRef } from './navigation-ref';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
@@ -42,17 +42,31 @@ function GuestBookingHandoffBridge() {
 /** Replays the one signed-out customer CTA that was most recently selected after auth. */
 function CustomerDestinationHandoffBridge() {
   useEffect(() => {
-    const intent = takePendingCustomerDestination();
-    if (!intent || !navigationRef.isReady()) return;
-    // Google Play release gate (see lib/feature-flags.ts) — CreditsHistory isn't registered in
-    // AccountStack when disabled, so a stashed pre-auth 'credits' intent (RoleSelectScreen) has
-    // nothing to replay into; silently dropping it (rather than firing an unhandled navigate) is
-    // the correct outcome, since the button that stashed it is itself hidden in that build too.
-    if (intent.kind === 'credits') {
-      if (isCreditsEnabled()) navigationRef.navigate('AccountTab', { screen: 'CreditsHistory' });
-    } else if (intent.kind === 'registerShop') {
-      navigationRef.navigate('AccountTab', { screen: 'RegisterShop' });
-    }
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+
+    const replay = () => {
+      if (cancelled) return;
+      // Do not consume the intent before NavigationContainer is ready. A native Google return can
+      // complete while App.tsx is swapping AuthStack for RootNavigator; consuming here too early
+      // would lose Register Shop and strand the customer on Home.
+      if (!navigationRef.isReady()) {
+        retry = setTimeout(replay, 0);
+        return;
+      }
+      const intent = takePendingCustomerDestination();
+      if (!intent) return;
+      // CreditsHistory isn't registered when its release gate is off, so the resolver returns null
+      // for that intent. Register Shop always resolves to AccountTab → RegisterShop.
+      const destination = resolvePostAuthCustomerNavigation(intent, isCreditsEnabled());
+      if (destination) navigationRef.navigate(destination.tab, { screen: destination.screen });
+    };
+
+    replay();
+    return () => {
+      cancelled = true;
+      if (retry) clearTimeout(retry);
+    };
   }, []);
   return null;
 }

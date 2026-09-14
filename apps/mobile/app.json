@@ -41,6 +41,7 @@
     "owner": "dcw-team",
     "plugins": [
       "expo-secure-store",
+      "react-native-nitro-google-signin",
       [
         "expo-notifications",
         {

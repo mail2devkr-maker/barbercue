@@ -16,6 +16,12 @@ export function stashPendingShopRegistrationIntent(): void {
   stashPendingCustomerDestination({ kind: 'registerShop' });
 }
 
+/** Starts the protected onboarding auth handoff and returns the exact auth-stack route to open. */
+export function beginShopRegistrationAuthentication(): 'CustomerLogin' {
+  stashPendingShopRegistrationIntent();
+  return 'CustomerLogin';
+}
+
 /** Consumes the stash — at most one replay per stashed intent, never re-fired on a later remount. */
 export function takePendingShopRegistrationIntent(): boolean {
   return takePendingCustomerDestination()?.kind === 'registerShop';

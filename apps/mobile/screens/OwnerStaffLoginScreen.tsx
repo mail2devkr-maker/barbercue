@@ -4,8 +4,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { staffLoginSchema } from '@barbercue/shared';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
-import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
-import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
+import { getGoogleIdToken } from '../lib/google-signin';
+import { beginShopRegistrationAuthentication } from '../lib/shop-registration-intent';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
@@ -58,7 +58,10 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
     setGoogleSubmitting(true);
     try {
       const result = await getGoogleIdToken(t);
-      if (result.type === 'cancelled') return;
+      if (result.type === 'cancelled') {
+        setError(t.couldNotCompleteGoogleSignIn);
+        return;
+      }
       if (result.type === 'error') {
         setError(result.message);
         return;
@@ -83,25 +86,23 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
       {error && <InlineError message={error} />}
 
-      {GOOGLE_SIGNIN_CONFIGURED && (
-        <>
-          <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={googleSubmitting}>
-            {googleSubmitting ? (
-              <ActivityIndicator color={fastQue.text} />
-            ) : (
-              <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>
-            )}
-          </Pressable>
-          <Text style={styles.googleNote}>
-            {role === 'OWNER' ? t.onlyWorksIfRegisteredOwner : t.onlyWorksIfRegisteredStaff}
-          </Text>
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>{t.orDivider}</Text>
-            <View style={styles.dividerLine} />
-          </View>
-        </>
-      )}
+      <>
+        <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={googleSubmitting}>
+          {googleSubmitting ? (
+            <ActivityIndicator color={fastQue.text} />
+          ) : (
+            <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>
+          )}
+        </Pressable>
+        <Text style={styles.googleNote}>
+          {role === 'OWNER' ? t.onlyWorksIfRegisteredOwner : t.onlyWorksIfRegisteredStaff}
+        </Text>
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>{t.orDivider}</Text>
+          <View style={styles.dividerLine} />
+        </View>
+      </>
 
       <View style={styles.field}>
         <Text style={styles.label}>{t.email}</Text>
@@ -142,8 +143,7 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
         <Pressable
           style={styles.registerShopLink}
           onPress={() => {
-            stashPendingShopRegistrationIntent();
-            navigation.navigate('CustomerLogin');
+            navigation.navigate(beginShopRegistrationAuthentication());
           }}
         >
           <Text style={styles.registerShopLinkText}>{t.newToFastQueRegisterShop}</Text>

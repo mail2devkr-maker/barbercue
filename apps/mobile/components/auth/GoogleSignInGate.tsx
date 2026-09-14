@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
-import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../../lib/google-signin';
+import { getGoogleIdToken } from '../../lib/google-signin';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 
@@ -31,7 +31,10 @@ export function GoogleSignInGate({
     setSubmitting(true);
     try {
       const result = await getGoogleIdToken(t);
-      if (result.type === 'cancelled') return;
+      if (result.type === 'cancelled') {
+        setError(t.couldNotCompleteGoogleSignIn);
+        return;
+      }
       if (result.type === 'error') {
         setError(result.message);
         return;
@@ -43,10 +46,6 @@ export function GoogleSignInGate({
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (!GOOGLE_SIGNIN_CONFIGURED) {
-    return <Text style={styles.unavailableText}>{t.signInUnavailableNotice}</Text>;
   }
 
   return (
