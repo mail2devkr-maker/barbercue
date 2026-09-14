@@ -2,7 +2,7 @@
   "expo": {
     "name": "FastQue",
     "slug": "devdutta-kumar-pandey",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -41,6 +41,7 @@
     "owner": "dcw-team",
     "plugins": [
       "expo-secure-store",
+      "react-native-nitro-google-signin",
       [
         "expo-notifications",
         {

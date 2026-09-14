@@ -21,7 +21,7 @@ import {
 } from '@barbercue/shared';
 import { ApiError, apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
-import { GOOGLE_SIGNIN_CONFIGURED, getGoogleIdToken } from '../lib/google-signin';
+import { getGoogleIdToken } from '../lib/google-signin';
 import { useLanguage } from '../lib/language-context';
 import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView } from '../components/ui';
@@ -44,7 +44,13 @@ function GoogleSignInButton() {
     setSubmitting(true);
     try {
       const result = await getGoogleIdToken(t);
-      if (result.type === 'cancelled') return;
+      // A cancelled Credential Manager sheet used to look exactly like a dead button, which is
+      // especially harmful when this screen was opened to continue shop registration. Keep the
+      // pending destination intact and give the customer an explicit, retryable result instead.
+      if (result.type === 'cancelled') {
+        setError(t.couldNotCompleteGoogleSignIn);
+        return;
+      }
       if (result.type === 'error') {
         setError(result.message);
         return;
@@ -241,7 +247,10 @@ export default function PhoneOtpLoginScreen() {
           <View style={styles.card}>
             {step === 'phone' ? (
               <>
-                {GOOGLE_SIGNIN_CONFIGURED && <GoogleSignInButton />}
+                {/* Always render the Google entry point. getGoogleIdToken() reports a missing or
+                    invalid build configuration in the inline error card, rather than making the
+                    sign-in option silently disappear. */}
+                <GoogleSignInButton />
                 {phoneOtpAvailable === false ? (
                   <View style={styles.noticeCard}>
                     <Text style={styles.noticeCardText}>

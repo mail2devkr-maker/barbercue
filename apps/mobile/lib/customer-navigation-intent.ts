@@ -1,4 +1,7 @@
 export type PendingCustomerDestination = { kind: 'credits' } | { kind: 'registerShop' };
+export type PostAuthCustomerNavigation =
+  | { tab: 'AccountTab'; screen: 'CreditsHistory' }
+  | { tab: 'AccountTab'; screen: 'RegisterShop' };
 
 let pendingCustomerDestination: PendingCustomerDestination | null = null;
 
@@ -16,4 +19,18 @@ export function takePendingCustomerDestination(): PendingCustomerDestination | n
   const intent = pendingCustomerDestination;
   pendingCustomerDestination = null;
   return intent;
+}
+
+/**
+ * The only mapping from a signed-out customer action to its authenticated destination. Keeping it
+ * pure lets the onboarding golden-path test assert the same destination RootNavigator executes.
+ */
+export function resolvePostAuthCustomerNavigation(
+  intent: PendingCustomerDestination,
+  creditsEnabled: boolean,
+): PostAuthCustomerNavigation | null {
+  if (intent.kind === 'credits') {
+    return creditsEnabled ? { tab: 'AccountTab', screen: 'CreditsHistory' } : null;
+  }
+  return { tab: 'AccountTab', screen: 'RegisterShop' };
 }

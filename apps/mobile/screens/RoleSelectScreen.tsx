@@ -15,7 +15,7 @@ import { useLanguage } from '../lib/language-context';
 import { resolveHomeLocation } from '../lib/home-location';
 import { createSignedOutHeroCommand, type HeroAction } from '../lib/hero-action-commands';
 import { stashPendingCustomerDestination } from '../lib/customer-navigation-intent';
-import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
+import { beginShopRegistrationAuthentication } from '../lib/shop-registration-intent';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { color, fastQue, font, lineHeightFor, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView, LanguageSwitcher, SafeImage } from '../components/ui';
@@ -130,8 +130,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
   // shop-registration-intent.ts / RootNavigator's ShopRegistrationHandoffBridge).
   function registerShop() {
     setMenuOpen(false);
-    stashPendingShopRegistrationIntent();
-    navigation.navigate('CustomerLogin');
+    navigation.navigate(beginShopRegistrationAuthentication());
   }
 
   return (
