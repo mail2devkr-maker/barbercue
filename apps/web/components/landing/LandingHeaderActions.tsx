@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "../../lib/auth-context";
-import { workspaceLandingPath, workspaceNavigationLabel } from "../../lib/workspace-route";
+import { isWorkspaceUser, workspaceLandingPath, workspaceNavigationLabel } from "../../lib/workspace-route";
 import styles from "./landing.module.css";
 
 /**
@@ -19,6 +19,16 @@ import styles from "./landing.module.css";
  * actions land on the same real OTP flow at /login — there's no separate registration screen to
  * point "Sign Up" at, so it intentionally shares the route rather than linking to a page that
  * doesn't exist.
+ *
+ * P0 fix: "wide"'s CTA is FastQue's only prominent shop-registration entry point, and
+ * RegisterShopPage itself grants any authenticated user — a customer included — the self-serve
+ * upgrade to SALON_OWNER (see its own comment: "how a plain CUSTOMER becomes a SALON_OWNER in the
+ * first place"). Hiding this CTA for every authenticated user therefore hid it from exactly the
+ * customers it exists for, leaving only their "My account" link — no visible path to shop
+ * onboarding at all. It stays hidden for an existing workspace user (owner/staff/admin), who
+ * already has the correct dashboard link and doesn't need a second onboarding entry point.
+ * "utility"'s CTA is the unrelated generic "Sign Up" action, which correctly still disappears for
+ * any authenticated user (signing up again makes no sense once signed in) — untouched here.
  */
 export function LandingHeaderActions({ variant }: { variant: "wide" | "utility" }) {
   const { user, status } = useAuth();
@@ -30,6 +40,9 @@ export function LandingHeaderActions({ variant }: { variant: "wide" | "utility" 
   const ctaLabel = variant === "wide" ? "List Your Shop" : "Sign Up";
   const ctaHref = variant === "wide" ? "/dashboard/register-shop" : "/login";
   const rootClassName = variant === "wide" ? styles.headerWideActions : styles.utilityAuth;
+  const showCta = variant === "wide"
+    ? !authenticatedUser || !isWorkspaceUser(authenticatedUser)
+    : !authenticatedUser;
 
   return (
     <div className={rootClassName}>
@@ -46,7 +59,7 @@ export function LandingHeaderActions({ variant }: { variant: "wide" | "utility" 
           {signInLabel}
         </span>
       )}
-      {!authenticatedUser && (
+      {showCta && (
         <Link href={ctaHref} className={ctaClassName}>
           {ctaLabel}
         </Link>
