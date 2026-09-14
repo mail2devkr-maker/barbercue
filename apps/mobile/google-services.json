@@ -43,6 +43,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "871155185690-coeheb4lrse2roj5n1pgpj164frnsdag.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dcw.fastque",
+            "certificate_hash": "562a82668378f451f1f9f67ad774002f6892122b"
+          }
+        },
+        {
+          "client_id": "871155185690-ot5d2npg0qdeb3k56dnnrjk163nm43cc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dcw.fastque",
+            "certificate_hash": "04acc14a78603c10984f821e4b8ac839fa12aadd"
+          }
+        },
+        {
           "client_id": "871155185690-bcl6bu22nphvg85hklflag78sqfp7khv.apps.googleusercontent.com",
           "client_type": 3
         }
