@@ -43,6 +43,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "871155185690-3c1u3dj52gg9fcmadall215l61fuv79a.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dcw.fastque",
+            "certificate_hash": "ce77bebd5473fdda066843a2d3989b22e2290521"
+          }
+        },
+        {
           "client_id": "871155185690-coeheb4lrse2roj5n1pgpj164frnsdag.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
