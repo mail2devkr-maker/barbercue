@@ -4,6 +4,7 @@ import {
   BookingErrorCode,
   BookingStatus,
   ChairStatus,
+  MAX_SERVICES_PER_BOOKING,
   SalonStatus,
   StaffMemberStatus,
   computeSlotCapacity,
@@ -153,6 +154,57 @@ export class AvailabilityService {
   }
 
   /**
+   * Multi-service booking core mission — the one place a candidate serviceIds[] is turned into
+   * real, trusted Service rows. Never trusts client-supplied duration/price: every caller
+   * downstream (availability, booking creation, reschedule) sums THESE rows' own durationMinutes/
+   * price, never anything the client sent alongside the ids.
+   *
+   * Rejects, in this order:
+   *  - more ids than MAX_SERVICES_PER_BOOKING (schema-level shape check already covers this for
+   *    HTTP callers, but this is the real authority — any caller, HTTP or not, gets the same limit)
+   *  - a duplicate id in the selection (DUPLICATE_SERVICE_SELECTION) — "the same service twice" is
+   *    a well-formed but invalid combination, distinct from a missing/foreign/inactive one
+   *  - any id that isn't an ACTIVE service belonging to this exact salon (SERVICE_NOT_FOUND) — a
+   *    single generic reason, deliberately never distinguishing "wrong salon" from "inactive" from
+   *    "doesn't exist" to an external caller, same as the existing single-service getServiceOrThrow
+   *
+   * Returns the matched services in the EXACT order serviceIds was given — Prisma's findMany gives
+   * no ordering guarantee for an `id: { in: [...] }` filter, and selection order is meaningful
+   * (Booking.serviceId / BookingService.sortOrder both key off "the first one requested").
+   */
+  async getServicesOrThrow(
+    salonId: string,
+    serviceIds: string[],
+  ): Promise<Service[]> {
+    if (serviceIds.length === 0 || serviceIds.length > MAX_SERVICES_PER_BOOKING) {
+      throw new AppException(
+        BookingErrorCode.SERVICE_NOT_FOUND,
+        'Select at least one and no more than the maximum number of services.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (new Set(serviceIds).size !== serviceIds.length) {
+      throw new AppException(
+        BookingErrorCode.DUPLICATE_SERVICE_SELECTION,
+        'The same service was selected more than once.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const services = await this.prisma.service.findMany({
+      where: { id: { in: serviceIds }, salonId, isActive: true },
+    });
+    if (services.length !== serviceIds.length) {
+      throw new AppException(
+        BookingErrorCode.SERVICE_NOT_FOUND,
+        'One or more selected services were not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const byId = new Map(services.map((s) => [s.id, s]));
+    return serviceIds.map((id) => byId.get(id)!);
+  }
+
+  /**
    * DATABASE.md's StaffService rule: "If a salon has zero StaffService rows for a given service,
    * every ACTIVE staff member is treated as qualified for it."
    *
@@ -164,27 +216,62 @@ export class AvailabilityService {
     salonId: string,
     serviceId: string,
   ): Promise<Prisma.SalonStaffWhereInput> {
-    const qualificationCount = await db.staffService.count({
-      where: { serviceId },
-    });
+    return this.qualifiedStaffWhereForServices(db, salonId, [serviceId]);
+  }
+
+  /**
+   * Multi-service booking core mission — the "Any Staff" / capacity-pool qualification rule for a
+   * COMPLETE multi-service appointment: a staff member counts as qualified only if they are
+   * qualified for EVERY selected service, applying DATABASE.md's existing per-service "zero
+   * StaffService rows means everyone qualifies" rule independently to each one first.
+   *
+   * This is a real AND, not an OR: for each service that DOES have at least one StaffService row
+   * (i.e. the salon has deliberately restricted who can perform it), the where-clause requires a
+   * separate `services: { some: { serviceId } }` match — one per such service — combined with
+   * Prisma's implicit AND across array entries. A naive `services: { some: { serviceId: { in:
+   * [...] } } }` would be WRONG here: it only requires the staff to be qualified for at least one
+   * of the services, which would let a barber qualified for only 1 of 3 selected services pass.
+   * Services with zero StaffService rows are correctly excluded from that AND entirely (nothing to
+   * require) rather than accidentally requiring a StaffService row that was never meant to exist.
+   */
+  async qualifiedStaffWhereForServices(
+    db: Db,
+    salonId: string,
+    serviceIds: string[],
+  ): Promise<Prisma.SalonStaffWhereInput> {
     const base: Prisma.SalonStaffWhereInput = {
       salonId,
       status: StaffMemberStatus.ACTIVE,
     };
-    return qualificationCount === 0
-      ? base
-      : { ...base, services: { some: { serviceId } } };
+    const qualificationCounts = await Promise.all(
+      serviceIds.map((serviceId) => db.staffService.count({ where: { serviceId } })),
+    );
+    const restrictedServiceIds = serviceIds.filter((_, i) => qualificationCounts[i] > 0);
+    if (restrictedServiceIds.length === 0) return base;
+    return {
+      ...base,
+      AND: restrictedServiceIds.map((serviceId) => ({
+        services: { some: { serviceId } },
+      })),
+    };
   }
 
   async listQualifiedStaff(
     salonId: string,
     serviceId: string,
   ): Promise<StaffOptionDto[]> {
-    await this.getServiceOrThrow(salonId, serviceId);
-    const where = await this.qualifiedStaffWhere(
+    return this.listQualifiedStaffForServices(salonId, [serviceId]);
+  }
+
+  async listQualifiedStaffForServices(
+    salonId: string,
+    serviceIds: string[],
+  ): Promise<StaffOptionDto[]> {
+    await this.getServicesOrThrow(salonId, serviceIds);
+    const where = await this.qualifiedStaffWhereForServices(
       this.prisma,
       salonId,
-      serviceId,
+      serviceIds,
     );
     const staff = await this.prisma.salonStaff.findMany({
       where,
@@ -204,10 +291,25 @@ export class AvailabilityService {
     serviceId: string,
     staffId: string,
   ): Promise<void> {
-    const where = await this.qualifiedStaffWhere(
+    return this.assertStaffQualifiedForServices(salonId, [serviceId], staffId);
+  }
+
+  /**
+   * A specific requested barber must be qualified for EVERY selected service, not merely one of
+   * them — see qualifiedStaffWhereForServices's own doc comment. STAFF_NOT_QUALIFIED is thrown
+   * exactly the same way whether the barber fails on one service or all of them; the error never
+   * says which service(s) disqualified them, matching the existing single-service message's level
+   * of detail.
+   */
+  async assertStaffQualifiedForServices(
+    salonId: string,
+    serviceIds: string[],
+    staffId: string,
+  ): Promise<void> {
+    const where = await this.qualifiedStaffWhereForServices(
       this.prisma,
       salonId,
-      serviceId,
+      serviceIds,
     );
     const qualified = await this.prisma.salonStaff.findFirst({
       where: { ...where, id: staffId },
@@ -226,7 +328,7 @@ export class AvailabilityService {
     }
     throw new AppException(
       BookingErrorCode.STAFF_NOT_QUALIFIED,
-      'This staff member is not qualified for the selected service.',
+      'This staff member is not qualified for every selected service.',
       HttpStatus.BAD_REQUEST,
     );
   }
@@ -272,7 +374,22 @@ export class AvailabilityService {
     salonId: string,
     serviceId: string,
   ): Promise<number> {
-    const where = await this.qualifiedStaffWhere(db, salonId, serviceId);
+    return this.getSlotCapacityForServices(db, salonId, [serviceId]);
+  }
+
+  /**
+   * Multi-service booking core mission — the same capacity model, but the qualified-staff pool is
+   * now the set of staff qualified for the COMPLETE selection (see
+   * qualifiedStaffWhereForServices). Chair capacity is unaffected by which/how many services were
+   * selected — one appointment still occupies exactly one chair for its whole duration regardless
+   * of how many services make it up.
+   */
+  async getSlotCapacityForServices(
+    db: Db,
+    salonId: string,
+    serviceIds: string[],
+  ): Promise<number> {
+    const where = await this.qualifiedStaffWhereForServices(db, salonId, serviceIds);
     const [qualifiedStaffCount, chairCount] = await Promise.all([
       db.salonStaff.count({ where }),
       db.chair.count({ where: { salonId, status: ChairStatus.ACTIVE } }),
@@ -328,13 +445,17 @@ export class AvailabilityService {
    */
   async getAvailability(
     salonId: string,
-    serviceId: string,
+    serviceIds: string[],
     date: string,
     staffId?: string,
   ): Promise<AvailabilitySlotDto[]> {
     await this.getSalonOrThrow(salonId);
-    const service = await this.getServiceOrThrow(salonId, serviceId);
-    if (staffId) await this.assertStaffQualified(salonId, serviceId, staffId);
+    // Multi-service booking core mission — the candidate interval a slot must fit is the SUM of
+    // every selected service's duration, never just one of them. Loaded via getServicesOrThrow so
+    // an unknown/foreign-salon/inactive/duplicate id is rejected here, before any slot math runs,
+    // exactly as it was for a single serviceId.
+    const services = await this.getServicesOrThrow(salonId, serviceIds);
+    if (staffId) await this.assertStaffQualifiedForServices(salonId, serviceIds, staffId);
     const timeZone = await this.resolveTimeZoneOrThrow(salonId);
 
     const now = new Date();
@@ -380,11 +501,12 @@ export class AvailabilityService {
       }
     }
 
-    const durationMs = service.durationMinutes * 60_000;
-    const slotCapacity = await this.getSlotCapacity(
+    const totalDurationMinutes = services.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const durationMs = totalDurationMinutes * 60_000;
+    const slotCapacity = await this.getSlotCapacityForServices(
       this.prisma,
       salonId,
-      serviceId,
+      serviceIds,
     );
 
     const overlapCandidates = await this.prisma.booking.findMany({

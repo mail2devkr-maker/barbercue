@@ -43,10 +43,15 @@ export function useRebook() {
         params: {
           salonId: booking.salonId,
           salonName: booking.salonName,
-          serviceId: booking.serviceId,
-          serviceName: booking.serviceName,
-          servicePrice: booking.servicePrice,
-          serviceDurationMinutes: booking.serviceDurationMinutes,
+          // Multi-service booking core mission — "Book again" carries the PREVIOUS appointment's
+          // complete service set (not just its first/primary service) wherever the same salon
+          // still offers all of them; the backend independently re-validates every id anyway.
+          services: booking.services.map((s) => ({
+            id: s.serviceId,
+            name: s.name,
+            price: s.price,
+            durationMinutes: s.durationMinutes,
+          })),
           operatingHours: salon.operatingHours,
           salonTimezone: salon.salonTimezone,
           preferredStaffId: booking.preferredStaffId,

@@ -8,6 +8,7 @@ import {
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
   computeMaxRedeemableCredits,
+  summarizeServiceNames,
   type AvailabilitySlotDto,
   type BookingDetailDto,
   type BookingPaymentInfoDto,
@@ -58,7 +59,7 @@ export function BookingFlow({
   currency,
   countryCode,
   salonTimezone,
-  initialServiceId,
+  initialServiceIds,
   initialStaffId,
 }: {
   salonId: string;
@@ -75,15 +76,17 @@ export function BookingFlow({
   // AI Style Advisor hand-off (major-upgrade phase) — set only when this flow was reached via
   // "Try This Look"; threaded straight into the booking-creation body when present.
   selectedStyleName?: string;
-  // "Book again" hand-off (Phase 3, customer convenience) — preselects service/barber from a past
-  // booking, same idea as selectedStyleName's Style Advisor hand-off. The customer still
-  // explicitly picks a new date and slot below; nothing here assumes the old slot is available.
-  initialServiceId?: string;
+  // "Book again" hand-off (Phase 3, customer convenience) — preselects the previous appointment's
+  // FULL service selection and barber, same idea as selectedStyleName's Style Advisor hand-off.
+  // The customer still explicitly picks a new date and slot below; nothing here assumes the old
+  // slot is available. Multi-service booking core mission: carries every previously-selected
+  // service, not just the first — see apps/web/lib/booking-actions.ts's rebookUrl.
+  initialServiceIds?: string[];
   initialStaffId?: string | null;
 }) {
   const { status: authStatus, user, googleLogin } = useAuth();
   const isCustomerSession = hasCustomerBookingSession(authStatus, user);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(initialServiceId ?? null);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(initialServiceIds ?? []);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | undefined>(initialStaffId);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
@@ -162,17 +165,24 @@ export function BookingFlow({
     };
   }, [isCustomerSession]);
 
-  // Stable across retries of the exact same attempt (same service/staff/date/slot); regenerates
+  // Stable across retries of the exact same attempt (same services/staff/date/slot); regenerates
   // the moment any earlier choice changes, since that's a materially different attempt. The deps
   // are deliberately not read inside the memo callback — they're a recompute trigger only.
   const idempotencyKey = useMemo(
     () => newIdempotencyKey(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedServiceId, selectedStaffId, selectedDate, selectedSlot?.slotStart],
+    [selectedServiceIds.join(","), selectedStaffId, selectedDate, selectedSlot?.slotStart],
   );
 
-  function handleSelectService(id: string) {
-    setSelectedServiceId(id);
+  // Multi-service booking core mission — toggling any service is a materially different selection:
+  // combined duration/price change immediately (ServiceStep derives those from the array itself,
+  // no extra state here), staff qualification must be re-fetched, and any previously chosen
+  // date/slot can no longer be trusted (a slot valid for the old selection may not fit the new
+  // combined duration) — see the effects below, which react to selectedServiceIds changing.
+  function toggleService(id: string) {
+    setSelectedServiceIds((current) =>
+      current.includes(id) ? current.filter((existing) => existing !== id) : [...current, id],
+    );
     setSelectedStaffId(undefined);
     setSelectedDate(null);
     setSelectedSlot(null);
@@ -192,14 +202,14 @@ export function BookingFlow({
   }
 
   useEffect(() => {
-    if (!selectedServiceId) return undefined;
+    if (selectedServiceIds.length === 0) return undefined;
     let cancelled = false;
     Promise.resolve()
       .then(() => {
         if (cancelled) return undefined;
         setStaffLoading(true);
         return apiFetch<StaffOptionDto[]>(
-          `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.staff}?serviceId=${selectedServiceId}`,
+          `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.staff}?serviceIds=${selectedServiceIds.join(",")}`,
         );
       })
       .then((options) => {
@@ -214,16 +224,17 @@ export function BookingFlow({
     return () => {
       cancelled = true;
     };
-  }, [selectedServiceId, salonId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedServiceIds.join(","), salonId]);
 
   useEffect(() => {
-    if (!selectedServiceId || !selectedDate || selectedStaffId === undefined) return undefined;
+    if (selectedServiceIds.length === 0 || !selectedDate || selectedStaffId === undefined) return undefined;
     let cancelled = false;
     Promise.resolve()
       .then(() => {
         if (cancelled) return undefined;
         setSlotsLoading(true);
-        const params = new URLSearchParams({ serviceId: selectedServiceId, date: selectedDate });
+        const params = new URLSearchParams({ serviceIds: selectedServiceIds.join(","), date: selectedDate });
         if (selectedStaffId) params.set("staffId", selectedStaffId);
         return apiFetch<AvailabilitySlotDto[]>(
           `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
@@ -241,11 +252,12 @@ export function BookingFlow({
     return () => {
       cancelled = true;
     };
-  }, [selectedServiceId, selectedDate, selectedStaffId, salonId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedServiceIds.join(","), selectedDate, selectedStaffId, salonId]);
 
   async function refreshCurrentAvailability() {
-    if (!selectedServiceId || !selectedDate) return;
-    const params = new URLSearchParams({ serviceId: selectedServiceId, date: selectedDate });
+    if (selectedServiceIds.length === 0 || !selectedDate) return;
+    const params = new URLSearchParams({ serviceIds: selectedServiceIds.join(","), date: selectedDate });
     if (selectedStaffId) params.set("staffId", selectedStaffId);
     const result = await apiFetch<AvailabilitySlotDto[]>(
       `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
@@ -256,7 +268,7 @@ export function BookingFlow({
   async function handleConfirmBooking() {
     // Defense in depth with the same rule as BookingsController: a STAFF/ADMIN audience must never
     // even attempt the customer-only POST and fall through to a raw FORBIDDEN_ROLE message.
-    if (!isCustomerSession || !selectedServiceId || !selectedSlot) return;
+    if (!isCustomerSession || selectedServiceIds.length === 0 || !selectedSlot) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -265,7 +277,7 @@ export function BookingFlow({
         headers: { "Idempotency-Key": idempotencyKey },
         body: JSON.stringify({
           salonId,
-          serviceId: selectedServiceId,
+          serviceIds: selectedServiceIds,
           slotStart: selectedSlot.slotStart,
           ...(selectedStaffId ? { preferredStaffId: selectedStaffId } : {}),
           ...(selectedStyleName ? { selectedStyleName } : {}),
@@ -291,7 +303,7 @@ export function BookingFlow({
       // reload the grid so the occupied state is visible without a page refresh.
       if (err instanceof ApiError && err.code === "SLOT_FULL" && selectedDate) {
         setSelectedSlot(null);
-        const params = new URLSearchParams({ serviceId: selectedServiceId, date: selectedDate });
+        const params = new URLSearchParams({ serviceIds: selectedServiceIds.join(","), date: selectedDate });
         if (selectedStaffId) params.set("staffId", selectedStaffId);
         void apiFetch<AvailabilitySlotDto[]>(
           `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
@@ -335,7 +347,7 @@ export function BookingFlow({
     setConfirmedBooking(null);
     setCancelResult(null);
     setSubmitError(null);
-    setSelectedServiceId(null);
+    setSelectedServiceIds([]);
     setSelectedStaffId(undefined);
     setSelectedDate(null);
     setSelectedSlot(null);
@@ -367,6 +379,22 @@ export function BookingFlow({
           <p className={styles.summaryLine}>
             <strong>{booking.serviceName}</strong> at {booking.salonName}
           </p>
+          {/* Multi-service booking core mission — every selected service, never just a summary
+              string, so a multi-service appointment's booking confirmation/detail is honest about
+              what was actually booked. A single-service booking (including any created before this
+              mission) shows exactly one row here, identical to before. */}
+          {booking.services.length > 1 && (
+            <ul className={styles.serviceBreakdownList}>
+              {booking.services.map((s) => (
+                <li key={s.serviceId} className={styles.serviceBreakdownItem}>
+                  <span>{s.name}</span>
+                  <span>
+                    {s.durationMinutes} min · {formatMoney(s.price, currency, countryCode)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           <p className={styles.summaryLine}>
             Appointment time: <strong>{arrival.date}, {arrival.time}</strong>
             {!arrival.isDeviceLocalTimezone && " (shop's local time)"}
@@ -464,7 +492,7 @@ export function BookingFlow({
   // Purely derived from existing selection state, for the step-progress strip only — no new
   // business state, no side effects.
   const progressSteps = [
-    { key: "service", label: "Service", done: !!selectedServiceId },
+    { key: "service", label: "Service", done: selectedServiceIds.length > 0 },
     { key: "barber", label: "Barber", done: selectedStaffId !== undefined },
     { key: "date", label: "Date", done: !!selectedDate },
     { key: "time", label: "Time", done: !!selectedSlot },
@@ -492,13 +520,13 @@ export function BookingFlow({
 
       <ServiceStep
         services={services}
-        selectedServiceId={selectedServiceId}
-        onSelect={handleSelectService}
+        selectedServiceIds={selectedServiceIds}
+        onToggle={toggleService}
         currency={currency}
         countryCode={countryCode}
       />
 
-      {selectedServiceId && (
+      {selectedServiceIds.length > 0 && (
         <StaffStep
           options={staffOptions}
           selectedStaffId={selectedStaffId}
@@ -507,7 +535,7 @@ export function BookingFlow({
         />
       )}
 
-      {selectedServiceId && selectedStaffId !== undefined && (
+      {selectedServiceIds.length > 0 && selectedStaffId !== undefined && (
         <DateStep
           operatingHours={operatingHours}
           selectedDate={selectedDate}
@@ -537,13 +565,28 @@ export function BookingFlow({
             // can never show a different-looking time than what the customer sees the instant
             // after they actually confirm.
             const arrival = formatBookingArrivalTime(selectedSlot.slotStart, salonTimezone);
+            const selectedServices = services.filter((s) => selectedServiceIds.includes(s.id));
             return (
-              <p className={styles.summaryLine}>
-                <strong>{services.find((s) => s.id === selectedServiceId)?.name}</strong> —{" "}
-                {arrival.date}, {arrival.time}
-                {!arrival.isDeviceLocalTimezone && " (shop's local time)"}
-                {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
-              </p>
+              <>
+                <p className={styles.summaryLine}>
+                  <strong>{summarizeServiceNames(selectedServices.map((s) => s.name))}</strong> —{" "}
+                  {arrival.date}, {arrival.time}
+                  {!arrival.isDeviceLocalTimezone && " (shop's local time)"}
+                  {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
+                </p>
+                {selectedServices.length > 1 && (
+                  <ul className={styles.serviceBreakdownList}>
+                    {selectedServices.map((s) => (
+                      <li key={s.id} className={styles.serviceBreakdownItem}>
+                        <span>{s.name}</span>
+                        <span>
+                          {s.durationMinutes} min · {formatMoney(s.price, currency, countryCode)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             );
           })()}
           {selectedStyleName && <p className={styles.summaryLine}>Style: {selectedStyleName}</p>}
@@ -555,14 +598,19 @@ export function BookingFlow({
             </p>
           )}
           {isCustomerSession && creditsBalance !== null && creditsBalance > 0 && (() => {
-            const servicePrice = services.find((s) => s.id === selectedServiceId)?.price ?? 0;
+            // Multi-service booking core mission: the redemption-cap preview must use the COMBINED
+            // price of every selected service, never just one — matching the server's own
+            // authoritative computation in BookingsService.create.
+            const combinedPrice = services
+              .filter((s) => selectedServiceIds.includes(s.id))
+              .reduce((sum, s) => sum + s.price, 0);
             // FastQue Credits / Wallet V1: the redemption cap is price-based (floor(price/50)*10),
             // NOT "whatever the wallet balance happens to be" — a customer can never redeem more
-            // than 20% of the service price even with a much larger balance. This is only a
+            // than 20% of the combined price even with a much larger balance. This is only a
             // preview; the server independently re-derives and enforces the same cap (see
             // BookingsService.create / CustomerCreditsService.redeemUpTo) regardless of what this
             // slider sends.
-            const maxRedeemable = Math.min(creditsBalance, computeMaxRedeemableCredits(servicePrice));
+            const maxRedeemable = Math.min(creditsBalance, computeMaxRedeemableCredits(combinedPrice));
             if (maxRedeemable <= 0) return null;
             return (
               <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -612,7 +660,7 @@ export function BookingFlow({
               <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
                 <p className={styles.summaryLine}>
                   {authStatus === "authenticated"
-                    ? "You are signed in with a shop/admin session. Continue as a customer to confirm this booking — your selected service, barber, date and time will stay selected."
+                    ? "You are signed in with a shop/admin session. Continue as a customer to confirm this booking — your selected services, barber, date and time will stay selected."
                     : "Sign in to confirm this booking"}
                 </p>
                 <GoogleIdentityButton

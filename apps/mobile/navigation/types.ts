@@ -1,6 +1,19 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { OperatingHoursDto, ServiceDto } from '@barbercue/shared';
 
+// Multi-service booking core mission — the booking wizard now carries the customer's COMPLETE
+// service selection (ordered) step to step, not a single serviceId/serviceName/servicePrice set.
+// name/price/durationMinutes here are display-only hints for rendering earlier steps' summaries
+// without extra round-trips (same convention the single-service fields followed before this
+// mission) — the backend never trusts them: BookingsService.create independently re-derives
+// duration/price from serviceIds alone (see ConfirmBookingScreen's own comment on this).
+export interface SelectedServiceParam {
+  id: string;
+  name: string;
+  price: number;
+  durationMinutes: number;
+}
+
 // Params are carried forward step-to-step rather than re-fetched, since the customer already
 // loaded them on the salon profile screen — same data-flow shape as apps/web's BookingFlow.
 export type SearchStackParamList = {
@@ -18,10 +31,7 @@ export type SearchStackParamList = {
   StaffSelect: {
     salonId: string;
     salonName: string;
-    serviceId: string;
-    serviceName: string;
-    servicePrice: number;
-    serviceDurationMinutes: number;
+    services: SelectedServiceParam[];
     operatingHours: OperatingHoursDto[];
     // Pre-confirmation timezone fix — the salon's resolved IANA zone (SalonProfileDto.
     // salonTimezone), carried forward step-to-step the same way operatingHours already is, so
@@ -33,10 +43,7 @@ export type SearchStackParamList = {
   DateSelect: {
     salonId: string;
     salonName: string;
-    serviceId: string;
-    serviceName: string;
-    servicePrice: number;
-    serviceDurationMinutes: number;
+    services: SelectedServiceParam[];
     operatingHours: OperatingHoursDto[];
     salonTimezone: string | null;
     preferredStaffId: string | null;
@@ -46,9 +53,7 @@ export type SearchStackParamList = {
   SlotSelect: {
     salonId: string;
     salonName: string;
-    serviceId: string;
-    serviceName: string;
-    servicePrice: number;
+    services: SelectedServiceParam[];
     salonTimezone: string | null;
     preferredStaffId: string | null;
     preferredStaffName: string | null;
@@ -58,9 +63,7 @@ export type SearchStackParamList = {
   ConfirmBooking: {
     salonId: string;
     salonName: string;
-    serviceId: string;
-    serviceName: string;
-    servicePrice: number;
+    services: SelectedServiceParam[];
     salonTimezone: string | null;
     preferredStaffId: string | null;
     preferredStaffName: string | null;
