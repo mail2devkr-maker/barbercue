@@ -118,8 +118,6 @@ export function ServiceCatalogPicker({
     const completedIds: string[] = [];
     try {
       for (const preset of choices) {
-        // Re-check against the latest props for every POST. Existing saved services are never
-        // overwritten or duplicated by a preset; inactive ones are restored explicitly below.
         if (findExistingServiceForPreset(services, preset)) continue;
         const draft = selected[preset.id];
         await apiFetch(scope(salonId, DASHBOARD_PATHS.services), {
@@ -293,7 +291,7 @@ const styles = StyleSheet.create({
   },
   headingRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space[3], marginBottom: space[3] },
   headingCopy: { flex: 1 },
-  title: { fontFamily: font.bodySemiBold, fontSize: fontSize.md, color: color.ink, marginBottom: space[1] },
+  title: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: color.ink, marginBottom: space[1] },
   hint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, lineHeight: 18 },
   selectionCount: {
     fontFamily: font.bodySemiBold,
