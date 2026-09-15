@@ -20,6 +20,10 @@ import {
   zonedHourOf,
   zonedWallTimeToUtc,
 } from '../common/timezone/timezone';
+import {
+  resolveEffectiveBookingServices,
+  type BookingWithServiceSnapshot,
+} from '../bookings/effective-booking-services';
 
 const PEAK_SLOW_HOUR_COUNT = 5;
 
@@ -34,6 +38,15 @@ const PEAK_SLOW_HOUR_COUNT = 5;
  * estimatedServiceValue is a clearly-labeled estimate (listed price x completed bookings) — never
  * a record of money actually collected, since BarberCue does not process payment. See its own doc
  * comment on OwnerAnalyticsDto.
+ *
+ * Production-safety hardening (P1) — multi-service booking core mission follow-up:
+ * estimatedServiceValue and servicePopularity both used to read only a completed booking's
+ * PRIMARY service (Booking.serviceId), silently under-counting/under-valuing every other selected
+ * service on a multi-service appointment. Both now derive from resolveEffectiveBookingServices'
+ * full per-booking service list (falling back to the live Service join for a rolling-deploy
+ * booking with zero BookingService rows — see that helper's own doc comment), so a Haircut +
+ * Beard Trim appointment counts toward BOTH services' popularity and contributes its COMPLETE
+ * combined price to estimatedServiceValue, not just Haircut's.
  */
 @Injectable()
 export class DashboardAnalyticsService {
@@ -98,7 +111,13 @@ export class DashboardAnalyticsService {
         select: {
           customerId: true,
           serviceId: true,
-          service: { select: { name: true, price: true } },
+          // Multi-service booking core mission (P1 follow-up) — the full selection, not just the
+          // primary service; `service` is kept too as resolveEffectiveBookingServices' fallback for
+          // a rolling-deploy booking with zero BookingService rows.
+          service: { select: { name: true, durationMinutes: true, price: true } },
+          services: {
+            select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+          },
         },
       }),
       this.prisma.queueEntry.count({
@@ -170,8 +189,11 @@ export class DashboardAnalyticsService {
       ),
       ...this.hourDistribution(allBookingsInRange, timeZone),
       servicePopularity: this.servicePopularity(completedBookings),
+      // Multi-service booking core mission (P1 follow-up) — the COMPLETE combined price of every
+      // selected service on each completed booking, never just the primary one.
       estimatedServiceValue: completedBookings.reduce(
-        (sum, b) => sum + (b.service ? Number(b.service.price) : 0),
+        (sum, b) =>
+          sum + resolveEffectiveBookingServices(b).reduce((s, svc) => s + Number(svc.price), 0),
         0,
       ),
     };
@@ -349,23 +371,25 @@ export class DashboardAnalyticsService {
     return { peakHours, slowHours };
   }
 
+  // Multi-service booking core mission (P1 follow-up) — "popularity" now means "how many completed
+  // appointments included this service," counting every selected service once per booking it
+  // appears in (not only the primary one). A Haircut + Beard Trim appointment increments BOTH
+  // services' completedCount, not just Haircut's.
   private servicePopularity(
-    bookings: {
-      serviceId: string;
-      service: { name: string; price: unknown } | null;
-    }[],
+    bookings: BookingWithServiceSnapshot[],
   ): ServicePopularityDto[] {
     const byService = new Map<string, ServicePopularityDto>();
     for (const b of bookings) {
-      if (!b.service) continue;
-      const existing = byService.get(b.serviceId);
-      if (existing) existing.completedCount += 1;
-      else
-        byService.set(b.serviceId, {
-          serviceId: b.serviceId,
-          name: b.service.name,
-          completedCount: 1,
-        });
+      for (const svc of resolveEffectiveBookingServices(b)) {
+        const existing = byService.get(svc.serviceId);
+        if (existing) existing.completedCount += 1;
+        else
+          byService.set(svc.serviceId, {
+            serviceId: svc.serviceId,
+            name: svc.serviceName,
+            completedCount: 1,
+          });
+      }
     }
     return [...byService.values()].sort(
       (a, b) => b.completedCount - a.completedCount,

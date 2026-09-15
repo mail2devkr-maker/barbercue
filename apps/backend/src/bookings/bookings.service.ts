@@ -35,6 +35,7 @@ import { CustomerCreditsService } from '../credits/customer-credits.service';
 import { AvailabilityService } from './availability.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { computeArrivalGuidance } from './arrival-guidance';
+import { resolveEffectiveBookingServices } from './effective-booking-services';
 
 // A booking-triggered cancellation may only auto-cancel a linked queue entry that has not yet
 // genuinely started service — WAITING (never called) or CALLED (called but not yet assigned a
@@ -500,6 +501,10 @@ export class BookingsService {
     );
     const minutesUntilSlot =
       (booking.slotStart.getTime() - Date.now()) / 60_000;
+    // Production-safety hardening (P0 #2): resolveEffectiveBookingServices falls back to the live
+    // Service join for a booking a rolling-deploy old backend created with zero BookingService
+    // rows, so this can never compute a charge against a price of 0.
+    const effectiveServices = resolveEffectiveBookingServices(booking);
     // Reuses packages/shared/src/calc's computeCancellationCharge — the same function the client
     // uses to render a live preview before the customer ever taps "Cancel." isNoShow is always
     // false here: no-show detection is dashboard/system-triggered work, out of scope in this phase.
@@ -507,7 +512,7 @@ export class BookingsService {
     // every service on this appointment, never just the first/primary one.
     const chargeAmount = computeCancellationCharge(
       policy,
-      paiseToRupees(this.totalServicePricePaise(booking.services)),
+      paiseToRupees(this.totalServicePricePaise(effectiveServices)),
       minutesUntilSlot,
       false,
     );
@@ -657,7 +662,9 @@ export class BookingsService {
     void this.pushDispatch.dispatchLocalizedToUser(
       updated.salon.ownerUserId,
       'bookingCancelled',
-      summarizeServiceNames(updated.services.map((s) => s.serviceName)),
+      summarizeServiceNames(
+        resolveEffectiveBookingServices(updated).map((s) => s.serviceName),
+      ),
       { type: 'booking.cancelled', salonId: updated.salonId, bookingId },
     );
 
@@ -719,8 +726,11 @@ export class BookingsService {
     // unchanged (see rescheduleBookingSchema's own doc comment: a different service selection is a
     // new booking, not a reschedule) and recalculates the full combined interval at the proposed
     // new start time from the booking's own stored BookingService snapshot, never a live re-fetch
-    // of the current Service rows.
-    const totalDurationMinutes = booking.services.reduce(
+    // of the current Service rows. Production-safety hardening (P0 #2): falls back to the live
+    // Service join for a rolling-deploy booking with zero BookingService rows, so this can never
+    // recompute a zero-duration interval (newSlotEnd === newSlotStart).
+    const effectiveServices = resolveEffectiveBookingServices(booking);
+    const totalDurationMinutes = effectiveServices.reduce(
       (sum, s) => sum + s.durationMinutes,
       0,
     );
@@ -752,7 +762,7 @@ export class BookingsService {
       const slotCapacity = await this.availability.getSlotCapacityForServices(
         tx,
         booking.salonId,
-        booking.services.map((s) => s.serviceId),
+        effectiveServices.map((s) => s.serviceId),
       );
       const overlapping = await tx.booking.count({
         where: {
@@ -823,7 +833,9 @@ export class BookingsService {
     void this.pushDispatch.dispatchLocalizedToUser(
       booking.salon.ownerUserId,
       'bookingRescheduled',
-      summarizeServiceNames(updated.services.map((s) => s.serviceName)),
+      summarizeServiceNames(
+        resolveEffectiveBookingServices(updated).map((s) => s.serviceName),
+      ),
       { type: 'booking.rescheduled', salonId: booking.salonId, bookingId },
     );
 
@@ -849,6 +861,12 @@ export class BookingsService {
   }
 
   private toDetailDto(booking: BookingWithDetails): BookingDetailDto {
+    // Production-safety hardening (P0 #2): falls back to the live Service join for a booking a
+    // rolling-deploy old backend created with zero BookingService rows — see
+    // resolveEffectiveBookingServices's own doc comment. Every field below that used to read
+    // `booking.services` directly now reads this instead, so such a booking is never shown with 0
+    // duration, 0 price, or an empty service list/summary.
+    const effectiveServices = resolveEffectiveBookingServices(booking);
     return {
       id: booking.id,
       salonId: booking.salonId,
@@ -898,12 +916,13 @@ export class BookingsService {
       // caller that hasn't been updated to render the full `services` breakdown below: it now sees
       // the true total price/duration instead of a single service's, and a truthful multi-service
       // name summary instead of a misleadingly incomplete one.
-      serviceName: summarizeServiceNames(booking.services.map((s) => s.serviceName)),
-      serviceDurationMinutes: booking.services.reduce((sum, s) => sum + s.durationMinutes, 0),
-      servicePrice: paiseToRupees(this.totalServicePricePaise(booking.services)),
+      serviceName: summarizeServiceNames(effectiveServices.map((s) => s.serviceName)),
+      serviceDurationMinutes: effectiveServices.reduce((sum, s) => sum + s.durationMinutes, 0),
+      servicePrice: paiseToRupees(this.totalServicePricePaise(effectiveServices)),
       // The complete, ordered per-service breakdown — every booking (including one created before
-      // this mission existed, backfilled by this mission's migration) has at least one entry.
-      services: booking.services.map(
+      // this mission existed, backfilled by this mission's migration, AND one a rolling-deploy old
+      // backend created with zero BookingService rows) has at least one entry here.
+      services: effectiveServices.map(
         (s): BookingServiceItemDto => ({
           serviceId: s.serviceId,
           name: s.serviceName,
@@ -919,7 +938,7 @@ export class BookingsService {
       payableAmount: paiseToRupees(
         Math.max(
           0,
-          this.totalServicePricePaise(booking.services) -
+          this.totalServicePricePaise(effectiveServices) -
             (booking.creditsRedeemedAmount
               ? decimalStringToPaise(booking.creditsRedeemedAmount.toString())
               : 0),

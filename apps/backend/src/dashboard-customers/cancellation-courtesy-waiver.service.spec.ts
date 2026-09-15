@@ -21,7 +21,12 @@ function ledgerRow(overrides: Record<string, unknown> = {}) {
     settledAt: null,
     booking: {
       slotStart: new Date('2026-09-03T12:00:00.000Z'),
-      service: { name: 'Haircut' },
+      serviceId: 'sv1',
+      service: { name: 'Haircut', durationMinutes: 30, price: { toString: () => '250' } },
+      // Multi-service booking core mission (P1 follow-up) — mirrors the `service` fixture above by
+      // default so untouched tests keep exercising the same single-service values via
+      // resolveEffectiveBookingServices' zero-row fallback.
+      services: [],
     },
     ...overrides,
   };
