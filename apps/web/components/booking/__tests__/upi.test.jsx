@@ -6,7 +6,13 @@ import { apiFetch, ApiError } from '../../../lib/api';
 import { formatMoney } from '@barbercue/shared';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error { code = 'PAYMENT_QR_REQUIRED'; } }));
-jest.mock('../../../lib/auth-context', () => ({ useAuth: () => ({ status: 'authenticated' }) }));
+// PR #75 (production customer-session booking gate) — BookingFlow now also checks
+// hasCustomerBookingSession(authStatus, user), not just authStatus === 'authenticated'; this suite
+// is about UPI/payment behavior for an already-established CUSTOMER session, not the gate itself
+// (see booking-session.test.jsx for that), so the mock user is a plain CUSTOMER-audience session.
+jest.mock('../../../lib/auth-context', () => ({
+  useAuth: () => ({ status: 'authenticated', user: { audience: require('@barbercue/shared').SessionAudience.CUSTOMER } }),
+}));
 jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => '12345678-1234-4567-8910-123456789012' }));
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children }) => <a>{children}</a> }));
 jest.mock('../../ui/Button', () => ({ Button: ({ children, variant, ...props }) => <button data-variant={variant} {...props}>{children}</button> }));
@@ -23,7 +29,8 @@ jest.mock('../../queue/CheckInPanel', () => ({ canCheckIn: () => false, CheckInP
 const qr = 'https://cdn.example/qr.png';
 const info = { onlinePaymentAvailable: true, paymentQrImageUrl: qr, upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons', currency: 'INR', upiQrDecoded: true };
 const booking = { id: 'booking1', status: 'CONFIRMED', payableAmount: 419.25, servicePrice: 500, creditsRedeemedAmount: 80.75,
-  serviceName: 'Haircut', salonName: 'Shop', slotStart: '2026-10-10T10:00:00Z', salonTimezone: 'Asia/Kolkata' };
+  serviceName: 'Haircut', services: [{ serviceId: 'svc', name: 'Haircut', durationMinutes: 30, price: 500 }],
+  salonName: 'Shop', slotStart: '2026-10-10T10:00:00Z', salonTimezone: 'Asia/Kolkata' };
 let tree; let paymentInfo; let createBooking;
 const text = () => JSON.stringify(tree.toJSON());
 const qrImages = () => tree.root.findAllByType('img').filter((image) => image.props.src === qr);
@@ -31,7 +38,7 @@ const buttons = (label) => tree.root.findAllByType('button').filter((button) => 
 async function click(label) { await act(async () => buttons(label)[0].props.onClick()); }
 async function renderFlow() {
   await act(async () => { tree = TestRenderer.create(<BookingFlow salonId="s" services={[{ id: 'svc', name: 'Haircut', price: 500 }]} operatingHours={[]}
-    initialServiceId="svc" initialStaffId={null} currency="INR" countryCode="IN" salonTimezone="Asia/Kolkata" />); });
+    initialServiceIds={['svc']} initialStaffId={null} currency="INR" countryCode="IN" salonTimezone="Asia/Kolkata" />); });
   await click('Select date'); await click('Select slot');
 }
 beforeEach(() => {

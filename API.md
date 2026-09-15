@@ -68,10 +68,10 @@ regardless of order — same fix philosophy as the `/areas/` locality route in P
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/salons/:salonId/booking/staff?serviceId=` | qualified-staff list for the "choose a barber" step (`ACTIVE` staff, StaffService rule below); "Any Staff" is a client-side option, never returned here |
-| GET | `/salons/:salonId/booking/availability?serviceId=&date=&staffId=` | applies the service-level capacity algorithm in [DATABASE.md](DATABASE.md#booking-capacity-model-resolved--service-level-not-salon-wide). `staffId` is optional and, per the soft-staff-preference decision below, only validates that staff's qualification/active status — it never changes which slots come back |
+| GET | `/salons/:salonId/booking/staff?serviceIds=` | qualified-staff list for the "choose a barber" step (`ACTIVE` staff, StaffService rule below, ANDed across every id in `serviceIds` — see "Multi-service bookings" below); "Any Staff" is a client-side option, never returned here |
+| GET | `/salons/:salonId/booking/availability?serviceIds=&date=&staffId=` | applies the multi-service capacity algorithm in [DATABASE.md](DATABASE.md#booking-capacity-model-resolved--service-level-not-salon-wide) against the COMBINED duration of every id in `serviceIds`. `staffId` is optional and, per the soft-staff-preference decision below, only validates that staff's qualification/active status — it never changes which slots come back |
 | GET | `/salons/:salonId/booking/cancellation-policy` | the effective policy (salon-specific row, else the platform-default row) — lets clients render an accurate cancellation-charge preview via `packages/shared`'s `computeCancellationCharge` before the customer ever creates a booking |
-| POST | `/bookings` | Idempotency-Key required. `{ salonId, serviceId, slotStart, preferredStaffId? }`. `preferredStaffId` is a soft preference only (see `DATABASE.md`'s Booking section) — it never affects capacity. Response status is `CONFIRMED` or `PENDING_PAYMENT` depending on the salon's `SalonPaymentPolicy` — client branches on the returned status, never assumes one or the other. Rejected with `OUTSTANDING_BALANCE` if the customer has a blocking `CustomerLedgerEntry` at that salon. |
+| POST | `/bookings` | Idempotency-Key required. `{ salonId, serviceIds, slotStart, preferredStaffId? }`. `preferredStaffId` is a soft preference only (see `DATABASE.md`'s Booking section) — it never affects capacity. Response status is `CONFIRMED` or `PENDING_PAYMENT` depending on the salon's `SalonPaymentPolicy` — client branches on the returned status, never assumes one or the other. Rejected with `OUTSTANDING_BALANCE` if the customer has a blocking `CustomerLedgerEntry` at that salon. |
 | GET | `/bookings/mine` | cursor-paginated |
 | GET | `/bookings/:id` | 404s (not 403) if the booking doesn't belong to the caller |
 | POST | `/bookings/:id/check-in` | Implemented in Phase 3C. Idempotency-Key required, no body. Allowed from 15 minutes before `slotStart` onward (`EARLY_CHECKIN_WINDOW_MINUTES`, no upper bound — the automatic no-show sweep that would otherwise cap lateness isn't built). Only a `CONFIRMED` booking with no existing `QueueEntry` can check in (`409 ALREADY_CHECKED_IN` on repeat); creates `QueueEntry(source=APPOINTMENT)` linked to the booking. Lives in a separate `BookingCheckInController` (not `BookingsController`) purely to avoid `BookingsModule` importing `QueueModule` while `QueueModule` already imports `BookingsModule` for `AvailabilityService` reuse — same URL prefix, different controller, which Nest allows. |
@@ -83,6 +83,45 @@ now) — see `apps/backend/src/common/interceptors/idempotency.interceptor.ts`. 
 request with the same key+body replays the cached response verbatim; the same key with a
 different body is rejected (`IDEMPOTENCY_KEY_REUSED`); a concurrent duplicate still in flight is
 rejected (`REQUEST_IN_PROGRESS`).
+
+### Multi-service bookings
+
+A customer may select **multiple services for one appointment** (e.g. Haircut + Beard Trim). The
+canonical, server-authoritative representation everywhere above is `serviceIds` — an ordered array
+of service ids, sent as a JSON array in the `POST /bookings` body and as a comma-separated string
+in the `GET .../staff` and `GET .../availability` query strings (`?serviceIds=id1,id2,id3`). The
+backend never trusts a client-computed total: it independently loads every id from the requested
+salon (rejecting duplicates, foreign-salon services, inactive services, and an empty selection),
+derives the combined `durationMinutes`/price server-side, and evaluates availability/capacity
+against the COMPLETE candidate interval (`slotStart` → `slotStart + SUM(durations)`), never by
+calling the single-service algorithm once per id and intersecting results.
+
+**Legacy `serviceId` compatibility (temporary, rolling-deploy window).** An already-installed
+client that predates this contract still sends the original single `serviceId` field/query param
+instead of `serviceIds`. All three endpoints above accept **either** shape:
+- Legacy `serviceId=<uuid>` (body field or query param) is normalized server-side to a one-element
+  `serviceIds: [serviceId]` before any business logic runs — behavior is byte-for-byte identical to
+  a new client explicitly sending that same one-element array (see
+  `packages/shared/src/schemas/index.ts`'s `checkServiceSelection`/`normalizeServiceSelection`).
+- Sending **both** `serviceId` and `serviceIds` on the same request is rejected as ambiguous
+  (`VALIDATION_ERROR`) rather than silently preferring one.
+- Sending **neither** is rejected the same way either shape always was ("select at least one
+  service").
+
+This compatibility is not scheduled for removal on a fixed date — it stays until every client
+sending the legacy shape (in practice: any FastQue mobile build older than this mission) is
+confirmed to have rolled out the update, since the backend cannot know which shape a given caller
+will send on its next request.
+
+**One barber for the whole appointment (V1).** A `preferredStaffId` must be qualified for **every**
+selected service and free for the complete combined interval — never a mid-appointment handoff
+between barbers. "Any Staff" capacity is computed the same way: a barber only counts as available
+for a multi-service appointment if they can perform **all** selected services (see
+`AvailabilityService.qualifiedStaffWhereForServices`, AND-based, never OR/"in" matching).
+
+**Chair occupancy.** A chair (and, transitively, slot capacity) is occupied for the appointment's
+COMPLETE combined interval, not per-service — the same race-safe transaction + per-salon advisory
+lock at booking creation described in `DATABASE.md`'s capacity model applies unchanged.
 
 ## Queue (customer view)
 

@@ -4,7 +4,7 @@ import {
   PipeTransform,
   type ArgumentMetadata,
 } from '@nestjs/common';
-import type { ZodType } from 'zod';
+import type { ZodType, ZodTypeDef } from 'zod';
 import { AppException } from '../exceptions/app.exception';
 
 /**
@@ -26,7 +26,12 @@ import { AppException } from '../exceptions/app.exception';
  */
 @Injectable()
 export class ZodValidationPipe<T> implements PipeTransform<unknown, unknown> {
-  constructor(private readonly schema: ZodType<T>) {}
+  // The schema's OWN input type is deliberately left unconstrained (`any`, not defaulted to `T`):
+  // a schema with a `.transform()`/`.pipe()` stage (e.g. availabilityQuerySchema's comma-separated
+  // serviceIds string -> string[]) has a real, and correct, input/output mismatch — the raw
+  // request value is never actually a `T`, only `schema.safeParse`'s validated *output* is. This
+  // pipe only ever cares about that output type.
+  constructor(private readonly schema: ZodType<T, ZodTypeDef, any>) {}
 
   transform(value: unknown, metadata: ArgumentMetadata): unknown {
     if (metadata.type === 'param' || metadata.type === 'custom') return value;

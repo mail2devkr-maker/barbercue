@@ -35,15 +35,19 @@ function StaffPhoto({ url, displayName }: { url: string | null; displayName: str
 
 export default function StaffSelectScreen({ route, navigation }: Props) {
   const { t } = useLanguage();
-  const { salonId, serviceId, ...rest } = route.params;
+  const { salonId, services, ...rest } = route.params;
   const [options, setOptions] = useState<StaffOptionDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Multi-service booking core mission — "Any Staff" capacity (and a specific barber's own
+  // qualification) must be evaluated against the COMPLETE service selection, never just the first
+  // one, so this must send every selected service id, not a single serviceId.
+  const serviceIds = services.map((s) => s.id).join(',');
 
   useEffect(() => {
     let cancelled = false;
     apiFetch<StaffOptionDto[]>(
-      `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.staff}?serviceId=${serviceId}`,
+      `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.staff}?serviceIds=${serviceIds}`,
     )
       .then((result) => {
         if (!cancelled) setOptions(result);
@@ -57,10 +61,10 @@ export default function StaffSelectScreen({ route, navigation }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [salonId, serviceId]);
+  }, [salonId, serviceIds]);
 
   function choose(preferredStaffId: string | null, preferredStaffName: string | null) {
-    navigation.navigate('DateSelect', { salonId, serviceId, ...rest, preferredStaffId, preferredStaffName });
+    navigation.navigate('DateSelect', { salonId, services, ...rest, preferredStaffId, preferredStaffName });
   }
 
   return (

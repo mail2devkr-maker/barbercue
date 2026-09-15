@@ -331,7 +331,14 @@ describe('DashboardCustomersService', () => {
           status: 'OUTSTANDING',
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           settledAt: null,
-          booking: { slotStart: new Date('2025-12-30T10:00:00.000Z'), service: { name: 'Haircut' } },
+          booking: {
+            slotStart: new Date('2025-12-30T10:00:00.000Z'),
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: { toString: () => '300' } },
+            // Multi-service booking core mission (P1 follow-up) — mirrors the `service` fixture
+            // above by default via resolveEffectiveBookingServices' zero-row fallback.
+            services: [],
+          },
         },
         {
           id: 'l2',
@@ -359,6 +366,42 @@ describe('DashboardCustomersService', () => {
         status: 'OUTSTANDING',
         bookingServiceName: 'Haircut',
       });
+    });
+
+    // Production-safety hardening (P1) — bookingServiceName must be a truthful summary of the
+    // COMPLETE service selection the charged booking actually had, never silently just the
+    // primary/first service.
+    it('shows a truthful multi-service summary in bookingServiceName, not just the primary service', async () => {
+      setup({
+        total: { c1: 1 },
+        completed: { c1: { count: 1 } },
+        users: [{ id: 'c1', phone: null, email: null }],
+      });
+      prisma.customerLedgerEntry.findMany.mockResolvedValue([
+        {
+          id: 'l1',
+          customerId: 'c1',
+          salonId: 's1',
+          bookingId: 'b1',
+          amount: 150,
+          reason: 'CANCELLATION_CHARGE',
+          status: 'OUTSTANDING',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          settledAt: null,
+          booking: {
+            slotStart: new Date('2025-12-30T10:00:00.000Z'),
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: { toString: () => '300' } },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: { toString: () => '300' } },
+              { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 20, price: { toString: () => '150' } },
+            ],
+          },
+        },
+      ]);
+
+      const result = await service.getOne('owner1', 's1', 'c1');
+      expect(result.ledgerEntries[0].bookingServiceName).toBe('Haircut + Beard Trim');
     });
 
     it('is not newCustomerGraceEligible once completedCount reaches the 3-visit limit', async () => {

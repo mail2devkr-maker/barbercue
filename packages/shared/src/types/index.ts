@@ -415,6 +415,11 @@ export interface BookingDto {
   id: string;
   salonId: string;
   customerId: string;
+  // Multi-service booking core mission: the PRIMARY (first-selected) service only, kept for every
+  // consumer that predates multi-service bookings and still needs exactly one id — QueueEntry/
+  // ServiceSession linkage at check-in time, and any read-only display that hasn't been updated to
+  // render BookingDetailDto.services yet (see that field's own doc comment). Never the full
+  // selection by itself; a multi-service booking's true selection is BookingDetailDto.services.
   serviceId: string;
   slotStart: string; // ISO 8601
   slotEnd: string;
@@ -475,6 +480,20 @@ export interface AvailabilitySlotDto {
 
 export type AvailabilitySlotState = 'AVAILABLE' | 'OCCUPIED';
 
+// Multi-service booking core mission — one ordered entry per service actually selected on this
+// appointment, snapshotted at booking-creation time (name/duration/price never drift if the
+// underlying Service is later renamed/repriced/deactivated — same snapshot convention as
+// prepaymentRequiredAmount and the other Booking-time snapshots in schema.prisma). Every booking,
+// including one created before this mission existed, has at least one entry — a pre-existing
+// single-service booking's array holds exactly that one service, backfilled once at migration
+// time, so this field is always safe to render without a legacy branch.
+export interface BookingServiceItemDto {
+  serviceId: string;
+  name: string;
+  durationMinutes: number;
+  price: number;
+}
+
 // Adds display fields a UI needs (booking confirmation, list, detail) without extra round-trips —
 // same pattern as SalonListItemDto extending SalonSummary in Phase 3A.
 export interface BookingDetailDto extends BookingDto {
@@ -507,9 +526,16 @@ export interface BookingDetailDto extends BookingDto {
   // latest check-in time before the booking is eligible to be marked NO_SHOW.
   checkInOpensAt: string | null;
   checkInDueBy: string | null;
+  // Multi-service booking core mission: these three now summarize the COMPLETE selection — a
+  // concise truthful name summary (see summarizeServiceNames), and the TOTAL duration/price across
+  // every selected service — never just the first one. See `services` below for the full,
+  // per-service breakdown a UI should render when it wants to show more than a summary.
   serviceName: string;
   serviceDurationMinutes: number;
   servicePrice: number;
+  // Multi-service booking core mission — the complete, ordered per-service breakdown. See
+  // BookingServiceItemDto's own doc comment; always has at least one entry, for every booking.
+  services: BookingServiceItemDto[];
   // FastQue Credits / Wallet V1: servicePrice minus creditsRedeemedAmount, floored at 0 — the
   // actual amount the customer needs to pay via the salon's payment QR. Always present (not just
   // when credits were redeemed) so a client never has to duplicate this subtraction itself.
