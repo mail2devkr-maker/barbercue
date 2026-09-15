@@ -50,7 +50,7 @@ export class BookingInfoController {
     @Query(new ZodValidationPipe(staffListQuerySchema))
     query: StaffListQueryInput,
   ) {
-    return this.availability.listQualifiedStaff(salonId, query.serviceId);
+    return this.availability.listQualifiedStaffForServices(salonId, query.serviceIds);
   }
 
   @Public()
@@ -62,7 +62,7 @@ export class BookingInfoController {
   ) {
     return this.availability.getAvailability(
       salonId,
-      query.serviceId,
+      query.serviceIds,
       query.date,
       query.staffId,
     );

@@ -38,6 +38,12 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
       city: { slug: 'bengaluru', countryCode: 'IN' },
     },
     service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+    // Multi-service booking core mission — every booking has at least one snapshotted
+    // BookingService row (backfilled for pre-existing bookings); mirrors the `service` fixture
+    // above by default so untouched tests keep exercising the same single-service values.
+    services: [
+      { serviceId: 'sv1', sortOrder: 0, serviceName: 'Haircut', durationMinutes: 30, price: decimal('300') },
+    ],
     preferredStaff: null,
     customer: { phone: '+919876543210', email: null },
     queueEntries: [],

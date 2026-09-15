@@ -22,11 +22,15 @@ export function salonPageUrl(
   return `${origin}/${booking.salonCountryCode.toLowerCase()}/${booking.citySlug}/${booking.salonSlug}`;
 }
 
+// Multi-service booking core mission — "Book again" carries the PREVIOUS appointment's complete
+// service set where feasible, not just the first/primary one (booking.serviceId). The book page's
+// `serviceId` query param accepts a comma-separated list of ids for exactly this reason — see
+// BookPage's own handling.
 export function rebookUrl(booking: BookingDetailDto): string {
   const params = new URLSearchParams({
     city: booking.citySlug,
     country: booking.salonCountryCode.toLowerCase(),
-    serviceId: booking.serviceId,
+    serviceId: booking.services.map((s) => s.serviceId).join(","),
   });
   if (booking.preferredStaffId) params.set("staffId", booking.preferredStaffId);
   return `/book/${booking.salonSlug}?${params}`;

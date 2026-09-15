@@ -15,7 +15,9 @@ import {
   isSlotBookable,
   paiseToDecimalString,
   paiseToRupees,
+  summarizeServiceNames,
   type BookingDetailDto,
+  type BookingServiceItemDto,
   type CancelBookingResponseDto,
   type CreateBookingInput,
   type OutstandingBalanceDetailsDto,
@@ -74,6 +76,10 @@ const bookingDetailInclude = {
     },
   },
   service: { select: { name: true, durationMinutes: true, price: true } },
+  // Multi-service booking core mission — the authoritative, ordered selection. Snapshot columns
+  // only (see BookingService's own doc comment): never re-joins the live Service, so a later
+  // rename/reprice/deactivation can't retroactively change what an already-created booking shows.
+  services: { orderBy: { sortOrder: 'asc' } },
   preferredStaff: { select: { displayName: true } },
   // Phase 16 (Ratings & Reviews) — id only, just to derive hasReview below; the review's own
   // content is fetched separately by ReviewsService, never duplicated onto BookingDetailDto.
@@ -109,10 +115,19 @@ export class BookingsService {
     idempotencyKey: string,
   ): Promise<BookingDetailDto> {
     const salon = await this.availability.getSalonOrThrow(input.salonId);
-    const service = await this.availability.getServiceOrThrow(
+    // Multi-service booking core mission — every selected service is loaded and validated (real,
+    // ACTIVE, belongs to this salon, no duplicates) before any duration/price is trusted. The
+    // client never supplies duration/price directly; only ids.
+    const services = await this.availability.getServicesOrThrow(
       input.salonId,
-      input.serviceId,
+      input.serviceIds,
     );
+    const totalDurationMinutes = services.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const totalPricePaise = services.reduce(
+      (sum, s) => sum + decimalStringToPaise(s.price.toString()),
+      0,
+    );
+    const totalPrice = paiseToDecimalString(totalPricePaise);
 
     const slotStart = new Date(input.slotStart);
     if (slotStart.getTime() <= Date.now()) {
@@ -123,7 +138,7 @@ export class BookingsService {
       );
     }
     const slotEnd = new Date(
-      slotStart.getTime() + service.durationMinutes * 60_000,
+      slotStart.getTime() + totalDurationMinutes * 60_000,
     );
     await this.availability.assertWithinOperatingHours(
       input.salonId,
@@ -132,9 +147,11 @@ export class BookingsService {
     );
 
     if (input.preferredStaffId) {
-      await this.availability.assertStaffQualified(
+      // V1 semantics (explicit mission scope): ONE barber for the complete appointment, qualified
+      // for EVERY selected service — never a mid-appointment handoff between barbers.
+      await this.availability.assertStaffQualifiedForServices(
         input.salonId,
-        input.serviceId,
+        input.serviceIds,
         input.preferredStaffId,
       );
       await this.availability.assertStaffWithinWorkingHours(
@@ -224,9 +241,11 @@ export class BookingsService {
     // wallet balance too — CustomerCreditsService.redeemUpTo returns the ACTUAL amount applied,
     // which is what gets snapshotted onto the booking, never this requested figure.
     const requestedCredits = input.creditsToRedeem ?? 0;
-    // Part 11 precision hardening: pass the exact Decimal straight through — never Number(price)
-    // — so the authoritative cap is derived via integer paise, not a float division of the price.
-    const maxCreditsAllowed = this.credits.computeMaxRedeemable(service.price);
+    // Part 11 precision hardening: pass the exact decimal string straight through — never
+    // Number(price) — so the authoritative cap is derived via integer paise, not a float division
+    // of the price. Multi-service booking core mission: the cap now applies to the COMBINED price
+    // of every selected service, never just the first/primary one.
+    const maxCreditsAllowed = this.credits.computeMaxRedeemable(totalPrice);
 
     const prepaymentRequirement =
       paymentPolicy?.prepaymentRequirement ?? PrepaymentRequirement.NONE;
@@ -240,8 +259,11 @@ export class BookingsService {
       prepaymentRequirement === PrepaymentRequirement.FULL
         ? 100
         : (paymentPolicy?.prepaymentPercentage ?? 100);
+    // Multi-service booking core mission: prepayment is a percentage of the COMBINED price, not
+    // just the first selected service — same float-percentage computation as before, applied to
+    // the correct total.
     const prepaymentRequiredAmount = requiresPrepayment
-      ? Number(service.price) * (prepaymentPercentage / 100)
+      ? Number(totalPrice) * (prepaymentPercentage / 100)
       : null;
 
     const bookingId = await this.prisma.$transaction(async (tx) => {
@@ -258,10 +280,10 @@ export class BookingsService {
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${input.salonId}))`,
       );
 
-      const slotCapacity = await this.availability.getSlotCapacity(
+      const slotCapacity = await this.availability.getSlotCapacityForServices(
         tx,
         input.salonId,
-        input.serviceId,
+        input.serviceIds,
       );
       const overlapping = await tx.booking.count({
         where: {
@@ -310,7 +332,11 @@ export class BookingsService {
         data: {
           salonId: input.salonId,
           customerId,
-          serviceId: input.serviceId,
+          // Multi-service booking core mission: the first selected service remains Booking's own
+          // serviceId/service — the read-compatibility pointer every pre-existing consumer
+          // (QueueEntry check-in linkage, analytics, admin activity, the customer ledger's service
+          // label) keeps reading unchanged. The COMPLETE, ordered selection is written below.
+          serviceId: services[0].id,
           slotStart,
           slotEnd,
           status,
@@ -321,6 +347,15 @@ export class BookingsService {
           selectedStyleName: input.selectedStyleName ?? null,
           checkInOpensMinutesBefore: EARLY_CHECKIN_WINDOW_MINUTES,
           checkInDueGraceMinutes: arrivalPolicy.appointmentArrivalGraceMinutes,
+          services: {
+            create: services.map((s, sortOrder) => ({
+              serviceId: s.id,
+              sortOrder,
+              serviceName: s.name,
+              durationMinutes: s.durationMinutes,
+              price: s.price,
+            })),
+          },
         },
       });
 
@@ -367,6 +402,10 @@ export class BookingsService {
 
     // Only after the transaction has actually committed — never on a rolled-back create (e.g.
     // SLOT_FULL), since that never reaches this line.
+    // Multi-service booking core mission: a concise, truthful summary ("Haircut + Beard Trim", or
+    // "3 services") — never just the first selected service's name — for every notification/push
+    // surface below. See summarizeServiceNames's own doc comment for the exact rule.
+    const serviceSummary = summarizeServiceNames(services.map((s) => s.name));
     this.realtime.emitBookingCreated(input.salonId, bookingId);
     await this.notifications.notify(
       customerId,
@@ -374,7 +413,7 @@ export class BookingsService {
       {
         salonId: input.salonId,
         salonName: salon.name,
-        serviceName: service.name,
+        serviceName: serviceSummary,
       },
       // No per-booking detail route exists on web yet (the list at account/bookings is the whole
       // surface) — the deep link must point at a route that actually exists, not an imagined one.
@@ -383,7 +422,7 @@ export class BookingsService {
     await this.notifications.notify(
       salon.ownerUserId,
       'owner.booking.created',
-      { salonId: input.salonId, bookingId, serviceName: service.name },
+      { salonId: input.salonId, bookingId, serviceName: serviceSummary },
       `dashboard/salons/${input.salonId}/bookings`,
     );
     // Real OS push, distinct from the in-app Notification row above and the websocket emit —
@@ -396,7 +435,7 @@ export class BookingsService {
     void this.pushDispatch.dispatchLocalizedToUser(
       salon.ownerUserId,
       'newBooking',
-      service.name,
+      serviceSummary,
       { type: 'booking.created', salonId: input.salonId, bookingId },
     );
 
@@ -464,9 +503,11 @@ export class BookingsService {
     // Reuses packages/shared/src/calc's computeCancellationCharge — the same function the client
     // uses to render a live preview before the customer ever taps "Cancel." isNoShow is always
     // false here: no-show detection is dashboard/system-triggered work, out of scope in this phase.
+    // Multi-service booking core mission: the charge is computed against the COMBINED price of
+    // every service on this appointment, never just the first/primary one.
     const chargeAmount = computeCancellationCharge(
       policy,
-      Number(booking.service.price),
+      paiseToRupees(this.totalServicePricePaise(booking.services)),
       minutesUntilSlot,
       false,
     );
@@ -616,7 +657,7 @@ export class BookingsService {
     void this.pushDispatch.dispatchLocalizedToUser(
       updated.salon.ownerUserId,
       'bookingCancelled',
-      updated.service.name,
+      summarizeServiceNames(updated.services.map((s) => s.serviceName)),
       { type: 'booking.cancelled', salonId: updated.salonId, bookingId },
     );
 
@@ -674,12 +715,17 @@ export class BookingsService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    const service = await this.availability.getServiceOrThrow(
-      booking.salonId,
-      booking.serviceId,
+    // Multi-service booking core mission — reschedule keeps the EXISTING selected services
+    // unchanged (see rescheduleBookingSchema's own doc comment: a different service selection is a
+    // new booking, not a reschedule) and recalculates the full combined interval at the proposed
+    // new start time from the booking's own stored BookingService snapshot, never a live re-fetch
+    // of the current Service rows.
+    const totalDurationMinutes = booking.services.reduce(
+      (sum, s) => sum + s.durationMinutes,
+      0,
     );
     const newSlotEnd = new Date(
-      newSlotStart.getTime() + service.durationMinutes * 60_000,
+      newSlotStart.getTime() + totalDurationMinutes * 60_000,
     );
     await this.availability.assertWithinOperatingHours(
       booking.salonId,
@@ -703,10 +749,10 @@ export class BookingsService {
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${booking.salonId}))`,
       );
 
-      const slotCapacity = await this.availability.getSlotCapacity(
+      const slotCapacity = await this.availability.getSlotCapacityForServices(
         tx,
         booking.salonId,
-        booking.serviceId,
+        booking.services.map((s) => s.serviceId),
       );
       const overlapping = await tx.booking.count({
         where: {
@@ -777,7 +823,7 @@ export class BookingsService {
     void this.pushDispatch.dispatchLocalizedToUser(
       booking.salon.ownerUserId,
       'bookingRescheduled',
-      updated.service.name,
+      summarizeServiceNames(updated.services.map((s) => s.serviceName)),
       { type: 'booking.rescheduled', salonId: booking.salonId, bookingId },
     );
 
@@ -846,17 +892,34 @@ export class BookingsService {
         checkInDueGraceMinutes: booking.checkInDueGraceMinutes,
         hasCheckedIn: booking.queueEntries.length > 0,
       }),
-      serviceName: booking.service.name,
-      serviceDurationMinutes: booking.service.durationMinutes,
-      servicePrice: Number(booking.service.price),
+      // Multi-service booking core mission: these three fields are now the COMBINED
+      // summary/total across every selected service, not just the first one — see
+      // BookingServiceItemDto's own doc comment. This is a strict correctness improvement for any
+      // caller that hasn't been updated to render the full `services` breakdown below: it now sees
+      // the true total price/duration instead of a single service's, and a truthful multi-service
+      // name summary instead of a misleadingly incomplete one.
+      serviceName: summarizeServiceNames(booking.services.map((s) => s.serviceName)),
+      serviceDurationMinutes: booking.services.reduce((sum, s) => sum + s.durationMinutes, 0),
+      servicePrice: paiseToRupees(this.totalServicePricePaise(booking.services)),
+      // The complete, ordered per-service breakdown — every booking (including one created before
+      // this mission existed, backfilled by this mission's migration) has at least one entry.
+      services: booking.services.map(
+        (s): BookingServiceItemDto => ({
+          serviceId: s.serviceId,
+          name: s.serviceName,
+          durationMinutes: s.durationMinutes,
+          price: Number(s.price),
+        }),
+      ),
       // Part 11 precision hardening: the payable invariant (servicePrice = payableAmount +
       // creditsRedeemed) is computed in integer paise, never via float subtraction of two
       // Number(decimal) values — Number(...) is only used once more here, at the very end, to
       // produce the display/DTO number (a controlled boundary conversion, not further arithmetic).
+      // Multi-service booking core mission: against the COMBINED price of every selected service.
       payableAmount: paiseToRupees(
         Math.max(
           0,
-          decimalStringToPaise(booking.service.price.toString()) -
+          this.totalServicePricePaise(booking.services) -
             (booking.creditsRedeemedAmount
               ? decimalStringToPaise(booking.creditsRedeemedAmount.toString())
               : 0),
@@ -865,5 +928,21 @@ export class BookingsService {
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
       hasReview: booking.reviews.length > 0,
     };
+  }
+
+  /**
+   * Multi-service booking core mission — exact integer-paise sum of a booking's own snapshotted
+   * BookingService prices (see money/index.ts's own header comment for why paise, never a
+   * Number(decimal) float sum). The single place every price total in this file is derived from,
+   * so servicePrice/payableAmount/cancellation-charge input can never silently drift from each
+   * other.
+   */
+  private totalServicePricePaise(
+    services: readonly { price: Prisma.Decimal }[],
+  ): number {
+    return services.reduce(
+      (sum, s) => sum + decimalStringToPaise(s.price.toString()),
+      0,
+    );
   }
 }

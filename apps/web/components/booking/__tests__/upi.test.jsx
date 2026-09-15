@@ -23,7 +23,8 @@ jest.mock('../../queue/CheckInPanel', () => ({ canCheckIn: () => false, CheckInP
 const qr = 'https://cdn.example/qr.png';
 const info = { onlinePaymentAvailable: true, paymentQrImageUrl: qr, upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons', currency: 'INR', upiQrDecoded: true };
 const booking = { id: 'booking1', status: 'CONFIRMED', payableAmount: 419.25, servicePrice: 500, creditsRedeemedAmount: 80.75,
-  serviceName: 'Haircut', salonName: 'Shop', slotStart: '2026-10-10T10:00:00Z', salonTimezone: 'Asia/Kolkata' };
+  serviceName: 'Haircut', services: [{ serviceId: 'svc', name: 'Haircut', durationMinutes: 30, price: 500 }],
+  salonName: 'Shop', slotStart: '2026-10-10T10:00:00Z', salonTimezone: 'Asia/Kolkata' };
 let tree; let paymentInfo; let createBooking;
 const text = () => JSON.stringify(tree.toJSON());
 const qrImages = () => tree.root.findAllByType('img').filter((image) => image.props.src === qr);
@@ -31,7 +32,7 @@ const buttons = (label) => tree.root.findAllByType('button').filter((button) => 
 async function click(label) { await act(async () => buttons(label)[0].props.onClick()); }
 async function renderFlow() {
   await act(async () => { tree = TestRenderer.create(<BookingFlow salonId="s" services={[{ id: 'svc', name: 'Haircut', price: 500 }]} operatingHours={[]}
-    initialServiceId="svc" initialStaffId={null} currency="INR" countryCode="IN" salonTimezone="Asia/Kolkata" />); });
+    initialServiceIds={['svc']} initialStaffId={null} currency="INR" countryCode="IN" salonTimezone="Asia/Kolkata" />); });
   await click('Select date'); await click('Select slot');
 }
 beforeEach(() => {

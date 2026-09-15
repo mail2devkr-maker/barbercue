@@ -241,6 +241,18 @@ export default function BookingDetailScreen({ route }: Props) {
             })}
           </Text>
         )}
+        {/* Multi-service booking core mission — booking detail must never display only the first
+            service; when more than one was selected, show each one's own name/duration/price
+            alongside the combined totals already shown above/below. */}
+        {booking.services.length > 1 && (
+          <View style={styles.serviceBreakdown}>
+            {booking.services.map((s) => (
+              <Text key={s.serviceId} style={styles.serviceBreakdownLine}>
+                {s.name} · {s.durationMinutes} {t.minutesAbbrev} · {formatMoney(s.price, booking.currency)}
+              </Text>
+            ))}
+          </View>
+        )}
         <Text style={styles.line}>{formatMoney(booking.servicePrice, booking.currency)}</Text>
         {booking.preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{booking.preferredStaffName}</Text>}
         {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
@@ -352,6 +364,8 @@ const styles = StyleSheet.create({
   lineSkeleton: { height: 16, borderRadius: 6, width: '60%' },
   card: { marginBottom: space[4] },
   line: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginBottom: space[1] },
+  serviceBreakdown: { marginBottom: space[1] },
+  serviceBreakdownLine: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: 2 },
   status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, marginBottom: space[2] },
   bookingId: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
   actionButton: { marginBottom: space[3] },

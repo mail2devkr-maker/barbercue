@@ -57,6 +57,12 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
       city: { slug: 'bengaluru', countryCode: 'IN' },
     },
     service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+    // Multi-service booking core mission — every booking has at least one snapshotted
+    // BookingService row; mirrors the `service` fixture above by default so untouched tests keep
+    // exercising the same single-service values.
+    services: [
+      { serviceId: 'sv1', sortOrder: 0, serviceName: 'Haircut', durationMinutes: 30, price: decimal('300') },
+    ],
     preferredStaff: null,
     reviews: [],
     queueEntries: [],
@@ -91,13 +97,16 @@ interface PrismaMock {
 interface AvailabilityMock {
   getSalonOrThrow: jest.Mock<Promise<unknown>, [string]>;
   getServiceOrThrow: jest.Mock<Promise<unknown>, [string, string]>;
+  getServicesOrThrow: jest.Mock<Promise<unknown[]>, [string, string[]]>;
   assertWithinOperatingHours: jest.Mock<Promise<void>, [string, Date, Date]>;
   assertStaffQualified: jest.Mock<Promise<void>, [string, string, string]>;
+  assertStaffQualifiedForServices: jest.Mock<Promise<void>, [string, string[], string]>;
   assertStaffWithinWorkingHours: jest.Mock<
     Promise<void>,
     [string, string, Date, Date]
   >;
   getSlotCapacity: jest.Mock<Promise<number>, [unknown, string, string]>;
+  getSlotCapacityForServices: jest.Mock<Promise<number>, [unknown, string, string[]]>;
 }
 
 describe('BookingsService', () => {
@@ -196,17 +205,36 @@ describe('BookingsService', () => {
           durationMinutes: 30,
           price: decimal('300'),
         }),
+      // Multi-service booking core mission — a tiny fixed catalog so tests can request any
+      // combination of sv1/sv2/sv3 without re-mocking this per test; order is preserved exactly as
+      // requested (see the real getServicesOrThrow's own contract), same as production.
+      getServicesOrThrow: jest
+        .fn<Promise<unknown[]>, [string, string[]]>()
+        .mockImplementation((_salonId, serviceIds) => {
+          const catalog: Record<string, unknown> = {
+            sv1: { id: 'sv1', salonId: 's1', name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+            sv2: { id: 'sv2', salonId: 's1', name: 'Beard Trim', durationMinutes: 20, price: decimal('150') },
+            sv3: { id: 'sv3', salonId: 's1', name: 'Facial', durationMinutes: 30, price: decimal('400') },
+          };
+          return Promise.resolve(serviceIds.map((id) => catalog[id]));
+        }),
       assertWithinOperatingHours: jest
         .fn<Promise<void>, [string, Date, Date]>()
         .mockResolvedValue(undefined),
       assertStaffQualified: jest
         .fn<Promise<void>, [string, string, string]>()
         .mockResolvedValue(undefined),
+      assertStaffQualifiedForServices: jest
+        .fn<Promise<void>, [string, string[], string]>()
+        .mockResolvedValue(undefined),
       assertStaffWithinWorkingHours: jest
         .fn<Promise<void>, [string, string, Date, Date]>()
         .mockResolvedValue(undefined),
       getSlotCapacity: jest
         .fn<Promise<number>, [unknown, string, string]>()
+        .mockResolvedValue(2),
+      getSlotCapacityForServices: jest
+        .fn<Promise<number>, [unknown, string, string[]]>()
         .mockResolvedValue(2),
     };
     cancellationPolicy = {
@@ -299,7 +327,7 @@ describe('BookingsService', () => {
       await expect(
         service.create(
           'c1',
-          { salonId: 's1', serviceId: 'sv1', slotStart: pastSlot },
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: pastSlot },
           BookingSource.WEB,
           'key-1',
         ),
@@ -314,7 +342,7 @@ describe('BookingsService', () => {
       await expect(
         service.create(
           'c1',
-          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
           BookingSource.WEB,
           'key-1',
         ),
@@ -337,7 +365,7 @@ describe('BookingsService', () => {
       await expect(
         service.create(
           'c1',
-          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
           BookingSource.WEB,
           'key-1',
         ),
@@ -350,7 +378,7 @@ describe('BookingsService', () => {
     });
 
     it('propagates staff-qualification failures for a preferredStaffId', async () => {
-      availability.assertStaffQualified.mockRejectedValue(
+      availability.assertStaffQualifiedForServices.mockRejectedValue(
         Object.assign(new Error('not qualified'), {
           code: 'STAFF_NOT_QUALIFIED',
         }),
@@ -360,7 +388,7 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             preferredStaffId: 'st1',
           },
@@ -376,7 +404,7 @@ describe('BookingsService', () => {
         'c1',
         {
           salonId: 's1',
-          serviceId: 'sv1',
+          serviceIds: ['sv1'],
           slotStart: futureSlot,
           preferredStaffId: 'st1',
         },
@@ -402,7 +430,7 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             preferredStaffId: 'st1',
           },
@@ -416,7 +444,7 @@ describe('BookingsService', () => {
     it('does not check working hours at all when no preferred barber is given', async () => {
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
         BookingSource.WEB,
         'key-1',
       );
@@ -424,12 +452,12 @@ describe('BookingsService', () => {
     });
 
     it('rejects with SLOT_FULL when consumed capacity has reached the computed slot capacity', async () => {
-      availability.getSlotCapacity.mockResolvedValue(2);
+      availability.getSlotCapacityForServices.mockResolvedValue(2);
       prisma.booking.count.mockResolvedValue(2);
       await expect(
         service.create(
           'c1',
-          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
           BookingSource.WEB,
           'key-1',
         ),
@@ -440,7 +468,7 @@ describe('BookingsService', () => {
     });
 
     it('rejects with STAFF_SLOT_UNAVAILABLE when the requested staff already has an overlapping booking, even with pool capacity to spare', async () => {
-      availability.getSlotCapacity.mockResolvedValue(5); // plenty of pool capacity
+      availability.getSlotCapacityForServices.mockResolvedValue(5); // plenty of pool capacity
       prisma.booking.count.mockImplementation((args: unknown) => {
         const where = (args as { where: { preferredStaffId?: string } }).where;
         // Pool-wide overlap count (no preferredStaffId filter): well under capacity.
@@ -452,7 +480,7 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             preferredStaffId: 'dinesh',
           },
@@ -464,7 +492,7 @@ describe('BookingsService', () => {
     });
 
     it('succeeds when the requested staff is free, even if another staff member is booked at the same time', async () => {
-      availability.getSlotCapacity.mockResolvedValue(5);
+      availability.getSlotCapacityForServices.mockResolvedValue(5);
       prisma.booking.count.mockImplementation((args: unknown) => {
         const where = (args as { where: { preferredStaffId?: string } }).where;
         // Salon-wide pool count sees 1 (some other staff's booking); the staff-specific count for
@@ -475,7 +503,7 @@ describe('BookingsService', () => {
         'c1',
         {
           salonId: 's1',
-          serviceId: 'sv1',
+          serviceIds: ['sv1'],
           slotStart: futureSlot,
           preferredStaffId: 'ramesh',
         },
@@ -486,11 +514,11 @@ describe('BookingsService', () => {
     });
 
     it('never queries per-staff overlap for an "Any Staff" booking (preferredStaffId omitted) — pool capacity alone governs it', async () => {
-      availability.getSlotCapacity.mockResolvedValue(2);
+      availability.getSlotCapacityForServices.mockResolvedValue(2);
       prisma.booking.count.mockResolvedValue(0);
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
         BookingSource.WEB,
         'key-1',
       );
@@ -500,13 +528,13 @@ describe('BookingsService', () => {
     });
 
     it('checks staff exclusivity inside the same per-salon advisory-locked transaction as the pool check (ordering/atomicity)', async () => {
-      availability.getSlotCapacity.mockResolvedValue(5);
+      availability.getSlotCapacityForServices.mockResolvedValue(5);
       prisma.booking.count.mockResolvedValue(0);
       await service.create(
         'c1',
         {
           salonId: 's1',
-          serviceId: 'sv1',
+          serviceIds: ['sv1'],
           slotStart: futureSlot,
           preferredStaffId: 'dinesh',
         },
@@ -523,7 +551,7 @@ describe('BookingsService', () => {
     it('creates a CONFIRMED booking with no prepayment when the payment policy has no prepaymentRequirement configured (defaults to NONE)', async () => {
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
         BookingSource.WEB,
         'key-1',
       );
@@ -536,7 +564,7 @@ describe('BookingsService', () => {
     it('emits booking.created exactly once after a successful create', async () => {
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
         BookingSource.WEB,
         'key-1',
       );
@@ -547,7 +575,7 @@ describe('BookingsService', () => {
     it('dispatches a localized push to the salon owner exactly once after a successful create, with an ids-only data payload (no customer PII)', async () => {
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
         BookingSource.WEB,
         'key-1',
       );
@@ -577,7 +605,7 @@ describe('BookingsService', () => {
       });
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
         BookingSource.WEB,
         'key-1',
       );
@@ -594,7 +622,7 @@ describe('BookingsService', () => {
       });
       await service.create(
         'c1',
-        { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
         BookingSource.WEB,
         'key-1',
       );
@@ -608,7 +636,7 @@ describe('BookingsService', () => {
         await expect(
           service.create(
             'c1',
-            { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+            { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
             BookingSource.WEB,
             'key-1',
           ),
@@ -623,7 +651,7 @@ describe('BookingsService', () => {
         await expect(
           service.create(
             'c1',
-            { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+            { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
             BookingSource.APP,
             'key-1',
           ),
@@ -634,7 +662,7 @@ describe('BookingsService', () => {
         prisma.salonPaymentPolicy.findUnique.mockResolvedValue(null);
         await service.create(
           'c1',
-          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
           BookingSource.WALK_IN,
           'key-1',
         );
@@ -657,17 +685,18 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             creditsToRedeem: 9999,
           },
           BookingSource.WEB,
           'key-1',
         );
-        // service.price is 300 in this suite's fixture -> cap is floor(300/50)*10 = 60. Part 11:
-        // the real call now passes the Decimal itself (never Number(price)) — this fixture's
-        // decimal() helper is a { toString() } stand-in, so assert on that rather than identity.
-        expect(String(credits.computeMaxRedeemable.mock.calls[0][0])).toBe('300');
+        // The combined selected-service price is 300 in this suite's fixture (single service) ->
+        // cap is floor(300/50)*10 = 60. Part 11: the real call passes an exact decimal string
+        // (never Number(price)), computed via paise summation — never the raw fixture Decimal
+        // object identity, hence the format-normalized '300.00' rather than the fixture's own '300'.
+        expect(String(credits.computeMaxRedeemable.mock.calls[0][0])).toBe('300.00');
         expect(credits.redeemUpTo).toHaveBeenCalledWith(
           prisma,
           'c1',
@@ -688,7 +717,7 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             creditsToRedeem: 9999, // far more than the customer could ever actually redeem
           },
@@ -710,7 +739,7 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             creditsToRedeem: 30,
           },
@@ -736,7 +765,7 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             creditsToRedeem: 30,
           },
@@ -755,7 +784,7 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             creditsToRedeem: 30,
           },
@@ -777,6 +806,9 @@ describe('BookingsService', () => {
         prisma.booking.findFirst.mockResolvedValue(
           makeBookingRow({
             service: { name: 'Haircut', durationMinutes: 30, price: decimal('75.99') },
+            services: [
+              { serviceId: 'sv1', sortOrder: 0, serviceName: 'Haircut', durationMinutes: 30, price: decimal('75.99') },
+            ],
             creditsRedeemedAmount: '10.00',
           }),
         );
@@ -784,7 +816,7 @@ describe('BookingsService', () => {
           'c1',
           {
             salonId: 's1',
-            serviceId: 'sv1',
+            serviceIds: ['sv1'],
             slotStart: futureSlot,
             creditsToRedeem: 10,
           },
@@ -799,7 +831,7 @@ describe('BookingsService', () => {
       it('never calls into credits at all when creditsToRedeem is omitted', async () => {
         await service.create(
           'c1',
-          { salonId: 's1', serviceId: 'sv1', slotStart: futureSlot },
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
           BookingSource.WEB,
           'key-1',
         );
@@ -1195,15 +1227,12 @@ describe('BookingsService', () => {
 
     beforeEach(() => {
       prisma.booking.findFirst.mockResolvedValue(
+        // Multi-service booking core mission: reschedule() now derives duration/price purely from
+        // the booking's own stored `services` snapshot (30 min / 300 default from makeBookingRow),
+        // never a live service re-fetch — no availability.getServiceOrThrow override needed here.
         makeBookingRow({ slotStart: futureSlot, status: 'CONFIRMED' }),
       );
-      availability.getServiceOrThrow.mockResolvedValue({
-        id: 'sv1',
-        salonId: 's1',
-        durationMinutes: 30,
-        price: decimal('300'),
-      });
-      availability.getSlotCapacity.mockResolvedValue(2);
+      availability.getSlotCapacityForServices.mockResolvedValue(2);
       prisma.booking.count.mockResolvedValue(0);
       prisma.booking.update.mockResolvedValue(
         makeBookingRow({ slotStart: new Date(newFutureSlot) }),
@@ -1331,6 +1360,138 @@ describe('BookingsService', () => {
     it('does not run a staff-exclusivity check at all when the booking has no preferred barber', async () => {
       await service.reschedule('c1', 'b1', { slotStart: newFutureSlot });
       expect(prisma.booking.count).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Multi-service booking core mission — cases numbered per the mission's own test plan; cases
+  // 1/2/3/4/6/6b/7 (pure availability/capacity math) live in availability.service.spec.ts, and
+  // 12/13 (web/mobile stale-slot clearing) live in their own apps. These are the BookingsService-
+  // level cases: staff qualification at write time, race safety, backward compatibility, reschedule
+  // duration, and credits/prepayment totals.
+  describe('multi-service booking core mission', () => {
+    const futureSlot = new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+
+    beforeEach(() => {
+      prisma.customerLedgerEntry.findMany.mockResolvedValue([]);
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue(PAYMENT_POLICY_WITH_QR);
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.booking.create.mockResolvedValue({ id: 'b1' });
+      // create()'s final getDetailOrThrow re-reads the booking; default fixture is fine unless a
+      // test below overrides it (Case 11 doesn't need to, since it only inspects the create() call
+      // args/data, not the returned DTO).
+      prisma.booking.findFirst.mockResolvedValue(makeBookingRow());
+    });
+
+    it('CASE 5: a preferred barber qualified for only 2 of 3 selected services is rejected and no booking is created', async () => {
+      availability.assertStaffQualifiedForServices.mockRejectedValueOnce(
+        Object.assign(new Error('not qualified'), { code: 'STAFF_NOT_QUALIFIED' }),
+      );
+      await expect(
+        service.create(
+          'c1',
+          {
+            salonId: 's1',
+            serviceIds: ['sv1', 'sv2', 'sv3'],
+            slotStart: futureSlot,
+            preferredStaffId: 'st1',
+          },
+          BookingSource.WEB,
+          'key-1',
+        ),
+      ).rejects.toMatchObject({ code: 'STAFF_NOT_QUALIFIED' });
+      expect(availability.assertStaffQualifiedForServices).toHaveBeenCalledWith(
+        's1',
+        ['sv1', 'sv2', 'sv3'],
+        'st1',
+      );
+      expect(prisma.booking.create).not.toHaveBeenCalled();
+    });
+
+    it('CASE 8: a one-chair race still allows only one winner — the second attempt sees the first as real overlap and is rejected', async () => {
+      availability.getSlotCapacityForServices.mockResolvedValue(1); // exactly one chair
+      // First attempt: no overlap yet -> succeeds.
+      prisma.booking.count.mockResolvedValueOnce(0);
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(prisma.booking.create).toHaveBeenCalledTimes(1);
+
+      // Second attempt for the same interval, now that the first booking exists: the fresh
+      // in-transaction recount (the actual race-safety mechanism — see create()'s own comment on
+      // the per-salon advisory lock) reports 1 overlapping booking against capacity 1.
+      prisma.booking.count.mockResolvedValueOnce(1);
+      await expect(
+        service.create(
+          'c2',
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
+          BookingSource.WEB,
+          'key-2',
+        ),
+      ).rejects.toMatchObject({ code: 'SLOT_FULL' });
+      expect(prisma.booking.create).toHaveBeenCalledTimes(1); // still only the first winner
+    });
+
+    it('CASE 9: an old single-service booking (exactly one BookingService row) remains fully readable', async () => {
+      prisma.booking.findFirst.mockResolvedValue(makeBookingRow()); // default fixture: one service, 30min/300
+      const detail = await service.getOne('c1', 'b1');
+      expect(detail.serviceId).toBe('sv1');
+      expect(detail.serviceName).toBe('Haircut');
+      expect(detail.serviceDurationMinutes).toBe(30);
+      expect(detail.servicePrice).toBe(300);
+      expect(detail.services).toEqual([
+        { serviceId: 'sv1', name: 'Haircut', durationMinutes: 30, price: 300 },
+      ]);
+    });
+
+    it('CASE 10: reschedule recalculates slotEnd from the FULL combined duration of every selected service (30+20+30=80), not just the first', async () => {
+      const newFutureSlot = new Date(Date.now() + 26 * 60 * 60_000);
+      prisma.booking.findFirst.mockResolvedValue(
+        makeBookingRow({
+          slotStart: new Date(Date.now() + 3 * 60 * 60_000),
+          services: [
+            { serviceId: 'sv1', sortOrder: 0, serviceName: 'Haircut', durationMinutes: 30, price: decimal('300') },
+            { serviceId: 'sv2', sortOrder: 1, serviceName: 'Beard Trim', durationMinutes: 20, price: decimal('150') },
+            { serviceId: 'sv3', sortOrder: 2, serviceName: 'Facial', durationMinutes: 30, price: decimal('400') },
+          ],
+        }),
+      );
+      availability.getSlotCapacityForServices.mockResolvedValue(2);
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.booking.update.mockResolvedValue(makeBookingRow({ slotStart: newFutureSlot }));
+
+      await service.reschedule('c1', 'b1', { slotStart: newFutureSlot.toISOString() });
+
+      const updateCall = prisma.booking.update.mock.calls[0][0] as {
+        data: { slotStart: Date; slotEnd: Date };
+      };
+      expect(updateCall.data.slotStart.getTime()).toBe(newFutureSlot.getTime());
+      expect(updateCall.data.slotEnd.getTime()).toBe(newFutureSlot.getTime() + 80 * 60_000);
+      // The capacity check driving SLOT_FULL/success must key off every selected service too.
+      expect(availability.getSlotCapacityForServices).toHaveBeenCalledWith(
+        prisma,
+        's1',
+        ['sv1', 'sv2', 'sv3'],
+      );
+    });
+
+    it('CASE 11: the credits redemption cap and FULL prepayment amount both use the COMPLETE appointment price (300+150=450), never just the first service', async () => {
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+        ...PAYMENT_POLICY_WITH_QR,
+        prepaymentRequirement: 'FULL',
+        prepaymentPercentage: null,
+      });
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceIds: ['sv1', 'sv2'], slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(String(credits.computeMaxRedeemable.mock.calls[0][0])).toBe('450.00');
+      const data = lastCreateData(prisma.booking.create);
+      expect(data.prepaymentRequiredAmount).toBe(450);
     });
   });
 });
