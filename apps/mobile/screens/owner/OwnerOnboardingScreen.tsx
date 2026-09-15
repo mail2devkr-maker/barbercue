@@ -32,6 +32,7 @@ import {
   PaymentQrSection,
   styles as sectionStyles,
 } from '../../components/owner/ShopSetupSections';
+import { ServiceCatalogPicker } from '../../components/owner/ServiceCatalogPicker';
 
 const TOTAL_STEPS = ONBOARDING_TOTAL_STEPS;
 
@@ -60,9 +61,6 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [maxStepReached, setMaxStepReached] = useState(1);
-  // Null until the very first load resolves; then fixed at whichever step that load resumed onto
-  // (1 for a brand-new registration, >1 for a returning owner) — used only to decide whether the
-  // "pick up where you left off" banner below is warranted, never touched again afterward.
   const [resumedAtStep, setResumedAtStep] = useState<number | null>(null);
   const stepInitializedRef = useRef(false);
   const [goingLive, setGoingLive] = useState(false);
@@ -104,9 +102,6 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
   const hasPhoto = photos.length > 0;
   const hasPaymentQr = Boolean(paymentQr?.paymentQrImageUrl);
 
-  // Runs once, the instant every list has loaded — never again, so navigating between steps
-  // (which doesn't reload) can't reset progress, and a step already completed by the time the
-  // owner returns is never re-shown as the current step.
   useEffect(() => {
     if (loading || stepInitializedRef.current) return;
     stepInitializedRef.current = true;
@@ -193,6 +188,7 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
               services.map((s) => <ServiceRow key={s.id} salonId={salonId} service={s} onChanged={() => void load()} />)
             )}
           </Card>
+          <ServiceCatalogPicker salonId={salonId} services={services} onChanged={() => void load()} />
           <AddServiceForm salonId={salonId} onAdded={() => void load()} />
         </>
       )}

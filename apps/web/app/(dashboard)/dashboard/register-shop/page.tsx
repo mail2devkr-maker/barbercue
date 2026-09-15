@@ -20,10 +20,11 @@ export default function RegisterShopPage() {
   return (
     <RequireRole redirectTo="/login">
       <main className={styles.page}>
-        <p className={styles.eyebrow}>Owner onboarding</p>
-        <h1 className={styles.title}>
-          Register your barber shop
-        </h1>
+        <div className={styles.hero}>
+          <p className={styles.eyebrow}>FastQue owner onboarding</p>
+          <h1 className={styles.title}>
+            Build your shop,<br />on your terms.
+          </h1>
         {/* Phase 11 replaced admin moderation with owner self-activation, so this no longer says
             "pending review" — nobody reviews it, and implying otherwise leaves owners waiting for
             an approval that will never arrive. */}
@@ -32,13 +33,23 @@ export default function RegisterShopPage() {
           Your shop starts closed. Add your services, chairs and barbers, then open it yourself
           from your dashboard — there&apos;s no waiting for approval.
         </p>
-        {needsPassword ? (
-          <div className={styles.securityCard}>
-            <InitialPasswordSetup onComplete={() => setPasswordCompleted(true)} />
+        </div>
+        <section className={styles.formCard} aria-label="Register your shop">
+          <div className={styles.formCardHeader}>
+            <span className={styles.stepBadge}>Step 1</span>
+            <div>
+              <h2>Register your shop</h2>
+              <p>Start with the details customers will use to find you.</p>
+            </div>
           </div>
-        ) : (
-          <RegisterSalonForm />
-        )}
+          {needsPassword ? (
+            <div className={styles.securityCard}>
+              <InitialPasswordSetup onComplete={() => setPasswordCompleted(true)} />
+            </div>
+          ) : (
+            <RegisterSalonForm />
+          )}
+        </section>
       </main>
     </RequireRole>
   );
