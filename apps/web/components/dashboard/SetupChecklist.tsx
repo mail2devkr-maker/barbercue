@@ -26,16 +26,15 @@ interface ChecklistStep {
  * First-run setup progress for one shop, shown on the settings page — which is exactly where
  * RegisterSalonForm drops a brand-new owner after registration, so it is the first thing they see.
  *
- * Counts come from the four owner list endpoints this user already has access to; there is no
+ * Counts come from the owner setup endpoints this user already has access to; there is no
  * dedicated "setup progress" endpoint and adding one would mean a backend route whose only job is
- * to re-count rows the setup pages already count. Four parallel GETs for one salon on one page is
- * a fair trade for not inventing an endpoint (and not an N+1 — this renders for a single salon).
+ * to re-count rows the setup pages already count. Parallel GETs for one salon on one page are a
+ * fair trade for not inventing an endpoint (and not an N+1 — this renders for a single salon).
  *
- * Steps 2-4 mirror the backend's real activation gate (SalonActivationService.assertReadyToOpen),
- * which refuses to move a PENDING salon to ACTIVE without an active service, chair and staff
- * member. This is the friendly, ahead-of-time version of that rule — the server is the authority,
- * so the two count the same things in the same way and the owner is never ticked off for a step
- * the server will then reject.
+ * The core checklist mirrors the backend's real activation gate
+ * (SalonActivationService.assertReadyToOpen), which refuses to move a PENDING salon to ACTIVE
+ * without an active service, chair and staff member. Opening hours and payment QR are intentionally
+ * shown separately as optional online-booking setup because neither is required to open the shop.
  */
 export function SetupChecklist({
   salonId,
@@ -103,7 +102,7 @@ export function SetupChecklist({
   // (PAYMENT_QR_REQUIRED for APP/WEB bookings; WALK_IN is never blocked), so a walk-in-only shop
   // can open with no QR configured at all.
   const hasPaymentQr = Boolean(paymentQr?.paymentQrImageUrl);
-  // Opening is the last step by design: a shop that becomes publicly discoverable with no
+  // Opening is the last core step by design: a shop that becomes publicly discoverable with no
   // services, no chairs or no barbers is a dead end for the customer who finds it — they can
   // reach the page but there is nothing to book and nobody to seat them.
   const readyToOpen = hasService && hasChair && hasBarber;
@@ -122,19 +121,13 @@ export function SetupChecklist({
 
   if (failed) return null;
 
-  const steps: ChecklistStep[] = [
+  const coreSteps: ChecklistStep[] = [
     { label: "Register your shop", done: true, href: null, why: "" },
     {
       label: "Add your services",
       done: hasService,
       href: `/dashboard/salons/${salonId}/services`,
       why: "Customers pick a service when they book or join the queue — without one there's nothing to choose.",
-    },
-    {
-      label: "Set your opening hours",
-      done: hasOpenDay,
-      href: `/dashboard/salons/${salonId}/hours`,
-      why: "Customers can only book appointments during your opening hours. Until you set them, your shop can take walk-ins through the queue but nobody can book ahead.",
     },
     {
       label: "Add your chairs",
@@ -149,39 +142,35 @@ export function SetupChecklist({
       why: "Your barbers run the live queue from their own login.",
     },
     {
-      label: "Add a payment QR",
-      done: hasPaymentQr,
-      href: `/dashboard/salons/${salonId}/payment-qr`,
-      why: "Shown to a customer paying for an app/website booking so they can scan and pay you directly. Until you add one, walk-ins work as normal but online booking is blocked.",
-    },
-    {
       label: "Open your shop",
       done: status === SalonStatus.ACTIVE,
       href: null,
       why: readyToOpen
         ? "Everything's ready — open your shop below to let customers find you."
-        : "Finish the steps above first, then open your shop below. Opening it now would show customers a shop that can't take them yet.",
+        : "Finish the required steps above first, then open your shop below. Opening it now would show customers a shop that can't take them yet.",
     },
   ];
 
-  const doneCount = steps.filter((s) => s.done).length;
-  const allDone = doneCount === steps.length;
+  const onlineBookingSteps: ChecklistStep[] = [
+    {
+      label: "Set your opening hours (Optional — required only for online bookings)",
+      done: hasOpenDay,
+      href: `/dashboard/salons/${salonId}/hours`,
+      why: "Customers can only book appointments during your opening hours. You can skip this if you want to use FastQue only for walk-ins and the live queue.",
+    },
+    {
+      label: "Add a payment QR (Optional — required only for online bookings)",
+      done: hasPaymentQr,
+      href: `/dashboard/salons/${salonId}/payment-qr`,
+      why: "Shown to a customer paying for an app/website booking so they can scan and pay you directly. You can skip this for walk-ins; no payment is made to FastQue by uploading the QR.",
+    },
+  ];
 
-  return (
-    <section className={styles.dividerSection}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-        <h2 className={styles.sectionHeading} style={{ margin: 0 }}>Shop setup</h2>
-        <span className={styles.hint} style={{ marginTop: 0 }}>
-          {loading ? "Checking…" : `${doneCount} of ${steps.length} done`}
-        </span>
-      </div>
+  const coreDoneCount = coreSteps.filter((s) => s.done).length;
+  const allCoreDone = coreDoneCount === coreSteps.length;
 
-      {allDone && !loading && (
-        <p style={{ color: "var(--bc-success)", fontSize: 14, marginBottom: 0, marginTop: 10 }}>
-          🎉 You&apos;re all set — your shop is open and ready for customers.
-        </p>
-      )}
-
+  function renderSteps(steps: ChecklistStep[]) {
+    return (
       <ul className={styles.checklist}>
         {steps.map((step) => (
           <li key={step.label} className={styles.checklistItem}>
@@ -208,6 +197,33 @@ export function SetupChecklist({
           </li>
         ))}
       </ul>
+    );
+  }
+
+  return (
+    <section className={styles.dividerSection}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <h2 className={styles.sectionHeading} style={{ margin: 0 }}>Shop setup</h2>
+        <span className={styles.hint} style={{ marginTop: 0 }}>
+          {loading ? "Checking…" : `${coreDoneCount} of ${coreSteps.length} required steps done`}
+        </span>
+      </div>
+
+      {allCoreDone && !loading && (
+        <p style={{ color: "var(--bc-success)", fontSize: 14, marginBottom: 0, marginTop: 10 }}>
+          🎉 Your core shop setup is complete. Optional online-booking features can be added anytime.
+        </p>
+      )}
+
+      {renderSteps(coreSteps)}
+
+      <div style={{ marginTop: 28, paddingTop: 22, borderTop: "1px solid var(--bc-border)" }}>
+        <h3 style={{ margin: 0, fontSize: 16 }}>Optional online-booking setup</h3>
+        <p className={styles.hint} style={{ marginTop: 6, marginBottom: 0 }}>
+          These steps are not required to register or open your shop. Add them only if you want customers to book and pay through the app or website.
+        </p>
+        {renderSteps(onlineBookingSteps)}
+      </div>
     </section>
   );
 }
