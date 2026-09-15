@@ -70,6 +70,61 @@ describe('createBookingSchema', () => {
     });
   });
 
+  // Production-safety hardening (P0 #1) — an already-installed FastQue client still sends the
+  // ORIGINAL single `serviceId` field on POST /bookings. Rolling deploys mean this shape reaches
+  // the backend indefinitely, not just during a brief overlap window, so it must keep working —
+  // see API.md's "Legacy serviceId compatibility" section.
+  describe('legacy serviceId compatibility', () => {
+    it('accepts the legacy single serviceId field and normalizes it to a one-element serviceIds array', () => {
+      const { serviceIds: _serviceIds, ...legacyValid } = valid;
+      const result = createBookingSchema.safeParse({ ...legacyValid, serviceId: SERVICE_A });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.serviceIds).toEqual([SERVICE_A]);
+        expect(result.data).not.toHaveProperty('serviceId');
+      }
+    });
+
+    it('rejects a non-UUID legacy serviceId', () => {
+      const { serviceIds: _serviceIds, ...legacyValid } = valid;
+      expect(createBookingSchema.safeParse({ ...legacyValid, serviceId: 'not-a-uuid' }).success).toBe(false);
+    });
+
+    it('rejects a body sending both serviceId and serviceIds (ambiguous)', () => {
+      expect(createBookingSchema.safeParse({ ...valid, serviceId: SERVICE_A }).success).toBe(false);
+    });
+
+    it('rejects a body sending neither serviceId nor serviceIds', () => {
+      const { serviceIds: _serviceIds, ...legacyValid } = valid;
+      expect(createBookingSchema.safeParse(legacyValid).success).toBe(false);
+    });
+
+    // The controller/service layer downstream of this schema (BookingsService.create) only ever
+    // sees the schema's OUTPUT — never the raw request body — so a legacy `serviceId` request and
+    // an equivalent one-element `serviceIds` request must normalize to a byte-for-byte identical
+    // CreateBookingInput for credits/prepayment/duration/price to behave IDENTICALLY for both. This
+    // is what actually proves "credits/prepayment unchanged for old one-service request" — every
+    // existing bookings.service.spec.ts test already exercises this exact normalized shape.
+    it('normalizes an old-client request to be byte-for-byte identical to the equivalent new-client request', () => {
+      const { serviceIds: _serviceIds, ...legacyValid } = valid;
+      const legacyResult = createBookingSchema.safeParse({
+        ...legacyValid,
+        serviceId: SERVICE_A,
+        creditsToRedeem: 25,
+      });
+      const newResult = createBookingSchema.safeParse({
+        ...valid,
+        serviceIds: [SERVICE_A],
+        creditsToRedeem: 25,
+      });
+      expect(legacyResult.success).toBe(true);
+      expect(newResult.success).toBe(true);
+      if (legacyResult.success && newResult.success) {
+        expect(legacyResult.data).toEqual(newResult.data);
+      }
+    });
+  });
+
   // Part 11 (FastQue Credits precision audit) — creditsToRedeem must reject anything with more
   // than 2 fractional digits. Tested against the actual schema (not zod's multipleOf in the
   // abstract), since that's what a real request body goes through.
@@ -149,6 +204,42 @@ describe('availabilityQuerySchema', () => {
     ).join(',');
     expect(availabilityQuerySchema.safeParse({ serviceIds: ids, date: '2026-08-05' }).success).toBe(false);
   });
+
+  // Production-safety hardening (P0 #1) — the exact legacy query form (`?serviceId=<uuid>`)
+  // currently sent by an already-installed FastQue client, indefinitely across a rolling deploy.
+  describe('legacy serviceId compatibility', () => {
+    it('accepts the legacy single ?serviceId= query param and normalizes it to a one-element serviceIds array', () => {
+      const result = availabilityQuerySchema.safeParse({ serviceId: SERVICE_A, date: '2026-08-05' });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.serviceIds).toEqual([SERVICE_A]);
+        expect(result.data).not.toHaveProperty('serviceId');
+      }
+    });
+
+    it('rejects a non-UUID legacy serviceId', () => {
+      expect(
+        availabilityQuerySchema.safeParse({ serviceId: 'not-a-uuid', date: '2026-08-05' }).success,
+      ).toBe(false);
+    });
+
+    it('rejects a query sending both serviceId and serviceIds (ambiguous)', () => {
+      expect(
+        availabilityQuerySchema.safeParse({ serviceId: SERVICE_A, serviceIds: SERVICE_B, date: '2026-08-05' })
+          .success,
+      ).toBe(false);
+    });
+
+    it('normalizes an old-client query to be byte-for-byte identical to the equivalent new-client query', () => {
+      const legacyResult = availabilityQuerySchema.safeParse({ serviceId: SERVICE_A, date: '2026-08-05' });
+      const newResult = availabilityQuerySchema.safeParse({ serviceIds: SERVICE_A, date: '2026-08-05' });
+      expect(legacyResult.success).toBe(true);
+      expect(newResult.success).toBe(true);
+      if (legacyResult.success && newResult.success) {
+        expect(legacyResult.data).toEqual(newResult.data);
+      }
+    });
+  });
 });
 
 describe('staffListQuerySchema', () => {
@@ -164,5 +255,40 @@ describe('staffListQuerySchema', () => {
 
   it('rejects a non-UUID serviceIds', () => {
     expect(staffListQuerySchema.safeParse({ serviceIds: 'nope' }).success).toBe(false);
+  });
+
+  // Production-safety hardening (P0 #1) — the exact legacy query form (`?serviceId=<uuid>`)
+  // currently sent by an already-installed FastQue client, indefinitely across a rolling deploy.
+  describe('legacy serviceId compatibility', () => {
+    it('accepts the legacy single ?serviceId= query param and normalizes it to a one-element serviceIds array', () => {
+      const result = staffListQuerySchema.safeParse({ serviceId: SERVICE_A });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.serviceIds).toEqual([SERVICE_A]);
+        expect(result.data).not.toHaveProperty('serviceId');
+      }
+    });
+
+    it('rejects a non-UUID legacy serviceId', () => {
+      expect(staffListQuerySchema.safeParse({ serviceId: 'not-a-uuid' }).success).toBe(false);
+    });
+
+    it('rejects a query sending both serviceId and serviceIds (ambiguous)', () => {
+      expect(staffListQuerySchema.safeParse({ serviceId: SERVICE_A, serviceIds: SERVICE_B }).success).toBe(false);
+    });
+
+    it('rejects a query sending neither serviceId nor serviceIds', () => {
+      expect(staffListQuerySchema.safeParse({}).success).toBe(false);
+    });
+
+    it('normalizes an old-client query to be byte-for-byte identical to the equivalent new-client query', () => {
+      const legacyResult = staffListQuerySchema.safeParse({ serviceId: SERVICE_A });
+      const newResult = staffListQuerySchema.safeParse({ serviceIds: SERVICE_A });
+      expect(legacyResult.success).toBe(true);
+      expect(newResult.success).toBe(true);
+      if (legacyResult.success && newResult.success) {
+        expect(legacyResult.data).toEqual(newResult.data);
+      }
+    });
   });
 });

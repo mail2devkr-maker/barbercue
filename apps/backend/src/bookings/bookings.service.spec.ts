@@ -1493,5 +1493,75 @@ describe('BookingsService', () => {
       const data = lastCreateData(prisma.booking.create);
       expect(data.prepaymentRequiredAmount).toBe(450);
     });
+
+    // Production-safety hardening (P0 #2) — DEPLOYMENT.md documents that migrations run before the
+    // new backend starts, but old and new backend instances may briefly overlap during a rolling
+    // deploy. An OLD backend binary still running in that window has no idea BookingService exists
+    // and only ever wrote Booking.serviceId/service — so a booking it creates AFTER the migration
+    // and its one-time backfill both already ran has ZERO BookingService rows. Every read path must
+    // fall back to the booking's live Service join (resolveEffectiveBookingServices) rather than
+    // silently producing 0 duration, 0 price, or an empty service list for a booking exactly like
+    // this one.
+    describe('zero BookingService rows (booking written by an old backend during a rolling deploy)', () => {
+      // makeBookingRow's default `service` fixture is Haircut/30min/₹300 — services: [] means the
+      // ONLY source of truth left is that live join, exactly like a real pre-mission/old-binary row.
+      function legacyBookingRow(overrides: Record<string, unknown> = {}) {
+        return makeBookingRow({ services: [], ...overrides });
+      }
+
+      it('remains fully readable via getOne, with duration/price/services[] synthesized from the live Service join', async () => {
+        prisma.booking.findFirst.mockResolvedValue(legacyBookingRow());
+        const detail = await service.getOne('c1', 'b1');
+        expect(detail.serviceId).toBe('sv1');
+        expect(detail.serviceName).toBe('Haircut');
+        expect(detail.serviceDurationMinutes).toBe(30);
+        expect(detail.servicePrice).toBe(300);
+        expect(detail.services).toEqual([
+          { serviceId: 'sv1', name: 'Haircut', durationMinutes: 30, price: 300 },
+        ]);
+        expect(detail.payableAmount).toBe(300);
+      });
+
+      it('cancellation charges the correct live-Service price, never 0', async () => {
+        const soonSlot = new Date(Date.now() + 10 * 60_000); // 10 min out — outside the free window
+        prisma.booking.findFirst.mockResolvedValue(legacyBookingRow({ slotStart: soonSlot }));
+        prisma.booking.update.mockResolvedValue(
+          legacyBookingRow({ slotStart: soonSlot, status: 'CANCELLED' }),
+        );
+        cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+          salonId: 's1',
+          freeCancellationWindowMinutes: 60,
+          lateCancellationChargeType: 'PERCENTAGE',
+          lateCancellationChargeValue: 50,
+          noShowChargeType: 'PERCENTAGE',
+          noShowChargeValue: 100,
+          appointmentArrivalGraceMinutes: 10,
+          queueCallResponseGraceMinutes: 3,
+        });
+
+        const result = await service.cancel('c1', 'b1');
+        expect(result.chargeAmount).toBe(150); // 50% of the live Service price (300) — never 50% of 0
+        expect(result.ledgerEntryCreated).toBe(true);
+      });
+
+      it('reschedule recalculates the correct non-zero duration from the live Service join', async () => {
+        const newFutureSlot = new Date(Date.now() + 26 * 60 * 60_000);
+        prisma.booking.findFirst.mockResolvedValue(
+          legacyBookingRow({ slotStart: new Date(Date.now() + 3 * 60 * 60_000) }),
+        );
+        availability.getSlotCapacityForServices.mockResolvedValue(2);
+        prisma.booking.count.mockResolvedValue(0);
+        prisma.booking.update.mockResolvedValue(legacyBookingRow({ slotStart: newFutureSlot }));
+
+        await service.reschedule('c1', 'b1', { slotStart: newFutureSlot.toISOString() });
+
+        const updateCall = prisma.booking.update.mock.calls[0][0] as {
+          data: { slotStart: Date; slotEnd: Date };
+        };
+        // Haircut's real 30-minute duration, never newSlotEnd === newSlotStart (0 minutes).
+        expect(updateCall.data.slotEnd.getTime()).toBe(newFutureSlot.getTime() + 30 * 60_000);
+        expect(availability.getSlotCapacityForServices).toHaveBeenCalledWith(prisma, 's1', ['sv1']);
+      });
+    });
   });
 });

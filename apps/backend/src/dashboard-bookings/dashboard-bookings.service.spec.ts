@@ -509,4 +509,24 @@ describe('DashboardBookingsService', () => {
       });
     });
   });
+
+  // Production-safety hardening (P0 #2) — same rolling-deploy scenario as
+  // bookings.service.spec.ts's own "zero BookingService rows" tests: an old backend binary still
+  // serving traffic after the booking_services migration and backfill both already ran only ever
+  // wrote Booking.serviceId/service, leaving zero BookingService rows on a booking it creates. The
+  // owner dashboard view must never show 0 duration, 0 price, or an empty service list for it.
+  describe('production-safety hardening — zero BookingService rows (rolling deploy)', () => {
+    it('remains fully readable via getOne, with duration/price/services[] synthesized from the live Service join', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(makeBookingRow({ services: [] }));
+      const dto = await service.getOne('owner1', 's1', 'b1');
+      expect(dto.serviceId).toBe('sv1');
+      expect(dto.serviceName).toBe('Haircut');
+      expect(dto.serviceDurationMinutes).toBe(30);
+      expect(dto.servicePrice).toBe(300);
+      expect(dto.services).toEqual([
+        { serviceId: 'sv1', name: 'Haircut', durationMinutes: 30, price: 300 },
+      ]);
+      expect(dto.payableAmount).toBe(300);
+    });
+  });
 });
