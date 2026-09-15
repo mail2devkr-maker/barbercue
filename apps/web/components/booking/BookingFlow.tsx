@@ -34,6 +34,7 @@ import { CancelBookingDialog } from "./CancelBookingDialog";
 import { RescheduleBookingDialog } from "./RescheduleBookingDialog";
 import { BookingActionsBar } from "./BookingActionsBar";
 import { BookingUpiAction } from "./BookingUpiAction";
+import { hasCustomerBookingSession } from "./booking-session";
 import { CheckInPanel, canCheckIn } from "../queue/CheckInPanel";
 import styles from "./booking.module.css";
 
@@ -80,7 +81,8 @@ export function BookingFlow({
   initialServiceId?: string;
   initialStaffId?: string | null;
 }) {
-  const { status: authStatus, googleLogin } = useAuth();
+  const { status: authStatus, user, googleLogin } = useAuth();
+  const isCustomerSession = hasCustomerBookingSession(authStatus, user);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(initialServiceId ?? null);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | undefined>(initialStaffId);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -140,9 +142,15 @@ export function BookingFlow({
     return () => { cancelled = true; };
   }, [salonId]);
 
-  // FastQue Credits / Wallet V1 — only fetched once signed in; an anonymous visitor has no wallet.
+  // Credits are customer-only, exactly like booking creation itself. A STAFF/ADMIN audience can be
+  // authenticated yet still be forbidden by the customer credits endpoint, so do not send that
+  // guaranteed-403 request just because authStatus says "authenticated".
   useEffect(() => {
-    if (authStatus !== "authenticated") return;
+    if (!isCustomerSession) {
+      setCreditsBalance(null);
+      setCreditsToRedeem(0);
+      return;
+    }
     let cancelled = false;
     apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
       .then((result) => {
@@ -152,7 +160,7 @@ export function BookingFlow({
     return () => {
       cancelled = true;
     };
-  }, [authStatus]);
+  }, [isCustomerSession]);
 
   // Stable across retries of the exact same attempt (same service/staff/date/slot); regenerates
   // the moment any earlier choice changes, since that's a materially different attempt. The deps
@@ -246,7 +254,9 @@ export function BookingFlow({
   }
 
   async function handleConfirmBooking() {
-    if (!selectedServiceId || !selectedSlot) return;
+    // Defense in depth with the same rule as BookingsController: a STAFF/ADMIN audience must never
+    // even attempt the customer-only POST and fall through to a raw FORBIDDEN_ROLE message.
+    if (!isCustomerSession || !selectedServiceId || !selectedSlot) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -296,10 +306,10 @@ export function BookingFlow({
     }
   }
 
-  // Issue #13 Mission E: Google Identity Services renders as an in-page button/overlay, never a
-  // full-page redirect, so every selection above (service/staff/date/slot) is still exactly what
-  // it was the moment authStatus flips to "authenticated" — no restart, no re-pick, no need to
-  // serialize state across a navigation that never happens.
+  // Google Identity Services renders as an in-page button/overlay, so selections survive both the
+  // ordinary anonymous -> customer login and the new STAFF/ADMIN -> CUSTOMER audience switch.
+  // AuthService.googleLogin guarantees CUSTOMER role for a linked owner/staff identity without
+  // removing their owner/staff DB roles; only this browser session changes audience.
   async function handleGoogleCredential(idToken: string) {
     setSubmitError(null);
     setGoogleSubmitting(true);
@@ -544,7 +554,7 @@ export function BookingFlow({
               appointment.
             </p>
           )}
-          {authStatus === "authenticated" && creditsBalance !== null && creditsBalance > 0 && (() => {
+          {isCustomerSession && creditsBalance !== null && creditsBalance > 0 && (() => {
             const servicePrice = services.find((s) => s.id === selectedServiceId)?.price ?? 0;
             // FastQue Credits / Wallet V1: the redemption cap is price-based (floor(price/50)*10),
             // NOT "whatever the wallet balance happens to be" — a customer can never redeem more
@@ -592,7 +602,7 @@ export function BookingFlow({
           </div>
           {submitError && <p className={styles.errorText}>{submitError}</p>}
           <div className={styles.confirmActions}>
-            {authStatus === "authenticated" ? (
+            {isCustomerSession ? (
               <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting || (paymentInfo !== null && !paymentInfo.onlinePaymentAvailable)}>
                 {submitting ? "Booking…" : "Confirm booking"}
               </Button>
@@ -600,7 +610,11 @@ export function BookingFlow({
               <p className={styles.summaryLine}>Loading…</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
-                <p className={styles.summaryLine}>Sign in to confirm this booking</p>
+                <p className={styles.summaryLine}>
+                  {authStatus === "authenticated"
+                    ? "You are signed in with a shop/admin session. Continue as a customer to confirm this booking — your selected service, barber, date and time will stay selected."
+                    : "Sign in to confirm this booking"}
+                </p>
                 <GoogleIdentityButton
                   audienceLabel="customer"
                   onCredential={(idToken) => void handleGoogleCredential(idToken)}
