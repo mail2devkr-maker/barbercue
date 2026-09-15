@@ -24,6 +24,7 @@ import {
   scope,
   ServiceRow,
   AddServiceForm,
+  ServicePresetPicker,
   ChairRow,
   AddChairForm,
   AddStaffForm,
@@ -193,6 +194,7 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
               services.map((s) => <ServiceRow key={s.id} salonId={salonId} service={s} onChanged={() => void load()} />)
             )}
           </Card>
+          <ServicePresetPicker salonId={salonId} services={services} onAdded={() => void load()} />
           <AddServiceForm salonId={salonId} onAdded={() => void load()} />
         </>
       )}

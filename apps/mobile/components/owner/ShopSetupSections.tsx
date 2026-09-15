@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ChairStatus,
@@ -10,6 +10,8 @@ import {
   e164PhoneSchema,
   formatMoney,
   salonPhotoUrlSchema,
+  SERVICE_CATALOG,
+  SERVICE_CATALOG_CATEGORIES,
   type OperatingHoursDto,
   type PhotoDto,
   type SalonChairDto,
@@ -47,6 +49,107 @@ export interface ServiceDtoLike {
   price: number;
   durationMinutes: number;
   isActive: boolean;
+}
+
+export function availableServicePresets(services: Pick<ServiceDtoLike, 'name' | 'isActive'>[]) {
+  const existingNames = new Set(
+    services.filter((service) => service.isActive).map((service) => service.name.trim().toLowerCase()),
+  );
+  return SERVICE_CATALOG.filter((preset) => !existingNames.has(preset.name.trim().toLowerCase()));
+}
+
+type PresetDraft = { price: string; durationMinutes: string };
+
+/** Mobile counterpart to the web catalog; both use the shared SERVICE_CATALOG. */
+export function ServicePresetPicker({ salonId, services, onAdded }: {
+  salonId: string;
+  services: ServiceDtoLike[];
+  onAdded: () => void;
+}) {
+  const [category, setCategory] = useState<string>(SERVICE_CATALOG_CATEGORIES[0]);
+  const [selected, setSelected] = useState<Record<string, PresetDraft>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const visible = availableServicePresets(services).filter((preset) => preset.category === category);
+
+  function toggle(id: string, defaultDurationMinutes: number) {
+    setSelected((current) => {
+      if (current[id]) {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      }
+      return { ...current, [id]: { price: '', durationMinutes: String(defaultDurationMinutes) } };
+    });
+    setError(null);
+  }
+
+  function update(id: string, patch: Partial<PresetDraft>) {
+    setSelected((current) => ({ ...current, [id]: { ...current[id], ...patch } }));
+  }
+
+  async function addSelected() {
+    const choices = SERVICE_CATALOG.filter((preset) => selected[preset.id]);
+    const invalid = choices.find((preset) => {
+      const draft = selected[preset.id];
+      return !Number.isFinite(Number(draft.price)) || Number(draft.price) < 0 || !Number.isInteger(Number(draft.durationMinutes)) || Number(draft.durationMinutes) < 5 || Number(draft.durationMinutes) > 480;
+    });
+    if (invalid) {
+      setError(`Enter a price and a duration from 5 to 480 minutes for ${invalid.name}.`);
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      for (const preset of choices) {
+        const draft = selected[preset.id];
+        await apiFetch(scope(salonId, DASHBOARD_PATHS.services), {
+          method: 'POST',
+          body: JSON.stringify({ name: preset.name, category: preset.category, price: Number(draft.price), durationMinutes: Number(draft.durationMinutes) }),
+        });
+      }
+      setSelected({});
+      onAdded();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not add the selected services.');
+      onAdded();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <View style={styles.presetSection}>
+      <Text style={styles.sectionTitle}>Start with popular services</Text>
+      <Text style={styles.hint}>Choose only what your shop offers. Set your own price and edit the suggested duration.</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroller}>
+        {SERVICE_CATALOG_CATEGORIES.map((name) => (
+          <Pressable key={name} onPress={() => setCategory(name)} style={[styles.categoryChip, category === name && styles.categoryChipSelected]}>
+            <Text style={[styles.categoryChipText, category === name && styles.categoryChipTextSelected]}>{name}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      {visible.map((preset) => {
+        const draft = selected[preset.id];
+        return (
+          <View key={preset.id} style={[styles.presetCard, draft && styles.presetCardSelected]}>
+            <Pressable onPress={() => toggle(preset.id, preset.defaultDurationMinutes)} style={styles.presetChoice}>
+              <View style={[styles.checkMark, draft && styles.checkMarkSelected]}><Text style={styles.checkMarkText}>{draft ? '✓' : ''}</Text></View>
+              <View style={styles.rowBody}><Text style={styles.rowTitle}>{preset.name}</Text><Text style={styles.rowMeta}>{preset.defaultDurationMinutes} min suggested</Text></View>
+            </Pressable>
+            {draft && <View style={styles.inlineRow}>
+              <TextInput style={[styles.input, styles.inputHalf]} value={draft.price} onChangeText={(value) => update(preset.id, { price: value })} keyboardType="numeric" placeholder="Price" placeholderTextColor={color.muted} />
+              <TextInput style={[styles.input, styles.inputHalf]} value={draft.durationMinutes} onChangeText={(value) => update(preset.id, { durationMinutes: value })} keyboardType="numeric" placeholder="Minutes" placeholderTextColor={color.muted} />
+            </View>}
+          </View>
+        );
+      })}
+      {visible.length === 0 && <Text style={styles.emptyText}>All presets in this category are already added.</Text>}
+      {Object.keys(selected).length > 0 && <Button title={saving ? 'Adding services…' : `Add ${Object.keys(selected).length} selected service${Object.keys(selected).length === 1 ? '' : 's'}`} onPress={() => void addSelected()} loading={saving} style={styles.addButton} />}
+      <Text style={styles.customServiceHint}>Need something else? Add a custom service below.</Text>
+      {error && <InlineError message={error} />}
+    </View>
+  );
 }
 
 export function ServiceRow({ salonId, service, onChanged }: { salonId: string; service: ServiceDtoLike; onChanged: () => void }) {
@@ -662,6 +765,19 @@ export const styles = StyleSheet.create({
   actionButton: { flex: 1 },
   addButton: { marginBottom: space[2] },
   hint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: space[3] },
+  presetSection: { marginBottom: space[3] },
+  categoryScroller: { gap: space[2], paddingBottom: space[2] },
+  categoryChip: { borderWidth: 1, borderColor: color.border, borderRadius: radius.pill, paddingHorizontal: space[3], paddingVertical: 7, backgroundColor: color.surface },
+  categoryChipSelected: { borderColor: color.accent, backgroundColor: color.accentSoft },
+  categoryChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted },
+  categoryChipTextSelected: { color: color.accent },
+  presetCard: { borderWidth: 1, borderColor: color.border, borderRadius: radius.md, padding: space[3], marginBottom: space[2], backgroundColor: color.surface },
+  presetCardSelected: { borderColor: color.accent, backgroundColor: color.accentSoft },
+  presetChoice: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
+  checkMark: { width: 22, height: 22, borderRadius: 11, borderWidth: 1, borderColor: color.border, alignItems: 'center', justifyContent: 'center' },
+  checkMarkSelected: { backgroundColor: color.accent, borderColor: color.accent },
+  checkMarkText: { color: color.accentContrast, fontFamily: font.bodyBold, fontSize: fontSize.xs },
+  customServiceHint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: space[2] },
 
   hoursEditRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[2], borderBottomWidth: 1, borderBottomColor: color.border },
   hoursDay: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.ink, width: 34 },
