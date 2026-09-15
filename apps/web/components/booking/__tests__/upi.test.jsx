@@ -6,7 +6,13 @@ import { apiFetch, ApiError } from '../../../lib/api';
 import { formatMoney } from '@barbercue/shared';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error { code = 'PAYMENT_QR_REQUIRED'; } }));
-jest.mock('../../../lib/auth-context', () => ({ useAuth: () => ({ status: 'authenticated' }) }));
+// PR #75 (production customer-session booking gate) — BookingFlow now also checks
+// hasCustomerBookingSession(authStatus, user), not just authStatus === 'authenticated'; this suite
+// is about UPI/payment behavior for an already-established CUSTOMER session, not the gate itself
+// (see booking-session.test.jsx for that), so the mock user is a plain CUSTOMER-audience session.
+jest.mock('../../../lib/auth-context', () => ({
+  useAuth: () => ({ status: 'authenticated', user: { audience: require('@barbercue/shared').SessionAudience.CUSTOMER } }),
+}));
 jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => '12345678-1234-4567-8910-123456789012' }));
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children }) => <a>{children}</a> }));
 jest.mock('../../ui/Button', () => ({ Button: ({ children, variant, ...props }) => <button data-variant={variant} {...props}>{children}</button> }));
