@@ -28,6 +28,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { AvailabilityService } from '../bookings/availability.service';
+import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 import { zonedDayBounds } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -46,6 +47,18 @@ const TRANSACTION_OPTIONS = { timeout: 15_000 };
 // salon-wide default rather than leaving the ETA uncomputed.
 const DEFAULT_SERVICE_DURATION_MINUTES = 30;
 
+// Selected on any QueueEntry.booking include so the combined (not just primary) service
+// selection is always available for ETA/duration math and display — matches
+// resolveEffectiveBookingServices' BookingWithServiceSnapshot shape exactly.
+const bookingServiceSnapshotSelect = {
+  serviceId: true,
+  service: { select: { name: true, durationMinutes: true, price: true } },
+  services: {
+    select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+    orderBy: { sortOrder: 'asc' as const },
+  },
+} satisfies Prisma.BookingSelect;
+
 const queueEntryDetailInclude = {
   service: { select: { name: true } },
   customer: { select: { phone: true } },
@@ -56,6 +69,7 @@ const queueEntryDetailInclude = {
     select: { id: true },
     take: 1,
   },
+  booking: { select: bookingServiceSnapshotSelect },
 } satisfies Prisma.QueueEntryInclude;
 
 type QueueEntryWithDetails = Prisma.QueueEntryGetPayload<{
@@ -1014,7 +1028,10 @@ export class QueueService {
     const waiting = await this.prisma.queueEntry.findMany({
       where: { salonId, status: QueueEntryStatus.WAITING },
       orderBy: { joinedAt: 'asc' },
-      include: { service: { select: { durationMinutes: true } } },
+      include: {
+        service: { select: { durationMinutes: true } },
+        booking: { select: bookingServiceSnapshotSelect },
+      },
     });
     if (waiting.length === 0) return;
 
@@ -1034,7 +1051,23 @@ export class QueueService {
       const peopleAhead = i;
       let serverCount: number;
       let avgServiceDurationMinutes: number;
-      if (entry.serviceId) {
+      if (entry.booking) {
+        // Appointment-sourced entry — use the FULL selected service set (not just the legacy
+        // primary Booking.serviceId) so a multi-service appointment's ETA reflects its true
+        // combined duration and only counts staff qualified for every selected service.
+        const effectiveServices = resolveEffectiveBookingServices(entry.booking);
+        const serviceIds = effectiveServices.map((s) => s.serviceId);
+        const configuredCapacity = await this.availability.getSlotCapacityForServices(
+          this.prisma,
+          salonId,
+          serviceIds,
+        );
+        serverCount = Math.min(configuredCapacity, availableOperationalChairs);
+        avgServiceDurationMinutes = effectiveServices.reduce(
+          (sum, s) => sum + s.durationMinutes,
+          0,
+        );
+      } else if (entry.serviceId) {
         const configuredCapacity = await this.availability.getSlotCapacity(
           this.prisma,
           salonId,
@@ -1175,6 +1208,14 @@ export class QueueService {
     entry: QueueEntryWithDetails,
     position: number | null,
   ): QueueEntryDetailDto {
+    // Appointment-sourced entries must show every selected service (e.g. "Haircut + Beard
+    // Trim"), not just the legacy primary Booking.serviceId — a walk-in entry has no linked
+    // booking and keeps showing its single directly-assigned service.
+    const serviceName = entry.booking
+      ? resolveEffectiveBookingServices(entry.booking)
+          .map((s) => s.serviceName)
+          .join(' + ')
+      : (entry.service?.name ?? null);
     return {
       id: entry.id,
       salonId: entry.salonId,
@@ -1186,7 +1227,7 @@ export class QueueService {
       assignedChairId: entry.assignedChairId,
       estimatedWaitMinutes: entry.estimatedWaitMinutes,
       serviceId: entry.serviceId,
-      serviceName: entry.service?.name ?? null,
+      serviceName,
       position,
       customerPhone: entry.customer?.phone ?? null,
       assignedStaffName: entry.assignedStaff?.displayName ?? null,
