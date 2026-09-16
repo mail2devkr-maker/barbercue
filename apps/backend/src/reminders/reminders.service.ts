@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { BookingStatus } from '@barbercue/shared';
+import { BookingStatus, summarizeServiceNames } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 
 // How far ahead of a booking's slotStart the reminder fires. A single fixed window for V1 — no
 // per-user configurable window UI exists yet (that's Phase 13's communication-preferences job) —
@@ -65,12 +66,28 @@ export class RemindersService {
         salonId: true,
         slotStart: true,
         salon: { select: { name: true } },
-        service: { select: { name: true } },
+        serviceId: true,
+        service: {
+          select: { name: true, durationMinutes: true, price: true },
+        },
+        services: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            serviceId: true,
+            serviceName: true,
+            durationMinutes: true,
+            price: true,
+          },
+        },
       },
     });
 
     let sentCount = 0;
     for (const booking of due) {
+      const serviceName = summarizeServiceNames(
+        resolveEffectiveBookingServices(booking).map((service) => service.serviceName),
+      );
+
       const sent = await this.prisma.$transaction(async (tx) => {
         // The conditional marker is the durable claim. Concurrent instances contend on the same
         // row; only one can change reminderSentAt from null. Because notification creation runs
@@ -95,7 +112,7 @@ export class RemindersService {
           {
             salonId: booking.salonId,
             salonName: booking.salon.name,
-            serviceName: booking.service.name,
+            serviceName,
             slotStart: booking.slotStart.toISOString(),
           },
           'account/bookings',
