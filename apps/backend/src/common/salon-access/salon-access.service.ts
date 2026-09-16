@@ -90,8 +90,9 @@ export class SalonAccessService {
    * Global-admin-scope fix: PLATFORM_ADMIN is only ever a global role — explicitly required here
    * rather than assumed, so a hypothetical salon-scoped PLATFORM_ADMIN row (which a DB CHECK
    * constraint now also makes impossible to persist at all) could never grant delegated access.
-   * Shared by both assertOwnerOrAdminAccess and assertAccessOrAdminAccess above —
-   * the two differ only in which non-admin membership they accept first.
+   * This path is used by setup/lifecycle management across PENDING, ACTIVE, and SUSPENDED salons;
+   * queue/operational delegated access uses assertGlobalAdminOperationalAccess instead and remains
+   * restricted to ACTIVE salons.
    */
   private async assertGlobalAdminAccess(
     userId: string,
