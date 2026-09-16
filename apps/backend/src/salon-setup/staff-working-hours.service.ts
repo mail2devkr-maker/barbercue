@@ -57,7 +57,7 @@ export class StaffWorkingHoursService {
     salonId: string,
     staffId: string,
   ): Promise<StaffWorkingHoursDto[]> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     await this.assertStaffInSalon(salonId, staffId);
 
     const rows = await this.prisma.staffWorkingHours.findMany({
@@ -84,7 +84,7 @@ export class StaffWorkingHoursService {
     staffId: string,
     input: SetStaffWorkingHoursInput,
   ): Promise<StaffWorkingHoursDto[]> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     await this.assertStaffInSalon(salonId, staffId);
 
     await this.prisma.$transaction(
@@ -106,6 +106,18 @@ export class StaffWorkingHoursService {
         }),
       ),
     );
+
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_STAFF_WORKING_HOURS_UPDATED',
+          entityType: 'SalonStaff',
+          entityId: staffId,
+          metadata: { salonId },
+        },
+      });
+    }
 
     return this.list(userId, salonId, staffId);
   }

@@ -33,5 +33,6 @@ import { StorageModule } from '../storage/storage.module';
     SalonPaymentQrService,
     SalonProfileService,
   ],
+  exports: [SalonActivationService],
 })
 export class SalonSetupModule {}
