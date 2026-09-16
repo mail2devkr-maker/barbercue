@@ -6,7 +6,17 @@ import { apiFetch, ApiError } from '../../../lib/api';
 import { formatMoney } from '@barbercue/shared';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error { code = 'PAYMENT_QR_REQUIRED'; } }));
-jest.mock('../../../lib/auth-context', () => ({ useAuth: () => ({ status: 'authenticated' }) }));
+jest.mock('../../../lib/auth-context', () => {
+  const { SessionAudience } = require('@barbercue/shared');
+
+  return {
+    useAuth: () => ({
+      status: 'authenticated',
+      user: { audience: SessionAudience.CUSTOMER },
+      googleLogin: jest.fn(),
+    }),
+  };
+});
 jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => '12345678-1234-4567-8910-123456789012' }));
 jest.mock('next/link', () => ({ __esModule: true, default: ({ children }) => <a>{children}</a> }));
 jest.mock('../../ui/Button', () => ({ Button: ({ children, variant, ...props }) => <button data-variant={variant} {...props}>{children}</button> }));
