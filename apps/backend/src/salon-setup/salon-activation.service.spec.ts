@@ -7,8 +7,10 @@ describe('SalonActivationService', () => {
     service: { count: jest.Mock };
     chair: { count: jest.Mock };
     salonStaff: { count: jest.Mock };
+    auditLog: { create: jest.Mock };
+    $transaction: jest.Mock;
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerAccess: jest.Mock; assertPlatformAdminAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -24,9 +26,14 @@ describe('SalonActivationService', () => {
       // removes rather than restating the whole fixture.
       service: { count: jest.fn().mockResolvedValue(1) },
       chair: { count: jest.fn().mockResolvedValue(1) },
-      salonStaff: { count: jest.fn().mockResolvedValue(1) },
+    salonStaff: { count: jest.fn().mockResolvedValue(1) },
+    $transaction: jest.fn(async (callback: (tx: unknown) => unknown) => callback(prisma)),
+    auditLog: { create: jest.fn() },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = {
+      assertOwnerAccess: jest.fn().mockResolvedValue(undefined),
+      assertPlatformAdminAccess: jest.fn().mockResolvedValue('PLATFORM_ADMIN'),
+    };
     service = new SalonActivationService(prisma as never, salonAccess as never);
   });
 
@@ -242,6 +249,44 @@ describe('SalonActivationService', () => {
 
       expect(result.status).toBe('SUSPENDED');
       expect(prisma.service.count).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('platform-admin lifecycle transitions', () => {
+    beforeEach(() => {
+      prisma.auditLog.create.mockClear();
+    });
+
+    it('opens a ready pending salon and records the admin actor', async () => {
+      const result = await service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'ACTIVE' as never });
+      expect(result.status).toBe('ACTIVE');
+      expect(salonAccess.assertPlatformAdminAccess).toHaveBeenCalledWith('admin-1', 'salon-1');
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ actorUserId: 'admin-1', action: 'ADMIN_SALON_OPENED', entityId: 'salon-1' }),
+      });
+    });
+
+    it('rejects an incomplete pending salon with readiness details', async () => {
+      prisma.service.count.mockResolvedValue(0);
+      await expect(service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'ACTIVE' as never }))
+        .rejects.toMatchObject({ code: 'SALON_SETUP_INCOMPLETE', details: { hasActiveService: false } });
+      expect(prisma.salon.update).not.toHaveBeenCalled();
+    });
+
+    it('suspends active and reopens suspended shops with valid transitions only', async () => {
+      prisma.salon.findUnique.mockResolvedValueOnce({ id: 'salon-1', status: 'ACTIVE' });
+      prisma.salon.update.mockResolvedValueOnce({ id: 'salon-1', status: 'SUSPENDED' });
+      await expect(service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'SUSPENDED' as never })).resolves.toEqual({ id: 'salon-1', status: 'SUSPENDED' });
+      prisma.salon.findUnique.mockResolvedValueOnce({ id: 'salon-1', status: 'SUSPENDED' });
+      prisma.salon.update.mockResolvedValueOnce({ id: 'salon-1', status: 'ACTIVE' });
+      await expect(service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'ACTIVE' as never })).resolves.toEqual({ id: 'salon-1', status: 'ACTIVE' });
+    });
+
+    it('rejects invalid transitions without writing', async () => {
+      prisma.salon.findUnique.mockResolvedValue({ id: 'salon-1', status: 'ACTIVE' });
+      await expect(service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'ACTIVE' as never }))
+        .rejects.toMatchObject({ code: 'SALON_STATUS_TRANSITION_INVALID' });
+      expect(prisma.salon.update).not.toHaveBeenCalled();
     });
   });
 });

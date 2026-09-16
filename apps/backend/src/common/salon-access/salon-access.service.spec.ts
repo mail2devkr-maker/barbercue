@@ -114,24 +114,20 @@ describe('SalonAccessService', () => {
       ).resolves.toBe('PLATFORM_ADMIN');
     });
 
-    it('denies a PLATFORM_ADMIN a PENDING salon — no moderation backdoor for lifecycle-incomplete shops', async () => {
+    it('grants a PLATFORM_ADMIN delegated access to a PENDING salon for support setup', async () => {
       prisma.userRole.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
       prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.PENDING });
-      await expect(
-        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
-      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      await expect(service.assertOwnerOrAdminAccess('admin-1', 'salon-1')).resolves.toBe('PLATFORM_ADMIN');
     });
 
-    it('denies a PLATFORM_ADMIN a SUSPENDED salon', async () => {
+    it('grants a PLATFORM_ADMIN delegated access to a SUSPENDED salon', async () => {
       prisma.userRole.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
       prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.SUSPENDED });
-      await expect(
-        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
-      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      await expect(service.assertOwnerOrAdminAccess('admin-1', 'salon-1')).resolves.toBe('PLATFORM_ADMIN');
     });
 
     it('throws SALON_NOT_FOUND for a real admin acting on a salonId that does not exist', async () => {
@@ -221,14 +217,20 @@ describe('SalonAccessService', () => {
       ).resolves.toBe('PLATFORM_ADMIN');
     });
 
-    it('denies a PLATFORM_ADMIN a PENDING salon — no moderation backdoor for lifecycle-incomplete shops', async () => {
+    it('grants a PLATFORM_ADMIN queue read access to a PENDING salon', async () => {
       prisma.userRole.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
       prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.PENDING });
-      await expect(
-        service.assertAccessOrAdminAccess('admin-1', 'salon-1'),
-      ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      await expect(service.assertAccessOrAdminAccess('admin-1', 'salon-1')).resolves.toBe('PLATFORM_ADMIN');
+    });
+
+    it('grants a PLATFORM_ADMIN delegated access to a SUSPENDED salon', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
+      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.SUSPENDED });
+      await expect(service.assertAccessOrAdminAccess('admin-1', 'salon-1')).resolves.toBe('PLATFORM_ADMIN');
     });
 
     it('denies a malformed salon-scoped PLATFORM_ADMIN row — the role only grants delegated access when global', async () => {

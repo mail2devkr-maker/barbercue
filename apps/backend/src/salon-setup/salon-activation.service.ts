@@ -72,13 +72,75 @@ export class SalonActivationService {
     return { id: updated.id, status: updated.status };
   }
 
+  /** Platform-admin lifecycle control. The admin actor is never treated as the shop owner. */
+  async updateStatusAsAdmin(
+    adminUserId: string,
+    salonId: string,
+    input: UpdateSalonStatusInput,
+  ): Promise<SalonStatusResultDto> {
+    await this.salonAccess.assertPlatformAdminAccess(adminUserId, salonId);
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { id: true, status: true },
+    });
+    if (!salon) {
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Salon not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const allowed =
+      (salon.status === SalonStatus.PENDING && input.status === SalonStatus.ACTIVE) ||
+      (salon.status === SalonStatus.ACTIVE && input.status === SalonStatus.SUSPENDED) ||
+      (salon.status === SalonStatus.SUSPENDED && input.status === SalonStatus.ACTIVE);
+    if (!allowed) {
+      throw new AppException(
+        'SALON_STATUS_TRANSITION_INVALID',
+        `Cannot change shop status from ${salon.status} to ${input.status}.`,
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    if (input.status === SalonStatus.ACTIVE) {
+      await this.assertReadyToOpen(salonId);
+    }
+
+    const action =
+      salon.status === SalonStatus.PENDING
+        ? 'ADMIN_SALON_OPENED'
+        : salon.status === SalonStatus.SUSPENDED
+          ? 'ADMIN_SALON_REOPENED'
+          : 'ADMIN_SALON_SUSPENDED';
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.salon.update({
+        where: { id: salonId },
+        data: { status: input.status },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: adminUserId,
+          action,
+          entityType: 'Salon',
+          entityId: salonId,
+          metadata: {
+            previousStatus: salon.status,
+            newStatus: input.status,
+          },
+        },
+      });
+      return { id: updated.id, status: updated.status };
+    });
+  }
+
   /**
    * Throws SALON_SETUP_INCOMPLETE unless the salon has at least one active service, chair and
    * staff member — the three things without which a customer who finds the shop cannot actually
    * be served. The thrown error carries a SalonSetupReadinessDto in `details` so the client can
    * tick off what's already done instead of restating the whole requirement.
    */
-  private async assertReadyToOpen(salonId: string): Promise<void> {
+  async assertReadyToOpen(salonId: string): Promise<void> {
     const [serviceCount, chairCount, staffCount] = await Promise.all([
       this.prisma.service.count({ where: { salonId, isActive: true } }),
       this.prisma.chair.count({
