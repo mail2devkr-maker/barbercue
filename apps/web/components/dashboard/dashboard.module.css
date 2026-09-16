@@ -2,6 +2,32 @@
    chairs, hours, photos, setup checklist, queue QR. Same tokens and card language as
    booking.module.css / queue.module.css, applied to CRUD-list and form shapes. */
 
+/* Issue #2/#7 (admin dark-UI parity) — every page under salons/[salonId] (settings, services,
+   chairs, staff, hours, etc.) reads its colors through the --bc-* custom properties above, so
+   redefining them on one wrapping scope (see [salonId]/layout.tsx) reskins the whole delegated
+   shop-management area to the current FastQue dark identity without forking a second admin-only
+   copy of these pages or touching the --bc-* tokens globally (which would also affect unrelated
+   still-light public pages, e.g. landing's below-the-fold sections). Same fq-* values as
+   landing.module.css / customer-auth.module.css. */
+.darkScope {
+  --bc-ink: #f7f5f4;
+  --bc-muted: rgba(255, 255, 255, 0.72);
+  --bc-border: rgba(255, 255, 255, 0.14);
+  --bc-surface: #12121a;
+  --bc-surface-tint: #171720;
+  --bc-success: #6fcf87;
+  --bc-warn: #ffb648;
+  --bc-accent: #f20a83;
+  --bc-gold: #ff9d5c;
+  --bc-gold-soft: rgba(255, 157, 92, 0.16);
+  --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --bc-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --bc-shadow-card: 0 12px 32px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.2);
+  background: #09090c;
+  color: var(--bc-ink);
+  min-height: 100vh;
+}
+
 .page {
   padding: 2.5rem 1.25rem 3rem;
   max-width: 720px;
@@ -68,7 +94,7 @@
 
 .bannerWarning {
   background: var(--bc-gold-soft);
-  color: #8a5a00;
+  color: var(--bc-gold);
 }
 
 /* ---------- Forms ---------- */
@@ -110,7 +136,7 @@
   /* 16px minimum: anything smaller makes iOS Safari zoom the page on focus. */
   font-size: 16px;
   color: var(--bc-ink);
-  background: #ffffff;
+  background: var(--bc-surface);
   box-sizing: border-box;
 }
 
@@ -180,7 +206,7 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  background: #ffffff;
+  background: var(--bc-surface);
   box-shadow: 0 4px 16px rgba(26, 21, 51, 0.045);
 }
 
@@ -253,7 +279,7 @@
 
 .statusPending {
   background: var(--bc-gold-soft);
-  color: #8a5a00;
+  color: var(--bc-gold);
 }
 
 .statusMuted {
@@ -267,7 +293,7 @@
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
   padding: 16px 18px;
-  background: #ffffff;
+  background: var(--bc-surface);
   box-shadow: 0 4px 16px rgba(26, 21, 51, 0.045);
 }
 
@@ -384,7 +410,7 @@
 .toggle {
   padding: 9px 14px;
   min-height: 40px;
-  background: #ffffff;
+  background: var(--bc-surface);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-sm);
   font-size: var(--bc-text-sm);
@@ -403,7 +429,7 @@
 /* ---------- QR section ---------- */
 
 .qrBox {
-  background: #ffffff;
+  background: var(--bc-surface);
   padding: 16px;
   border-radius: var(--bc-radius-md);
   display: inline-block;
@@ -469,7 +495,7 @@
   border: 1px solid var(--bc-border);
   border-radius: 999px;
   color: var(--bc-muted);
-  background: #ffffff;
+  background: var(--bc-surface);
   font-size: var(--bc-text-xs);
   font-weight: 650;
   white-space: nowrap;
@@ -494,7 +520,7 @@
 
 .setupStepCurrent span {
   background: var(--bc-gold-soft);
-  color: #6f4800;
+  color: var(--bc-gold);
 }
 
 .setupActions {
@@ -557,7 +583,7 @@
   border: 1px solid var(--bc-border);
   border-radius: 999px;
   color: var(--bc-muted);
-  background: #ffffff;
+  background: var(--bc-surface);
   font-size: var(--bc-text-xs);
   font-weight: 650;
   white-space: nowrap;
@@ -593,7 +619,7 @@
   padding: clamp(16px, 3vw, 24px);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-lg);
-  background: linear-gradient(145deg, #ffffff, #fffaf2);
+  background: linear-gradient(145deg, var(--bc-surface), var(--bc-surface-tint));
 }
 
 .catalogHeadingRow,
@@ -619,7 +645,7 @@
   flex: 0 0 auto;
   padding: 5px 9px;
   border-radius: 999px;
-  color: #6f4800;
+  color: var(--bc-gold);
   background: var(--bc-gold-soft);
   font-size: 0.72rem;
   font-weight: 700;
@@ -646,7 +672,7 @@
   padding: 13px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  background: #ffffff;
+  background: var(--bc-surface);
 }
 
 .catalogCardSelected {

@@ -262,7 +262,7 @@ export default function DashboardCustomerDetailPage({
 
       {pendingAction && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(20,16,12,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ background: "#fff", borderRadius: "var(--bc-radius-md)", padding: 24, maxWidth: 420, width: "90%", boxShadow: "var(--bc-shadow-lg)" }}>
+          <div style={{ background: "var(--bc-surface)", borderRadius: "var(--bc-radius-md)", padding: 24, maxWidth: 420, width: "90%", boxShadow: "var(--bc-shadow-lg)" }}>
             <p className={styles.rowTitle} style={{ marginBottom: 12 }}>
               {pendingAction.entry.reason === "CANCELLATION_CHARGE"
                 ? pendingAction.action === "waive"
