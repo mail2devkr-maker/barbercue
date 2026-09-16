@@ -5,12 +5,15 @@ import {
   LedgerReason,
   LedgerStatus,
   computeCancellationCharge,
+  decimalStringToPaise,
+  paiseToRupees,
   type CancellationPolicyDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
+import { resolveEffectiveBookingServices } from './effective-booking-services';
 
 /**
  * STATE_MACHINES.md: "CONFIRMED --> NO_SHOW: customer never checks in within
@@ -66,7 +69,19 @@ export class BookingNoShowService {
         salonId: true,
         customerId: true,
         slotStart: true,
-        service: { select: { price: true } },
+        serviceId: true,
+        service: {
+          select: { name: true, durationMinutes: true, price: true },
+        },
+        services: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            serviceId: true,
+            serviceName: true,
+            durationMinutes: true,
+            price: true,
+          },
+        },
         salon: { select: { ownerUserId: true } },
       },
     });
@@ -93,9 +108,21 @@ export class BookingNoShowService {
       const graceMs = policy.appointmentArrivalGraceMinutes * 60_000;
       if (booking.slotStart.getTime() + graceMs > now) continue; // not yet overdue for this salon
 
+      // Multi-service financial correctness: no-show percentage charges must apply to the complete
+      // appointment value, never only Booking.service (the primary/first compatibility pointer).
+      // Integer-paise summation avoids float drift. The effective-service helper also keeps an
+      // anomalous rolling-deploy booking with zero snapshots truthful instead of charging zero.
+      const effectiveServices = resolveEffectiveBookingServices(booking);
+      const appointmentPrice = paiseToRupees(
+        effectiveServices.reduce(
+          (sum, service) =>
+            sum + decimalStringToPaise(service.price.toString()),
+          0,
+        ),
+      );
       const chargeAmount = computeCancellationCharge(
         policy,
-        Number(booking.service.price),
+        appointmentPrice,
         0, // unused by the isNoShow branch — see computeCancellationCharge
         true,
       );
