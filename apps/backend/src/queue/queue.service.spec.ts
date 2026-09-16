@@ -103,6 +103,7 @@ describe('QueueService', () => {
     getServiceOrThrow: jest.Mock<Promise<unknown>, [string, string]>;
     assertStaffQualified: jest.Mock<Promise<void>, [string, string, string]>;
     getSlotCapacity: jest.Mock<Promise<number>, [unknown, string, string]>;
+    getSlotCapacityForServices: jest.Mock<Promise<number>, [unknown, string, string[]]>;
     getSalonTimeZone: jest.Mock<Promise<string | null>, [string]>;
     resolveTimeZoneOrThrow: jest.Mock<Promise<string>, [string]>;
   };
@@ -205,6 +206,9 @@ describe('QueueService', () => {
         .mockResolvedValue(undefined),
       getSlotCapacity: jest
         .fn<Promise<number>, [unknown, string, string]>()
+        .mockResolvedValue(3),
+      getSlotCapacityForServices: jest
+        .fn<Promise<number>, [unknown, string, string[]]>()
         .mockResolvedValue(3),
       // Asia/Kolkata by default — every existing IST-day-boundary assertion in this file stays
       // valid as-is; timezone-specific correctness itself is covered in availability.service.spec.ts.
@@ -858,6 +862,100 @@ describe('QueueService', () => {
       ]);
       await service.recomputeEtas('s1');
       expect(realtime.emitQueueEntryWaitAlert).toHaveBeenCalledWith('s1', 'c1', 'q1');
+    });
+  });
+
+  describe('recomputeEtas — multi-service booking duration (Issue 5 fix)', () => {
+    it('resolves capacity from the FULL combined service selection, not just the primary Booking.serviceId', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({
+          id: 'q1',
+          serviceId: 'sv1',
+          bookingId: 'bk1',
+          booking: {
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+              { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+            ],
+          },
+        }),
+      ]);
+      await service.recomputeEtas('s1');
+      expect(availability.getSlotCapacityForServices).toHaveBeenCalledWith(
+        prisma,
+        's1',
+        ['sv1', 'sv2'],
+      );
+      expect(availability.getSlotCapacity).not.toHaveBeenCalled();
+    });
+
+    it('computes ETA from the SUM of every selected service\'s duration, not just the primary one', async () => {
+      availability.getSlotCapacityForServices.mockResolvedValueOnce(1);
+      // Two WAITING entries so the second has peopleAhead=1 and serverCount=1 — batchesAhead=1,
+      // making the combined-vs-primary duration difference (45 vs 30) observable in the eta itself.
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q0', serviceId: null }),
+        makeRawEntry({
+          id: 'q1',
+          serviceId: 'sv1',
+          bookingId: 'bk1',
+          booking: {
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+              { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+            ],
+          },
+        }),
+      ]);
+      await service.recomputeEtas('s1');
+      const q1Update = prisma.queueEntry.update.mock.calls.find(
+        (call) => (call[0] as { where: { id: string } }).where.id === 'q1',
+      );
+      expect((q1Update?.[0] as { data: { estimatedWaitMinutes: number } }).data.estimatedWaitMinutes).toBe(45);
+    });
+
+    it('falls back to the single serviceId FK for a walk-in entry with no linked booking', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q1', serviceId: 'sv1', bookingId: null }),
+      ]);
+      await service.recomputeEtas('s1');
+      expect(availability.getSlotCapacity).toHaveBeenCalledWith(prisma, 's1', 'sv1');
+      expect(availability.getSlotCapacityForServices).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('toDetailDto — combined service name for multi-service appointments (Issue 5 fix)', () => {
+    it('shows every selected service, not just the primary one, for a booking-linked entry', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]); // recomputeEtas no-op
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeDetailEntry({
+          id: 'q1',
+          bookingId: 'bk1',
+          booking: {
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+              { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+            ],
+          },
+        }),
+      ]);
+      const result = await service.getDashboardQueue('owner1', 's1');
+      expect(result.entries[0].serviceName).toBe('Haircut + Beard Trim');
+    });
+
+    it('keeps showing the single service name for a walk-in entry with no linked booking', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]); // recomputeEtas no-op
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeDetailEntry({ id: 'q1', bookingId: null, service: { name: 'Haircut' } }),
+      ]);
+      const result = await service.getDashboardQueue('owner1', 's1');
+      expect(result.entries[0].serviceName).toBe('Haircut');
     });
   });
 
