@@ -54,7 +54,7 @@ export function AuthCard({
   const story = STORIES[audience];
 
   return (
-    <main className={`${styles.page} ${["customer", "owner", "staff"].includes(audience) ? styles.customerPage : ""}`}>
+    <main className={`${styles.page} ${styles.darkPage}`}>
       <header className={styles.topBar}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
           <BrandLockup showTagline canonicalArtwork />
