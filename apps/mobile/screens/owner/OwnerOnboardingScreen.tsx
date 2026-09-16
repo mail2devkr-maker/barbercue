@@ -67,6 +67,10 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
   const [goLiveError, setGoLiveError] = useState<string | null>(null);
   const [missingRequirements, setMissingRequirements] = useState<SalonSetupReadinessDto | null>(null);
   const [live, setLive] = useState(false);
+  // Owner-clarified requirement: a brand-new shop's onboarding must start with an empty services
+  // list and an explicit "Add service" action -- the shared preset catalog (~98 items) must never
+  // dominate the first screen a new owner sees. It only appears after this explicit toggle.
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -188,8 +192,16 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
               services.map((s) => <ServiceRow key={s.id} salonId={salonId} service={s} onChanged={() => void load()} />)
             )}
           </Card>
-          <ServiceCatalogPicker salonId={salonId} services={services} onChanged={() => void load()} />
           <AddServiceForm salonId={salonId} onAdded={() => void load()} />
+          <Button
+            title={showCatalog ? t.hideServiceSuggestions : t.browseServiceSuggestions}
+            variant="outline"
+            onPress={() => setShowCatalog((prev) => !prev)}
+            style={styles.catalogToggle}
+          />
+          {showCatalog && (
+            <ServiceCatalogPicker salonId={salonId} services={services} onChanged={() => void load()} />
+          )}
         </>
       )}
 
@@ -295,6 +307,7 @@ const styles = StyleSheet.create({
   progressDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: color.border },
   progressDotDone: { backgroundColor: color.goldSoft },
   progressDotActive: { backgroundColor: color.accent },
+  catalogToggle: { marginTop: space[2] },
   navRow: { flexDirection: 'row', gap: space[2], marginTop: space[4] },
   navButton: { flex: 1 },
   goLiveButton: { marginTop: space[2] },
