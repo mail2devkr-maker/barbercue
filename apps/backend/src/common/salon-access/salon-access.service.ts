@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { BookingErrorCode, QueueErrorCode, Role } from '@barbercue/shared';
+import { BookingErrorCode, QueueErrorCode, Role, SalonStatus } from '@barbercue/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../exceptions/app.exception';
 
@@ -75,7 +75,7 @@ export class SalonAccessService {
       where: { userId, salonId, role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] } },
     });
     if (membership) return 'STAFF_OR_OWNER';
-    return this.assertGlobalAdminAccess(userId, salonId);
+    return this.assertGlobalAdminOperationalAccess(userId, salonId);
   }
 
   /** Explicit platform-admin gate for lifecycle operations. */
@@ -120,6 +120,47 @@ export class SalonAccessService {
       'You do not have access to this salon.',
       HttpStatus.FORBIDDEN,
     );
+  }
+
+  /**
+   * Queue/operational delegated access remains limited to ACTIVE salons. Setup and lifecycle
+   * management use assertGlobalAdminAccess above so admins can support PENDING and SUSPENDED
+   * salons without accidentally exposing queue operations for non-operational shops.
+   */
+  private async assertGlobalAdminOperationalAccess(
+    userId: string,
+    salonId: string,
+  ): Promise<'PLATFORM_ADMIN'> {
+    const adminMembership = await this.prisma.userRole.findFirst({
+      where: { userId, role: Role.PLATFORM_ADMIN, salonId: null },
+    });
+    if (!adminMembership) {
+      throw new AppException(
+        QueueErrorCode.SALON_ACCESS_DENIED,
+        'You do not have access to this salon.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { status: true },
+    });
+    if (!salon) {
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Shop not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (salon.status !== SalonStatus.ACTIVE) {
+      throw new AppException(
+        QueueErrorCode.SALON_ACCESS_DENIED,
+        'You do not have access to this salon.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    return 'PLATFORM_ADMIN';
   }
 
   private async assertRoles(
