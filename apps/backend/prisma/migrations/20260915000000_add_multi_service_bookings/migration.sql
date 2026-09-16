@@ -1,16 +1,6 @@
--- Multi-service booking core mission — the scheduling flaw this fixes: a single-chair shop showed
--- overlapping slots (9:15/9:30/9:45) as bookable for a customer who had already selected 80 minutes
--- of combined services starting at 9:00, because a Booking (and every capacity/availability query)
--- only ever knew about one service. This migration adds the missing multi-service record.
---
--- Purely additive: "bookings"."serviceId" is NOT touched (not dropped, not made nullable, no
--- constraint changed) — every existing consumer of Booking.serviceId/service keeps reading exactly
--- what it always did. This table is new, read by new code paths only, and the backfill below is a
--- one-time INSERT that cannot fail an old (pre-migration) binary's writes: that binary knows
--- nothing about "booking_services" and will simply keep inserting into "bookings" exactly as
--- before for as long as it's still serving traffic during a Railway pre-deploy migration window.
+-- Multi-service booking core mission — additive, backward-compatible booking-service snapshots.
+-- Booking.serviceId remains the primary/first-service compatibility pointer.
 
--- CreateTable
 CREATE TABLE "booking_services" (
   "id"              TEXT NOT NULL,
   "bookingId"       TEXT NOT NULL,
@@ -30,24 +20,19 @@ ALTER TABLE "booking_services"
   ADD CONSTRAINT "booking_services_serviceId_fkey"
   FOREIGN KEY ("serviceId") REFERENCES "services"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- The same service cannot appear twice on one appointment (see schema.prisma's own doc comment on
--- this model for why this is a DB guarantee, not just an application-layer check).
+-- One service can appear only once in an appointment.
 CREATE UNIQUE INDEX "booking_services_bookingId_serviceId_key"
   ON "booking_services"("bookingId", "serviceId");
 
--- Every read of a booking's services is "give me this bookingId's rows, in order" — the one query
--- shape this table exists to serve.
+-- One ordering position can belong to only one service in an appointment.
+CREATE UNIQUE INDEX "booking_services_bookingId_sortOrder_key"
+  ON "booking_services"("bookingId", "sortOrder");
+
 CREATE INDEX "booking_services_bookingId_idx"
   ON "booking_services"("bookingId");
 
--- Backfill: every booking that already existed gets exactly one booking_services row, derived from
--- its own (unchanged) serviceId and that service's CURRENT name/duration/price. This is the only
--- honest backfill available — no historical per-booking snapshot of the service's name/duration/
--- price at the time it was originally booked exists anywhere to recover, so "the service's values
--- as they stand today" is what a customer/owner would already see for that booking's single
--- serviceName/servicePrice/serviceDurationMinutes fields before this migration, and remains
--- consistent with what they'll see afterwards. sortOrder 0 is correct by construction: a
--- pre-migration booking only ever had one service, so it is unambiguously "first".
+-- Existing bookings predate BookingService snapshots. Backfill the only truthful snapshot still
+-- recoverable: the booking's primary service values as they exist at migration time.
 INSERT INTO "booking_services" ("id", "bookingId", "serviceId", "sortOrder", "serviceName", "durationMinutes", "price", "createdAt")
 SELECT
   gen_random_uuid(),
@@ -60,3 +45,52 @@ SELECT
   b."createdAt"
 FROM "bookings" b
 JOIN "services" s ON s."id" = b."serviceId";
+
+-- Rolling-deploy durability:
+-- Railway runs migrations before all old backend instances have necessarily drained. An old binary
+-- can therefore INSERT a Booking after the one-time backfill while knowing nothing about the new
+-- booking_services table. A read-time fallback prevents zero values, but it is not historically
+-- durable: later Service edits could rewrite the apparent old appointment.
+--
+-- A deferred constraint trigger closes that window at the database boundary. For an old binary,
+-- it creates sortOrder=0 from the Service row before the transaction commits. For the new backend,
+-- Prisma already creates BookingService rows in the same transaction; because this trigger is
+-- INITIALLY DEFERRED it runs at commit, sees the primary snapshot already present, and the targeted
+-- ON CONFLICT becomes a no-op. Thus old and new binaries safely coexist without duplicate rows.
+CREATE OR REPLACE FUNCTION "fastque_snapshot_primary_booking_service"()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO "booking_services" (
+    "id",
+    "bookingId",
+    "serviceId",
+    "sortOrder",
+    "serviceName",
+    "durationMinutes",
+    "price",
+    "createdAt"
+  )
+  SELECT
+    gen_random_uuid(),
+    NEW."id",
+    NEW."serviceId",
+    0,
+    s."name",
+    s."durationMinutes",
+    s."price",
+    NEW."createdAt"
+  FROM "services" s
+  WHERE s."id" = NEW."serviceId"
+  ON CONFLICT ("bookingId", "serviceId") DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER "booking_services_snapshot_primary_after_booking_insert"
+AFTER INSERT ON "bookings"
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION "fastque_snapshot_primary_booking_service"();
