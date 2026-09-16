@@ -245,7 +245,7 @@ function TimezoneSection({ salonId }: { salonId: string }) {
                 setSelected(e.target.value);
                 setSaved(false);
               }}
-              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", minWidth: 260 }}
+              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", minWidth: 260, background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             >
               <option value="" disabled>
                 Choose a time zone…
