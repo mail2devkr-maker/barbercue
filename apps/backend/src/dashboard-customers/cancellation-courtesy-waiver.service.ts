@@ -10,48 +10,7 @@ import {
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { PrismaService } from '../prisma/prisma.service';
-
-interface LedgerRow {
-  id: string;
-  customerId: string;
-  salonId: string;
-  bookingId: string | null;
-  amount: { toString(): string } | number;
-  reason: string;
-  status: string;
-  createdAt: Date;
-  settledAt: Date | null;
-  booking: { slotStart: Date; service: { name: string } } | null;
-}
-
-const ledgerRowSelect = {
-  id: true,
-  customerId: true,
-  salonId: true,
-  bookingId: true,
-  amount: true,
-  reason: true,
-  status: true,
-  createdAt: true,
-  settledAt: true,
-  booking: { select: { slotStart: true, service: { select: { name: true } } } },
-} as const;
-
-function toLedgerEntryDto(row: LedgerRow): CustomerLedgerEntryDto {
-  return {
-    id: row.id,
-    customerId: row.customerId,
-    salonId: row.salonId,
-    bookingId: row.bookingId,
-    amount: Number(row.amount),
-    reason: row.reason as LedgerReason,
-    status: row.status as LedgerStatus,
-    createdAt: row.createdAt.toISOString(),
-    settledAt: row.settledAt ? row.settledAt.toISOString() : null,
-    bookingServiceName: row.booking?.service.name ?? null,
-    bookingSlotStart: row.booking?.slotStart.toISOString() ?? null,
-  };
-}
+import { ledgerRowSelect, toLedgerEntryDto, type LedgerRow } from './ledger-entry';
 
 /**
  * Owner-controlled customer-retention courtesy for LATE cancellation charges only.

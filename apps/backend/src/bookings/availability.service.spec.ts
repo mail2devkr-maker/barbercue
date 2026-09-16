@@ -9,7 +9,10 @@ function futureDateString(daysAhead: number): string {
 
 interface PrismaMock {
   salon: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
-  service: { findFirst: jest.Mock<Promise<unknown>, [unknown]> };
+  service: {
+    findFirst: jest.Mock<Promise<unknown>, [unknown]>;
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+  };
   staffService: { count: jest.Mock<Promise<number>, [unknown]> };
   salonStaff: {
     count: jest.Mock<Promise<number>, [unknown]>;
@@ -30,7 +33,10 @@ describe('AvailabilityService', () => {
   beforeEach(async () => {
     prisma = {
       salon: { findUnique: jest.fn<Promise<unknown>, [unknown]>() },
-      service: { findFirst: jest.fn<Promise<unknown>, [unknown]>() },
+      service: {
+        findFirst: jest.fn<Promise<unknown>, [unknown]>(),
+        findMany: jest.fn<Promise<unknown[]>, [unknown]>(),
+      },
       staffService: { count: jest.fn<Promise<number>, [unknown]>() },
       salonStaff: {
         count: jest.fn<Promise<number>, [unknown]>(),
@@ -186,7 +192,7 @@ describe('AvailabilityService', () => {
 
   describe('listQualifiedStaff (Phase 17 — Barber Professional Profile)', () => {
     it('includes photoUrl/bio/yearsExperience on each option', async () => {
-      prisma.service.findFirst.mockResolvedValue({ id: 'sv1' });
+      prisma.service.findMany.mockResolvedValue([{ id: 'sv1', salonId: 's1', isActive: true }]);
       prisma.staffService.count.mockResolvedValue(0);
       prisma.salonStaff.findMany.mockResolvedValue([
         {
@@ -261,6 +267,12 @@ describe('AvailabilityService', () => {
         durationMinutes: 30,
         isActive: true,
       });
+      // getAvailability loads its service(s) via getServicesOrThrow (service.findMany) — the
+      // findFirst mock above is unused by getAvailability itself, kept only in case a test in this
+      // block also exercises getServiceOrThrow directly.
+      prisma.service.findMany.mockResolvedValue([
+        { id: 'sv1', salonId: 's1', name: 'Haircut', durationMinutes: 30, isActive: true },
+      ]);
       prisma.staffService.count.mockResolvedValue(0);
       prisma.salonStaff.count.mockResolvedValue(2);
       prisma.chair.count.mockResolvedValue(2);
@@ -275,7 +287,7 @@ describe('AvailabilityService', () => {
       });
       const slots = await service.getAvailability(
         's1',
-        'sv1',
+        ['sv1'],
         futureDateString(2),
       );
       expect(slots).toEqual([]);
@@ -285,7 +297,7 @@ describe('AvailabilityService', () => {
       prisma.operatingHours.findUnique.mockResolvedValue(null);
       const slots = await service.getAvailability(
         's1',
-        'sv1',
+        ['sv1'],
         futureDateString(2),
       );
       expect(slots).toEqual([]);
@@ -299,7 +311,7 @@ describe('AvailabilityService', () => {
       });
       const slots = await service.getAvailability(
         's1',
-        'sv1',
+        ['sv1'],
         futureDateString(45),
       );
       expect(slots).toEqual([]);
@@ -313,7 +325,7 @@ describe('AvailabilityService', () => {
       });
       const slots = await service.getAvailability(
         's1',
-        'sv1',
+        ['sv1'],
         futureDateString(2),
       );
       // 09:00-10:00 window, 30 min service, 15 min granularity: 09:00, 09:15, 09:30 fit (09:45+30=10:15 doesn't).
@@ -337,7 +349,7 @@ describe('AvailabilityService', () => {
         { slotStart: slotStartUtc, slotEnd: slotEndUtc },
         { slotStart: slotStartUtc, slotEnd: slotEndUtc },
       ]);
-      const slots = await service.getAvailability('s1', 'sv1', day);
+      const slots = await service.getAvailability('s1', ['sv1'], day);
       const firstSlot = slots.find(
         (s) => s.slotStart === slotStartUtc.toISOString(),
       );
@@ -346,12 +358,9 @@ describe('AvailabilityService', () => {
     });
 
     it('marks every candidate that overlaps a longer appointment as occupied', async () => {
-      prisma.service.findFirst.mockResolvedValue({
-        id: 'sv1',
-        salonId: 's1',
-        durationMinutes: 45,
-        isActive: true,
-      });
+      prisma.service.findMany.mockResolvedValue([
+        { id: 'sv1', salonId: 's1', name: 'Haircut', durationMinutes: 45, isActive: true },
+      ]);
       prisma.salonStaff.count.mockResolvedValue(1);
       prisma.chair.count.mockResolvedValue(1);
       prisma.operatingHours.findUnique.mockResolvedValue({
@@ -369,7 +378,7 @@ describe('AvailabilityService', () => {
         { slotStart: bookedStart, slotEnd: bookedEnd },
       ]);
 
-      const slots = await service.getAvailability('s1', 'sv1', day);
+      const slots = await service.getAvailability('s1', ['sv1'], day);
       expect(
         slots.find((slot) => slot.slotStart === bookedStart.toISOString()),
       ).toMatchObject({
@@ -412,7 +421,7 @@ describe('AvailabilityService', () => {
         prisma.staffWorkingHours.findUnique.mockResolvedValue(null);
         const slots = await service.getAvailability(
           's1',
-          'sv1',
+          ['sv1'],
           futureDateString(2),
           'st1',
         );
@@ -429,7 +438,7 @@ describe('AvailabilityService', () => {
         });
         const slots = await service.getAvailability(
           's1',
-          'sv1',
+          ['sv1'],
           futureDateString(2),
           'st1',
         );
@@ -449,7 +458,7 @@ describe('AvailabilityService', () => {
         });
         const slots = await service.getAvailability(
           's1',
-          'sv1',
+          ['sv1'],
           futureDateString(2),
           'st1',
         );
@@ -464,7 +473,7 @@ describe('AvailabilityService', () => {
         });
         const slots = await service.getAvailability(
           's1',
-          'sv1',
+          ['sv1'],
           futureDateString(2),
           'st1',
         );
@@ -486,7 +495,7 @@ describe('AvailabilityService', () => {
             preferredStaffId: 'st1',
           },
         ]);
-        const slots = await service.getAvailability('s1', 'sv1', day, 'st1');
+        const slots = await service.getAvailability('s1', ['sv1'], day, 'st1');
         const slot = slots.find(
           (s) => s.slotStart === slotStartUtc.toISOString(),
         );
@@ -509,7 +518,7 @@ describe('AvailabilityService', () => {
             preferredStaffId: 'st1',
           },
         ]);
-        const slots = await service.getAvailability('s1', 'sv1', day, 'st2');
+        const slots = await service.getAvailability('s1', ['sv1'], day, 'st2');
         const slot = slots.find(
           (s) => s.slotStart === slotStartUtc.toISOString(),
         );
@@ -535,12 +544,188 @@ describe('AvailabilityService', () => {
             preferredStaffId: 'st1',
           },
         ]);
-        const slots = await service.getAvailability('s1', 'sv1', day);
+        const slots = await service.getAvailability('s1', ['sv1'], day);
         const slot = slots.find(
           (s) => s.slotStart === slotStartUtc.toISOString(),
         );
         expect(slot).toMatchObject({ available: true, state: 'AVAILABLE' });
       });
+    });
+  });
+
+  // Multi-service booking core mission — the P0 scheduling flaw this mission fixes: a single-chair
+  // shop must not show 9:15/9:30/9:45 as available when the customer has already selected 80
+  // minutes of combined services starting at 9:00. Cases numbered per the mission's own test plan.
+  describe('multi-service booking core mission — availability', () => {
+    function threeServiceCatalog() {
+      // 30 + 20 + 30 = 80 minutes combined, matching the mission's own worked example exactly.
+      return [
+        { id: 'svA', salonId: 's1', name: 'Haircut', durationMinutes: 30, isActive: true },
+        { id: 'svB', salonId: 's1', name: 'Beard Trim', durationMinutes: 20, isActive: true },
+        { id: 'svC', salonId: 's1', name: 'Facial', durationMinutes: 30, isActive: true },
+      ];
+    }
+
+    beforeEach(() => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        timezone: null,
+        city: { countryCode: 'IN' },
+      });
+      prisma.staffService.count.mockResolvedValue(0); // every ACTIVE staff qualifies, by default
+    });
+
+    it('CASE 1: a single-chair shop hides every slot overlapping an existing 60-minute appointment for an 80-minute combined selection, and the first fully-clear slot is available', async () => {
+      prisma.service.findMany.mockResolvedValue(threeServiceCatalog());
+      prisma.salonStaff.count.mockResolvedValue(2); // staff is not the bottleneck
+      prisma.chair.count.mockResolvedValue(1); // exactly one chair
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '11:30',
+        isClosed: false,
+      });
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      // 09:00-10:00 IST = 03:30-04:30 UTC — a real existing 60-minute appointment.
+      const existingStart = new Date(Date.UTC(y, m - 1, d, 3, 30));
+      const existingEnd = new Date(Date.UTC(y, m - 1, d, 4, 30));
+      prisma.booking.findMany.mockResolvedValue([
+        { slotStart: existingStart, slotEnd: existingEnd },
+      ]);
+
+      const slots = await service.getAvailability('s1', ['svA', 'svB', 'svC'], day);
+      const byStart = new Map(slots.map((s) => [s.slotStart, s]));
+      const at = (hh: number, mm: number) =>
+        byStart.get(new Date(Date.UTC(y, m - 1, d, hh - 5, mm - 30)).toISOString());
+      // 09:15, 09:30, 09:45 all produce an 80-minute candidate interval that overlaps the existing
+      // 09:00-10:00 appointment (e.g. 09:15-10:35 overlaps 09:00-10:00) — every one unavailable.
+      expect(at(9, 15)).toMatchObject({ available: false, state: 'OCCUPIED' });
+      expect(at(9, 30)).toMatchObject({ available: false, state: 'OCCUPIED' });
+      expect(at(9, 45)).toMatchObject({ available: false, state: 'OCCUPIED' });
+      // 10:00-11:20 does not overlap the existing 09:00-10:00 appointment at all -> available.
+      expect(at(10, 0)).toMatchObject({ available: true, state: 'AVAILABLE' });
+    });
+
+    it('CASE 2: the candidate slotEnd is exactly slotStart + the sum of every selected service duration (30+20+30=80)', async () => {
+      prisma.service.findMany.mockResolvedValue(threeServiceCatalog());
+      prisma.salonStaff.count.mockResolvedValue(2);
+      prisma.chair.count.mockResolvedValue(2);
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '12:00',
+        isClosed: false,
+      });
+      prisma.booking.findMany.mockResolvedValue([]);
+      const day = futureDateString(2);
+      const slots = await service.getAvailability('s1', ['svA', 'svB', 'svC'], day);
+      expect(slots.length).toBeGreaterThan(0);
+      for (const slot of slots) {
+        expect(new Date(slot.slotEnd).getTime() - new Date(slot.slotStart).getTime()).toBe(
+          80 * 60_000,
+        );
+      }
+    });
+
+    it('CASE 3: adding a service to the selection changes which slots are available (a slot valid for one service can become invalid for the combined selection)', async () => {
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      prisma.salonStaff.count.mockResolvedValue(1);
+      prisma.chair.count.mockResolvedValue(1);
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '10:00',
+        isClosed: false,
+      });
+      // A second, unrelated appointment sits at 09:45-10:00 (IST) — irrelevant to a short single
+      // 30-minute service starting at 09:00, but it collides with a longer combined selection.
+      const blockStart = new Date(Date.UTC(y, m - 1, d, 4, 15));
+      const blockEnd = new Date(Date.UTC(y, m - 1, d, 4, 30));
+      prisma.booking.findMany.mockResolvedValue([{ slotStart: blockStart, slotEnd: blockEnd }]);
+
+      prisma.service.findMany.mockResolvedValue([threeServiceCatalog()[0]]); // svA alone, 30 min
+      const singleServiceSlots = await service.getAvailability('s1', ['svA'], day);
+      const singleAt9 = singleServiceSlots.find((s) => s.slotStart === new Date(Date.UTC(y, m - 1, d, 3, 30)).toISOString());
+      expect(singleAt9).toMatchObject({ available: true }); // 09:00-09:30 never touches 09:45-10:00
+
+      prisma.service.findMany.mockResolvedValue(threeServiceCatalog()); // svA+svB+svC, 80 min
+      const combinedSlots = await service.getAvailability('s1', ['svA', 'svB', 'svC'], day);
+      // The 09:00-10:00 window can't even fit an 80-minute appointment at all (closes at 10:00) —
+      // adding services didn't just shrink availability, the entire day now has no valid slot,
+      // proving the selection genuinely drives what's computed, not a client-side filter.
+      expect(combinedSlots).toEqual([]);
+    });
+
+    it('CASE 4: a candidate interval crossing salon closing time never appears as a slot at all', async () => {
+      prisma.service.findMany.mockResolvedValue(threeServiceCatalog()); // 80 minutes
+      prisma.salonStaff.count.mockResolvedValue(2);
+      prisma.chair.count.mockResolvedValue(2);
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '10:00', // only 60 minutes of window — cannot fit an 80-minute appointment
+        isClosed: false,
+      });
+      prisma.booking.findMany.mockResolvedValue([]);
+      const slots = await service.getAvailability('s1', ['svA', 'svB', 'svC'], futureDateString(2));
+      expect(slots).toEqual([]);
+    });
+
+    it('CASE 6: "Any Staff" requires ONE barber qualified for every selected service — three different barbers each qualified for only one service must not count as available', async () => {
+      // Every service HAS restrictive StaffService rows (count > 0), and no single staff member
+      // holds a qualification row for more than one of the three services.
+      prisma.staffService.count.mockResolvedValue(1);
+      prisma.service.findMany.mockResolvedValue(threeServiceCatalog());
+      prisma.chair.count.mockResolvedValue(5); // chairs are plentiful; staff qualification is the constraint
+      // qualifiedStaffWhereForServices issues one salonStaff.count per AND-ed where clause in
+      // production, but this test only needs the OUTER count() this mock stands in for: zero staff
+      // satisfy "qualified for svA AND svB AND svC" since each barber only qualifies for one.
+      prisma.salonStaff.count.mockResolvedValue(0);
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '12:00',
+        isClosed: false,
+      });
+      prisma.booking.findMany.mockResolvedValue([]);
+      const slots = await service.getAvailability('s1', ['svA', 'svB', 'svC'], futureDateString(2));
+      // Capacity is min(0 qualified staff, 5 chairs) = 0 -> nothing is ever bookable.
+      expect(slots.every((s) => !s.available)).toBe(true);
+      expect(slots.length).toBeGreaterThan(0); // slots exist (the window fits 80 min); none bookable
+    });
+
+    it('CASE 6b: qualifiedStaffWhereForServices ANDs one where-clause per restricted service, never a single OR-based "in" match', async () => {
+      prisma.staffService.count.mockResolvedValue(1);
+      const where = await service.qualifiedStaffWhereForServices(
+        prisma as never,
+        's1',
+        ['svA', 'svB', 'svC'],
+      );
+      expect(where.AND).toHaveLength(3);
+      const services = (where.AND as { services: { some: { serviceId: string } } }[]).map(
+        (clause) => clause.services.some.serviceId,
+      );
+      expect(services.sort()).toEqual(['svA', 'svB', 'svC']);
+    });
+
+    it('CASE 7: with 2 chairs and sufficient qualified staff, a legitimate overlapping appointment is allowed', async () => {
+      prisma.service.findMany.mockResolvedValue([threeServiceCatalog()[0]]); // single 30-min service
+      prisma.staffService.count.mockResolvedValue(0); // unrestricted
+      prisma.salonStaff.count.mockResolvedValue(2);
+      prisma.chair.count.mockResolvedValue(2);
+      prisma.operatingHours.findUnique.mockResolvedValue({
+        openTime: '09:00',
+        closeTime: '11:00',
+        isClosed: false,
+      });
+      const day = futureDateString(2);
+      const [y, m, d] = day.split('-').map(Number);
+      const existingStart = new Date(Date.UTC(y, m - 1, d, 3, 30)); // 09:00 IST
+      const existingEnd = new Date(Date.UTC(y, m - 1, d, 4, 0)); // 09:30 IST
+      prisma.booking.findMany.mockResolvedValue([{ slotStart: existingStart, slotEnd: existingEnd }]);
+
+      const slots = await service.getAvailability('s1', ['svA'], day);
+      const at915 = slots.find((s) => s.slotStart === new Date(Date.UTC(y, m - 1, d, 3, 45)).toISOString());
+      // Capacity 2 (min(2 staff, 2 chairs)), only 1 overlapping booking -> isSlotBookable(2,1)=true.
+      expect(at915).toMatchObject({ available: true, state: 'AVAILABLE' });
     });
   });
 
@@ -651,6 +836,12 @@ describe('AvailabilityService', () => {
         durationMinutes: 30,
         isActive: true,
       });
+      // getAvailability loads its service(s) via getServicesOrThrow (service.findMany) — the
+      // findFirst mock above is unused by getAvailability itself, kept only in case a test in this
+      // block also exercises getServiceOrThrow directly.
+      prisma.service.findMany.mockResolvedValue([
+        { id: 'sv1', salonId: 's1', name: 'Haircut', durationMinutes: 30, isActive: true },
+      ]);
       prisma.staffService.count.mockResolvedValue(0);
       prisma.salonStaff.count.mockResolvedValue(2);
       prisma.chair.count.mockResolvedValue(2);
@@ -677,7 +868,7 @@ describe('AvailabilityService', () => {
       });
       // A summer date: 09:00 London (BST, +01:00) = 08:00 UTC — NOT 03:30 UTC, which is what the
       // old fixed +05:30 IST assumption would have produced for this same wall-clock time.
-      const slots = await service.getAvailability('s1', 'sv1', '2026-07-01');
+      const slots = await service.getAvailability('s1', ['sv1'], '2026-07-01');
       expect(slots.length).toBeGreaterThan(0);
       expect(slots[0].slotStart).toBe('2026-07-01T08:00:00.000Z');
     });
@@ -699,7 +890,7 @@ describe('AvailabilityService', () => {
         isClosed: false,
       });
       // A winter date: 09:00 London (GMT, +00:00) = 09:00 UTC.
-      const slots = await service.getAvailability('s1', 'sv1', '2026-01-15');
+      const slots = await service.getAvailability('s1', ['sv1'], '2026-01-15');
       expect(slots.length).toBeGreaterThan(0);
       expect(slots[0].slotStart).toBe('2026-01-15T09:00:00.000Z');
     });
@@ -712,7 +903,7 @@ describe('AvailabilityService', () => {
         city: { countryCode: 'US' },
       });
       await expect(
-        service.getAvailability('s1', 'sv1', futureDateString(2)),
+        service.getAvailability('s1', ['sv1'], futureDateString(2)),
       ).rejects.toMatchObject({ code: 'SALON_TIMEZONE_REQUIRED' });
     });
 
@@ -724,7 +915,7 @@ describe('AvailabilityService', () => {
         city: { countryCode: 'US' },
       });
       await expect(
-        service.getAvailability('s1', 'sv1', futureDateString(2)),
+        service.getAvailability('s1', ['sv1'], futureDateString(2)),
       ).rejects.toMatchObject({ code: 'SALON_TIMEZONE_REQUIRED' });
     });
   });

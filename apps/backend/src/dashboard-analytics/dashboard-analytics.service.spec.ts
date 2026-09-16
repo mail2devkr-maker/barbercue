@@ -16,7 +16,10 @@ describe('DashboardAnalyticsService', () => {
     serviceSession: { findMany: jest.Mock };
   };
   let salonAccess: {
-    assertOwnerOrAdminAccess: jest.Mock<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
+    assertOwnerOrAdminAccess: jest.Mock<
+      Promise<'OWNER' | 'PLATFORM_ADMIN'>,
+      [string, string]
+    >;
   };
 
   beforeEach(async () => {
@@ -27,7 +30,11 @@ describe('DashboardAnalyticsService', () => {
       salon: {
         findUnique: jest
           .fn()
-          .mockResolvedValue({ currency: 'INR', timezone: null, city: { countryCode: 'IN' } }),
+          .mockResolvedValue({
+            currency: 'INR',
+            timezone: null,
+            city: { countryCode: 'IN' },
+          }),
       },
       booking: {
         groupBy: jest.fn().mockResolvedValue([]),
@@ -56,7 +63,10 @@ describe('DashboardAnalyticsService', () => {
 
   it('checks salon access before reading anything', async () => {
     await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
-    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner1', 's1');
+    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
+      'owner1',
+      's1',
+    );
   });
 
   it('rejects an owner who does not operate this salon', async () => {
@@ -72,11 +82,16 @@ describe('DashboardAnalyticsService', () => {
   // Part 2 — delegated shop management. Read-only endpoint: a successful delegated read needs no
   // AuditLog row (nothing here mutates), unlike salon-setup's admin-mutation paths.
   it('a delegated PLATFORM_ADMIN on an ACTIVE salon can read analytics too', async () => {
-    salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+    salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce(
+      'PLATFORM_ADMIN',
+    );
     await expect(
       service.getAnalytics('admin-1', 's1', 'today', undefined, undefined),
     ).resolves.toBeDefined();
-    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('admin-1', 's1');
+    expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
+      'admin-1',
+      's1',
+    );
   });
 
   it('defaults to "today" for an unrecognized/missing range value', async () => {
@@ -148,12 +163,22 @@ describe('DashboardAnalyticsService', () => {
       {
         customerId: 'c1',
         serviceId: 'sv1',
-        service: { name: 'Haircut', price: decimal('300') },
+        service: {
+          name: 'Haircut',
+          durationMinutes: 30,
+          price: decimal('300'),
+        },
+        services: [],
       },
       {
         customerId: 'c2',
         serviceId: 'sv1',
-        service: { name: 'Haircut', price: decimal('300') },
+        service: {
+          name: 'Haircut',
+          durationMinutes: 30,
+          price: decimal('300'),
+        },
+        services: [],
       },
     ]);
     const result = await service.getAnalytics(
@@ -171,17 +196,28 @@ describe('DashboardAnalyticsService', () => {
       {
         customerId: 'c1',
         serviceId: 'sv1',
-        service: { name: 'Haircut', price: decimal('300') },
+        service: {
+          name: 'Haircut',
+          durationMinutes: 30,
+          price: decimal('300'),
+        },
+        services: [],
       },
       {
         customerId: 'c2',
         serviceId: 'sv1',
-        service: { name: 'Haircut', price: decimal('300') },
+        service: {
+          name: 'Haircut',
+          durationMinutes: 30,
+          price: decimal('300'),
+        },
+        services: [],
       },
       {
         customerId: 'c3',
         serviceId: 'sv2',
-        service: { name: 'Shave', price: decimal('150') },
+        service: { name: 'Shave', durationMinutes: 30, price: decimal('150') },
+        services: [],
       },
     ]);
     const result = await service.getAnalytics(
@@ -197,17 +233,63 @@ describe('DashboardAnalyticsService', () => {
     ]);
   });
 
+  // Production-safety hardening (P1) — a completed multi-service appointment must count toward
+  // EVERY selected service's popularity, never only its primary/first (Booking.serviceId), and
+  // must contribute its COMPLETE combined price to estimatedServiceValue, never just the first
+  // service's own price.
+  it('counts every selected service (not just the primary) toward popularity and estimated value for a multi-service booking', async () => {
+    prisma.booking.findMany.mockResolvedValueOnce([
+      {
+        customerId: 'c1',
+        serviceId: 'sv1',
+        service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+        services: [
+          { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: decimal('300') },
+          { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 20, price: decimal('150') },
+        ],
+      },
+      {
+        customerId: 'c2',
+        serviceId: 'sv1',
+        service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+        services: [
+          { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: decimal('300') },
+        ],
+      },
+    ]);
+    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+    // Haircut appears in both bookings (2), Beard Trim only in the first (1) — never 0 just
+    // because it wasn't the primary service.
+    expect(result.servicePopularity).toEqual([
+      { serviceId: 'sv1', name: 'Haircut', completedCount: 2 },
+      { serviceId: 'sv2', name: 'Beard Trim', completedCount: 1 },
+    ]);
+    // 450 (300+150) from the first booking + 300 from the second = 750, never 600 (300+300, the
+    // primary-only total).
+    expect(result.estimatedServiceValue).toBe(750);
+  });
+
   it('classifies a customer with no prior completed visit as new, and one with a prior visit as repeat', async () => {
     prisma.booking.findMany.mockResolvedValueOnce([
       {
         customerId: 'first-timer',
         serviceId: 'sv1',
-        service: { name: 'Haircut', price: decimal('300') },
+        service: {
+          name: 'Haircut',
+          durationMinutes: 30,
+          price: decimal('300'),
+        },
+        services: [],
       },
       {
         customerId: 'regular',
         serviceId: 'sv1',
-        service: { name: 'Haircut', price: decimal('300') },
+        service: {
+          name: 'Haircut',
+          durationMinutes: 30,
+          price: decimal('300'),
+        },
+        services: [],
       },
     ]);
     prisma.booking.groupBy.mockImplementation((args: { by: string[] }) => {

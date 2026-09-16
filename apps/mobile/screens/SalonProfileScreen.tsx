@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from '@barbercue/shared';
-import type { PublicSalonStatusDto, SalonProfileDto } from '@barbercue/shared';
+import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney, summarizeServiceNames } from '@barbercue/shared';
+import type { PublicSalonStatusDto, SalonProfileDto, ServiceDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { Skeleton, ErrorState, SafeImage, PhotoGalleryViewer, PremiumButton, PremiumScreen } from '../components/ui';
@@ -52,6 +52,17 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
+  // Multi-service booking core mission — the customer may select multiple services for ONE
+  // appointment. Order is selection order (push on select, filter on deselect), the same array
+  // shape carried forward as SelectedServiceParam[] through the rest of the booking wizard — the
+  // backend independently re-derives combined duration/price from these ids, this is display-only.
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+
+  function toggleService(id: string) {
+    setSelectedServiceIds((current) =>
+      current.includes(id) ? current.filter((existing) => existing !== id) : [...current, id],
+    );
+  }
 
   const load = useCallback(
     (isRefresh: boolean) => {
@@ -182,31 +193,70 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         />
 
         <Text style={styles.sectionTitle}>{t.servicesLabel}</Text>
-        {salon.services.map((item) => (
-          <Pressable
-            key={item.id}
-            style={styles.card}
-            onPress={() =>
-              navigation.navigate('StaffSelect', {
-                salonId: salon.id,
-                salonName: salon.name,
-                serviceId: item.id,
-                serviceName: item.name,
-                servicePrice: item.price,
-                serviceDurationMinutes: item.durationMinutes,
-                operatingHours: salon.operatingHours,
-                salonTimezone: salon.salonTimezone,
-                selectedStyleName,
-              })
-            }
-          >
-            <View style={styles.cardRow}>
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardTitle}>{formatMoney(item.price, salon.currency, salon.countryCode)}</Text>
-            </View>
-            <Text style={styles.cardSubtitle}>{item.durationMinutes} {t.minutesAbbrev}</Text>
-          </Pressable>
-        ))}
+        {salon.services.map((item) => {
+          const isSelected = selectedServiceIds.includes(item.id);
+          return (
+            <Pressable
+              key={item.id}
+              style={[styles.card, isSelected && styles.cardSelected]}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isSelected }}
+              onPress={() => toggleService(item.id)}
+            >
+              <View style={styles.cardRow}>
+                <View style={styles.cardTitleRow}>
+                  <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                    {isSelected && <Text style={styles.checkboxMark}>✓</Text>}
+                  </View>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                </View>
+                <Text style={styles.cardTitle}>{formatMoney(item.price, salon.currency, salon.countryCode)}</Text>
+              </View>
+              <Text style={styles.cardSubtitle}>{item.durationMinutes} {t.minutesAbbrev}</Text>
+            </Pressable>
+          );
+        })}
+        {(() => {
+          const selectedServices = selectedServiceIds
+            .map((id) => salon.services.find((s) => s.id === id))
+            .filter((s): s is ServiceDto => Boolean(s));
+          const combinedDurationMinutes = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+          const combinedPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
+          return (
+            <>
+              {selectedServices.length > 0 && (
+                <View style={styles.selectionSummary}>
+                  <Text style={styles.selectionSummaryNames}>
+                    {summarizeServiceNames(selectedServices.map((s) => s.name))}
+                  </Text>
+                  <Text style={styles.selectionSummaryTotals}>
+                    {combinedDurationMinutes} {t.minutesAbbrev} · {formatMoney(combinedPrice, salon.currency, salon.countryCode)}
+                  </Text>
+                </View>
+              )}
+              <PremiumButton
+                title={t.continueLabel}
+                disabled={selectedServices.length === 0}
+                onPress={() =>
+                  navigation.navigate('StaffSelect', {
+                    salonId: salon.id,
+                    salonName: salon.name,
+                    services: selectedServices.map((s) => ({
+                      id: s.id,
+                      name: s.name,
+                      price: s.price,
+                      durationMinutes: s.durationMinutes,
+                    })),
+                    operatingHours: salon.operatingHours,
+                    salonTimezone: salon.salonTimezone,
+                    selectedStyleName,
+                  })
+                }
+                style={styles.continueButton}
+              />
+            </>
+          );
+        })()}
 
         {salon.team.length > 0 && (
           <>
@@ -317,9 +367,31 @@ const styles = StyleSheet.create({
     padding: space[4],
     marginBottom: space[3],
   },
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  cardSelected: { borderColor: color.accent, backgroundColor: color.accentSoft },
+  cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
   cardTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: fastQue.text },
   cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: space[1] },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: fastQue.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: { borderColor: color.accent, backgroundColor: color.accent },
+  checkboxMark: { fontFamily: font.bodyBold, fontSize: fontSize.xs, color: '#ffffff' },
+  selectionSummary: {
+    backgroundColor: color.accentSoft,
+    borderRadius: radius.md,
+    padding: space[3],
+    marginBottom: space[3],
+  },
+  selectionSummaryNames: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
+  selectionSummaryTotals: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textSecondary, marginTop: space[1] },
+  continueButton: { marginBottom: space[5] },
 
   teamStrip: { marginBottom: space[2] },
   teamCard: {

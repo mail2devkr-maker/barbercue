@@ -12,50 +12,133 @@ import {
   StaffMemberStatus,
   VerificationStatus,
 } from '../enums';
-import { PREMIUM_PLAN_IDS } from '../constants';
+import { MAX_SERVICES_PER_BOOKING, PREMIUM_PLAN_IDS } from '../constants';
 import { isValidPostalCode, postalCodeRuleFor } from '../locale';
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
 // The backend is always the authority — these schemas exist so both sides reject bad input the
 // same way before a request ever reaches the server, not to move validation off the server.
 
-export const createBookingSchema = z.object({
-  salonId: z.string().uuid(),
-  serviceId: z.string().uuid(),
-  slotStart: z.string().datetime(),
-  // Soft preference only ("Any Staff" = omitted) — see DATABASE.md's Booking section.
-  preferredStaffId: z.string().uuid().optional(),
-  // AI Style Advisor hand-off (major-upgrade phase) — set when booking arrives via "Try This
-  // Look" -> "Book This Style"; omitted for every ordinary booking.
-  selectedStyleName: z.string().min(1).max(100).optional(),
-  // FastQue Credits / Wallet V1: how much of the customer's own wallet balance to apply against
-  // this booking's price, reducing what they pay online. Omitted or 0 = redeem nothing. The
-  // backend re-validates this against both the live balance and the service price inside a
-  // transaction (BookingsService.create) — this schema only rejects shapes that could never be
-  // valid (negative, non-finite, more than 2 decimal places), never the actual balance check.
-  creditsToRedeem: z.number().finite().min(0).multipleOf(0.01).optional(),
-});
+// Multi-service booking core mission: one appointment now carries an ORDERED list of selected
+// services (not just a shape check) — order is preserved end to end (BookingService.sortOrder,
+// BookingDetailDto.services) since it drives which service is treated as "primary" for the
+// consumers that still need exactly one (Booking.serviceId, QueueEntry linkage — see
+// BookingsService.create's own doc comment). Structural only: duplicate ids, foreign-salon
+// services, inactive services and empty selections are all rejected server-side against real data
+// (AvailabilityService.getServicesOrThrow), never here — a schema has no salon/DB context to check
+// any of that against.
+const serviceIdsSchema = z
+  .array(z.string().uuid())
+  .min(1, 'Select at least one service.')
+  .max(MAX_SERVICES_PER_BOOKING, `Select at most ${MAX_SERVICES_PER_BOOKING} services.`);
+
+// Production-safety hardening (P0 #1) — an already-installed FastQue client (mobile not yet
+// updated, or any external integration) still sends the ORIGINAL single `serviceId` field on
+// booking creation and on the staff/availability GET queries below. Rolling deploys mean that
+// shape reaches this backend for real, indefinitely, not just during a brief overlap window — so
+// it must keep being accepted, not just tolerated once. New clients send the ordered `serviceIds`
+// array instead. Exactly one of the two is accepted per request: both present is rejected (a
+// client sending both has a bug worth surfacing, not a case worth silently guessing which one
+// wins) and neither present is rejected with the same "select a service" message either shape
+// used before normalization. See API.md's "Legacy serviceId compatibility" section.
+type ServiceSelectionInput = { serviceId?: string; serviceIds?: string[] };
+
+function checkServiceSelection(value: ServiceSelectionInput, ctx: z.RefinementCtx): void {
+  if (value.serviceId && value.serviceIds) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Provide either serviceId or serviceIds, not both.',
+      path: ['serviceIds'],
+    });
+  }
+  if (!value.serviceId && !value.serviceIds) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Select at least one service.',
+      path: ['serviceIds'],
+    });
+  }
+}
+
+function normalizeServiceSelection<T extends ServiceSelectionInput>(
+  value: T,
+): Omit<T, 'serviceId' | 'serviceIds'> & { serviceIds: string[] } {
+  const { serviceId, serviceIds, ...rest } = value;
+  return { ...rest, serviceIds: serviceIds ?? [serviceId as string] } as Omit<
+    T,
+    'serviceId' | 'serviceIds'
+  > & { serviceIds: string[] };
+}
+
+export const createBookingSchema = z
+  .object({
+    salonId: z.string().uuid(),
+    // Legacy single-service clients — see checkServiceSelection/normalizeServiceSelection above.
+    serviceId: z.string().uuid().optional(),
+    serviceIds: serviceIdsSchema.optional(),
+    slotStart: z.string().datetime(),
+    // Soft preference only ("Any Staff" = omitted) — see DATABASE.md's Booking section.
+    preferredStaffId: z.string().uuid().optional(),
+    // AI Style Advisor hand-off (major-upgrade phase) — set when booking arrives via "Try This
+    // Look" -> "Book This Style"; omitted for every ordinary booking.
+    selectedStyleName: z.string().min(1).max(100).optional(),
+    // FastQue Credits / Wallet V1: how much of the customer's own wallet balance to apply against
+    // this booking's price, reducing what they pay online. Omitted or 0 = redeem nothing. The
+    // backend re-validates this against both the live balance and the COMBINED price of every
+    // selected service, inside a transaction (BookingsService.create) — this schema only rejects
+    // shapes that could never be valid (negative, non-finite, more than 2 decimal places), never the
+    // actual balance/price check.
+    creditsToRedeem: z.number().finite().min(0).multipleOf(0.01).optional(),
+  })
+  .superRefine(checkServiceSelection)
+  .transform(normalizeServiceSelection);
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
-// POST bookings/:id/reschedule — only the slot moves; service/staff/salon are unchanged (a
-// different service or salon is a new booking, not a reschedule of this one).
+// POST bookings/:id/reschedule — only the slot moves; the existing booking's selected services,
+// staff and salon are unchanged (a different service selection or salon is a new booking, not a
+// reschedule of this one — see the mission's explicit "do not change services during reschedule"
+// rule).
 export const rescheduleBookingSchema = z.object({
   slotStart: z.string().datetime(),
 });
 export type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
 
-// GET /salons/:salonId/availability query params.
-export const availabilityQuerySchema = z.object({
-  serviceId: z.string().uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format'),
-  staffId: z.string().uuid().optional(),
-});
+// A GET query string can only ever carry plain strings, so the ordered service-id list travels as
+// one comma-separated param (`serviceIds=id1,id2,id3`) rather than a repeated key — repeated-key
+// array parsing is a query-library convention (qs) that both web fetch() and mobile's URLSearchParams
+// callers would otherwise have to special-case; a single delimited string is trivial for every
+// client to build and preserves the selection order exactly as typed. Structural validation only
+// (shape + uuid format + count) — the same real-data checks as createBookingSchema apply
+// server-side once these ids reach AvailabilityService.
+const serviceIdsQueryParam = z
+  .string()
+  .min(1, 'serviceIds is required.')
+  .transform((raw) => raw.split(',').map((id) => id.trim()))
+  .pipe(serviceIdsSchema);
+
+// GET /salons/:salonId/availability query params. Accepts the legacy single `?serviceId=<uuid>`
+// alongside the new `?serviceIds=<id1,id2,...>` — see checkServiceSelection/
+// normalizeServiceSelection above.
+export const availabilityQuerySchema = z
+  .object({
+    serviceId: z.string().uuid().optional(),
+    serviceIds: serviceIdsQueryParam.optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format'),
+    staffId: z.string().uuid().optional(),
+  })
+  .superRefine(checkServiceSelection)
+  .transform(normalizeServiceSelection);
 export type AvailabilityQueryInput = z.infer<typeof availabilityQuerySchema>;
 
-// GET /salons/:salonId/staff query params.
-export const staffListQuerySchema = z.object({
-  serviceId: z.string().uuid(),
-});
+// GET /salons/:salonId/staff query params. Same legacy `?serviceId=<uuid>` compatibility as
+// availabilityQuerySchema above.
+export const staffListQuerySchema = z
+  .object({
+    serviceId: z.string().uuid().optional(),
+    serviceIds: serviceIdsQueryParam.optional(),
+  })
+  .superRefine(checkServiceSelection)
+  .transform(normalizeServiceSelection);
 export type StaffListQueryInput = z.infer<typeof staffListQuerySchema>;
 
 export const joinQueueSchema = z.object({

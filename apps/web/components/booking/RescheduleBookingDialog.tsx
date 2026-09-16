@@ -58,6 +58,10 @@ export function RescheduleBookingDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const days = nextDays(booking.salonTimezone);
+  // Multi-service booking core mission — reschedule keeps the booking's EXISTING full service
+  // selection unchanged (never re-prompts for services); the combined-interval availability check
+  // must key off every one of them, not just the primary/first (booking.serviceId).
+  const serviceIds = booking.services.map((s) => s.serviceId).join(",");
 
   useEffect(() => {
     if (!selectedDate) return undefined;
@@ -66,7 +70,7 @@ export function RescheduleBookingDialog({
       .then(() => {
         if (cancelled) return undefined;
         setSlotsLoading(true);
-        const params = new URLSearchParams({ serviceId: booking.serviceId, date: selectedDate });
+        const params = new URLSearchParams({ serviceIds, date: selectedDate });
         if (booking.preferredStaffId) params.set("staffId", booking.preferredStaffId);
         return apiFetch<AvailabilitySlotDto[]>(
           `${DISCOVERY_PATHS.salons}/${booking.salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params}`,
@@ -84,7 +88,7 @@ export function RescheduleBookingDialog({
     return () => {
       cancelled = true;
     };
-  }, [selectedDate, booking.salonId, booking.serviceId, booking.preferredStaffId]);
+  }, [selectedDate, booking.salonId, serviceIds, booking.preferredStaffId]);
 
   async function handleConfirm() {
     if (!selectedSlot) return;
@@ -106,7 +110,7 @@ export function RescheduleBookingDialog({
       // now-occupied time shows disabled instead of staying selectable.
       if (err instanceof ApiError && err.code === "SLOT_FULL" && selectedDate) {
         setSelectedSlot(null);
-        const params = new URLSearchParams({ serviceId: booking.serviceId, date: selectedDate });
+        const params = new URLSearchParams({ serviceIds, date: selectedDate });
         if (booking.preferredStaffId) params.set("staffId", booking.preferredStaffId);
         void apiFetch<AvailabilitySlotDto[]>(
           `${DISCOVERY_PATHS.salons}/${booking.salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params}`,

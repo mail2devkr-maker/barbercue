@@ -85,6 +85,21 @@ export function computeCancellationCharge(
 }
 
 /**
+ * Multi-service booking core mission — a concise, truthful, length-bounded summary of the service
+ * names on one appointment, reused by notifications (SMS/push text has real length constraints) and
+ * by any legacy display surface that hasn't been updated to render the full per-service breakdown
+ * (BookingDetailDto.services) yet. Never fabricates or reorders names, and never silently drops a
+ * service without saying so: 1 -> the name itself, 2 -> "A + B", 3+ -> "N services" rather than an
+ * ever-growing "A + B + C + ..." string that could blow past a notification's length budget.
+ */
+export function summarizeServiceNames(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} + ${names[1]}`;
+  return `${names.length} services`;
+}
+
+/**
  * Service-level booking capacity per DATABASE.md: a service consumes one staff member and one
  * chair simultaneously, so the scarcer resource is the binding constraint. Correctly yields 2 for
  * both "3 barbers + 2 chairs" and "2 barbers + 3 chairs".

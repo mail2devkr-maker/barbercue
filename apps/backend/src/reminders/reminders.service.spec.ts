@@ -10,7 +10,16 @@ function makeDueBooking(overrides: Record<string, unknown> = {}) {
     salonId: 's1',
     slotStart: new Date(Date.now() + 30 * 60_000),
     salon: { name: 'Demo Salon' },
-    service: { name: 'Haircut' },
+    serviceId: 'sv1',
+    service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+    services: [
+      {
+        serviceId: 'sv1',
+        serviceName: 'Haircut',
+        durationMinutes: 30,
+        price: 300,
+      },
+    ],
     ...overrides,
   };
 }
@@ -78,8 +87,6 @@ describe('RemindersService', () => {
     const spanMinutes =
       (call.where.slotStart.lt.getTime() - call.where.slotStart.gte.getTime()) /
       60_000;
-    // Window end is REMINDER_WINDOW_MINUTES from now; window start is a few minutes from now
-    // (the minimum lead) — so the span is strictly less than the full window.
     expect(spanMinutes).toBeLessThan(REMINDER_WINDOW_MINUTES);
     expect(spanMinutes).toBeGreaterThan(0);
   });
@@ -107,6 +114,53 @@ describe('RemindersService', () => {
         salonName: 'Demo Salon',
         serviceName: 'Haircut',
       }),
+      'account/bookings',
+    );
+  });
+
+  it('summarizes every selected service in a multi-service reminder', async () => {
+    prisma.booking.findMany.mockResolvedValueOnce([
+      makeDueBooking({
+        services: [
+          {
+            serviceId: 'sv1',
+            serviceName: 'Haircut',
+            durationMinutes: 30,
+            price: 300,
+          },
+          {
+            serviceId: 'sv2',
+            serviceName: 'Beard Trim',
+            durationMinutes: 20,
+            price: 150,
+          },
+        ],
+      }),
+    ]);
+
+    await service.sendDueReminders();
+
+    expect(notifications.notifyInTransaction).toHaveBeenCalledWith(
+      tx,
+      'c1',
+      'booking.reminder',
+      expect.objectContaining({ serviceName: 'Haircut + Beard Trim' }),
+      'account/bookings',
+    );
+  });
+
+  it('falls back to the primary live service when snapshot rows are absent', async () => {
+    prisma.booking.findMany.mockResolvedValueOnce([
+      makeDueBooking({ services: [] }),
+    ]);
+
+    await service.sendDueReminders();
+
+    expect(notifications.notifyInTransaction).toHaveBeenCalledWith(
+      tx,
+      'c1',
+      'booking.reminder',
+      expect.objectContaining({ serviceName: 'Haircut' }),
       'account/bookings',
     );
   });
