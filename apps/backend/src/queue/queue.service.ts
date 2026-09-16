@@ -133,21 +133,40 @@ export class QueueService {
       );
     }
 
-    const entryId = await this.prisma.$transaction(async (tx) => {
-      const tokenNumber = await this.nextTokenNumber(tx, booking.salonId);
-      const created = await tx.queueEntry.create({
-        data: {
-          salonId: booking.salonId,
-          bookingId,
-          customerId,
-          serviceId: booking.serviceId,
-          source: QueueEntrySource.APPOINTMENT,
-          tokenNumber,
-          status: QueueEntryStatus.WAITING,
-        },
-      });
-      return created.id;
-    }, TRANSACTION_OPTIONS);
+    let entryId: string;
+    try {
+      entryId = await this.prisma.$transaction(async (tx) => {
+        const tokenNumber = await this.nextTokenNumber(tx, booking.salonId);
+        const created = await tx.queueEntry.create({
+          data: {
+            salonId: booking.salonId,
+            bookingId,
+            customerId,
+            serviceId: booking.serviceId,
+            source: QueueEntrySource.APPOINTMENT,
+            tokenNumber,
+            status: QueueEntryStatus.WAITING,
+          },
+        });
+        return created.id;
+      }, TRANSACTION_OPTIONS);
+    } catch (err) {
+      // The pre-check above (existingForBooking) is a fast, friendly-error common case, not the
+      // actual guarantee — it reads outside any lock, so two concurrent check-ins for the same
+      // booking can both pass it before either commits. QueueEntry.bookingId's unique index is
+      // the real backstop; a P2002 here means we lost that race, not a system failure.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new AppException(
+          QueueErrorCode.ALREADY_CHECKED_IN,
+          'This booking has already been checked in.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw err;
+    }
 
     await this.recomputeEtas(booking.salonId);
     this.realtime.emitQueueUpdated(booking.salonId);

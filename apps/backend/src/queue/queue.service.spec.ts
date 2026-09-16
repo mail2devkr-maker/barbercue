@@ -250,6 +250,56 @@ describe('QueueService', () => {
     prisma.queueEntry.findUnique.mockResolvedValue(makeDetailEntry());
   });
 
+  describe('checkIn', () => {
+    function makeCheckInBooking(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'bk1',
+        salonId: 's1',
+        serviceId: 'sv1',
+        status: 'CONFIRMED',
+        slotStart: new Date(),
+        ...overrides,
+      };
+    }
+
+    // Regression for the final-seven hardening review's confirmed race: the pre-check
+    // (existingForBooking, a plain read before the transaction) is a fast, friendly-error common
+    // case, not the actual guarantee -- two concurrent check-ins for the same booking can both
+    // pass it before either commits. QueueEntry.bookingId's unique index (added alongside this
+    // fix) is the real backstop; losing that race must surface as the same ALREADY_CHECKED_IN
+    // error a client already knows how to handle, never a raw 500.
+    it('translates a P2002 race on QueueEntry.bookingId to ALREADY_CHECKED_IN, not a raw error', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(makeCheckInBooking());
+      prisma.queueEntry.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+          meta: { target: ['queue_entries_bookingId_key'] },
+        }),
+      );
+      await expect(service.checkIn('c1', 'bk1')).rejects.toMatchObject({
+        code: 'ALREADY_CHECKED_IN',
+      });
+    });
+
+    it('creates the entry normally when nothing else has raced it', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(makeCheckInBooking());
+      prisma.queueEntry.create.mockResolvedValueOnce({ id: 'q-new' });
+      await service.checkIn('c1', 'bk1');
+      expect(prisma.queueEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ bookingId: 'bk1', customerId: 'c1' }),
+        }),
+      );
+    });
+
+    it('re-throws a non-P2002 error from the transaction unchanged', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(makeCheckInBooking());
+      prisma.queueEntry.create.mockRejectedValueOnce(new Error('db is down'));
+      await expect(service.checkIn('c1', 'bk1')).rejects.toThrow('db is down');
+    });
+  });
+
   describe('joinWalkIn', () => {
     it('rejects with ALREADY_IN_QUEUE when the customer already has an active entry', async () => {
       prisma.queueEntry.findFirst.mockResolvedValueOnce(makeRawEntry());
