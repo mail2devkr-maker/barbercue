@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { ledgerRowSelect, toLedgerEntryDto, type LedgerRow } from './ledger-entry';
+import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -200,14 +201,25 @@ export class DashboardCustomersService {
         },
         _count: { _all: true },
       }),
-      this.prisma.booking.groupBy({
-        by: ['customerId', 'serviceId'],
+      // Multi-service booking core mission follow-up — a booking.groupBy on the legacy
+      // Booking.serviceId alone would only ever count a multi-service appointment toward its
+      // FIRST selected service, undercounting every other one (the same bug servicePopularity in
+      // dashboard-analytics.service.ts was fixed for). Fetch the full snapshot per booking instead
+      // and tally every selected service via resolveEffectiveBookingServices below.
+      this.prisma.booking.findMany({
         where: {
           salonId,
           customerId: { in: customerIds },
           status: BookingStatus.COMPLETED,
         },
-        _count: { _all: true },
+        select: {
+          customerId: true,
+          serviceId: true,
+          service: { select: { name: true, durationMinutes: true, price: true } },
+          services: {
+            select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+          },
+        },
       }),
       this.prisma.queueEntry.groupBy({
         by: ['customerId', 'assignedStaffId'],
@@ -269,10 +281,11 @@ export class DashboardCustomersService {
 
     const serviceCounts = new Map<string, Map<string, number>>();
     for (const row of serviceGrouped) {
-      if (!row.serviceId) continue;
       const byService =
         serviceCounts.get(row.customerId) ?? new Map<string, number>();
-      byService.set(row.serviceId, row._count._all);
+      for (const svc of resolveEffectiveBookingServices(row)) {
+        byService.set(svc.serviceId, (byService.get(svc.serviceId) ?? 0) + 1);
+      }
       serviceCounts.set(row.customerId, byService);
     }
     const staffCounts = new Map<string, Map<string, number>>();
