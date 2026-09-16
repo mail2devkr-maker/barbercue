@@ -6,7 +6,13 @@ import { decodePaymentQr } from './payment-qr-decoder';
 import { buildBookingUpiUri, BookingStatus, setSalonUpiSchema } from '@barbercue/shared';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
-jest.setTimeout(20000);
+// Real, unmocked QR generation + a fresh worker_threads decode round trip is inherently
+// multi-second work on this suite (each call spins up its own Worker and does a cold
+// require('sharp')/require('jsqr') inside it -- see payment-qr-decoder.ts), and measured up to
+// ~14s for a single round trip under load in CI-adjacent conditions. 20s left too little margin
+// for the tests below that need two sequential round trips. Scoped to this one file, not a global
+// Jest config change, since every other suite's timing profile is unrelated to this.
+jest.setTimeout(45000);
 const payload = 'upi://pay?pa=merchant%40bank&pn=Shop%20%26%20Sons&am=9999.00';
 async function image(text = payload, format: 'png' | 'jpeg' | 'webp' = 'png') {
   // Fix the QR mask for deterministic fixtures; avoid the generator's eight-mask search in Jest's VM.
@@ -16,6 +22,15 @@ async function image(text = payload, format: 'png' | 'jpeg' | 'webp' = 'png') {
 }
 
 describe('QR-derived UPI — real image decode and replacement safety', () => {
+  // The default-payload QR is generated+decoded identically by several tests below just to seed
+  // an "old" QR before the actual scenario under test -- regenerating it per-test was pure
+  // redundant real work (4+ extra ~10s round trips across the file) with no coverage benefit,
+  // since setFromUpload/decodePaymentQr don't mutate the input file. Built once here and reused;
+  // every test-specific image (a different payload/malformed text) is still generated fresh.
+  let baseImage: Express.Multer.File;
+  beforeAll(async () => {
+    baseImage = await image();
+  });
   let row: any; let actor: jest.Mock; let prisma: any; let storage: any;
   let service: SalonPaymentQrService; let info: BookingPaymentInfoService;
   beforeEach(() => {
@@ -46,13 +61,13 @@ describe('QR-derived UPI — real image decode and replacement safety', () => {
     });
   });
   it('replacement binds NEW QR and NEW account atomically', async () => {
-    await service.setFromUpload('owner', 's', await image()); const first = row.paymentQrImageUrl;
+    await service.setFromUpload('owner', 's', baseImage); const first = row.paymentQrImageUrl;
     await service.setFromUpload('owner', 's', await image('upi://pay?pa=new@bank&pn=New%20Shop'));
     expect(row.paymentQrImageUrl).not.toBe(first);
     expect(await info.get('s')).toMatchObject({ upiVpa: 'new@bank', upiPayeeName: 'New Shop', upiQrDecoded: true });
   });
   it.each(['https://example.com', 'upi://pay?pa=bad@@bank&pn=Shop', 'upi://pay?pa=merchant@bank'])('non-UPI/malformed replacement clears OLD routing: %s', async (text) => {
-    await service.setFromUpload('owner', 's', await image());
+    await service.setFromUpload('owner', 's', baseImage);
     const result = await service.setFromUpload('owner', 's', await image(text));
     expect(result).toMatchObject({ upiVpa: null, upiPayeeName: null, upiQrDecoded: false });
     expect(row).toMatchObject({ upiVpa: null, upiPayeeName: null });
@@ -71,7 +86,7 @@ describe('QR-derived UPI — real image decode and replacement safety', () => {
     expect(await info.get('s')).toMatchObject({ onlinePaymentAvailable: false, upiQrDecoded: false });
   });
   it('linking even a decoded object clears routing without ANY remote fetch', async () => {
-    await service.setFromUpload('owner', 's', await image()); const putCount = storage.putPublicObject.mock.calls.length;
+    await service.setFromUpload('owner', 's', baseImage); const putCount = storage.putPublicObject.mock.calls.length;
     const fetchSpy = jest.spyOn(global, 'fetch');
     try {
       const result = await service.setLink('owner', 's', { url: row.paymentQrImageUrl });
@@ -85,7 +100,7 @@ describe('QR-derived UPI — real image decode and replacement safety', () => {
     expect(row.upiVpa).toBe('old@bank'); // Reads do not migrate historical data.
   });
   it('legacy client cannot override extracted account via manual PATCH', async () => {
-    await service.setFromUpload('owner', 's', await image());
+    await service.setFromUpload('owner', 's', baseImage);
     await expect(service.setUpi('owner', 's', { upiVpa: 'other@bank', upiPayeeName: 'Other' })).rejects.toMatchObject({ code: 'UPI_QR_UPLOAD_REQUIRED' });
     expect(row.upiVpa).toBe('merchant@bank');
   });
@@ -101,13 +116,13 @@ describe('QR-derived UPI — real image decode and replacement safety', () => {
     expect(storage.putPublicObject).not.toHaveBeenCalled(); expect(prisma.salonPaymentPolicy.upsert).not.toHaveBeenCalled();
   });
   it('delegated admin audit remains free of QR payload/image bytes', async () => {
-    actor.mockResolvedValue('PLATFORM_ADMIN'); await service.setFromUpload('admin', 's', await image());
+    actor.mockResolvedValue('PLATFORM_ADMIN'); await service.setFromUpload('admin', 's', baseImage);
     expect(prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({ actorUserId: 'admin', action: 'ADMIN_PAYMENT_QR_UPDATED' }) });
     expect(JSON.stringify(prisma.auditLog.create.mock.calls)).not.toContain('merchant');
   });
   it('storage failure preserves entire previous QR/account pair', async () => {
     const before = { ...row }; storage.putPublicObject.mockRejectedValue(new Error('storage down'));
-    await expect(service.setFromUpload('owner', 's', await image())).rejects.toThrow('storage down');
+    await expect(service.setFromUpload('owner', 's', baseImage)).rejects.toThrow('storage down');
     expect(row).toEqual(before); expect(prisma.salonPaymentPolicy.upsert).not.toHaveBeenCalled();
   });
   it('malformed image bytes fail closed without throwing', async () => {
