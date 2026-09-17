@@ -84,9 +84,13 @@ it('QR-only salon remains bookable with QR fallback and no direct intent', async
   paymentInfo = { ...info, upiVpa: null }; await renderFlow(); await click('Confirm booking');
   expect(qrImages()).toHaveLength(1); expect(buttons('Tap to Pay with UPI')).toHaveLength(0);
 });
-it('missing QR disables confirm without exposing routing', async () => {
+it('missing QR keeps confirm enabled and falls back to pay at shop', async () => {
   paymentInfo = { ...info, onlinePaymentAvailable: false, paymentQrImageUrl: null }; await renderFlow();
-  expect(buttons('Confirm booking')[0].props.disabled).toBe(true); expect(qrImages()).toHaveLength(0);
+  expect(buttons('Confirm booking')[0].props.disabled).toBe(false); expect(qrImages()).toHaveLength(0);
+  expect(text()).toContain('pay at the shop');
+  await click('Confirm booking');
+  expect(apiFetch.mock.calls.filter(([, opts]) => opts?.method)).toHaveLength(1);
+  expect(text()).toContain('Booking confirmed');
 });
 it('server PAYMENT_QR_REQUIRED after stale read preserves pre-booking safety', async () => {
   createBooking = async () => { throw new ApiError('Shop payment QR is required'); };
