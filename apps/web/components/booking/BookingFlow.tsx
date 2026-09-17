@@ -637,21 +637,23 @@ export function BookingFlow({
           })()}
           <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--bc-border)", borderRadius: 12 }}>
             <strong>Payment</strong>
-            <span>Pay Online with UPI</span>
             {paymentInfo?.onlinePaymentAvailable ? (
-              <span>Online UPI payment is available. FastQue will show the shop QR and the exact server-confirmed amount after your booking is created.</span>
+              <>
+                <span>Pay Online with UPI</span>
+                <span>Online UPI payment is available. FastQue will show the shop QR and the exact server-confirmed amount after your booking is created.</span>
+              </>
             ) : paymentInfoError ? (
-              <span>Payment information could not be loaded. FastQue will still verify the shop payment setup when you confirm.</span>
+              <span>Online payment information could not be loaded. You can still confirm your booking and pay at the shop.</span>
             ) : paymentInfo ? (
-              <span className={styles.errorText}>Online booking is unavailable because this shop has not configured online payment yet.</span>
+              <span>Online UPI payment is not configured for this shop. You can still confirm your booking and pay at the shop.</span>
             ) : (
-              <span>Checking shop payment setup…</span>
+              <span>Checking online payment options… You can still confirm your booking.</span>
             )}
           </div>
           {submitError && <p className={styles.errorText}>{submitError}</p>}
           <div className={styles.confirmActions}>
             {isCustomerSession ? (
-              <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting || (paymentInfo !== null && !paymentInfo.onlinePaymentAvailable)}>
+              <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting}>
                 {submitting ? "Booking…" : "Confirm booking"}
               </Button>
             ) : authStatus === "loading" ? (
