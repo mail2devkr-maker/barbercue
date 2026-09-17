@@ -38,10 +38,6 @@ import { hasCustomerBookingSession } from "./booking-session";
 import { CheckInPanel, canCheckIn } from "../queue/CheckInPanel";
 import styles from "./booking.module.css";
 
-// Part O (Customer Dues + Cancellation Policy mission): "Free cancellation up to 1 hour before
-// your appointment" — but only ever the real effective window, never a hard-coded "1 hour" when a
-// salon's own policy is more generous. 60/120/etc render as whole hours; anything else falls back
-// to a plain minute count rather than an awkward "1 hour 30 minutes".
 function formatFreeCancellationWindow(minutes: number): string {
   if (minutes % 60 === 0) {
     const hours = minutes / 60;
@@ -64,20 +60,10 @@ export function BookingFlow({
   salonId: string;
   services: ServiceDto[];
   operatingHours: OperatingHoursDto[];
-  // From the salon this flow belongs to — every amount shown here is in its currency.
   currency: string | null;
   countryCode?: string | null;
-  // Pre-confirmation timezone fix — SalonProfileDto's resolved IANA zone (server-side, via
-  // resolveSalonTimeZone). Every pre-confirm date/slot render in this flow uses this, never the
-  // customer device's zone, so the displayed appointment time never silently jumps once the
-  // booking actually confirms (BookingDetailDto.salonTimezone is the exact same resolution).
   salonTimezone: string | null;
-  // AI Style Advisor hand-off (major-upgrade phase) — set only when this flow was reached via
-  // "Try This Look"; threaded straight into the booking-creation body when present.
   selectedStyleName?: string;
-  // "Book again" hand-off (Phase 3, customer convenience) — preselects service/barber from a past
-  // booking, same idea as selectedStyleName's Style Advisor hand-off. The customer still
-  // explicitly picks a new date and slot below; nothing here assumes the old slot is available.
   initialServiceId?: string;
   initialStaffId?: string | null;
 }) {
@@ -98,27 +84,14 @@ export function BookingFlow({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<BookingDetailDto | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
-  // Only the charge-amount/ledger fields are read off this — the booking itself always comes from
-  // confirmedBooking (updated in place by both onCancelled and onRescheduled below) so the two
-  // actions can never race each other for which one's "latest" booking gets displayed.
   const [cancelResult, setCancelResult] = useState<CancelBookingResponseDto | null>(null);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyDto | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<BookingPaymentInfoDto | null>(null);
   const [paymentInfoError, setPaymentInfoError] = useState(false);
-
-  // FastQue Credits / Wallet V1 — the customer's live wallet balance, fetched once they're signed
-  // in and reach the Confirm step (never before: an anonymous visitor has no balance to show).
-  // creditsToRedeem is a plain number input, re-clamped to [0, min(balance, price)] on every
-  // change so the displayed payable amount is always consistent with what the server will actually
-  // accept — the server re-validates this again regardless (see BookingsService.create), this is
-  // only for a sane, honest preview.
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
   const [creditsToRedeem, setCreditsToRedeem] = useState(0);
 
-  // Part O — fetched once per salon, shown alongside the Confirm step so the customer knows the
-  // real policy before they book, not just at cancel time (CancelBookingDialog fetches it again
-  // itself for the live charge preview, deliberately not shared state — see that component).
   useEffect(() => {
     let cancelled = false;
     apiFetch<CancellationPolicyDto>(
@@ -136,15 +109,20 @@ export function BookingFlow({
   useEffect(() => {
     let cancelled = false;
     setPaymentInfoError(false);
-    apiFetch<BookingPaymentInfoDto>(`${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.paymentInfo}`)
-      .then((info) => { if (!cancelled) setPaymentInfo(info); })
-      .catch(() => { if (!cancelled) setPaymentInfoError(true); });
-    return () => { cancelled = true; };
+    apiFetch<BookingPaymentInfoDto>(
+      `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.paymentInfo}`,
+    )
+      .then((info) => {
+        if (!cancelled) setPaymentInfo(info);
+      })
+      .catch(() => {
+        if (!cancelled) setPaymentInfoError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [salonId]);
 
-  // Credits are customer-only, exactly like booking creation itself. A STAFF/ADMIN audience can be
-  // authenticated yet still be forbidden by the customer credits endpoint, so do not send that
-  // guaranteed-403 request just because authStatus says "authenticated".
   useEffect(() => {
     if (!isCustomerSession) {
       setCreditsBalance(null);
@@ -162,9 +140,6 @@ export function BookingFlow({
     };
   }, [isCustomerSession]);
 
-  // Stable across retries of the exact same attempt (same service/staff/date/slot); regenerates
-  // the moment any earlier choice changes, since that's a materially different attempt. The deps
-  // are deliberately not read inside the memo callback — they're a recompute trigger only.
   const idempotencyKey = useMemo(
     () => newIdempotencyKey(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -254,8 +229,6 @@ export function BookingFlow({
   }
 
   async function handleConfirmBooking() {
-    // Defense in depth with the same rule as BookingsController: a STAFF/ADMIN audience must never
-    // even attempt the customer-only POST and fall through to a raw FORBIDDEN_ROLE message.
     if (!isCustomerSession || !selectedServiceId || !selectedSlot) return;
     setSubmitting(true);
     setSubmitError(null);
@@ -275,41 +248,28 @@ export function BookingFlow({
       void refreshCurrentAvailability().catch(() => undefined);
       setConfirmedBooking(booking);
       setCreditsToRedeem(0);
-      // Redemption never fails/rejects — the server always clamps and the booking always succeeds
-      // (see BookingsService.create) — so a successful response can still mean some or all of the
-      // requested credits were actually applied. Re-fetch the real balance rather than
-      // locally subtracting creditsToRedeem, since the server's actualUsed
-      // (booking.creditsRedeemedAmount) may be less than what was requested.
       if (creditsToRedeem > 0) {
         void apiFetch<CustomerCreditBalanceDto>(`${CREDITS_PATHS.credits}/${CREDITS_PATHS.balance}`)
           .then((result) => setCreditsBalance(result.balance))
           .catch(() => undefined);
       }
     } catch (err) {
-      // The availability grid is advisory; the booking transaction is authoritative. If another
-      // customer won the last capacity concurrently, clear the stale selection and immediately
-      // reload the grid so the occupied state is visible without a page refresh.
       if (err instanceof ApiError && err.code === "SLOT_FULL" && selectedDate) {
         setSelectedSlot(null);
         const params = new URLSearchParams({ serviceId: selectedServiceId, date: selectedDate });
         if (selectedStaffId) params.set("staffId", selectedStaffId);
         void apiFetch<AvailabilitySlotDto[]>(
           `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
-        ).then(setSlots).catch(() => undefined);
+        )
+          .then(setSlots)
+          .catch(() => undefined);
       }
-      // A failed create (e.g. SLOT_FULL) never reaches the redemption step at all — the whole
-      // transaction rolls back — so the wallet balance is genuinely untouched and doesn't need
-      // re-fetching here.
       setSubmitError(err instanceof ApiError ? err.message : "Could not create the booking. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Google Identity Services renders as an in-page button/overlay, so selections survive both the
-  // ordinary anonymous -> customer login and the new STAFF/ADMIN -> CUSTOMER audience switch.
-  // AuthService.googleLogin guarantees CUSTOMER role for a linked owner/staff identity without
-  // removing their owner/staff DB roles; only this browser session changes audience.
   async function handleGoogleCredential(idToken: string) {
     setSubmitError(null);
     setGoogleSubmitting(true);
@@ -322,15 +282,6 @@ export function BookingFlow({
     }
   }
 
-  // Root cause of "can't book a second service": once confirmedBooking was set, this component
-  // had no path back to the picker steps at all — the early `if (confirmedBooking) return ...`
-  // below is permanent for the lifetime of this component instance, and nothing ever set
-  // confirmedBooking back to null. A customer landing back on this same salon's booking page
-  // (e.g. via "Book again" or simply not navigating away) was stuck looking at their first
-  // booking's confirmation forever, with no way to start another one from this screen. This does
-  // NOT touch cancel/reschedule (those correctly update the SAME booking in place) or the
-  // create-fails-with-SLOT_FULL path (that already stays on the picker, unaffected) — only the
-  // "start a genuinely new booking attempt" gap.
   function handleBookAnother() {
     setConfirmedBooking(null);
     setCancelResult(null);
@@ -345,9 +296,6 @@ export function BookingFlow({
   if (confirmedBooking) {
     const booking = confirmedBooking;
     const cancelled = booking.status === "CANCELLED";
-    // Part 5 (show arrival time after booking): always converted through the salon's own
-    // timezone, never the device's — a customer booking a shop outside their own city/timezone
-    // must never be shown a silently-wrong arrival time.
     const arrival = formatBookingArrivalTime(booking.slotStart, booking.salonTimezone);
     const statusClass =
       booking.status === "CONFIRMED"
@@ -359,7 +307,11 @@ export function BookingFlow({
       <section className={styles.confirmedWrap}>
         <div className={styles.confirmedCard}>
           <div className={styles.confirmedHead}>
-            <span className={`${styles.confirmedIcon} ${cancelled ? styles.confirmedIconCancelled : styles.confirmedIconOk}`}>
+            <span
+              className={`${styles.confirmedIcon} ${
+                cancelled ? styles.confirmedIconCancelled : styles.confirmedIconOk
+              }`}
+            >
               {cancelled ? "✕" : "✓"}
             </span>
             <h2 className={styles.confirmedTitle}>{cancelled ? "Booking cancelled" : "Booking confirmed"}</h2>
@@ -371,10 +323,6 @@ export function BookingFlow({
             Appointment time: <strong>{arrival.date}, {arrival.time}</strong>
             {!arrival.isDeviceLocalTimezone && " (shop's local time)"}
           </p>
-          {/* Part 5 completion (arrival guidance) — derived server-side from the booking's own
-              checkInOpensAt/checkInDueBy snapshot (see BookingDetailDto's doc comment); both null
-              means no arrival guidance applies (cancelled/completed/already checked in/no policy
-              snapshot recorded), so nothing renders rather than a fabricated window. */}
           {booking.checkInOpensAt && booking.checkInDueBy && (
             <p className={styles.summaryLine}>
               Check in between:{" "}
@@ -399,18 +347,40 @@ export function BookingFlow({
             )}
           </p>
           {!cancelled && paymentInfo?.onlinePaymentAvailable && (
-            <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--bc-border)", borderRadius: 12 }}>
+            <div
+              className={styles.summaryLine}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                padding: 12,
+                border: "1px solid var(--bc-border)",
+                borderRadius: 12,
+              }}
+            >
               <strong>Pay Online with UPI</strong>
               <span>Amount payable: {formatMoney(booking.payableAmount, currency, countryCode)}</span>
               <BookingUpiAction booking={booking} paymentInfo={paymentInfo} />
-              {paymentInfo.paymentQrImageUrl && <img src={paymentInfo.paymentQrImageUrl} alt="Shop UPI payment QR" width={220} height={220} style={{ maxWidth: "100%", objectFit: "contain" }} />}
-              <span>Scan this shop QR with your UPI app. Opening/scanning the QR does not make FastQue mark payment as paid; settlement is not automatically verified in V1.</span>
+              {paymentInfo.paymentQrImageUrl && (
+                <img
+                  src={paymentInfo.paymentQrImageUrl}
+                  alt="Shop UPI payment QR"
+                  width={220}
+                  height={220}
+                  style={{ maxWidth: "100%", objectFit: "contain" }}
+                />
+              )}
+              <span>
+                Scan this shop QR with your UPI app. Opening/scanning the QR does not make FastQue mark payment as
+                paid; settlement is not automatically verified in V1.
+              </span>
             </div>
           )}
           {booking.creditsRedeemedAmount !== null && booking.creditsRedeemedAmount > 0 && (
             <p className={styles.summaryLine}>
-              {formatMoney(booking.creditsRedeemedAmount, currency, countryCode)} in FastQue Credits applied —
-              pay {formatMoney(booking.payableAmount, currency, countryCode)} at the shop&apos;s payment QR.
+              {formatMoney(booking.creditsRedeemedAmount, currency, countryCode)} in FastQue Credits applied — pay{" "}
+              {formatMoney(booking.payableAmount, currency, countryCode)}{" "}
+              {paymentInfo?.onlinePaymentAvailable ? "using the shop's UPI option or at the shop." : "at the shop."}
             </p>
           )}
           {cancelResult && (
@@ -461,8 +431,6 @@ export function BookingFlow({
     );
   }
 
-  // Purely derived from existing selection state, for the step-progress strip only — no new
-  // business state, no side effects.
   const progressSteps = [
     { key: "service", label: "Service", done: !!selectedServiceId },
     { key: "barber", label: "Barber", done: selectedStaffId !== undefined },
@@ -532,17 +500,15 @@ export function BookingFlow({
             <span className={styles.stepNumber}>5</span> Confirm
           </h2>
           {(() => {
-            // Pre-confirmation timezone fix — the exact same formatter/zone the confirmed-booking
-            // view above uses (formatBookingArrivalTime + booking.salonTimezone), so this summary
-            // can never show a different-looking time than what the customer sees the instant
-            // after they actually confirm.
             const arrival = formatBookingArrivalTime(selectedSlot.slotStart, salonTimezone);
             return (
               <p className={styles.summaryLine}>
                 <strong>{services.find((s) => s.id === selectedServiceId)?.name}</strong> —{" "}
                 {arrival.date}, {arrival.time}
                 {!arrival.isDeviceLocalTimezone && " (shop's local time)"}
-                {selectedStaffId && <> with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}</>}
+                {selectedStaffId && <>
+                  {" "}with {staffOptions.find((s) => s.id === selectedStaffId)?.displayName}
+                </>}
               </p>
             );
           })()}
@@ -554,56 +520,77 @@ export function BookingFlow({
               appointment.
             </p>
           )}
-          {isCustomerSession && creditsBalance !== null && creditsBalance > 0 && (() => {
-            const servicePrice = services.find((s) => s.id === selectedServiceId)?.price ?? 0;
-            // FastQue Credits / Wallet V1: the redemption cap is price-based (floor(price/50)*10),
-            // NOT "whatever the wallet balance happens to be" — a customer can never redeem more
-            // than 20% of the service price even with a much larger balance. This is only a
-            // preview; the server independently re-derives and enforces the same cap (see
-            // BookingsService.create / CustomerCreditsService.redeemUpTo) regardless of what this
-            // slider sends.
-            const maxRedeemable = Math.min(creditsBalance, computeMaxRedeemableCredits(servicePrice));
-            if (maxRedeemable <= 0) return null;
-            return (
-              <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label htmlFor="credits-redeem">
-                  You have {formatMoney(creditsBalance, currency, countryCode)} in FastQue Credits — redeem up to{" "}
-                  {formatMoney(maxRedeemable, currency, countryCode)}
-                </label>
-                <input
-                  id="credits-redeem"
-                  type="range"
-                  min={0}
-                  max={maxRedeemable}
-                  step={1}
-                  value={Math.min(creditsToRedeem, maxRedeemable)}
-                  onChange={(e) => setCreditsToRedeem(Number(e.target.value))}
-                />
-                <p>
-                  {creditsToRedeem > 0
-                    ? `Applying ${formatMoney(creditsToRedeem, currency, countryCode)} in FastQue Credits — the final payable amount is confirmed by FastQue after the booking is created.`
-                    : "Slide to apply credits"}
-                </p>
-              </div>
-            );
-          })()}
-          <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--bc-border)", borderRadius: 12 }}>
+          {isCustomerSession &&
+            creditsBalance !== null &&
+            creditsBalance > 0 &&
+            (() => {
+              const servicePrice = services.find((s) => s.id === selectedServiceId)?.price ?? 0;
+              const maxRedeemable = Math.min(creditsBalance, computeMaxRedeemableCredits(servicePrice));
+              if (maxRedeemable <= 0) return null;
+              return (
+                <div className={styles.summaryLine} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label htmlFor="credits-redeem">
+                    You have {formatMoney(creditsBalance, currency, countryCode)} in FastQue Credits — redeem up to{" "}
+                    {formatMoney(maxRedeemable, currency, countryCode)}
+                  </label>
+                  <input
+                    id="credits-redeem"
+                    type="range"
+                    min={0}
+                    max={maxRedeemable}
+                    step={1}
+                    value={Math.min(creditsToRedeem, maxRedeemable)}
+                    onChange={(e) => setCreditsToRedeem(Number(e.target.value))}
+                  />
+                  <p>
+                    {creditsToRedeem > 0
+                      ? `Applying ${formatMoney(creditsToRedeem, currency, countryCode)} in FastQue Credits — the final payable amount is confirmed by FastQue after the booking is created.`
+                      : "Slide to apply credits"}
+                  </p>
+                </div>
+              );
+            })()}
+          <div
+            className={styles.summaryLine}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              padding: 12,
+              border: "1px solid var(--bc-border)",
+              borderRadius: 12,
+            }}
+          >
             <strong>Payment</strong>
-            <span>Pay Online with UPI</span>
             {paymentInfo?.onlinePaymentAvailable ? (
-              <span>Online UPI payment is available. FastQue will show the shop QR and the exact server-confirmed amount after your booking is created.</span>
+              <>
+                <span>Pay Online with UPI</span>
+                <span>
+                  Online UPI payment is available. FastQue will show the shop QR and the exact server-confirmed amount
+                  after your booking is created.
+                </span>
+              </>
             ) : paymentInfoError ? (
-              <span>Payment information could not be loaded. FastQue will still verify the shop payment setup when you confirm.</span>
+              <>
+                <span>Pay at shop</span>
+                <span>Online payment details could not be loaded. You can still confirm this booking and pay at the shop.</span>
+              </>
             ) : paymentInfo ? (
-              <span className={styles.errorText}>Online booking is unavailable because this shop has not configured online payment yet.</span>
+              <>
+                <span>Pay at shop</span>
+                <span>Online payment is not configured for this shop. You can still confirm now and pay the shop directly.</span>
+              </>
             ) : (
-              <span>Checking shop payment setup…</span>
+              <>
+                <span>Payment option loading…</span>
+                <span>You can still confirm the booking while FastQue checks whether online UPI is available.</span>
+              </>
             )}
           </div>
           {submitError && <p className={styles.errorText}>{submitError}</p>}
           <div className={styles.confirmActions}>
             {isCustomerSession ? (
-              <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting || (paymentInfo !== null && !paymentInfo.onlinePaymentAvailable)}>
+              <Button type="button" variant="primary" onClick={() => void handleConfirmBooking()} disabled={submitting}>
                 {submitting ? "Booking…" : "Confirm booking"}
               </Button>
             ) : authStatus === "loading" ? (
