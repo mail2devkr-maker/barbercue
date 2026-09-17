@@ -34,6 +34,12 @@ interface CitySearchFieldProps {
   onSelect: (city: CitySearchResultDto | null) => void;
   /** id of the caller's label element — the input is swapped out on select, so it can't own one. */
   labelledBy: string;
+  /**
+   * The picker is shared by the light shop-registration form and the dark public discovery page.
+   * Keep light as the default so existing registration callers preserve their exact appearance;
+   * discovery opts into dark explicitly instead of mutating the shared registration inputStyle.
+   */
+  tone?: "light" | "dark";
 }
 
 /** "Karnataka" / "Karnataka (KA)" / null — never a fabricated placeholder for a region-less city. */
@@ -61,6 +67,7 @@ export function CitySearchField({
   selectedCity,
   onSelect,
   labelledBy,
+  tone = "light",
 }: CitySearchFieldProps) {
   const listboxId = useId();
   const [query, setQuery] = useState("");
@@ -74,6 +81,19 @@ export function CitySearchField({
 
   const trimmed = query.trim();
   const tooShort = trimmed.length < MIN_QUERY_LENGTH;
+  const dark = tone === "dark";
+  const themedInputStyle: React.CSSProperties = dark
+    ? {
+        ...inputStyle,
+        background: "rgba(255, 255, 255, 0.04)",
+        color: "#fff",
+        borderColor: "rgba(255, 255, 255, 0.22)",
+        caretColor: "#fff",
+      }
+    : inputStyle;
+  const themedHintStyle: React.CSSProperties = dark
+    ? { ...hintStyle, color: "rgba(255, 255, 255, 0.68)" }
+    : hintStyle;
 
   useEffect(() => {
     // Nothing to search against, the picker is already satisfied, or the owner hasn't typed
@@ -153,12 +173,13 @@ export function CitySearchField({
           justifyContent: "space-between",
           gap: 10,
           padding: "8px 8px 8px 12px",
-          background: "var(--bc-gold-soft)",
+          background: dark ? "rgba(255, 255, 255, 0.08)" : "var(--bc-gold-soft)",
+          borderColor: dark ? "rgba(255, 255, 255, 0.22)" : inputStyle.borderColor,
         }}
       >
         <span style={{ minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: 15, color: "var(--bc-ink)" }}>{selectedCity.name}</span>
-          {region && <span style={{ ...hintStyle, marginTop: 0, display: "block" }}>{region}</span>}
+          <span style={{ fontWeight: 600, fontSize: 15, color: dark ? "#fff" : "var(--bc-ink)" }}>{selectedCity.name}</span>
+          {region && <span style={{ ...themedHintStyle, marginTop: 0, display: "block" }}>{region}</span>}
         </span>
         <div style={{ flexShrink: 0 }}>
           <Button type="button" variant="outline" onClick={clearSelection}>
@@ -189,7 +210,7 @@ export function CitySearchField({
         aria-controls={listboxId}
         aria-autocomplete="list"
         aria-activedescendant={expanded ? `${listboxId}-${activeIndex}` : undefined}
-        style={inputStyle}
+        style={themedInputStyle}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -248,15 +269,15 @@ export function CitySearchField({
         </ul>
       )}
 
-      {!tooShort && state.kind === "loading" && <p style={hintStyle}>Searching cities…</p>}
+      {!tooShort && state.kind === "loading" && <p style={themedHintStyle}>Searching cities…</p>}
       {!tooShort && state.kind === "results" && cities.length === 0 && (
-        <p style={hintStyle}>No cities found for “{trimmed}”. Try a different spelling.</p>
+        <p style={themedHintStyle}>No cities found for “{trimmed}”. Try a different spelling.</p>
       )}
       {!tooShort && state.kind === "failed" && (
-        <p style={{ ...hintStyle, color: "var(--bc-accent)" }}>Could not search cities. Please try again.</p>
+        <p style={{ ...themedHintStyle, color: "var(--bc-accent)" }}>Could not search cities. Please try again.</p>
       )}
       {tooShort && countryId && (
-        <p style={hintStyle}>Type at least {MIN_QUERY_LENGTH} letters of your city&apos;s name.</p>
+        <p style={themedHintStyle}>Type at least {MIN_QUERY_LENGTH} letters of your city&apos;s name.</p>
       )}
     </div>
   );
