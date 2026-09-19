@@ -137,10 +137,26 @@
 }
 
 .securityCard {
+  /* InitialPasswordSetup is shared with the dark auth screens and therefore reads --fq-* tokens.
+     On this warm/light registration card those variables were not in scope, so the browser fell
+     back to inherited white text from .page and rendered the whole password form nearly invisible.
+     Define an explicit LIGHT token set here so the shared component keeps its semantics while
+     remaining fully readable inside this white card. */
+  --fq-void: #fffdf9;
+  --fq-charcoal: #f8f1e6;
+  --fq-hairline: #d8cfc3;
+  --fq-text: #1c1a17;
+  --fq-text-muted: #655e54;
+  --fq-text-faint: #8b8277;
+  --fq-pink: #f20a83;
+  --fq-coral: #ff3e57;
+  --fq-orange: #d85a24;
+  --fq-gradient: linear-gradient(100deg, var(--fq-pink) 0%, var(--fq-coral) 55%, #ff7a45 100%);
+  color: var(--fq-text);
   padding: clamp(22px, 5vw, 34px);
-  border: 1px solid color-mix(in srgb, var(--bc-brand-coral) 14%, var(--bc-border));
+  border: 1px solid color-mix(in srgb, var(--bc-brand-coral) 22%, var(--bc-border));
   border-radius: var(--bc-radius-lg);
-  background: rgba(255, 253, 249, 0.84);
+  background: rgba(255, 253, 249, 0.98);
   box-shadow: var(--bc-shadow-sm);
 }
 
