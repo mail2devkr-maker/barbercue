@@ -15,16 +15,19 @@ type Props = NativeStackScreenProps<SearchStackParamList, 'SlotSelect'>;
 
 export default function SlotSelectScreen({ route, navigation }: Props) {
   const { t, language } = useLanguage();
-  const { salonId, serviceId, preferredStaffId, salonTimezone, date, ...rest } = route.params;
+  const { salonId, services, preferredStaffId, salonTimezone, date, ...rest } = route.params;
   const [slots, setSlots] = useState<AvailabilitySlotDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Multi-service booking core mission — the candidate interval for EVERY slot the grid shows must
+  // reflect the full combined duration of every selected service, never just the first one.
+  const serviceIds = services.map((s) => s.id).join(',');
 
   const loadSlots = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ serviceId, date });
+    const params = new URLSearchParams({ serviceIds, date });
     if (preferredStaffId) params.set('staffId', preferredStaffId);
     apiFetch<AvailabilitySlotDto[]>(
       `${DISCOVERY_PATHS.salons}/${salonId}/booking/${SALON_BOOKING_INFO_PATHS.availability}?${params.toString()}`,
@@ -41,7 +44,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [salonId, serviceId, preferredStaffId, date]);
+  }, [salonId, serviceIds, preferredStaffId, date]);
 
   // Re-fetch when returning from confirmation. A successful booking or a competing customer
   // winning the last slot must not leave the previous grid looking selectable.
@@ -81,7 +84,7 @@ export default function SlotSelectScreen({ route, navigation }: Props) {
                   onPress={() =>
                     navigation.navigate('ConfirmBooking', {
                       salonId,
-                      serviceId,
+                      services,
                       preferredStaffId,
                       salonTimezone,
                       ...rest,

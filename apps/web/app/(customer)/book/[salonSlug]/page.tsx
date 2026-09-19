@@ -24,6 +24,13 @@ export default async function BookPage({
 }) {
   const { salonSlug } = await params;
   const { city, country, style, serviceId, staffId } = await searchParams;
+  // Multi-service booking core mission — `serviceId` accepts a comma-separated list (set by
+  // rebookUrl/AI Style Advisor hand-off) so "Book again" can carry a previous appointment's
+  // COMPLETE service selection, not just its first service. A bare single id still works
+  // unchanged (a one-element list).
+  const initialServiceIds = serviceId
+    ? serviceId.split(",").map((id) => id.trim()).filter(Boolean)
+    : undefined;
   // Salon.slug is unique only per city, and City.slug is unique only per country (B9), so the
   // salon profile page's "Book an appointment" link always passes both alongside the slug.
   if (!city || !country) notFound();
@@ -64,11 +71,11 @@ export default async function BookPage({
         countryCode={salon.countryCode}
         salonTimezone={salon.salonTimezone}
         selectedStyleName={style}
-        initialServiceId={serviceId}
+        initialServiceIds={initialServiceIds}
         // A prefilled service (rebook or style hand-off) always came with an explicit staff choice
         // already made on the original booking — default to "Any Staff" (null) rather than leaving
         // the picker unset, unless a specific staffId was actually carried over.
-        initialStaffId={serviceId ? (staffId ?? null) : undefined}
+        initialStaffId={initialServiceIds ? (staffId ?? null) : undefined}
       />
     </main>
   );

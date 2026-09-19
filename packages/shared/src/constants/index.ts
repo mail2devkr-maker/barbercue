@@ -217,6 +217,14 @@ export const ADMIN_CREDITS_PATHS = {
 export const CREDIT_SLAB_AMOUNT_INR = 50;
 export const CREDIT_PER_SLAB_INR = 10;
 
+// Multi-service booking core mission: the most services a single appointment may select. A hard
+// ceiling, not a UX suggestion — createBookingSchema/availabilityQuerySchema/staffListQuerySchema
+// reject anything past this before it ever reaches AvailabilityService/BookingsService, so a
+// pathological request can never force the server to sum an unbounded list of durations/prices or
+// build an unbounded staff-qualification AND-clause. 10 comfortably covers any real appointment
+// (a full "cut + beard + facial + wash + style" combination is 4-5) with generous headroom.
+export const MAX_SERVICES_PER_BOOKING = 10;
+
 // DashboardQueueController's `@Controller('dashboard')` prefix — staff/owner queue operations.
 // Salon photo upload limits. Shared so the browser can reject a bad file before spending an
 // upload on it and the server can reject the same file again on arrival — the client copy is a

@@ -12,6 +12,7 @@ import {
   formatBookingArrivalTime,
   formatMoney,
   formatZonedDateTime,
+  summarizeServiceNames,
 } from '@barbercue/shared';
 import type {
   BookingDetailDto,
@@ -58,9 +59,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const {
     salonId,
     salonName,
-    serviceId,
-    serviceName,
-    servicePrice,
+    services,
     salonTimezone,
     preferredStaffId,
     preferredStaffName,
@@ -68,6 +67,13 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
     slotEnd,
     selectedStyleName,
   } = route.params;
+  // Multi-service booking core mission — this summary is a display-only preview; the server
+  // independently re-derives combined duration/price from serviceIds alone (BookingsService.create
+  // never trusts a client-sent total), same convention SelectedServiceParam's own doc comment
+  // states for every step upstream of this screen.
+  const combinedServiceName = summarizeServiceNames(services.map((s) => s.name));
+  const combinedDurationMinutes = services.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const combinedPrice = services.reduce((sum, s) => sum + s.price, 0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetailDto | null>(null);
@@ -84,7 +90,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   // balance regardless of what this screen sends.
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
   const [creditsToRedeem, setCreditsToRedeem] = useState(0);
-  const maxRedeemable = Math.min(creditsBalance ?? 0, computeMaxRedeemableCredits(servicePrice));
+  const maxRedeemable = Math.min(creditsBalance ?? 0, computeMaxRedeemableCredits(combinedPrice));
 
   useEffect(() => {
     let cancelled = false;
@@ -133,7 +139,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
         headers: { 'Idempotency-Key': newIdempotencyKey() },
         body: JSON.stringify({
           salonId,
-          serviceId,
+          serviceIds: services.map((s) => s.id),
           slotStart,
           ...(preferredStaffId ? { preferredStaffId } : {}),
           ...(selectedStyleName ? { selectedStyleName } : {}),
@@ -166,6 +172,18 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           <Text style={styles.line}>
             {booking.serviceName}{t.atConnector}{booking.salonName}
           </Text>
+          {/* Multi-service booking core mission — booking detail/history must never display only
+              the first service; when more than one was selected, show each one's own name/duration
+              /price alongside the combined summary line above. */}
+          {booking.services.length > 1 && (
+            <View style={styles.serviceBreakdown}>
+              {booking.services.map((s) => (
+                <Text key={s.serviceId} style={styles.serviceBreakdownLine}>
+                  {s.name} · {s.durationMinutes} {t.minutesAbbrev} · {formatMoney(s.price, null)}
+                </Text>
+              ))}
+            </View>
+          )}
           {(() => {
             // Part 5 (show arrival time after booking): converted through the salon's own
             // timezone, never the device's — a customer booking a shop outside their own
@@ -258,7 +276,19 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
       <SectionHeader eyebrow={t.bookingTitle} title={t.confirmBookingTitle} />
       <Card style={styles.card}>
         <Text style={styles.line}>
-          {serviceName}{t.atConnector}{salonName}
+          {combinedServiceName}{t.atConnector}{salonName}
+        </Text>
+        {services.length > 1 && (
+          <View style={styles.serviceBreakdown}>
+            {services.map((s) => (
+              <Text key={s.id} style={styles.serviceBreakdownLine}>
+                {s.name} · {s.durationMinutes} {t.minutesAbbrev} · {formatMoney(s.price, null)}
+              </Text>
+            ))}
+          </View>
+        )}
+        <Text style={styles.line}>
+          {combinedDurationMinutes} {t.minutesAbbrev} · {formatMoney(combinedPrice, null)}
         </Text>
         {(() => {
           // Pre-confirmation timezone fix — the exact same formatter/zone the confirmed-booking
@@ -367,6 +397,8 @@ const styles = StyleSheet.create({
   centeredContent: { justifyContent: 'center' },
   card: { marginBottom: space[4] },
   line: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginBottom: space[1] },
+  serviceBreakdown: { marginBottom: space[1] },
+  serviceBreakdownLine: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginBottom: 2 },
   policyLine: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: space[1] },
   status: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.accent, marginTop: space[2] },
   paymentBox: { marginTop: space[3], paddingTop: space[3], borderTopWidth: 1, borderTopColor: color.border },

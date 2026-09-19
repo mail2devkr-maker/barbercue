@@ -649,6 +649,9 @@ export interface UiStrings {
   reviewsSuffix: string;
   joinQueueNow: string;
   meetTheTeam: string;
+  // Multi-service booking core mission — advances from the multi-select service picker (mobile's
+  // SalonProfileScreen) once at least one service is chosen, to the staff-selection step.
+  continueLabel: string;
   bookingForTheLookPrefix: string;
   bookingForTheLookSuffix: string;
   searchByNamePlaceholder: string;
@@ -1346,6 +1349,7 @@ const enUi: UiStrings = {
   reviewsSuffix: 'review(s)',
   joinQueueNow: 'Join queue now',
   meetTheTeam: 'Meet the team',
+  continueLabel: 'Continue',
   bookingForTheLookPrefix: 'Booking for the ',
   bookingForTheLookSuffix: ' look — pick a shop to continue.',
   searchByNamePlaceholder: 'Search by name…',
@@ -2009,6 +2013,7 @@ const hiUi: UiStrings = {
   reviewsSuffix: 'समीक्षा',
   joinQueueNow: 'अभी कतार में शामिल हों',
   meetTheTeam: 'टीम से मिलें',
+  continueLabel: 'जारी रखें',
   bookingForTheLookPrefix: '',
   bookingForTheLookSuffix: ' लुक के लिए बुकिंग — जारी रखने के लिए दुकान चुनें।',
   searchByNamePlaceholder: 'नाम से खोजें…',

@@ -845,6 +845,8 @@ model Service {
   bookings            Booking[]
   queueEntries        QueueEntry[]
   serviceSessions     ServiceSession[]
+  // Multi-service booking core mission — see BookingService's own doc comment.
+  bookingServices     BookingService[]
 
   @@map("services")
 }
@@ -867,8 +869,23 @@ model Booking {
   salon                    Salon         @relation(fields: [salonId], references: [id])
   customerId               String
   customer                 User          @relation("BookingCustomer", fields: [customerId], references: [id])
+  // Multi-service booking core mission: kept exactly as it was — the FIRST service the customer
+  // selected (ordering preserved via BookingService.sortOrder), never removed or made nullable, so
+  // every consumer that predates multi-service bookings (QueueEntry/ServiceSession linkage at
+  // check-in, admin/analytics "recent activity" feeds, the customer ledger's per-charge service
+  // label) keeps working unchanged against a real, meaningful value rather than an arbitrary one.
+  // The booking's true, authoritative service selection is the `services` relation below — this
+  // column is a read compatibility view onto its first entry, not a second source of truth: both
+  // are written together, once, inside the same create() transaction, and neither is ever updated
+  // independently afterwards.
   serviceId                String
   service                  Service       @relation(fields: [serviceId], references: [id])
+  // Multi-service booking core mission — the complete, ordered set of services actually selected
+  // for this appointment (see BookingService's own doc comment for why it snapshots rather than
+  // joins live). Every booking has at least one row here, including every booking that existed
+  // before this relation did — the migration that introduced this table backfilled one row per
+  // existing booking from its (still-present, unchanged) serviceId/service at that time.
+  services                 BookingService[]
   slotStart                DateTime
   slotEnd                  DateTime
   status                   BookingStatus @default(CONFIRMED)
@@ -926,6 +943,42 @@ model Booking {
 
   @@index([salonId, slotStart, slotEnd])
   @@map("bookings")
+}
+
+// Multi-service booking core mission — one row per service actually selected on a Booking, in
+// customer-chosen order (sortOrder). This is the authoritative multi-service record; Booking.
+// serviceId/service (above) remains a read-compatibility pointer at its first entry only.
+//
+// Snapshotted, not a live join: serviceName/durationMinutes/price are copied from the Service at
+// booking-creation time and never updated afterwards, for the exact same reason every other
+// Booking-time snapshot in this file exists (prepaymentRequiredAmount, checkInOpensMinutesBefore,
+// etc.) — a later rename/reprice/deactivation of the Service must never retroactively change what
+// a past booking is shown to have cost or included. serviceId is still a real FK (never dropped
+// even if the Service is later deactivated) purely for traceability/joins; every display field a
+// UI needs comes from the snapshot columns, never from re-reading the live Service row.
+//
+// @@unique([bookingId, serviceId]): the same service cannot appear twice on one appointment — a
+// customer wanting "two haircuts" is not a supported product concept in V1 (one appointment is one
+// visit with one ordered set of distinct services), and this constraint makes that a database
+// guarantee, not just a validation-layer convention (see AvailabilityService.getServicesOrThrow,
+// the one place a candidate serviceIds[] is checked for duplicates before ever reaching here).
+model BookingService {
+  id              String   @id @default(uuid())
+  bookingId       String
+  booking         Booking  @relation(fields: [bookingId], references: [id])
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id])
+  // 0-based selection order — which service is "first" (and therefore mirrored onto Booking.
+  // serviceId) is never ambiguous or re-derived from creation timestamps.
+  sortOrder       Int
+  serviceName     String
+  durationMinutes Int
+  price           Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now())
+
+  @@unique([bookingId, serviceId])
+  @@index([bookingId])
+  @@map("booking_services")
 }
 
 // ---------- FastQue Credits / Wallet V1 ----------

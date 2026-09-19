@@ -36,8 +36,17 @@ describe('BookingNoShowService', () => {
       id: 'b1',
       salonId: 's1',
       customerId: 'cust-1',
-      slotStart: new Date(Date.now() - 20 * 60_000), // 20 minutes ago
-      service: { price: 500 },
+      slotStart: new Date(Date.now() - 20 * 60_000),
+      serviceId: 'sv1',
+      service: { name: 'Haircut', durationMinutes: 30, price: 500 },
+      services: [
+        {
+          serviceId: 'sv1',
+          serviceName: 'Haircut',
+          durationMinutes: 30,
+          price: 500,
+        },
+      ],
       salon: { ownerUserId: 'owner-1' },
       ...overrides,
     };
@@ -72,7 +81,7 @@ describe('BookingNoShowService', () => {
     service = moduleRef.get(BookingNoShowService);
   });
 
-  it('queries only CONFIRMED bookings with no linked queue entry (never checked in) whose slot has already started', async () => {
+  it('queries only CONFIRMED bookings with no linked queue entry whose slot has already started', async () => {
     await service.markOverdueNoShows();
     const call = prisma.booking.findMany.mock.calls[0][0] as {
       where: {
@@ -88,18 +97,18 @@ describe('BookingNoShowService', () => {
 
   it('skips a candidate whose salon-specific grace period has not yet elapsed', async () => {
     prisma.booking.findMany.mockResolvedValue([
-      candidate({ slotStart: new Date(Date.now() - 2 * 60_000) }), // only 2 min ago
+      candidate({ slotStart: new Date(Date.now() - 2 * 60_000) }),
     ]);
     cancellationPolicy.getEffectivePolicy.mockResolvedValue({
       ...FLAT_ZERO_POLICY,
-      appointmentArrivalGraceMinutes: 10, // needs 10 min — not yet due
+      appointmentArrivalGraceMinutes: 10,
     });
     const count = await service.markOverdueNoShows();
     expect(count).toBe(0);
     expect(tx.booking.updateMany).not.toHaveBeenCalled();
   });
 
-  it('marks an overdue booking NO_SHOW, writes an AuditLog entry, notifies customer and owner, and emits realtime — no ledger entry when the charge is zero', async () => {
+  it('marks an overdue booking NO_SHOW, writes audit, notifies, and emits realtime with zero charge', async () => {
     prisma.booking.findMany.mockResolvedValue([candidate()]);
     const count = await service.markOverdueNoShows();
     expect(count).toBe(1);
@@ -136,7 +145,7 @@ describe('BookingNoShowService', () => {
     expect(realtime.emitBookingNoShow).toHaveBeenCalledWith('s1', 'b1');
   });
 
-  it('creates a CustomerLedgerEntry(OUTSTANDING, NO_SHOW_CHARGE) when the policy charges for no-shows', async () => {
+  it('creates a CustomerLedgerEntry when a flat no-show charge applies', async () => {
     prisma.booking.findMany.mockResolvedValue([candidate()]);
     cancellationPolicy.getEffectivePolicy.mockResolvedValue({
       ...FLAT_ZERO_POLICY,
@@ -156,6 +165,82 @@ describe('BookingNoShowService', () => {
     });
   });
 
+  it('charges a percentage against the COMPLETE multi-service appointment price', async () => {
+    prisma.booking.findMany.mockResolvedValue([
+      candidate({
+        service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+        services: [
+          {
+            serviceId: 'sv1',
+            serviceName: 'Haircut',
+            durationMinutes: 30,
+            price: 300,
+          },
+          {
+            serviceId: 'sv2',
+            serviceName: 'Beard Trim',
+            durationMinutes: 20,
+            price: 150,
+          },
+        ],
+      }),
+    ]);
+    cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+      ...FLAT_ZERO_POLICY,
+      noShowChargeType: 'PERCENTAGE',
+      noShowChargeValue: 50,
+    });
+
+    await service.markOverdueNoShows();
+
+    expect(tx.booking.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: 'NO_SHOW', cancellationChargeAmount: 225 },
+      }),
+    );
+    expect(tx.customerLedgerEntry.create).toHaveBeenCalledWith({
+      data: {
+        customerId: 'cust-1',
+        salonId: 's1',
+        bookingId: 'b1',
+        amount: 225,
+        reason: 'NO_SHOW_CHARGE',
+        status: 'OUTSTANDING',
+      },
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: {
+        actorUserId: null,
+        action: 'BOOKING_NO_SHOW',
+        entityType: 'Booking',
+        entityId: 'b1',
+        metadata: { chargeAmount: 225, appointmentArrivalGraceMinutes: 10 },
+      },
+    });
+  });
+
+  it('uses the live primary service as a defensive fallback when snapshot rows are absent', async () => {
+    prisma.booking.findMany.mockResolvedValue([
+      candidate({
+        service: { name: 'Haircut', durationMinutes: 30, price: 500 },
+        services: [],
+      }),
+    ]);
+    cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+      ...FLAT_ZERO_POLICY,
+      noShowChargeType: 'PERCENTAGE',
+      noShowChargeValue: 50,
+    });
+
+    await service.markOverdueNoShows();
+
+    expect(tx.booking.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: 'NO_SHOW', cancellationChargeAmount: 250 },
+      }),
+    );
+  });
+
   it('looks up the policy once per salon, not once per booking', async () => {
     prisma.booking.findMany.mockResolvedValue([
       candidate({ id: 'b1' }),
@@ -165,7 +250,7 @@ describe('BookingNoShowService', () => {
     expect(cancellationPolicy.getEffectivePolicy).toHaveBeenCalledTimes(1);
   });
 
-  it('re-checks status/queueEntries inside the claim, so a late check-in between read and write is silently skipped, not overwritten', async () => {
+  it('re-checks status/queueEntries inside the claim so a late check-in is skipped', async () => {
     prisma.booking.findMany.mockResolvedValue([
       candidate({ id: 'b1' }),
       candidate({ id: 'b2' }),

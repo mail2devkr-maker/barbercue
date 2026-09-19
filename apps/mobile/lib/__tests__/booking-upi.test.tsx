@@ -25,8 +25,10 @@ jest.mock('../../components/ui', () => {
 const qrUrl = 'https://cdn.example/qr.png';
 const info = { onlinePaymentAvailable: true, paymentQrImageUrl: qrUrl, upiVpa: 'merchant@bank', upiPayeeName: 'Shop & Sons', currency: 'INR', upiQrDecoded: true };
 const booking = { id: 'booking1', status: 'CONFIRMED', payableAmount: 419.25, servicePrice: 500, creditsRedeemedAmount: 80.75,
-  serviceName: 'Haircut', salonName: 'Test Shop', slotStart: '2026-10-10T10:00:00Z', salonTimezone: 'Asia/Kolkata' };
-const props = { route: { params: { salonId: 's', salonName: 'Test Shop', serviceId: 'svc', serviceName: 'Haircut', servicePrice: 500,
+  serviceName: 'Haircut', services: [{ serviceId: 'svc', name: 'Haircut', durationMinutes: 30, price: 500 }],
+  salonName: 'Test Shop', slotStart: '2026-10-10T10:00:00Z', salonTimezone: 'Asia/Kolkata' };
+const props = { route: { params: { salonId: 's', salonName: 'Test Shop',
+  services: [{ id: 'svc', name: 'Haircut', price: 500, durationMinutes: 30 }],
   salonTimezone: 'Asia/Kolkata', slotStart: booking.slotStart, slotEnd: '2026-10-10T10:30:00Z' } }, navigation: { navigate: jest.fn(), popToTop: jest.fn() } };
 let tree: ReturnType<typeof TestRenderer.create>;
 type TestNode = { props: Record<string, any> };
