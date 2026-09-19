@@ -1,6 +1,8 @@
 .header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 45;
   border-bottom: 1px solid var(--bc-border);
   background: rgba(255, 253, 249, 0.96);
@@ -32,6 +34,10 @@
 .headerDark .wordmark:focus-visible,
 .headerDark .publicLink:focus-visible {
   outline-color: #f7f5f4;
+}
+
+.headerSpacer {
+  height: 64px;
 }
 
 .inner {
@@ -96,6 +102,10 @@
 }
 
 @media (max-width: 520px) {
+  .headerSpacer {
+    height: 58px;
+  }
+
   .inner {
     min-height: 58px;
   }
