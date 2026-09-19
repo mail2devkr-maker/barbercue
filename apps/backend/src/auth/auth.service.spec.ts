@@ -27,7 +27,11 @@ describe('AuthService', () => {
     };
     userRole: {
       create: jest.Mock;
+      createMany: jest.Mock;
       deleteMany: jest.Mock;
+    };
+    salon: {
+      findMany: jest.Mock;
     };
     passwordResetToken: {
       create: jest.Mock;
@@ -79,7 +83,8 @@ describe('AuthService', () => {
         updateMany: jest.fn(),
       },
       authIdentity: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
-      userRole: { create: jest.fn(), deleteMany: jest.fn() },
+      userRole: { create: jest.fn(), createMany: jest.fn().mockResolvedValue({ count: 0 }), deleteMany: jest.fn() },
+      salon: { findMany: jest.fn().mockResolvedValue([]) },
       passwordResetToken: {
         create: jest.fn(),
         findUnique: jest.fn(),
@@ -539,6 +544,59 @@ describe('AuthService', () => {
       expect(result.user.roles).toEqual([Role.SALON_OWNER]);
     });
 
+    it('repairs a missing SALON_OWNER role only when Salon.ownerUserId already proves ownership after DB recovery', async () => {
+      googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'ai-owner-recovery',
+        user: {
+          id: 'recovered-owner',
+          phone: null,
+          email: 'owner@example.com',
+          status: UserStatus.ACTIVE,
+          preferredLanguage: Language.EN,
+          passwordHash: 'hash',
+          roles: [
+            { role: Role.CUSTOMER, salonId: null },
+            { role: Role.PLATFORM_ADMIN, salonId: null },
+          ],
+        },
+      });
+      prisma.salon.findMany.mockResolvedValue([{ id: 'salon-recovered' }]);
+      prisma.userRole.createMany.mockResolvedValue({ count: 1 });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'recovered-owner',
+        phone: null,
+        email: 'owner@example.com',
+        status: UserStatus.ACTIVE,
+        preferredLanguage: Language.EN,
+        passwordHash: 'hash',
+        roles: [
+          { role: Role.CUSTOMER, salonId: null },
+          { role: Role.PLATFORM_ADMIN, salonId: null },
+          { role: Role.SALON_OWNER, salonId: 'salon-recovered' },
+        ],
+      });
+
+      const result = await service.staffGoogleLogin('id-token');
+
+      expect(prisma.salon.findMany).toHaveBeenCalledWith({
+        where: { ownerUserId: 'recovered-owner' },
+        select: { id: true },
+      });
+      expect(prisma.userRole.createMany).toHaveBeenCalledWith({
+        data: [{ userId: 'recovered-owner', role: Role.SALON_OWNER, salonId: 'salon-recovered' }],
+        skipDuplicates: true,
+      });
+      expect(result.user.roles).toEqual([Role.SALON_OWNER]);
+      expect(result.user.audience).toBe(SessionAudience.STAFF);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'recovered-owner',
+        [Role.SALON_OWNER],
+        SessionAudience.STAFF,
+        undefined,
+      );
+    });
+
     it('rejects a customer-only account matched by email — never links the identity, never elevates the account', async () => {
       googleAuthService.verifyIdToken.mockResolvedValue(verifiedIdentity);
       prisma.authIdentity.findUnique.mockResolvedValue(null);
@@ -808,6 +866,18 @@ describe('AuthService', () => {
       await expect(
         service.adminGoogleLogin('id-token', undefined),
       ).rejects.toMatchObject({ code: AuthErrorCode.TOTP_REQUIRED });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('turns an undecryptable restored TOTP secret into a secure setup-required response instead of a 500', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue({ user: admin });
+      cryptoService.decrypt.mockImplementationOnce(() => {
+        throw new Error('Unsupported state or unable to authenticate data');
+      });
+
+      await expect(
+        service.adminGoogleLogin('id-token', '123456'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.TOTP_SETUP_REQUIRED });
       expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
     });
 

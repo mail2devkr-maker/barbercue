@@ -82,60 +82,67 @@ export class AdminTotpBootstrapController {
   async setup(@Body(new ZodValidationPipe(setupSchema)) body: SetupInput) {
     let user = await this.resolveVerifiedAdmin(body.idToken);
 
-    if (user.twoFactorEnabled) {
-      throw new AppException(
-        AuthErrorCode.TOTP_REQUIRED,
-        'Two-factor authentication is already configured for this account.',
-        HttpStatus.CONFLICT,
-      );
-    }
-
-    let secret: string;
-    if (user.totpSecret) {
-      secret = this.cryptoService.decrypt(user.totpSecret);
-    } else {
+    const claimFreshSetupSecret = async (
+      expectedTwoFactorEnabled: boolean,
+      expectedTotpSecret: string | null,
+    ): Promise<string> => {
       const generated = this.totpService.generateSecret();
       const encrypted = this.cryptoService.encrypt(generated);
       const claimed = await this.prisma.user.updateMany({
         where: {
           id: user.id,
-          twoFactorEnabled: false,
-          totpSecret: null,
+          twoFactorEnabled: expectedTwoFactorEnabled,
+          totpSecret: expectedTotpSecret,
         },
-        data: { totpSecret: encrypted },
+        data: {
+          twoFactorEnabled: false,
+          totpSecret: encrypted,
+        },
       });
+      if (claimed.count !== 1) {
+        throw new AppException(
+          AuthErrorCode.TOTP_SETUP_REQUIRED,
+          'Authenticator setup state changed. Please try again.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      user = { ...user, twoFactorEnabled: false, totpSecret: encrypted };
+      return generated;
+    };
 
-      if (claimed.count === 1) {
-        secret = generated;
-      } else {
-        const refreshed = await this.prisma.user.findUnique({
-          where: { id: user.id },
-          include: { roles: true },
-        });
-        if (!refreshed) {
-          throw new AppException(
-            AuthErrorCode.UNAUTHENTICATED,
-            'User not found.',
-            HttpStatus.UNAUTHORIZED,
-          );
-        }
-        user = refreshed;
-        if (user.twoFactorEnabled) {
+    let secret: string;
+
+    if (user.twoFactorEnabled) {
+      // Normal configured state stays fail-closed. The only recovery exception is a ciphertext
+      // that cannot be decrypted with the current server key after a database restore. Google
+      // identity has already been verified by resolveVerifiedAdmin; we atomically replace only
+      // that exact unusable ciphertext and still require confirmation of the new TOTP before any
+      // ADMIN session can be issued.
+      if (user.totpSecret) {
+        try {
+          this.cryptoService.decrypt(user.totpSecret);
           throw new AppException(
             AuthErrorCode.TOTP_REQUIRED,
             'Two-factor authentication is already configured for this account.',
             HttpStatus.CONFLICT,
           );
+        } catch (err) {
+          if (err instanceof AppException) throw err;
+          secret = await claimFreshSetupSecret(true, user.totpSecret);
         }
-        if (!user.totpSecret) {
-          throw new AppException(
-            AuthErrorCode.TOTP_SETUP_REQUIRED,
-            'Unable to start authenticator setup. Please try again.',
-            HttpStatus.CONFLICT,
-          );
-        }
-        secret = this.cryptoService.decrypt(user.totpSecret);
+      } else {
+        secret = await claimFreshSetupSecret(true, null);
       }
+    } else if (user.totpSecret) {
+      try {
+        secret = this.cryptoService.decrypt(user.totpSecret);
+      } catch {
+        // A half-restored/unconfirmed setup secret can be unusable for the same key-mismatch
+        // reason. Replace only the exact stale value; concurrent setup attempts fail safely.
+        secret = await claimFreshSetupSecret(false, user.totpSecret);
+      }
+    } else {
+      secret = await claimFreshSetupSecret(false, null);
     }
 
     return {
