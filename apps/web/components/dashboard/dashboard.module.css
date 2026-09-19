@@ -656,6 +656,29 @@
   font-weight: 700;
 }
 
+.catalogHeadingActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.catalogBulkPriceBar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 1px dashed var(--bc-border);
+  border-radius: var(--bc-radius-md);
+}
+
+.catalogBulkPriceBar .fieldWrap {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
 .catalogFilters {
   margin: 18px 0;
   display: grid;
@@ -753,6 +776,10 @@
     align-self: flex-start;
   }
 
+  .catalogHeadingActions {
+    justify-content: space-between;
+  }
+
   .catalogFilters,
   .catalogDraftFields,
   .editGrid {
@@ -765,6 +792,11 @@
 
   .catalogAddBar > button {
     width: 100%;
+  }
+
+  .catalogBulkPriceBar {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
