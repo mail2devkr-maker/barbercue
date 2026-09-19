@@ -330,6 +330,41 @@ export class AuthService {
     const identity = await this.googleAuthService.verifyIdToken(idToken);
 
     const user = await this.prisma.$transaction(async (tx) => {
+      // Disaster-recovery consistency repair: Salon.ownerUserId is the canonical ownership
+      // relationship. If a recovery restored the Salon row but missed its matching SALON_OWNER
+      // UserRole, repair only that already-proven ownership before applying the normal login gate.
+      // This never infers ownership from email and never grants access to a salon the User row
+      // does not already own.
+      const repairMissingOwnerRole = async <T extends { id: string; roles: Array<{ role: Role }> }>(
+        candidate: T,
+      ): Promise<T> => {
+        const alreadyOperator = candidate.roles.some(
+          ({ role }) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+        );
+        if (alreadyOperator) return candidate;
+
+        const ownedSalons = await tx.salon.findMany({
+          where: { ownerUserId: candidate.id },
+          select: { id: true },
+        });
+        if (ownedSalons.length === 0) return candidate;
+
+        await tx.userRole.createMany({
+          data: ownedSalons.map(({ id: salonId }) => ({
+            userId: candidate.id,
+            role: Role.SALON_OWNER,
+            salonId,
+          })),
+          skipDuplicates: true,
+        });
+
+        const refreshed = await tx.user.findUnique({
+          where: { id: candidate.id },
+          include: { roles: true },
+        });
+        return (refreshed ?? candidate) as T;
+      };
+
       const existingIdentity = await tx.authIdentity.findUnique({
         where: {
           provider_providerSub: {
@@ -339,7 +374,9 @@ export class AuthService {
         },
         include: { user: { include: { roles: true } } },
       });
-      if (existingIdentity) return existingIdentity.user;
+      if (existingIdentity) {
+        return repairMissingOwnerRole(existingIdentity.user);
+      }
 
       if (!identity.email) return null;
 
@@ -349,23 +386,24 @@ export class AuthService {
       });
       if (!existingUser) return null;
 
-      const candidateRoles = existingUser.roles.map((r) => r.role);
+      const repairedUser = await repairMissingOwnerRole(existingUser);
+      const candidateRoles = repairedUser.roles.map((r) => r.role);
       const candidateIsStaffOrOwner = candidateRoles.some(
         (r) => r === Role.SALON_STAFF || r === Role.SALON_OWNER,
       );
       // The role check gates the link itself — an existing customer-only user with this email
-      // is left completely untouched (no identity created, no role granted).
+      // is left completely untouched unless Salon.ownerUserId independently proves ownership.
       if (!candidateIsStaffOrOwner) return null;
 
       await tx.authIdentity.create({
         data: {
-          userId: existingUser.id,
+          userId: repairedUser.id,
           provider: AuthProvider.GOOGLE,
           providerSub: identity.sub,
           email: identity.email,
         },
       });
-      return existingUser;
+      return repairedUser;
     });
 
     const roles = user?.roles.map((r) => r.role) ?? [];
@@ -913,7 +951,20 @@ export class AuthService {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    const secret = this.cryptoService.decrypt(user.totpSecret);
+    let secret: string;
+    try {
+      secret = this.cryptoService.decrypt(user.totpSecret);
+    } catch {
+      // A database recovery can restore ciphertext that was encrypted under a different
+      // TOTP_ENCRYPTION_KEY. Treat that as a secure re-enrollment requirement instead of leaking
+      // a 500. The admin login page will verify Google again and enter the bootstrap flow; no
+      // ADMIN session is issued until a newly enrolled authenticator code is confirmed.
+      throw new AppException(
+        AuthErrorCode.TOTP_SETUP_REQUIRED,
+        'Authenticator setup must be repaired before admin sign-in can continue.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
     const valid = await this.totpService.verifyToken(secret, totpCode);
     if (!valid) {
       throw new AppException(
