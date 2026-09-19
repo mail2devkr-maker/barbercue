@@ -869,6 +869,19 @@ describe('AuthService', () => {
       expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
     });
 
+    it('detects an undecryptable restored TOTP secret before prompting for an impossible code', async () => {
+      prisma.authIdentity.findUnique.mockResolvedValue({ user: admin });
+      cryptoService.decrypt.mockImplementationOnce(() => {
+        throw new Error('Unsupported state or unable to authenticate data');
+      });
+
+      await expect(
+        service.adminGoogleLogin('id-token', undefined),
+      ).rejects.toMatchObject({ code: AuthErrorCode.TOTP_SETUP_REQUIRED });
+      expect(totpService.verifyToken).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
     it('turns an undecryptable restored TOTP secret into a secure setup-required response instead of a 500', async () => {
       prisma.authIdentity.findUnique.mockResolvedValue({ user: admin });
       cryptoService.decrypt.mockImplementationOnce(() => {
