@@ -65,7 +65,8 @@ export default function SalonsDashboardHomePage() {
   }, [workplaces]);
 
   return (
-    <main className={styles.page}>
+    <div className={`${styles.darkScope} ${styles.salonsHomeDark}`}>
+      <main className={styles.page}>
       <h1 className={styles.pageTitle}>Your dashboard</h1>
       <p className={styles.pageSubtitle}>
         Signed in as <strong>{user?.email}</strong>.
@@ -194,9 +195,10 @@ export default function SalonsDashboardHomePage() {
         )}
       </div>
 
-      <Button type="button" variant="outline" onClick={() => void logout()}>
-        Log out
-      </Button>
-    </main>
+        <Button type="button" variant="outline" onClick={() => void logout()}>
+          Log out
+        </Button>
+      </main>
+    </div>
   );
 }
