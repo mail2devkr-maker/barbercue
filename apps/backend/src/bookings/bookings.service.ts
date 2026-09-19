@@ -220,21 +220,11 @@ export class BookingsService {
     // CancellationPolicy at read time.
     const arrivalPolicy = await this.cancellationPolicy.getEffectivePolicy(input.salonId);
 
-    // FastQue Credits / Wallet V1: an ONLINE (APP/WEB-sourced) booking needs the shop's payment QR
-    // to actually be shown to the customer for payment — there is no live payment gateway (see
-    // this file's own cancel()-comment on Payment being schema-only), so this is a hard,
-    // server-side prerequisite, not a UI hint the client could bypass. WALK_IN never needs one:
-    // that customer pays the shop in person, no QR involved.
-    if (
-      source !== BookingSource.WALK_IN &&
-      !paymentPolicy?.paymentQrImageUrl
-    ) {
-      throw new AppException(
-        BookingErrorCode.PAYMENT_QR_REQUIRED,
-        `${salon.name} hasn't set up online payment yet. Please try booking again later or visit in person.`,
-        HttpStatus.CONFLICT,
-      );
-    }
+    // Online payment is optional. A shop may accept online bookings without ever configuring a
+    // payment QR; those bookings are confirmed normally and can be paid at the shop. A configured
+    // QR only enables the prepayment path below — it is never a prerequisite for creating an
+    // APP/WEB booking.
+    const hasOnlinePaymentSetup = Boolean(paymentPolicy?.paymentQrImageUrl);
 
     // FastQue Credits / Wallet V1: the client-requested amount is never trusted as-is — it is only
     // ever an upper bound. The server independently computes the redemption cap from its own
@@ -251,8 +241,9 @@ export class BookingsService {
     const prepaymentRequirement =
       paymentPolicy?.prepaymentRequirement ?? PrepaymentRequirement.NONE;
     const requiresPrepayment =
-      prepaymentRequirement === PrepaymentRequirement.PARTIAL ||
-      prepaymentRequirement === PrepaymentRequirement.FULL;
+      hasOnlinePaymentSetup &&
+      (prepaymentRequirement === PrepaymentRequirement.PARTIAL ||
+        prepaymentRequirement === PrepaymentRequirement.FULL);
     const status: BookingStatus = requiresPrepayment
       ? BookingStatus.PENDING_PAYMENT
       : BookingStatus.CONFIRMED;
