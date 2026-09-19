@@ -85,6 +85,7 @@ interface PrismaMock {
   };
   booking: {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
+    findUnique: jest.Mock<Promise<unknown>, [unknown]>;
     update: jest.Mock<Promise<unknown>, [unknown]>;
     count: jest.Mock<Promise<number>, [unknown]>;
   };
@@ -177,6 +178,7 @@ describe('QueueService', () => {
       },
       booking: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
+        findUnique: jest.fn<Promise<unknown>, [unknown]>(),
         update: jest.fn<Promise<unknown>, [unknown]>(),
         count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
       },
@@ -297,6 +299,68 @@ describe('QueueService', () => {
       prisma.booking.findFirst.mockResolvedValueOnce(makeCheckInBooking());
       prisma.queueEntry.create.mockRejectedValueOnce(new Error('db is down'));
       await expect(service.checkIn('c1', 'bk1')).rejects.toThrow('db is down');
+    });
+  });
+
+  // P0 arrival-alert mission — the owner/staff-triggered twin of checkIn(), reached from the
+  // dashboard's ARRIVED confirmation. Converges on the exact same createArrivalQueueEntry path.
+  describe('arriveAsOperator', () => {
+    function makeArrivalBooking(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'bk1',
+        salonId: 's1',
+        serviceId: 'sv1',
+        customerId: 'c1',
+        status: 'CONFIRMED',
+        slotStart: new Date(),
+        ...overrides,
+      };
+    }
+
+    it('checks salon access for the calling operator before doing anything else', async () => {
+      prisma.booking.findUnique.mockResolvedValueOnce(makeArrivalBooking());
+      prisma.queueEntry.create.mockResolvedValueOnce({ id: 'q-new' });
+      await service.arriveAsOperator('op-1', 'bk1');
+      expect(salonAccess.assertAccessOrAdminAccess).toHaveBeenCalledWith('op-1', 's1');
+    });
+
+    it('creates exactly one QueueEntry for the booking\'s own customer, same as self-check-in', async () => {
+      prisma.booking.findUnique.mockResolvedValueOnce(makeArrivalBooking());
+      prisma.queueEntry.create.mockResolvedValueOnce({ id: 'q-new' });
+      await service.arriveAsOperator('op-1', 'bk1');
+      expect(prisma.queueEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ bookingId: 'bk1', customerId: 'c1', source: 'APPOINTMENT' }),
+        }),
+      );
+    });
+
+    it('requirement 9 (arrival race): a customer self-check-in racing this exact operator click converges on one QueueEntry — the loser gets ALREADY_CHECKED_IN, not a raw error', async () => {
+      prisma.booking.findUnique.mockResolvedValueOnce(makeArrivalBooking());
+      prisma.queueEntry.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+          meta: { target: ['queue_entries_bookingId_key'] },
+        }),
+      );
+      await expect(service.arriveAsOperator('op-1', 'bk1')).rejects.toMatchObject({
+        code: 'ALREADY_CHECKED_IN',
+      });
+    });
+
+    it('rejects a booking that is not CONFIRMED', async () => {
+      prisma.booking.findUnique.mockResolvedValueOnce(makeArrivalBooking({ status: 'NO_SHOW' }));
+      await expect(service.arriveAsOperator('op-1', 'bk1')).rejects.toMatchObject({
+        code: 'INVALID_QUEUE_TRANSITION',
+      });
+    });
+
+    it('throws BOOKING_NOT_FOUND for an unknown booking', async () => {
+      prisma.booking.findUnique.mockResolvedValueOnce(null);
+      await expect(service.arriveAsOperator('op-1', 'nope')).rejects.toMatchObject({
+        code: 'BOOKING_NOT_FOUND',
+      });
     });
   });
 

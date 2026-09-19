@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DayScheduler } from "../../../../../../components/dashboard/DayScheduler";
+import { ArrivalAlertOverlay } from "../../../../../../components/bookings/ArrivalAlertOverlay";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 import scheduleStyles from "../../../../../../components/dashboard/schedule.module.css";
 
@@ -31,6 +32,7 @@ export default async function DaySchedulePage({
         </Link>
       </nav>
       <DayScheduler salonId={salonId} />
+      <ArrivalAlertOverlay salonId={salonId} />
     </main>
   );
 }

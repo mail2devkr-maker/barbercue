@@ -47,7 +47,7 @@ export class PushDispatchService {
    */
   async dispatchLocalizedToUser(
     userId: string,
-    kind: 'newBooking' | 'bookingRescheduled' | 'bookingCancelled',
+    kind: 'newBooking' | 'bookingRescheduled' | 'bookingCancelled' | 'arrivalCheck',
     serviceName: string | null,
     data: Record<string, unknown>,
   ): Promise<void> {

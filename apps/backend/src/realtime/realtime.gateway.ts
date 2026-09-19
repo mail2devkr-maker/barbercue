@@ -162,6 +162,16 @@ export class RealtimeGateway implements OnGatewayConnection {
       .emit('booking.expired', { salonId, bookingId });
   }
 
+  // P0 arrival-alert mission — the one-shot "a booking just crossed T-5" nudge for any connected
+  // owner/staff dashboard. Ids-only, same convention as every other emit here: the client's own
+  // GET .../arrival-alerts is the source of truth this just tells it to re-fetch, so a client that
+  // missed this event (reconnect, hard refresh) still recovers the correct eligible set on its own.
+  emitBookingArrivalAlert(salonId: string, bookingId: string): void {
+    this.server
+      .to(`salon:${salonId}`)
+      .emit('booking.arrival_alert', { salonId, bookingId });
+  }
+
   // QueueEntryExpiryService's automatic CALLED->NO_SHOW sweep — same shape as emitEntryCalled,
   // ids-only, client refetches. Not the customer-room too: unlike emitEntryCalled (which needs to
   // wake a specific customer's device), a no-show is something the OWNER dashboard needs to see

@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ARRIVAL_ALERT_LEAD_MINUTES,
   BookingErrorCode,
   BookingStatus,
   OWNER_BOOKING_FILTERS,
@@ -8,6 +9,7 @@ import {
   paiseToRupees,
   summarizeServiceNames,
   type BookingServiceItemDto,
+  type CancellationPolicyDto,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
@@ -21,6 +23,7 @@ import {
 } from '../common/timezone/timezone';
 import { computeArrivalGuidance } from '../bookings/arrival-guidance';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
+import { CancellationPolicyService } from '../bookings/cancellation-policy.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -72,6 +75,7 @@ export class DashboardBookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
+    private readonly cancellationPolicy: CancellationPolicyService,
   ) {}
 
   async list(
@@ -130,8 +134,11 @@ export class DashboardBookingsService {
     });
     const hasMore = bookings.length > limit;
     const page = hasMore ? bookings.slice(0, limit) : bookings;
+    // One policy lookup per page, not per booking — same rationale as BookingNoShowService's own
+    // per-salon policy cache, just simpler here since every row in one list() call shares a salonId.
+    const policy = await this.cancellationPolicy.getEffectivePolicy(salonId);
     return {
-      items: page.map((b) => this.toOwnerDetailDto(b)),
+      items: page.map((b) => this.toOwnerDetailDto(b, policy)),
       nextCursor: hasMore ? page[page.length - 1].id : null,
     };
   }
@@ -155,7 +162,8 @@ export class DashboardBookingsService {
         HttpStatus.NOT_FOUND,
       );
     }
-    return this.toOwnerDetailDto(booking);
+    const policy = await this.cancellationPolicy.getEffectivePolicy(salonId);
+    return this.toOwnerDetailDto(booking, policy);
   }
 
   private resolveFilter(filterRaw: string | undefined): OwnerBookingFilter {
@@ -241,8 +249,21 @@ export class DashboardBookingsService {
 
   private toOwnerDetailDto(
     booking: OwnerBookingWithDetails,
+    policy: CancellationPolicyDto,
   ): OwnerBookingDetailDto {
     const latestEntry = booking.queueEntries[0];
+    const hasCheckedIn = booking.queueEntries.length > 0;
+    // P0 arrival-alert mission — server-computed so the owner UI never re-implements grace-period
+    // math itself. Both flags are only ever true for a still-open, not-yet-arrived CONFIRMED
+    // booking; see OwnerBookingDetailDto's own doc comment.
+    const arrivalAlertDue =
+      booking.status === BookingStatus.CONFIRMED &&
+      !hasCheckedIn &&
+      booking.slotStart.getTime() - ARRIVAL_ALERT_LEAD_MINUTES * 60_000 <= Date.now();
+    const noShowEligible =
+      booking.status === BookingStatus.CONFIRMED &&
+      !hasCheckedIn &&
+      booking.slotStart.getTime() + policy.appointmentArrivalGraceMinutes * 60_000 <= Date.now();
     // Production-safety hardening (P0 #2): falls back to the live Service join for a booking a
     // rolling-deploy old backend created with zero BookingService rows — see
     // resolveEffectiveBookingServices's own doc comment. The owner view must never show 0
@@ -324,6 +345,9 @@ export class DashboardBookingsService {
         ? booking.cancelledAt.toISOString()
         : null,
       hasReview: booking.reviews.length > 0,
+      hasCheckedIn,
+      arrivalAlertDue,
+      noShowEligible,
     };
   }
 }

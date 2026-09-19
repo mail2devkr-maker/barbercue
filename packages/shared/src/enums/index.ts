@@ -329,6 +329,14 @@ export const BookingErrorCode = {
   // single serviceIds[] selection. Distinct from SERVICE_NOT_FOUND (a missing/foreign/inactive id):
   // this selection is well-formed data pointing at real services, just an invalid combination.
   DUPLICATE_SERVICE_SELECTION: 'DUPLICATE_SERVICE_SELECTION',
+  // P0 arrival-alert mission — BookingNoShowService.markNoShow's manual/operator gate: the booking
+  // isn't CONFIRMED, already has a QueueEntry (arrived), or the salon's arrival grace hasn't
+  // elapsed yet. Replaces the removed automatic sweep's silent skip with an explicit, actionable
+  // rejection for the operator who tried to act too early/on the wrong booking.
+  NO_SHOW_NOT_ELIGIBLE: 'NO_SHOW_NOT_ELIGIBLE',
+  // P0 arrival-alert mission — BookingNoShowService.correctToCompleted's gate: only a currently
+  // NO_SHOW booking can be corrected this way.
+  BOOKING_NOT_NO_SHOW: 'BOOKING_NOT_NO_SHOW',
 } as const;
 export type BookingErrorCode = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
 

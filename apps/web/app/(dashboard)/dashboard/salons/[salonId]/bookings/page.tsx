@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { OwnerBookingsView } from "../../../../../../components/bookings/OwnerBookingsView";
+import { ArrivalAlertOverlay } from "../../../../../../components/bookings/ArrivalAlertOverlay";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 import scheduleStyles from "../../../../../../components/dashboard/schedule.module.css";
 
@@ -26,6 +27,7 @@ export default async function DashboardBookingsPage({
         <Link href={`/dashboard/salons/${salonId}/schedule`}>Day schedule</Link>
       </nav>
       <OwnerBookingsView salonId={salonId} />
+      <ArrivalAlertOverlay salonId={salonId} />
     </main>
   );
 }

@@ -21,6 +21,7 @@ const TYPE_LABEL: Record<string, string> = {
   "owner.booking.expired": "Unpaid booking expired",
   "owner.walk_in.joined": "New walk-in",
   "staff.assigned": "You were assigned a customer",
+  "owner.booking.arrival_check": "Appointment arrival check",
 };
 
 function timeAgo(iso: string): string {

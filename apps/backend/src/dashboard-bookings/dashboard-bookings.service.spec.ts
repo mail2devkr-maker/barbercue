@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { DashboardBookingsService } from './dashboard-bookings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { CancellationPolicyService } from '../bookings/cancellation-policy.service';
 
 function decimal(value: string) {
   return { toString: () => value } as unknown as number;
@@ -87,12 +88,29 @@ describe('DashboardBookingsService', () => {
         .fn<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>()
         .mockResolvedValue('OWNER'),
     };
+    // P0 arrival-alert mission — DashboardBookingsService now computes arrivalAlertDue/
+    // noShowEligible per row, which needs the salon's effective policy. A grace/lead window far
+    // outside every existing fixture's slotStart-vs-now delta (fixtures use fixed 2026-06-01 dates)
+    // keeps every pre-existing assertion in this file exercising the exact same values as before.
+    const cancellationPolicy = {
+      getEffectivePolicy: jest.fn().mockResolvedValue({
+        salonId: 's1',
+        freeCancellationWindowMinutes: 60,
+        lateCancellationChargeType: 'FLAT',
+        lateCancellationChargeValue: 0,
+        noShowChargeType: 'FLAT',
+        noShowChargeValue: 0,
+        appointmentArrivalGraceMinutes: 10,
+        queueCallResponseGraceMinutes: 3,
+      }),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
         DashboardBookingsService,
         { provide: PrismaService, useValue: prisma },
         { provide: SalonAccessService, useValue: salonAccess },
+        { provide: CancellationPolicyService, useValue: cancellationPolicy },
       ],
     }).compile();
     service = moduleRef.get(DashboardBookingsService);
