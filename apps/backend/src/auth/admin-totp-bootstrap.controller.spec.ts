@@ -1,4 +1,4 @@
-import { AuthErrorCode, AuthProvider, Role, UserStatus } from '@barbercue/shared';
+import { AuthErrorCode, Role, UserStatus } from '@barbercue/shared';
 import { AdminTotpBootstrapController } from './admin-totp-bootstrap.controller';
 
 describe('AdminTotpBootstrapController recovery', () => {
