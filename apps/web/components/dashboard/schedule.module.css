@@ -26,7 +26,7 @@
   overflow-x: auto;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  background: #fff;
+  background: var(--bc-surface);
 }
 
 .grid {
@@ -68,7 +68,7 @@
   font-size: var(--bc-text-sm);
   font-weight: 700;
   color: var(--bc-ink);
-  background: #fff;
+  background: var(--bc-surface);
   border-bottom: 1px solid var(--bc-border);
   text-align: center;
 }
@@ -151,19 +151,19 @@
 }
 
 .blockConfirmed {
-  background: color-mix(in srgb, var(--bc-warn) 16%, #fff);
+  background: color-mix(in srgb, var(--bc-warn) 18%, var(--bc-surface));
   border-color: color-mix(in srgb, var(--bc-warn) 40%, transparent);
-  color: #6b4a00;
+  color: var(--bc-warn);
 }
 
 .blockCompleted {
-  background: color-mix(in srgb, var(--bc-success) 16%, #fff);
+  background: color-mix(in srgb, var(--bc-success) 18%, var(--bc-surface));
   border-color: color-mix(in srgb, var(--bc-success) 40%, transparent);
-  color: #1c4a2e;
+  color: var(--bc-success);
 }
 
 .blockCancelled {
-  background: color-mix(in srgb, var(--bc-accent) 12%, #fff);
+  background: color-mix(in srgb, var(--bc-accent) 14%, var(--bc-surface));
   border-color: color-mix(in srgb, var(--bc-accent) 35%, transparent);
   color: var(--bc-accent);
   text-decoration: line-through;
@@ -173,7 +173,7 @@
 .detailPanel {
   margin-top: var(--bc-space-3);
   padding: var(--bc-space-4);
-  background: #fff;
+  background: var(--bc-surface);
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
 }

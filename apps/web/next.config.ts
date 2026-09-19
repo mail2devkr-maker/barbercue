@@ -2,11 +2,28 @@ import type { NextConfig } from "next";
 import path from "path";
 
 // The browser talks to the web service only. API requests are reverse-proxied by Next.js to the
-// backend so the httpOnly refresh cookie is first-party to the public web origin. This avoids
-// relying on third-party cookies between Railway's separate *.up.railway.app service domains.
-const backendOrigin = process.env.BACKEND_INTERNAL_URL ?? "http://localhost:3000";
+// backend so the httpOnly refresh cookie is first-party to the web origin and browser CORS never
+// depends on the backend allowing localhost or Railway's generated domain directly.
+//
+// BACKEND_INTERNAL_URL is the preferred server-only target (Railway/private networking). For
+// existing local worktrees that still set an absolute NEXT_PUBLIC_API_BASE_URL such as
+// http://localhost:3000/api/v1 or a remote preview backend, preserve that value only as the
+// SERVER-SIDE proxy target. The browser itself is forced to /api/v1 below, so the backend origin
+// is never exposed as a cross-origin fetch target.
+const configuredPublicApi = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+const legacyBackendOrigin =
+  configuredPublicApi && /^https?:\/\//i.test(configuredPublicApi)
+    ? configuredPublicApi.replace(/\/api\/v1\/?$/i, "").replace(/\/+$/, "")
+    : undefined;
+const backendOrigin =
+  process.env.BACKEND_INTERNAL_URL?.trim() || legacyBackendOrigin || "http://localhost:3000";
 
 const nextConfig: NextConfig = {
+  // Browser code must always use the same-origin proxy. This also covers older client modules
+  // that still read NEXT_PUBLIC_API_BASE_URL directly instead of going through lib/api.ts.
+  env: {
+    NEXT_PUBLIC_API_BASE_URL: "/api/v1",
+  },
   // Monorepo: prevents Next.js from mis-inferring the workspace root when multiple
   // package-lock.json files exist in the tree (root + legacy-prototype/).
   outputFileTracingRoot: path.join(__dirname, "../../"),

@@ -401,6 +401,8 @@ export interface UiStrings {
   chooseShopHint: string;
   shopSubtitle: string;
   noServicesYet: string;
+  browseServiceSuggestions: string;
+  hideServiceSuggestions: string;
   noChairsYet: string;
   noBarbersYet: string;
   customersHint: string;
@@ -1125,6 +1127,8 @@ const enUi: UiStrings = {
   chooseShopHint: 'Choose a shop from the Dashboard tab first.',
   shopSubtitle: 'Services, chairs, staff, and hours',
   noServicesYet: 'No services yet.',
+  browseServiceSuggestions: 'Browse suggestions',
+  hideServiceSuggestions: 'Hide suggestions',
   noChairsYet: 'No chairs yet.',
   noBarbersYet: 'No barbers added yet.',
   customersHint: 'Visit history, dues, and no-show waivers for everyone who has booked at your shop.',
@@ -1789,6 +1793,8 @@ const hiUi: UiStrings = {
   chooseShopHint: 'पहले डैशबोर्ड टैब से एक दुकान चुनें।',
   shopSubtitle: 'सेवाएं, कुर्सियां, स्टाफ और समय',
   noServicesYet: 'अभी कोई सेवा नहीं है।',
+  browseServiceSuggestions: 'सुझाव देखें',
+  hideServiceSuggestions: 'सुझाव छिपाएं',
   noChairsYet: 'अभी कोई कुर्सी नहीं है।',
   noBarbersYet: 'अभी कोई बार्बर नहीं जोड़ा गया।',
   customersHint: 'आपकी दुकान पर बुकिंग करने वाले हर ग्राहक का विज़िट इतिहास, बकाया और नो-शो छूट।',

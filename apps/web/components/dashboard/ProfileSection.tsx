@@ -111,7 +111,7 @@ export function ProfileSection({ salonId }: { salonId: string }) {
               type="text"
               value={form.name}
               onChange={(e) => update({ name: e.target.value })}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)" }}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             />
           </label>
           <label>
@@ -120,7 +120,7 @@ export function ProfileSection({ salonId }: { salonId: string }) {
               type="tel"
               value={form.phone}
               onChange={(e) => update({ phone: e.target.value })}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)" }}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             />
           </label>
           <label>
@@ -129,7 +129,7 @@ export function ProfileSection({ salonId }: { salonId: string }) {
               type="email"
               value={form.email}
               onChange={(e) => update({ email: e.target.value })}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)" }}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             />
           </label>
           <label>
@@ -138,7 +138,7 @@ export function ProfileSection({ salonId }: { salonId: string }) {
               type="text"
               value={form.addressLine}
               onChange={(e) => update({ addressLine: e.target.value })}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)" }}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             />
           </label>
           <label>
@@ -147,7 +147,7 @@ export function ProfileSection({ salonId }: { salonId: string }) {
               type="text"
               value={form.postalCode}
               onChange={(e) => update({ postalCode: e.target.value })}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)" }}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             />
           </label>
           <label>
@@ -156,7 +156,7 @@ export function ProfileSection({ salonId }: { salonId: string }) {
               value={form.description}
               onChange={(e) => update({ description: e.target.value })}
               rows={3}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", font: "inherit" }}
+              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", font: "inherit", background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             />
           </label>
           <div>

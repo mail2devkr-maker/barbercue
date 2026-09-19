@@ -19,29 +19,36 @@ interface QueueGroupByArgs {
 // A configurable fake for booking.groupBy — real tests set `data` per (by-shape, status) key
 // rather than relying on call-order, since buildSummaries fires several groupBy calls in
 // parallel via Promise.all and the exact order is an implementation detail tests shouldn't pin.
+// Synthetic completed-booking rows for the preferredServiceId findMany query (buildSummaries no
+// longer groupBy's the legacy Booking.serviceId — see dashboard-customers.service.ts's own
+// comment — so each (customerId, serviceId, count) entry becomes `count` distinct single-service
+// booking rows; resolveEffectiveBookingServices falls back to the `service` join when `services`
+// is empty, exactly like a real pre-multi-service booking would).
+function makeCompletedServiceRows(
+  byService: Record<string, Record<string, number>> = {},
+) {
+  return Object.entries(byService).flatMap(([customerId, byServiceForCustomer]) =>
+    Object.entries(byServiceForCustomer).flatMap(([serviceId, count]) =>
+      Array.from({ length: count }, () => ({
+        customerId,
+        serviceId,
+        service: { name: serviceId, durationMinutes: 30, price: 100 },
+        services: [],
+      })),
+    ),
+  );
+}
+
 function makeBookingGroupBy(
   data: {
     total?: Record<string, number>;
     completed?: Record<string, { count: number; min?: Date; max?: Date }>;
     cancelled?: Record<string, number>;
     noShow?: Record<string, number>;
-    byService?: Record<string, Record<string, number>>; // customerId -> serviceId -> count
   },
   pageRows: { customerId: string }[] = [],
 ) {
   return jest.fn((args: BookingGroupByArgs) => {
-    const byServiceShape = args.by.includes('serviceId');
-    if (byServiceShape) {
-      const rows = Object.entries(data.byService ?? {}).flatMap(
-        ([customerId, byService]) =>
-          Object.entries(byService).map(([serviceId, count]) => ({
-            customerId,
-            serviceId,
-            _count: { _all: count },
-          })),
-      );
-      return Promise.resolve(rows);
-    }
     if (args.where.status === 'COMPLETED') {
       const rows = Object.entries(data.completed ?? {}).map(
         ([customerId, v]) => ({
@@ -91,7 +98,7 @@ describe('DashboardCustomersService', () => {
   let service: DashboardCustomersService;
   let prisma: {
     salon: { findUnique: jest.Mock };
-    booking: { groupBy: jest.Mock; count: jest.Mock };
+    booking: { groupBy: jest.Mock; count: jest.Mock; findMany: jest.Mock };
     queueEntry: { groupBy: jest.Mock };
     user: { findMany: jest.Mock };
     service: { findMany: jest.Mock };
@@ -127,6 +134,9 @@ describe('DashboardCustomersService', () => {
       overrides,
       overrides.pageRows ?? [],
     );
+    prisma.booking.findMany = jest
+      .fn()
+      .mockResolvedValue(makeCompletedServiceRows(overrides.byService));
     prisma.queueEntry.groupBy = jest
       .fn()
       .mockResolvedValue(overrides.staffGroupRows ?? []);
@@ -136,7 +146,11 @@ describe('DashboardCustomersService', () => {
   beforeEach(async () => {
     prisma = {
       salon: { findUnique: jest.fn().mockResolvedValue({ currency: 'INR' }) },
-      booking: { groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+      booking: {
+        groupBy: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       queueEntry: { groupBy: jest.fn().mockResolvedValue([]) },
       user: { findMany: jest.fn().mockResolvedValue([]) },
       service: { findMany: jest.fn().mockResolvedValue([]) },
@@ -273,6 +287,56 @@ describe('DashboardCustomersService', () => {
         byService: { c1: { 'svc-haircut': 3, 'svc-shave': 1 } },
         users: [{ id: 'c1', phone: null, email: null }],
       });
+      prisma.service.findMany = jest
+        .fn()
+        .mockResolvedValue([{ id: 'svc-haircut', name: 'Haircut' }]);
+
+      const result = await service.getOne('owner1', 's1', 'c1');
+
+      expect(prisma.service.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['svc-haircut'] } } }),
+      );
+      expect(result.preferredServiceName).toBe('Haircut');
+    });
+
+    // Regression for the bug found in the final-seven hardening review: buildSummaries used to
+    // groupBy the legacy Booking.serviceId alone, which only ever counted a multi-service
+    // appointment toward its FIRST selected service. Haircut is the genuinely more-frequent
+    // service (present on all 3 completed bookings) even though it's the PRIMARY (services[0])
+    // on only one of them -- a serviceId-only count would have under-counted it to 1 and wrongly
+    // preferred Beard Trim (which primaries on the other two).
+    it('counts every selected service on a multi-service booking, not just its primary one', async () => {
+      setup({
+        total: { c1: 3 },
+        completed: { c1: { count: 3 } },
+        users: [{ id: 'c1', phone: null, email: null }],
+      });
+      prisma.booking.findMany = jest.fn().mockResolvedValue([
+        {
+          customerId: 'c1',
+          serviceId: 'svc-haircut',
+          service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+          services: [],
+        },
+        {
+          customerId: 'c1',
+          serviceId: 'svc-beard',
+          service: { name: 'Beard Trim', durationMinutes: 15, price: 150 },
+          services: [
+            { serviceId: 'svc-beard', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+            { serviceId: 'svc-haircut', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+          ],
+        },
+        {
+          customerId: 'c1',
+          serviceId: 'svc-beard',
+          service: { name: 'Beard Trim', durationMinutes: 15, price: 150 },
+          services: [
+            { serviceId: 'svc-beard', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+            { serviceId: 'svc-haircut', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+          ],
+        },
+      ]);
       prisma.service.findMany = jest
         .fn()
         .mockResolvedValue([{ id: 'svc-haircut', name: 'Haircut' }]);

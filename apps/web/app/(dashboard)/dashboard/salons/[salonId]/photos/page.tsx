@@ -680,7 +680,7 @@ const fileLabelStyle: React.CSSProperties = {
   display: "inline-block",
   padding: "11px 18px",
   minHeight: 44,
-  background: "#fff",
+  background: "var(--bc-surface)",
   border: "1px solid var(--bc-ink)",
   borderRadius: "var(--bc-radius-sm)",
   fontWeight: 600,

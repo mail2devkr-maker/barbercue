@@ -55,7 +55,7 @@ export function GoogleIdentityButton({
     });
     const width = Math.min(buttonRef.current.offsetWidth || 320, 400);
     window.google.accounts.id.renderButton(buttonRef.current, {
-      theme: "outline",
+      theme: "filled_black",
       size: "large",
       width,
       text: "continue_with",

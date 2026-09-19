@@ -1,5 +1,6 @@
 import { OwnerShopNav } from "../../../../../components/dashboard/OwnerShopNav";
 import { AdminManagingBanner } from "../../../../../components/dashboard/AdminManagingBanner";
+import styles from "../../../../../components/dashboard/dashboard.module.css";
 
 // Issue #13 Mission B: wraps every shop-management section (queue, settings, bookings,
 // schedule, customers, analytics, reviews, verification, services, hours, photos, chairs,
@@ -19,10 +20,10 @@ export default async function SalonSectionLayout({
 }) {
   const { salonId } = await params;
   return (
-    <>
+    <div className={styles.darkScope}>
       <OwnerShopNav salonId={salonId} />
       <AdminManagingBanner />
       {children}
-    </>
+    </div>
   );
 }

@@ -32,6 +32,7 @@ import {
   PaymentQrSection,
   styles as sectionStyles,
 } from '../../components/owner/ShopSetupSections';
+import { ServiceCatalogPicker } from '../../components/owner/ServiceCatalogPicker';
 
 const TOTAL_STEPS = ONBOARDING_TOTAL_STEPS;
 
@@ -60,15 +61,16 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [maxStepReached, setMaxStepReached] = useState(1);
-  // Null until the very first load resolves; then fixed at whichever step that load resumed onto
-  // (1 for a brand-new registration, >1 for a returning owner) — used only to decide whether the
-  // "pick up where you left off" banner below is warranted, never touched again afterward.
   const [resumedAtStep, setResumedAtStep] = useState<number | null>(null);
   const stepInitializedRef = useRef(false);
   const [goingLive, setGoingLive] = useState(false);
   const [goLiveError, setGoLiveError] = useState<string | null>(null);
   const [missingRequirements, setMissingRequirements] = useState<SalonSetupReadinessDto | null>(null);
   const [live, setLive] = useState(false);
+  // Owner-clarified requirement: a brand-new shop's onboarding must start with an empty services
+  // list and an explicit "Add service" action -- the shared preset catalog (~98 items) must never
+  // dominate the first screen a new owner sees. It only appears after this explicit toggle.
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -104,9 +106,6 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
   const hasPhoto = photos.length > 0;
   const hasPaymentQr = Boolean(paymentQr?.paymentQrImageUrl);
 
-  // Runs once, the instant every list has loaded — never again, so navigating between steps
-  // (which doesn't reload) can't reset progress, and a step already completed by the time the
-  // owner returns is never re-shown as the current step.
   useEffect(() => {
     if (loading || stepInitializedRef.current) return;
     stepInitializedRef.current = true;
@@ -194,6 +193,15 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
             )}
           </Card>
           <AddServiceForm salonId={salonId} onAdded={() => void load()} />
+          <Button
+            title={showCatalog ? t.hideServiceSuggestions : t.browseServiceSuggestions}
+            variant="outline"
+            onPress={() => setShowCatalog((prev) => !prev)}
+            style={styles.catalogToggle}
+          />
+          {showCatalog && (
+            <ServiceCatalogPicker salonId={salonId} services={services} onChanged={() => void load()} />
+          )}
         </>
       )}
 
@@ -299,6 +307,7 @@ const styles = StyleSheet.create({
   progressDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: color.border },
   progressDotDone: { backgroundColor: color.goldSoft },
   progressDotActive: { backgroundColor: color.accent },
+  catalogToggle: { marginTop: space[2] },
   navRow: { flexDirection: 'row', gap: space[2], marginTop: space[4] },
   navButton: { flex: 1 },
   goLiveButton: { marginTop: space[2] },

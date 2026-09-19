@@ -15,6 +15,13 @@ function dateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+export function getNextShopStatus(status: SalonStatus): { status: SalonStatus; label: string } | null {
+  if (status === SalonStatus.PENDING) return { status: SalonStatus.ACTIVE, label: "Open shop" };
+  if (status === SalonStatus.ACTIVE) return { status: SalonStatus.SUSPENDED, label: "Suspend" };
+  if (status === SalonStatus.SUSPENDED) return { status: SalonStatus.ACTIVE, label: "Re-open" };
+  return null;
+}
+
 export default function AdminDashboardPage() {
   const { user, logout } = useAuth();
   const [data, setData] = useState<PlatformAdminOverviewDto | null>(null);
@@ -23,6 +30,32 @@ export default function AdminDashboardPage() {
   const [shopStatus, setShopStatus] = useState<"ALL" | SalonStatus>("ALL");
   const [deletingShopId, setDeletingShopId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [statusShopId, setStatusShopId] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
+
+  async function handleStatusChange(shopId: string, shopName: string, currentStatus: SalonStatus) {
+    const transition = getNextShopStatus(currentStatus);
+    if (!transition || !window.confirm(`${transition.label} "${shopName}"?`)) return;
+    setStatusError(null);
+    setStatusSuccess(null);
+    setStatusShopId(shopId);
+    try {
+      const result = await apiFetch<{ id: string; status: SalonStatus }>(
+        `${ADMIN_PATHS.admin}/${ADMIN_PATHS.shops}/${shopId}/${ADMIN_PATHS.status}`,
+        { method: "PATCH", body: JSON.stringify({ status: transition.status }) },
+      );
+      setData((current) => current ? { ...current, shops: current.shops.map((shop) => shop.id === shopId ? { ...shop, status: result.status } : shop) } : current);
+      setStatusSuccess(`${transition.label} completed for ${shopName}.`);
+    } catch (requestError) {
+      const details = requestError instanceof ApiError && requestError.details && typeof requestError.details === "object"
+        ? Object.entries(requestError.details as Record<string, unknown>).filter(([, value]) => value === false).map(([key]) => key.replace(/^hasActive/, "Missing active ").replace(/([A-Z])/g, " $1").trim()).join(", ")
+        : "";
+      setStatusError(requestError instanceof ApiError ? `${requestError.message}${details ? ` (${details})` : ""}` : "Could not update this shop status.");
+    } finally {
+      setStatusShopId(null);
+    }
+  }
 
   async function handleDeleteShop(shopId: string, shopName: string) {
     if (!window.confirm(`Delete "${shopName}"? This cannot be undone. Only a shop with no staff, bookings, queue, review, or ledger activity can be deleted.`)) {
@@ -69,8 +102,8 @@ export default function AdminDashboardPage() {
       <header className={styles.header}>
         <div>
           <p className={styles.eyebrow}>Role-protected operations</p>
-          <h1>Platform monitoring</h1>
-          <p>Read-only visibility across FastQue. Signed in as {user?.email ?? "platform admin"}.</p>
+          <h1>Platform operations</h1>
+          <p>Monitor FastQue and apply controlled shop support actions. Signed in as {user?.email ?? "platform admin"}.</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
@@ -116,6 +149,8 @@ export default function AdminDashboardPage() {
           <section className={styles.section}>
             <div className={styles.sectionHeader}><h2>Shops</h2><span>{shops.length} shown · latest 100</span></div>
             {deleteError && <p className={styles.error} role="alert">{deleteError}</p>}
+            {statusError && <p className={styles.error} role="alert">{statusError}</p>}
+            {statusSuccess && <p className={styles.success} role="status">{statusSuccess}</p>}
             <div className={styles.tableWrap}>
               <table><thead><tr><th>Shop</th><th>Status</th><th>Owner</th><th>Operations</th><th>Plan</th><th>Actions</th></tr></thead>
                 <tbody>{shops.map((shop) => <tr key={shop.id}>
@@ -125,15 +160,11 @@ export default function AdminDashboardPage() {
                   <td>{shop.staffCount} staff · {shop.bookingCount} bookings · {shop.liveQueueCount} live</td>
                   <td>{shop.subscriptionStatus}</td>
                   <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {/* Part 2 (admin delegated shop management) — only an ACTIVE shop is
-                        delegated-manageable (SalonAccessService.assertOwnerOrAdminAccess enforces
-                        this server-side regardless of what this button does); reusing the exact
-                        same owner "Set up & open" settings page rather than a second admin-only UI,
-                        with AdminManagingBanner disclosing the admin session on every page there. */}
-                    {shop.status === SalonStatus.ACTIVE && (
-                      <LinkButton href={`/dashboard/salons/${shop.id}/settings`} variant="secondary">
-                        Manage
-                      </LinkButton>
+                    <LinkButton href={`/dashboard/salons/${shop.id}/settings`} variant="secondary">Manage</LinkButton>
+                    {getNextShopStatus(shop.status) && (
+                      <Button type="button" variant={shop.status === SalonStatus.ACTIVE ? "outline" : "primary"} disabled={statusShopId === shop.id} onClick={() => void handleStatusChange(shop.id, shop.name, shop.status)}>
+                        {statusShopId === shop.id ? "Saving…" : getNextShopStatus(shop.status)?.label}
+                      </Button>
                     )}
                     <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleDeleteShop(shop.id, shop.name)}>
                       {deletingShopId === shop.id ? "Deleting…" : "Delete"}

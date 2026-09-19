@@ -12,9 +12,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 
 /**
- * Owner-side Service catalog CRUD. Every method begins with SalonAccessService.assertOwnerAccess —
- * the same salon-isolation primitive every other dashboard route uses — so an owner can only
- * ever touch their own salon's services.
+ * Service catalog CRUD. Every method begins with SalonAccessService.assertOwnerOrAdminAccess,
+ * preserving salon isolation while allowing explicit platform-admin delegated support.
  *
  * There is deliberately no delete: Service is foreign-keyed from Booking, QueueEntry, and
  * ServiceSession, so removing a row would orphan historical bookings and completed visits.
@@ -44,7 +43,7 @@ export class SalonServicesService {
     salonId: string,
     input: CreateSalonServiceInput,
   ): Promise<SalonServiceDto> {
-    await this.salonAccess.assertOwnerAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const existingServices = await this.prisma.service.findMany({
       where: { salonId },
     });
@@ -75,6 +74,17 @@ export class SalonServicesService {
         isActive: true,
       },
     });
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_SERVICE_CREATED',
+          entityType: 'Service',
+          entityId: created.id,
+          metadata: { salonId, name: created.name },
+        },
+      });
+    }
     return this.toDto(created, await this.currencyFor(salonId));
   }
 

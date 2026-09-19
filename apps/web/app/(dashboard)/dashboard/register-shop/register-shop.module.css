@@ -1,12 +1,65 @@
 .page {
-  width: min(660px, 100%);
-  margin: 0 auto;
-  padding: clamp(28px, 5vw, 54px) clamp(16px, 4vw, 32px) 64px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: calc(100vh - 72px);
+  padding: clamp(32px, 6vw, 84px) clamp(16px, 4vw, 48px) 72px;
+  display: grid;
+  grid-template-columns: minmax(260px, 430px) minmax(0, 650px);
+  justify-content: center;
+  align-items: start;
+  gap: clamp(28px, 6vw, 88px);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: #f7f5f4;
+  background:
+    radial-gradient(circle at 9% 5%, rgba(242, 10, 131, 0.2), transparent 34%),
+    radial-gradient(circle at 94% 8%, rgba(255, 122, 69, 0.18), transparent 31%),
+    radial-gradient(circle at 20% 96%, rgba(255, 62, 87, 0.12), transparent 30%),
+    linear-gradient(145deg, #09090c 0%, #0d0d12 52%, #151017 100%);
+}
+
+.page::before,
+.page::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(10px);
+}
+
+.page::before {
+  width: min(54vw, 760px);
+  height: min(54vw, 760px);
+  top: -290px;
+  right: -220px;
+  background: radial-gradient(circle, rgba(242, 10, 131, 0.2), rgba(255, 62, 87, 0.07) 48%, transparent 72%);
+}
+
+.page::after {
+  width: 460px;
+  height: 460px;
+  bottom: -260px;
+  left: -190px;
+  background: radial-gradient(circle, rgba(255, 122, 69, 0.16), transparent 67%);
+}
+
+.hero,
+.formCard {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.hero {
+  padding-top: clamp(16px, 5vw, 72px);
 }
 
 .eyebrow {
   margin-bottom: 10px;
-  color: var(--bc-accent);
+  color: #ff6678;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.13em;
@@ -14,25 +67,110 @@
 }
 
 .title {
-  margin: 0 0 10px;
-  color: var(--bc-ink);
+  margin: 0 0 14px;
+  color: #f7f5f4;
   font-family: var(--font-display);
   font-size: clamp(2.2rem, 7vw, 3.8rem);
   font-weight: 500;
   letter-spacing: -0.045em;
   line-height: 1;
+  text-wrap: balance;
 }
 
 .intro {
-  margin-bottom: 28px;
-  color: var(--bc-muted);
+  max-width: 42rem;
+  margin-bottom: 0;
+  color: rgba(255, 255, 255, 0.72);
   line-height: 1.65;
+}
+
+.formCard {
+  padding: clamp(22px, 4vw, 42px);
+  border: 1px solid rgba(255, 62, 87, 0.28);
+  border-radius: var(--bc-radius-xl);
+  background: linear-gradient(145deg, rgba(255, 253, 249, 0.98), rgba(248, 241, 230, 0.96));
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(14px);
+}
+
+.formCard::before {
+  content: "";
+  display: block;
+  height: 4px;
+  margin: calc(-1 * clamp(22px, 4vw, 42px)) calc(-1 * clamp(22px, 4vw, 42px)) 28px;
+  border-radius: var(--bc-radius-xl) var(--bc-radius-xl) 0 0;
+  background: linear-gradient(100deg, #f20a83 0%, #ff3e57 55%, #ff7a45 100%);
+}
+
+.formCardHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.formCardHeader > div {
+  min-width: 0;
+}
+
+.formCardHeader h2 {
+  margin: 0 0 4px;
+  color: var(--bc-brand-navy);
+  font-size: clamp(1.45rem, 3vw, 2rem);
+}
+
+.formCardHeader p {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+}
+
+.stepBadge {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: var(--bc-radius-sm);
+  background: linear-gradient(100deg, #f20a83 0%, #ff3e57 55%, #ff7a45 100%);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .securityCard {
   padding: clamp(22px, 5vw, 34px);
-  border: 1px solid var(--bc-border);
-  border-radius: 22px;
-  background: linear-gradient(145deg, #fffdf9, #f8f0e5);
+  border: 1px solid color-mix(in srgb, var(--bc-brand-coral) 14%, var(--bc-border));
+  border-radius: var(--bc-radius-lg);
+  background: rgba(255, 253, 249, 0.84);
   box-shadow: var(--bc-shadow-sm);
+}
+
+@media (max-width: 760px) {
+  .page {
+    min-height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    padding-top: 32px;
+  }
+
+  .hero {
+    padding-top: 0;
+  }
+
+  .title {
+    font-size: clamp(2.35rem, 12vw, 3.2rem);
+  }
+
+  .formCard {
+    padding: 22px 18px;
+    border-radius: var(--bc-radius-lg);
+  }
+
+  .formCard::before {
+    margin: -22px -18px 24px;
+    border-radius: var(--bc-radius-lg) var(--bc-radius-lg) 0 0;
+  }
+
+  .formCardHeader {
+    gap: 10px;
+  }
 }
