@@ -944,15 +944,12 @@ export class AuthService {
         HttpStatus.FORBIDDEN,
       );
     }
-    if (!totpCode) {
-      throw new AppException(
-        AuthErrorCode.TOTP_REQUIRED,
-        'A 6-digit authenticator code is required.',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
     let secret: string;
     try {
+      // Validate that the configured secret is actually usable before asking the admin for a
+      // one-time code. After a database restore the ciphertext may belong to an older
+      // TOTP_ENCRYPTION_KEY; in that case Google sign-in must enter the secure bootstrap flow
+      // immediately instead of first prompting for a code that can never succeed.
       secret = this.cryptoService.decrypt(user.totpSecret);
     } catch {
       // A database recovery can restore ciphertext that was encrypted under a different
@@ -963,6 +960,13 @@ export class AuthService {
         AuthErrorCode.TOTP_SETUP_REQUIRED,
         'Authenticator setup must be repaired before admin sign-in can continue.',
         HttpStatus.FORBIDDEN,
+      );
+    }
+    if (!totpCode) {
+      throw new AppException(
+        AuthErrorCode.TOTP_REQUIRED,
+        'A 6-digit authenticator code is required.',
+        HttpStatus.UNAUTHORIZED,
       );
     }
     const valid = await this.totpService.verifyToken(secret, totpCode);

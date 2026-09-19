@@ -115,7 +115,16 @@ function AdminLoginForm() {
       await adminGoogleLogin(parsed.data);
       router.replace(safeNextPath(searchParams.get("next")) ?? "/dashboard/admin");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Sign-in failed. Please try again.");
+      if (err instanceof ApiError && err.code === AuthErrorCode.TOTP_SETUP_REQUIRED) {
+        try {
+          setTotpCode("");
+          await startTotpSetup(googleIdToken);
+        } catch (setupErr) {
+          setError(setupErr instanceof ApiError ? setupErr.message : "Authenticator setup could not be started. Please try again.");
+        }
+      } else {
+        setError(err instanceof ApiError ? err.message : "Sign-in failed. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
