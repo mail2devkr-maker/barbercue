@@ -12,6 +12,7 @@ import { BookingsService } from './bookings.service';
 import { BookingExpiryService } from './booking-expiry.service';
 import { BookingNoShowService } from './booking-no-show.service';
 import { BookingPaymentInfoService } from './booking-payment-info.service';
+import { ArrivalAlertsService } from './arrival-alerts.service';
 
 @Module({
   // forwardRef: QueueModule already imports BookingsModule (for AvailabilityService/
@@ -32,11 +33,16 @@ import { BookingPaymentInfoService } from './booking-payment-info.service';
     BookingExpiryService,
     BookingNoShowService,
     BookingPaymentInfoService,
+    ArrivalAlertsService,
   ],
   // AvailabilityService is reused by Phase 3C's queue module (qualified-staff-pool logic for live
   // assignment) — exported so QueueModule can inject it without duplicating the StaffService rule.
   // CancellationPolicyService is exported too, so QueueModule's QueueEntryExpiryService can reuse
   // the same per-salon grace-period lookup rather than a duplicate provider registration.
-  exports: [AvailabilityService, CancellationPolicyService],
+  // BookingNoShowService/ArrivalAlertsService are exported (P0 arrival-alert mission) so
+  // DashboardQueueController — which already lives in QueueModule and already imports BookingsModule
+  // for the two exports above — can mount the new manual no-show/correction/alert endpoints without
+  // a second, competing controller.
+  exports: [AvailabilityService, CancellationPolicyService, BookingNoShowService, ArrivalAlertsService],
 })
 export class BookingsModule {}

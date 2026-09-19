@@ -44,6 +44,13 @@ export interface VoiceAnnouncements {
   /** Spoken once, immediately, when an owner/staff member turns voice announcements on — the only
    * way speechSynthesis/Speech.speak can be confirmed working without waiting for a real event. */
   voiceAnnouncementsOn(): string;
+  /**
+   * Owner/staff: the repeating arrival-check reminder (P0 arrival-alert mission) — asks whether an
+   * unresolved, grace-window-eligible appointment's customer has arrived. `serviceName`/`time`
+   * follow the exact same null-safe pattern as newBookingReceived/bookingRescheduled above; never a
+   * customer name (no canonical one exists in this product — see ArrivalAlertDto's own comment).
+   */
+  arrivalCheck(serviceName: string | null, time: string | null): string;
 }
 
 const en: VoiceAnnouncements = {
@@ -66,6 +73,11 @@ const en: VoiceAnnouncements = {
   newCustomerJoined: (tokenNumber, serviceName) =>
     `New customer joined the queue. Token number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
   voiceAnnouncementsOn: () => 'Voice announcements on.',
+  arrivalCheck: (serviceName, time) => {
+    const service = serviceName ? `${serviceName} customer` : 'appointment';
+    const when = time ? ` at ${time}` : '';
+    return `Appointment reminder. Has your${when} ${service} arrived? Please confirm arrived or not arrived.`;
+  },
 };
 
 // Hindi, Devanagari script — expo-speech / speechSynthesis both accept UTF-8 text directly, no
@@ -95,6 +107,11 @@ const hi: VoiceAnnouncements = {
   newCustomerJoined: (tokenNumber, serviceName) =>
     `कतार में नया ग्राहक जुड़ा। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
   voiceAnnouncementsOn: () => 'आवाज़ में सूचनाएं चालू हैं।',
+  arrivalCheck: (serviceName, time) => {
+    const service = serviceName ? `${serviceName} ग्राहक` : 'अपॉइंटमेंट';
+    const when = time ? ` ${time} बजे की` : '';
+    return `अपॉइंटमेंट रिमाइंडर। क्या आपकी${when} ${service} पहुंच चुकी है? कृपया पुष्टि करें, आया या नहीं आया।`;
+  },
 };
 
 export const VOICE_ANNOUNCEMENTS: Readonly<Record<Language, VoiceAnnouncements>> = {
@@ -2314,6 +2331,7 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'owner.booking.expired': 'Booking expired',
   'owner.walk_in.joined': 'New walk-in',
   'staff.assigned': 'You were assigned a customer',
+  'owner.booking.arrival_check': 'Appointment arrival check',
 };
 
 const hiNotificationTypeLabels: NotificationTypeLabels = {
@@ -2329,6 +2347,7 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'owner.booking.expired': 'बुकिंग समाप्त हो गई',
   'owner.walk_in.joined': 'नया वॉक-इन',
   'staff.assigned': 'आपको एक ग्राहक सौंपा गया',
+  'owner.booking.arrival_check': 'अपॉइंटमेंट आगमन जांच',
 };
 
 export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTypeLabels>> = {
@@ -2359,6 +2378,9 @@ export interface PushCopy {
   newBooking(serviceName: string | null): { title: string; body: string };
   bookingRescheduled(serviceName: string | null): { title: string; body: string };
   bookingCancelled(serviceName: string | null): { title: string; body: string };
+  /** P0 arrival-alert mission — the one-shot T-5-minute push. Never a customer name (see
+   * ArrivalAlertDto's own comment on why one is never invented). */
+  arrivalCheck(serviceName: string | null): { title: string; body: string };
 }
 
 const enPush: PushCopy = {
@@ -2374,6 +2396,12 @@ const enPush: PushCopy = {
     title: 'Booking cancelled',
     body: serviceName ? `${serviceName} booking was cancelled.` : 'A booking at your shop was cancelled.',
   }),
+  arrivalCheck: (serviceName) => ({
+    title: 'Appointment in 5 minutes',
+    body: serviceName
+      ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.`
+      : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
+  }),
 };
 
 const hiPush: PushCopy = {
@@ -2388,6 +2416,12 @@ const hiPush: PushCopy = {
   bookingCancelled: (serviceName) => ({
     title: 'बुकिंग रद्द हुई',
     body: serviceName ? `${serviceName} बुकिंग रद्द कर दी गई।` : 'आपकी दुकान की एक बुकिंग रद्द कर दी गई।',
+  }),
+  arrivalCheck: (serviceName) => ({
+    title: 'अपॉइंटमेंट 5 मिनट में',
+    body: serviceName
+      ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।`
+      : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
   }),
 };
 

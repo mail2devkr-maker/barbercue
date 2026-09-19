@@ -30,6 +30,7 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'owner.booking.expired': NotificationCategory.BOOKING_UPDATES,
   'owner.walk_in.joined': NotificationCategory.QUEUE_UPDATES,
   'staff.assigned': NotificationCategory.QUEUE_UPDATES,
+  'owner.booking.arrival_check': NotificationCategory.BOOKING_UPDATES,
 };
 
 const ALL_CATEGORIES: NotificationCategory[] = [

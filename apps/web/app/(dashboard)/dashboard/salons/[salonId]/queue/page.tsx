@@ -1,6 +1,7 @@
 import { DashboardQueueView } from "../../../../../../components/queue/DashboardQueueView";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { CapacitySummaryPanel } from "../../../../../../components/dashboard/CapacitySummaryPanel";
+import { ArrivalAlertOverlay } from "../../../../../../components/bookings/ArrivalAlertOverlay";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // Live queue view for salon staff/owners — call/assign/complete/no-show/cancel and staff
@@ -20,6 +21,7 @@ export default async function DashboardQueuePage({
       <SetupNavigation salonId={salonId} currentStep="queue" section="steps" />
       <CapacitySummaryPanel salonId={salonId} />
       <DashboardQueueView salonId={salonId} />
+      <ArrivalAlertOverlay salonId={salonId} />
       <SetupNavigation
         salonId={salonId}
         currentStep="queue"

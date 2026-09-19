@@ -102,6 +102,44 @@ export class QueueService {
         HttpStatus.NOT_FOUND,
       );
     }
+    return this.createArrivalQueueEntry(booking, customerId);
+  }
+
+  /**
+   * P0 arrival-alert mission — the owner/staff-triggered twin of checkIn() above, reached from
+   * the dashboard's ARRIVED confirmation instead of the customer's own self-check-in. Converges on
+   * exactly the same QueueEntry-creation path (createArrivalQueueEntry), so a customer self-check-in
+   * racing an operator's Mark Arrived click for the same booking can only ever produce one
+   * QueueEntry — bookingId's unique index is the real backstop either way, matching requirement 9.
+   */
+  async arriveAsOperator(
+    userId: string,
+    bookingId: string,
+  ): Promise<QueueEntryDetailDto> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+    if (!booking) {
+      throw new AppException(
+        BookingErrorCode.BOOKING_NOT_FOUND,
+        'Booking not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    await this.salonAccess.assertAccessOrAdminAccess(userId, booking.salonId);
+    return this.createArrivalQueueEntry(booking, booking.customerId);
+  }
+
+  private async createArrivalQueueEntry(
+    booking: {
+      id: string;
+      salonId: string;
+      slotStart: Date;
+      status: BookingStatus;
+      serviceId: string;
+    },
+    customerId: string,
+  ): Promise<QueueEntryDetailDto> {
     if (booking.status !== BookingStatus.CONFIRMED) {
       throw new AppException(
         QueueErrorCode.INVALID_QUEUE_TRANSITION,
@@ -111,7 +149,7 @@ export class QueueService {
     }
 
     const existingForBooking = await this.prisma.queueEntry.findFirst({
-      where: { bookingId },
+      where: { bookingId: booking.id },
     });
     if (existingForBooking) {
       throw new AppException(
@@ -140,7 +178,7 @@ export class QueueService {
         const created = await tx.queueEntry.create({
           data: {
             salonId: booking.salonId,
-            bookingId,
+            bookingId: booking.id,
             customerId,
             serviceId: booking.serviceId,
             source: QueueEntrySource.APPOINTMENT,

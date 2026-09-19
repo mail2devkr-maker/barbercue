@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import {
+  BookingErrorCode,
   BookingStatus,
   LedgerReason,
   LedgerStatus,
@@ -10,186 +11,294 @@ import {
   type CancellationPolicyDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { AppException } from '../common/exceptions/app.exception';
+import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { resolveEffectiveBookingServices } from './effective-booking-services';
 
+const noShowCandidateSelect = {
+  id: true,
+  salonId: true,
+  customerId: true,
+  slotStart: true,
+  status: true,
+  serviceId: true,
+  service: { select: { name: true, durationMinutes: true, price: true } },
+  services: {
+    orderBy: { sortOrder: 'asc' as const },
+    select: {
+      serviceId: true,
+      serviceName: true,
+      durationMinutes: true,
+      price: true,
+    },
+  },
+  queueEntries: { select: { id: true }, take: 1 },
+  salon: { select: { ownerUserId: true } },
+};
+
 /**
- * STATE_MACHINES.md: "CONFIRMED --> NO_SHOW: customer never checks in within
- * appointmentArrivalGraceMinutes of slotStart." Distinct from booking-expiry.service.ts's
- * PENDING_PAYMENT timeout in every way that matters: the terminal state is NO_SHOW not EXPIRED,
- * the grace window is a per-salon CancellationPolicy setting (not a fixed platform constant) and
- * is measured from slotStart (not slotEnd or createdAt), and — per the cancellation flow's own
- * documented fork ("No-show follows the same fork... using noShowChargeType/noShowChargeValue
- * instead of the late-cancellation values") — a no-show owes the salon's configured no-show
- * charge, exactly like BookingsService.cancel() computes a late-cancellation charge, reusing the
- * identical shared computeCancellationCharge function with isNoShow=true.
+ * P0 production incident (2026-09-19, booking d3c70810-...): the previous version of this service
+ * ran an unattended `@Cron` sweep that automatically flipped any CONFIRMED booking to NO_SHOW —
+ * with a real financial charge — purely because `slotStart + appointmentArrivalGraceMinutes` had
+ * elapsed and no QueueEntry existed. That is not proof of physical absence: a salon can serve a
+ * customer without the customer ever using FastQue's own self-check-in. The booking above was
+ * served in person and still got charged as a no-show ten minutes after its slot started.
  *
- * "Never checks in" is Booking.queueEntries being empty: a checked-in appointment gets a
- * QueueEntry (source=APPOINTMENT, see STATE_MACHINES.md's "Queue entry creation timing"), so once
- * that exists the booking's fate is tracked through the queue engine instead, never this sweep.
- *
- * Same claim-based sweep shape as booking-expiry.service.ts and RemindersService — the updateMany
- * re-checks status/slotStart/queueEntries inside its own where clause as the durable claim, so a
- * late check-in or a cancel/reschedule between the initial read and the write is silently skipped
- * rather than incorrectly overwritten.
+ * New rule, matching STATE_MACHINES.md's corrected diagram: CONFIRMED never auto-transitions to
+ * NO_SHOW on a timer. It only becomes NO_SHOW through `markNoShow`, an explicit operator action
+ * (owner/staff, gated by the exact same salon-access check as every other dashboard mutation),
+ * itself only reachable once the arrival grace has genuinely elapsed AND no QueueEntry exists —
+ * the automatic sweep's every other safety property (claim-based re-check, multi-service charge
+ * math, ledger/audit/notification shape) is preserved here, just behind a human decision instead
+ * of a timer. Detecting "overdue, still unconfirmed" and nudging an operator toward that decision
+ * is ArrivalAlertsService's job now, not this service's.
  */
 @Injectable()
 export class BookingNoShowService {
-  private readonly logger = new Logger(BookingNoShowService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly cancellationPolicy: CancellationPolicyService,
+    private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
-  async sweep(): Promise<void> {
-    const count = await this.markOverdueNoShows();
-    if (count > 0) this.logger.log(`Marked ${count} booking(s) as no-show.`);
-  }
-
-  async markOverdueNoShows(): Promise<number> {
-    const now = Date.now();
-
-    // Broad candidate read: any CONFIRMED, never-checked-in booking whose slot has already
-    // started. The salon-specific grace check happens per candidate below — appointmentArrivalGraceMinutes
-    // varies per salon, so it can't be expressed as a single WHERE cutoff across every row.
-    const candidates = await this.prisma.booking.findMany({
-      where: {
-        status: BookingStatus.CONFIRMED,
-        slotStart: { lt: new Date(now) },
-        queueEntries: { none: {} },
-      },
-      select: {
-        id: true,
-        salonId: true,
-        customerId: true,
-        slotStart: true,
-        serviceId: true,
-        service: {
-          select: { name: true, durationMinutes: true, price: true },
-        },
-        services: {
-          orderBy: { sortOrder: 'asc' },
-          select: {
-            serviceId: true,
-            serviceName: true,
-            durationMinutes: true,
-            price: true,
-          },
-        },
-        salon: { select: { ownerUserId: true } },
-      },
+  async markNoShow(
+    userId: string,
+    bookingId: string,
+  ): Promise<{ id: string; status: BookingStatus; chargeAmount: number }> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: noShowCandidateSelect,
     });
+    if (!booking) {
+      throw new AppException(
+        BookingErrorCode.BOOKING_NOT_FOUND,
+        'Booking not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    await this.salonAccess.assertAccessOrAdminAccess(userId, booking.salonId);
 
-    if (candidates.length === 0) return 0;
-
-    // One policy lookup per salon per run, not per booking — getEffectivePolicy falls back to the
-    // platform-default row, which is the common case for most salons.
-    const policyCache = new Map<string, CancellationPolicyDto>();
-    async function policyFor(
-      this: BookingNoShowService,
-      salonId: string,
-    ): Promise<CancellationPolicyDto> {
-      const cached = policyCache.get(salonId);
-      if (cached) return cached;
-      const policy = await this.cancellationPolicy.getEffectivePolicy(salonId);
-      policyCache.set(salonId, policy);
-      return policy;
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new AppException(
+        BookingErrorCode.NO_SHOW_NOT_ELIGIBLE,
+        'Only a confirmed booking can be marked no-show.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (booking.queueEntries.length > 0) {
+      throw new AppException(
+        BookingErrorCode.NO_SHOW_NOT_ELIGIBLE,
+        'This booking has already checked in and cannot be marked no-show.',
+        HttpStatus.CONFLICT,
+      );
     }
 
-    let markedCount = 0;
-    for (const booking of candidates) {
-      const policy = await policyFor.call(this, booking.salonId);
-      const graceMs = policy.appointmentArrivalGraceMinutes * 60_000;
-      if (booking.slotStart.getTime() + graceMs > now) continue; // not yet overdue for this salon
-
-      // Multi-service financial correctness: no-show percentage charges must apply to the complete
-      // appointment value, never only Booking.service (the primary/first compatibility pointer).
-      // Integer-paise summation avoids float drift. The effective-service helper also keeps an
-      // anomalous rolling-deploy booking with zero snapshots truthful instead of charging zero.
-      const effectiveServices = resolveEffectiveBookingServices(booking);
-      const appointmentPrice = paiseToRupees(
-        effectiveServices.reduce(
-          (sum, service) =>
-            sum + decimalStringToPaise(service.price.toString()),
-          0,
-        ),
+    const policy = await this.cancellationPolicy.getEffectivePolicy(booking.salonId);
+    const graceMs = policy.appointmentArrivalGraceMinutes * 60_000;
+    if (booking.slotStart.getTime() + graceMs > Date.now()) {
+      throw new AppException(
+        BookingErrorCode.NO_SHOW_NOT_ELIGIBLE,
+        `No-show can only be confirmed after the ${policy.appointmentArrivalGraceMinutes}-minute arrival grace has elapsed.`,
+        HttpStatus.BAD_REQUEST,
       );
-      const chargeAmount = computeCancellationCharge(
-        policy,
-        appointmentPrice,
-        0, // unused by the isNoShow branch — see computeCancellationCharge
-        true,
-      );
+    }
 
-      const result = await this.prisma.$transaction(async (tx) => {
-        const claim = await tx.booking.updateMany({
-          where: {
-            id: booking.id,
-            status: BookingStatus.CONFIRMED,
-            queueEntries: { none: {} },
-          },
+    const chargeAmount = this.computeNoShowCharge(booking, policy);
+
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      // Claim-based re-check, exactly as the removed automatic sweep did: a concurrent check-in
+      // (customer self-check-in racing this exact operator click) or a duplicate/retried request
+      // is silently rejected here rather than double-charging or overwriting a real arrival.
+      const claim = await tx.booking.updateMany({
+        where: {
+          id: booking.id,
+          status: BookingStatus.CONFIRMED,
+          queueEntries: { none: {} },
+        },
+        data: {
+          status: BookingStatus.NO_SHOW,
+          cancellationChargeAmount: chargeAmount,
+        },
+      });
+      if (claim.count === 0) return false;
+
+      if (chargeAmount > 0) {
+        await tx.customerLedgerEntry.create({
           data: {
-            status: BookingStatus.NO_SHOW,
-            cancellationChargeAmount: chargeAmount,
+            customerId: booking.customerId,
+            salonId: booking.salonId,
+            bookingId: booking.id,
+            amount: chargeAmount,
+            reason: LedgerReason.NO_SHOW_CHARGE,
+            status: LedgerStatus.OUTSTANDING,
           },
         });
-        if (claim.count === 0) return false;
+      }
 
-        if (chargeAmount > 0) {
-          await tx.customerLedgerEntry.create({
-            data: {
-              customerId: booking.customerId,
-              salonId: booking.salonId,
-              bookingId: booking.id,
-              amount: chargeAmount,
-              reason: LedgerReason.NO_SHOW_CHARGE,
-              status: LedgerStatus.OUTSTANDING,
-            },
-          });
-        }
-
-        await tx.auditLog.create({
-          data: {
-            actorUserId: null,
-            action: 'BOOKING_NO_SHOW',
-            entityType: 'Booking',
-            entityId: booking.id,
-            metadata: {
-              chargeAmount,
-              appointmentArrivalGraceMinutes: policy.appointmentArrivalGraceMinutes,
-            },
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'BOOKING_NO_SHOW',
+          entityType: 'Booking',
+          entityId: booking.id,
+          metadata: {
+            chargeAmount,
+            appointmentArrivalGraceMinutes: policy.appointmentArrivalGraceMinutes,
+            mode: 'manual',
           },
-        });
-
-        await this.notifications.notifyInTransaction(
-          tx,
-          booking.customerId,
-          'booking.no_show',
-          { salonId: booking.salonId },
-          'account/bookings',
-        );
-        await this.notifications.notifyInTransaction(
-          tx,
-          booking.salon.ownerUserId,
-          'owner.booking.no_show',
-          { salonId: booking.salonId, bookingId: booking.id },
-          `dashboard/salons/${booking.salonId}/bookings`,
-        );
-        return true;
+        },
       });
 
-      if (result) {
-        markedCount += 1;
-        this.realtime.emitBookingNoShow(booking.salonId, booking.id);
-      }
+      await this.notifications.notifyInTransaction(
+        tx,
+        booking.customerId,
+        'booking.no_show',
+        { salonId: booking.salonId },
+        'account/bookings',
+      );
+      await this.notifications.notifyInTransaction(
+        tx,
+        booking.salon.ownerUserId,
+        'owner.booking.no_show',
+        { salonId: booking.salonId, bookingId: booking.id },
+        `dashboard/salons/${booking.salonId}/bookings`,
+      );
+      return true;
+    });
+
+    if (!claimed) {
+      throw new AppException(
+        BookingErrorCode.NO_SHOW_NOT_ELIGIBLE,
+        'This booking is no longer eligible to be marked no-show — it may have just been checked in.',
+        HttpStatus.CONFLICT,
+      );
     }
 
-    return markedCount;
+    this.realtime.emitBookingNoShow(booking.salonId, booking.id);
+    return { id: booking.id, status: BookingStatus.NO_SHOW, chargeAmount };
+  }
+
+  /**
+   * Requirement 17 (existing false no-show correction) — an auditable, reversible-in-spirit
+   * correction for a booking that was wrongly marked NO_SHOW (by the now-removed automatic sweep,
+   * or by operator mistake). Never deletes the original BOOKING_NO_SHOW audit row or ledger
+   * history: the outstanding charge (if any) is WAIVED, not deleted, and a second, distinct audit
+   * row records the correction. Never fabricates a QueueEntry/ServiceSession/staff/chair — this
+   * booking never actually flowed through the live queue, and pretending it did would fabricate
+   * history the mission explicitly forbids.
+   */
+  async correctToCompleted(
+    userId: string,
+    bookingId: string,
+  ): Promise<{ id: string; status: BookingStatus; waivedLedgerEntryIds: string[] }> {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, salonId: true, customerId: true, status: true },
+    });
+    if (!booking) {
+      throw new AppException(
+        BookingErrorCode.BOOKING_NOT_FOUND,
+        'Booking not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    await this.salonAccess.assertAccessOrAdminAccess(userId, booking.salonId);
+
+    if (booking.status !== BookingStatus.NO_SHOW) {
+      throw new AppException(
+        BookingErrorCode.BOOKING_NOT_NO_SHOW,
+        'Only a booking currently marked no-show can be corrected to completed.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const waivedLedgerEntryIds = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.booking.updateMany({
+        where: { id: booking.id, status: BookingStatus.NO_SHOW },
+        data: { status: BookingStatus.COMPLETED },
+      });
+      if (claim.count === 0) {
+        throw new AppException(
+          BookingErrorCode.BOOKING_NOT_NO_SHOW,
+          'This booking is no longer marked no-show.',
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      // Neutralize any outstanding no-show charge without deleting it — WAIVED is the same
+      // reversible terminal state dashboard-customers.service.ts's own waiveNoShowDue uses.
+      const outstanding = await tx.customerLedgerEntry.findMany({
+        where: {
+          bookingId: booking.id,
+          reason: LedgerReason.NO_SHOW_CHARGE,
+          status: LedgerStatus.OUTSTANDING,
+        },
+        select: { id: true },
+      });
+      if (outstanding.length > 0) {
+        await tx.customerLedgerEntry.updateMany({
+          where: { id: { in: outstanding.map((e) => e.id) } },
+          data: { status: LedgerStatus.WAIVED },
+        });
+      }
+
+      // The original BOOKING_NO_SHOW row is never touched — this is an additional, distinct audit
+      // entry recording the correction, not an edit of history.
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'BOOKING_NO_SHOW_CORRECTED_TO_COMPLETED',
+          entityType: 'Booking',
+          entityId: booking.id,
+          metadata: {
+            waivedLedgerEntryIds: outstanding.map((e) => e.id),
+          },
+        },
+      });
+
+      await this.notifications.notifyInTransaction(
+        tx,
+        booking.customerId,
+        'booking.confirmed',
+        { salonId: booking.salonId },
+        'account/bookings',
+      );
+
+      return outstanding.map((e) => e.id);
+    });
+
+    this.realtime.emitBookingNoShow(booking.salonId, booking.id);
+    return { id: booking.id, status: BookingStatus.COMPLETED, waivedLedgerEntryIds };
+  }
+
+  private computeNoShowCharge(
+    booking: {
+      serviceId: string;
+      service: { name: string; durationMinutes: number; price: Prisma.Decimal };
+      services: Array<{
+        serviceId: string;
+        serviceName: string;
+        durationMinutes: number;
+        price: Prisma.Decimal;
+      }>;
+    },
+    policy: CancellationPolicyDto,
+  ): number {
+    // Multi-service financial correctness: no-show percentage charges must apply to the complete
+    // appointment value, never only Booking.service (the primary/first compatibility pointer).
+    // Integer-paise summation avoids float drift.
+    const effectiveServices = resolveEffectiveBookingServices(booking);
+    const appointmentPrice = paiseToRupees(
+      effectiveServices.reduce(
+        (sum, service) => sum + decimalStringToPaise(service.price.toString()),
+        0,
+      ),
+    );
+    return computeCancellationCharge(policy, appointmentPrice, 0, true);
   }
 }

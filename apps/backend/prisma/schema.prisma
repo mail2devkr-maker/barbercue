@@ -914,6 +914,13 @@ model Booking {
   // customer, so the periodic sweep never double-reminds. Null means "not sent yet", not "no
   // reminder wanted" — every eligible booking gets exactly one until it's sent.
   reminderSentAt           DateTime?
+  // P0 arrival-alert mission — set once the T-5-minute arrival-check sweep has notified this
+  // salon's operators, so the periodic sweep never re-sends the same one-shot nudge (realtime +
+  // durable Notification + mobile push) on every run. Null means "not sent yet". Unlike
+  // reminderSentAt this never gates whether the FULL-SCREEN overlay itself shows — that eligibility
+  // is always re-derived live (CONFIRMED, no QueueEntry, now >= slotStart - lead) so a reconnect or
+  // hard refresh can never lose an unresolved alert; this column only dedupes the one-time push.
+  arrivalAlertSentAt       DateTime?
   // FastQue Credits / Wallet V1 — a snapshot, not a live-recomputed value, so a later change to
   // CREDIT_SLAB_AMOUNT_INR or the wallet balance can never retroactively change what a past
   // booking shows it redeemed. Set once, at creation, to the ACTUAL amount applied after the

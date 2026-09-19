@@ -333,7 +333,21 @@ export const DASHBOARD_PATHS = {
   // postalCode/description). No such endpoint existed before this; shared verbatim by owner and
   // PLATFORM_ADMIN via the same SalonProfileService.
   profile: 'profile',
+  // P0 arrival-alert mission — POST dashboard/bookings/:id/arrive|no-show|correct-no-show (staff/
+  // owner-triggered booking-lifecycle actions, mounted alongside the existing queue mutations in
+  // DashboardQueueController) and GET dashboard/salons/:salonId/arrival-alerts (the "reconstruct
+  // eligibility from backend truth" read used by the full-screen overlay on load/reconnect).
+  arrive: 'arrive',
+  correctNoShow: 'correct-no-show',
+  arrivalAlerts: 'arrival-alerts',
 } as const;
+
+// P0 arrival-alert mission — how far ahead of slotStart the arrival-check alert becomes eligible.
+// A single platform-wide constant for V1, same rationale as reminders.service.ts's
+// REMINDER_WINDOW_MINUTES: no owner-facing settings UI exists yet to make this per-salon
+// configurable, so it stays a named constant (one-line change later) rather than a hardcoded
+// magic number repeated in both the backend sweep and the frontend eligibility display.
+export const ARRIVAL_ALERT_LEAD_MINUTES = 5;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).
 // `:token` is Salon.publicQueueToken, never the internal Salon.id.

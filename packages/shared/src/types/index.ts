@@ -582,6 +582,34 @@ export interface OwnerBookingDetailDto extends BookingDetailDto {
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
   cancelledAt: string | null; // ISO 8601
+  // P0 arrival-alert mission — server-computed so the client never re-derives no-show/arrival
+  // policy math itself (grace minutes, charge amounts) from raw fields. `hasCheckedIn` mirrors
+  // ArrivalGuidance's own definition (a QueueEntry exists for this booking) so the owner UI can
+  // tell "arrived and waiting" apart from "not yet arrived" even though both currently read as
+  // Booking.status === CONFIRMED. `arrivalAlertDue`/`noShowEligible` are both false once
+  // hasCheckedIn is true or the booking has left CONFIRMED.
+  hasCheckedIn: boolean;
+  arrivalAlertDue: boolean;
+  noShowEligible: boolean;
+}
+
+// P0 arrival-alert mission — the full-screen owner overlay's "what needs my attention right now"
+// read model. Deliberately id/summary-only (never phone/email — see the mission's privacy
+// requirement): `customerDisplayName` is always the truthful fallback ("Your 3:15 PM Haircut
+// customer") because no canonical customer display name exists anywhere in this product (User has
+// only phone/email, never a name field) — never invented here.
+export interface ArrivalAlertDto {
+  bookingId: string;
+  salonId: string;
+  slotStart: string; // ISO 8601
+  serviceName: string;
+  customerDisplayName: string;
+  graceExpired: boolean;
+  // Only meaningful once graceExpired is true (the amount a MARK NO SHOW action would actually
+  // charge, per this salon's live CancellationPolicy) — null beforehand so the client never shows
+  // a premature/guessed figure.
+  noShowChargePreview: number | null;
+  currency: string | null;
 }
 
 // ---------- Owner customer CRM (Phase 8) ----------
@@ -791,6 +819,10 @@ export const NOTIFICATION_TYPES = [
   'owner.booking.expired',
   'owner.walk_in.joined',
   'staff.assigned',
+  // P0 arrival-alert mission — the T-5-minute "has this customer arrived?" nudge, distinct from
+  // 'owner.booking.no_show' (a terminal, financially-consequential state) and from
+  // 'booking.reminder' (customer-facing, much larger lead window).
+  'owner.booking.arrival_check',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
