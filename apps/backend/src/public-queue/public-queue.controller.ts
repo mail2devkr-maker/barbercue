@@ -109,10 +109,11 @@ export class PublicQueueController {
     return this.queueService.joinWalkIn(user.id, salon.id, body.serviceId);
   }
 
-  // Authenticated owner/staff endpoint — same authorization mechanism as every other dashboard
-  // salon-scoped route (SalonAccessService.assertAccess), so an owner can only ever retrieve
-  // their own salon's QR/URL, never another salon's.
-  @Roles(Role.SALON_OWNER, Role.SALON_STAFF)
+  // Authenticated owner/staff/admin endpoint. PLATFORM_ADMIN needs this read-only QR while
+  // explicitly managing a selected ACTIVE shop; the salon-specific access check below still
+  // prevents cross-shop access for ordinary owner/staff sessions and keeps delegated queue
+  // access limited to operational shops.
+  @Roles(Role.SALON_OWNER, Role.SALON_STAFF, Role.PLATFORM_ADMIN)
   @Get(
     `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.queueQr}`,
   )
@@ -120,7 +121,7 @@ export class PublicQueueController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
   ): Promise<PublicQueueQrDto> {
-    await this.salonAccess.assertAccess(user.id, salonId);
+    await this.salonAccess.assertAccessOrAdminAccess(user.id, salonId);
     const publicQueueToken = await this.tokenService.getOrCreateToken(salonId);
     return {
       publicQueueToken,
