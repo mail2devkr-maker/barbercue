@@ -83,13 +83,14 @@ export default function AdminDashboardPage() {
       setData(overview);
       setError(null);
     } catch (requestError) {
-      if (!background || !data) {
+      // A background poll failure must not blank a healthy snapshot; the next poll can retry.
+      if (!background) {
         setError(requestError instanceof ApiError ? requestError.message : "Could not load platform monitoring.");
       }
     } finally {
       if (!background) setRefreshing(false);
     }
-  }, [data]);
+  }, []);
 
   useEffect(() => {
     void loadOverview();
