@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -11,8 +12,10 @@ import {
   ADMIN_PATHS,
   Role,
   decideVerificationSchema,
+  updateSalonStatusSchema,
   type AuthenticatedUser,
   type DecideVerificationInput,
+  type UpdateSalonStatusInput,
 } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -20,6 +23,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AdminMonitoringService } from './admin-monitoring.service';
 import { AdminVerificationService } from './admin-verification.service';
 import { AdminSalonManagementService } from './admin-salon-management.service';
+import { SalonActivationService } from '../salon-setup/salon-activation.service';
 
 /** Authentication is global; authorization is admin-role only. Monitoring routes are read-only;
  * the verification routes (Phase 18) and shop deletion are this controller's mutating surfaces —
@@ -31,6 +35,7 @@ export class AdminController {
     private readonly monitoring: AdminMonitoringService,
     private readonly verification: AdminVerificationService,
     private readonly salonManagement: AdminSalonManagementService,
+    private readonly activation: SalonActivationService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -75,5 +80,15 @@ export class AdminController {
   @Delete(`${ADMIN_PATHS.shops}/:id`)
   deleteShop(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.salonManagement.deleteSalon(user.id, id);
+  }
+
+  @Patch(`${ADMIN_PATHS.shops}/:id/${ADMIN_PATHS.status}`)
+  updateShopStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateSalonStatusSchema))
+    body: UpdateSalonStatusInput,
+  ) {
+    return this.activation.updateStatusAsAdmin(user.id, id, body);
   }
 }

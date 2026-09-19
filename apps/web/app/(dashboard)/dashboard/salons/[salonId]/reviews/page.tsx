@@ -89,7 +89,7 @@ function ReviewRow({
             onChange={(e) => setText(e.target.value)}
             placeholder="Write a public response…"
             rows={2}
-            style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--bc-border)" }}
+            style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--bc-border)", background: "var(--bc-surface)", color: "var(--bc-ink)" }}
           />
           {error && (
             <p role="alert" style={{ color: "var(--bc-accent)", fontSize: "var(--bc-text-sm)" }}>

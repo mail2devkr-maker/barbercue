@@ -58,7 +58,7 @@ function ReadinessItem({
   doneLabel: string;
 }) {
   return (
-    <li style={{ color: done ? "var(--bc-success)" : "#8A5A00" }}>
+    <li style={{ color: done ? "var(--bc-success)" : "var(--bc-gold)" }}>
       <span aria-hidden="true">{done ? "✓" : "✗"}</span>{" "}
       {done ? doneLabel : label}
     </li>
@@ -245,7 +245,7 @@ function TimezoneSection({ salonId }: { salonId: string }) {
                 setSelected(e.target.value);
                 setSaved(false);
               }}
-              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", minWidth: 260 }}
+              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", minWidth: 260, background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             >
               <option value="" disabled>
                 Choose a time zone…
@@ -394,7 +394,7 @@ export default function DashboardSettingsPage({
             </>
           ) : (
             <>
-              <p style={{ color: "#B36B00", fontSize: 14, marginBottom: 12 }}>
+              <p style={{ color: "var(--bc-warn)", fontSize: 14, marginBottom: 12 }}>
                 Your shop is <strong>{STATUS_LABEL[salon.status].toLowerCase()}</strong> — customers
                 can&apos;t find it in search, and its queue QR shows as unavailable, until you open
                 it. You can close it again at any time.

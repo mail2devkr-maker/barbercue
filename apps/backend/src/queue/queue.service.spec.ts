@@ -103,6 +103,7 @@ describe('QueueService', () => {
     getServiceOrThrow: jest.Mock<Promise<unknown>, [string, string]>;
     assertStaffQualified: jest.Mock<Promise<void>, [string, string, string]>;
     getSlotCapacity: jest.Mock<Promise<number>, [unknown, string, string]>;
+    getSlotCapacityForServices: jest.Mock<Promise<number>, [unknown, string, string[]]>;
     getSalonTimeZone: jest.Mock<Promise<string | null>, [string]>;
     resolveTimeZoneOrThrow: jest.Mock<Promise<string>, [string]>;
   };
@@ -206,6 +207,9 @@ describe('QueueService', () => {
       getSlotCapacity: jest
         .fn<Promise<number>, [unknown, string, string]>()
         .mockResolvedValue(3),
+      getSlotCapacityForServices: jest
+        .fn<Promise<number>, [unknown, string, string[]]>()
+        .mockResolvedValue(3),
       // Asia/Kolkata by default — every existing IST-day-boundary assertion in this file stays
       // valid as-is; timezone-specific correctness itself is covered in availability.service.spec.ts.
       getSalonTimeZone: jest
@@ -244,6 +248,56 @@ describe('QueueService', () => {
     // getDetailOrThrow is called at the end of nearly every mutating method — give it a default
     // resolved entry so each test only needs to override what it specifically cares about.
     prisma.queueEntry.findUnique.mockResolvedValue(makeDetailEntry());
+  });
+
+  describe('checkIn', () => {
+    function makeCheckInBooking(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'bk1',
+        salonId: 's1',
+        serviceId: 'sv1',
+        status: 'CONFIRMED',
+        slotStart: new Date(),
+        ...overrides,
+      };
+    }
+
+    // Regression for the final-seven hardening review's confirmed race: the pre-check
+    // (existingForBooking, a plain read before the transaction) is a fast, friendly-error common
+    // case, not the actual guarantee -- two concurrent check-ins for the same booking can both
+    // pass it before either commits. QueueEntry.bookingId's unique index (added alongside this
+    // fix) is the real backstop; losing that race must surface as the same ALREADY_CHECKED_IN
+    // error a client already knows how to handle, never a raw 500.
+    it('translates a P2002 race on QueueEntry.bookingId to ALREADY_CHECKED_IN, not a raw error', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(makeCheckInBooking());
+      prisma.queueEntry.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+          meta: { target: ['queue_entries_bookingId_key'] },
+        }),
+      );
+      await expect(service.checkIn('c1', 'bk1')).rejects.toMatchObject({
+        code: 'ALREADY_CHECKED_IN',
+      });
+    });
+
+    it('creates the entry normally when nothing else has raced it', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(makeCheckInBooking());
+      prisma.queueEntry.create.mockResolvedValueOnce({ id: 'q-new' });
+      await service.checkIn('c1', 'bk1');
+      expect(prisma.queueEntry.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ bookingId: 'bk1', customerId: 'c1' }),
+        }),
+      );
+    });
+
+    it('re-throws a non-P2002 error from the transaction unchanged', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(makeCheckInBooking());
+      prisma.queueEntry.create.mockRejectedValueOnce(new Error('db is down'));
+      await expect(service.checkIn('c1', 'bk1')).rejects.toThrow('db is down');
+    });
   });
 
   describe('joinWalkIn', () => {
@@ -858,6 +912,100 @@ describe('QueueService', () => {
       ]);
       await service.recomputeEtas('s1');
       expect(realtime.emitQueueEntryWaitAlert).toHaveBeenCalledWith('s1', 'c1', 'q1');
+    });
+  });
+
+  describe('recomputeEtas — multi-service booking duration (Issue 5 fix)', () => {
+    it('resolves capacity from the FULL combined service selection, not just the primary Booking.serviceId', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({
+          id: 'q1',
+          serviceId: 'sv1',
+          bookingId: 'bk1',
+          booking: {
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+              { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+            ],
+          },
+        }),
+      ]);
+      await service.recomputeEtas('s1');
+      expect(availability.getSlotCapacityForServices).toHaveBeenCalledWith(
+        prisma,
+        's1',
+        ['sv1', 'sv2'],
+      );
+      expect(availability.getSlotCapacity).not.toHaveBeenCalled();
+    });
+
+    it('computes ETA from the SUM of every selected service\'s duration, not just the primary one', async () => {
+      availability.getSlotCapacityForServices.mockResolvedValueOnce(1);
+      // Two WAITING entries so the second has peopleAhead=1 and serverCount=1 — batchesAhead=1,
+      // making the combined-vs-primary duration difference (45 vs 30) observable in the eta itself.
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q0', serviceId: null }),
+        makeRawEntry({
+          id: 'q1',
+          serviceId: 'sv1',
+          bookingId: 'bk1',
+          booking: {
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+              { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+            ],
+          },
+        }),
+      ]);
+      await service.recomputeEtas('s1');
+      const q1Update = prisma.queueEntry.update.mock.calls.find(
+        (call) => (call[0] as { where: { id: string } }).where.id === 'q1',
+      );
+      expect((q1Update?.[0] as { data: { estimatedWaitMinutes: number } }).data.estimatedWaitMinutes).toBe(45);
+    });
+
+    it('falls back to the single serviceId FK for a walk-in entry with no linked booking', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeRawEntry({ id: 'q1', serviceId: 'sv1', bookingId: null }),
+      ]);
+      await service.recomputeEtas('s1');
+      expect(availability.getSlotCapacity).toHaveBeenCalledWith(prisma, 's1', 'sv1');
+      expect(availability.getSlotCapacityForServices).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('toDetailDto — combined service name for multi-service appointments (Issue 5 fix)', () => {
+    it('shows every selected service, not just the primary one, for a booking-linked entry', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]); // recomputeEtas no-op
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeDetailEntry({
+          id: 'q1',
+          bookingId: 'bk1',
+          booking: {
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+              { serviceId: 'sv2', serviceName: 'Beard Trim', durationMinutes: 15, price: 150 },
+            ],
+          },
+        }),
+      ]);
+      const result = await service.getDashboardQueue('owner1', 's1');
+      expect(result.entries[0].serviceName).toBe('Haircut + Beard Trim');
+    });
+
+    it('keeps showing the single service name for a walk-in entry with no linked booking', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([]); // recomputeEtas no-op
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeDetailEntry({ id: 'q1', bookingId: null, service: { name: 'Haircut' } }),
+      ]);
+      const result = await service.getDashboardQueue('owner1', 's1');
+      expect(result.entries[0].serviceName).toBe('Haircut');
     });
   });
 

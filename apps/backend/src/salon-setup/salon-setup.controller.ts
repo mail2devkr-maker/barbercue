@@ -75,15 +75,9 @@ const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:sal
  * from managing another owner's salon. Both layers are required — the role alone says "an owner",
  * assertOwnerAccess says "an owner *of this salon*".
  *
- * PLATFORM_ADMIN (Part 2, admin delegated shop management) was added to the class-level role list
- * below so this file needs zero route/DTO duplication for the handful of methods that support it.
- * It is NOT a blanket grant: an admin only actually gets past a given method if that method's own
- * service was explicitly switched from assertOwnerAccess to assertOwnerOrAdminAccess (currently:
- * timezone, services.list/update, operatingHours.list/set, paymentQr.get/setLink/setFromUpload/
- * remove — see each service's own comments). Every other method here still calls the original
- * assertOwnerAccess, which has no admin branch at all, so an admin hitting e.g. chairs or staff
- * passes this controller's guard but is then correctly rejected with 403 inside the service —
- * admin access is opt-in per mutation, reviewed and audit-logged one at a time, never implicit.
+ * PLATFORM_ADMIN is allowed through the controller-level role list for delegated support. Every
+ * service method still performs its own explicit owner-or-admin salon authorization and records
+ * the real admin actor for mutations; staff never receives this controller role.
  *
  * Routes live under the existing `dashboard/salons/:salonId/...` shape. Note DashboardQueueController
  * separately owns `dashboard/staff/:id/status` (clock in/out for an existing barber) — a different

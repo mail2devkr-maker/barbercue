@@ -1129,7 +1129,13 @@ model QueueEntry {
   id          String           @id @default(uuid())
   salonId     String
   salon       Salon            @relation(fields: [salonId], references: [id])
-  bookingId   String?
+  // Unique (not just indexed): checkIn()'s duplicate guard used to be a plain findFirst read
+  // before the create, with no DB-level backstop — two concurrent check-in requests for the same
+  // booking (a double-tap, or a client retry with a fresh idempotency key) could each pass that
+  // read before either committed, producing two QueueEntry rows for one booking. Postgres allows
+  // multiple NULLs through a unique index, so this does not constrain walk-ins (bookingId always
+  // null for those).
+  bookingId   String?          @unique
   booking     Booking?         @relation(fields: [bookingId], references: [id])
   customerId  String?
   customer    User?            @relation(fields: [customerId], references: [id])

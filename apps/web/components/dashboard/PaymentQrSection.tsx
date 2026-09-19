@@ -158,7 +158,7 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
                 setLinkUrl(e.target.value);
                 setSaved(false);
               }}
-              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", minWidth: 280, flex: 1 }}
+              style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", minWidth: 280, flex: 1, background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             />
             <Button type="button" variant="secondary" onClick={() => void saveLink()} disabled={saving || !linkUrl.trim()}>
               {saving ? "Saving…" : "Link QR code image"}

@@ -89,9 +89,9 @@ function RequestRow({
       <td>{new Date(item.submittedAt).toLocaleString()}</td>
       <td><strong>{item.status}</strong></td>
       <td>
-        {error && <p role="alert" style={{ color: "var(--bc-accent)", fontSize: 12, margin: "0 0 6px" }}>{error}</p>}
+        {error && <p role="alert" style={{ color: "#ffb7c9", fontSize: 12, margin: "0 0 6px" }}>{error}</p>}
         {decided ? (
-          <span style={{ fontSize: 12, color: "var(--bc-muted)" }}>{item.reviewNotes ?? "No notes"}</span>
+          <span style={{ fontSize: 12, color: "#a7a7b4" }}>{item.reviewNotes ?? "No notes"}</span>
         ) : (
           <>
             <textarea
@@ -99,7 +99,16 @@ function RequestRow({
               onChange={(e) => setReviewNotes(e.target.value)}
               placeholder="Review notes (required to reject)"
               rows={2}
-              style={{ width: "100%", marginBottom: 6, padding: 6, borderRadius: 6, border: "1px solid var(--bc-border)", fontSize: 12 }}
+              style={{
+                width: "100%",
+                marginBottom: 6,
+                padding: 6,
+                borderRadius: 6,
+                border: "1px solid #3a3a48",
+                background: "#0d0d12",
+                color: "#f7f7fb",
+                fontSize: 12,
+              }}
             />
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {item.status === "SUBMITTED" && (

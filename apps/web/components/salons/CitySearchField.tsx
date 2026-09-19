@@ -74,6 +74,22 @@ export function CitySearchField({
 
   const trimmed = query.trim();
   const tooShort = trimmed.length < MIN_QUERY_LENGTH;
+  // CitySearchField is shared by both the light registration form and the dark discovery page.
+  // The old shared form style hard-coded --bc-ink, which made typed city text almost black on the
+  // dark search surface and therefore unreadable. Inherit the host surface's text colour instead:
+  // registration already inherits dark ink, while /search inherits its light-on-dark foreground.
+  // Background/border remain owned by each host's CSS, so this component doesn't invent a second
+  // palette or force the registration form to look like discovery.
+  const hostInputStyle: React.CSSProperties = {
+    ...inputStyle,
+    color: "inherit",
+    caretColor: "currentColor",
+  };
+  const hostHintStyle: React.CSSProperties = {
+    ...hintStyle,
+    color: "inherit",
+    opacity: 0.72,
+  };
 
   useEffect(() => {
     // Nothing to search against, the picker is already satisfied, or the owner hasn't typed
@@ -189,7 +205,7 @@ export function CitySearchField({
         aria-controls={listboxId}
         aria-autocomplete="list"
         aria-activedescendant={expanded ? `${listboxId}-${activeIndex}` : undefined}
-        style={inputStyle}
+        style={hostInputStyle}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -248,15 +264,15 @@ export function CitySearchField({
         </ul>
       )}
 
-      {!tooShort && state.kind === "loading" && <p style={hintStyle}>Searching cities…</p>}
+      {!tooShort && state.kind === "loading" && <p style={hostHintStyle}>Searching cities…</p>}
       {!tooShort && state.kind === "results" && cities.length === 0 && (
-        <p style={hintStyle}>No cities found for “{trimmed}”. Try a different spelling.</p>
+        <p style={hostHintStyle}>No cities found for “{trimmed}”. Try a different spelling.</p>
       )}
       {!tooShort && state.kind === "failed" && (
-        <p style={{ ...hintStyle, color: "var(--bc-accent)" }}>Could not search cities. Please try again.</p>
+        <p style={{ ...hostHintStyle, color: "var(--bc-accent)", opacity: 1 }}>Could not search cities. Please try again.</p>
       )}
       {tooShort && countryId && (
-        <p style={hintStyle}>Type at least {MIN_QUERY_LENGTH} letters of your city&apos;s name.</p>
+        <p style={hostHintStyle}>Type at least {MIN_QUERY_LENGTH} letters of your city&apos;s name.</p>
       )}
     </div>
   );

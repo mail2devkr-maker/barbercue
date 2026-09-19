@@ -15,9 +15,10 @@ describe('StaffWorkingHoursService', () => {
   let prisma: {
     salonStaff: { findFirst: jest.Mock };
     staffWorkingHours: { findMany: jest.Mock; upsert: jest.Mock };
+    auditLog: { create: jest.Mock };
     $transaction: jest.Mock;
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock };
+  let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -30,9 +31,10 @@ describe('StaffWorkingHoursService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         upsert: jest.fn((args: unknown) => args),
       },
-      $transaction: jest.fn().mockResolvedValue([]),
+    $transaction: jest.fn().mockResolvedValue([]),
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
     service = new StaffWorkingHoursService(
       prisma as never,
       salonAccess as never,
@@ -42,7 +44,7 @@ describe('StaffWorkingHoursService', () => {
   describe('list', () => {
     it('checks salon access before reading anything', async () => {
       await service.list('owner-1', 'salon-1', 'staff-1');
-      expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
         'owner-1',
         'salon-1',
       );
@@ -92,7 +94,7 @@ describe('StaffWorkingHoursService', () => {
     });
 
     it("refuses to read another owner's salon", async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValue(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(
@@ -103,6 +105,14 @@ describe('StaffWorkingHoursService', () => {
   });
 
   describe('set', () => {
+    it('allows delegated admin updates and records the admin actor', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+      await service.set('admin-1', 'salon-1', 'staff-1', { days: week() });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ actorUserId: 'admin-1', action: 'ADMIN_STAFF_WORKING_HOURS_UPDATED', entityId: 'staff-1' }),
+      });
+    });
+
     it('writes all 7 days in a single transaction, scoped to the staffId', async () => {
       await service.set('owner-1', 'salon-1', 'staff-1', { days: week() });
 
@@ -130,7 +140,7 @@ describe('StaffWorkingHoursService', () => {
     });
 
     it('checks access before writing anything', async () => {
-      salonAccess.assertOwnerAccess.mockRejectedValue(
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
       await expect(

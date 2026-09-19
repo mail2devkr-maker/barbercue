@@ -29,6 +29,13 @@ export function DashboardHeader() {
   const match = pathname.match(SALON_SCOPED_PATH);
   const currentSalonId = match?.[1] ?? null;
   const restOfPath = match?.[2] ?? "";
+  // Admin/#2/#7 dark-UI parity -- dark only on the routes already reskinned to the FastQue dark
+  // identity (salon-scoped management pages, admin, register-shop), never on the still-legacy
+  // salon list, which would create the opposite (dark header over a light page) seam instead.
+  const isDarkSurface =
+    currentSalonId !== null ||
+    pathname.startsWith("/dashboard/admin") ||
+    pathname.startsWith("/dashboard/register-shop");
 
   useEffect(() => {
     if (!currentSalonId) return;
@@ -50,7 +57,7 @@ export function DashboardHeader() {
   const showSwitcher = currentSalonId !== null && ownedShops.length > 1;
 
   return (
-    <header className={styles.header}>
+    <header className={`${styles.header} ${isDarkSurface ? styles.headerDark : ""}`}>
       <div className={styles.inner}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
           <BrandLockup compact canonicalArtwork />

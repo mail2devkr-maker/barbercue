@@ -7,6 +7,33 @@
   backdrop-filter: blur(14px);
 }
 
+/* Admin/#2/#7 dark-UI parity -- this header is shared by every dashboard route, including the
+   still-legacy salon list, so it can't just always be dark without creating the opposite seam
+   there. Applied only on the routes already reskinned to the FastQue dark identity (admin,
+   register-shop, salon-scoped management pages), matching exactly what DashboardHeader itself
+   already detects a salon-scoped path for (the shop switcher). */
+.headerDark {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+  background: rgba(13, 13, 18, 0.92);
+}
+
+.headerDark .wordmark {
+  color: #f7f5f4;
+}
+
+.headerDark .publicLink {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.headerDark .publicLink:hover {
+  color: #ff7a45;
+}
+
+.headerDark .wordmark:focus-visible,
+.headerDark .publicLink:focus-visible {
+  outline-color: #f7f5f4;
+}
+
 .inner {
   width: min(100% - 32px, 1120px);
   min-height: 64px;

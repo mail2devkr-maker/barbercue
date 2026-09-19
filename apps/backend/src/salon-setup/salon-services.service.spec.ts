@@ -16,9 +16,7 @@ describe('SalonServicesService', () => {
     };
     auditLog: { create: jest.Mock };
   };
-  // `create` still calls assertOwnerAccess (unconverted — Part 2 only wired list/update for
-  // delegated admin management); `list`/`update` call the new assertOwnerOrAdminAccess. Both
-  // mocks coexist here for exactly that reason.
+  // All catalog operations use the explicit owner-or-admin delegated access gate.
   let salonAccess: { assertOwnerAccess: jest.Mock; assertOwnerOrAdminAccess: jest.Mock };
 
   beforeEach(() => {
@@ -329,6 +327,23 @@ describe('SalonServicesService', () => {
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(prisma.service.update).not.toHaveBeenCalled();
       expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+  });
+
+  it('allows a PLATFORM_ADMIN to create a service and audits the real admin actor', async () => {
+    salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+    prisma.service.create.mockResolvedValue({
+      id: 'svc-admin', name: 'Fade', description: null, durationMinutes: 30,
+      price: decimal('400'), category: 'Hair', isActive: true,
+    });
+    const result = await service.create('admin-1', 'salon-1', {
+      name: 'Fade', price: 400, durationMinutes: 30, category: 'Hair',
+    });
+    expect(result.id).toBe('svc-admin');
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: 'admin-1', action: 'ADMIN_SERVICE_CREATED', entityType: 'Service', entityId: 'svc-admin',
+      }),
     });
   });
 });
