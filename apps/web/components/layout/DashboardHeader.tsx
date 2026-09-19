@@ -33,6 +33,7 @@ export function DashboardHeader() {
   // identity (salon-scoped management pages, admin, register-shop), never on the still-legacy
   // salon list, which would create the opposite (dark header over a light page) seam instead.
   const isDarkSurface =
+    pathname === "/dashboard/salons" ||
     currentSalonId !== null ||
     pathname.startsWith("/dashboard/admin") ||
     pathname.startsWith("/dashboard/register-shop");
@@ -57,8 +58,9 @@ export function DashboardHeader() {
   const showSwitcher = currentSalonId !== null && ownedShops.length > 1;
 
   return (
-    <header className={`${styles.header} ${isDarkSurface ? styles.headerDark : ""}`}>
-      <div className={styles.inner}>
+    <>
+      <header className={`${styles.header} ${isDarkSurface ? styles.headerDark : ""}`}>
+        <div className={styles.inner}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
           <BrandLockup compact canonicalArtwork />
         </Link>
@@ -92,7 +94,9 @@ export function DashboardHeader() {
             <span aria-hidden="true">←</span> Visit public site
           </Link>
         </div>
-      </div>
-    </header>
+        </div>
+      </header>
+      <div className={styles.headerSpacer} aria-hidden="true" />
+    </>
   );
 }

@@ -28,6 +28,10 @@
   min-height: 100vh;
 }
 
+.salonsHomeDark {
+  min-height: calc(100vh - 64px);
+}
+
 .page {
   padding: 2.5rem 1.25rem 3rem;
   max-width: 720px;
@@ -765,6 +769,10 @@
 }
 
 @media (max-width: 520px) {
+  .salonsHomeDark {
+    min-height: calc(100vh - 58px);
+  }
+
   .page,
   .pageWide {
     padding-inline: 16px;
