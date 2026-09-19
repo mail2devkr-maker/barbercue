@@ -82,7 +82,7 @@ export class SalonsController {
     return this.salonsService.listWorkplaces(user.id);
   }
 
-  @Roles(Role.SALON_OWNER, Role.SALON_STAFF)
+  @Roles(Role.SALON_OWNER, Role.SALON_STAFF, Role.PLATFORM_ADMIN)
   @Get(`${DISCOVERY_PATHS.mine}/:salonId`)
   getMine(
     @CurrentUser() user: AuthenticatedUser,
