@@ -15,17 +15,18 @@ import styles from "./dashboard.module.css";
 //
 // `adminEnabled` (Part 2, admin delegated shop management) marks exactly the sections
 // SalonAccessService.assertOwnerOrAdminAccess actually backs today (settings — profile/timezone/
-// payment-QR all live on that one page — plus services/hours/photos/chairs/staff). Queue,
-// bookings, schedule, customers, analytics, reviews and verification all still gate on the
-// owner/staff-only assertAccess/assertOwnerAccess untouched by Part 2, so a PLATFORM_ADMIN
-// following any of those links would get a real 403 — this is the single source of truth for
+// payment-QR all live on that one page — plus bookings/services/hours/photos/chairs/staff).
+// DashboardBookingsController now explicitly permits PLATFORM_ADMIN and then re-checks the
+// specific salon through assertOwnerOrAdminAccess, so Bookings belongs in the delegated admin
+// surface too. Queue/schedule/customers/analytics/reviews/verification remain restricted. This is
+// the single source of truth for
 // which links to even show a delegated-admin session, rather than a second hard-coded list
 // somewhere else (see settings/page.tsx's own history: it used to keep a duplicate of this exact
 // list, removed once this component started covering the same ground).
 const SHOP_SECTIONS = [
   { id: "queue", label: "Live queue", adminEnabled: false },
   { id: "settings", label: "Set up & open", adminEnabled: true },
-  { id: "bookings", label: "Bookings", adminEnabled: false },
+  { id: "bookings", label: "Bookings", adminEnabled: true },
   { id: "schedule", label: "Schedule", adminEnabled: false },
   { id: "customers", label: "Customers", adminEnabled: false },
   { id: "analytics", label: "Analytics", adminEnabled: false },
