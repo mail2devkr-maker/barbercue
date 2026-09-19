@@ -68,11 +68,20 @@ Status: **V1 decisions finalized.** PostgreSQL. ORM: Prisma. Fields shown in cam
 - id, salonId → Salon, customerId → User, serviceId → Service, slotStart, slotEnd
 - status (`PENDING_PAYMENT`/`CONFIRMED`/`CANCELLED`/`COMPLETED`/`NO_SHOW`/`EXPIRED`)
 - source (`APP`/`WEB`/`WALK_IN`), idempotencyKey (unique)
-- **prepaymentRequiredAmount** (nullable, snapshot of `SalonPaymentPolicy` × `Service.price` at creation time — later policy edits never retroactively change what an existing booking owes)
-- **preferredStaffId → SalonStaff (nullable)** — *Phase 3B addition.* A soft customer preference captured during booking ("choose a barber," with "Any Staff" = null), shown to the salon later, but explicitly **not** a capacity input — the pool-based algorithm below is completely unchanged by it. Real staff/chair assignment still only happens at queue check-in/dashboard-assign time. This preserves the "never bound to a specific staff member" capacity model above while still letting the customer express a preference; validated for qualification/active status at booking time but never blocks or filters slot availability.
+- **prepaymentRequiredAmount** (nullable, snapshot of `SalonPaymentPolicy` × the COMBINED price of every selected service at creation time — later policy/price edits never retroactively change what an existing booking owes)
+- **preferredStaffId → SalonStaff (nullable)** — *Phase 3B addition.* A soft customer preference captured during booking ("choose a barber," with "Any Staff" = null), shown to the salon later, but explicitly **not** a capacity input — the pool-based algorithm below is completely unchanged by it. Real staff/chair assignment still only happens at queue check-in/dashboard-assign time. This preserves the "never bound to a specific staff member" capacity model above while still letting the customer express a preference; validated for qualification/active status at booking time but never blocks or filters slot availability. **Multi-service V1 rule**: this one barber must be qualified for and must perform *every* selected service on the appointment — never a mid-appointment handoff between barbers.
 - cancelledAt, cancelledBy → User (nullable), cancellationChargeAmount (nullable)
 - **selectedStyleName** (nullable string, major-upgrade phase) — set only when the booking arrived via the AI Style Advisor's "Try This Look" hand-off; free text, not a foreign key, since `HAIRSTYLE_CATALOG` is a fixed `packages/shared` constant rather than salon-configurable DB data.
 - **Whether a new `Booking` starts `PENDING_PAYMENT` or `CONFIRMED` is a pure function of `SalonPaymentPolicy.prepaymentRequirement`** — see [STATE_MACHINES.md](STATE_MACHINES.md#booking).
+- **`serviceId`/`service` (multi-service booking core mission — compatibility pointer, unchanged shape/meaning)**: a customer can select *multiple* services for one appointment (see `BookingService` below for the real, complete, ordered selection). `serviceId` is never removed or repurposed — it always still points at the FIRST selected service, so every consumer that predates multi-service bookings (queue check-in linkage, admin activity feed, analytics/ledger service-label joins) keeps reading a real, valid value with no code changes. New/updated consumers should read `BookingService` (or `BookingDetailDto.services`/`OwnerBookingDetailDto.services` at the API layer) for the complete selection instead.
+
+**BookingService** (multi-service booking core mission — the complete, ordered, snapshotted service selection for one appointment)
+- id, bookingId → Booking, serviceId → Service, sortOrder (int, 0-based — preserves selection order; index 0 is also what `Booking.serviceId` points at)
+- **serviceName, durationMinutes, price** — snapshotted at booking-creation time, same pattern as `Booking.prepaymentRequiredAmount`/`checkInOpensMinutesBefore` above: a later `Service` rename/reprice/deactivation never retroactively changes what an already-created booking shows.
+- `@@unique([bookingId, serviceId])` — the same service can never appear twice on one appointment.
+- **Additive migration, zero destructive changes**: this table was added by a single migration that also backfilled exactly one row (`sortOrder=0`, copied from that booking's own `serviceId`/`Service` values at migration time) for every pre-existing `Booking`. No existing booking, and no consumer reading `Booking.serviceId`/`service` directly, was ever broken by this change.
+- **Rolling-deploy caveat**: DEPLOYMENT.md's rolling-deploy window means an OLD backend binary can still be creating bookings for a short time *after* this migration (and its one-time backfill) already ran — that old binary has no idea `BookingService` exists, so it only ever writes `Booking.serviceId`/`service`, leaving a booking like that with **zero** `BookingService` rows even though it was created after the migration. Every read path that needs the full service selection must tolerate this (`resolveEffectiveBookingServices` in `apps/backend/src/bookings/effective-booking-services.ts` — falls back to synthesizing one item from the live `Service` join when `services` is empty), not assume `BookingService` rows are guaranteed non-empty just because the migration has already run.
+- Server-authoritative throughout: the client sends only `serviceIds` (an ordered array of ids); the backend independently loads and validates every id from the requested salon (rejects duplicates, foreign-salon services, inactive services, an empty selection, and more than `MAX_SERVICES_PER_BOOKING`), and derives combined duration/price itself — see API.md's "Multi-service bookings" section for the full request/response contract, including the temporary legacy single-`serviceId` compatibility shape.
 
 **QueueEntry** (the operational token — created at different times depending on source, see [STATE_MACHINES.md](STATE_MACHINES.md#queue-entry-creation-timing))
 - id, salonId → Salon, bookingId → Booking (nullable — walk-ins), customerId → User (nullable — anonymous walk-in logged by staff)
@@ -150,6 +159,32 @@ For a requested `(serviceId, slotStart, slotEnd)`:
 
 Both `PENDING_PAYMENT` and `CONFIRMED` bookings count as consumed — a customer mid-payment for the last slot correctly blocks a second customer from also reserving it. Step 4's capacity check and the `Booking` insert happen in one transaction so two simultaneous requests for the last slot can't both succeed.
 
+**Multi-service booking core mission — extension to `(serviceIds[], slotStart, slotEnd)`.** Every
+step above generalizes directly rather than being replaced:
+
+1. **Qualified staff pool** = count of `ACTIVE` `SalonStaff` qualified for **every** id in
+   `serviceIds` — the per-service "unrestricted if the salon has zero `StaffService` rows for it"
+   rule from step 1 is applied independently per service, then the resulting sets are **AND**ed
+   together (never OR'd/"in"-matched) before counting. A barber qualified for only 2 of 3 selected
+   services does not count toward this pool at all, and "Any Staff" only ever means "a single
+   barber who can do all of them," never "combined coverage across several different barbers."
+2. **Chair pool** — unchanged; chairs are still shared across all services (`Service.maxConcurrent`
+   caveat in step 4 above still applies unmodified).
+3. **Slot capacity** — unchanged formula, computed from the multi-service-aware staff pool above.
+4. **`slotEnd`** is never a client input for `POST /bookings` — it is always
+   `slotStart + SUM(durationMinutes across every id in serviceIds)`, computed server-side from
+   real, validated `Service` rows (see `BookingService` above). Consumed-capacity overlap detection
+   is otherwise identical: it evaluates the requested slot's COMPLETE interval against existing
+   bookings' own stored `[slotStart, slotEnd)`, which already reflects each of *their* full
+   combined durations.
+5. Unchanged: bookable iff `consumedCapacity < slotCapacity`, now evaluated over the full interval.
+
+A chair (and the slot capacity it contributes to) is occupied for the appointment's **complete**
+combined interval, never per-service — e.g. a 30+20+30=80-minute selection starting at 09:00 must
+make every overlapping candidate slot through 10:20 unavailable, not just the first 30 minutes of
+it. The same per-salon advisory-lock transaction described just below applies unchanged to a
+multi-service booking's capacity check and insert.
+
 **Phase 3B implementation refinement**: the literal mechanism is a per-salon Postgres advisory transaction lock (`pg_advisory_xact_lock(hashtext(salonId))`), not `SELECT ... FOR UPDATE` on the overlapping-booking set as originally worded here. `FOR UPDATE` only locks *existing* rows, so it doesn't serialize two *first-ever* concurrent bookings for an empty slot (there's nothing yet to lock) — the advisory lock closes that gap completely while preserving the documented intent unchanged. Verified directly: an e2e test creates 3 concurrent bookings against a capacity-3 slot (3 qualified staff × 4 chairs) and confirms a 4th is rejected with `SLOT_FULL`. Also note: Neon's serverless Postgres can incur a multi-second cold-start on the first query after inactivity, which can exceed Prisma's default 5s interactive-transaction window — this transaction is opened with an explicit 15s timeout to absorb that, not because the transaction's own work is slow.
 
 ## Relationship summary (ER, textual)
@@ -162,6 +197,7 @@ Salon ──< Service ──< StaffService >── SalonStaff
 Salon ── SalonPaymentPolicy (1:1)
 Salon ──< CancellationPolicy (0:1, falls back to platform default row)
 Salon ──< Booking >── User(customer)
+Booking ──< BookingService >── Service (the complete, ordered, snapshotted selection; Booking.serviceId/service is a compatibility pointer at the first entry only)
 Booking ──< QueueEntry (0..1, created at check-in for appointments, immediately for walk-ins)
 QueueEntry ──< ServiceSession >── SalonStaff, Chair, Service
 Booking ──< Payment (0..1, required/optional/voluntary depending on policy)

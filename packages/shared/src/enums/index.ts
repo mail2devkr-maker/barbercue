@@ -325,6 +325,10 @@ export const BookingErrorCode = {
   // in BookingsService.create, never left to client-side validation alone. WALK_IN bookings never
   // trigger this — a walk-in pays the shop in person, no QR needed.
   PAYMENT_QR_REQUIRED: 'PAYMENT_QR_REQUIRED',
+  // Multi-service booking core mission — the same service id was submitted more than once in a
+  // single serviceIds[] selection. Distinct from SERVICE_NOT_FOUND (a missing/foreign/inactive id):
+  // this selection is well-formed data pointing at real services, just an invalid combination.
+  DUPLICATE_SERVICE_SELECTION: 'DUPLICATE_SERVICE_SELECTION',
 } as const;
 export type BookingErrorCode = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
 

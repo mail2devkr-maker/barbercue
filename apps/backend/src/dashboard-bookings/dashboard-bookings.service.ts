@@ -4,6 +4,10 @@ import {
   BookingErrorCode,
   BookingStatus,
   OWNER_BOOKING_FILTERS,
+  decimalStringToPaise,
+  paiseToRupees,
+  summarizeServiceNames,
+  type BookingServiceItemDto,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
@@ -16,6 +20,7 @@ import {
   zonedDayBounds,
 } from '../common/timezone/timezone';
 import { computeArrivalGuidance } from '../bookings/arrival-guidance';
+import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -40,6 +45,10 @@ const ownerBookingInclude = {
     },
   },
   service: { select: { name: true, durationMinutes: true, price: true } },
+  // Multi-service booking core mission — same authoritative, snapshotted, ordered relation as
+  // bookings.service.ts's customer-facing bookingDetailInclude; see BookingService's own doc
+  // comment.
+  services: { orderBy: { sortOrder: 'asc' } },
   preferredStaff: { select: { displayName: true } },
   customer: { select: { phone: true, email: true } },
   queueEntries: {
@@ -234,6 +243,11 @@ export class DashboardBookingsService {
     booking: OwnerBookingWithDetails,
   ): OwnerBookingDetailDto {
     const latestEntry = booking.queueEntries[0];
+    // Production-safety hardening (P0 #2): falls back to the live Service join for a booking a
+    // rolling-deploy old backend created with zero BookingService rows — see
+    // resolveEffectiveBookingServices's own doc comment. The owner view must never show 0
+    // duration, 0 price, or an empty service list/summary for such a booking.
+    const effectiveServices = resolveEffectiveBookingServices(booking);
     return {
       id: booking.id,
       salonId: booking.salonId,
@@ -276,13 +290,28 @@ export class DashboardBookingsService {
         checkInDueGraceMinutes: booking.checkInDueGraceMinutes,
         hasCheckedIn: booking.queueEntries.length > 0,
       }),
-      serviceName: booking.service.name,
-      serviceDurationMinutes: booking.service.durationMinutes,
-      servicePrice: Number(booking.service.price),
-      payableAmount: Math.max(
-        0,
-        Number(booking.service.price) -
-          Number(booking.creditsRedeemedAmount ?? 0),
+      // Multi-service booking core mission — same combined-total/summary semantics as
+      // bookings.service.ts's customer-facing toDetailDto; owner views must never show only the
+      // first selected service (see this mission's explicit "owner booking views" requirement).
+      serviceName: summarizeServiceNames(effectiveServices.map((s) => s.serviceName)),
+      serviceDurationMinutes: effectiveServices.reduce((sum, s) => sum + s.durationMinutes, 0),
+      servicePrice: paiseToRupees(
+        effectiveServices.reduce((sum, s) => sum + decimalStringToPaise(s.price.toString()), 0),
+      ),
+      services: effectiveServices.map(
+        (s): BookingServiceItemDto => ({
+          serviceId: s.serviceId,
+          name: s.serviceName,
+          durationMinutes: s.durationMinutes,
+          price: Number(s.price),
+        }),
+      ),
+      payableAmount: paiseToRupees(
+        Math.max(
+          0,
+          effectiveServices.reduce((sum, s) => sum + decimalStringToPaise(s.price.toString()), 0) -
+            decimalStringToPaise((booking.creditsRedeemedAmount ?? '0').toString()),
+        ),
       ),
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
       customerPhone: booking.customer.phone,

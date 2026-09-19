@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { ledgerRowSelect, toLedgerEntryDto, type LedgerRow } from './ledger-entry';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -33,54 +34,6 @@ interface CustomerAggregates {
   lastVisitAt: Date | null;
   preferredServiceId: string | null;
   preferredStaffId: string | null;
-}
-
-// Prisma.CustomerLedgerEntryGetPayload-shaped row from the `ledger` query in buildSummaries below
-// — kept local rather than imported from @prisma/client so this file's Prisma coupling stays
-// confined to inline query shapes, matching the rest of this service.
-interface LedgerRow {
-  id: string;
-  customerId: string;
-  salonId: string;
-  bookingId: string | null;
-  amount: { toString(): string } | number;
-  reason: string;
-  status: string;
-  createdAt: Date;
-  settledAt: Date | null;
-  booking: { slotStart: Date; service: { name: string } } | null;
-}
-
-// Reused by every query that must return a full LedgerRow (buildSummaries, getOwnedLedgerEntry,
-// and the post-mutation re-read in waiveNoShowDue/restoreNoShowDue) so none of them can silently
-// drift and return a partial row missing the booking/service join.
-const ledgerRowSelect = {
-  id: true,
-  customerId: true,
-  salonId: true,
-  bookingId: true,
-  amount: true,
-  reason: true,
-  status: true,
-  createdAt: true,
-  settledAt: true,
-  booking: { select: { slotStart: true, service: { select: { name: true } } } },
-} as const;
-
-function toLedgerEntryDto(row: LedgerRow): CustomerLedgerEntryDto {
-  return {
-    id: row.id,
-    customerId: row.customerId,
-    salonId: row.salonId,
-    bookingId: row.bookingId,
-    amount: Number(row.amount),
-    reason: row.reason as LedgerReason,
-    status: row.status as LedgerStatus,
-    createdAt: row.createdAt.toISOString(),
-    settledAt: row.settledAt ? row.settledAt.toISOString() : null,
-    bookingServiceName: row.booking?.service.name ?? null,
-    bookingSlotStart: row.booking?.slotStart.toISOString() ?? null,
-  };
 }
 
 function segmentFor(completedCount: number): CustomerSegment | null {
