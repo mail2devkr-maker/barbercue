@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ADMIN_PATHS, SalonStatus, type PlatformAdminOverviewDto } from "@barbercue/shared";
 import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
@@ -33,6 +33,7 @@ export default function AdminDashboardPage() {
   const [statusShopId, setStatusShopId] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   async function handleStatusChange(shopId: string, shopName: string, currentStatus: SalonStatus) {
     const transition = getNextShopStatus(currentStatus);
@@ -73,17 +74,38 @@ export default function AdminDashboardPage() {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false;
-    apiFetch<PlatformAdminOverviewDto>(`${ADMIN_PATHS.admin}/${ADMIN_PATHS.overview}`)
-      .then((overview) => {
-        if (!cancelled) setData(overview);
-      })
-      .catch((requestError) => {
-        if (!cancelled) setError(requestError instanceof ApiError ? requestError.message : "Could not load platform monitoring.");
-      });
-    return () => { cancelled = true; };
+  const loadOverview = useCallback(async (background = false) => {
+    if (!background) setRefreshing(true);
+    try {
+      const overview = await apiFetch<PlatformAdminOverviewDto>(
+        `${ADMIN_PATHS.admin}/${ADMIN_PATHS.overview}`,
+      );
+      setData(overview);
+      setError(null);
+    } catch (requestError) {
+      // A background poll failure must not blank a healthy snapshot; the next poll can retry.
+      if (!background) {
+        setError(requestError instanceof ApiError ? requestError.message : "Could not load platform monitoring.");
+      }
+    } finally {
+      if (!background) setRefreshing(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
+
+  // The admin overview used to be a one-time snapshot, so a booking created after the page had
+  // opened stayed invisible until a full browser refresh. Poll lightly while this operations page
+  // is open so new bookings/cancellations become visible without making the admin guess that the
+  // data is stale.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadOverview(true);
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [loadOverview]);
 
   const normalizedQuery = query.trim().toLowerCase();
   const shops = useMemo(() => (data?.shops ?? []).filter((shop) =>
@@ -105,7 +127,10 @@ export default function AdminDashboardPage() {
           <h1>Platform operations</h1>
           <p>Monitor FastQue and apply controlled shop support actions. Signed in as {user?.email ?? "platform admin"}.</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Button type="button" variant="outline" onClick={() => void loadOverview()} disabled={refreshing}>
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </Button>
           <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
           <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
         </div>
