@@ -3,9 +3,11 @@ import {
   CustomerSubscriptionStatus,
   QueueEntryStatus,
   Role,
+  summarizeServiceNames,
   type PlatformAdminOverviewDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 
 const MONITORING_LIMIT = 100;
 const RECENT_ACTIVITY_LIMIT = 50;
@@ -105,7 +107,8 @@ export class AdminMonitoringService {
         orderBy: { createdAt: 'desc' },
         include: {
           salon: { select: { name: true } },
-          service: { select: { name: true } },
+          service: { select: { name: true, durationMinutes: true, price: true } },
+          services: { orderBy: { sortOrder: 'asc' } },
           customer: { select: { email: true, phone: true } },
         },
       }),
@@ -178,7 +181,9 @@ export class AdminMonitoringService {
         status: booking.status,
         slotStart: booking.slotStart.toISOString(),
         salonName: booking.salon.name,
-        serviceName: booking.service.name,
+        serviceName: summarizeServiceNames(
+          resolveEffectiveBookingServices(booking).map((service) => service.serviceName),
+        ),
         customerEmail: booking.customer.email,
         customerPhone: booking.customer.phone,
       })),
