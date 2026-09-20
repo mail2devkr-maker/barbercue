@@ -34,14 +34,25 @@ export interface ServiceCatalogItem {
   name: string;
   category: string;
   defaultDurationMinutes: number;
-  /** Suggested India onboarding price in rupees; editable by the salon owner before save. */
-  defaultPriceInr: number;
+  /**
+   * Lowest salon tier where this service appears. Packs are nested:
+   * BASIC ⊂ STANDARD ⊂ ADVANCED.
+   */
   pack: ServicePackId;
+  /**
+   * Suggested India onboarding prices by salon tier. Only packs where the service is available
+   * are populated. Owners can edit the suggested value before saving.
+   */
+  defaultPriceInrByPack: Readonly<Partial<Record<ServicePackId, number>>>;
+  /**
+   * Backward-compatible suggested price at the service's minimum tier.
+   */
+  defaultPriceInr: number;
 }
 
-// Every catalog service belongs to exactly one onboarding pack. Keeping the partition in one
-// place lets web and mobile offer the same one-tap pack selection without duplicating business
-// rules across clients.
+// The sets below define the minimum tier for a service. Packs are intentionally nested so common
+// services such as Haircut can appear in Basic, Standard and Advance with different suggested
+// prices, while premium-only services appear only where they make sense.
 const BASIC_SERVICE_IDS = new Set([
   'classic-haircut',
   'buzz-cut',
@@ -117,8 +128,8 @@ const ADVANCED_SERVICE_IDS = new Set([
 // Curated FastQue onboarding suggestions for India. These are intentionally round, editable
 // starting points rather than claims of a single nationwide market price. Keeping them beside the
 // shared catalog gives web and mobile exactly the same defaults.
-const SUGGESTED_PRICE_INR_BY_ID: Readonly<Record<string, number>> = {
-  "classic-haircut": 250,
+const STANDARD_REFERENCE_PRICE_INR_BY_ID: Readonly<Record<string, number>> = {
+  "classic-haircut": 100,
   "skin-fade": 350,
   "zero-fade": 300,
   "buzz-cut": 200,
@@ -218,10 +229,44 @@ const SUGGESTED_PRICE_INR_BY_ID: Readonly<Record<string, number>> = {
   "body-polish": 1500
 };
 
+const PACK_RANK: Readonly<Record<ServicePackId, number>> = {
+  BASIC: 0,
+  STANDARD: 1,
+  ADVANCED: 2,
+};
+
 function packFor(id: string): ServicePackId {
   if (BASIC_SERVICE_IDS.has(id)) return 'BASIC';
   if (ADVANCED_SERVICE_IDS.has(id)) return 'ADVANCED';
   return 'STANDARD';
+}
+
+function roundSuggestedPrice(value: number): number {
+  if (value < 100) return Math.max(20, Math.round(value / 10) * 10);
+  if (value < 500) return Math.round(value / 50) * 50;
+  return Math.round(value / 100) * 100;
+}
+
+function pricesFor(id: string, minimumPack: ServicePackId): Readonly<Partial<Record<ServicePackId, number>>> {
+  const reference = STANDARD_REFERENCE_PRICE_INR_BY_ID[id];
+  if (reference === undefined) {
+    throw new Error(`Missing suggested service price for catalog item: ${id}`);
+  }
+
+  if (minimumPack === 'BASIC') {
+    return {
+      BASIC: roundSuggestedPrice(reference * 0.5),
+      STANDARD: reference,
+      ADVANCED: roundSuggestedPrice(reference * 2),
+    };
+  }
+  if (minimumPack === 'STANDARD') {
+    return {
+      STANDARD: reference,
+      ADVANCED: roundSuggestedPrice(reference * 1.5),
+    };
+  }
+  return { ADVANCED: reference };
 }
 
 function item(
@@ -230,11 +275,33 @@ function item(
   name: string,
   defaultDurationMinutes: number,
 ): ServiceCatalogItem {
-  const defaultPriceInr = SUGGESTED_PRICE_INR_BY_ID[id];
+  const pack = packFor(id);
+  const defaultPriceInrByPack = pricesFor(id, pack);
+  const defaultPriceInr = defaultPriceInrByPack[pack];
   if (defaultPriceInr === undefined) {
-    throw new Error(`Missing suggested service price for catalog item: ${id}`);
+    throw new Error(`Missing minimum-pack price for catalog item: ${id}`);
   }
-  return { category, id, name, defaultDurationMinutes, defaultPriceInr, pack: packFor(id) };
+  return {
+    category,
+    id,
+    name,
+    defaultDurationMinutes,
+    defaultPriceInrByPack,
+    defaultPriceInr,
+    pack,
+  };
+}
+
+export function serviceAvailableInPack(item: ServiceCatalogItem, pack: ServicePackId): boolean {
+  return PACK_RANK[pack] >= PACK_RANK[item.pack];
+}
+
+export function suggestedServicePriceInr(item: ServiceCatalogItem, pack: ServicePackId): number {
+  const price = item.defaultPriceInrByPack[pack];
+  if (price === undefined) {
+    throw new Error(`${item.name} is not available in ${pack} pack`);
+  }
+  return price;
 }
 
 export const SERVICE_CATALOG_CATEGORIES = [

@@ -6,6 +6,8 @@ import {
   SERVICE_CATALOG_CATEGORIES,
   SERVICE_CATALOG_PACKS,
   normalizeServiceIdentity,
+  serviceAvailableInPack,
+  suggestedServicePriceInr,
   type SalonServiceDto,
   type ServiceCatalogItem,
   type ServicePackId,
@@ -24,10 +26,10 @@ interface CatalogDraft {
 // FastQue provides editable India-oriented suggested price + duration defaults. Shared by both
 // the individual toggle and Select All so a whole pack becomes immediately saveable without
 // repetitive typing; owners can still change either value before saving.
-function emptyDraft(item: ServiceCatalogItem): CatalogDraft {
+function emptyDraft(item: ServiceCatalogItem, pack: ServicePackId): CatalogDraft {
   return {
     item,
-    price: String(item.defaultPriceInr),
+    price: String(suggestedServicePriceInr(item, pack)),
     durationMinutes: String(item.defaultDurationMinutes),
     description: "",
   };
@@ -73,7 +75,7 @@ export function ServiceCatalogPicker({
   const visible = useMemo(() => {
     const search = query.trim().toLowerCase();
     return SERVICE_CATALOG.filter((catalogItem) =>
-      catalogItem.pack === pack &&
+      serviceAvailableInPack(catalogItem, pack) &&
       (category === "all" || catalogItem.category === category) &&
       (!search || `${catalogItem.name} ${catalogItem.category}`.toLowerCase().includes(search)),
     );
@@ -84,14 +86,14 @@ export function ServiceCatalogPicker({
   const selectableCatalog = useMemo(
     () => SERVICE_CATALOG.filter(
       (catalogItem) =>
-        catalogItem.pack === pack &&
+        serviceAvailableInPack(catalogItem, pack) &&
         !existingByIdentity.has(normalizeServiceIdentity(catalogItem.name, catalogItem.category)),
     ),
     [existingByIdentity, pack],
   );
   const allSelected = selectableCatalog.length > 0 && selectableCatalog.every((item) => selected[item.id]);
   const packCategories = SERVICE_CATALOG_CATEGORIES.filter((name) =>
-    SERVICE_CATALOG.some((item) => item.pack === pack && item.category === name),
+    SERVICE_CATALOG.some((item) => serviceAvailableInPack(item, pack) && item.category === name),
   );
 
   function toggle(item: ServiceCatalogItem) {
@@ -103,7 +105,7 @@ export function ServiceCatalogPicker({
         delete next[item.id];
         return next;
       }
-      return { ...current, [item.id]: emptyDraft(item) };
+      return { ...current, [item.id]: emptyDraft(item, pack) };
     });
     onError(null);
   }
@@ -114,7 +116,7 @@ export function ServiceCatalogPicker({
     setSelected((current) => {
       const next = { ...current };
       for (const item of selectableCatalog) {
-        if (!next[item.id]) next[item.id] = emptyDraft(item);
+        if (!next[item.id]) next[item.id] = emptyDraft(item, pack);
       }
       return next;
     });
@@ -122,14 +124,20 @@ export function ServiceCatalogPicker({
   }
 
   function clearCurrentPack() {
-    const packIds = new Set(
-      SERVICE_CATALOG.filter((item) => item.pack === pack).map((item) => item.id),
-    );
-    setSelected((current) =>
-      Object.fromEntries(
-        Object.entries(current).filter(([id]) => !packIds.has(id)),
-      ),
-    );
+    setSelected({});
+    onError(null);
+  }
+
+  function choosePack(nextPack: ServicePackId) {
+    if (nextPack === pack) return;
+    // A service can exist in multiple tiers with different suggested prices. Reset only unsaved
+    // selections when the owner changes tier so a Basic price can never silently carry into
+    // Standard/Advance (or vice versa). Already-saved salon services are untouched.
+    setPack(nextPack);
+    setSelected({});
+    setBulkPrice("");
+    setCategory("all");
+    setQuery("");
     onError(null);
   }
 
@@ -230,7 +238,7 @@ export function ServiceCatalogPicker({
         <div>
           <p className={styles.eyebrow}>Quick setup</p>
           <h2 id="service-catalog-heading" className={styles.sectionHeading}>Choose a service pack</h2>
-          <p className={styles.hint}>Choose a pack with suggested India prices and service times already filled. Keep them or edit anything before saving.</p>
+          <p className={styles.hint}>The same core service can have a different suggested price by salon tier. Choose Basic, Standard or Advance, then keep or edit the prefilled price and time.</p>
         </div>
         <div className={styles.catalogHeadingActions}>
           <span className={styles.selectionCount}>{Object.keys(selected).length} selected</span>
@@ -247,18 +255,13 @@ export function ServiceCatalogPicker({
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10, marginBottom: 18 }}>
         {SERVICE_CATALOG_PACKS.map((packOption) => {
-          const count = SERVICE_CATALOG.filter((item) => item.pack === packOption.id).length;
+          const count = SERVICE_CATALOG.filter((item) => serviceAvailableInPack(item, packOption.id)).length;
           const active = pack === packOption.id;
           return (
             <button
               key={packOption.id}
               type="button"
-              onClick={() => {
-                setPack(packOption.id);
-                setCategory("all");
-                setQuery("");
-                onError(null);
-              }}
+              onClick={() => choosePack(packOption.id)}
               aria-pressed={active}
               style={{
                 textAlign: "left",
@@ -328,7 +331,7 @@ export function ServiceCatalogPicker({
                   />
                   <span>
                     <strong>{item.name}</strong>
-                    <small>{item.category} · ₹{item.defaultPriceInr} · {item.defaultDurationMinutes} min suggested</small>
+                    <small>{item.category} · ₹{suggestedServicePriceInr(item, pack)} · {item.defaultDurationMinutes} min suggested</small>
                   </span>
                 </label>
                 {existing?.isActive && <span className={styles.addedBadge}>Added</span>}

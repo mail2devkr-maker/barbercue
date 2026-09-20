@@ -6,6 +6,8 @@ import {
   SERVICE_CATALOG_CATEGORIES,
   SERVICE_CATALOG_PACKS,
   normalizeServiceIdentity,
+  serviceAvailableInPack,
+  suggestedServicePriceInr,
   type ServiceCatalogItem,
   type ServiceDto,
   type ServicePackId,
@@ -62,12 +64,14 @@ export function ServiceCatalogPicker({
       ),
     [services],
   );
-  const visible = SERVICE_CATALOG.filter((preset) => preset.pack === pack && preset.category === category);
+  const visible = SERVICE_CATALOG.filter(
+    (preset) => serviceAvailableInPack(preset, pack) && preset.category === category,
+  );
   const selectablePack = SERVICE_CATALOG.filter(
-    (preset) => preset.pack === pack && !findExistingServiceForPreset(services, preset),
+    (preset) => serviceAvailableInPack(preset, pack) && !findExistingServiceForPreset(services, preset),
   );
   const packCategories = SERVICE_CATALOG_CATEGORIES.filter((name) =>
-    SERVICE_CATALOG.some((item) => item.pack === pack && item.category === name),
+    SERVICE_CATALOG.some((item) => serviceAvailableInPack(item, pack) && item.category === name),
   );
 
   function selectCurrentPack() {
@@ -77,7 +81,7 @@ export function ServiceCatalogPicker({
       for (const preset of selectablePack) {
         if (!next[preset.id]) {
           next[preset.id] = {
-            price: String(preset.defaultPriceInr),
+            price: String(suggestedServicePriceInr(preset, pack)),
             durationMinutes: String(preset.defaultDurationMinutes),
           };
         }
@@ -98,7 +102,7 @@ export function ServiceCatalogPicker({
       return {
         ...current,
         [preset.id]: {
-          price: String(preset.defaultPriceInr),
+          price: String(suggestedServicePriceInr(preset, pack)),
           durationMinutes: String(preset.defaultDurationMinutes),
         },
       };
@@ -196,7 +200,7 @@ export function ServiceCatalogPicker({
         <View style={styles.headingCopy}>
           <Text style={styles.title}>Choose a service pack</Text>
           <Text style={styles.hint}>
-            Suggested India prices and service times are already filled. Keep them or edit before saving.
+            Core services can have different suggested prices by salon tier. Pick Basic, Standard or Advance; price and time are prefilled and editable.
           </Text>
         </View>
         <Text style={styles.selectionCount}>{Object.keys(selected).length} selected</Text>
@@ -213,8 +217,12 @@ export function ServiceCatalogPicker({
             accessibilityRole="button"
             accessibilityState={{ selected: pack === packOption.id }}
             onPress={() => {
+              if (packOption.id === pack) return;
               setPack(packOption.id);
-              const firstCategory = SERVICE_CATALOG.find((item) => item.pack === packOption.id)?.category;
+              setSelected({});
+              const firstCategory = SERVICE_CATALOG.find(
+                (item) => serviceAvailableInPack(item, packOption.id),
+              )?.category;
               if (firstCategory) setCategory(firstCategory);
               setError(null);
             }}
@@ -275,7 +283,7 @@ export function ServiceCatalogPicker({
               <View style={styles.presetCopy}>
                 <Text style={styles.presetName}>{preset.name}</Text>
                 <Text style={styles.presetMeta}>
-                  ₹{preset.defaultPriceInr} · {preset.defaultDurationMinutes} min suggested
+                  ₹{suggestedServicePriceInr(preset, pack)} · {preset.defaultDurationMinutes} min suggested
                 </Text>
               </View>
               {existing?.isActive && <Text style={styles.addedBadge}>Added</Text>}
