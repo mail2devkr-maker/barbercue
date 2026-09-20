@@ -11,3 +11,4 @@ export * from './catalog/service-catalog';
 export * from './catalog/salon-discovery-filters';
 export * from './cancellation-courtesy';
 export * from './upi';
+export * from './contact';

@@ -28,6 +28,9 @@ function makeRawEntry(overrides: Record<string, unknown> = {}) {
     status: QueueEntryStatus.WAITING,
     assignedStaffId: null,
     assignedChairId: null,
+    contactName: null,
+    contactPhone: null,
+    arrivedAt: null,
     joinedAt: new Date(),
     calledAt: null,
     ...overrides,
@@ -91,6 +94,9 @@ interface PrismaMock {
   };
   auditLog: {
     create: jest.Mock<Promise<unknown>, [unknown]>;
+  };
+  user: {
+    findUnique: jest.Mock<Promise<unknown>, [unknown]>;
   };
   $executeRaw: jest.Mock<Promise<unknown>, [unknown]>;
   $transaction: jest.Mock;
@@ -184,6 +190,13 @@ describe('QueueService', () => {
       },
       auditLog: {
         create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+      },
+      // The customer's own account - has a phone by default so pre-existing join tests keep
+      // exercising the unchanged happy path.
+      user: {
+        findUnique: jest
+          .fn<Promise<unknown>, [unknown]>()
+          .mockResolvedValue({ phone: '+919000000001' }),
       },
       $executeRaw: jest
         .fn<Promise<unknown>, [unknown]>()
@@ -282,6 +295,13 @@ describe('QueueService', () => {
       await expect(service.checkIn('c1', 'bk1')).rejects.toMatchObject({
         code: 'ALREADY_CHECKED_IN',
       });
+    });
+
+    it('creates an appointment entry that is already acknowledged as arrived', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(makeCheckInBooking());
+      prisma.queueEntry.create.mockResolvedValueOnce({ id: 'q-new' });
+      await service.checkIn('c1', 'bk1');
+      expect(lastCallData(prisma.queueEntry.create).arrivedAt).toBeInstanceOf(Date);
     });
 
     it('creates the entry normally when nothing else has raced it', async () => {
@@ -388,6 +408,47 @@ describe('QueueService', () => {
       expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
     });
 
+    describe('contact details (Live Queue operations)', () => {
+      function primeJoin() {
+        prisma.queueEntry.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+        prisma.queueEntry.create.mockResolvedValue({ id: 'q-contact' });
+      }
+
+      it('persists the contact name and phone given with the join, but starts NOT arrived', async () => {
+        primeJoin();
+        await service.joinWalkIn('c1', 's1', undefined, { name: 'Ravi Kumar', phone: '+919811122233' });
+        const data = lastCallData(prisma.queueEntry.create);
+        expect(data.contactName).toBe('Ravi Kumar');
+        expect(data.contactPhone).toBe('+919811122233');
+        expect(data).not.toHaveProperty('arrivedAt'); // a remote/QR join is not proof of presence
+      });
+
+      it('prefers the number given with the join over the account phone', async () => {
+        primeJoin();
+        await service.joinWalkIn('c1', 's1', undefined, { phone: '+919811122233' });
+        expect(lastCallData(prisma.queueEntry.create).contactPhone).toBe('+919811122233');
+        expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      });
+
+      it('falls back to the account phone when none is given, so older clients keep working', async () => {
+        primeJoin();
+        await service.joinWalkIn('c1', 's1');
+        const data = lastCallData(prisma.queueEntry.create);
+        expect(data.contactPhone).toBe('+919000000001');
+        expect(data.contactName).toBeNull();
+      });
+
+      it('refuses to create an uncontactable entry when neither a join phone nor an account phone exists', async () => {
+        prisma.queueEntry.findFirst.mockResolvedValueOnce(null);
+        prisma.user.findUnique.mockResolvedValue({ phone: null }); // e.g. a Google-sign-in account
+        await expect(service.joinWalkIn('c1', 's1', undefined, { name: 'Ravi' })).rejects.toMatchObject({
+          code: 'CONTACT_PHONE_REQUIRED',
+        });
+        expect(prisma.queueEntry.create).not.toHaveBeenCalled();
+        expect(realtime.emitQueueUpdated).not.toHaveBeenCalled();
+      });
+    });
+
     it('starts numbering at 1 when no entries exist yet for the salon today', async () => {
       prisma.queueEntry.findFirst
         .mockResolvedValueOnce(null)
@@ -458,6 +519,97 @@ describe('QueueService', () => {
     });
   });
 
+  describe('markArrived (Live Queue arrival acknowledgement)', () => {
+    it('enforces salon access before touching the entry', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      salonAccess.assertAccessOrAdminAccess.mockRejectedValueOnce(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(service.markArrived('stranger', 'q1')).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('records arrival only by filling a NULL arrivedAt on a still-active entry', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      await service.markArrived('staff1', 'q1');
+      const call = prisma.queueEntry.updateMany.mock.calls[0][0] as {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      };
+      expect(call.where).toMatchObject({ id: 'q1', arrivedAt: null });
+      expect(call.where.status).toEqual({ in: ['WAITING', 'CALLED'] });
+      expect(call.data.arrivedAt).toBeInstanceOf(Date);
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+
+    it('is idempotent: an already-arrived entry is returned unchanged with no write and no realtime noise', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ arrivedAt: new Date() }));
+      await expect(service.markArrived('staff1', 'q1')).resolves.toBeDefined();
+      expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+      expect(realtime.emitQueueUpdated).not.toHaveBeenCalled();
+    });
+
+    it('treats losing a race to another operator as success, not an error', async () => {
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry()) // initial read: not yet arrived
+        .mockResolvedValueOnce({ arrivedAt: new Date() }); // re-read after the lost claim
+      prisma.queueEntry.updateMany.mockResolvedValueOnce({ count: 0 });
+      await expect(service.markArrived('staff1', 'q1')).resolves.toBeDefined();
+    });
+
+    it('reports a real conflict when the entry left the active states underneath the request', async () => {
+      prisma.queueEntry.findUnique
+        .mockResolvedValueOnce(makeRawEntry())
+        .mockResolvedValueOnce({ arrivedAt: null });
+      prisma.queueEntry.updateMany.mockResolvedValueOnce({ count: 0 });
+      await expect(service.markArrived('staff1', 'q1')).rejects.toMatchObject({ code: 'INVALID_QUEUE_TRANSITION' });
+    });
+
+    it.each(['IN_SERVICE', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'EXPIRED'])(
+      'refuses to mark a %s entry arrived',
+      async (status) => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ status }));
+        await expect(service.markArrived('staff1', 'q1')).rejects.toMatchObject({ code: 'INVALID_QUEUE_TRANSITION' });
+        expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('queue detail DTO - contact + arrival', () => {
+    it('exposes the join contact name/phone and arrival time to the (authorized) dashboard caller', async () => {
+      const arrivedAt = new Date('2026-09-20T10:00:00.000Z');
+      prisma.queueEntry.findUnique.mockResolvedValue(
+        makeDetailEntry({ contactName: 'Ravi Kumar', contactPhone: '+919811122233', arrivedAt }),
+      );
+      const dto = await service.markArrived('staff1', 'q1');
+      expect(dto.customerName).toBe('Ravi Kumar');
+      expect(dto.customerPhone).toBe('+919811122233');
+      expect(dto.arrivedAt).toBe(arrivedAt.toISOString());
+    });
+
+    it('falls back to the account phone when the entry has no join phone', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValue(
+        makeDetailEntry({ contactPhone: null, arrivedAt: new Date(), customer: { phone: '+919000000001' } }),
+      );
+      expect((await service.markArrived('staff1', 'q1')).customerPhone).toBe('+919000000001');
+    });
+
+    it('never invents a name: a null contactName stays null (no email/phone-derived display name)', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValue(
+        makeDetailEntry({ contactName: null, arrivedAt: new Date(), customer: { phone: '+919000000001', email: 'x@y.com' } }),
+      );
+      const dto = await service.markArrived('staff1', 'q1');
+      expect(dto.customerName).toBeNull();
+      expect(JSON.stringify(dto)).not.toContain('x@y.com');
+    });
+
+    it('reports null arrivedAt for a remote join that has not been acknowledged', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValue(makeDetailEntry({ arrivedAt: null }));
+      const dto = await service.markArrived('staff1', 'q1');
+      expect(dto.arrivedAt).toBeNull();
+    });
+  });
+
   describe('assign', () => {
     const input = { staffId: 'st1', chairId: 'ch1' };
 
@@ -479,6 +631,21 @@ describe('QueueService', () => {
         },
       );
       expect(availability.assertStaffQualified).not.toHaveBeenCalled();
+    });
+
+    it('implicitly acknowledges arrival when seating an entry that was never marked arrived', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ arrivedAt: null }));
+      await service.assign('staff1', 'q1', input);
+      const claim = prisma.queueEntry.updateMany.mock.calls[0][0] as { data: Record<string, unknown> };
+      expect(claim.data.status).toBe('IN_SERVICE');
+      expect(claim.data.arrivedAt).toBeInstanceOf(Date);
+    });
+
+    it('never overwrites an earlier explicit arrival time when assigning', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ arrivedAt: new Date('2026-09-20T09:00:00Z') }));
+      await service.assign('staff1', 'q1', input);
+      const claim = prisma.queueEntry.updateMany.mock.calls[0][0] as { data: Record<string, unknown> };
+      expect(claim.data).not.toHaveProperty('arrivedAt');
     });
 
     it('reuses AvailabilityService.assertStaffQualified for the qualification check', async () => {
@@ -863,6 +1030,18 @@ describe('QueueService', () => {
       expect(prisma.service.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { salonId: 's1', isActive: true } }),
       );
+    });
+  });
+
+  describe('getQueueStatus (public) - privacy', () => {
+    it('never carries any customer contact or arrival detail', async () => {
+      prisma.salonStaff.count.mockResolvedValueOnce(3);
+      prisma.chair.count.mockResolvedValueOnce(4);
+      const result = await service.getQueueStatus('s1');
+      const json = JSON.stringify(result);
+      for (const forbidden of ['customerName', 'customerPhone', 'contactName', 'contactPhone', 'arrivedAt', 'email']) {
+        expect(json).not.toContain(forbidden);
+      }
     });
   });
 

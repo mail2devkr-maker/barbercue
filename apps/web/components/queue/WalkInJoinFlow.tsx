@@ -13,6 +13,7 @@ import { useAuth } from "../../lib/auth-context";
 import { Button } from "../ui/Button";
 import { GoogleIdentityButton } from "../auth/GoogleIdentityButton";
 import { QueueStatusPanel } from "./QueueStatusPanel";
+import { QueueContactFields, resolveContactInput } from "./QueueContactFields";
 import styles from "./queue.module.css";
 
 // Issue #13 Mission E: service selection is visible and usable with no login wall at all — only
@@ -22,8 +23,10 @@ import styles from "./queue.module.css";
 // across sign-in — the exact same pattern PublicQueueJoinFlow (the QR entry point) already proved
 // out for this queue engine.
 export function WalkInJoinFlow({ salonId, services }: { salonId: string; services: ServiceDto[] }) {
-  const { status: authStatus, googleLogin } = useAuth();
+  const { status: authStatus, googleLogin, user } = useAuth();
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,14 +50,27 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
     };
   }, [authStatus]);
 
+  // Prefill from the account once it loads, without clobbering anything the customer typed.
+  useEffect(() => {
+    if (user?.phone) setContactPhone((current) => current || (user.phone as string));
+  }, [user?.phone]);
+
   async function handleJoin() {
+    const resolved = resolveContactInput(contactName, contactPhone);
+    if (!resolved.ok) {
+      setError(resolved.error);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
       const created = await apiFetch<QueueEntryDetailDto>(`salons/${salonId}/queue/${SALON_QUEUE_PATHS.join}`, {
         method: "POST",
         headers: { "Idempotency-Key": newIdempotencyKey() },
-        body: JSON.stringify(selectedServiceId ? { serviceId: selectedServiceId } : {}),
+        body: JSON.stringify({
+          ...(selectedServiceId ? { serviceId: selectedServiceId } : {}),
+          ...resolved.contact,
+        }),
       });
       setEntry(created);
     } catch (err) {
@@ -112,6 +128,16 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
           </option>
         ))}
       </select>
+
+      {authStatus === "authenticated" && (
+        <QueueContactFields
+          idPrefix="walkin"
+          name={contactName}
+          phone={contactPhone}
+          onNameChange={setContactName}
+          onPhoneChange={setContactPhone}
+        />
+      )}
 
       {error && <p className={styles.errorText}>{error}</p>}
 

@@ -83,6 +83,12 @@ export class DashboardQueueController {
     return this.queueService.call(user.id, id);
   }
 
+  // Live Queue operations mission — staff acknowledge a queue customer is physically in the shop.
+  @Post(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.arrive}`)
+  markArrived(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.queueService.markArrived(user.id, id);
+  }
+
   @Post(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.assign}`)
   @Idempotent()
   assign(

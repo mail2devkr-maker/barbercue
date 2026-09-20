@@ -24,6 +24,13 @@ export interface ExpoPushMessage {
   body: string;
   data?: Record<string, unknown>;
   categoryId?: string;
+  // Android delivery hints. `channelId` must name a channel the app has already created (the app
+  // creates 'booking-updates' at push registration); `sound` requests the default alert tone and
+  // `priority` asks FCM for heads-up delivery. All subject to the user's OS notification, volume
+  // and Do-Not-Disturb settings — FastQue cannot and does not override those.
+  channelId?: string;
+  sound?: 'default' | null;
+  priority?: 'default' | 'normal' | 'high';
 }
 
 export interface ExpoPushTicket {

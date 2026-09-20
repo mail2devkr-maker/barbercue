@@ -1162,6 +1162,16 @@ model QueueEntry {
   assignedChairId String?
   assignedChair   Chair?      @relation("AssignedChair", fields: [assignedChairId], references: [id])
 
+  // Live Queue operations mission — the contact details the customer gave when joining (a
+  // per-entry snapshot: FastQue stores no customer name, and an account may have no phone, so the
+  // join flow collects both). Only ever returned by owner/staff dashboard reads and to the entry's
+  // own customer; never by the public queue status APIs, realtime payloads or logs.
+  contactName          String?
+  contactPhone         String?
+  // Authoritative arrival acknowledgement, instead of widening the status enum: an appointment
+  // check-in sets it at creation (arrival was already confirmed), a remote/QR join starts null and
+  // staff mark it, and assigning an entry to a chair implicitly sets it (the person is in the shop).
+  arrivedAt            DateTime?
   joinedAt             DateTime  @default(now())
   calledAt             DateTime?
   serviceStartedAt     DateTime?

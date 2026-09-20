@@ -22,6 +22,7 @@ import { BrandLockup } from "../ui/BrandLockup";
 import { GoogleIdentityButton } from "../auth/GoogleIdentityButton";
 import authStyles from "../auth/customer-auth.module.css";
 import { QueueStatusPanel } from "./QueueStatusPanel";
+import { QueueContactFields, resolveContactInput } from "./QueueContactFields";
 import styles from "./queue.module.css";
 
 type Stage = "loading" | "invalid" | "unavailable" | "ready" | "joining" | "joined";
@@ -35,10 +36,12 @@ type Stage = "loading" | "invalid" | "unavailable" | "ready" | "joining" | "join
  * the exact same components an authenticated customer's own queue page already uses.
  */
 export function PublicQueueJoinFlow({ token }: { token: string }) {
-  const { status: authStatus, verifyCustomerOtp, googleLogin } = useAuth();
+  const { status: authStatus, verifyCustomerOtp, googleLogin, user } = useAuth();
   const [stage, setStage] = useState<Stage>("loading");
   const [info, setInfo] = useState<PublicQueueInfoDto | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState(user?.phone ?? "");
   const [entry, setEntry] = useState<QueueEntryDetailDto | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
 
@@ -117,7 +120,16 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
     };
   }, [authStatus, stage]);
 
+  useEffect(() => {
+    if (user?.phone) setContactPhone((current) => current || (user.phone as string));
+  }, [user?.phone]);
+
   async function handleJoin() {
+    const resolved = resolveContactInput(contactName, contactPhone);
+    if (!resolved.ok) {
+      setJoinError(resolved.error);
+      return;
+    }
     setStage("joining");
     setJoinError(null);
     try {
@@ -126,7 +138,10 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
         {
           method: "POST",
           headers: { "Idempotency-Key": newIdempotencyKey() },
-          body: JSON.stringify(selectedServiceId ? { serviceId: selectedServiceId } : {}),
+          body: JSON.stringify({
+            ...(selectedServiceId ? { serviceId: selectedServiceId } : {}),
+            ...resolved.contact,
+          }),
         },
       );
       setEntry(created);
@@ -263,6 +278,16 @@ export function PublicQueueJoinFlow({ token }: { token: string }) {
               ))}
             </select>
           </div>
+        )}
+
+        {authStatus === "authenticated" && (
+          <QueueContactFields
+            idPrefix="public-queue"
+            name={contactName}
+            phone={contactPhone}
+            onNameChange={setContactName}
+            onPhoneChange={setContactPhone}
+          />
         )}
 
         {joinError && <p className={styles.errorText}>{joinError}</p>}

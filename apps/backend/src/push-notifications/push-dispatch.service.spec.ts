@@ -185,6 +185,31 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     ]);
   });
 
+  it('targets the existing high-importance Android booking channel with the default sound for arrival checks', async () => {
+    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
+    await service.dispatchLocalizedToUser('owner-1', 'arrivalCheck', 'Haircut', {
+      type: 'booking.arrival_check',
+      salonId: 's1',
+      bookingId: 'b1',
+    });
+    const [[messages]] = expo.send.mock.calls;
+    expect(messages[0]).toMatchObject({
+      channelId: 'booking-updates',
+      sound: 'default',
+      priority: 'high',
+      categoryId: 'booking_arrival_check', // actionable Arrived / Not arrived buttons preserved
+    });
+  });
+
+  it('leaves every other push kind exactly as it was — no forced channel/sound/priority', async () => {
+    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
+    await service.dispatchLocalizedToUser('owner-1', 'newBooking', 'Haircut', { type: 'booking.created' });
+    const [[messages]] = expo.send.mock.calls;
+    expect(messages[0]).not.toHaveProperty('channelId');
+    expect(messages[0]).not.toHaveProperty('sound');
+    expect(messages[0]).not.toHaveProperty('priority');
+  });
+
   it('degrades to English rather than failing when the recipient-language lookup itself throws', async () => {
     prisma.user.findUnique.mockRejectedValue(new Error('db down'));
     await expect(

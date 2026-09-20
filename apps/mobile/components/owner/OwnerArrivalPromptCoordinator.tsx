@@ -17,6 +17,12 @@ import {
   type OwnerArrivalPromptRequest,
 } from '../../lib/arrival-prompt';
 import { navigationRef } from '../../navigation/navigation-ref';
+import {
+  alertArrivalOnce,
+  clearArrivalAlerted,
+  markArrivalAlerted,
+  pruneArrivalAlerted,
+} from '../../lib/arrival-alert-sound';
 import { Button } from '../ui';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
 
@@ -107,12 +113,21 @@ export function OwnerArrivalPromptCoordinator() {
   const snoozedUntilRef = useRef<Map<string, number>>(new Map());
   const snoozeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const copy = copyFor(language);
+  const languageRef = useRef(language);
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
 
   const chooseAlert = useCallback((
     alerts: ArrivalAlertDto[],
     preferredBookingId?: string,
     initialAction?: OwnerArrivalPromptInitialAction,
+    // true when the owner opened this deliberately (push tap, Notification Center): the prompt
+    // appearing is then the answer to their own action and must not make a sound.
+    userInitiated = false,
   ) => {
+    // A booking that is no longer eligible ends its alert episode, so a future one may sound again.
+    pruneArrivalAlerted(alerts.map((item) => item.bookingId));
     const now = Date.now();
     const eligible = alerts.filter((item) => (snoozedUntilRef.current.get(item.bookingId) ?? 0) <= now);
     const next =
@@ -125,6 +140,19 @@ export function OwnerArrivalPromptCoordinator() {
       setConfirmStep(null);
       return;
     }
+    // Audible alert + vibration exactly once per eligible appearance. alertArrivalOnce dedupes per
+    // booking episode, so the 30s safety refresh and socket reconnects re-run this without sound.
+    if (userInitiated) {
+      markArrivalAlerted(next.bookingId);
+    } else {
+      const activeCopy = copyFor(languageRef.current);
+      void alertArrivalOnce({
+        bookingId: next.bookingId,
+        salonId: next.salonId,
+        title: activeCopy.eyebrow,
+        body: `${formatTime(next.slotStart, languageRef.current)} · ${next.serviceName} · ${activeCopy.title}`,
+      });
+    }
     if (initialAction === 'arrived') setConfirmStep('arrived');
     else if (initialAction === 'not-arrived') {
       setConfirmStep(next.graceExpired ? 'not-arrived-late' : 'not-arrived-early');
@@ -135,7 +163,7 @@ export function OwnerArrivalPromptCoordinator() {
     (salonId: string, request?: OwnerArrivalPromptRequest) =>
       apiFetch<ArrivalAlertDto[]>(alertsPath(salonId))
         .then((alerts) => {
-          chooseAlert(alerts, request?.bookingId, request?.initialAction ?? null);
+          chooseAlert(alerts, request?.bookingId, request?.initialAction ?? null, Boolean(request));
           return true;
         })
         .catch(() => false),
@@ -201,6 +229,8 @@ export function OwnerArrivalPromptCoordinator() {
       setTimeout(() => {
         snoozedUntilRef.current.delete(bookingId);
         snoozeTimersRef.current.delete(bookingId);
+        // The reminder is eligible again, so it is allowed to sound again.
+        clearArrivalAlerted(bookingId);
         void refreshSalon(salonId);
       }, SNOOZE_MS),
     );

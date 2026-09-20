@@ -553,6 +553,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
               <div className={styles.entryHead}>
                 <div>
                   <span className={styles.entryToken}>#{entry.tokenNumber}</span>{" "}
+                  {entry.customerName && <span className={styles.entryMeta}>{entry.customerName}</span>}{" "}
                   {entry.customerPhone && <span className={styles.entryMeta}>{entry.customerPhone}</span>}
                   {entry.serviceName && <span className={styles.entryMeta}> — {entry.serviceName}</span>}
                   {newEntryIds.includes(entry.id) && <span className={styles.newBadge}>NEW</span>}
