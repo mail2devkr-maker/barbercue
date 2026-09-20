@@ -30,6 +30,7 @@ export interface JwtPayload {
 const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<Record<SessionAudience, ReadonlySet<Role>>> = {
   [SessionAudience.CUSTOMER]: new Set([Role.CUSTOMER]),
   [SessionAudience.STAFF]: new Set([Role.SALON_STAFF, Role.SALON_OWNER]),
+  [SessionAudience.EMPLOYEE]: new Set([Role.FIELD_EXECUTIVE]),
   [SessionAudience.ADMIN]: new Set([Role.PLATFORM_ADMIN]),
 };
 
