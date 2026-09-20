@@ -91,6 +91,9 @@ export function ServiceCatalogPicker({
     [existingByIdentity, pack],
   );
   const allSelected = selectableCatalog.length > 0 && selectableCatalog.every((item) => selected[item.id]);
+  const packCategories = SERVICE_CATALOG_CATEGORIES.filter((name) =>
+    SERVICE_CATALOG.some((item) => item.pack === pack && item.category === name),
+  );
 
   function toggle(item: ServiceCatalogItem) {
     const existing = existingByIdentity.get(normalizeServiceIdentity(item.name, item.category));
@@ -300,7 +303,7 @@ export function ServiceCatalogPicker({
             className={styles.select}
           >
             <option value="all">All categories</option>
-            {SERVICE_CATALOG_CATEGORIES.map((name) => <option key={name} value={name}>{name}</option>)}
+            {packCategories.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
       </div>
