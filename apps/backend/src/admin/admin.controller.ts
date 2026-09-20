@@ -14,7 +14,13 @@ import {
   decideVerificationSchema,
   updateSalonStatusSchema,
   type AuthenticatedUser,
+  createEmployeeSchema,
+  resetEmployeePasswordSchema,
+  updateEmployeeSchema,
+  type CreateEmployeeInput,
   type DecideVerificationInput,
+  type ResetEmployeePasswordInput,
+  type UpdateEmployeeInput,
   type UpdateSalonStatusInput,
 } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -24,6 +30,7 @@ import { AdminMonitoringService } from './admin-monitoring.service';
 import { AdminVerificationService } from './admin-verification.service';
 import { AdminSalonManagementService } from './admin-salon-management.service';
 import { SalonActivationService } from '../salon-setup/salon-activation.service';
+import { AdminEmployeeManagementService } from './admin-employee-management.service';
 
 /** Authentication is global; authorization is admin-role only. Monitoring routes are read-only;
  * the verification routes (Phase 18) and shop deletion are this controller's mutating surfaces —
@@ -36,6 +43,7 @@ export class AdminController {
     private readonly verification: AdminVerificationService,
     private readonly salonManagement: AdminSalonManagementService,
     private readonly activation: SalonActivationService,
+    private readonly employees: AdminEmployeeManagementService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -75,6 +83,38 @@ export class AdminController {
       body.decision,
       body.reviewNotes,
     );
+  }
+
+  @Get(ADMIN_PATHS.employees)
+  listEmployees() {
+    return this.employees.list();
+  }
+
+  @Post(ADMIN_PATHS.employees)
+  createEmployee(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createEmployeeSchema)) body: CreateEmployeeInput,
+  ) {
+    return this.employees.create(user.id, body);
+  }
+
+  @Patch(`${ADMIN_PATHS.employees}/:id`)
+  updateEmployee(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateEmployeeSchema)) body: UpdateEmployeeInput,
+  ) {
+    return this.employees.update(user.id, id, body);
+  }
+
+  @Post(`${ADMIN_PATHS.employees}/:id/${ADMIN_PATHS.password}`)
+  resetEmployeePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(resetEmployeePasswordSchema))
+    body: ResetEmployeePasswordInput,
+  ) {
+    return this.employees.resetPassword(user.id, id, body);
   }
 
   @Delete(`${ADMIN_PATHS.shops}/:id`)

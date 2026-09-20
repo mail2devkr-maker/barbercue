@@ -16,6 +16,7 @@ import {
   PrepaymentRequirement,
   SalonStatus,
   StaffMemberStatus,
+  UserStatus,
   VerificationStatus,
 } from '../enums';
 import { MAX_SERVICES_PER_BOOKING, PREMIUM_PLAN_IDS } from '../constants';
@@ -336,6 +337,44 @@ export const employeeLoginSchema = z.object({
   password: passwordSchema,
 });
 export type EmployeeLoginInput = z.infer<typeof employeeLoginSchema>;
+
+// PLATFORM_ADMIN employee provisioning. Employee IDs are generated server-side and immutable;
+// admins choose the temporary password explicitly so no plaintext credential ever needs to be
+// generated, logged, emailed, or returned by the server.
+export const createEmployeeSchema = z
+  .object({
+    fullName: z.string().trim().min(2).max(120),
+    territory: z.string().trim().max(160).optional(),
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
+
+export const updateEmployeeSchema = z
+  .object({
+    fullName: z.string().trim().min(2).max(120).optional(),
+    territory: z.union([z.string().trim().max(160), z.null()]).optional(),
+    status: z.nativeEnum(UserStatus).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'No employee changes provided',
+  });
+export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
+
+export const resetEmployeePasswordSchema = z
+  .object({
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+export type ResetEmployeePasswordInput = z.infer<typeof resetEmployeePasswordSchema>;
 
 export const adminLoginSchema = z.object({
   email: z.string().email(),

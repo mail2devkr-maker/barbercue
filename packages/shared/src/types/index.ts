@@ -80,6 +80,14 @@ export interface EmployeeProfileDto {
   joinedAt: string;
 }
 
+export interface AdminEmployeeDto extends EmployeeProfileDto {
+  userId: string;
+  status: UserStatus;
+  passwordConfigured: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuthTokens {
   accessToken: string;
   // Present in the response body for mobile (stored via secure storage); web instead relies on

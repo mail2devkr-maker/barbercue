@@ -56,6 +56,9 @@ export const ADMIN_PATHS = {
   // succeed against a shop with zero bookings/staff/queue/reviews/ledger activity.
   shops: 'shops',
   status: 'status',
+  // FastQue internal field-team provisioning — PLATFORM_ADMIN only.
+  employees: 'employees',
+  password: 'password',
 } as const;
 
 // The ONLY place this wording is allowed to live — every surface that shows a Verified badge

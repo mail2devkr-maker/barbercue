@@ -4,14 +4,17 @@ import { AdminMonitoringService } from './admin-monitoring.service';
 import { AdminVerificationService } from './admin-verification.service';
 import { AdminSalonManagementService } from './admin-salon-management.service';
 import { SalonSetupModule } from '../salon-setup/salon-setup.module';
+import { AuthModule } from '../auth/auth.module';
+import { AdminEmployeeManagementService } from './admin-employee-management.service';
 
 @Module({
-  imports: [SalonSetupModule],
+  imports: [SalonSetupModule, AuthModule],
   controllers: [AdminController],
   providers: [
     AdminMonitoringService,
     AdminVerificationService,
     AdminSalonManagementService,
+    AdminEmployeeManagementService,
   ],
 })
 export class AdminModule {}
