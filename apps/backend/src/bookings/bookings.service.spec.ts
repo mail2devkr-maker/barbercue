@@ -357,6 +357,19 @@ describe('BookingsService', () => {
       expect(prisma.booking.create).not.toHaveBeenCalled();
     });
 
+    // P0 follow-up: a no-show due waived by BookingNoShowService.correctToCompleted must never keep
+    // blocking the customer — the eligibility gate must only ever look at OUTSTANDING entries.
+    it('only counts OUTSTANDING ledger entries, so a WAIVED (corrected) no-show due never blocks a new booking', async () => {
+      prisma.customerLedgerEntry.findMany.mockResolvedValue([]);
+      await service
+        .create('c1', { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot }, BookingSource.WEB, 'key-1')
+        .catch(() => undefined);
+      const query = prisma.customerLedgerEntry.findMany.mock.calls[0][0] as {
+        where: { customerId: string; salonId: string; status: string };
+      };
+      expect(query.where).toEqual({ customerId: 'c1', salonId: 's1', status: 'OUTSTANDING' });
+    });
+
     it('rejects with OUTSTANDING_BALANCE using the total amount when the customer has multiple unsettled ledger entries', async () => {
       prisma.customerLedgerEntry.findMany.mockResolvedValue([
         { amount: decimal('150'), reason: 'NO_SHOW_CHARGE' },

@@ -18,6 +18,7 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
+import { setVoiceEnabled as setSharedVoiceEnabled, useVoiceEnabled } from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
 import styles from "./queue.module.css";
 
@@ -202,13 +203,17 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
   const [newEntryIds, setNewEntryIds] = useState<string[]>([]);
   const [newEntryNotice, setNewEntryNotice] = useState<QueueEntryDetailDto | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  // Shared with every other voice consumer (see lib/voice-preference.ts) rather than a private copy.
+  const voiceEnabled = useVoiceEnabled();
   const initializedRef = useRef(false);
   const knownWaitingIdsRef = useRef<Set<string>>(new Set());
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const audioContextRef = useRef<AudioContext | null>(null);
   const soundEnabledRef = useRef(false);
-  const voiceEnabledRef = useRef(false);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+  }, [voiceEnabled]);
   // Set language (see profile page) rather than the queue itself — this bell rings for whichever
   // owner/staff member is watching this dashboard right now.
   const preferredLanguageRef = useRef(user?.preferredLanguage);
@@ -436,12 +441,12 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
   function toggleVoice() {
     if (voiceEnabledRef.current) {
       voiceEnabledRef.current = false;
-      setVoiceEnabled(false);
+      setSharedVoiceEnabled(false);
       if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
       return;
     }
     voiceEnabledRef.current = true;
-    setVoiceEnabled(true);
+    setSharedVoiceEnabled(true);
     speak(voiceAnnouncementsFor(preferredLanguageRef.current).voiceAnnouncementsOn());
   }
 

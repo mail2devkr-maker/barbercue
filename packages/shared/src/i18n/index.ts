@@ -74,9 +74,9 @@ const en: VoiceAnnouncements = {
     `New customer joined the queue. Token number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
   voiceAnnouncementsOn: () => 'Voice announcements on.',
   arrivalCheck: (serviceName, time) => {
-    const service = serviceName ? `${serviceName} customer` : 'appointment';
-    const when = time ? ` at ${time}` : '';
-    return `Appointment reminder. Has your${when} ${service} arrived? Please confirm arrived or not arrived.`;
+    const service = serviceName ? `${serviceName} customer` : 'customer';
+    const when = time ? ` ${time}` : '';
+    return `Appointment reminder. Has the${when} ${service} arrived? Please confirm arrived or not arrived.`;
   },
 };
 
@@ -108,9 +108,9 @@ const hi: VoiceAnnouncements = {
     `कतार में नया ग्राहक जुड़ा। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
   voiceAnnouncementsOn: () => 'आवाज़ में सूचनाएं चालू हैं।',
   arrivalCheck: (serviceName, time) => {
-    const service = serviceName ? `${serviceName} ग्राहक` : 'अपॉइंटमेंट';
-    const when = time ? ` ${time} बजे की` : '';
-    return `अपॉइंटमेंट रिमाइंडर। क्या आपकी${when} ${service} पहुंच चुकी है? कृपया पुष्टि करें, आया या नहीं आया।`;
+    const service = serviceName ? `${serviceName} ग्राहक` : 'अपॉइंटमेंट के ग्राहक';
+    const when = time ? `${time} बजे के ` : '';
+    return `अपॉइंटमेंट रिमाइंडर। क्या ${when}${service} पहुंच चुका है? कृपया पुष्टि करें, आया या नहीं आया।`;
   },
 };
 
@@ -2324,6 +2324,7 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'booking.no_show': 'Marked as no-show',
   'booking.expired': 'Booking expired',
   'booking.reminder': 'Upcoming appointment',
+  'booking.corrected': 'Booking corrected: marked completed',
   'queue.turn_approaching': 'Your turn is approaching',
   'owner.booking.created': 'New booking',
   'owner.booking.cancelled': 'Booking cancelled',
@@ -2340,6 +2341,7 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'booking.no_show': 'नो-शो के रूप में चिह्नित',
   'booking.expired': 'बुकिंग समाप्त हो गई',
   'booking.reminder': 'आगामी अपॉइंटमेंट',
+  'booking.corrected': 'बुकिंग सुधारी गई: पूर्ण के रूप में चिह्नित',
   'queue.turn_approaching': 'आपकी बारी आने वाली है',
   'owner.booking.created': 'नई बुकिंग',
   'owner.booking.cancelled': 'बुकिंग रद्द हुई',

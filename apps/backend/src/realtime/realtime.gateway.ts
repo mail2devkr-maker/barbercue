@@ -162,6 +162,16 @@ export class RealtimeGateway implements OnGatewayConnection {
       .emit('booking.expired', { salonId, bookingId });
   }
 
+  // P0 follow-up — a NO_SHOW booking was corrected to COMPLETED. Deliberately its own event, never
+  // `booking.no_show`: owner dashboards and the affected customer must refetch, and nothing may
+  // read this as a new no-show. Salon room for operator surfaces, customer room so the customer's
+  // own bookings view can refetch. Ids-only, same convention as every emit here.
+  emitBookingCorrected(salonId: string, bookingId: string, customerId: string): void {
+    const payload = { salonId, bookingId };
+    this.server.to(`salon:${salonId}`).emit('booking.corrected', payload);
+    this.server.to(`customer:${customerId}`).emit('booking.corrected', payload);
+  }
+
   // P0 arrival-alert mission — the one-shot "a booking just crossed T-5" nudge for any connected
   // owner/staff dashboard. Ids-only, same convention as every other emit here: the client's own
   // GET .../arrival-alerts is the source of truth this just tells it to re-fetch, so a client that

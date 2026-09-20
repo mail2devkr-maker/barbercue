@@ -167,3 +167,32 @@ describe('pushCopyFor', () => {
     expect(pushCopyFor(undefined)).toBe(PUSH_COPY[Language.EN]);
   });
 });
+
+// P0 follow-up: the arrival-check voice copy and the correction notification label.
+describe('arrival-check voice + correction notification copy', () => {
+  it('EN arrival-check reads naturally with a service and time, and never invents a customer name', () => {
+    const text = voiceAnnouncementsFor(Language.EN).arrivalCheck('Haircut', '3:15 PM');
+    expect(text).toBe(
+      'Appointment reminder. Has the 3:15 PM Haircut customer arrived? Please confirm arrived or not arrived.',
+    );
+  });
+
+  it('EN arrival-check degrades gracefully with no service or time', () => {
+    expect(voiceAnnouncementsFor(Language.EN).arrivalCheck(null, null)).toContain('Has the customer arrived?');
+  });
+
+  it('HI arrival-check is real Devanagari Hindi with the masculine "ग्राहक ... चुका" agreement', () => {
+    const text = voiceAnnouncementsFor(Language.HI).arrivalCheck('Haircut', '3:15 PM');
+    expect(text).toContain('Haircut ग्राहक पहुंच चुका है');
+    expect(text).not.toContain('चुकी');
+    expect(text).not.toBe(voiceAnnouncementsFor(Language.EN).arrivalCheck('Haircut', '3:15 PM'));
+  });
+
+  it('a corrected booking is labelled as corrected/completed, never as merely confirmed', () => {
+    expect(notificationTypeLabel(Language.EN, 'booking.corrected')).toBe('Booking corrected: marked completed');
+    expect(notificationTypeLabel(Language.EN, 'booking.corrected')).not.toBe(
+      notificationTypeLabel(Language.EN, 'booking.confirmed'),
+    );
+    expect(notificationTypeLabel(Language.HI, 'booking.corrected')).toContain('सुधारी');
+  });
+});

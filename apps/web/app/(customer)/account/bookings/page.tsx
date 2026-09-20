@@ -16,6 +16,7 @@ import type {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
+import { getRealtimeSocket, onReconnect } from "../../../../lib/realtime";
 import { CancelBookingDialog } from "../../../../components/booking/CancelBookingDialog";
 import { RescheduleBookingDialog } from "../../../../components/booking/RescheduleBookingDialog";
 import { BookingActionsBar } from "../../../../components/booking/BookingActionsBar";
@@ -167,6 +168,35 @@ export default function MyBookingsPage() {
       .catch(() => {});
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // P0 correction follow-up: RealtimeGateway emits booking.corrected to the affected customer's
+  // room after a false NO_SHOW is corrected to COMPLETED. Refetch backend truth immediately so an
+  // already-open bookings page cannot keep showing the stale NO_SHOW/charge until a manual reload.
+  useEffect(() => {
+    let cancelled = false;
+    const socket = getRealtimeSocket();
+
+    const refreshCorrectedBooking = () => {
+      void loadPage()
+        .then((result) => {
+          if (cancelled) return;
+          setBookings(result.items);
+          setNextCursor(result.nextCursor);
+        })
+        .catch(() => {
+          // Non-fatal: the durable notification remains available and reconnect/manual reload can
+          // retry. Never replace the current list with guessed state.
+        });
+    };
+
+    socket.on("booking.corrected", refreshCorrectedBooking);
+    const unsubscribeReconnect = onReconnect(refreshCorrectedBooking);
+    return () => {
+      cancelled = true;
+      socket.off("booking.corrected", refreshCorrectedBooking);
+      unsubscribeReconnect();
     };
   }, []);
 

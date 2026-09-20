@@ -14,6 +14,7 @@ const TYPE_LABEL: Record<string, string> = {
   "booking.cancelled": "Booking cancelled",
   "booking.no_show": "Booking marked as no-show",
   "booking.expired": "Booking hold expired",
+  "booking.corrected": "Booking corrected: marked completed",
   "queue.turn_approaching": "Your turn is approaching",
   "owner.booking.created": "New booking",
   "owner.booking.cancelled": "Booking cancelled",

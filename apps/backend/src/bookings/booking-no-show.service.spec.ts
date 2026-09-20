@@ -38,7 +38,7 @@ describe('BookingNoShowService', () => {
   };
   let cancellationPolicy: { getEffectivePolicy: jest.Mock };
   let salonAccess: { assertAccessOrAdminAccess: jest.Mock };
-  let realtime: { emitBookingNoShow: jest.Mock };
+  let realtime: { emitBookingNoShow: jest.Mock; emitBookingCorrected: jest.Mock };
   let notifications: { notifyInTransaction: jest.Mock };
 
   function overdueBooking(overrides: Partial<Record<string, unknown>> = {}) {
@@ -86,7 +86,7 @@ describe('BookingNoShowService', () => {
     salonAccess = {
       assertAccessOrAdminAccess: jest.fn().mockResolvedValue('STAFF_OR_OWNER'),
     };
-    realtime = { emitBookingNoShow: jest.fn() };
+    realtime = { emitBookingNoShow: jest.fn(), emitBookingCorrected: jest.fn() };
     notifications = { notifyInTransaction: jest.fn().mockResolvedValue(true) };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -235,7 +235,14 @@ describe('BookingNoShowService', () => {
 
   describe('correctToCompleted', () => {
     function noShowBooking(overrides: Partial<Record<string, unknown>> = {}) {
-      return { id: 'b1', salonId: 's1', customerId: 'cust-1', status: 'NO_SHOW', ...overrides };
+      return {
+        id: 'b1',
+        salonId: 's1',
+        customerId: 'cust-1',
+        status: 'NO_SHOW',
+        cancellationChargeAmount: 200,
+        ...overrides,
+      };
     }
 
     beforeEach(() => {
@@ -261,24 +268,70 @@ describe('BookingNoShowService', () => {
       const result = await service.correctToCompleted('owner-1', 'b1');
 
       expect(result).toEqual({ id: 'b1', status: 'COMPLETED', waivedLedgerEntryIds: ['ledger-1'] });
+      // The stale no-show charge is cleared on the booking itself in the same claim, so no
+      // customer/owner surface keeps presenting the served booking as carrying a charge.
       expect(tx.booking.updateMany).toHaveBeenCalledWith({
         where: { id: 'b1', status: 'NO_SHOW' },
-        data: { status: 'COMPLETED' },
+        data: { status: 'COMPLETED', cancellationChargeAmount: null },
       });
+      // WAIVED exactly once: the claim itself re-asserts OUTSTANDING.
+      expect(tx.customerLedgerEntry.updateMany).toHaveBeenCalledTimes(1);
       expect(tx.customerLedgerEntry.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['ledger-1'] } },
+        where: { id: { in: ['ledger-1'] }, status: 'OUTSTANDING' },
         data: { status: 'WAIVED' },
       });
+      // Never deleted.
+      expect(tx.customerLedgerEntry).not.toHaveProperty('delete');
       // The correction is a NEW, distinct audit row — the original BOOKING_NO_SHOW entry (written
-      // when the booking was first marked) is never read, edited or deleted by this method.
+      // when the booking was first marked) is never read, edited or deleted by this method — and it
+      // preserves the original charge amount that was cleared from the booking row.
+      expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
       expect(tx.auditLog.create).toHaveBeenCalledWith({
         data: {
           actorUserId: 'owner-1',
           action: 'BOOKING_NO_SHOW_CORRECTED_TO_COMPLETED',
           entityType: 'Booking',
           entityId: 'b1',
-          metadata: { waivedLedgerEntryIds: ['ledger-1'] },
+          metadata: {
+            waivedLedgerEntryIds: ['ledger-1'],
+            previousStatus: 'NO_SHOW',
+            previousCancellationChargeAmount: 200,
+          },
         },
+      });
+    });
+
+    it('tells the customer their booking was corrected — never that it was merely "confirmed"', async () => {
+      await service.correctToCompleted('owner-1', 'b1');
+      const types = notifications.notifyInTransaction.mock.calls.map((call) => call[2]);
+      expect(types).toEqual(['booking.corrected']);
+      expect(types).not.toContain('booking.confirmed');
+      expect(types).not.toContain('booking.no_show');
+    });
+
+    it('emits booking.corrected, and never booking.no_show, after a successful correction', async () => {
+      await service.correctToCompleted('owner-1', 'b1');
+      expect(realtime.emitBookingCorrected).toHaveBeenCalledWith('s1', 'b1', 'cust-1');
+      expect(realtime.emitBookingNoShow).not.toHaveBeenCalled();
+    });
+
+    it('emits nothing and notifies no one when the correction claim is lost', async () => {
+      tx.booking.updateMany.mockResolvedValue({ count: 0 });
+      await expect(service.correctToCompleted('owner-1', 'b1')).rejects.toMatchObject({
+        code: 'BOOKING_NOT_NO_SHOW',
+      });
+      expect(realtime.emitBookingCorrected).not.toHaveBeenCalled();
+      expect(realtime.emitBookingNoShow).not.toHaveBeenCalled();
+      expect(notifications.notifyInTransaction).not.toHaveBeenCalled();
+    });
+
+    it('records a null previous charge truthfully when the booking never carried one', async () => {
+      prisma.booking.findUnique.mockResolvedValue(noShowBooking({ cancellationChargeAmount: null }));
+      await service.correctToCompleted('owner-1', 'b1');
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: expect.objectContaining({ previousCancellationChargeAmount: null }),
+        }),
       });
     });
 

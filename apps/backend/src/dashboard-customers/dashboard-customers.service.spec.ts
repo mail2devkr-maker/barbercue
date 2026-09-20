@@ -98,7 +98,7 @@ describe('DashboardCustomersService', () => {
   let service: DashboardCustomersService;
   let prisma: {
     salon: { findUnique: jest.Mock };
-    booking: { groupBy: jest.Mock; count: jest.Mock; findMany: jest.Mock };
+    booking: { groupBy: jest.Mock; count: jest.Mock; findMany: jest.Mock; findUnique: jest.Mock };
     queueEntry: { groupBy: jest.Mock };
     user: { findMany: jest.Mock };
     service: { findMany: jest.Mock };
@@ -150,6 +150,7 @@ describe('DashboardCustomersService', () => {
         groupBy: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue({ status: 'NO_SHOW' }),
       },
       queueEntry: { groupBy: jest.fn().mockResolvedValue([]) },
       user: { findMany: jest.fn().mockResolvedValue([]) },
@@ -609,6 +610,15 @@ describe('DashboardCustomersService', () => {
       const result = await service.restoreNoShowDue('owner1', 's1', 'c1', 'l1');
       expect(result.ledgerEntry.status).toBe('OUTSTANDING');
       expect(row.status).toBe('OUTSTANDING');
+    });
+
+    it('refuses to restore a due whose booking was corrected to COMPLETED (never resurrects a stale payable)', async () => {
+      const row = makeLedgerFake({ id: 'l1', salonId: 's1', customerId: 'c1', reason: 'NO_SHOW_CHARGE', status: 'WAIVED', amount: 200, bookingId: 'b1' });
+      prisma.booking.findUnique.mockResolvedValue({ status: 'COMPLETED' });
+      await expect(service.restoreNoShowDue('owner1', 's1', 'c1', 'l1')).rejects.toMatchObject({
+        code: 'LEDGER_ENTRY_NOT_RESTORABLE',
+      });
+      expect(row.status).toBe('WAIVED');
     });
 
     it('14. writes a NO_SHOW_DUE_WAIVED AuditLog row', async () => {
