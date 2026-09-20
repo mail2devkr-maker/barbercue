@@ -643,32 +643,35 @@ describe('BookingsService', () => {
       expect(data.prepaymentRequiredAmount).toBe(300);
     });
 
-    describe('payment QR gate (FastQue Credits / Wallet V1)', () => {
-      it('rejects PAYMENT_QR_REQUIRED for an ONLINE (WEB) booking when the salon has no payment QR configured', async () => {
+    describe('optional payment QR (approved shop onboarding policy)', () => {
+      it('allows an ONLINE (WEB) booking when the salon has no payment QR configured', async () => {
         prisma.salonPaymentPolicy.findUnique.mockResolvedValue(null);
-        await expect(
-          service.create(
-            'c1',
-            { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
-            BookingSource.WEB,
-            'key-1',
-          ),
-        ).rejects.toMatchObject({ code: 'PAYMENT_QR_REQUIRED' });
-        expect(prisma.booking.create).not.toHaveBeenCalled();
+        await service.create(
+          'c1',
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
+          BookingSource.WEB,
+          'key-1',
+        );
+        const data = lastCreateData(prisma.booking.create);
+        expect(data.status).toBe('CONFIRMED');
+        expect(data.prepaymentRequiredAmount).toBeNull();
       });
 
-      it('rejects PAYMENT_QR_REQUIRED for an ONLINE (APP) booking when the salon has a payment policy row but no QR image set on it', async () => {
+      it('allows an ONLINE (APP) booking when a policy row exists but no QR image is configured', async () => {
         prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
           paymentQrImageUrl: null,
+          prepaymentRequirement: 'FULL',
+          prepaymentPercentage: null,
         });
-        await expect(
-          service.create(
-            'c1',
-            { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
-            BookingSource.APP,
-            'key-1',
-          ),
-        ).rejects.toMatchObject({ code: 'PAYMENT_QR_REQUIRED' });
+        await service.create(
+          'c1',
+          { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
+          BookingSource.APP,
+          'key-1',
+        );
+        const data = lastCreateData(prisma.booking.create);
+        expect(data.status).toBe('CONFIRMED');
+        expect(data.prepaymentRequiredAmount).toBeNull();
       });
 
       it('never gates a WALK_IN booking on the payment QR — that customer pays the shop in person', async () => {
