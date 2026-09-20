@@ -1,8 +1,14 @@
-export interface OwnerBookingPushData {
-  type: 'booking.created' | 'booking.rescheduled' | 'booking.cancelled' | 'booking.arrival_check';
+interface OwnerBookingPushBase {
   salonId: string;
   bookingId: string;
 }
+// A discriminated union (not one interface with a union-typed `type`), so checking
+// `payload.type === 'booking.arrival_check'` narrows the whole payload at every call site.
+export type OwnerBookingPushData =
+  | (OwnerBookingPushBase & { type: 'booking.created' })
+  | (OwnerBookingPushBase & { type: 'booking.rescheduled' })
+  | (OwnerBookingPushBase & { type: 'booking.cancelled' })
+  | (OwnerBookingPushBase & { type: 'booking.arrival_check' });
 type OwnerBookingPushListener = (payload: OwnerBookingPushData) => boolean;
 
 let pendingOwnerBookingPush: OwnerBookingPushData | null = null;
