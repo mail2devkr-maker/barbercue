@@ -30,7 +30,7 @@ export const SERVICE_CATALOG_PACKS: readonly ServicePackDefinition[] = [
     id: 'ADVANCED',
     label: 'Advance Salon Services',
     description:
-      'The complete FastQue beauty catalog, including every Basic/Standard service plus technical hair treatments, premium facials, full-body waxing, advanced nails, bridal/HD makeup and intensive body care — with premium suggested prices.',
+      'The complete FastQue beauty catalog, including separate Gents/Ladies variants for shared services plus technical hair treatments, premium facials, full-body waxing, advanced nails, bridal/HD makeup and intensive body care — with premium suggested prices.',
   },
 ] as const;
 
@@ -275,14 +275,155 @@ const PACK_RANK: Readonly<Record<ServicePackId, number>> = {
   ADVANCED: 2,
 };
 
+const LADIES_ONLY_UNPREFIXED_IDS = new Set(['balayage', 'ombre']);
+
+const MIN_PACK_OVERRIDE_BY_ID: Readonly<Partial<Record<string, ServicePackId>>> = {
+  // Small gents barbers generally do not offer waxing/nail care in the Basic pack.
+  'gents-underarms': 'STANDARD',
+  'gents-half-arms': 'STANDARD',
+  'gents-full-arms': 'STANDARD',
+  'gents-half-legs': 'STANDARD',
+  'gents-full-legs': 'STANDARD',
+  'gents-stomach': 'STANDARD',
+  'gents-back': 'STANDARD',
+  'gents-full-body-wax': 'ADVANCED',
+  'gents-manicure': 'STANDARD',
+  'gents-pedicure': 'STANDARD',
+  'gents-nail-cut-file': 'STANDARD',
+  // Basic gents pack stays focused on barbering/colour/head massage.
+  'gents-cleanup': 'STANDARD',
+  'gents-de-tan': 'STANDARD',
+  'gents-bleach': 'STANDARD',
+};
+
+const AUDIENCE_REFERENCE_PRICE_INR_BY_ID: Readonly<Record<string, number>> = {
+  // Hair colour — ladies references assume a typical medium-length starting service.
+  'gents-root-touch-up': 300,
+  'ladies-root-touch-up': 700,
+  'gents-global-hair-colour': 500,
+  'ladies-global-hair-colour': 1200,
+  'gents-highlights': 800,
+  'ladies-highlights': 2500,
+  'gents-lowlights': 800,
+  'ladies-lowlights': 2500,
+  'gents-henna': 250,
+  'ladies-henna': 500,
+
+  // Hair care / treatments.
+  'gents-hair-spa': 500,
+  'ladies-hair-spa': 900,
+  'gents-deep-conditioning': 350,
+  'ladies-deep-conditioning': 700,
+  'gents-head-massage': 150,
+  'ladies-head-massage': 250,
+  'gents-anti-dandruff-treatment': 500,
+  'ladies-anti-dandruff-treatment': 900,
+  'gents-anti-hairfall-treatment': 600,
+  'ladies-anti-hairfall-treatment': 1000,
+  'gents-scalp-treatment': 700,
+  'ladies-scalp-treatment': 1100,
+  'gents-keratin-treatment': 1500,
+  'ladies-keratin-treatment': 4000,
+  'gents-smoothening': 1800,
+  'ladies-smoothening': 3500,
+  'gents-rebonding-straightening': 2000,
+  'ladies-rebonding-straightening': 4500,
+  'gents-hair-botox': 2000,
+  'ladies-hair-botox': 5000,
+
+  // Facial / skin.
+  'gents-cleanup': 400,
+  'ladies-cleanup': 500,
+  'gents-fruit-facial': 600,
+  'ladies-fruit-facial': 700,
+  'gents-gold-facial': 800,
+  'ladies-gold-facial': 1000,
+  'gents-diamond-facial': 1000,
+  'ladies-diamond-facial': 1200,
+  'gents-hydrating-facial': 800,
+  'ladies-hydrating-facial': 1000,
+  'gents-brightening-facial': 800,
+  'ladies-brightening-facial': 1000,
+  'gents-anti-ageing-facial': 1200,
+  'ladies-anti-ageing-facial': 1500,
+  'gents-acne-control-facial': 900,
+  'ladies-acne-control-facial': 1200,
+  'gents-de-tan': 400,
+  'ladies-de-tan': 500,
+  'gents-bleach': 300,
+  'ladies-bleach': 400,
+  'gents-face-polish': 500,
+  'ladies-face-polish': 700,
+
+  // Threading / waxing that both audiences may request.
+  'gents-eyebrows': 100,
+  'ladies-eyebrows': 50,
+  'gents-full-face-threading': 250,
+  'ladies-full-face-threading': 150,
+  'gents-underarms': 200,
+  'ladies-underarms': 150,
+  'gents-half-arms': 350,
+  'ladies-half-arms': 250,
+  'gents-full-arms': 550,
+  'ladies-full-arms': 400,
+  'gents-half-legs': 500,
+  'ladies-half-legs': 350,
+  'gents-full-legs': 800,
+  'ladies-full-legs': 600,
+  'gents-stomach': 500,
+  'ladies-stomach': 350,
+  'gents-back': 750,
+  'ladies-back': 500,
+  'gents-full-body-wax': 2500,
+  'ladies-full-body-wax': 1800,
+
+  // Hands / feet.
+  'gents-manicure': 450,
+  'ladies-manicure': 500,
+  'gents-pedicure': 650,
+  'ladies-pedicure': 700,
+  'gents-spa-manicure': 750,
+  'ladies-spa-manicure': 800,
+  'gents-spa-pedicure': 950,
+  'ladies-spa-pedicure': 1000,
+  'gents-nail-cut-file': 120,
+  'ladies-nail-cut-file': 150,
+
+  // Spa / body care.
+  'gents-foot-massage': 450,
+  'ladies-foot-massage': 400,
+  'gents-hand-massage': 350,
+  'ladies-hand-massage': 300,
+  'gents-head-neck-shoulder-massage': 550,
+  'ladies-head-neck-shoulder-massage': 500,
+  'gents-back-massage': 800,
+  'ladies-back-massage': 700,
+  'gents-body-scrub': 1200,
+  'ladies-body-scrub': 1000,
+  'gents-body-polish': 1800,
+  'ladies-body-polish': 1500,
+};
+
+function baseServiceId(id: string): string {
+  if (id.startsWith('gents-')) return id.slice('gents-'.length);
+  if (id.startsWith('ladies-')) return id.slice('ladies-'.length);
+  return id;
+}
+
 function packFor(id: string): ServicePackId {
-  if (BASIC_SERVICE_IDS.has(id)) return 'BASIC';
-  if (STANDARD_SERVICE_IDS.has(id)) return 'STANDARD';
+  const override = MIN_PACK_OVERRIDE_BY_ID[id];
+  if (override) return override;
+  const baseId = baseServiceId(id);
+  if (BASIC_SERVICE_IDS.has(baseId)) return 'BASIC';
+  if (STANDARD_SERVICE_IDS.has(baseId)) return 'STANDARD';
   // Anything not explicitly offered by Basic or Standard is an Advance-only beauty service.
   return 'ADVANCED';
 }
 
 function salonAudienceFor(category: string, id: string): SalonType {
+  if (id.startsWith('gents-')) return SalonType.GENTS;
+  if (id.startsWith('ladies-')) return SalonType.LADIES;
+  if (LADIES_ONLY_UNPREFIXED_IDS.has(id)) return SalonType.LADIES;
   if (category === "Men's Hair & Grooming" || category === 'Beard & Shaving') {
     return SalonType.GENTS;
   }
@@ -309,7 +450,9 @@ function roundSuggestedPrice(value: number): number {
 }
 
 function pricesFor(id: string, minimumPack: ServicePackId): Readonly<Partial<Record<ServicePackId, number>>> {
-  const reference = STANDARD_REFERENCE_PRICE_INR_BY_ID[id];
+  const reference =
+    AUDIENCE_REFERENCE_PRICE_INR_BY_ID[id] ??
+    STANDARD_REFERENCE_PRICE_INR_BY_ID[baseServiceId(id)];
   if (reference === undefined) {
     throw new Error(`Missing suggested service price for catalog item: ${id}`);
   }
@@ -353,6 +496,19 @@ function item(
     defaultPriceInr,
     pack,
   };
+}
+
+function genderPair(
+  category: string,
+  baseId: string,
+  name: string,
+  gentsDurationMinutes: number,
+  ladiesDurationMinutes: number,
+): readonly ServiceCatalogItem[] {
+  return [
+    item(category, `gents-${baseId}`, `Gents ${name}`, gentsDurationMinutes),
+    item(category, `ladies-${baseId}`, `Ladies ${name}`, ladiesDurationMinutes),
+  ];
 }
 
 export function serviceAvailableInPack(item: ServiceCatalogItem, pack: ServicePackId): boolean {
@@ -423,60 +579,60 @@ export const SERVICE_CATALOG: readonly ServiceCatalogItem[] = [
   item("Women's Hair", "basic-hairdo", "Basic Hairdo", 45),
   item("Women's Hair", "party-hairdo", "Party Hairdo", 60),
 
-  item("Hair Colour", "root-touch-up", "Root Touch-Up", 75),
-  item("Hair Colour", "global-hair-colour", "Global Hair Colour", 120),
-  item("Hair Colour", "highlights", "Highlights", 120),
-  item("Hair Colour", "lowlights", "Lowlights", 120),
+  ...genderPair("Hair Colour", "root-touch-up", "Root Touch-Up", 45, 75),
+  ...genderPair("Hair Colour", "global-hair-colour", "Global Hair Colour", 60, 120),
+  ...genderPair("Hair Colour", "highlights", "Highlights", 75, 150),
+  ...genderPair("Hair Colour", "lowlights", "Lowlights", 75, 150),
   item("Hair Colour", "balayage", "Balayage", 180),
   item("Hair Colour", "ombre", "Ombre", 180),
-  item("Hair Colour", "henna", "Henna", 90),
+  ...genderPair("Hair Colour", "henna", "Henna", 45, 90),
 
-  item("Hair Care & Treatments", "hair-spa", "Hair Spa", 60),
-  item("Hair Care & Treatments", "deep-conditioning", "Deep Conditioning", 45),
-  item("Hair Care & Treatments", "head-massage", "Head Massage", 30),
-  item("Hair Care & Treatments", "anti-dandruff-treatment", "Anti-Dandruff Treatment", 60),
-  item("Hair Care & Treatments", "anti-hairfall-treatment", "Anti-Hairfall Treatment", 60),
-  item("Hair Care & Treatments", "scalp-treatment", "Scalp Treatment", 60),
-  item("Hair Care & Treatments", "keratin-treatment", "Keratin Treatment", 180),
-  item("Hair Care & Treatments", "smoothening", "Smoothening", 180),
-  item("Hair Care & Treatments", "rebonding-straightening", "Rebonding/Straightening", 240),
-  item("Hair Care & Treatments", "hair-botox", "Hair Botox", 180),
+  ...genderPair("Hair Care & Treatments", "hair-spa", "Hair Spa", 45, 60),
+  ...genderPair("Hair Care & Treatments", "deep-conditioning", "Deep Conditioning", 30, 45),
+  ...genderPair("Hair Care & Treatments", "head-massage", "Head Massage", 30, 30),
+  ...genderPair("Hair Care & Treatments", "anti-dandruff-treatment", "Anti-Dandruff Treatment", 45, 60),
+  ...genderPair("Hair Care & Treatments", "anti-hairfall-treatment", "Anti-Hairfall Treatment", 45, 60),
+  ...genderPair("Hair Care & Treatments", "scalp-treatment", "Scalp Treatment", 45, 60),
+  ...genderPair("Hair Care & Treatments", "keratin-treatment", "Keratin Treatment", 90, 180),
+  ...genderPair("Hair Care & Treatments", "smoothening", "Smoothening", 120, 180),
+  ...genderPair("Hair Care & Treatments", "rebonding-straightening", "Rebonding/Straightening", 150, 240),
+  ...genderPair("Hair Care & Treatments", "hair-botox", "Hair Botox", 120, 180),
 
-  item("Facial & Skin", "cleanup", "Cleanup", 45),
-  item("Facial & Skin", "fruit-facial", "Fruit Facial", 60),
-  item("Facial & Skin", "gold-facial", "Gold Facial", 75),
-  item("Facial & Skin", "diamond-facial", "Diamond Facial", 75),
-  item("Facial & Skin", "hydrating-facial", "Hydrating Facial", 60),
-  item("Facial & Skin", "brightening-facial", "Brightening Facial", 60),
-  item("Facial & Skin", "anti-ageing-facial", "Anti-Ageing Facial", 75),
-  item("Facial & Skin", "acne-control-facial", "Acne-Control Facial", 60),
-  item("Facial & Skin", "de-tan", "De-Tan", 45),
-  item("Facial & Skin", "bleach", "Bleach", 30),
-  item("Facial & Skin", "face-polish", "Face Polish", 45),
+  ...genderPair("Facial & Skin", "cleanup", "Cleanup", 40, 45),
+  ...genderPair("Facial & Skin", "fruit-facial", "Fruit Facial", 55, 60),
+  ...genderPair("Facial & Skin", "gold-facial", "Gold Facial", 65, 75),
+  ...genderPair("Facial & Skin", "diamond-facial", "Diamond Facial", 65, 75),
+  ...genderPair("Facial & Skin", "hydrating-facial", "Hydrating Facial", 55, 60),
+  ...genderPair("Facial & Skin", "brightening-facial", "Brightening Facial", 55, 60),
+  ...genderPair("Facial & Skin", "anti-ageing-facial", "Anti-Ageing Facial", 65, 75),
+  ...genderPair("Facial & Skin", "acne-control-facial", "Acne-Control Facial", 55, 60),
+  ...genderPair("Facial & Skin", "de-tan", "De-Tan", 40, 45),
+  ...genderPair("Facial & Skin", "bleach", "Bleach", 25, 30),
+  ...genderPair("Facial & Skin", "face-polish", "Face Polish", 40, 45),
 
-  item("Threading", "eyebrows", "Eyebrows", 15),
+  ...genderPair("Threading", "eyebrows", "Eyebrows", 15, 15),
   item("Threading", "upper-lip", "Upper Lip", 10),
   item("Threading", "chin", "Chin", 10),
   item("Threading", "forehead", "Forehead", 10),
   item("Threading", "side-face", "Side Face", 20),
-  item("Threading", "full-face-threading", "Full Face Threading", 35),
+  ...genderPair("Threading", "full-face-threading", "Full Face Threading", 35, 35),
 
-  item("Waxing", "underarms", "Underarms", 15),
-  item("Waxing", "half-arms", "Half Arms", 25),
-  item("Waxing", "full-arms", "Full Arms", 35),
-  item("Waxing", "half-legs", "Half Legs", 30),
-  item("Waxing", "full-legs", "Full Legs", 45),
+  ...genderPair("Waxing", "underarms", "Underarms", 20, 15),
+  ...genderPair("Waxing", "half-arms", "Half Arms", 30, 25),
+  ...genderPair("Waxing", "full-arms", "Full Arms", 45, 35),
+  ...genderPair("Waxing", "half-legs", "Half Legs", 40, 30),
+  ...genderPair("Waxing", "full-legs", "Full Legs", 60, 45),
   item("Waxing", "full-face-wax", "Full Face Wax", 30),
-  item("Waxing", "stomach", "Stomach", 30),
-  item("Waxing", "back", "Back", 35),
-  item("Waxing", "full-body-wax", "Full Body Wax", 120),
+  ...genderPair("Waxing", "stomach", "Stomach", 40, 30),
+  ...genderPair("Waxing", "back", "Back", 50, 35),
+  ...genderPair("Waxing", "full-body-wax", "Full Body Wax", 150, 120),
   item("Waxing", "bikini-wax", "Bikini Wax", 35),
 
-  item("Hands, Feet & Nails", "manicure", "Manicure", 45),
-  item("Hands, Feet & Nails", "pedicure", "Pedicure", 60),
-  item("Hands, Feet & Nails", "spa-manicure", "Spa Manicure", 60),
-  item("Hands, Feet & Nails", "spa-pedicure", "Spa Pedicure", 75),
-  item("Hands, Feet & Nails", "nail-cut-file", "Nail Cut & File", 20),
+  ...genderPair("Hands, Feet & Nails", "manicure", "Manicure", 45, 45),
+  ...genderPair("Hands, Feet & Nails", "pedicure", "Pedicure", 60, 60),
+  ...genderPair("Hands, Feet & Nails", "spa-manicure", "Spa Manicure", 60, 60),
+  ...genderPair("Hands, Feet & Nails", "spa-pedicure", "Spa Pedicure", 75, 75),
+  ...genderPair("Hands, Feet & Nails", "nail-cut-file", "Nail Cut & File", 20, 20),
   item("Hands, Feet & Nails", "nail-polish", "Nail Polish", 20),
   item("Hands, Feet & Nails", "gel-polish", "Gel Polish", 45),
   item("Hands, Feet & Nails", "gel-removal", "Gel Removal", 30),
@@ -495,12 +651,12 @@ export const SERVICE_CATALOG: readonly ServiceCatalogItem[] = [
   item("Makeup & Occasion", "bridal-hairdo", "Bridal Hairdo", 120),
   item("Makeup & Occasion", "pre-bridal-package", "Pre-Bridal Package", 240),
 
-  item("Spa / Body Care", "foot-massage", "Foot Massage", 30),
-  item("Spa / Body Care", "hand-massage", "Hand Massage", 25),
-  item("Spa / Body Care", "head-neck-shoulder-massage", "Head/Neck/Shoulder Massage", 40),
-  item("Spa / Body Care", "back-massage", "Back Massage", 45),
-  item("Spa / Body Care", "body-scrub", "Body Scrub", 60),
-  item("Spa / Body Care", "body-polish", "Body Polish", 75),
+  ...genderPair("Spa / Body Care", "foot-massage", "Foot Massage", 30, 30),
+  ...genderPair("Spa / Body Care", "hand-massage", "Hand Massage", 25, 25),
+  ...genderPair("Spa / Body Care", "head-neck-shoulder-massage", "Head/Neck/Shoulder Massage", 40, 40),
+  ...genderPair("Spa / Body Care", "back-massage", "Back Massage", 45, 45),
+  ...genderPair("Spa / Body Care", "body-scrub", "Body Scrub", 60, 60),
+  ...genderPair("Spa / Body Care", "body-polish", "Body Polish", 75, 75),
 ] as const;
 
 /** Match services consistently without changing the owner's display spelling. */
