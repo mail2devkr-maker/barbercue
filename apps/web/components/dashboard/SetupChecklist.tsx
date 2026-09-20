@@ -136,10 +136,10 @@ export function SetupChecklist({
       why: "Chairs set how many customers you can serve at once. With none, nobody can be seated.",
     },
     {
-      label: "Add your barbers",
+      label: "Add your staff",
       done: hasBarber,
       href: `/dashboard/salons/${salonId}/staff`,
-      why: "Your barbers run the live queue from their own login.",
+      why: "Your staff help run the live queue and can use their own login when contact details are configured.",
     },
     {
       label: "Open your shop",
