@@ -1,5 +1,5 @@
 export interface OwnerBookingPushData {
-  type: 'booking.created' | 'booking.rescheduled' | 'booking.cancelled';
+  type: 'booking.created' | 'booking.rescheduled' | 'booking.cancelled' | 'booking.arrival_check';
   salonId: string;
   bookingId: string;
 }
@@ -16,7 +16,12 @@ const ownerBookingPushListeners = new Set<OwnerBookingPushListener>();
 export function parseOwnerBookingPushData(value: unknown): OwnerBookingPushData | null {
   if (!value || typeof value !== 'object') return null;
   const data = value as Record<string, unknown>;
-  if (data.type !== 'booking.created' && data.type !== 'booking.rescheduled' && data.type !== 'booking.cancelled') return null;
+  if (
+    data.type !== 'booking.created' &&
+    data.type !== 'booking.rescheduled' &&
+    data.type !== 'booking.cancelled' &&
+    data.type !== 'booking.arrival_check'
+  ) return null;
   if (typeof data.salonId !== 'string' || data.salonId.length === 0) return null;
   if (typeof data.bookingId !== 'string' || data.bookingId.length === 0) return null;
   return { type: data.type, salonId: data.salonId, bookingId: data.bookingId };
