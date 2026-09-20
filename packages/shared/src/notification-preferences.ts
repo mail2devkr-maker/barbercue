@@ -41,6 +41,19 @@ export const NOTIFICATION_CATEGORY_DEFAULT_ENABLED: Readonly<Record<Notification
   [NotificationCategory.PROMOTIONAL]: true,
 };
 
+/**
+ * Preferences that exist but can NOT be turned off. The critical arrival prompt is mandatory shop
+ * operations: the push that wakes the owner's phone for "has the customer arrived?" is always
+ * dispatched, so ARRIVAL_ALERTS on PUSH is required. (ARRIVAL_ALERTS on IN_APP stays a normal
+ * toggle - it only controls the supplemental Notification Center entry.)
+ */
+export function isNotificationPreferenceRequired(
+  category: NotificationCategory,
+  channel: NotificationChannel,
+): boolean {
+  return category === NotificationCategory.ARRIVAL_ALERTS && channel === NotificationChannel.PUSH;
+}
+
 export function isOperationalNotificationCategory(category: NotificationCategory): boolean {
   return (OPERATIONAL_NOTIFICATION_CATEGORIES as readonly string[]).includes(category);
 }
@@ -54,6 +67,9 @@ export function isOperationalNotificationCategory(category: NotificationCategory
 export function resolveNotificationPreference(
   stored: boolean | null | undefined,
   category: NotificationCategory,
+  channel?: NotificationChannel,
 ): boolean {
+  // A required preference is ON whatever is stored (even a stale OFF row can never suppress it).
+  if (channel !== undefined && isNotificationPreferenceRequired(category, channel)) return true;
   return stored ?? NOTIFICATION_CATEGORY_DEFAULT_ENABLED[category];
 }

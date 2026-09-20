@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   ALL_NOTIFICATION_CATEGORIES,
+  isNotificationPreferenceRequired,
   NotificationCategory,
   NotificationChannel,
   NotificationStatus,
@@ -13,6 +14,7 @@ import {
   type PaginatedResult,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { AppException } from '../common/exceptions/app.exception';
 import { isNotificationEnabled } from './notification-preference';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -194,8 +196,9 @@ export class NotificationsService {
           (channel): NotificationChannelPreferenceDto => ({
             channel,
             // Read-only: an unconfigured pair resolves to the default and is never written here.
-            enabled: resolveNotificationPreference(byKey.get(`${category}:${channel}`), category),
+            enabled: resolveNotificationPreference(byKey.get(`${category}:${channel}`), category, channel),
             available: AVAILABLE_CHANNELS.has(channel),
+            ...(isNotificationPreferenceRequired(category, channel) ? { required: true } : {}),
           }),
         ),
       })),
@@ -208,6 +211,18 @@ export class NotificationsService {
     channel: NotificationChannel,
     enabled: boolean,
   ): Promise<NotificationPreferencesDto> {
+    // The critical arrival prompt is mandatory shop operations: its push transport cannot be
+    // turned off from FastQue. Turning it "on" is a harmless no-op (nothing is stored).
+    if (isNotificationPreferenceRequired(category, channel)) {
+      if (!enabled) {
+        throw new AppException(
+          'NOTIFICATION_PREFERENCE_REQUIRED',
+          'Arrival confirmation alerts are required for shop operations and cannot be turned off.',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      return this.getPreferences(userId);
+    }
     await this.prisma.notificationPreference.upsert({
       where: { userId_category_channel: { userId, category, channel } },
       update: { enabled },

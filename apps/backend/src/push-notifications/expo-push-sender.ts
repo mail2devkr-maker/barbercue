@@ -20,9 +20,15 @@ export function isPlausibleExpoPushToken(token: string): boolean {
 
 export interface ExpoPushMessage {
   to: string;
-  title: string;
-  body: string;
+  // Omitted for a DATA-ONLY message (see PushPayload.dataOnly): with no title/body Expo sends no FCM
+  // `notification` block, so Android hands the message to the app's own messaging service even when the
+  // app is backgrounded, locked or killed. With a title/body, Android's FCM SDK shows the notification
+  // itself and never calls the app - which is exactly why it cannot wake a locked screen.
+  title?: string;
+  body?: string;
   data?: Record<string, unknown>;
+  /** Seconds FCM may keep the message while the device is offline. */
+  ttl?: number;
   categoryId?: string;
   // Android delivery hints. `channelId` must name a channel the app has already created (the app
   // creates 'booking-updates' at push registration); `sound` requests the default alert tone and

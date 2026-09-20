@@ -19,6 +19,8 @@ jest.mock('expo-notifications', () => ({
   AndroidNotificationPriority: { HIGH: 'high' },
 }));
 jest.mock('../../../lib/push-notifications', () => ({ ANDROID_BOOKING_CHANNEL_ID: 'booking-updates' }));
+// These suites pin the TONE path (speech impossible on the test phone); spoken behaviour is covered in *.voice.test.tsx.
+jest.mock('../../../lib/voice-announce', () => ({ canSpeak: jest.fn(async () => false), speakBooking: jest.fn() }));
 jest.mock('../../../lib/api', () => ({
   apiFetch: jest.fn(),
   ApiError: class ApiError extends Error {},

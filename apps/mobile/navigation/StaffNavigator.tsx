@@ -3,6 +3,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import StaffTodayScreen from '../screens/staff/StaffTodayScreen';
 import DashboardAccountStack, { type DashboardAccountStackParamList } from './DashboardAccountStack';
 import { SalonProvider } from '../lib/salon-context';
+import { OwnerArrivalPromptCoordinator } from '../components/owner/OwnerArrivalPromptCoordinator';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
@@ -18,11 +19,16 @@ const Tab = createBottomTabNavigator<StaffTabParamList>();
 // Mounted only for an authenticated user whose roles include SALON_STAFF but not SALON_OWNER
 // (see App.tsx) — deliberately just two tabs. Staff has no shop-management surface (that stays
 // on OwnerNavigator's Dashboard/Shop tabs only), so there is nothing else to give it a tab for.
+//
+// The mandatory arrival prompt is mounted here too: a staff member assigned to a booking is a
+// recipient of its arrival alert (the backend only lists - and only pushes - the bookings assigned
+// to them), so their phone must be able to show the same decision screen as the owner's.
 export default function StaffNavigator() {
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
   return (
     <SalonProvider>
+      <OwnerArrivalPromptCoordinator audience="staff" />
       <Tab.Navigator
         screenOptions={{
           headerShown: false,

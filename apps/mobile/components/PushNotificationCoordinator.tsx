@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { DASHBOARD_PATHS, Role, formatVoiceDateTime, type Language, type MeResponse, type OwnerBookingDetailDto } from '@barbercue/shared';
 import { useAuth } from '../lib/auth-context';
 import { apiFetch } from '../lib/api';
@@ -19,7 +19,8 @@ import {
   requestOwnerBookingPushNavigation,
   type OwnerBookingPushData,
 } from '../lib/push-navigation';
-import { requestOwnerArrivalPrompt } from '../lib/arrival-prompt';
+import { parseArrivalCheckUrl, requestOwnerArrivalPrompt, type OwnerArrivalPromptRequest } from '../lib/arrival-prompt';
+import { dismissNativeArrivalNotification } from '../lib/arrival-alert-native';
 import {
   LOCAL_ARRIVAL_ALERT_TYPE,
   foregroundArrivalPushBehavior,
@@ -52,6 +53,11 @@ function isOwner(user: MeResponse | null): user is MeResponse {
   return Boolean(user?.roles.includes(Role.SALON_OWNER));
 }
 
+/** Arrival alerts reach the owner and the staff member assigned to the booking; every other booking push is owner-only. */
+function isArrivalOperator(user: MeResponse | null): user is MeResponse {
+  return Boolean(user?.roles.some((role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF));
+}
+
 function bookingDetailPath(salonId: string, bookingId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}/${bookingId}`;
 }
@@ -67,6 +73,7 @@ export function PushNotificationCoordinator() {
   const currentUserRef = useRef<MeResponse | null>(null);
   const languageRef = useRef<Language>(language);
   const deferredResponseRef = useRef<Notifications.NotificationResponse | null>(null);
+  const deferredArrivalLinkRef = useRef<OwnerArrivalPromptRequest | null>(null);
 
   useEffect(() => {
     currentUserRef.current = status === 'authenticated' ? user : null;
@@ -77,9 +84,9 @@ export function PushNotificationCoordinator() {
   }, [language]);
 
   function handleOwnerBookingResponse(response: Notifications.NotificationResponse, actor: MeResponse | null): boolean {
-    if (!isOwner(actor)) return false;
     const payload = parseOwnerBookingPushData(response.notification.request.content.data);
     if (!payload) return false;
+    if (payload.type === 'booking.arrival_check' ? !isArrivalOperator(actor) : !isOwner(actor)) return false;
     if (payload.type === 'booking.arrival_check') {
       // The owner tapped the push (which already sounded) - opening the prompt must stay silent.
       markArrivalAlerted(payload.bookingId);
@@ -93,6 +100,18 @@ export function PushNotificationCoordinator() {
       return true;
     }
     requestOwnerBookingPushNavigation(payload);
+    return true;
+  }
+
+  /**
+   * The native arrival alert (full-screen / heads-up) hands the owner here via fastque://arrival-check.
+   * The phone already alerted, so the prompt opens silently and on the existing two-step confirmation.
+   */
+  function handleArrivalLink(request: OwnerArrivalPromptRequest, actor: MeResponse | null): boolean {
+    if (!isArrivalOperator(actor)) return false;
+    markArrivalAlerted(request.bookingId);
+    dismissNativeArrivalNotification(request.bookingId);
+    requestOwnerArrivalPrompt(request);
     return true;
   }
 
@@ -162,7 +181,9 @@ export function PushNotificationCoordinator() {
 
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       const payload = parseOwnerBookingPushData(notification.request.content.data);
-      if (payload && isOwner(currentUserRef.current)) scheduleForegroundVoiceFallback(payload);
+      if (!payload) return;
+      const allowed = payload.type === 'booking.arrival_check' ? isArrivalOperator(currentUserRef.current) : isOwner(currentUserRef.current);
+      if (allowed) scheduleForegroundVoiceFallback(payload);
     });
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -170,6 +191,18 @@ export function PushNotificationCoordinator() {
         deferredResponseRef.current = response;
       }
     });
+    const onArrivalUrl = (url: string | null): void => {
+      const request = parseArrivalCheckUrl(url);
+      if (request && !handleArrivalLink(request, currentUserRef.current)) deferredArrivalLinkRef.current = request;
+    };
+    const linkSubscription = Linking.addEventListener('url', (event) => onArrivalUrl(event.url));
+    void Linking.getInitialURL()
+      .then((url) => {
+        if (mounted) onArrivalUrl(url);
+      })
+      .catch(() => {
+        // Initial-URL lookup is best effort; the prompt is also recovered from backend truth on open.
+      });
     const tokenSubscription = Notifications.addPushTokenListener((token) => {
       void reregisterRefreshedPushToken(currentUserRef.current, token.data);
     });
@@ -191,6 +224,7 @@ export function PushNotificationCoordinator() {
       mounted = false;
       receivedSubscription.remove();
       responseSubscription.remove();
+      linkSubscription.remove();
       tokenSubscription.remove();
     };
   }, []);
@@ -204,6 +238,8 @@ export function PushNotificationCoordinator() {
       deferredResponseRef.current = null;
       void Notifications.clearLastNotificationResponseAsync();
     }
+    const deferredLink = deferredArrivalLinkRef.current;
+    if (deferredLink && handleArrivalLink(deferredLink, user)) deferredArrivalLinkRef.current = null;
   }, [status, user]);
 
   return null;

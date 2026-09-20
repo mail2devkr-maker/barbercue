@@ -26,6 +26,11 @@ function enabledFor(prefs: NotificationPreferencesDto, category: NotificationCat
   return prefs.categories.find((c) => c.category === category)?.channels.find((c) => c.channel === channel)?.enabled ?? true;
 }
 
+/** The critical arrival prompt is mandatory shop operations: shown as "Required", never as a checkbox. */
+function requiredFor(prefs: NotificationPreferencesDto, category: NotificationCategory, channel: Channel): boolean {
+  return prefs.categories.find((c) => c.category === category)?.channels.find((c) => c.channel === channel)?.required === true;
+}
+
 function withEnabled(
   prefs: NotificationPreferencesDto,
   category: NotificationCategory,
@@ -122,6 +127,14 @@ export function NotificationPreferencesPanel() {
           {CHANNELS.map((channel) => {
             const key = `${category}:${channel}`;
             const label = channel === NotificationChannel.PUSH ? t.notificationChannelPush : t.notificationChannelInApp;
+            if (requiredFor(prefs, category, channel)) {
+              return (
+                <span key={key} className={styles.toggle} data-testid={`required-${key}`}>
+                  <span>{label}</span>
+                  <strong>{t.notificationRequiredBadge}</strong>
+                </span>
+              );
+            }
             return (
               <label key={key} className={styles.toggle}>
                 <input

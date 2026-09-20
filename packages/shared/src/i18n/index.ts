@@ -867,6 +867,18 @@ export interface UiStrings {
   notificationSettingsSaveFailed: string;
   notificationSettingsRetry: string;
   notificationSettingsPushNote: string;
+  notificationRequiredBadge: string;
+  arrivalReadinessTitle: string;
+  arrivalReadinessReady: string;
+  arrivalFullScreenAccessTitle: string;
+  arrivalFullScreenAccessBody: string;
+  arrivalFullScreenAccessAction: string;
+  arrivalNotificationsOffTitle: string;
+  arrivalNotificationsOffBody: string;
+  arrivalNotificationsOffAction: string;
+  arrivalChannelMutedTitle: string;
+  arrivalChannelMutedBody: string;
+  arrivalChannelMutedAction: string;
   assignAction: string;
   noShowAction: string;
   barberLabel: string;
@@ -1587,7 +1599,7 @@ const enUi: UiStrings = {
   notificationSettingsOperationalHeading: 'Operational alerts',
   notificationSettingsPromoHeading: 'Offers',
   notificationSettingsPromoNote: 'Offers are separate from operational alerts. Turning one off never affects the other.',
-  notificationSettingsArrivalNote: 'The full-screen arrival prompt still appears while FastQue is open.',
+  notificationSettingsArrivalNote: 'Arrival confirmation screens are required for shop operations and always appear when FastQue needs an arrival decision. Notification settings control additional alerts, not the required arrival screen.',
   notificationChannelPush: 'Push',
   notificationChannelInApp: 'In-app list',
   notificationCategoryBookingTitle: 'Booking updates',
@@ -1604,6 +1616,18 @@ const enUi: UiStrings = {
   notificationSettingsSaveFailed: 'Could not save that change. Please try again.',
   notificationSettingsRetry: 'Try again',
   notificationSettingsPushNote: 'Push alerts are delivered to the FastQue app on your phone.',
+  notificationRequiredBadge: 'Required',
+  arrivalReadinessTitle: 'Arrival screen readiness',
+  arrivalReadinessReady: 'This phone is ready: the arrival screen can wake it, even when locked.',
+  arrivalFullScreenAccessTitle: 'Allow full-screen arrival alerts',
+  arrivalFullScreenAccessBody: 'Android needs your permission before FastQue can show the arrival screen over the lock screen. Without it you will only get a normal notification.',
+  arrivalFullScreenAccessAction: 'Open full-screen settings',
+  arrivalNotificationsOffTitle: 'Notifications are turned off for FastQue',
+  arrivalNotificationsOffBody: 'Turn notifications on in your phone settings, or FastQue cannot alert you when a customer is due.',
+  arrivalNotificationsOffAction: 'Open notification settings',
+  arrivalChannelMutedTitle: 'The arrival alert is turned down on this phone',
+  arrivalChannelMutedBody: 'Your phone has lowered the priority of the FastQue arrival alert, so it may not pop up or speak when a customer is due. Open its settings and set it to Urgent / pop on screen.',
+  arrivalChannelMutedAction: 'Open arrival alert settings',
   assignAction: 'Assign',
   noShowAction: 'No-show',
   barberLabel: 'Barber',
@@ -2299,7 +2323,7 @@ const hiUi: UiStrings = {
   notificationSettingsOperationalHeading: 'संचालन अलर्ट',
   notificationSettingsPromoHeading: 'ऑफ़र',
   notificationSettingsPromoNote: 'ऑफ़र संचालन अलर्ट से अलग हैं। एक को बंद करने से दूसरा प्रभावित नहीं होता।',
-  notificationSettingsArrivalNote: 'FastQue खुला होने पर पूरी स्क्रीन वाला आगमन प्रॉम्प्ट फिर भी दिखेगा।',
+  notificationSettingsArrivalNote: 'आगमन पुष्टि स्क्रीन दुकान के संचालन के लिए ज़रूरी हैं और जब भी FastQue को आगमन का निर्णय चाहिए, हमेशा दिखाई देती हैं। नोटिफ़िकेशन सेटिंग्स अतिरिक्त अलर्ट को नियंत्रित करती हैं, ज़रूरी आगमन स्क्रीन को नहीं।',
   notificationChannelPush: 'पुश',
   notificationChannelInApp: 'ऐप के अंदर सूची',
   notificationCategoryBookingTitle: 'बुकिंग अपडेट',
@@ -2316,6 +2340,18 @@ const hiUi: UiStrings = {
   notificationSettingsSaveFailed: 'वह बदलाव सहेजा नहीं जा सका। कृपया फिर कोशिश करें।',
   notificationSettingsRetry: 'फिर कोशिश करें',
   notificationSettingsPushNote: 'पुश अलर्ट आपके फ़ोन के FastQue ऐप में भेजे जाते हैं।',
+  notificationRequiredBadge: 'ज़रूरी',
+  arrivalReadinessTitle: 'आगमन स्क्रीन की तैयारी',
+  arrivalReadinessReady: 'यह फ़ोन तैयार है: आगमन स्क्रीन लॉक होने पर भी इसे जगा सकती है।',
+  arrivalFullScreenAccessTitle: 'फ़ुल-स्क्रीन आगमन अलर्ट की अनुमति दें',
+  arrivalFullScreenAccessBody: 'लॉक स्क्रीन पर आगमन स्क्रीन दिखाने से पहले Android को आपकी अनुमति चाहिए। इसके बिना आपको केवल सामान्य नोटिफ़िकेशन मिलेगा।',
+  arrivalFullScreenAccessAction: 'फ़ुल-स्क्रीन सेटिंग्स खोलें',
+  arrivalNotificationsOffTitle: 'FastQue के लिए नोटिफ़िकेशन बंद हैं',
+  arrivalNotificationsOffBody: 'अपने फ़ोन की सेटिंग्स में नोटिफ़िकेशन चालू करें, वरना ग्राहक का समय होने पर FastQue आपको अलर्ट नहीं कर पाएगा।',
+  arrivalNotificationsOffAction: 'नोटिफ़िकेशन सेटिंग्स खोलें',
+  arrivalChannelMutedTitle: 'इस फ़ोन पर आगमन अलर्ट की प्राथमिकता घटा दी गई है',
+  arrivalChannelMutedBody: 'आपके फ़ोन ने FastQue के आगमन अलर्ट की प्राथमिकता घटा दी है, इसलिए ग्राहक का समय होने पर वह स्क्रीन पर न आए या बोले नहीं। उसकी सेटिंग्स खोलकर उसे तत्काल / स्क्रीन पर पॉप-अप पर सेट करें।',
+  arrivalChannelMutedAction: 'आगमन अलर्ट सेटिंग्स खोलें',
   assignAction: 'नियुक्त करें',
   noShowAction: 'नो-शो',
   barberLabel: 'बार्बर',

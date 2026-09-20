@@ -4,6 +4,7 @@ import {
   NOTIFICATION_CATEGORY_DEFAULT_ENABLED,
   OPERATIONAL_NOTIFICATION_CATEGORIES,
   SETTINGS_NOTIFICATION_CHANNELS,
+  isNotificationPreferenceRequired,
   isOperationalNotificationCategory,
   resolveNotificationPreference,
 } from '../notification-preferences';
@@ -87,5 +88,66 @@ describe('settings copy', () => {
 
   it('Hindi is really Hindi, not the English fallback', () => {
     expect(uiStringsFor(Language.HI).notificationSettingsTitle).not.toBe(uiStringsFor(Language.EN).notificationSettingsTitle);
+  });
+});
+
+describe('the critical arrival prompt is a required preference', () => {
+  it('only ARRIVAL_ALERTS on PUSH is required', () => {
+    const required: string[] = [];
+    for (const category of ALL_NOTIFICATION_CATEGORIES) {
+      for (const channel of Object.values(NotificationChannel)) {
+        if (isNotificationPreferenceRequired(category, channel)) required.push(`${category}:${channel}`);
+      }
+    }
+    expect(required).toEqual(['ARRIVAL_ALERTS:PUSH']);
+  });
+
+  it('a required preference resolves ON whatever is stored - even a stale OFF row', () => {
+    expect(
+      resolveNotificationPreference(false, NotificationCategory.ARRIVAL_ALERTS, NotificationChannel.PUSH),
+    ).toBe(true);
+    expect(
+      resolveNotificationPreference(undefined, NotificationCategory.ARRIVAL_ALERTS, NotificationChannel.PUSH),
+    ).toBe(true);
+  });
+
+  it('the supplemental arrival in-app entry and every other pair still honour an explicit OFF', () => {
+    expect(
+      resolveNotificationPreference(false, NotificationCategory.ARRIVAL_ALERTS, NotificationChannel.IN_APP),
+    ).toBe(false);
+    expect(
+      resolveNotificationPreference(false, NotificationCategory.BOOKING_UPDATES, NotificationChannel.PUSH),
+    ).toBe(false);
+    // Callers that do not pass a channel keep the old behaviour.
+    expect(resolveNotificationPreference(false, NotificationCategory.ARRIVAL_ALERTS)).toBe(false);
+  });
+});
+
+describe('arrival readiness / required-screen copy', () => {
+  it.each([Language.EN, Language.HI])('has every mandatory-arrival string in %s', (language) => {
+    const t = uiStringsFor(language) as unknown as Record<string, string>;
+    for (const key of [
+      'notificationSettingsArrivalNote',
+      'notificationRequiredBadge',
+      'arrivalReadinessTitle',
+      'arrivalReadinessReady',
+      'arrivalFullScreenAccessTitle',
+      'arrivalFullScreenAccessBody',
+      'arrivalFullScreenAccessAction',
+      'arrivalNotificationsOffTitle',
+      'arrivalNotificationsOffBody',
+      'arrivalNotificationsOffAction',
+      'arrivalChannelMutedTitle',
+      'arrivalChannelMutedBody',
+      'arrivalChannelMutedAction',
+    ]) {
+      expect(t[key]).toBeTruthy();
+    }
+  });
+
+  it('the required-screen note says the screen cannot be turned off and that settings only control extra alerts', () => {
+    expect(uiStringsFor(Language.EN).notificationSettingsArrivalNote).toBe(
+      'Arrival confirmation screens are required for shop operations and always appear when FastQue needs an arrival decision. Notification settings control additional alerts, not the required arrival screen.',
+    );
   });
 });

@@ -16,6 +16,7 @@ import { SalonAccessService } from '../common/salon-access/salon-access.service'
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
+import { lockBookingResolution } from './booking-resolution-lock';
 import { resolveEffectiveBookingServices } from './effective-booking-services';
 
 const noShowCandidateSelect = {
@@ -111,6 +112,9 @@ export class BookingNoShowService {
     const chargeAmount = this.computeNoShowCharge(booking, policy);
 
     const claimed = await this.prisma.$transaction(async (tx) => {
+      // Serialise with a simultaneous Arrived / customer check-in for this booking: the claim's
+      // "no queue entry" condition below is evaluated only after that transaction has committed.
+      await lockBookingResolution(tx, booking.id);
       // Claim-based re-check, exactly as the removed automatic sweep did: a concurrent check-in
       // (customer self-check-in racing this exact operator click) or a duplicate/retried request
       // is silently rejected here rather than double-charging or overwriting a real arrival.

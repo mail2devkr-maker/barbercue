@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { AppState, Modal, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   DASHBOARD_PATHS,
@@ -16,6 +16,13 @@ import {
   type OwnerArrivalPromptInitialAction,
   type OwnerArrivalPromptRequest,
 } from '../../lib/arrival-prompt';
+import {
+  cancelNativeArrivalAlert,
+  isNativeArrivalAlertAvailable,
+  readNativeArrivalState,
+  reconcileNativeArrivalAlerts,
+  scheduleNativeArrivalSnooze,
+} from '../../lib/arrival-alert-native';
 import { navigationRef } from '../../navigation/navigation-ref';
 import {
   alertArrivalOnce,
@@ -96,14 +103,15 @@ function copyFor(language: Language) {
 }
 
 /**
- * Native owner-side counterpart of the web ArrivalAlertOverlay.
+ * Native owner-side counterpart of the web ArrivalAlertOverlay. Also mounted for staff
+ * (`audience="staff"`): the backend scopes a staff member's list to the bookings assigned to them.
  *
  * - Reconstructs eligibility from backend truth, so a missed push/realtime event is recoverable.
  * - A foreground T-5 event opens this full-screen prompt immediately.
  * - OS push taps / Arrived / Not arrived notification actions replay into this component.
  * - Arrived and No Show remain two-step actions; notification buttons never mutate business state.
  */
-export function OwnerArrivalPromptCoordinator() {
+export function OwnerArrivalPromptCoordinator({ audience = 'owner' }: { audience?: 'owner' | 'staff' }) {
   const { language } = useLanguage();
   const { selectedSalonId, workplaces, selectSalon } = useSalon();
   const [active, setActive] = useState<ArrivalAlertDto | null>(null);
@@ -112,6 +120,9 @@ export function OwnerArrivalPromptCoordinator() {
   const [error, setError] = useState<string | null>(null);
   const snoozedUntilRef = useRef<Map<string, number>>(new Map());
   const snoozeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const armSnoozeRef = useRef<(alert: ArrivalAlertDto, until: number) => void>(() => undefined);
+  // The booking currently on screen, readable inside chooseAlert without re-creating it.
+  const activeRef = useRef<ArrivalAlertDto | null>(null);
   const copy = copyFor(language);
   const languageRef = useRef(language);
   useEffect(() => {
@@ -128,14 +139,28 @@ export function OwnerArrivalPromptCoordinator() {
   ) => {
     // A booking that is no longer eligible ends its alert episode, so a future one may sound again.
     pruneArrivalAlerted(alerts.map((item) => item.bookingId));
+    // The phone may already have alerted (full-screen / heads-up) while the app was away: this
+    // episode stays silent here, and a snooze chosen there is honoured here.
+    const nativeState = readNativeArrivalState();
+    for (const bookingId of nativeState.alerted) markArrivalAlerted(bookingId);
+    for (const [bookingId, until] of Object.entries(nativeState.snoozes)) {
+      const alert = alerts.find((item) => item.bookingId === bookingId);
+      if (alert && until > Date.now() && !snoozedUntilRef.current.has(bookingId)) armSnoozeRef.current(alert, until);
+    }
     const now = Date.now();
     const eligible = alerts.filter((item) => (snoozedUntilRef.current.get(item.bookingId) ?? 0) <= now);
     const next =
       (preferredBookingId ? eligible.find((item) => item.bookingId === preferredBookingId) : undefined) ??
       eligible[0] ??
       null;
+    // A refresh (30 s safety net, realtime event, app resume) that lands on the SAME booking must not undo
+    // where the owner is: it used to reset the confirmation step, so a native "Arrived" / "Not arrived"
+    // button press was lost the moment the resume refresh completed, and an owner reading a "Confirm No
+    // Show" step was bounced back to the first screen every 30 seconds.
+    const sameBooking = Boolean(next) && activeRef.current?.bookingId === next?.bookingId;
+    activeRef.current = next;
     setActive(next);
-    setError(null);
+    if (!sameBooking || initialAction) setError(null);
     if (!next) {
       setConfirmStep(null);
       return;
@@ -144,6 +169,10 @@ export function OwnerArrivalPromptCoordinator() {
     // booking episode, so the 30s safety refresh and socket reconnects re-run this without sound.
     if (userInitiated) {
       markArrivalAlerted(next.bookingId);
+    } else if (isNativeArrivalAlertAvailable() && AppState.currentState !== 'active') {
+      // Away from the app the phone's own alert (the notification with its full-screen intent) is the
+      // one alert; a second local one from a half-asleep JS runtime would just double it up.
+      markArrivalAlerted(next.bookingId);
     } else {
       const activeCopy = copyFor(languageRef.current);
       void alertArrivalOnce({
@@ -151,18 +180,29 @@ export function OwnerArrivalPromptCoordinator() {
         salonId: next.salonId,
         title: activeCopy.eyebrow,
         body: `${formatTime(next.slotStart, languageRef.current)} · ${next.serviceName} · ${activeCopy.title}`,
+        voice: {
+          language: languageRef.current,
+          serviceName: next.serviceName,
+          time: formatTime(next.slotStart, languageRef.current),
+        },
       });
     }
     if (initialAction === 'arrived') setConfirmStep('arrived');
     else if (initialAction === 'not-arrived') {
       setConfirmStep(next.graceExpired ? 'not-arrived-late' : 'not-arrived-early');
-    } else setConfirmStep(null);
+    } else if (!sameBooking) setConfirmStep(null);
   }, []);
+  // Keep the ref in step with every other place that clears or sets the active prompt (snooze, resolve).
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   const refreshSalon = useCallback(
     (salonId: string, request?: OwnerArrivalPromptRequest) =>
       apiFetch<ArrivalAlertDto[]>(alertsPath(salonId))
         .then((alerts) => {
+          // Backend truth first: native forgets any alert/snooze that is no longer eligible.
+          reconcileNativeArrivalAlerts(salonId, alerts.map((item) => item.bookingId));
           chooseAlert(alerts, request?.bookingId, request?.initialAction ?? null, Boolean(request));
           return true;
         })
@@ -209,6 +249,16 @@ export function OwnerArrivalPromptCoordinator() {
     };
   }, [selectedSalonId, refreshSalon]);
 
+  // Coming back to the app always re-asks the backend, so a push that never arrived (or arrived while
+  // the app was killed) is recovered the moment the owner opens FastQue.
+  useEffect(() => {
+    if (!selectedSalonId) return undefined;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshSalon(selectedSalonId);
+    });
+    return () => subscription.remove();
+  }, [selectedSalonId, refreshSalon]);
+
   useEffect(
     () => () => {
       snoozeTimersRef.current.forEach((timer) => clearTimeout(timer));
@@ -217,23 +267,38 @@ export function OwnerArrivalPromptCoordinator() {
     [],
   );
 
+  // Hides a booking's prompt until `until`, then re-arms it (at most once per snooze).
+  const armSnooze = useCallback(
+    (alert: ArrivalAlertDto, until: number): void => {
+      const { bookingId, salonId } = alert;
+      snoozedUntilRef.current.set(bookingId, until);
+      const existing = snoozeTimersRef.current.get(bookingId);
+      if (existing) clearTimeout(existing);
+      snoozeTimersRef.current.set(
+        bookingId,
+        setTimeout(() => {
+          snoozedUntilRef.current.delete(bookingId);
+          snoozeTimersRef.current.delete(bookingId);
+          // With the app away the phone's own snooze alarm re-alerts (exactly once); the prompt is
+          // recovered from backend truth when the owner opens the app.
+          if (isNativeArrivalAlertAvailable() && AppState.currentState !== 'active') return;
+          // The reminder is eligible again, so it is allowed to sound again.
+          clearArrivalAlerted(bookingId);
+          void refreshSalon(salonId);
+        }, Math.max(0, until - Date.now())),
+      );
+    },
+    [refreshSalon],
+  );
+  useEffect(() => {
+    armSnoozeRef.current = armSnooze;
+  }, [armSnooze]);
+
   function snoozeCurrent(): void {
     if (!active) return;
-    const { bookingId, salonId } = active;
-    const until = Date.now() + SNOOZE_MS;
-    snoozedUntilRef.current.set(bookingId, until);
-    const existing = snoozeTimersRef.current.get(bookingId);
-    if (existing) clearTimeout(existing);
-    snoozeTimersRef.current.set(
-      bookingId,
-      setTimeout(() => {
-        snoozedUntilRef.current.delete(bookingId);
-        snoozeTimersRef.current.delete(bookingId);
-        // The reminder is eligible again, so it is allowed to sound again.
-        clearArrivalAlerted(bookingId);
-        void refreshSalon(salonId);
-      }, SNOOZE_MS),
-    );
+    armSnooze(active, Date.now() + SNOOZE_MS);
+    // The phone re-alerts once in 2 minutes even if this JS runtime is asleep by then.
+    scheduleNativeArrivalSnooze(active, languageRef.current);
     setActive(null);
     setConfirmStep(null);
     setError(null);
@@ -249,9 +314,10 @@ export function OwnerArrivalPromptCoordinator() {
         headers: { 'Idempotency-Key': newIdempotencyKey() },
       });
       const salonId = active.salonId;
+      cancelNativeArrivalAlert(active.bookingId);
       setActive(null);
       setConfirmStep(null);
-      if (navigationRef.isReady()) navigationRef.navigate('OwnerQueueTab');
+      if (navigationRef.isReady()) navigationRef.navigate(audience === 'staff' ? 'StaffTodayTab' : 'OwnerQueueTab');
       void refreshSalon(salonId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.error);
@@ -270,9 +336,10 @@ export function OwnerArrivalPromptCoordinator() {
         headers: { 'Idempotency-Key': newIdempotencyKey() },
       });
       const salonId = active.salonId;
+      cancelNativeArrivalAlert(active.bookingId);
       setActive(null);
       setConfirmStep(null);
-      if (navigationRef.isReady()) navigationRef.navigate('OwnerBookingsTab');
+      if (navigationRef.isReady()) navigationRef.navigate(audience === 'staff' ? 'StaffTodayTab' : 'OwnerBookingsTab');
       void refreshSalon(salonId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.error);

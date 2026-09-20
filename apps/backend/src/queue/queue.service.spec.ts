@@ -266,6 +266,12 @@ describe('QueueService', () => {
   });
 
   describe('checkIn', () => {
+    // The transaction re-reads the booking's status under the per-booking lock (see
+    // lockBookingResolution); by default it is still CONFIRMED.
+    beforeEach(() => {
+      prisma.booking.findUnique.mockResolvedValue({ status: 'CONFIRMED' });
+    });
+
     function makeCheckInBooking(overrides: Record<string, unknown> = {}) {
       return {
         id: 'bk1',
@@ -325,6 +331,10 @@ describe('QueueService', () => {
   // P0 arrival-alert mission — the owner/staff-triggered twin of checkIn(), reached from the
   // dashboard's ARRIVED confirmation. Converges on the exact same createArrivalQueueEntry path.
   describe('arriveAsOperator', () => {
+    beforeEach(() => {
+      prisma.booking.findUnique.mockResolvedValue({ status: 'CONFIRMED' });
+    });
+
     function makeArrivalBooking(overrides: Record<string, unknown> = {}) {
       return {
         id: 'bk1',
@@ -366,6 +376,54 @@ describe('QueueService', () => {
       );
       await expect(service.arriveAsOperator('op-1', 'bk1')).rejects.toMatchObject({
         code: 'ALREADY_CHECKED_IN',
+      });
+    });
+
+    describe('simultaneous responses (owner + assigned staff, or a racing No Show)', () => {
+      it('takes the per-booking resolution lock before re-checking status and creating the entry', async () => {
+        prisma.booking.findUnique.mockResolvedValueOnce(makeArrivalBooking());
+        const order: string[] = [];
+        prisma.$executeRaw.mockImplementation(async (sql: unknown) => {
+          order.push(`lock:${JSON.stringify(sql).includes('booking-resolution:bk1') ? 'bk1' : 'other'}`);
+        });
+        prisma.queueEntry.create.mockImplementationOnce(async () => {
+          order.push('create');
+          return { id: 'q-new' };
+        });
+        await service.arriveAsOperator('op-1', 'bk1');
+        expect(order.indexOf('lock:bk1')).toBeGreaterThanOrEqual(0);
+        expect(order.indexOf('lock:bk1')).toBeLessThan(order.indexOf('create'));
+      });
+
+      it('a No Show that committed after the pre-check is seen under the lock: no queue entry is created', async () => {
+        prisma.booking.findUnique
+          .mockResolvedValueOnce(makeArrivalBooking()) // pre-check: still CONFIRMED
+          .mockResolvedValueOnce({ status: 'NO_SHOW' }); // re-read under the lock: the other responder won
+        await expect(service.arriveAsOperator('op-1', 'bk1')).rejects.toMatchObject({
+          code: 'INVALID_QUEUE_TRANSITION',
+        });
+        expect(prisma.queueEntry.create).not.toHaveBeenCalled();
+      });
+
+      it('two simultaneous Arrived responses create exactly one QueueEntry; the second is told ALREADY_CHECKED_IN', async () => {
+        prisma.booking.findUnique.mockResolvedValue(makeArrivalBooking());
+        // The unique index on QueueEntry.bookingId is the arbiter: first insert wins, second is P2002.
+        prisma.queueEntry.create
+          .mockResolvedValueOnce({ id: 'q-new' })
+          .mockRejectedValueOnce(
+            new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+              code: 'P2002',
+              clientVersion: '5.0.0',
+              meta: { target: ['queue_entries_bookingId_key'] },
+            }),
+          );
+        const results = await Promise.allSettled([
+          service.arriveAsOperator('owner-1', 'bk1'),
+          service.arriveAsOperator('staff-1', 'bk1'),
+        ]);
+        expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+        const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+        expect(rejected.reason).toMatchObject({ code: 'ALREADY_CHECKED_IN' });
       });
     });
 

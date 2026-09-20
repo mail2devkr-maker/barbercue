@@ -88,7 +88,7 @@ const postCalls = () =>
   (apiFetch as jest.Mock).mock.calls.filter(([, init]) => init?.method === 'POST').map(([path, init]) => ({ path, init }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type TestNode = { props: Record<string, any>; children?: unknown[]; findAll: (predicate: (node: TestNode) => boolean) => TestNode[] };
+type TestNode = { type: unknown; props: Record<string, any>; children?: unknown[]; findAll: (predicate: (node: TestNode) => boolean) => TestNode[] };
 const allNodes = (predicate: (node: TestNode) => boolean): TestNode[] =>
   (tree!.root as unknown as TestNode).findAll(predicate);
 const isButtonTitled = (n: TestNode, title: string) => n.props?.title === title && typeof n.props?.onPress === 'function';
@@ -268,11 +268,28 @@ describe('arrival state and lifecycle', () => {
     expect(hasButton(t.markArrivedAction)).toBe(false);
   });
 
-  it('Assign is only offered for a called customer who has arrived', async () => {
+  // REGRESSION (1.0.4/1.0.5 vs 1.0.3): Assign had been hidden until "Mark arrived" was tapped, so the
+  // normal WAITING -> Call -> Assign flow was impossible for every remote/QR join. The backend seats a
+  // WAITING/CALLED entry and records the arrival itself, so Assign must be offered for any called entry.
+  it('Assign is offered for a CALLED customer whether or not arrival was acknowledged (the 1.0.3 flow)', async () => {
     queue = [entry({ status: 'CALLED', arrivedAt: null })];
     await render();
+    expect(hasButton(t.assignAction)).toBe(true);
+    expect(hasButton(t.markArrivedAction)).toBe(true); // the separate acknowledgement stays available, optional
+    queue = [entry({ status: 'CALLED', arrivedAt: '2026-09-20T10:05:00.000Z' })];
+    await act(async () => tree!.unmount());
+    await render();
+    expect(hasButton(t.assignAction)).toBe(true);
+  });
+
+  it('Assign is not offered where it makes no sense: a WAITING entry (must be called first) or one already in service', async () => {
+    queue = [entry({ status: 'WAITING' })];
+    await render();
     expect(hasButton(t.assignAction)).toBe(false);
-    expect(hasButton(t.markArrivedAction)).toBe(true);
+    await act(async () => tree!.unmount());
+    queue = [entry({ status: 'IN_SERVICE', activeServiceSessionId: 'sess1' })];
+    await render();
+    expect(hasButton(t.assignAction)).toBe(false);
   });
 
   it('Cancel is not offered mid-service, where an accidental tap would abort a running session', async () => {
@@ -315,5 +332,151 @@ describe('failures are translated, never raw', () => {
     await press(t.callAction);
     expect(screenText()).toContain(t.queueEntryChangedError);
     expect(listCalls).toBeGreaterThan(before);
+  });
+});
+
+// The whole owner flow against a small stateful stand-in for the backend's rules (QueueService.call /
+// assign / cancel and ServiceSession complete): a real transition changes the next list the panel reads,
+// exactly as it does against the API, so this proves the UI flow end to end rather than button-by-button.
+describe('Live Queue lifecycle: Call -> Assign staff + free chair -> In service -> Complete, and Cancel', () => {
+  type Fake = { id: string; token: number; status: string; arrivedAt: string | null; staff: string | null; chair: string | null; session: string | null };
+  let entries: Fake[];
+  let chairs: { id: string; label: string }[];
+  let rejected: string[];
+
+  const occupiedBy = (chairId: string) => entries.find((e) => e.status === 'IN_SERVICE' && e.chair === chairId);
+
+  function snapshot() {
+    return {
+      entries: entries.map((e) => ({
+        ...entry({ id: e.id, tokenNumber: e.token, status: e.status, arrivedAt: e.arrivedAt, activeServiceSessionId: e.session }),
+        assignedStaffName: e.staff === 'st1' ? 'Sam' : e.staff === 'st2' ? 'Ria' : null,
+        assignedChairLabel: chairs.find((c) => c.id === e.chair)?.label ?? null,
+      })),
+      staffRoster: [
+        { id: 'st1', displayName: 'Sam', status: 'ACTIVE' },
+        { id: 'st2', displayName: 'Ria', status: 'ACTIVE' },
+      ],
+      chairs: chairs.map((c) => ({ id: c.id, label: c.label, occupancy: occupiedBy(c.id) ? 'OCCUPIED' : 'FREE' })),
+      services: [],
+    };
+  }
+
+  beforeEach(() => {
+    rejected = [];
+    chairs = [
+      { id: 'ch1', label: 'Chair 1' },
+      { id: 'ch2', label: 'Chair 2' },
+    ];
+    entries = [
+      { id: 'q1', token: 7, status: 'WAITING', arrivedAt: null, staff: null, chair: null, session: null },
+      { id: 'q2', token: 8, status: 'WAITING', arrivedAt: null, staff: null, chair: null, session: null },
+    ];
+    (apiFetch as jest.Mock).mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
+      if (init?.method !== 'POST') return snapshot();
+      const [, , id, action] = path.split('/'); // dashboard/queue-entries/:id/:action | dashboard/service-sessions/:id/complete
+      const { ApiError } = require('../../../lib/api');
+      if (path.startsWith('dashboard/service-sessions/')) {
+        const done = entries.find((e) => e.session === id)!;
+        done.status = 'COMPLETED';
+        done.session = null;
+        return {};
+      }
+      const target = entries.find((e) => e.id === id)!;
+      if (action === 'call') {
+        if (target.status !== 'WAITING') throw new ApiError(409, { error: { code: 'INVALID_QUEUE_TRANSITION', message: 'not waiting' } });
+        target.status = 'CALLED';
+      } else if (action === 'assign') {
+        const { staffId, chairId } = JSON.parse(init!.body!);
+        if (occupiedBy(chairId)) {
+          rejected.push(chairId);
+          throw new ApiError(409, { error: { code: 'CHAIR_ALREADY_OCCUPIED', message: 'occupied' } });
+        }
+        if (!['WAITING', 'CALLED'].includes(target.status)) throw new ApiError(409, { error: { code: 'INVALID_QUEUE_TRANSITION', message: 'no' } });
+        target.status = 'IN_SERVICE';
+        target.staff = staffId;
+        target.chair = chairId;
+        target.session = `sess-${target.id}`;
+        target.arrivedAt = target.arrivedAt ?? '2026-09-20T10:06:00.000Z'; // seating records the arrival (backend rule)
+      } else if (action === 'cancel') {
+        target.status = 'CANCELLED';
+      }
+      return {};
+    });
+  });
+
+  // Selectable barber / chair chips are the Pressables in the assign panel.
+  const textOf = (n: unknown): string =>
+    typeof n === 'string' ? n : ((n as TestNode).children ?? []).map(textOf).join('');
+  const pressableNodes = () => allNodes((n) => typeof n.props?.onPress === 'function');
+  const chipLabels = (): string[] => pressableNodes().map(textOf);
+  const chip = (label: string) => pressableNodes().find((n) => textOf(n) === label)!;
+  const callButtons = () => allNodes((n) => isButtonTitled(n, t.callAction));
+
+  it('runs the full flow: Call, Assign (staff + free chair), In service on that chair, chair blocked for others, Complete frees it, Cancel still works', async () => {
+    await render();
+
+    // 1. WAITING -> Call. The entry is not "arrived" (a remote join) and that must not matter.
+    await act(async () => {
+      await callButtons()[0].props.onPress();
+    });
+    expect(entries[0].status).toBe('CALLED');
+    expect(entries[0].arrivedAt).toBeNull();
+
+    // 2. CALLED -> Assign is offered (the regression) -> pick staff + a free chair.
+    expect(hasButton(t.assignAction)).toBe(true);
+    await press(t.assignAction);
+    await act(async () => chip('Sam').props.onPress());
+    await act(async () => chip('Chair 2').props.onPress());
+
+    // 3. Confirm assignment: one POST with the chosen staff, chair and service.
+    await press(t.confirmAssignmentAction);
+    const assign = postCalls().find((c) => c.path === 'dashboard/queue-entries/q1/assign')!;
+    expect(JSON.parse(assign.init.body)).toEqual({ staffId: 'st1', chairId: 'ch2', serviceId: 'sv1' });
+
+    // 4. The entry is IN_SERVICE with a service session and the UI refreshed to show it.
+    expect(entries[0]).toMatchObject({ status: 'IN_SERVICE', staff: 'st1', chair: 'ch2', session: 'sess-q1' });
+    expect(entries[0].arrivedAt).not.toBeNull();
+    expect(screenText()).toContain(t.inService);
+    expect(hasButton(t.completeAction)).toBe(true);
+
+    // 5 + 6. Chair 2 is occupied by token 7; the next called entry is offered only the FREE chair, and the
+    // backend would refuse it if it were tried anyway.
+    await act(async () => {
+      await callButtons()[0].props.onPress(); // q2 is now the only WAITING entry
+    });
+    expect(entries[1].status).toBe('CALLED');
+    expect(occupiedBy('ch2')?.token).toBe(7);
+    await press(t.assignAction);
+    expect(chipLabels()).toContain('Chair 1'); // the free chair is selectable
+    expect(chipLabels()).not.toContain('Chair 2'); // the occupied chair is not
+    expect(rejected).toEqual([]);
+
+    // 7. Complete Service frees the chair.
+    await act(async () => tree!.unmount());
+    await render();
+    await press(t.completeAction);
+    await confirmAlert();
+    expect(postCalls().map((c) => c.path)).toContain('dashboard/service-sessions/sess-q1/complete');
+    expect(entries[0].status).toBe('COMPLETED');
+    expect(occupiedBy('ch2')).toBeUndefined();
+    expect(snapshot().chairs.find((c) => c.id === 'ch2')!.occupancy).toBe('FREE');
+
+    // 8. Cancel still works (on the entry that is still CALLED).
+    await act(async () => tree!.unmount());
+    await render();
+    await press(t.cancelAction);
+    await confirmAlert();
+    expect(postCalls().map((c) => c.path)).toContain('dashboard/queue-entries/q2/cancel');
+    expect(entries[1].status).toBe('CANCELLED');
+  });
+
+  it('an occupied chair is never offered for selection, and a forced assignment to it is refused by the (fake) backend rules without changing the entry', async () => {
+    entries[0] = { ...entries[0], status: 'IN_SERVICE', staff: 'st2', chair: 'ch1', session: 'sess-q1', arrivedAt: '2026-09-20T10:06:00.000Z' };
+    entries[1].status = 'CALLED';
+    await render();
+    await press(t.assignAction);
+    expect(chipLabels()).toContain('Chair 2');
+    expect(chipLabels()).not.toContain('Chair 1');
   });
 });

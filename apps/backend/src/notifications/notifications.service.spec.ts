@@ -324,12 +324,12 @@ describe('NotificationsService', () => {
 
     it('reflects only the explicit change: one OFF row turns exactly that category+channel OFF', async () => {
       prisma.notificationPreference.findMany.mockResolvedValueOnce([
-        { category: 'ARRIVAL_ALERTS', channel: 'PUSH', enabled: false },
+        { category: 'QUEUE_UPDATES', channel: 'PUSH', enabled: false },
       ]);
       const result = await service.getPreferences('user1');
       const flat = result.categories.flatMap((c) => c.channels.map((ch) => [`${c.category}:${ch.channel}`, ch.enabled] as const));
       const off = flat.filter(([, enabled]) => !enabled).map(([key]) => key);
-      expect(off).toEqual(['ARRIVAL_ALERTS:PUSH']);
+      expect(off).toEqual(['QUEUE_UPDATES:PUSH']);
     });
   });
 
@@ -407,6 +407,49 @@ describe('NotificationsService', () => {
 
   // Persistence round trip against a small in-memory stand-in for the preference table: what a
   // user sets is exactly what a later read shows AND what delivery then honours.
+  describe('the critical arrival prompt: ARRIVAL_ALERTS on PUSH is required', () => {
+    it('reports ARRIVAL_ALERTS/PUSH as required and ON on a fresh account', async () => {
+      const prefs = await service.getPreferences('u1');
+      const push = prefs.categories.find((c) => c.category === 'ARRIVAL_ALERTS')!.channels.find((c) => c.channel === 'PUSH')!;
+      expect(push).toMatchObject({ enabled: true, required: true, available: true });
+    });
+
+    it('only that one preference is marked required - every other pair is an ordinary toggle', async () => {
+      const prefs = await service.getPreferences('u1');
+      const required = prefs.categories.flatMap((c) => c.channels.filter((ch) => ch.required).map((ch) => `${c.category}:${ch.channel}`));
+      expect(required).toEqual(['ARRIVAL_ALERTS:PUSH']);
+    });
+
+    it('still reports it ON even if a stale OFF row somehow exists', async () => {
+      prisma.notificationPreference.findMany.mockResolvedValueOnce([
+        { category: 'ARRIVAL_ALERTS', channel: 'PUSH', enabled: false },
+      ]);
+      const prefs = await service.getPreferences('u1');
+      const push = prefs.categories.find((c) => c.category === 'ARRIVAL_ALERTS')!.channels.find((c) => c.channel === 'PUSH')!;
+      expect(push.enabled).toBe(true);
+    });
+
+    it('REFUSES to turn it off - with a clear code - and stores nothing', async () => {
+      await expect(service.setPreference('u1', 'ARRIVAL_ALERTS', 'PUSH', false)).rejects.toMatchObject({
+        code: 'NOTIFICATION_PREFERENCE_REQUIRED',
+      });
+      expect(prisma.notificationPreference.upsert).not.toHaveBeenCalled();
+    });
+
+    it('turning it "on" is a harmless no-op that writes no row', async () => {
+      const prefs = await service.setPreference('u1', 'ARRIVAL_ALERTS', 'PUSH', true);
+      expect(prisma.notificationPreference.upsert).not.toHaveBeenCalled();
+      expect(prefs.categories).toHaveLength(5);
+    });
+
+    it('the supplemental Notification Center entry (IN_APP) stays a normal toggle', async () => {
+      await service.setPreference('u1', 'ARRIVAL_ALERTS', 'IN_APP', false);
+      expect(prisma.notificationPreference.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: { userId: 'u1', category: 'ARRIVAL_ALERTS', channel: 'IN_APP', enabled: false } }),
+      );
+    });
+  });
+
   describe('setPreference -> getPreferences -> delivery round trip', () => {
     beforeEach(() => {
       const table = new Map<string, boolean>();
@@ -439,19 +482,19 @@ describe('NotificationsService', () => {
 
     it('an OFF choice persists and reloads OFF, touching nothing else, and stops that category+channel', async () => {
       const before = await service.getPreferences('u1');
-      expect(flag(before, 'ARRIVAL_ALERTS', 'PUSH')).toBe(true);
+      expect(flag(before, 'BOOKING_UPDATES', 'PUSH')).toBe(true);
 
-      const after = await service.setPreference('u1', 'ARRIVAL_ALERTS', 'PUSH', false);
-      expect(flag(after, 'ARRIVAL_ALERTS', 'PUSH')).toBe(false);
+      const after = await service.setPreference('u1', 'BOOKING_UPDATES', 'PUSH', false);
+      expect(flag(after, 'BOOKING_UPDATES', 'PUSH')).toBe(false);
 
       const reloaded = await service.getPreferences('u1'); // a fresh read, as after an app restart
-      expect(flag(reloaded, 'ARRIVAL_ALERTS', 'PUSH')).toBe(false);
-      expect(flag(reloaded, 'ARRIVAL_ALERTS', 'IN_APP')).toBe(true);
-      expect(flag(reloaded, 'BOOKING_UPDATES', 'PUSH')).toBe(true);
+      expect(flag(reloaded, 'BOOKING_UPDATES', 'PUSH')).toBe(false);
+      expect(flag(reloaded, 'BOOKING_UPDATES', 'IN_APP')).toBe(true);
+      expect(flag(reloaded, 'ARRIVAL_ALERTS', 'PUSH')).toBe(true);
       expect(flag(reloaded, 'PROMOTIONAL', 'PUSH')).toBe(true);
 
       // IN_APP for the same category still delivers - PUSH-off is per channel.
-      expect(await service.notify('u1', 'owner.booking.arrival_check')).toBe(true);
+      expect(await service.notify('u1', 'owner.booking.created')).toBe(true);
     });
 
     it('turning it back ON persists and reloads ON', async () => {

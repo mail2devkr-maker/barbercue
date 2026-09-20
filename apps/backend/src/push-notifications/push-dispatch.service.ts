@@ -22,6 +22,16 @@ export interface PushPayload {
   category: NotificationCategory;
   title: string;
   body: string;
+  /**
+   * Send WITHOUT title/body/sound/channel (a data-only FCM message). Required for the critical arrival
+   * alert: an FCM message that carries a `notification` block is displayed by the Android FCM SDK itself
+   * while the app is in the background and never reaches the app's FastQueArrivalMessagingService, so the
+   * full-screen lock-screen alert cannot run. A data-only message is always delivered to that service,
+   * which builds the localized notification, full-screen intent and sound itself from `data`.
+   */
+  dataOnly?: boolean;
+  /** Seconds a data-only message may wait for an offline device before being dropped. */
+  ttlSeconds?: number;
   /** Ids-only, same convention as RealtimeGateway's emits — never customer PII. */
   data?: Record<string, unknown>;
   categoryId?: string;
@@ -30,11 +40,9 @@ export interface PushPayload {
   priority?: 'default' | 'normal' | 'high';
 }
 
-// The Android channel the mobile app creates at push registration (lib/push-notifications.ts:
-// ANDROID_BOOKING_CHANNEL_ID) — HIGH importance, default sound, vibration. The arrival check is
-// the one push where silence defeats its purpose, so it names the channel explicitly and requests
-// the default tone rather than relying on Expo/FCM's fallback channel.
-const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
+// The arrival check is only useful around the appointment time; a late delivery to a phone that was
+// offline is worthless (and the app reconciles with the backend when it opens anyway).
+const ARRIVAL_PUSH_TTL_SECONDS = 600;
 
 type PushKind = 'newBooking' | 'bookingRescheduled' | 'bookingCancelled' | 'arrivalCheck';
 
@@ -97,13 +105,18 @@ export class PushDispatchService {
       category: PUSH_KIND_CATEGORY[kind],
       title,
       body,
-      data,
+      // The arrival check also carries the recipient's language so the native lock-screen alert
+      // (which runs without the JS app, and so cannot read the in-app language) speaks it. A
+      // language code is not personal data.
+      data: kind === 'arrivalCheck' ? { ...data, lang: preferredLanguage ?? Language.EN } : data,
       ...(kind === 'arrivalCheck'
         ? {
-            categoryId: 'booking_arrival_check',
-            channelId: ANDROID_BOOKING_CHANNEL_ID,
-            sound: 'default' as const,
+            // Data-only + high priority: delivered to the native arrival service in every app state
+            // (see PushPayload.dataOnly). Its title/body/sound/full-screen behaviour are built on the
+            // phone from the ids + language in `data`; nothing customer-identifying is in it.
+            dataOnly: true,
             priority: 'high' as const,
+            ttlSeconds: ARRIVAL_PUSH_TTL_SECONDS,
           }
         : {}),
     });
@@ -147,9 +160,9 @@ export class PushDispatchService {
 
     const messages: ExpoPushMessage[] = devices.map((device) => ({
       to: device.expoPushToken,
-      title: payload.title,
-      body: payload.body,
+      ...(payload.dataOnly ? {} : { title: payload.title, body: payload.body }),
       data: payload.data,
+      ...(payload.ttlSeconds ? { ttl: payload.ttlSeconds } : {}),
       ...(payload.categoryId ? { categoryId: payload.categoryId } : {}),
       ...(payload.channelId ? { channelId: payload.channelId } : {}),
       ...(payload.sound !== undefined ? { sound: payload.sound } : {}),

@@ -30,5 +30,5 @@ export async function isNotificationEnabled(
   const row = await db.notificationPreference.findUnique({
     where: { userId_category_channel: { userId, category, channel } },
   });
-  return resolveNotificationPreference(row?.enabled, category);
+  return resolveNotificationPreference(row?.enabled, category, channel);
 }

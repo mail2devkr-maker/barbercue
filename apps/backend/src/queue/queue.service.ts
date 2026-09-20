@@ -28,6 +28,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { AvailabilityService } from '../bookings/availability.service';
+import { lockBookingResolution } from '../bookings/booking-resolution-lock';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 import { zonedDayBounds } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -174,6 +175,21 @@ export class QueueService {
     let entryId: string;
     try {
       entryId = await this.prisma.$transaction(async (tx) => {
+        // Serialise with a simultaneous No Show (or a second responder's Arrived) for this booking,
+        // then re-check under the lock: the pre-checks above read outside any lock, so without this a
+        // No Show that committed a moment ago could still be followed by a queue entry.
+        await lockBookingResolution(tx, booking.id);
+        const current = await tx.booking.findUnique({
+          where: { id: booking.id },
+          select: { status: true },
+        });
+        if (current?.status !== BookingStatus.CONFIRMED) {
+          throw new AppException(
+            QueueErrorCode.INVALID_QUEUE_TRANSITION,
+            'Only a confirmed booking can be checked in.',
+            HttpStatus.CONFLICT,
+          );
+        }
         const tokenNumber = await this.nextTokenNumber(tx, booking.salonId);
         const created = await tx.queueEntry.create({
           data: {
