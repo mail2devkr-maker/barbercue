@@ -43,6 +43,11 @@ export const AUTH_PATHS = {
 export const EMPLOYEE_PATHS = {
   employee: 'employee',
   me: 'me',
+  dashboard: 'dashboard',
+  leads: 'leads',
+  visits: 'visits',
+  followUps: 'follow-ups',
+  onboard: 'onboard',
 } as const;
 
 export const EMPLOYEE_RESERVED_ID_MIN = 1;
@@ -64,6 +69,11 @@ export const ADMIN_PATHS = {
   employees: 'employees',
   password: 'password',
   special: 'special',
+  // FastQue internal field CRM / sales-operations portal.
+  crm: 'crm',
+  leads: 'leads',
+  visits: 'visits',
+  followUps: 'follow-ups',
 } as const;
 
 // The ONLY place this wording is allowed to live — every surface that shows a Verified badge
