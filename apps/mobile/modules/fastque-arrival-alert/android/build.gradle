@@ -1,0 +1,37 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.dcw.fastque.arrivalalert'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.fastquearrivalalert"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+// expo-notifications ships to the app as a prebuilt artifact (its expo-module.config.json has a
+// `publication`), so it is not a Gradle project in a normal build. Resolve the matching version from
+// node_modules; fall back to the project when a build compiles it from source.
+def notificationsVersion = {
+  def resolved = ["node", "--print", "require.resolve('expo-notifications/package.json', { paths: [process.cwd()] })"]
+    .execute(null, projectDir).text.trim()
+  return new groovy.json.JsonSlurper().parse(new File(resolved)).version
+}
+
+dependencies {
+  // The arrival messaging service extends expo-notifications' ExpoFirebaseMessagingService so every
+  // other push keeps flowing through Expo unchanged.
+  if (findProject(':expo-notifications') != null) {
+    implementation project(':expo-notifications')
+  } else {
+    implementation "host.exp.exponent:expo.modules.notifications:${notificationsVersion()}"
+  }
+  implementation 'androidx.core:core:1.17.0'
+  // Same Firebase Messaging version expo-notifications compiles against (its dependency is not exported).
+  implementation 'com.google.firebase:firebase-messaging:25.0.1'
+}

@@ -858,6 +858,9 @@ export interface NotificationChannelPreferenceDto {
   channel: NotificationChannel;
   enabled: boolean;
   available: boolean;
+  // True for a preference that is mandatory and cannot be turned off (see
+  // isNotificationPreferenceRequired): always `enabled`, and clients show it as required, not a toggle.
+  required?: boolean;
 }
 
 export interface NotificationCategoryPreferenceDto {

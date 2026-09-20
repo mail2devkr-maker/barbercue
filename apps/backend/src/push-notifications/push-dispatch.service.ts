@@ -97,7 +97,10 @@ export class PushDispatchService {
       category: PUSH_KIND_CATEGORY[kind],
       title,
       body,
-      data,
+      // The arrival check also carries the recipient's language so the native lock-screen alert
+      // (which runs without the JS app, and so cannot read the in-app language) speaks it. A
+      // language code is not personal data.
+      data: kind === 'arrivalCheck' ? { ...data, lang: preferredLanguage ?? Language.EN } : data,
       ...(kind === 'arrivalCheck'
         ? {
             categoryId: 'booking_arrival_check',

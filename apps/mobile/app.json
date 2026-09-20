@@ -2,7 +2,8 @@
   "expo": {
     "name": "FastQue",
     "slug": "devdutta-kumar-pandey",
-    "version": "1.0.4",
+    "version": "1.0.5",
+    "scheme": "fastque",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",

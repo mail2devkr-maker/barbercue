@@ -20,8 +20,10 @@ const dto = () => ({
     category,
     channels: CHANNELS.map((channel) => ({
       channel,
-      enabled: stored.get(`${category}:${channel}`) ?? true,
+      enabled: category === 'ARRIVAL_ALERTS' && channel === 'PUSH' ? true : (stored.get(`${category}:${channel}`) ?? true),
       available: channel === 'IN_APP' || channel === 'PUSH',
+      // The critical arrival prompt is mandatory: always ON and marked required by the server.
+      ...(category === 'ARRIVAL_ALERTS' && channel === 'PUSH' ? { required: true } : {}),
     })),
   })),
 });
@@ -75,7 +77,8 @@ afterEach(async () => {
 
 it('shows every category ON for an owner who never configured anything (default ON)', async () => {
   await mount();
-  expect(checkboxes()).toHaveLength(ALL_NOTIFICATION_CATEGORIES.length * 2);
+  // push + in-app each, except the mandatory arrival push which has no checkbox
+  expect(checkboxes()).toHaveLength(ALL_NOTIFICATION_CATEGORIES.length * 2 - 1);
   for (const c of checkboxes()) expect(c.props.checked).toBe(true);
 });
 
@@ -95,10 +98,10 @@ it('lists the four operational categories, with Offers as its own separate secti
 
 it('toggling one checkbox OFF saves exactly that category+channel', async () => {
   await mount();
-  await act(async () => checkbox('ARRIVAL_ALERTS', 'PUSH').props.onChange({ target: { checked: false } }));
+  await act(async () => checkbox('BOOKING_UPDATES', 'PUSH').props.onChange({ target: { checked: false } }));
   await flush();
-  expect(putCalls()).toEqual([{ category: 'ARRIVAL_ALERTS', channel: 'PUSH', enabled: false }]);
-  expect(checkbox('ARRIVAL_ALERTS', 'PUSH').props.checked).toBe(false);
+  expect(putCalls()).toEqual([{ category: 'BOOKING_UPDATES', channel: 'PUSH', enabled: false }]);
+  expect(checkbox('BOOKING_UPDATES', 'PUSH').props.checked).toBe(false);
   expect(checkboxes().filter((c) => !c.props.checked)).toHaveLength(1);
 });
 
@@ -135,9 +138,9 @@ it('promotional is independent of the operational alerts', async () => {
 it('reverts the checkbox and says so when the save fails - never showing a state the server did not store', async () => {
   await mount();
   failNextPut = true;
-  await act(async () => checkbox('ARRIVAL_ALERTS', 'PUSH').props.onChange({ target: { checked: false } }));
+  await act(async () => checkbox('ARRIVAL_ALERTS', 'IN_APP').props.onChange({ target: { checked: false } }));
   await flush();
-  expect(checkbox('ARRIVAL_ALERTS', 'PUSH').props.checked).toBe(true);
+  expect(checkbox('ARRIVAL_ALERTS', 'IN_APP').props.checked).toBe(true);
   expect(text()).toContain(t.notificationSettingsSaveFailed);
   expect(stored.size).toBe(0);
 });
@@ -165,11 +168,27 @@ it('shows a retry when the settings cannot be loaded', async () => {
   const retry = tree.root.findAll((n) => n.type === 'button' && n.props.onClick)[0];
   await act(async () => retry.props.onClick());
   await flush();
-  expect(checkboxes()).toHaveLength(ALL_NOTIFICATION_CATEGORIES.length * 2);
+  expect(checkboxes()).toHaveLength(ALL_NOTIFICATION_CATEGORIES.length * 2 - 1);
 });
 
 it('renders Hindi copy for a Hindi-language user', async () => {
   useAuth.mockReturnValue({ user: { roles: ['SALON_OWNER'], preferredLanguage: 'HI' } });
   await mount();
   expect(text()).toContain(uiStringsFor('HI').notificationCategoryArrivalTitle);
+});
+
+it('shows the arrival push as Required with no checkbox, and states the arrival screen cannot be switched off', async () => {
+  await mount();
+  expect(checkbox('ARRIVAL_ALERTS', 'PUSH')).toBeUndefined();
+  expect(text()).toContain('required-ARRIVAL_ALERTS:PUSH');
+  expect(text()).toContain(t.notificationRequiredBadge);
+  expect(text()).toContain('Arrival confirmation screens are required for shop operations');
+  expect(putCalls()).toHaveLength(0);
+});
+
+it('still lets an owner turn the supplemental arrival in-app entry off', async () => {
+  await mount();
+  await act(async () => checkbox('ARRIVAL_ALERTS', 'IN_APP').props.onChange({ target: { checked: false } }));
+  await flush();
+  expect(putCalls()).toEqual([{ category: 'ARRIVAL_ALERTS', channel: 'IN_APP', enabled: false }]);
 });

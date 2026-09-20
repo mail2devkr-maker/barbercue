@@ -85,7 +85,7 @@ export class ArrivalAlertsService {
         resolveEffectiveBookingServices(booking).map((s) => s.serviceName),
       );
 
-      const sent = await this.prisma.$transaction(async (tx) => {
+      const claimed = await this.prisma.$transaction(async (tx) => {
         // Same durable-claim shape as every other sweep in this codebase: only one concurrent run
         // (or an overlapping manual retry) can flip arrivalAlertSentAt from null, so a duplicate
         // scheduler tick can never send the same logical alert twice.
@@ -101,11 +101,15 @@ export class ArrivalAlertsService {
         });
         if (claim.count === 0) return false;
 
-        return this.notifications.notifyInTransaction(
+        // Supplemental only: the Notification Center entry follows the user's ARRIVAL_ALERTS in-app
+        // preference (notifyInTransaction returns false when they turned it off). Its outcome must
+        // NOT decide whether the mandatory alert is dispatched, so it is deliberately ignored here.
+        await this.notifications.notifyInTransaction(
           tx,
           booking.salon.ownerUserId,
           'owner.booking.arrival_check',
           {
+            type: 'booking.arrival_check',
             salonId: booking.salonId,
             bookingId: booking.id,
             serviceName,
@@ -113,19 +117,29 @@ export class ArrivalAlertsService {
           },
           `dashboard/salons/${booking.salonId}/bookings`,
         );
+        return true;
       });
 
-      if (sent) {
+      if (claimed) {
         sentCount += 1;
+        // The critical arrival prompt: ALWAYS dispatched once the booking is claimed, whatever the
+        // user's notification preferences say. Realtime wakes a connected app; the push is the
+        // transport that can wake a backgrounded, locked or killed one (native full-screen alert).
         this.realtime.emitBookingArrivalAlert(booking.salonId, booking.id);
-        // Fire-and-forget, same convention as bookings.service.ts's own push call sites — a push
-        // failure must never affect the alert sweep itself (the durable in-app Notification above
-        // already committed).
+        // Fire-and-forget, same convention as bookings.service.ts's own push call sites - a push
+        // failure must never affect the alert sweep itself. IDs and non-PII operational fields only:
+        // no customer name, phone or email ever goes into this payload.
         void this.pushDispatch.dispatchLocalizedToUser(
           booking.salon.ownerUserId,
           'arrivalCheck',
           serviceName,
-          { type: 'booking.arrival_check', salonId: booking.salonId, bookingId: booking.id },
+          {
+            type: 'booking.arrival_check',
+            salonId: booking.salonId,
+            bookingId: booking.id,
+            slotStart: booking.slotStart.toISOString(),
+            serviceName,
+          },
         );
       }
     }

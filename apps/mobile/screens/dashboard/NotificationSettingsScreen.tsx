@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { AppState, Linking, StyleSheet, Switch, Text, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import {
   ALL_NOTIFICATION_CATEGORIES,
@@ -11,6 +11,12 @@ import {
   type NotificationPreferencesDto,
 } from '@barbercue/shared';
 import { apiFetch } from '../../lib/api';
+import {
+  getArrivalAlertReadiness,
+  openArrivalNotificationSettings,
+  openFullScreenIntentSettings,
+  type ArrivalAlertReadiness,
+} from '../../lib/arrival-alert-native';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, lineHeightFor, space } from '../../lib/theme';
 import { Button, Card, InlineError, Screen, SectionHeader } from '../../components/ui';
@@ -23,6 +29,11 @@ function isEnabled(prefs: NotificationPreferencesDto, category: NotificationCate
   const row = prefs.categories.find((c) => c.category === category)?.channels.find((c) => c.channel === channel);
   // The server always returns every pair; if one is somehow missing the default is ON.
   return row?.enabled ?? true;
+}
+
+/** The critical arrival prompt: shown as "Required", never as a switch. */
+function isRequired(prefs: NotificationPreferencesDto, category: NotificationCategory, channel: Channel): boolean {
+  return prefs.categories.find((c) => c.category === category)?.channels.find((c) => c.channel === channel)?.required === true;
 }
 
 function isAvailable(prefs: NotificationPreferencesDto, category: NotificationCategory, channel: Channel): boolean {
@@ -62,6 +73,16 @@ export default function NotificationSettingsScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [osDenied, setOsDenied] = useState(false);
+  // null on iOS/web and on a build without the native arrival alert: nothing to set up there.
+  const [readiness, setReadiness] = useState<ArrivalAlertReadiness | null>(() => getArrivalAlertReadiness());
+
+  // The owner comes back from the phone's settings screen: re-check what they just changed.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setReadiness(getArrivalAlertReadiness());
+    });
+    return () => subscription.remove();
+  }, []);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -124,6 +145,17 @@ export default function NotificationSettingsScreen() {
         {([NotificationChannel.PUSH, NotificationChannel.IN_APP] as const).map((channel) => {
           const key = `${category}:${channel}`;
           const label = channel === NotificationChannel.PUSH ? t.notificationChannelPush : t.notificationChannelInApp;
+          if (isRequired(prefs, category, channel)) {
+            // Mandatory shop operation: there is nothing to switch off here.
+            return (
+              <View key={key} style={styles.switchRow}>
+                <Text style={styles.switchLabel}>{label}</Text>
+                <Text testID={`required-${key}`} style={styles.requiredBadge}>
+                  {t.notificationRequiredBadge}
+                </Text>
+              </View>
+            );
+          }
           return (
             <View key={key} style={styles.switchRow}>
               <Text style={styles.switchLabel}>{label}</Text>
@@ -159,6 +191,29 @@ export default function NotificationSettingsScreen() {
           </View>
         )}
       </Card>
+
+      {readiness && (
+        <Card style={styles.card}>
+          <Text style={styles.sectionHeading}>{t.arrivalReadinessTitle}</Text>
+          {!readiness.notificationsEnabled ? (
+            <View testID="arrival-readiness-notifications" style={styles.osDenied}>
+              <Text style={styles.osDeniedText}>{t.arrivalNotificationsOffTitle}</Text>
+              <Text style={styles.osNote}>{t.arrivalNotificationsOffBody}</Text>
+              <Button title={t.arrivalNotificationsOffAction} variant="outline" onPress={openArrivalNotificationSettings} />
+            </View>
+          ) : !readiness.fullScreenIntentAllowed ? (
+            <View testID="arrival-readiness-fullscreen" style={styles.osDenied}>
+              <Text style={styles.osDeniedText}>{t.arrivalFullScreenAccessTitle}</Text>
+              <Text style={styles.osNote}>{t.arrivalFullScreenAccessBody}</Text>
+              <Button title={t.arrivalFullScreenAccessAction} variant="outline" onPress={openFullScreenIntentSettings} />
+            </View>
+          ) : (
+            <Text testID="arrival-readiness-ready" style={styles.osNote}>
+              {t.arrivalReadinessReady}
+            </Text>
+          )}
+        </Card>
+      )}
 
       {loadError && (
         <>
@@ -197,5 +252,6 @@ const styles = StyleSheet.create({
   categoryDesc: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted, marginTop: space[1] },
   categoryNote: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted, marginTop: space[1] },
   switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: space[2] },
+  requiredBadge: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.accent },
   switchLabel: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
 });

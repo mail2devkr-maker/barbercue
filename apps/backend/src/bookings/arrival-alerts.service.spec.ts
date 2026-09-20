@@ -106,6 +106,35 @@ describe('ArrivalAlertsService', () => {
       );
     });
 
+    describe('the critical arrival prompt is mandatory: notification preferences never suppress its transport', () => {
+      it('STILL dispatches the push and the realtime nudge when the in-app list preference is OFF (notifyInTransaction -> false)', async () => {
+        prisma.booking.findMany.mockResolvedValue([candidate()]);
+        notifications.notifyInTransaction.mockResolvedValue(false); // ARRIVAL_ALERTS in-app turned off
+        const count = await service.sendDueAlerts();
+        expect(count).toBe(1);
+        expect(realtime.emitBookingArrivalAlert).toHaveBeenCalledWith('s1', 'b1');
+        expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledTimes(1);
+      });
+
+      it('sends exactly once per booking claim - the in-app outcome does not create extra or missing sends', async () => {
+        prisma.booking.findMany.mockResolvedValue([candidate({ id: 'b1' }), candidate({ id: 'b2' })]);
+        notifications.notifyInTransaction.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+        await service.sendDueAlerts();
+        expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledTimes(2);
+        expect(realtime.emitBookingArrivalAlert).toHaveBeenCalledTimes(2);
+      });
+
+      it('the push data is IDs + non-personal operational fields only (time and service, never customer identity)', async () => {
+        prisma.booking.findMany.mockResolvedValue([candidate()]);
+        await service.sendDueAlerts();
+        const data = pushDispatch.dispatchLocalizedToUser.mock.calls[0][3] as Record<string, unknown>;
+        expect(Object.keys(data).sort()).toEqual(['bookingId', 'salonId', 'serviceName', 'slotStart', 'type']);
+        expect(data.type).toBe('booking.arrival_check');
+        expect(typeof data.slotStart).toBe('string');
+        expect(data.serviceName).toBe('Haircut');
+      });
+    });
+
     it('never double-sends: a lost updateMany claim (already sent by a concurrent/duplicate sweep run) skips the notification entirely', async () => {
       prisma.booking.findMany.mockResolvedValue([candidate()]);
       tx.booking.updateMany.mockResolvedValue({ count: 0 });

@@ -1,0 +1,36 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Lets the owner's arrival-decision screen appear over the lock screen and wake the display.
+    On Android 14+ this is a special access the owner must grant (Settings > Apps > FastQue >
+    Allow full-screen notifications); without it FastQue degrades to a heads-up notification.
+  -->
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.VIBRATE" />
+
+  <application>
+    <!-- Higher priority than expo-notifications' own service (-1): FCM delivers to exactly one
+         MESSAGING_EVENT service. Anything that is not an arrival check is handed straight back to it. -->
+    <service
+      android:name=".FastQueArrivalMessagingService"
+      android:exported="false">
+      <intent-filter android:priority="100">
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+      </intent-filter>
+    </service>
+
+    <activity
+      android:name=".FastQueArrivalAlertActivity"
+      android:exported="false"
+      android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+      android:showWhenLocked="true"
+      android:turnScreenOn="true"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:launchMode="singleTask" />
+
+    <receiver
+      android:name=".FastQueArrivalSnoozeReceiver"
+      android:exported="false" />
+  </application>
+</manifest>

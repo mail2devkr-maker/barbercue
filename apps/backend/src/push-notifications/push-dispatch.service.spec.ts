@@ -255,7 +255,6 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
       ['newBooking', 'BOOKING_UPDATES'],
       ['bookingRescheduled', 'BOOKING_UPDATES'],
       ['bookingCancelled', 'BOOKING_UPDATES'],
-      ['arrivalCheck', 'ARRIVAL_ALERTS'],
     ] as const)('EXPLICIT OFF: %s sends nothing when %s is OFF on PUSH - and never even loads the user\'s devices', async (kind, category) => {
       oneDevice();
       stored({ [`${category}:PUSH`]: false });
@@ -293,12 +292,82 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
 
     it('turning a category back ON resumes delivery', async () => {
       oneDevice();
-      stored({ 'ARRIVAL_ALERTS:PUSH': false });
-      await send('arrivalCheck');
+      stored({ 'BOOKING_UPDATES:PUSH': false });
+      await send('newBooking');
       expect(expo.send).not.toHaveBeenCalled();
-      stored({ 'ARRIVAL_ALERTS:PUSH': true });
-      await send('arrivalCheck');
+      stored({ 'BOOKING_UPDATES:PUSH': true });
+      await send('newBooking');
       expect(expo.send).toHaveBeenCalledTimes(1);
+    });
+
+    // ---- the critical arrival prompt is MANDATORY: preferences can never suppress its transport ----
+    describe('critical arrival prompt is mandatory (cannot be suppressed by preferences)', () => {
+      it('is sent even when ARRIVAL_ALERTS on PUSH is explicitly OFF (e.g. a stale/legacy row)', async () => {
+        oneDevice();
+        stored({ 'ARRIVAL_ALERTS:PUSH': false });
+        await send('arrivalCheck');
+        expect(expo.send).toHaveBeenCalledTimes(1);
+      });
+
+      it('is sent even when EVERY operational push preference is OFF', async () => {
+        oneDevice();
+        stored({
+          'BOOKING_UPDATES:PUSH': false,
+          'QUEUE_UPDATES:PUSH': false,
+          'REMINDERS:PUSH': false,
+          'ARRIVAL_ALERTS:PUSH': false,
+          'ARRIVAL_ALERTS:IN_APP': false,
+          'PROMOTIONAL:PUSH': false,
+        });
+        await send('arrivalCheck');
+        expect(expo.send).toHaveBeenCalledTimes(1);
+        // ...while an ordinary booking push in the same state IS still suppressed - the exemption is
+        // the arrival prompt only, not a hole in the gate.
+        expo.send.mockClear();
+        await send('newBooking');
+        expect(expo.send).not.toHaveBeenCalled();
+      });
+
+      it('is high priority, on the dedicated booking channel, with the actionable category', async () => {
+        oneDevice();
+        await send('arrivalCheck');
+        const [[messages]] = expo.send.mock.calls;
+        expect(messages[0]).toMatchObject({
+          priority: 'high',
+          channelId: 'booking-updates',
+          sound: 'default',
+          categoryId: 'booking_arrival_check',
+        });
+      });
+
+      it('carries only IDs and non-personal operational fields: type, shop, booking, time, service, language', async () => {
+        oneDevice();
+        await service.dispatchLocalizedToUser('owner-1', 'arrivalCheck', 'Haircut', {
+          type: 'booking.arrival_check',
+          salonId: 's1',
+          bookingId: 'b1',
+          slotStart: '2026-09-21T10:00:00.000Z',
+          serviceName: 'Haircut',
+        });
+        const [[messages]] = expo.send.mock.calls;
+        expect(Object.keys(messages[0].data).sort()).toEqual(
+          ['bookingId', 'lang', 'salonId', 'serviceName', 'slotStart', 'type'].sort(),
+        );
+        expect(messages[0].data.lang).toBe('EN');
+        // No customer identity (phone/email/name fields) anywhere; the generic word "customer" in the body copy is not PII.
+        const serialized = JSON.stringify(messages[0]);
+        for (const forbidden of ['phone', 'email', 'contact', '+91', '@', 'customername']) {
+          expect(serialized.toLowerCase()).not.toContain(forbidden.toLowerCase());
+        }
+      });
+
+      it("uses the recipient's own language for the native screen (Hindi owner gets lang HI)", async () => {
+        oneDevice();
+        prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.HI });
+        await send('arrivalCheck');
+        const [[messages]] = expo.send.mock.calls;
+        expect(messages[0].data.lang).toBe('HI');
+      });
     });
 
     it('never writes a preference row - reading the gate cannot create an OFF row', async () => {
