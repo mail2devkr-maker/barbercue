@@ -11,12 +11,8 @@ import { HeroVisual } from "../../components/landing/HeroVisual";
 import { HeroBookingCard } from "../../components/landing/HeroBookingCard";
 import { HeroFeatureRow } from "../../components/landing/HeroFeatureRow";
 import { HeroSearchField } from "../../components/landing/HeroSearchField";
-import { LandingHeaderActions } from "../../components/landing/LandingHeaderActions";
-import { LandingMobileNav } from "../../components/landing/LandingMobileNav";
-import { LocationIcon, SearchIcon, PlayIcon } from "../../components/landing/icons";
+import { SearchIcon, PlayIcon } from "../../components/landing/icons";
 import { EditorialImage } from "../../components/editorial/EditorialImage";
-import { BrandLockup } from "../../components/ui/BrandLockup";
-import { SiteFooter } from "../../components/layout/SiteFooter";
 import styles from "../../components/landing/landing.module.css";
 
 const TITLE = "Find a barbershop, salon or spa near you";
@@ -53,22 +49,6 @@ const OWNER_POINTS = [
   "Get a permanent, shareable FastQue Shop ID",
 ];
 
-/**
- * Header location-chip labels, driven only by `cities` — the real "cities with an active salon"
- * list HomePage already fetches for its city-browse chips further down the page, never a
- * hard-coded country/city. Real when there's a real single answer, neutral otherwise: FastQue
- * genuinely operates in one country/city today, so this shows that country/city's real name, but
- * the label degrades to a neutral "Worldwide"/"All cities" the moment that's no longer true
- * (multiple countries/cities, or the discovery fetch failed) rather than keep asserting a specific
- * place that may no longer be the only one.
- */
-function operatingLocationLabels(cities: CityDto[] | null): { country: string; city: string } {
-  const countryCodes = new Set((cities ?? []).map((c) => c.countryCode));
-  const country = cities && countryCodes.size === 1 ? cities[0].country : "Worldwide";
-  const city = cities && cities.length === 1 ? cities[0].name : "All cities";
-  return { country, city };
-}
-
 export default async function HomePage() {
   const [cities, featured, liveStats] = await Promise.all([
     fetchDiscoveryOrNull<CityDto[]>(DISCOVERY_PATHS.cities, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
@@ -81,71 +61,10 @@ export default async function HomePage() {
       DISCOVERY_REVALIDATE_SECONDS,
     ).catch(() => null),
   ]);
-  const { country: countryLabel, city: cityLabel } = operatingLocationLabels(cities);
 
   return (
     <div className={styles.page}>
       <JsonLd data={organizationJsonLd()} />
-
-      <header className={styles.landingHeader}>
-        {/* Reference B's top utility row — hidden at the wide/ultra-wide tier, where Reference A's
-            single consolidated row (below) has room for everything at once instead. */}
-        <div className={styles.utilityBar}>
-          <div className={styles.utilityInner}>
-            <div className={styles.utilityLeft}>
-              {/* No real country switcher exists — a plain label, not a dropdown affordance with
-                  nothing behind it — and its text is the real operating country (or a neutral
-                  "Worldwide") derived from actual city data, never a hard-coded guess. */}
-              <span className={styles.locationChip}>
-                <LocationIcon className={styles.locationIcon} />
-                {countryLabel}
-              </span>
-              <span className={styles.utilityTagline}>
-                Good Looks<span className={styles.utilityDot} aria-hidden="true" />Less Waiting
-              </span>
-            </div>
-            <div className={styles.utilityRight}>
-              <Link href="/employee/login">Employee Login</Link>
-              <Link href="/about-us">About Us</Link>
-              <Link href="/contact-us">Contact Us</Link>
-              <Link href="#book-or-queue">For Customers</Link>
-              <Link href="#for-shops">For Shops</Link>
-              <Link href="/dashboard/register-shop">Partner With Us</Link>
-              <span className={styles.utilityDivider} aria-hidden="true" />
-              <LandingHeaderActions variant="utility" />
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.mainNavBar}>
-          <div className={styles.headerInner}>
-            <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-              <BrandLockup transparent headerArtwork />
-            </Link>
-
-            <nav className={styles.headerNav} aria-label="Primary">
-              <Link href="/search" className={styles.headerNavActive}>Find a barber</Link>
-              <Link href="#services">Services</Link>
-              <Link href="#book-or-queue">How it works</Link>
-              <Link href="#for-shops">For shops</Link>
-              <Link href="/about-us" className={styles.headerNavAbout}>About Us</Link>
-            </nav>
-
-            {/* Reference A's wide-tier actions: location + Sign In + List Your Shop. No real city
-                switcher exists on this page, so this is a plain label (real city name, or a
-                neutral "All cities"), not a dropdown. */}
-            <div className={styles.headerWideRow}>
-              <span className={styles.locationChip}>
-                <LocationIcon className={styles.locationIcon} />
-                {cityLabel}
-              </span>
-              <LandingHeaderActions variant="wide" />
-            </div>
-
-            <LandingMobileNav />
-          </div>
-        </div>
-      </header>
 
       <main>
       <section className={styles.hero}>
@@ -386,7 +305,6 @@ export default async function HomePage() {
 
       </main>
 
-      <SiteFooter />
     </div>
   );
 }
