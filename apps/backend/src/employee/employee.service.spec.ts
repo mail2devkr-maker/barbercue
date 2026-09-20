@@ -173,6 +173,45 @@ describe('EmployeeService CRM', () => {
     expect(result.onboardedSalon?.publicId).toBe('BC-SHOP-000123');
   });
 
+  it('rejects re-attributing an already-onboarded lead to a different shop', async () => {
+    const onboarded = {
+      ...leadRow,
+      status: CrmLeadStatus.ONBOARDED,
+      onboardedSalonId: 'salon-1',
+      onboardedAt: new Date('2026-09-21T02:00:00.000Z'),
+      onboardedSalon: {
+        id: 'salon-1',
+        publicId: 'BC-SHOP-000123',
+        name: 'Test Salon',
+      },
+    };
+    prisma.employeeCrmLead.findFirst
+      .mockResolvedValueOnce(onboarded)
+      .mockResolvedValueOnce(onboarded);
+
+    await expect(
+      service.onboardLead('user-1', 'lead-1', {
+        salonPublicId: 'BC-SHOP-000999',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_LEAD_TRANSITION' });
+
+    expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rejects a future timestamp for a completed field visit', async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    await expect(
+      service.createVisit('user-1', {
+        leadId: leadRow.id,
+        outcome: CrmVisitOutcome.CONTACTED,
+        visitedAt: future,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_LEAD_TRANSITION' });
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('logs a visit against an owned lead and advances a new lead to interested', async () => {
     const visit = {
       id: 'visit-1',
