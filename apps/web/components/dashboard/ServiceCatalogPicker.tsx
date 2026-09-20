@@ -123,11 +123,15 @@ export function ServiceCatalogPicker({
     onError(null);
   }
 
-  // Deselecting must not leave a stale draft behind for any item — clearing the whole map is the
-  // only way "every selected service" and "every hidden payload" stay in sync.
-  function clearAll() {
-    setSelected({});
-    setBulkPrice("");
+  function clearCurrentPack() {
+    const packIds = new Set(
+      SERVICE_CATALOG.filter((item) => item.pack === pack).map((item) => item.id),
+    );
+    setSelected((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([id]) => !packIds.has(id)),
+      ),
+    );
     onError(null);
   }
 
@@ -237,7 +241,7 @@ export function ServiceCatalogPicker({
           <Button
             type="button"
             variant="outline"
-            onClick={() => (allSelected ? clearAll() : selectAll())}
+            onClick={() => (allSelected ? clearCurrentPack() : selectAll())}
             disabled={selectableCatalog.length === 0}
           >
             {allSelected ? "Clear pack selection" : `Select all in ${SERVICE_CATALOG_PACKS.find((item) => item.id === pack)?.label ?? "this pack"}`}
