@@ -66,6 +66,9 @@ export function ServiceCatalogPicker({
   const selectablePack = SERVICE_CATALOG.filter(
     (preset) => preset.pack === pack && !findExistingServiceForPreset(services, preset),
   );
+  const packCategories = SERVICE_CATALOG_CATEGORIES.filter((name) =>
+    SERVICE_CATALOG.some((item) => item.pack === pack && item.category === name),
+  );
 
   function selectCurrentPack() {
     if (saving) return;
@@ -233,7 +236,7 @@ export function ServiceCatalogPicker({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoryScroller}
       >
-        {SERVICE_CATALOG_CATEGORIES.map((name) => (
+        {packCategories.map((name) => (
           <Pressable
             key={name}
             accessibilityRole="button"
