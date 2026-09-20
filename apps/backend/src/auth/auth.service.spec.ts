@@ -122,6 +122,7 @@ describe('AuthService', () => {
         const allowed: Record<SessionAudience, Role[]> = {
           [SessionAudience.CUSTOMER]: [Role.CUSTOMER],
           [SessionAudience.STAFF]: [Role.SALON_STAFF, Role.SALON_OWNER],
+          [SessionAudience.EMPLOYEE]: [Role.FIELD_EXECUTIVE],
           [SessionAudience.ADMIN]: [Role.PLATFORM_ADMIN],
         };
         return roles.filter((role) => allowed[audience].includes(role));
