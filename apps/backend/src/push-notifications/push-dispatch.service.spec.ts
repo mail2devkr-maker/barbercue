@@ -179,7 +179,7 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     });
     expect(expo.send).toHaveBeenCalledWith([
       expect.objectContaining({
-        categoryId: 'booking-arrival-check',
+        categoryId: 'booking_arrival_check',
         data: expect.objectContaining({ type: 'booking.arrival_check', salonId: 's1', bookingId: 'b1' }),
       }),
     ]);
