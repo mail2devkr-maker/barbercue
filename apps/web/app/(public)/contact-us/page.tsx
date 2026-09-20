@@ -92,9 +92,8 @@ export default function ContactUsPage() {
                 </div>
               </dl>
               <p className={styles.notice}>
-                A public business phone number or office address is not listed here because FastQue
-                has not published those details yet. They can be added as soon as the official
-                contact details are confirmed.
+                When contacting support, include the email or phone number you use with FastQue and
+                any relevant booking or shop ID. Never send your password, OTP or other sign-in secret.
               </p>
             </div>
           </div>
