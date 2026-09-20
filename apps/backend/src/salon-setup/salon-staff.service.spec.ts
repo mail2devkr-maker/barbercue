@@ -108,7 +108,7 @@ describe('SalonStaffService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('creates a usable barber with required phone and no email invitation', async () => {
+  it('creates a usable staff member with phone and no email invitation', async () => {
     const result = await service.create('owner-1', 'salon-1', {
       displayName: 'Marcus',
       phone: '+919876543210',
@@ -142,6 +142,29 @@ describe('SalonStaffService', () => {
       staff: { phone: '+919876543210' },
     });
     expect(result.inviteUrl).toBeUndefined();
+  });
+
+  it('creates contact-optional staff with only a display name', async () => {
+    const result = await service.create('owner-1', 'salon-1', {
+      displayName: 'Asha',
+    });
+
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: { status: 'ACTIVE' },
+    });
+    expect(prisma.salonStaff.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        salonId: 'salon-1',
+        userId: 'user-1',
+        displayName: 'Asha',
+        roleInSalon: 'BARBER',
+        status: 'ACTIVE',
+      }),
+    });
+    expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+    expect(emailSender.sendStaffInvitation).not.toHaveBeenCalled();
+    expect(result.invitationSent).toBe(false);
   });
 
   it('preserves the invitation flow when an email is provided', async () => {
@@ -350,7 +373,7 @@ describe('SalonStaffService', () => {
     );
   });
 
-  it('deactivates a barber rather than deleting them', async () => {
+  it('deactivates a staff member rather than deleting them', async () => {
     await service.update('owner-1', 'salon-1', 'staff-1', {
       status: 'INACTIVE' as never,
     });
@@ -410,7 +433,7 @@ describe('SalonStaffService', () => {
       expect(prisma.auditLog.create).not.toHaveBeenCalled();
     });
 
-    it('PLATFORM_ADMIN can add a barber, recorded under the real admin actor and never leaking the invite token', async () => {
+    it('PLATFORM_ADMIN can add staff, recorded under the real admin actor and never leaking the invite token', async () => {
       salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
       await service.create('admin-1', 'salon-1', {
         displayName: 'Marcus',
