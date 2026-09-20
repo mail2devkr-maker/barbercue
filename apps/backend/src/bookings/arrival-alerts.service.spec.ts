@@ -94,7 +94,7 @@ describe('ArrivalAlertsService', () => {
         tx,
         'owner-1',
         'owner.booking.arrival_check',
-        expect.objectContaining({ salonId: 's1', bookingId: 'b1' }),
+        expect.objectContaining({ type: 'booking.arrival_check', salonId: 's1', bookingId: 'b1' }),
         'dashboard/salons/s1/bookings',
       );
       expect(realtime.emitBookingArrivalAlert).toHaveBeenCalledWith('s1', 'b1');

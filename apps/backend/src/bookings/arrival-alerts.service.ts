@@ -125,7 +125,7 @@ export class ArrivalAlertsService {
           booking.salon.ownerUserId,
           'arrivalCheck',
           serviceName,
-          { salonId: booking.salonId, bookingId: booking.id },
+          { type: 'booking.arrival_check', salonId: booking.salonId, bookingId: booking.id },
         );
       }
     }

@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { NOTIFICATION_PATHS, notificationTypeLabel } from '@barbercue/shared';
+import { Language, NOTIFICATION_PATHS, notificationTypeLabel } from '@barbercue/shared';
 import type { NotificationDto, UiStrings } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
+import { requestOwnerArrivalPrompt } from '../lib/arrival-prompt';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton } from '../components/ui';
 
 function timeAgo(t: UiStrings, iso: string): string {
@@ -58,9 +59,21 @@ export default function NotificationsScreen() {
   );
 
   function markRead(n: NotificationDto) {
-    if (n.readAt) return;
-    apiFetch(`${NOTIFICATION_PATHS.notifications}/${n.id}/${NOTIFICATION_PATHS.read}`, { method: 'POST' }).catch(() => {});
-    setItems((prev) => (prev ?? []).map((it) => (it.id === n.id ? { ...it, readAt: new Date().toISOString() } : it)));
+    if (!n.readAt) {
+      apiFetch(`${NOTIFICATION_PATHS.notifications}/${n.id}/${NOTIFICATION_PATHS.read}`, { method: 'POST' }).catch(() => {});
+      setItems((prev) => (prev ?? []).map((it) => (it.id === n.id ? { ...it, readAt: new Date().toISOString() } : it)));
+    }
+    if (
+      n.type === 'owner.booking.arrival_check' &&
+      typeof n.payload?.salonId === 'string' &&
+      typeof n.payload?.bookingId === 'string'
+    ) {
+      requestOwnerArrivalPrompt({
+        type: 'booking.arrival_check',
+        salonId: n.payload.salonId,
+        bookingId: n.payload.bookingId,
+      });
+    }
   }
 
   function markAllRead() {
@@ -112,6 +125,11 @@ export default function NotificationsScreen() {
                 {typeof n.payload?.serviceName === 'string' && (
                   <Text style={styles.meta}>{n.payload.serviceName}</Text>
                 )}
+                {n.type === 'owner.booking.arrival_check' && (
+                  <Text style={styles.actionHint}>
+                    {language === Language.HI ? 'जवाब देने के लिए टैप करें' : 'Tap to respond'}
+                  </Text>
+                )}
                 <Text style={styles.time}>{timeAgo(t, n.createdAt)}</Text>
               </Pressable>
             ))
@@ -148,6 +166,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
   titleUnread: { fontFamily: font.bodyBold },
   meta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
+  actionHint: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.accent, marginTop: space[2] },
   time: { fontFamily: font.bodyRegular, fontSize: 10, color: color.muted, marginTop: 4 },
   loadMoreButton: { marginTop: space[2], marginBottom: space[6] },
 });

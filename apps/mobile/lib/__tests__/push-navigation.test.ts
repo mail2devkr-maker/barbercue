@@ -1,7 +1,7 @@
 import { parseOwnerBookingPushData } from '../push-navigation';
 
 describe('owner booking push payload parsing', () => {
-  it.each(['booking.created', 'booking.rescheduled', 'booking.cancelled'] as const)('accepts %s', (type) => {
+  it.each(['booking.created', 'booking.rescheduled', 'booking.cancelled', 'booking.arrival_check'] as const)('accepts %s', (type) => {
     expect(parseOwnerBookingPushData({ type, salonId: 's1', bookingId: 'b1' })).toEqual({ type, salonId: 's1', bookingId: 'b1' });
   });
 
