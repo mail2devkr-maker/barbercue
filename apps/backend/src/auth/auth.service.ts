@@ -246,7 +246,14 @@ export class AuthService {
     });
     const user = profile?.user ?? null;
     const roles = user?.roles.map((r) => r.role) ?? [];
-    const isFieldExecutive = roles.includes(Role.FIELD_EXECUTIVE);
+    // FIELD_EXECUTIVE is an internal FastQue role, never salon-scoped. Re-check the raw UserRole
+    // rows here (before they are flattened to Role[]) so a malformed salon-scoped row can never
+    // authenticate through the employee surface.
+    const isGlobalFieldExecutive =
+      !!user &&
+      user.roles.some(
+        (r) => r.role === Role.FIELD_EXECUTIVE && r.salonId === null,
+      );
 
     // Constant-shape password comparison prevents employee-code enumeration by response timing.
     const passwordHash =
@@ -257,7 +264,7 @@ export class AuthService {
       passwordHash,
     );
 
-    if (!profile || !user || !isFieldExecutive || !passwordMatches) {
+    if (!profile || !user || !isGlobalFieldExecutive || !passwordMatches) {
       throw new AppException(
         AuthErrorCode.INVALID_CREDENTIALS,
         'Incorrect employee ID or password.',
