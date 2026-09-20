@@ -8,6 +8,8 @@ import { useLanguage } from '../lib/language-context';
 import { speakBooking } from '../lib/voice-announce';
 import { claimBookingVoiceEvent } from '../lib/booking-voice-dedupe';
 import {
+  ARRIVAL_ACTION_ARRIVED,
+  ARRIVAL_ACTION_NOT_ARRIVED,
   isPushEligibleUser,
   registerPushDeviceForUser,
   reregisterRefreshedPushToken,
@@ -17,6 +19,7 @@ import {
   requestOwnerBookingPushNavigation,
   type OwnerBookingPushData,
 } from '../lib/push-navigation';
+import { requestOwnerArrivalPrompt } from '../lib/arrival-prompt';
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
@@ -61,11 +64,25 @@ export function PushNotificationCoordinator() {
     if (!isOwner(actor)) return false;
     const payload = parseOwnerBookingPushData(response.notification.request.content.data);
     if (!payload) return false;
+    if (payload.type === 'booking.arrival_check') {
+      const initialAction =
+        response.actionIdentifier === ARRIVAL_ACTION_ARRIVED
+          ? 'arrived'
+          : response.actionIdentifier === ARRIVAL_ACTION_NOT_ARRIVED
+            ? 'not-arrived'
+            : null;
+      requestOwnerArrivalPrompt({ ...payload, initialAction });
+      return true;
+    }
     requestOwnerBookingPushNavigation(payload);
     return true;
   }
 
   function scheduleForegroundVoiceFallback(payload: OwnerBookingPushData): void {
+    if (payload.type === 'booking.arrival_check') {
+      requestOwnerArrivalPrompt(payload);
+      return;
+    }
     setTimeout(() => {
       if (!isOwner(currentUserRef.current)) return;
       const activeLanguage = languageRef.current;
