@@ -64,20 +64,20 @@ export default function EmployeeDashboardPage() {
     email: "",
     city: "",
     locality: "",
-    source: CrmLeadSource.FIELD_VISIT,
+    source: CrmLeadSource.FIELD_VISIT as CrmLeadSource,
     notes: "",
   });
   const [visitForm, setVisitForm] = useState({
     leadId: "",
     shopName: "",
-    outcome: CrmVisitOutcome.CONTACTED,
+    outcome: CrmVisitOutcome.CONTACTED as CrmVisitOutcome,
     notes: "",
     visitedAt: "",
   });
   const [followUpForm, setFollowUpForm] = useState({
     leadId: "",
     dueAt: "",
-    channel: CrmFollowUpChannel.CALL,
+    channel: CrmFollowUpChannel.CALL as CrmFollowUpChannel,
     notes: "",
   });
 
