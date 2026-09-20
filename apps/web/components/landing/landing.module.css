@@ -24,6 +24,21 @@
 }
 
 .landingHeader {
+  /* Canonical site-wide chrome tokens live on the fixed header itself because the header now
+     mounts from RootLayout, outside the Home page's .page token scope. */
+  --fq-void: #09090c;
+  --fq-charcoal: #0d0d12;
+  --fq-utility-bg: #171314;
+  --fq-hairline: rgba(255, 255, 255, 0.1);
+  --fq-text: #f7f5f4;
+  --fq-text-muted: rgba(255, 255, 255, 0.72);
+  --fq-text-faint: rgba(255, 255, 255, 0.5);
+  --fq-pink: #f20a83;
+  --fq-coral: #ff3e57;
+  --fq-orange: #ff7a45;
+  --fq-gradient: linear-gradient(100deg, var(--fq-pink) 0%, var(--fq-coral) 55%, var(--fq-orange) 100%);
+  --fq-glass-border: rgba(255, 62, 87, 0.28);
+
   /* This page's root already sits inside `html, body { overflow-x: hidden }` (globals.css), which
      per spec forces both elements' computed overflow-y to `auto` — a nested double scroll
      container that silently defeats `position: sticky` several levels down (confirmed: the header
