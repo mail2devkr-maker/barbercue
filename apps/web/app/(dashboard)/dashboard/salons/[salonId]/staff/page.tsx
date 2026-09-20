@@ -170,7 +170,6 @@ export default function DashboardStaffPage({
             placeholder="+91 98765 43210"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            required
             autoComplete="tel"
             className={styles.input}
           />
