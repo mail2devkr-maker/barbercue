@@ -77,6 +77,12 @@ enum SalonStatus {
   SUSPENDED
 }
 
+enum SalonType {
+  GENTS
+  LADIES
+  UNISEX
+}
+
 enum SalonStaffRole {
   OWNER
   MANAGER
@@ -631,6 +637,9 @@ model Salon {
   email            String?
   description      String?
   status           SalonStatus @default(PENDING)
+  // Owner-selected service audience used to filter onboarding presets. Existing salons default to
+  // UNISEX so the migration is backwards-compatible and never hides already-configured services.
+  salonType        SalonType   @default(UNISEX)
 
   // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
   planId                String?
