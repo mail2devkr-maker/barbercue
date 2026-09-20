@@ -84,7 +84,7 @@ export function ServiceCatalogPicker({
       (category === "all" || catalogItem.category === category) &&
       (!search || `${catalogItem.name} ${catalogItem.category}`.toLowerCase().includes(search)),
     );
-  }, [category, pack, query]);
+  }, [category, pack, query, salonType]);
 
   // Bulk selection is intentionally pack-scoped: owners can pick a whole pack instead of
   // clicking dozens of services. Suggested price/time defaults make the pack immediately ready.
