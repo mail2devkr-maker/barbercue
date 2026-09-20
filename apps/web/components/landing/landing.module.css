@@ -42,6 +42,47 @@
   border-bottom: 1px solid var(--fq-hairline);
 }
 
+.siteHeaderSpacer {
+  height: 116px;
+  flex: 0 0 auto;
+}
+
+.siteShopSwitcher,
+.siteShopSwitcherMobile {
+  appearance: none;
+  border: 1px solid var(--fq-hairline);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fq-text);
+  border-radius: 10px;
+  font: 600 0.76rem/1 var(--font-body);
+  cursor: pointer;
+}
+
+.siteShopSwitcher {
+  max-width: 180px;
+  min-height: 32px;
+  padding: 0 28px 0 10px;
+}
+
+.siteShopSwitcherMobile {
+  width: 100%;
+  min-height: 42px;
+  margin: 6px 0;
+  padding: 0 12px;
+  background: var(--fq-charcoal);
+}
+
+.siteShopSwitcher option,
+.siteShopSwitcherMobile option {
+  background: var(--fq-charcoal);
+  color: var(--fq-text);
+}
+
+.siteMobileBell {
+  display: none;
+  margin-left: auto;
+}
+
 .utilityBar {
   background: var(--fq-utility-bg);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -326,7 +367,7 @@
      grows past its own 76px min-height to fit the logo's own rendered height at this tier's width
      — up to ~97px at the widest point of this tier's own clamp range) since .landingHeader is
      position: fixed and out of flow — see its own comment. */
-  padding: 156px 24px 64px;
+  padding: 48px 24px 64px;
   background: var(--fq-void);
   color: var(--fq-text);
 }
@@ -730,9 +771,7 @@
   }
 
   .hero {
-    /* Utility bar is hidden at this tier, so the fixed header is just the main nav row — but at
-       this tier's own clamp ceiling the logo's rendered height grows the row to ~100px. */
-    padding: 120px 24px 96px;
+    padding: 56px 24px 96px;
   }
 
   .heroInner {
@@ -1397,12 +1436,10 @@
 }
 
 .sitePoweredByText {
-  color: #171313;
+  color: rgba(255, 255, 255, 0.78);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  -webkit-text-stroke: 0.35px rgba(255, 255, 255, 0.82);
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.72);
 }
 
 .sitePoweredByDcw {
@@ -1423,8 +1460,11 @@
   .headerNav { display: none; }
   .mobileNavHost { display: block; }
 
-  /* Utility bar is hidden at this tier too, so the fixed header is just the ~77px main nav row. */
-  .hero { padding-top: 100px; }
+  .siteHeaderSpacer { height: 76px; }
+  .siteMobileBell { display: block; }
+
+  /* Header space is now reserved globally by SiteHeader; this is only hero breathing room. */
+  .hero { padding-top: 48px; }
 
   /* Keep the visual full bleed at tablet widths too; cover preserves the photo's source ratio
      while the scrim maintains the dark reading space behind the unchanged copy. */
@@ -1472,9 +1512,10 @@
   .utilityLeft { gap: 12px; }
   .utilityRight { gap: 12px; }
 
-  /* headerInner drops to a 64px min-height at this breakpoint (see below), so the fixed header
-     is shorter here too. */
-  .hero { padding: 84px 16px 56px; min-height: 0; }
+  .siteHeaderSpacer { height: 64px; }
+
+  /* Fixed header space is handled globally; retain only the hero's own internal breathing room. */
+  .hero { padding: 36px 16px 56px; min-height: 0; }
   .heroInner { min-height: 0; gap: 28px; }
   .heroCopy { max-width: 100%; }
 
