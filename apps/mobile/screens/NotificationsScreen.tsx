@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { NOTIFICATION_PATHS, notificationTypeLabel } from '@barbercue/shared';
+import { Language, NOTIFICATION_PATHS, notificationTypeLabel } from '@barbercue/shared';
 import type { NotificationDto, UiStrings } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useLanguage } from '../lib/language-context';
@@ -125,6 +125,11 @@ export default function NotificationsScreen() {
                 {typeof n.payload?.serviceName === 'string' && (
                   <Text style={styles.meta}>{n.payload.serviceName}</Text>
                 )}
+                {n.type === 'owner.booking.arrival_check' && (
+                  <Text style={styles.actionHint}>
+                    {language === Language.HI ? 'जवाब देने के लिए टैप करें' : 'Tap to respond'}
+                  </Text>
+                )}
                 <Text style={styles.time}>{timeAgo(t, n.createdAt)}</Text>
               </Pressable>
             ))
@@ -161,6 +166,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, color: color.ink },
   titleUnread: { fontFamily: font.bodyBold },
   meta: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
+  actionHint: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.accent, marginTop: space[2] },
   time: { fontFamily: font.bodyRegular, fontSize: 10, color: color.muted, marginTop: 4 },
   loadMoreButton: { marginTop: space[2], marginBottom: space[6] },
 });
