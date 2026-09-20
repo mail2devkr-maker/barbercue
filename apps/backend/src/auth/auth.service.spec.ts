@@ -75,6 +75,9 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
+    // Railway/CI runs tests with NODE_ENV=production; make password-link tests hermetic instead of
+    // depending on whichever WEB_BASE_URL happens to exist in the build environment.
+    process.env.WEB_BASE_URL = 'https://fastque.test';
     prisma = {
       user: {
         findUnique: jest.fn(),
