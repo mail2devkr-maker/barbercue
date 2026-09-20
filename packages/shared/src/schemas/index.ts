@@ -331,6 +331,12 @@ export const staffLoginSchema = z.object({
 });
 export type StaffLoginInput = z.infer<typeof staffLoginSchema>;
 
+export const employeeLoginSchema = z.object({
+  employeeCode: z.string().trim().min(3).max(32).transform((value) => value.toUpperCase()),
+  password: passwordSchema,
+});
+export type EmployeeLoginInput = z.infer<typeof employeeLoginSchema>;
+
 export const adminLoginSchema = z.object({
   email: z.string().email(),
   password: passwordSchema,

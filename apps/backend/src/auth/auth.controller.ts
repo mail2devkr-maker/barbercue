@@ -32,6 +32,7 @@ import {
   deleteAccountSchema,
   setLanguageSchema,
   staffLoginSchema,
+  employeeLoginSchema,
   type AdminGoogleLoginInput,
   type AdminLoginInput,
   type AuthenticatedUser,
@@ -46,6 +47,7 @@ import {
   type ResetPasswordInput,
   type SetLanguageInput,
   type StaffLoginInput,
+  type EmployeeLoginInput,
 } from '@barbercue/shared';
 import { AuthService } from './auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -133,6 +135,24 @@ export class AuthController {
   ) {
     const result = await this.authService.googleLogin(
       body.idToken,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.employeeLogin)
+  @UsePipes(new ZodValidationPipe(employeeLoginSchema))
+  async employeeLogin(
+    @Body() body: EmployeeLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.employeeLogin(
+      body.employeeCode,
+      body.password,
       req.headers['user-agent'],
     );
     setRefreshCookie(res, result.tokens.refreshToken);

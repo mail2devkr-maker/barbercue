@@ -233,6 +233,71 @@ export class AuthService {
     };
   }
 
+  // ---------- FastQue employee: employee code + password ----------
+
+  async employeeLogin(
+    employeeCode: string,
+    password: string,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const profile = await this.prisma.employeeProfile.findUnique({
+      where: { employeeCode: employeeCode.trim().toUpperCase() },
+      include: { user: { include: { roles: true } } },
+    });
+    const user = profile?.user ?? null;
+    const roles = user?.roles.map((r) => r.role) ?? [];
+    // FIELD_EXECUTIVE is an internal FastQue role, never salon-scoped. Re-check the raw UserRole
+    // rows here (before they are flattened to Role[]) so a malformed salon-scoped row can never
+    // authenticate through the employee surface.
+    const isGlobalFieldExecutive =
+      !!user &&
+      user.roles.some(
+        (r) => r.role === Role.FIELD_EXECUTIVE && r.salonId === null,
+      );
+
+    // Constant-shape password comparison prevents employee-code enumeration by response timing.
+    const passwordHash =
+      user?.passwordHash ??
+      '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva';
+    const passwordMatches = await this.passwordService.compare(
+      password,
+      passwordHash,
+    );
+
+    if (!profile || !user || !isGlobalFieldExecutive || !passwordMatches) {
+      throw new AppException(
+        AuthErrorCode.INVALID_CREDENTIALS,
+        'Incorrect employee ID or password.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    this.assertActive(user.status);
+
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
+      SessionAudience.EMPLOYEE,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      sessionRoles,
+      SessionAudience.EMPLOYEE,
+      deviceInfo,
+    );
+
+    return {
+      user: this.toMeResponse(
+        user.id,
+        sessionRoles,
+        SessionAudience.EMPLOYEE,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
   // ---------- Staff / Owner: email + password ----------
 
   async staffLogin(

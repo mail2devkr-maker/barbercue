@@ -104,6 +104,7 @@ export default async function HomePage() {
               </span>
             </div>
             <div className={styles.utilityRight}>
+              <Link href="/employee/login">Employee Login</Link>
               <Link href="/about-us">About Us</Link>
               <Link href="/contact-us">Contact Us</Link>
               <Link href="#book-or-queue">For Customers</Link>
@@ -395,7 +396,7 @@ export default async function HomePage() {
           <nav className={styles.footerLinks} aria-label="Footer">
             <div><span>Customers</span><Link href="/search">Find a barber</Link><Link href="/account/bookings">My bookings</Link><Link href="/style-advisor">Style Advisor</Link></div>
             <div><span>Shops</span><Link href="/dashboard/register-shop">Register your shop</Link><Link href="/owner/login">Owner login</Link><Link href="/staff/login">Staff login</Link></div>
-            <div><span>FastQue</span><Link href="/about-us">About Us</Link><Link href="/contact-us">Contact Us</Link><Link href="/login">Customer login</Link><Link href="/privacy-policy">Privacy policy</Link><Link href="/account-deletion">Account deletion</Link></div>
+            <div><span>FastQue</span><Link href="/employee/login">Employee Login</Link><Link href="/about-us">About Us</Link><Link href="/contact-us">Contact Us</Link><Link href="/login">Customer login</Link><Link href="/privacy-policy">Privacy policy</Link><Link href="/account-deletion">Account deletion</Link></div>
           </nav>
           <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue. · Created by Devdutta Kumar Pandey</p>
         </div>

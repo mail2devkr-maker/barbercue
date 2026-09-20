@@ -30,6 +30,7 @@ export interface JwtPayload {
 const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<Record<SessionAudience, ReadonlySet<Role>>> = {
   [SessionAudience.CUSTOMER]: new Set([Role.CUSTOMER]),
   [SessionAudience.STAFF]: new Set([Role.SALON_STAFF, Role.SALON_OWNER]),
+  [SessionAudience.EMPLOYEE]: new Set([Role.FIELD_EXECUTIVE]),
   [SessionAudience.ADMIN]: new Set([Role.PLATFORM_ADMIN]),
 };
 
@@ -56,9 +57,9 @@ export class TokenService {
   /**
    * The single choke point every login/refresh path must go through to turn a raw DB roles list
    * into what a session of a given audience may actually assert. Filters by role TYPE only — the
-   * extra "PLATFORM_ADMIN must also be salonId: null" invariant is re-checked separately wherever
-   * the raw UserRole rows (not just role types) are available, since a plain Role[] has already
-   * discarded salonId by the time it would reach this function.
+   * extra global-role invariants (PLATFORM_ADMIN and FIELD_EXECUTIVE must also have salonId: null)
+   * are re-checked separately wherever the raw UserRole rows (not just role types) are available,
+   * since a plain Role[] has already discarded salonId by the time it would reach this function.
    */
   scopeRolesToAudience(roles: Role[], audience: SessionAudience): Role[] {
     const allowed = ROLES_ALLOWED_FOR_AUDIENCE[audience];
@@ -198,6 +199,12 @@ export class TokenService {
         (r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null,
       );
       if (!hasGlobalAdmin) scopedRoles = [];
+    }
+    if (audience === SessionAudience.EMPLOYEE) {
+      const hasGlobalFieldExecutive = claimed.user.roles.some(
+        (r) => r.role === Role.FIELD_EXECUTIVE && r.salonId === null,
+      );
+      if (!hasGlobalFieldExecutive) scopedRoles = [];
     }
 
     // A session whose audience no longer maps to ANY currently-held role (the backing role was
