@@ -122,6 +122,24 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
     setMissingRequirements(null);
   }
 
+  function advanceOnboarding() {
+    let next = step + 1;
+    // Opening hours and chairs are provisioned automatically for new shops. Once those defaults
+    // exist, do not make the owner review two already-complete screens during first-time setup.
+    while (next < TOTAL_STEPS) {
+      if (next === 2 && hasOpenDay) {
+        next += 1;
+        continue;
+      }
+      if (next === 4 && hasChair) {
+        next += 1;
+        continue;
+      }
+      break;
+    }
+    goToStep(next);
+  }
+
   async function goLive() {
     setGoingLive(true);
     setGoLiveError(null);
@@ -271,10 +289,10 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
       <View style={styles.navRow}>
         {step > 1 && <Button title={t.previousAction} variant="outline" onPress={() => goToStep(step - 1)} style={styles.navButton} />}
         {step < TOTAL_STEPS && ONBOARDING_SKIPPABLE_STEPS.has(step) && (
-          <Button title={t.skipForNowAction} variant="outline" onPress={() => goToStep(step + 1)} style={styles.navButton} />
+          <Button title={t.skipForNowAction} variant="outline" onPress={advanceOnboarding} style={styles.navButton} />
         )}
         {step < TOTAL_STEPS && (
-          <Button title={t.saveAndNextAction} onPress={() => goToStep(step + 1)} style={styles.navButton} />
+          <Button title={t.saveAndNextAction} onPress={advanceOnboarding} style={styles.navButton} />
         )}
       </View>
     </Screen>
