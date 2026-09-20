@@ -2,7 +2,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--bc-surface);
 }
 
 /* Owner correction — opt-in premium dark variant (currently /search only, via CustomerShell's
@@ -63,7 +63,7 @@
 .accountDropdownItem:focus-visible,
 .menuToggle:focus-visible,
 .mobileNavLink:focus-visible {
-  outline: 2px solid var(--bc-ink);
+  outline: 2px solid #f7f5f4;
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -171,7 +171,7 @@
 }
 
 .accountDropdownItem:hover {
-  background: var(--bc-surface);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .menuToggle {
@@ -246,7 +246,11 @@
 .headerDark .wordmark { color: #f7f5f4; }
 .headerDark .navLink { color: rgba(255, 255, 255, 0.72); }
 .headerDark .navLink:hover { color: #f7f5f4; }
-.headerDark .navLinkActive { color: #ff3e57; border-bottom-color: #ff3e57; }
+.headerDark .navLinkActive {
+  color: #f7f5f4;
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(100deg, #f20a83 0%, #ff3e57 55%, #ff7a45 100%) 1;
+}
 .headerDark .signInLink { color: #f7f5f4; border-color: rgba(255, 255, 255, 0.10); }
 .headerDark .accountButton { color: #f7f5f4; border-color: rgba(255, 255, 255, 0.10); }
 .headerDark .accountDot { background: #f7f5f4; color: #09090c; }
