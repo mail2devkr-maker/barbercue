@@ -179,34 +179,40 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     expect(messages[0].title).not.toBe('Booking cancelled');
   });
 
-  it('marks arrival-check pushes with the actionable notification category', async () => {
-    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
-    await service.dispatchLocalizedToUser('owner-1', 'arrivalCheck', 'Haircut', {
-      type: 'booking.arrival_check',
-      salonId: 's1',
-      bookingId: 'b1',
-    });
-    expect(expo.send).toHaveBeenCalledWith([
-      expect.objectContaining({
-        categoryId: 'booking_arrival_check',
-        data: expect.objectContaining({ type: 'booking.arrival_check', salonId: 's1', bookingId: 'b1' }),
-      }),
-    ]);
-  });
+  // ROOT CAUSE of the 1.0.5 lock-screen regression (proven on-device with adb/logcat): an Expo push that
+  // carries a title/body becomes an FCM *notification message*. While the app is backgrounded, locked or
+  // killed, Android's FCM SDK shows it itself (tag "FCM-Notification:...") and NEVER calls the app's
+  // FastQueArrivalMessagingService - so no full-screen intent, no screen wake, no native channel. A
+  // DATA-ONLY message is always delivered to that service. The arrival check must therefore be data-only.
+  describe('the critical arrival check is a DATA-ONLY push (so the native lock-screen alert can run)', () => {
+    const send = async (): Promise<Record<string, unknown>> => {
+      prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
+      await service.dispatchLocalizedToUser('owner-1', 'arrivalCheck', 'Haircut', {
+        type: 'booking.arrival_check',
+        salonId: 's1',
+        bookingId: 'b1',
+        slotStart: '2026-09-21T10:00:00.000Z',
+        serviceName: 'Haircut',
+      });
+      const [[messages]] = expo.send.mock.calls;
+      return messages[0] as Record<string, unknown>;
+    };
 
-  it('targets the existing high-importance Android booking channel with the default sound for arrival checks', async () => {
-    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
-    await service.dispatchLocalizedToUser('owner-1', 'arrivalCheck', 'Haircut', {
-      type: 'booking.arrival_check',
-      salonId: 's1',
-      bookingId: 'b1',
+    it('has NO title, body, sound, channel or category - any of those makes Android display it itself', async () => {
+      const message = await send();
+      for (const key of ['title', 'body', 'sound', 'channelId', 'categoryId']) expect(message).not.toHaveProperty(key);
     });
-    const [[messages]] = expo.send.mock.calls;
-    expect(messages[0]).toMatchObject({
-      channelId: 'booking-updates',
-      sound: 'default',
-      priority: 'high',
-      categoryId: 'booking_arrival_check', // actionable Arrived / Not arrived buttons preserved
+
+    it('is high priority with a short time-to-live, and carries the ids + language in data', async () => {
+      const message = await send();
+      expect(message).toMatchObject({ priority: 'high', ttl: 600 });
+      expect(message.data).toMatchObject({ type: 'booking.arrival_check', salonId: 's1', bookingId: 'b1', lang: 'EN' });
+    });
+
+    it('is still gated only by the mandatory-arrival rule, never sent to an unregistered user', async () => {
+      devices.devicesForUser.mockResolvedValue([]);
+      await service.dispatchLocalizedToUser('owner-1', 'arrivalCheck', 'Haircut', { type: 'booking.arrival_check' });
+      expect(expo.send).not.toHaveBeenCalled();
     });
   });
 
@@ -328,16 +334,12 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
         expect(expo.send).not.toHaveBeenCalled();
       });
 
-      it('is high priority, on the dedicated booking channel, with the actionable category', async () => {
+      it('is a high-priority DATA-ONLY message (no title/body/channel/sound)', async () => {
         oneDevice();
         await send('arrivalCheck');
         const [[messages]] = expo.send.mock.calls;
-        expect(messages[0]).toMatchObject({
-          priority: 'high',
-          channelId: 'booking-updates',
-          sound: 'default',
-          categoryId: 'booking_arrival_check',
-        });
+        expect(messages[0]).toMatchObject({ priority: 'high' });
+        for (const key of ['title', 'body', 'channelId', 'sound', 'categoryId']) expect(messages[0]).not.toHaveProperty(key);
       });
 
       it('carries only IDs and non-personal operational fields: type, shop, booking, time, service, language', async () => {
