@@ -8,6 +8,7 @@ import {
   type ArrivalAlertDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
+import { newIdempotencyKey } from "../../lib/idempotency";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
 import { getVoiceEnabled, useVoiceEnabled } from "../../lib/voice-preference";
@@ -184,7 +185,10 @@ export function ArrivalAlertOverlay({ salonId }: { salonId: string }) {
     setBusy(true);
     setError(null);
     try {
-      await apiFetch(arrivePath(active!.bookingId), { method: "POST" });
+      await apiFetch(arrivePath(active!.bookingId), {
+        method: "POST",
+        headers: { "Idempotency-Key": newIdempotencyKey() },
+      });
       stopVoice();
       setConfirmStep(null);
       refresh();
@@ -204,7 +208,10 @@ export function ArrivalAlertOverlay({ salonId }: { salonId: string }) {
     setBusy(true);
     setError(null);
     try {
-      await apiFetch(noShowPath(active!.bookingId), { method: "POST" });
+      await apiFetch(noShowPath(active!.bookingId), {
+        method: "POST",
+        headers: { "Idempotency-Key": newIdempotencyKey() },
+      });
       stopVoice();
       setConfirmStep(null);
       refresh();
