@@ -25,6 +25,7 @@ enum Role {
   CUSTOMER
   SALON_STAFF
   SALON_OWNER
+  FIELD_EXECUTIVE
   PLATFORM_ADMIN
 }
 
@@ -38,6 +39,7 @@ enum Role {
 enum SessionAudience {
   CUSTOMER
   STAFF
+  EMPLOYEE
   ADMIN
 }
 
@@ -289,6 +291,7 @@ model User {
   creditAccount           CustomerCreditAccount?
   manualChairOccupanciesStarted ManualChairOccupancy[] @relation("ManualChairOccupancyStartedBy")
   manualChairOccupanciesEnded   ManualChairOccupancy[] @relation("ManualChairOccupancyEndedBy")
+  employeeProfile               EmployeeProfile?
 
   @@map("users")
 }
@@ -334,6 +337,22 @@ model AuthIdentity {
   @@unique([provider, providerSub])
   @@index([userId])
   @@map("auth_identities")
+}
+
+// ---------- FastQue CRM / field operations ----------
+
+model EmployeeProfile {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  employeeCode String   @unique
+  fullName     String
+  territory    String?
+  joinedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("employee_profiles")
 }
 
 model RefreshToken {
