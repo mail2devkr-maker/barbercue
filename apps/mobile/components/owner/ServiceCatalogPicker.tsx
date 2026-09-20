@@ -54,7 +54,14 @@ export function ServiceCatalogPicker({
   onChanged: () => void;
 }) {
   const [pack, setPack] = useState<ServicePackId>("BASIC");
-  const [category, setCategory] = useState<string>(SERVICE_CATALOG_CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(
+    () =>
+      SERVICE_CATALOG.find(
+        (item) =>
+          serviceAvailableInPack(item, "BASIC") &&
+          serviceAvailableForSalonType(item, salonType),
+      )?.category ?? SERVICE_CATALOG_CATEGORIES[0],
+  );
   const [selected, setSelected] = useState<Record<string, PresetDraft>>({});
   const [saving, setSaving] = useState(false);
   const [reactivatingId, setReactivatingId] = useState<string | null>(null);
