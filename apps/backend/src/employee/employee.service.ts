@@ -192,7 +192,15 @@ export class EmployeeService {
   ): Promise<EmployeeCrmLeadDto> {
     const { profile, lead } = await this.requireOwnedLead(userId, leadId);
     if (lead.status === CrmLeadStatus.ONBOARDED && lead.onboardedSalonId) {
-      return this.getLeadById(profile.id, lead.id);
+      const existing = await this.getLeadById(profile.id, lead.id);
+      if (existing.onboardedSalon?.publicId === input.salonPublicId) {
+        return existing;
+      }
+      throw new AppException(
+        CrmErrorCode.INVALID_LEAD_TRANSITION,
+        `This lead is already attributed to ${existing.onboardedSalon?.publicId ?? 'another FastQue shop'}.`,
+        HttpStatus.CONFLICT,
+      );
     }
 
     const salon = await this.prisma.salon.findUnique({
@@ -289,6 +297,15 @@ export class EmployeeService {
       };
     }
 
+    const visitedAt = input.visitedAt ? new Date(input.visitedAt) : new Date();
+    if (visitedAt.getTime() > Date.now() + 5 * 60 * 1000) {
+      throw new AppException(
+        CrmErrorCode.INVALID_LEAD_TRANSITION,
+        'A completed field visit cannot be recorded in the future. Schedule a follow-up instead.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const shopName = (emptyToNull(input.shopName) ?? lead?.shopName)?.trim();
     if (!shopName) {
       throw new AppException(
@@ -304,7 +321,7 @@ export class EmployeeService {
           employeeProfileId: profile.id,
           leadId: lead?.id ?? null,
           shopName,
-          visitedAt: input.visitedAt ? new Date(input.visitedAt) : new Date(),
+          visitedAt,
           outcome: input.outcome,
           notes: emptyToNull(input.notes) ?? null,
         },
