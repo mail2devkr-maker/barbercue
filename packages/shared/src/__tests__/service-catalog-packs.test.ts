@@ -57,15 +57,15 @@ describe('service catalog onboarding packs', () => {
         'global-hair-colour',
       ]),
     );
-    expect(basic.map((service) => service.id)).not.toEqual(
-      expect.arrayContaining([
-        'womens-haircut',
-        'cleanup',
-        'manicure',
-        'party-makeup',
-        'bridal-makeup',
-      ]),
-    );
+    for (const id of [
+      'womens-haircut',
+      'cleanup',
+      'manicure',
+      'party-makeup',
+      'bridal-makeup',
+    ]) {
+      expect(basic.map((service) => service.id)).not.toContain(id);
+    }
 
     // Standard salon: Basic + broader unisex beauty/grooming services.
     expect(standard).toHaveLength(73);
@@ -82,14 +82,14 @@ describe('service catalog onboarding packs', () => {
         'back-massage',
       ]),
     );
-    expect(standard.map((service) => service.id)).not.toEqual(
-      expect.arrayContaining([
-        'keratin-treatment',
-        'nail-extensions',
-        'bridal-makeup',
-        'full-body-wax',
-      ]),
-    );
+    for (const id of [
+      'keratin-treatment',
+      'nail-extensions',
+      'bridal-makeup',
+      'full-body-wax',
+    ]) {
+      expect(standard.map((service) => service.id)).not.toContain(id);
+    }
 
     // Advance salon: complete catalog, including every premium/technical beauty service.
     expect(advanced).toHaveLength(SERVICE_CATALOG.length);
