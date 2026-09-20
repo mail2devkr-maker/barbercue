@@ -506,7 +506,7 @@ export function HoursEditor({ salonId, hours, onSaved }: { salonId: string; hour
   const [days, setDays] = useState(() =>
     Array.from({ length: 7 }, (_, dayOfWeek) => {
       const existing = hours.find((h) => h.dayOfWeek === dayOfWeek);
-      return existing ?? { dayOfWeek, openTime: '09:00', closeTime: '21:00', isClosed: dayOfWeek === 0 };
+      return existing ?? { dayOfWeek, openTime: '09:00', closeTime: '21:00', isClosed: false };
     }),
   );
   const [saving, setSaving] = useState(false);
@@ -591,7 +591,8 @@ export function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: (
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const phoneValid = e164PhoneSchema.safeParse(phone).success;
+  const normalizedPhone = phone.trim();
+  const phoneValid = normalizedPhone === '' || e164PhoneSchema.safeParse(normalizedPhone).success;
 
   async function submit() {
     setError(null);
@@ -603,7 +604,11 @@ export function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: (
     try {
       await apiFetch(scope(salonId, DASHBOARD_PATHS.staff), {
         method: 'POST',
-        body: JSON.stringify({ displayName, phone, ...(email.trim() ? { email: email.trim() } : {}) }),
+        body: JSON.stringify({
+          displayName: displayName.trim(),
+          ...(normalizedPhone ? { phone: normalizedPhone } : {}),
+          ...(email.trim() ? { email: email.trim() } : {}),
+        }),
       });
       setDisplayName('');
       setPhone('');
@@ -626,7 +631,7 @@ export function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: (
       <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder={t.phoneNumberPlaceholder} placeholderTextColor={color.muted} keyboardType="phone-pad" />
       <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder={t.emailOptionalPlaceholder} placeholderTextColor={color.muted} keyboardType="email-address" autoCapitalize="none" />
       <View style={styles.actionRow}>
-        <Button title={t.addAction} onPress={() => void submit()} loading={saving} disabled={!displayName || !phone} style={styles.actionButton} />
+        <Button title={t.addAction} onPress={() => void submit()} loading={saving} disabled={!displayName.trim()} style={styles.actionButton} />
         <Button title={t.cancelAction} variant="outline" onPress={() => setOpen(false)} style={styles.actionButton} />
       </View>
     </View>
