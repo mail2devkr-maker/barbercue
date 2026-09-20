@@ -9,7 +9,18 @@ import {
 } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import { SiteFooter } from "../../components/layout/SiteFooter";
+import { BrandLockup } from "../../components/ui/BrandLockup";
 import styles from "./employee.module.css";
+
+function EmployeePageFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {children}
+      <SiteFooter />
+    </>
+  );
+}
 
 export default function EmployeeDashboardPage() {
   const { user, status, logout } = useAuth();
@@ -30,21 +41,24 @@ export default function EmployeeDashboardPage() {
 
   if (status === "loading" || !profile) {
     return (
-      <main className={styles.page}>
-        <div className={styles.shell}>
-          <p className={styles.eyebrow}>FastQue Field Operations</p>
-          <h1 className={styles.title}>{error ? "Employee profile unavailable" : "Preparing your dashboard…"}</h1>
-          {error && <p className={styles.error}>{error}</p>}
-        </div>
-      </main>
+      <EmployeePageFrame>
+        <main className={styles.page}>
+          <div className={styles.shell}>
+            <p className={styles.eyebrow}>FastQue Field Operations</p>
+            <h1 className={styles.title}>{error ? "Employee profile unavailable" : "Preparing your dashboard…"}</h1>
+            {error && <p className={styles.error}>{error}</p>}
+          </div>
+        </main>
+      </EmployeePageFrame>
     );
   }
 
   return (
+    <EmployeePageFrame>
     <main className={styles.page}>
       <div className={styles.shell}>
         <div className={styles.topbar}>
-          <div className={styles.brand}>FastQue · Employee</div>
+          <div className={styles.brand}><BrandLockup compact canonicalArtwork /></div>
           <button
             type="button"
             className={styles.signout}
@@ -77,5 +91,6 @@ export default function EmployeeDashboardPage() {
         </section>
       </div>
     </main>
+    </EmployeePageFrame>
   );
 }

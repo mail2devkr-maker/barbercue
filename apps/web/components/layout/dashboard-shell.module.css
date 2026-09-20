@@ -4,9 +4,12 @@
   left: 0;
   right: 0;
   z-index: 45;
-  border-bottom: 1px solid var(--bc-border);
-  background: rgba(255, 253, 249, 0.96);
-  backdrop-filter: blur(14px);
+  color: #f7f5f4;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(9, 9, 12, 0.86);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
 /* Admin/#2/#7 dark-UI parity -- this header is shared by every dashboard route, including the
@@ -15,8 +18,8 @@
    register-shop, salon-scoped management pages), matching exactly what DashboardHeader itself
    already detects a salon-scoped path for (the shop switcher). */
 .headerDark {
-  border-bottom-color: rgba(255, 255, 255, 0.12);
-  background: rgba(13, 13, 18, 0.92);
+  border-bottom-color: rgba(255, 255, 255, 0.10);
+  background: rgba(9, 9, 12, 0.86);
 }
 
 .headerDark .wordmark {
@@ -58,7 +61,7 @@
 
 .wordmark {
   gap: 10px;
-  color: var(--bc-ink);
+  color: #f7f5f4;
   font-family: var(--font-display);
   font-size: 1.15rem;
   font-weight: 600;
@@ -80,7 +83,7 @@
 
 .publicLink {
   gap: 7px;
-  color: var(--bc-muted);
+  color: rgba(255, 255, 255, 0.72);
   font-size: var(--bc-text-sm);
   font-weight: 600;
   /* Without this, the default flex-shrink lets this item's box get narrower than its own text,
@@ -91,12 +94,12 @@
 }
 
 .publicLink:hover {
-  color: var(--bc-accent);
+  color: #ff7a45;
 }
 
 .wordmark:focus-visible,
 .publicLink:focus-visible {
-  outline: 2px solid var(--bc-ink);
+  outline: 2px solid #f7f5f4;
   outline-offset: 4px;
   border-radius: 6px;
 }
