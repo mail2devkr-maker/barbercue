@@ -181,6 +181,7 @@ export default function AdminEmployeesPage() {
         </div>
         <div className={styles.headerActions}>
           <LinkButton href="/dashboard/admin" variant="outline">Platform operations</LinkButton>
+          <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>
           <LinkButton href="/employee/login" variant="outline">Open employee login</LinkButton>
         </div>
       </header>
