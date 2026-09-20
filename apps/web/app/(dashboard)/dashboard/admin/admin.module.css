@@ -61,7 +61,7 @@
 }
 
 .filters > div:first-child { flex: 1 1 360px; }
-.filters > div:last-child { flex: 0 1 220px; }
+.filters > div:not(:first-child) { flex: 0 1 220px; }
 .filters label { display: block; margin-bottom: 5px; font-size: var(--bc-text-xs); font-weight: 700; color: #e8e8ef; }
 .filters input, .filters select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #3a3a48; border-radius: var(--bc-radius-sm); background: #0d0d12; color: #f7f7fb; font: 16px var(--font-body); box-sizing: border-box; }
 .filters input:focus-visible, .filters select:focus-visible { outline: 2px solid #ff6f91; outline-offset: 2px; }
