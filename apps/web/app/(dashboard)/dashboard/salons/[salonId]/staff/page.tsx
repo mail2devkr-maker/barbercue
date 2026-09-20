@@ -76,7 +76,7 @@ export default function DashboardStaffPage({
       setNotice(
         result.invitationSent && result.staff.email
           ? `Staff member added. Invitation sent to ${result.staff.email}.`
-          : "Staff member added. Contact details can be added later.",
+          : "Staff member added without a login invitation.",
       );
       setDisplayName("");
       setPhone("");
