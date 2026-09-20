@@ -8,6 +8,11 @@ import {
 import {
   ChairStatus,
   ChargeType,
+  CrmFollowUpChannel,
+  CrmFollowUpStatus,
+  CrmLeadSource,
+  CrmLeadStatus,
+  CrmVisitOutcome,
   CreditFundingSource,
   Language,
   NotificationCategory,
@@ -389,6 +394,86 @@ export const resetEmployeePasswordSchema = z
     path: ['confirmPassword'],
   });
 export type ResetEmployeePasswordInput = z.infer<typeof resetEmployeePasswordSchema>;
+
+// ---------- FastQue internal Field CRM ----------
+const optionalCrmText = (max: number) =>
+  z.union([z.string().trim().max(max), z.literal('')]).optional();
+
+export const createCrmLeadSchema = z.object({
+  shopName: z.string().trim().min(2).max(180),
+  contactName: optionalCrmText(120),
+  phone: optionalCrmText(32),
+  email: z.union([z.string().trim().email(), z.literal('')]).optional(),
+  city: optionalCrmText(120),
+  locality: optionalCrmText(160),
+  addressLine: optionalCrmText(300),
+  source: z.nativeEnum(CrmLeadSource).default(CrmLeadSource.FIELD_VISIT),
+  notes: optionalCrmText(2000),
+});
+export type CreateCrmLeadInput = z.infer<typeof createCrmLeadSchema>;
+
+export const updateCrmLeadSchema = z
+  .object({
+    shopName: z.string().trim().min(2).max(180).optional(),
+    contactName: z.union([z.string().trim().max(120), z.null()]).optional(),
+    phone: z.union([z.string().trim().max(32), z.null()]).optional(),
+    email: z.union([z.string().trim().email(), z.null()]).optional(),
+    city: z.union([z.string().trim().max(120), z.null()]).optional(),
+    locality: z.union([z.string().trim().max(160), z.null()]).optional(),
+    addressLine: z.union([z.string().trim().max(300), z.null()]).optional(),
+    source: z.nativeEnum(CrmLeadSource).optional(),
+    status: z.nativeEnum(CrmLeadStatus).optional(),
+    notes: z.union([z.string().trim().max(2000), z.null()]).optional(),
+    lostReason: z.union([z.string().trim().max(500), z.null()]).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'No lead changes provided',
+  });
+export type UpdateCrmLeadInput = z.infer<typeof updateCrmLeadSchema>;
+
+export const onboardCrmLeadSchema = z.object({
+  salonPublicId: z
+    .string()
+    .trim()
+    .regex(/^BC-SHOP-[0-9]{6}$/i, 'Enter a FastQue Shop ID like BC-SHOP-000123')
+    .transform((value) => value.toUpperCase()),
+});
+export type OnboardCrmLeadInput = z.infer<typeof onboardCrmLeadSchema>;
+
+export const createCrmVisitSchema = z
+  .object({
+    leadId: z.string().uuid().optional(),
+    shopName: optionalCrmText(180),
+    visitedAt: z.string().datetime().optional(),
+    outcome: z.nativeEnum(CrmVisitOutcome),
+    notes: optionalCrmText(2000),
+  })
+  .refine((value) => !!value.leadId || !!value.shopName?.trim(), {
+    message: 'Choose a lead or enter the shop name',
+    path: ['shopName'],
+  });
+export type CreateCrmVisitInput = z.infer<typeof createCrmVisitSchema>;
+
+export const createCrmFollowUpSchema = z.object({
+  leadId: z.string().uuid(),
+  dueAt: z.string().datetime(),
+  channel: z.nativeEnum(CrmFollowUpChannel),
+  notes: optionalCrmText(1000),
+});
+export type CreateCrmFollowUpInput = z.infer<typeof createCrmFollowUpSchema>;
+
+export const updateCrmFollowUpSchema = z
+  .object({
+    dueAt: z.string().datetime().optional(),
+    channel: z.nativeEnum(CrmFollowUpChannel).optional(),
+    status: z.nativeEnum(CrmFollowUpStatus).optional(),
+    notes: z.union([z.string().trim().max(1000), z.null()]).optional(),
+    outcome: z.union([z.string().trim().max(1000), z.null()]).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'No follow-up changes provided',
+  });
+export type UpdateCrmFollowUpInput = z.infer<typeof updateCrmFollowUpSchema>;
 
 export const adminLoginSchema = z.object({
   email: z.string().email(),
