@@ -31,6 +31,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { DashboardReviewsModule } from './dashboard-reviews/dashboard-reviews.module';
 import { VerificationModule } from './verification/verification.module';
 import { CustomerCreditsModule } from './credits/customer-credits.module';
+import { EmployeeModule } from './employee/employee.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { CustomerCreditsModule } from './credits/customer-credits.module';
     SalonAccessModule,
     HealthModule,
     AuthModule,
+    EmployeeModule,
     // BookingsModule and QueueModule are registered before SalonsModule so their
     // `salons/:salonId/...` sub-routes (BookingInfoController's `booking/{staff,availability,
     // cancellation-policy}`, SalonQueueController's `queue/{status,join}`) are matched by
