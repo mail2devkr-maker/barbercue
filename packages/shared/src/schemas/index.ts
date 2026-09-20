@@ -354,6 +354,14 @@ export const createEmployeeSchema = z
   });
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 
+export const createSpecialEmployeeSchema = createEmployeeSchema.and(
+  z.object({
+    employeeNumber: z.number().int().min(1).max(100),
+    totpCode: z.string().regex(/^\d{6}$/, 'totpCode must be 6 digits'),
+  }),
+);
+export type CreateSpecialEmployeeInput = z.infer<typeof createSpecialEmployeeSchema>;
+
 export const updateEmployeeSchema = z
   .object({
     fullName: z.string().trim().min(2).max(120).optional(),

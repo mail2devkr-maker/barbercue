@@ -45,6 +45,10 @@ export const EMPLOYEE_PATHS = {
   me: 'me',
 } as const;
 
+export const EMPLOYEE_RESERVED_ID_MIN = 1;
+export const EMPLOYEE_RESERVED_ID_MAX = 100;
+export const EMPLOYEE_STANDARD_ID_START = 101;
+
 export const ADMIN_PATHS = {
   admin: 'admin',
   overview: 'overview',
@@ -59,6 +63,7 @@ export const ADMIN_PATHS = {
   // FastQue internal field-team provisioning — PLATFORM_ADMIN only.
   employees: 'employees',
   password: 'password',
+  special: 'special',
 } as const;
 
 // The ONLY place this wording is allowed to live — every surface that shows a Verified badge
