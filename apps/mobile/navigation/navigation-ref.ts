@@ -11,6 +11,7 @@ import type { AccountStackParamList, SearchStackParamList } from './types';
 // sharing one generic ref.
 export type AppNavigationParamList = {
   OwnerBookingsTab: undefined;
+  OwnerQueueTab: undefined;
   SearchTab: NavigatorScreenParams<SearchStackParamList>;
   AccountTab: NavigatorScreenParams<AccountStackParamList>;
 };
