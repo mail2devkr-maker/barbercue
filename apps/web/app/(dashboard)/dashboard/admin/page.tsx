@@ -131,6 +131,7 @@ export default function AdminDashboardPage() {
           <Button type="button" variant="outline" onClick={() => void loadOverview()} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
+          <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
           <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
           <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
         </div>
