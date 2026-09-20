@@ -10,6 +10,7 @@ const LINKS = [
   { href: "#services", label: "Services" },
   { href: "#book-or-queue", label: "How it works" },
   { href: "#for-shops", label: "For shops" },
+  { href: "/employee/login", label: "Employee Login" },
   { href: "/about-us", label: "About Us" },
   { href: "/contact-us", label: "Contact Us" },
 ];
