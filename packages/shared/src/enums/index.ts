@@ -144,6 +144,16 @@ export const CrmFollowUpStatus = {
 export type CrmFollowUpStatus =
   (typeof CrmFollowUpStatus)[keyof typeof CrmFollowUpStatus];
 
+export const CrmErrorCode = {
+  LEAD_NOT_FOUND: 'LEAD_NOT_FOUND',
+  VISIT_NOT_FOUND: 'VISIT_NOT_FOUND',
+  FOLLOW_UP_NOT_FOUND: 'FOLLOW_UP_NOT_FOUND',
+  SALON_NOT_FOUND: 'SALON_NOT_FOUND',
+  SALON_ALREADY_ATTRIBUTED: 'SALON_ALREADY_ATTRIBUTED',
+  INVALID_LEAD_TRANSITION: 'INVALID_LEAD_TRANSITION',
+} as const;
+export type CrmErrorCode = (typeof CrmErrorCode)[keyof typeof CrmErrorCode];
+
 export const ChairStatus = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
