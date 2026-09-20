@@ -10,6 +10,7 @@ import {
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import { SiteFooter } from "../../components/layout/SiteFooter";
+import { BrandLockup } from "../../components/ui/BrandLockup";
 import styles from "./employee.module.css";
 
 function EmployeePageFrame({ children }: { children: React.ReactNode }) {
@@ -57,7 +58,7 @@ export default function EmployeeDashboardPage() {
     <main className={styles.page}>
       <div className={styles.shell}>
         <div className={styles.topbar}>
-          <div className={styles.brand}>FastQue · Employee</div>
+          <div className={styles.brand}><BrandLockup compact canonicalArtwork /></div>
           <button
             type="button"
             className={styles.signout}
