@@ -21,7 +21,11 @@ const FLAT_ZERO_POLICY = {
 describe('ArrivalAlertsService', () => {
   let service: ArrivalAlertsService;
   let tx: { booking: { updateMany: jest.Mock } };
-  let prisma: { booking: { findMany: jest.Mock }; $transaction: jest.Mock };
+  let prisma: {
+    booking: { findMany: jest.Mock };
+    salon: { findUnique: jest.Mock };
+    $transaction: jest.Mock;
+  };
   let cancellationPolicy: { getEffectivePolicy: jest.Mock };
   let salonAccess: { assertAccessOrAdminAccess: jest.Mock };
   let realtime: { emitBookingArrivalAlert: jest.Mock };
@@ -39,6 +43,7 @@ describe('ArrivalAlertsService', () => {
         { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 500 },
       ],
       salon: { ownerUserId: 'owner-1', currency: 'INR' },
+      preferredStaff: null, // "Any staff" unless a test says otherwise
       ...overrides,
     };
   }
@@ -47,6 +52,7 @@ describe('ArrivalAlertsService', () => {
     tx = { booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) } };
     prisma = {
       booking: { findMany: jest.fn().mockResolvedValue([]) },
+      salon: { findUnique: jest.fn().mockResolvedValue({ ownerUserId: 'owner-1' }) },
       $transaction: jest.fn((callback: (t: typeof tx) => unknown) => callback(tx)),
     };
     cancellationPolicy = { getEffectivePolicy: jest.fn().mockResolvedValue(FLAT_ZERO_POLICY) };
@@ -135,6 +141,96 @@ describe('ArrivalAlertsService', () => {
       });
     });
 
+    describe('recipients: the salon owner plus the staff member assigned to that booking - never the whole roster', () => {
+      const recipientsOf = () =>
+        pushDispatch.dispatchLocalizedToUser.mock.calls.map((call) => call[0] as string);
+      const payloadsOf = () =>
+        pushDispatch.dispatchLocalizedToUser.mock.calls.map((call) => call[3] as Record<string, unknown>);
+
+      it('an "Any staff" booking alerts the owner only', async () => {
+        prisma.booking.findMany.mockResolvedValue([candidate()]);
+        await service.sendDueAlerts();
+        expect(recipientsOf()).toEqual(['owner-1']);
+      });
+
+      it('a booking with an assigned (preferred) ACTIVE staff member alerts the owner AND that staff user - once each', async () => {
+        prisma.booking.findMany.mockResolvedValue([
+          candidate({ preferredStaff: { userId: 'staff-user-7', status: 'ACTIVE' } }),
+        ]);
+        const count = await service.sendDueAlerts();
+        expect(count).toBe(1); // one claimed alert episode, two recipients
+        expect(recipientsOf()).toEqual(['owner-1', 'staff-user-7']);
+        expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledTimes(2);
+        expect(realtime.emitBookingArrivalAlert).toHaveBeenCalledTimes(1);
+      });
+
+      it('never alerts any other staff member of the salon', async () => {
+        prisma.booking.findMany.mockResolvedValue([
+          candidate({ preferredStaff: { userId: 'staff-user-7', status: 'ACTIVE' } }),
+        ]);
+        await service.sendDueAlerts();
+        expect(recipientsOf()).not.toContain('staff-user-9');
+        // The query itself selects only the booking's own staff link, never the roster.
+        const select = (prisma.booking.findMany.mock.calls[0][0] as { select: Record<string, unknown> }).select;
+        expect(select.preferredStaff).toEqual({ select: { userId: true, status: true } });
+      });
+
+      it('does not alert an INACTIVE assigned staff member', async () => {
+        prisma.booking.findMany.mockResolvedValue([
+          candidate({ preferredStaff: { userId: 'staff-user-7', status: 'INACTIVE' } }),
+        ]);
+        await service.sendDueAlerts();
+        expect(recipientsOf()).toEqual(['owner-1']);
+      });
+
+      it('alerts the owner once when the owner is also the assigned staff member', async () => {
+        prisma.booking.findMany.mockResolvedValue([
+          candidate({ preferredStaff: { userId: 'owner-1', status: 'ACTIVE' } }),
+        ]);
+        await service.sendDueAlerts();
+        expect(recipientsOf()).toEqual(['owner-1']);
+      });
+
+      it('each recipient is dispatched independently on their own registered device(s) - one having none does not affect the other', async () => {
+        prisma.booking.findMany.mockResolvedValue([
+          candidate({ preferredStaff: { userId: 'staff-user-7', status: 'ACTIVE' } }),
+        ]);
+        // PushDispatchService resolves to nothing for a user without a device (and swallows provider
+        // errors itself), so the loop never depends on one recipient's outcome.
+        pushDispatch.dispatchLocalizedToUser.mockResolvedValue(undefined);
+        await expect(service.sendDueAlerts()).resolves.toBe(1);
+        expect(recipientsOf()).toEqual(['owner-1', 'staff-user-7']);
+      });
+
+      it('the staff push carries the same PII-free payload as the owner push', async () => {
+        prisma.booking.findMany.mockResolvedValue([
+          candidate({ preferredStaff: { userId: 'staff-user-7', status: 'ACTIVE' } }),
+        ]);
+        await service.sendDueAlerts();
+        const [ownerData, staffData] = payloadsOf();
+        expect(staffData).toEqual(ownerData);
+        expect(Object.keys(staffData).sort()).toEqual(['bookingId', 'salonId', 'serviceName', 'slotStart', 'type']);
+      });
+
+      it('the Notification Center entry stays owner-only (staff get the mandatory prompt, not a list entry)', async () => {
+        prisma.booking.findMany.mockResolvedValue([
+          candidate({ preferredStaff: { userId: 'staff-user-7', status: 'ACTIVE' } }),
+        ]);
+        await service.sendDueAlerts();
+        expect(notifications.notifyInTransaction).toHaveBeenCalledTimes(1);
+        expect(notifications.notifyInTransaction.mock.calls[0][1]).toBe('owner-1');
+      });
+
+      it('a duplicate sweep (lost claim) alerts nobody - neither owner nor staff', async () => {
+        prisma.booking.findMany.mockResolvedValue([
+          candidate({ preferredStaff: { userId: 'staff-user-7', status: 'ACTIVE' } }),
+        ]);
+        tx.booking.updateMany.mockResolvedValue({ count: 0 });
+        await expect(service.sendDueAlerts()).resolves.toBe(0);
+        expect(pushDispatch.dispatchLocalizedToUser).not.toHaveBeenCalled();
+      });
+    });
+
     it('never double-sends: a lost updateMany claim (already sent by a concurrent/duplicate sweep run) skips the notification entirely', async () => {
       prisma.booking.findMany.mockResolvedValue([candidate()]);
       tx.booking.updateMany.mockResolvedValue({ count: 0 });
@@ -156,6 +252,36 @@ describe('ArrivalAlertsService', () => {
     it('checks salon access before reading anything', async () => {
       await service.getEligibleAlerts('op-1', 's1');
       expect(salonAccess.assertAccessOrAdminAccess).toHaveBeenCalledWith('op-1', 's1');
+    });
+
+    describe('who sees which prompts (recipient scope)', () => {
+      const whereOf = () =>
+        (prisma.booking.findMany.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+
+      it('the salon owner sees every eligible booking of the salon (no staff filter)', async () => {
+        prisma.salon.findUnique.mockResolvedValue({ ownerUserId: 'owner-1' });
+        await service.getEligibleAlerts('owner-1', 's1');
+        expect(whereOf()).not.toHaveProperty('preferredStaff');
+      });
+
+      it('a staff member sees ONLY the bookings assigned to them', async () => {
+        prisma.salon.findUnique.mockResolvedValue({ ownerUserId: 'owner-1' });
+        await service.getEligibleAlerts('staff-user-7', 's1');
+        expect(whereOf().preferredStaff).toEqual({ is: { userId: 'staff-user-7', status: 'ACTIVE' } });
+      });
+
+      it('a delegated platform admin sees the whole salon', async () => {
+        salonAccess.assertAccessOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
+        await service.getEligibleAlerts('admin-1', 's1');
+        expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+        expect(whereOf()).not.toHaveProperty('preferredStaff');
+      });
+
+      it('access is still checked first - an outsider never reaches the query', async () => {
+        salonAccess.assertAccessOrAdminAccess.mockRejectedValue(new Error('SALON_ACCESS_DENIED'));
+        await expect(service.getEligibleAlerts('nobody', 's1')).rejects.toThrow('SALON_ACCESS_DENIED');
+        expect(prisma.booking.findMany).not.toHaveBeenCalled();
+      });
     });
 
     it('never invents a customer name — always the truthful "Your {service} customer" fallback', async () => {

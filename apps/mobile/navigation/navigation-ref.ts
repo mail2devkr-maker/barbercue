@@ -12,6 +12,7 @@ import type { AccountStackParamList, SearchStackParamList } from './types';
 export type AppNavigationParamList = {
   OwnerBookingsTab: undefined;
   OwnerQueueTab: undefined;
+  StaffTodayTab: undefined;
   SearchTab: NavigatorScreenParams<SearchStackParamList>;
   AccountTab: NavigatorScreenParams<AccountStackParamList>;
 };

@@ -24,8 +24,14 @@ import androidx.core.app.NotificationManagerCompat
  *  - Full-screen not allowed, or the phone is unlocked and in use -> Android shows the very same
  *    notification as a heads-up with sound + vibration and Arrived / Not arrived / Remind actions.
  *
+ * The heads-up fallback is deliberately persistent and expanded (big-text style with all three action
+ * buttons showing, ongoing so a stray swipe cannot lose the decision) because that is the most Android
+ * allows a non-core full-screen-intent app to do while another app is in active use. Nothing here uses
+ * SYSTEM_ALERT_WINDOW / draw-over-other-apps, and FastQue is neither an alarm nor a calling app: it never
+ * declares itself as one (no ALARM or CALL category).
+ *
  * It obeys the phone: notification permission, the channel setting, ring volume and Do Not Disturb are
- * all still applied by the OS. Nothing here bypasses DND (no ALARM category, no bypass-DND flag).
+ * all still applied by the OS. Nothing here bypasses DND (no bypass-DND flag).
  */
 object ArrivalAlertNotifier {
   const val CHANNEL_ID = "fastque-arrival-check"
@@ -40,6 +46,9 @@ object ArrivalAlertNotifier {
   const val ACTION_NOT_ARRIVED = "not-arrived"
 
   private const val TAG = "FastQueArrivalAlert"
+  // Failsafe only: the arrival window closes long before this, and every resolution path cancels the
+  // notification itself. It just guarantees a stale one can never linger in the tray.
+  private const val NOTIFICATION_TIMEOUT_MS = 30L * 60 * 1000
   private val VIBRATION = longArrayOf(0, 500, 250, 500, 250, 500)
 
   private fun notificationId(bookingId: String): Int = bookingId.hashCode()
@@ -155,6 +164,10 @@ object ArrivalAlertNotifier {
       .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
       .setDefaults(NotificationCompat.DEFAULT_ALL)
       .setOnlyAlertOnce(true)
+      // Persistent: stays (with its buttons visible) until the owner acts, opens it, snoozes, or the
+      // backend says the arrival is resolved. Tapping still dismisses it.
+      .setOngoing(true)
+      .setTimeoutAfter(NOTIFICATION_TIMEOUT_MS)
       .setAutoCancel(true)
       .setContentIntent(openPending)
       .addAction(0, strings.arrived, arrivedPending)

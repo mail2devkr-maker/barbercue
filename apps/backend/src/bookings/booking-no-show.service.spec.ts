@@ -24,6 +24,7 @@ const FLAT_ZERO_POLICY = {
 describe('BookingNoShowService', () => {
   let service: BookingNoShowService;
   let tx: {
+    $executeRaw: jest.Mock;
     booking: { updateMany: jest.Mock };
     customerLedgerEntry: {
       create: jest.Mock;
@@ -66,6 +67,7 @@ describe('BookingNoShowService', () => {
 
   beforeEach(async () => {
     tx = {
+      $executeRaw: jest.fn().mockResolvedValue(undefined),
       booking: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       customerLedgerEntry: {
         create: jest.fn().mockResolvedValue({}),
@@ -223,6 +225,35 @@ describe('BookingNoShowService', () => {
       });
       expect(tx.customerLedgerEntry.create).not.toHaveBeenCalled();
       expect(realtime.emitBookingNoShow).not.toHaveBeenCalled();
+    });
+
+    it('takes the per-booking resolution lock BEFORE claiming, so a simultaneous Arrived is fully committed first', async () => {
+      const order: string[] = [];
+      tx.$executeRaw.mockImplementation(async (sql: unknown) => {
+        order.push(JSON.stringify(sql).includes('booking-resolution:b1') ? 'lock' : 'other');
+      });
+      tx.booking.updateMany.mockImplementation(async () => {
+        order.push('claim');
+        return { count: 1 };
+      });
+      await service.markNoShow('op-1', 'b1');
+      expect(order).toEqual(['lock', 'claim']);
+    });
+
+    it('two simultaneous No Show responses (owner + assigned staff) charge once: the second claim finds nothing to claim', async () => {
+      tx.booking.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 0 });
+      const results = await Promise.allSettled([
+        service.markNoShow('owner-1', 'b1'),
+        service.markNoShow('staff-1', 'b1'),
+      ]);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({
+        code: 'NO_SHOW_NOT_ELIGIBLE',
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
+      expect(realtime.emitBookingNoShow).toHaveBeenCalledTimes(1);
     });
 
     it('throws BOOKING_NOT_FOUND for an unknown booking', async () => {

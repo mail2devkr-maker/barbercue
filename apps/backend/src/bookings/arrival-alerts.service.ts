@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   ARRIVAL_ALERT_LEAD_MINUTES,
   BookingStatus,
+  StaffMemberStatus,
   computeCancellationCharge,
   decimalStringToPaise,
   paiseToRupees,
@@ -33,7 +34,28 @@ const arrivalCandidateSelect = {
     },
   },
   salon: { select: { ownerUserId: true, currency: true } },
+  // The staff member the customer picked for this appointment (the only per-booking staff link that
+  // exists before check-in). Their user is the second recipient of the mandatory arrival alert.
+  preferredStaff: { select: { userId: true, status: true } },
 };
+
+/**
+ * Who must be woken for a booking's arrival decision: the salon owner, plus the staff member
+ * assigned to that booking (its preferred staff) when they are an ACTIVE staff member. Never the
+ * rest of the roster - an "Any staff" booking alerts the owner only. Order is stable (owner first)
+ * and the two are de-duplicated when the owner is also the assigned staff member.
+ */
+export function arrivalAlertRecipients(booking: {
+  salon: { ownerUserId: string };
+  preferredStaff: { userId: string; status: string } | null;
+}): string[] {
+  const recipients = [booking.salon.ownerUserId];
+  const staff = booking.preferredStaff;
+  if (staff && staff.status === StaffMemberStatus.ACTIVE && staff.userId !== booking.salon.ownerUserId) {
+    recipients.push(staff.userId);
+  }
+  return recipients;
+}
 
 /**
  * Requirement 3 (arrival alert, P0 mission) — deliberately split from BookingNoShowService: this
@@ -126,21 +148,27 @@ export class ArrivalAlertsService {
         // user's notification preferences say. Realtime wakes a connected app; the push is the
         // transport that can wake a backgrounded, locked or killed one (native full-screen alert).
         this.realtime.emitBookingArrivalAlert(booking.salonId, booking.id);
+        // Owner + the booking's assigned staff member, each on their own registered device(s) - a
+        // recipient with no registered device simply gets nothing (PushDispatchService no-ops), and
+        // the rest of the salon's staff are never alerted. Both may answer; the booking transition is
+        // still claimed exactly once server-side (see QueueService / BookingNoShowService).
         // Fire-and-forget, same convention as bookings.service.ts's own push call sites - a push
         // failure must never affect the alert sweep itself. IDs and non-PII operational fields only:
         // no customer name, phone or email ever goes into this payload.
-        void this.pushDispatch.dispatchLocalizedToUser(
-          booking.salon.ownerUserId,
-          'arrivalCheck',
-          serviceName,
-          {
-            type: 'booking.arrival_check',
-            salonId: booking.salonId,
-            bookingId: booking.id,
-            slotStart: booking.slotStart.toISOString(),
+        for (const recipientUserId of arrivalAlertRecipients(booking)) {
+          void this.pushDispatch.dispatchLocalizedToUser(
+            recipientUserId,
+            'arrivalCheck',
             serviceName,
-          },
-        );
+            {
+              type: 'booking.arrival_check',
+              salonId: booking.salonId,
+              bookingId: booking.id,
+              slotStart: booking.slotStart.toISOString(),
+              serviceName,
+            },
+          );
+        }
       }
     }
 
@@ -152,9 +180,21 @@ export class ArrivalAlertsService {
    * state or the one-shot sweep event — a booking is eligible for exactly as long as it stays
    * CONFIRMED with no QueueEntry and within ARRIVAL_ALERT_LEAD_MINUTES of its slot, regardless of
    * whether/when the sweep above already sent its one-time nudge for it.
+   *
+   * Scope follows the recipient rule: the salon owner (and a delegated platform admin) sees every
+   * eligible booking of the salon; a staff member sees only the bookings assigned to them, so
+   * opening the app never surfaces a colleague's customer.
    */
   async getEligibleAlerts(userId: string, salonId: string): Promise<ArrivalAlertDto[]> {
-    await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
+    const access = await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
+    let staffScopeUserId: string | null = null;
+    if (access === 'STAFF_OR_OWNER') {
+      const salon = await this.prisma.salon.findUnique({
+        where: { id: salonId },
+        select: { ownerUserId: true },
+      });
+      if (!salon || salon.ownerUserId !== userId) staffScopeUserId = userId;
+    }
     const policy = await this.cancellationPolicy.getEffectivePolicy(salonId);
     const now = Date.now();
     const graceMs = policy.appointmentArrivalGraceMinutes * 60_000;
@@ -165,6 +205,9 @@ export class ArrivalAlertsService {
         status: BookingStatus.CONFIRMED,
         queueEntries: { none: {} },
         slotStart: { lte: new Date(now + ARRIVAL_ALERT_LEAD_MINUTES * 60_000) },
+        ...(staffScopeUserId
+          ? { preferredStaff: { is: { userId: staffScopeUserId, status: StaffMemberStatus.ACTIVE } } }
+          : {}),
       },
       select: arrivalCandidateSelect,
       orderBy: { slotStart: 'asc' },

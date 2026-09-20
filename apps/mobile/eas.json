@@ -23,6 +23,18 @@
       "env": {
         "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false"
       }
+    },
+    "physical-test": {
+      "environment": "production",
+      "channel": "physical-test",
+      "distribution": "internal",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

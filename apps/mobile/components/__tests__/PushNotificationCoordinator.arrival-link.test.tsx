@@ -140,6 +140,15 @@ it('defers the link until the owner is signed in, then opens the prompt once', a
   expect(requestOwnerArrivalPrompt).toHaveBeenCalledWith(expect.objectContaining({ bookingId: 'b-1', initialAction: 'arrived' }));
 });
 
+it('lets the staff member assigned to the booking open the arrival prompt', async () => {
+  mockAuth = { status: 'authenticated', user: { roles: ['SALON_STAFF'] } };
+  initialUrl = `${LINK}&action=not-arrived`;
+  await mount();
+  expect(requestOwnerArrivalPrompt).toHaveBeenCalledWith(
+    expect.objectContaining({ bookingId: 'b-1', initialAction: 'not-arrived' }),
+  );
+});
+
 it('never opens an arrival prompt for a non-owner', async () => {
   mockAuth = { status: 'authenticated', user: { roles: ['CUSTOMER'] } };
   initialUrl = LINK;

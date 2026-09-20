@@ -103,14 +103,15 @@ function copyFor(language: Language) {
 }
 
 /**
- * Native owner-side counterpart of the web ArrivalAlertOverlay.
+ * Native owner-side counterpart of the web ArrivalAlertOverlay. Also mounted for staff
+ * (`audience="staff"`): the backend scopes a staff member's list to the bookings assigned to them.
  *
  * - Reconstructs eligibility from backend truth, so a missed push/realtime event is recoverable.
  * - A foreground T-5 event opens this full-screen prompt immediately.
  * - OS push taps / Arrived / Not arrived notification actions replay into this component.
  * - Arrived and No Show remain two-step actions; notification buttons never mutate business state.
  */
-export function OwnerArrivalPromptCoordinator() {
+export function OwnerArrivalPromptCoordinator({ audience = 'owner' }: { audience?: 'owner' | 'staff' }) {
   const { language } = useLanguage();
   const { selectedSalonId, workplaces, selectSalon } = useSalon();
   const [active, setActive] = useState<ArrivalAlertDto | null>(null);
@@ -299,7 +300,7 @@ export function OwnerArrivalPromptCoordinator() {
       cancelNativeArrivalAlert(active.bookingId);
       setActive(null);
       setConfirmStep(null);
-      if (navigationRef.isReady()) navigationRef.navigate('OwnerQueueTab');
+      if (navigationRef.isReady()) navigationRef.navigate(audience === 'staff' ? 'StaffTodayTab' : 'OwnerQueueTab');
       void refreshSalon(salonId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.error);
@@ -321,7 +322,7 @@ export function OwnerArrivalPromptCoordinator() {
       cancelNativeArrivalAlert(active.bookingId);
       setActive(null);
       setConfirmStep(null);
-      if (navigationRef.isReady()) navigationRef.navigate('OwnerBookingsTab');
+      if (navigationRef.isReady()) navigationRef.navigate(audience === 'staff' ? 'StaffTodayTab' : 'OwnerBookingsTab');
       void refreshSalon(salonId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.error);

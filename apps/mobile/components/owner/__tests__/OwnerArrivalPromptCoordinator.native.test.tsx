@@ -6,6 +6,7 @@ import { AppState, Platform, Vibration } from 'react-native';
 import { OwnerArrivalPromptCoordinator } from '../OwnerArrivalPromptCoordinator';
 import { __resetArrivalAlertsForTests } from '../../../lib/arrival-alert-sound';
 import { apiFetch } from '../../../lib/api';
+import { navigationRef } from '../../../navigation/navigation-ref';
 import {
   cancelNativeArrivalAlert,
   readNativeArrivalState,
@@ -35,7 +36,7 @@ jest.mock('../../../lib/salon-context', () => {
   const workplaces = [{ id: 's1' }];
   return { useSalon: () => ({ selectedSalonId: 's1', workplaces, selectSalon }) };
 });
-jest.mock('../../../navigation/navigation-ref', () => ({ navigationRef: { isReady: () => false, navigate: jest.fn() } }));
+jest.mock('../../../navigation/navigation-ref', () => ({ navigationRef: { isReady: () => true, navigate: jest.fn() } }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 jest.mock('../../ui', () => ({ Button: require('../../ui/Button').Button }));
 jest.mock('../../../lib/realtime', () => ({
@@ -86,10 +87,10 @@ const press = async (title: string) => {
   });
 };
 
-async function mount(alerts: ReturnType<typeof alert>[]) {
+async function mount(alerts: ReturnType<typeof alert>[], audience?: 'owner' | 'staff') {
   (apiFetch as jest.Mock).mockResolvedValue(alerts);
   await act(async () => {
-    tree = TestRenderer.create(createElement(OwnerArrivalPromptCoordinator));
+    tree = TestRenderer.create(createElement(OwnerArrivalPromptCoordinator, { audience: audience ?? 'owner' }));
   });
   await flush();
 }
@@ -247,6 +248,33 @@ describe('resolving', () => {
     await press('Confirm No Show');
     await flush();
     expect(cancelNativeArrivalAlert).toHaveBeenCalledWith('b1');
+  });
+
+  it('an owner lands on the Live Queue after Arrived, a staff member on Today (their only work tab)', async () => {
+    await mount([alert('b1')]);
+    (apiFetch as jest.Mock).mockResolvedValue([]);
+    await press('Arrived');
+    await press('Confirm Arrived');
+    await flush();
+    expect(navigationRef.navigate).toHaveBeenLastCalledWith('OwnerQueueTab');
+
+    await act(async () => tree!.unmount());
+    (navigationRef.navigate as jest.Mock).mockClear();
+    await mount([alert('b2')], 'staff');
+    (apiFetch as jest.Mock).mockResolvedValue([]);
+    await press('Arrived');
+    await press('Confirm Arrived');
+    await flush();
+    expect(navigationRef.navigate).toHaveBeenLastCalledWith('StaffTodayTab');
+  });
+
+  it('a staff member gets the same two-step prompt (Arrived is never a one-tap booking change)', async () => {
+    await mount([alert('b1')], 'staff');
+    await press('Arrived');
+    // Step 1 only opens the confirmation - no backend mutation yet.
+    const mutations = (apiFetch as jest.Mock).mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(mutations).toHaveLength(0);
+    expect(tree!.toJSON()).not.toBeNull();
   });
 
   it('does NOT cancel or resolve anything when the owner only snoozes ("Not arrived" before grace)', async () => {

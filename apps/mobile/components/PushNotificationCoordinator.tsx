@@ -53,6 +53,11 @@ function isOwner(user: MeResponse | null): user is MeResponse {
   return Boolean(user?.roles.includes(Role.SALON_OWNER));
 }
 
+/** Arrival alerts reach the owner and the staff member assigned to the booking; every other booking push is owner-only. */
+function isArrivalOperator(user: MeResponse | null): user is MeResponse {
+  return Boolean(user?.roles.some((role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF));
+}
+
 function bookingDetailPath(salonId: string, bookingId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}/${bookingId}`;
 }
@@ -79,9 +84,9 @@ export function PushNotificationCoordinator() {
   }, [language]);
 
   function handleOwnerBookingResponse(response: Notifications.NotificationResponse, actor: MeResponse | null): boolean {
-    if (!isOwner(actor)) return false;
     const payload = parseOwnerBookingPushData(response.notification.request.content.data);
     if (!payload) return false;
+    if (payload.type === 'booking.arrival_check' ? !isArrivalOperator(actor) : !isOwner(actor)) return false;
     if (payload.type === 'booking.arrival_check') {
       // The owner tapped the push (which already sounded) - opening the prompt must stay silent.
       markArrivalAlerted(payload.bookingId);
@@ -103,7 +108,7 @@ export function PushNotificationCoordinator() {
    * The phone already alerted, so the prompt opens silently and on the existing two-step confirmation.
    */
   function handleArrivalLink(request: OwnerArrivalPromptRequest, actor: MeResponse | null): boolean {
-    if (!isOwner(actor)) return false;
+    if (!isArrivalOperator(actor)) return false;
     markArrivalAlerted(request.bookingId);
     dismissNativeArrivalNotification(request.bookingId);
     requestOwnerArrivalPrompt(request);
@@ -176,7 +181,9 @@ export function PushNotificationCoordinator() {
 
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       const payload = parseOwnerBookingPushData(notification.request.content.data);
-      if (payload && isOwner(currentUserRef.current)) scheduleForegroundVoiceFallback(payload);
+      if (!payload) return;
+      const allowed = payload.type === 'booking.arrival_check' ? isArrivalOperator(currentUserRef.current) : isOwner(currentUserRef.current);
+      if (allowed) scheduleForegroundVoiceFallback(payload);
     });
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
