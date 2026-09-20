@@ -210,6 +210,20 @@
   font-weight: 700;
 }
 
+/* Contact details are rendered inside the dark .story panel. Override the default light-page
+   detail colors so Website/Product values and row dividers stay readable on that surface. */
+.story .detailRow {
+  border-top-color: rgba(255, 255, 255, 0.16);
+}
+
+.story .detailRow dt {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.story .detailRow dd {
+  color: #fff;
+}
+
 .notice {
   margin-top: 18px !important;
   padding: 16px 18px;
