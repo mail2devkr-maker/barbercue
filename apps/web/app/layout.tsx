@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Work_Sans } from "next/font/google";
 import "./globals.css";
-import "./premium-header.css";
 import { AuthProvider } from "../lib/auth-context";
+import { SiteHeader } from "../components/layout/SiteHeader";
+import { SiteFooter } from "../components/layout/SiteFooter";
 
 // next/font self-hosts these at build time (no runtime request to Google, no layout shift) and
 // exposes each as a CSS variable so globals.css can assign them without a hardcoded font stack
@@ -57,7 +58,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${fraunces.variable} ${workSans.variable}`}>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <SiteHeader />
+          {children}
+          <SiteFooter />
+        </AuthProvider>
       </body>
     </html>
   );

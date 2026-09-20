@@ -1,5 +1,3 @@
-import { CustomerHeader } from "./CustomerHeader";
-import { SiteFooter } from "./SiteFooter";
 import { OfflineBanner } from "./OfflineBanner";
 import styles from "./customer-shell.module.css";
 
@@ -16,9 +14,7 @@ export function CustomerShell({ children, dark }: { children: React.ReactNode; d
   return (
     <div className={`${styles.shell} ${dark ? styles.dark : ""}`}>
       <OfflineBanner />
-      <CustomerHeader dark />
       <div className={styles.main}>{children}</div>
-      <SiteFooter />
     </div>
   );
 }

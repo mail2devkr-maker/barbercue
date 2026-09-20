@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { BrandLockup } from "../ui/BrandLockup";
-import { SiteFooter } from "../layout/SiteFooter";
 import styles from "./customer-auth.module.css";
 
 export type AuthAudience = "customer" | "owner" | "staff" | "employee" | "admin" | "recovery";
@@ -61,15 +59,7 @@ export function AuthCard({
   const story = STORIES[audience];
 
   return (
-    <>
     <main className={`${styles.page} ${styles.darkPage}`}>
-      <header className={styles.topBar}>
-        <Link href="/" className={styles.wordmark} aria-label="FastQue home">
-          <BrandLockup showTagline canonicalArtwork />
-        </Link>
-        <Link href="/" className={styles.homeLink}>Home</Link>
-      </header>
-
       <div className={styles.shell}>
         <aside className={`${styles.storyPanel} ${styles[`story-${audience}`]}`} aria-label="About FastQue">
           <div className={styles.storyContent}>
@@ -118,8 +108,6 @@ export function AuthCard({
         </section>
       </div>
     </main>
-    <SiteFooter />
-    </>
   );
 }
 
