@@ -198,7 +198,13 @@ export class BookingNoShowService {
   ): Promise<{ id: string; status: BookingStatus; waivedLedgerEntryIds: string[] }> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      select: { id: true, salonId: true, customerId: true, status: true },
+      select: {
+        id: true,
+        salonId: true,
+        customerId: true,
+        status: true,
+        cancellationChargeAmount: true,
+      },
     });
     if (!booking) {
       throw new AppException(
@@ -220,7 +226,13 @@ export class BookingNoShowService {
     const waivedLedgerEntryIds = await this.prisma.$transaction(async (tx) => {
       const claim = await tx.booking.updateMany({
         where: { id: booking.id, status: BookingStatus.NO_SHOW },
-        data: { status: BookingStatus.COMPLETED },
+        // Booking.cancellationChargeAmount is current-state, customer/owner-facing data (the
+        // customer bookings page, owner bookings view and both mobile screens render it whenever
+        // it is > 0/non-null). Left at the old no-show figure it would keep presenting a
+        // COMPLETED, served booking as carrying a charge even though the ledger due is WAIVED — so
+        // it is reset here, in the same transaction, and the original figure is preserved in the
+        // AuditLog metadata below rather than lost.
+        data: { status: BookingStatus.COMPLETED, cancellationChargeAmount: null },
       });
       if (claim.count === 0) {
         throw new AppException(
@@ -242,7 +254,12 @@ export class BookingNoShowService {
       });
       if (outstanding.length > 0) {
         await tx.customerLedgerEntry.updateMany({
-          where: { id: { in: outstanding.map((e) => e.id) } },
+          // Status is re-asserted in the claim so an entry can only ever transition
+          // OUTSTANDING -> WAIVED once, even if something else touched it since the read above.
+          where: {
+            id: { in: outstanding.map((e) => e.id) },
+            status: LedgerStatus.OUTSTANDING,
+          },
           data: { status: LedgerStatus.WAIVED },
         });
       }
@@ -257,6 +274,11 @@ export class BookingNoShowService {
           entityId: booking.id,
           metadata: {
             waivedLedgerEntryIds: outstanding.map((e) => e.id),
+            previousStatus: BookingStatus.NO_SHOW,
+            previousCancellationChargeAmount:
+              booking.cancellationChargeAmount !== null
+                ? Number(booking.cancellationChargeAmount)
+                : null,
           },
         },
       });
@@ -264,15 +286,15 @@ export class BookingNoShowService {
       await this.notifications.notifyInTransaction(
         tx,
         booking.customerId,
-        'booking.confirmed',
-        { salonId: booking.salonId },
+        'booking.corrected',
+        { salonId: booking.salonId, bookingId: booking.id },
         'account/bookings',
       );
 
       return outstanding.map((e) => e.id);
     });
 
-    this.realtime.emitBookingNoShow(booking.salonId, booking.id);
+    this.realtime.emitBookingCorrected(booking.salonId, booking.id, booking.customerId);
     return { id: booking.id, status: BookingStatus.COMPLETED, waivedLedgerEntryIds };
   }
 

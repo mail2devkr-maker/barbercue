@@ -812,6 +812,9 @@ export const NOTIFICATION_TYPES = [
   'booking.no_show',
   'booking.expired',
   'booking.reminder',
+  // P0 follow-up: told to a customer whose booking was wrongly recorded as a no-show and has been
+  // corrected to COMPLETED — deliberately NOT 'booking.confirmed', which would misstate the outcome.
+  'booking.corrected',
   'queue.turn_approaching',
   'owner.booking.created',
   'owner.booking.cancelled',

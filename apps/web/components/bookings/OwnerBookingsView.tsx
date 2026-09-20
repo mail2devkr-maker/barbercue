@@ -15,6 +15,7 @@ import {
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
+import { setVoiceEnabled as setSharedVoiceEnabled, useVoiceEnabled } from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
 import styles from "./bookings.module.css";
 
@@ -173,11 +174,15 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(null);
   const [cancelNotice, setCancelNotice] = useState<string | null>(null);
-  const [alertsEnabled, setAlertsEnabled] = useState(false);
+  // Shared with every other voice consumer (see lib/voice-preference.ts) rather than a private copy.
+  const alertsEnabled = useVoiceEnabled();
 
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const audioContextRef = useRef<AudioContext | null>(null);
-  const alertsEnabledRef = useRef(false);
+  const alertsEnabledRef = useRef(alertsEnabled);
+  useEffect(() => {
+    alertsEnabledRef.current = alertsEnabled;
+  }, [alertsEnabled]);
   const filterRef = useRef(filter);
   useEffect(() => {
     filterRef.current = filter;
@@ -240,7 +245,8 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
   async function toggleAlerts() {
     if (alertsEnabledRef.current) {
       alertsEnabledRef.current = false;
-      setAlertsEnabled(false);
+      setSharedVoiceEnabled(false);
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
       void audioContextRef.current?.suspend();
       return;
     }
@@ -250,12 +256,12 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
       audioContextRef.current = context;
       if (context.state === "suspended") await context.resume();
       alertsEnabledRef.current = true;
-      setAlertsEnabled(true);
+      setSharedVoiceEnabled(true);
       playChime();
     } catch {
       // AudioContext unavailable — alerts still work as silent toasts/badges.
       alertsEnabledRef.current = true;
-      setAlertsEnabled(true);
+      setSharedVoiceEnabled(true);
     }
   }
 
@@ -340,14 +346,23 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
       if (alertsEnabledRef.current) speak(voiceAnnouncementsFor(preferredLanguageRef.current).bookingCancelled());
     }
 
+    // A NO_SHOW booking corrected to COMPLETED — nothing to announce, just refresh the list so the
+    // row's status/charge reflect backend truth.
+    function onCorrected(payload: { salonId: string; bookingId: string }) {
+      if (payload.salonId !== salonId) return;
+      void loadPage(filterRef.current, undefined, false);
+    }
+
     socket.on("booking.created", onCreated);
     socket.on("booking.cancelled", onCancelled);
+    socket.on("booking.corrected", onCorrected);
     // Phase 15: resync the list once the socket reconnects — a dropped connection may have
     // missed a booking.created/cancelled event entirely, and there's no server-side replay.
     const unsubscribeReconnect = onReconnect(() => void loadPage(filterRef.current, undefined, false));
     return () => {
       socket.off("booking.created", onCreated);
       socket.off("booking.cancelled", onCancelled);
+      socket.off("booking.corrected", onCorrected);
       unsubscribeReconnect();
     };
   }, [salonId, loadPage, playChime, speak]);

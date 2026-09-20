@@ -4,6 +4,7 @@ import { ArrivalAlertOverlay } from '../ArrivalAlertOverlay';
 import { apiFetch } from '../../../lib/api';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../../lib/realtime';
 import { useAuth } from '../../../lib/auth-context';
+import { setVoiceEnabled } from '../../../lib/voice-preference';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
 jest.mock('../../../lib/realtime', () => ({
@@ -56,6 +57,7 @@ async function renderOverlay(alerts) {
 // logic, which is environment-independent.
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  setVoiceEnabled(false);
   jest.clearAllMocks();
   getRealtimeSocket.mockReturnValue(fakeSocket);
   onReconnect.mockReturnValue(() => {});
@@ -150,4 +152,112 @@ it('Snooze removes the alert from view without any backend call', async () => {
   await act(async () => findByText('button', 'Snooze 2 minutes').props.onClick());
   expect(tree.toJSON()).toBeNull();
   expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial load — snooze is client-only
+});
+
+// ---- P0 follow-up: the spoken reminder honours the shared Voice Announcements preference ----
+// The visual alert never depends on it. These tests install a minimal browser speech environment
+// (the suite otherwise runs under Jest's 'node' environment with no `window`).
+describe('voice preference', () => {
+  let speak;
+  let cancel;
+
+  function installSpeech() {
+    speak = jest.fn();
+    cancel = jest.fn();
+    const store = new Map();
+    globalThis.window = {
+      speechSynthesis: { speak, cancel },
+      localStorage: {
+        getItem: (key) => (store.has(key) ? store.get(key) : null),
+        setItem: (key, value) => store.set(key, value),
+      },
+    };
+    globalThis.SpeechSynthesisUtterance = function SpeechSynthesisUtterance(text) {
+      this.text = text;
+    };
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    installSpeech();
+  });
+
+  afterEach(() => {
+    delete globalThis.window;
+    delete globalThis.SpeechSynthesisUtterance;
+  });
+
+  async function advance(ms) {
+    await act(async () => {
+      jest.advanceTimersByTime(ms);
+    });
+  }
+
+  it('voice OFF: the full-screen alert stays up but nothing is ever spoken', async () => {
+    await renderOverlay([NOT_DUE]);
+    await advance(120_000);
+    expect(tree.toJSON()).not.toBeNull();
+    expect(findByText('p', 'Appointment arrival check')).toBeDefined();
+    expect(speak).not.toHaveBeenCalled();
+  });
+
+  it('voice ON: announces immediately and then repeats about every 25 seconds', async () => {
+    setVoiceEnabled(true);
+    await renderOverlay([NOT_DUE]);
+    expect(speak).toHaveBeenCalledTimes(1);
+    expect(speak.mock.calls[0][0].text).toContain('Has the');
+    expect(speak.mock.calls[0][0].text).toContain('Haircut customer arrived?');
+    await advance(25_000);
+    expect(speak).toHaveBeenCalledTimes(2);
+    await advance(25_000);
+    expect(speak).toHaveBeenCalledTimes(3);
+  });
+
+  it('voice ON with Hindi: speaks Hindi text with the hi-IN locale', async () => {
+    useAuth.mockReturnValue({ user: { preferredLanguage: 'HI' } });
+    setVoiceEnabled(true);
+    await renderOverlay([NOT_DUE]);
+    const utterance = speak.mock.calls[0][0];
+    expect(utterance.lang).toBe('hi-IN');
+    expect(utterance.text).toContain('ग्राहक');
+  });
+
+  it('turning voice OFF while an alert is active cancels speech immediately and stops the repeats', async () => {
+    setVoiceEnabled(true);
+    await renderOverlay([NOT_DUE]);
+    expect(speak).toHaveBeenCalledTimes(1);
+    const cancelsBefore = cancel.mock.calls.length;
+
+    await act(async () => setVoiceEnabled(false));
+    expect(cancel.mock.calls.length).toBeGreaterThan(cancelsBefore);
+
+    await advance(120_000);
+    expect(speak).toHaveBeenCalledTimes(1);
+    expect(tree.toJSON()).not.toBeNull(); // still visually alerting
+  });
+
+  it('turning voice back ON resumes the unresolved reminder', async () => {
+    await renderOverlay([NOT_DUE]);
+    await advance(60_000);
+    expect(speak).not.toHaveBeenCalled();
+
+    await act(async () => setVoiceEnabled(true));
+    expect(speak).toHaveBeenCalledTimes(1);
+    await advance(25_000);
+    expect(speak).toHaveBeenCalledTimes(2);
+  });
+
+  it("never cancels other components' speech just by mounting with voice OFF", async () => {
+    await renderOverlay([NOT_DUE]);
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('does not talk over an open confirmation dialog', async () => {
+    setVoiceEnabled(true);
+    await renderOverlay([NOT_DUE]);
+    await act(async () => findByText('button', 'Arrived').props.onClick());
+    const before = speak.mock.calls.length;
+    await advance(60_000);
+    expect(speak.mock.calls.length).toBe(before);
+  });
 });

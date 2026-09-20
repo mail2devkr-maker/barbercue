@@ -504,6 +504,23 @@ export class DashboardCustomersService {
         HttpStatus.CONFLICT,
       );
     }
+    // A due waived because its booking was corrected NO_SHOW -> COMPLETED (BookingNoShowService.
+    // correctToCompleted) must never be resurrected: the customer was served, so re-opening the
+    // charge would both bill them for a visit they attended and block their next booking via the
+    // OUTSTANDING_BALANCE gate.
+    if (entry.bookingId) {
+      const linkedBooking = await this.prisma.booking.findUnique({
+        where: { id: entry.bookingId },
+        select: { status: true },
+      });
+      if (linkedBooking?.status === BookingStatus.COMPLETED) {
+        throw new AppException(
+          BookingErrorCode.LEDGER_ENTRY_NOT_RESTORABLE,
+          'This due belongs to a booking that was corrected to completed and cannot be restored.',
+          HttpStatus.CONFLICT,
+        );
+      }
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       const claim = await tx.customerLedgerEntry.updateMany({

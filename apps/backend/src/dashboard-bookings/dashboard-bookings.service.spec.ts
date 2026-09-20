@@ -423,6 +423,23 @@ describe('DashboardBookingsService', () => {
       expect(dto).not.toHaveProperty('idempotencyKey');
     });
 
+    // P0 follow-up: a booking corrected NO_SHOW -> COMPLETED has its cancellationChargeAmount
+    // cleared, so the owner DTO must carry no payable charge and offer no arrival/no-show action.
+    it('a corrected (COMPLETED, charge cleared) booking exposes no charge and no arrival/no-show action', async () => {
+      prisma.booking.findFirst.mockResolvedValueOnce(
+        makeBookingRow({
+          status: 'COMPLETED',
+          cancellationChargeAmount: null,
+          slotStart: new Date('2020-01-01T10:00:00.000Z'),
+        }),
+      );
+      const dto = await service.getOne('owner1', 's1', 'b1');
+      expect(dto.status).toBe('COMPLETED');
+      expect(dto.cancellationChargeAmount).toBeNull();
+      expect(dto.noShowEligible).toBe(false);
+      expect(dto.arrivalAlertDue).toBe(false);
+    });
+
     it('leaves assignedStaff null until the booking has a queue entry', async () => {
       prisma.booking.findFirst.mockResolvedValueOnce(makeBookingRow());
       const dto = await service.getOne('owner1', 's1', 'b1');

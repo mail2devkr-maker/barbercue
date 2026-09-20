@@ -10,6 +10,7 @@ import {
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
+import { getVoiceEnabled, useVoiceEnabled } from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
 import styles from "./arrival-alert-overlay.module.css";
 
@@ -67,6 +68,9 @@ type ConfirmStep = null | "arrived" | "not-arrived-early" | "not-arrived-late";
  */
 export function ArrivalAlertOverlay({ salonId }: { salonId: string }) {
   const { user } = useAuth();
+  // The existing Voice Announcements preference (lib/voice-preference.ts). The full-screen visual
+  // alert never depends on it; only the spoken reminder does.
+  const voiceEnabled = useVoiceEnabled();
   const [alerts, setAlerts] = useState<ArrivalAlertDto[]>([]);
   const [confirmStep, setConfirmStep] = useState<ConfirmStep>(null);
   const [busy, setBusy] = useState(false);
@@ -127,6 +131,7 @@ export function ArrivalAlertOverlay({ salonId }: { salonId: string }) {
 
   const speak = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    if (!getVoiceEnabled()) return;
     if (!tryAcquireVoiceLock()) return;
     const utterance = new SpeechSynthesisUtterance(text);
     if (preferredLanguageRef.current) utterance.lang = SPEECH_LOCALE[preferredLanguageRef.current];
@@ -138,10 +143,20 @@ export function ArrivalAlertOverlay({ salonId }: { salonId: string }) {
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
   }, []);
 
-  // The repeating voice loop — stops the instant `active` becomes null (resolved) or a
-  // confirmation dialog is open (never talk over the owner mid-decision).
+  // Turning voice OFF while an alert is active cancels any speech already in flight immediately.
+  // Only on a true->false transition, so merely mounting with voice off never cancels speech that
+  // belongs to another component.
+  const previousVoiceEnabledRef = useRef(voiceEnabled);
   useEffect(() => {
-    if (!active || confirmStep) return;
+    if (previousVoiceEnabledRef.current && !voiceEnabled) stopVoice();
+    previousVoiceEnabledRef.current = voiceEnabled;
+  }, [voiceEnabled, stopVoice]);
+
+  // The repeating voice loop — runs only while Voice Announcements is ON, and stops the instant
+  // `active` becomes null (resolved) or a confirmation dialog is open (never talk over the owner
+  // mid-decision). Turning voice back ON re-runs this effect and resumes the unresolved reminder.
+  useEffect(() => {
+    if (!active || confirmStep || !voiceEnabled) return;
     const announce = () => {
       speak(
         voiceAnnouncementsFor(preferredLanguageRef.current).arrivalCheck(
@@ -154,7 +169,7 @@ export function ArrivalAlertOverlay({ salonId }: { salonId: string }) {
     const interval = setInterval(announce, VOICE_REPEAT_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.bookingId, confirmStep, speak]);
+  }, [active?.bookingId, confirmStep, voiceEnabled, speak]);
 
   useEffect(() => stopVoice, [stopVoice]);
 
