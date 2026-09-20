@@ -278,7 +278,12 @@ export default function DashboardServicesPage({
         )}
       </section>
 
-      <SetupNavigation salonId={salonId} currentStep="services" section="actions" />
+      <SetupNavigation
+        salonId={salonId}
+        currentStep="services"
+        section="actions"
+        nextAction={{ kind: "link", href: `/dashboard/salons/${salonId}/photos`, label: "Next →" }}
+      />
     </main>
     </RequireRole>
   );
