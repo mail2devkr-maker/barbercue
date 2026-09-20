@@ -210,14 +210,14 @@
 
 .compactRow div,
 .overdueRow div,
-table td > div {
+.tableWrap td > div {
   display: grid;
   gap: 4px;
 }
 
 .compactRow small,
 .overdueRow small,
-table small {
+.tableWrap small {
   display: block;
   color: rgba(248,244,239,.48);
   font-size: .74rem;
@@ -249,7 +249,7 @@ table small {
 .formGrid select,
 .formGrid textarea,
 .search,
-table select,
+.tableWrap select,
 .inlineAction input {
   width: 100%;
   min-height: 43px;
@@ -272,7 +272,7 @@ table select,
 .formGrid select:focus,
 .formGrid textarea:focus,
 .search:focus,
-table select:focus,
+.tableWrap select:focus,
 .inlineAction input:focus {
   outline: 2px solid rgba(255, 110, 73, .65);
   outline-offset: 1px;
