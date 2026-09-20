@@ -170,6 +170,21 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     expect(messages[0].title).not.toBe('Booking cancelled');
   });
 
+  it('marks arrival-check pushes with the actionable notification category', async () => {
+    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
+    await service.dispatchLocalizedToUser('owner-1', 'arrivalCheck', 'Haircut', {
+      type: 'booking.arrival_check',
+      salonId: 's1',
+      bookingId: 'b1',
+    });
+    expect(expo.send).toHaveBeenCalledWith([
+      expect.objectContaining({
+        categoryId: 'booking-arrival-check',
+        data: expect.objectContaining({ type: 'booking.arrival_check', salonId: 's1', bookingId: 'b1' }),
+      }),
+    ]);
+  });
+
   it('degrades to English rather than failing when the recipient-language lookup itself throws', async () => {
     prisma.user.findUnique.mockRejectedValue(new Error('db down'));
     await expect(
