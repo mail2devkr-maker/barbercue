@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BrandLockup } from "../ui/BrandLockup";
 import styles from "./customer-auth.module.css";
 
-export type AuthAudience = "customer" | "owner" | "staff" | "admin" | "recovery";
+export type AuthAudience = "customer" | "owner" | "staff" | "employee" | "admin" | "recovery";
 
 const STORIES: Record<AuthAudience, { eyebrow: string; title: string; copy: string }> = {
   customer: {
@@ -20,6 +20,11 @@ const STORIES: Record<AuthAudience, { eyebrow: string; title: string; copy: stri
     title: "Your chair, clearly organised.",
     copy: "Sign in with the staff account your shop owner invited you to use.",
   },
+  employee: {
+    eyebrow: "FASTQUE FIELD OPERATIONS",
+    title: "Your day in the field.",
+    copy: "Sign in with your FastQue Employee ID to record visits, follow-ups and shop onboarding activity.",
+  },
   admin: {
     eyebrow: "PLATFORM ACCESS",
     title: "FastQue operations.",
@@ -36,6 +41,7 @@ const AUDIENCE_LINKS = [
   { key: "customer", href: "/login", label: "Customer" },
   { key: "owner", href: "/owner/login", label: "Shop owner" },
   { key: "staff", href: "/staff/login", label: "Barber / staff" },
+  { key: "employee", href: "/employee/login", label: "Employee" },
 ] as const;
 
 export function AuthCard({
