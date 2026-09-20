@@ -88,7 +88,16 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
     let cancelled = false;
     apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
       .then((list) => {
-        if (!cancelled) setCountries(orderCountriesForDisplay(list));
+        if (cancelled) return;
+        const ordered = orderCountriesForDisplay(list);
+        setCountries(ordered);
+        // India is preselected for the primary onboarding path; the owner can still open the
+        // country picker and choose any other supported country.
+        if (ordered.some((country) => country.isoCode2 === 'IN')) {
+          setForm((current) =>
+            current.countryCode ? current : { ...current, countryCode: 'IN' },
+          );
+        }
       })
       .catch(() => undefined);
     return () => {
