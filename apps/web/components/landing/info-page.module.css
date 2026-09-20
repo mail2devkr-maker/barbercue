@@ -1,0 +1,265 @@
+.page {
+  background:
+    radial-gradient(circle at 86% 4%, rgba(244, 48, 111, 0.09), transparent 28rem),
+    linear-gradient(180deg, #fbf8f3 0%, #ffffff 52%, #fbf8f3 100%);
+  color: #1d1a17;
+}
+
+.hero,
+.section,
+.contactGrid,
+.finalCta {
+  width: min(100% - 48px, 1120px);
+  margin: 0 auto;
+}
+
+.hero {
+  padding: 88px 0 64px;
+}
+
+.eyebrow {
+  margin: 0 0 16px;
+  color: #d83359;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 900px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 7vw, 5.8rem);
+  font-weight: 600;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.lead {
+  max-width: 760px;
+  margin: 28px 0 0;
+  color: #6d665f;
+  font-size: clamp(1rem, 1.7vw, 1.18rem);
+  line-height: 1.75;
+}
+
+.heroActions,
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primary {
+  background: linear-gradient(110deg, #ef1672, #ff704a);
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(239, 22, 114, 0.2);
+}
+
+.secondary {
+  border: 1px solid rgba(29, 26, 23, 0.16);
+  background: rgba(255, 255, 255, 0.84);
+  color: #1d1a17;
+}
+
+.section {
+  padding: 34px 0 74px;
+}
+
+.sectionHeader {
+  max-width: 740px;
+  margin-bottom: 28px;
+}
+
+.sectionHeader h2,
+.finalCta h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.sectionHeader p,
+.finalCta p {
+  color: #6d665f;
+  line-height: 1.7;
+}
+
+.grid,
+.contactGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.card,
+.contactCard {
+  padding: 28px;
+  border: 1px solid rgba(29, 26, 23, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 14px 38px rgba(32, 24, 20, 0.055);
+}
+
+.cardNumber {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  margin-bottom: 28px;
+  border: 1px solid rgba(216, 51, 89, 0.25);
+  border-radius: 50%;
+  color: #d83359;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.card h3,
+.contactCard h2 {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 600;
+}
+
+.card p,
+.contactCard p {
+  margin: 0;
+  color: #6d665f;
+  line-height: 1.65;
+}
+
+.story {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 56px;
+  align-items: start;
+  padding: 48px;
+  border-radius: 30px;
+  background: #171319;
+  color: #fff;
+}
+
+.story h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 4.2vw, 3.5rem);
+  font-weight: 600;
+  line-height: 1.04;
+}
+
+.story p {
+  margin: 0 0 18px;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.75;
+}
+
+.story strong {
+  color: #fff;
+}
+
+.contactGrid {
+  padding-bottom: 72px;
+}
+
+.contactCard a,
+.inlineLink {
+  color: #d83359;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.details {
+  display: grid;
+  gap: 14px;
+  margin: 22px 0 0;
+}
+
+.detailRow {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(29, 26, 23, 0.1);
+}
+
+.detailRow dt {
+  color: #7b746c;
+  font-weight: 700;
+}
+
+.detailRow dd {
+  margin: 0;
+  color: #1d1a17;
+  font-weight: 700;
+}
+
+.notice {
+  margin-top: 18px !important;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: #fff6f2;
+  color: #5f514b !important;
+  font-size: 0.92rem;
+}
+
+.finalCta {
+  margin-bottom: 80px;
+  padding: 48px;
+  border-radius: 30px;
+  background: linear-gradient(130deg, #f7ede4, #fff 62%);
+  border: 1px solid rgba(29, 26, 23, 0.08);
+}
+
+@media (max-width: 860px) {
+  .grid,
+  .contactGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .story {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 32px;
+  }
+}
+
+@media (max-width: 620px) {
+  .hero,
+  .section,
+  .contactGrid,
+  .finalCta {
+    width: min(100% - 32px, 1120px);
+  }
+
+  .hero {
+    padding: 56px 0 44px;
+  }
+
+  .card,
+  .contactCard,
+  .finalCta {
+    padding: 24px;
+  }
+
+  .detailRow {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
