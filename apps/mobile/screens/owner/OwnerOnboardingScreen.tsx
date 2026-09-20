@@ -5,6 +5,7 @@ import {
   DASHBOARD_PATHS,
   SalonSetupErrorCode,
   SalonStatus,
+  SalonType,
   StaffMemberStatus,
   type OperatingHoursDto,
   type PhotoDto,
@@ -12,6 +13,7 @@ import {
   type SalonPaymentQrDto,
   type SalonSetupReadinessDto,
   type SalonStaffDto,
+  type SalonTypeResultDto,
   type ServiceDto,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
@@ -36,6 +38,12 @@ import { ServiceCatalogPicker } from '../../components/owner/ServiceCatalogPicke
 
 const TOTAL_STEPS = ONBOARDING_TOTAL_STEPS;
 
+const SALON_TYPE_OPTIONS = [
+  { value: SalonType.GENTS, label: 'Gents Parlor' },
+  { value: SalonType.LADIES, label: 'Ladies Parlor' },
+  { value: SalonType.UNISEX, label: 'Unisex Salon' },
+] as const;
+
 /**
  * The 7-step self-serve setup wizard for a freshly-registered (PENDING) shop — Mobile Shop Owner
  * Onboarding mission. Every step below renders one of ShopSetupSections' existing forms; this
@@ -52,6 +60,8 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
   const { reload } = useSalon();
   const { t } = useLanguage();
   const [services, setServices] = useState<ServiceDto[]>([]);
+  const [salonType, setSalonType] = useState<SalonType>(SalonType.UNISEX);
+  const [savingSalonType, setSavingSalonType] = useState(false);
   const [chairs, setChairs] = useState<SalonChairDto[]>([]);
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
   const [hours, setHours] = useState<OperatingHoursDto[]>([]);
@@ -70,7 +80,7 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
   // Owner-clarified requirement: a brand-new shop's onboarding must start with an empty services
   // list and an explicit "Add service" action -- the shared preset catalog (~98 items) must never
   // dominate the first screen a new owner sees. It only appears after this explicit toggle.
-  const [showCatalog, setShowCatalog] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -82,14 +92,18 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
       apiFetch<OperatingHoursDto[]>(scope(salonId, DASHBOARD_PATHS.operatingHours)),
       apiFetch<PhotoDto[]>(scope(salonId, DASHBOARD_PATHS.photos)),
       apiFetch<SalonPaymentQrDto>(scope(salonId, DASHBOARD_PATHS.paymentQr)),
+      apiFetch<SalonTypeResultDto>(
+        `${scope(salonId, DASHBOARD_PATHS.services)}/${DASHBOARD_PATHS.salonType}`,
+      ),
     ])
-      .then(([s, c, st, h, p, qr]) => {
+      .then(([s, c, st, h, p, qr, typeResult]) => {
         setServices(s);
         setChairs(c);
         setStaff(st);
         setHours(h);
         setPhotos(p);
         setPaymentQr(qr);
+        setSalonType(typeResult.salonType);
       })
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load your shop setup.'))
       .finally(() => setLoading(false));
@@ -114,6 +128,23 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
     setMaxStepReached(first);
     setResumedAtStep(first);
   }, [loading, hasService, hasOpenDay, hasPhoto, hasChair, hasStaff, hasPaymentQr]);
+
+  async function changeSalonType(nextType: SalonType) {
+    if (nextType === salonType || savingSalonType) return;
+    setSavingSalonType(true);
+    setError(null);
+    try {
+      const result = await apiFetch<SalonTypeResultDto>(
+        `${scope(salonId, DASHBOARD_PATHS.services)}/${DASHBOARD_PATHS.salonType}`,
+        { method: 'PATCH', body: JSON.stringify({ salonType: nextType }) },
+      );
+      setSalonType(result.salonType);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not save salon type.');
+    } finally {
+      setSavingSalonType(false);
+    }
+  }
 
   function goToStep(next: number) {
     setStep(next);
@@ -204,6 +235,24 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
       {step === 1 && (
         <>
           <Card style={sectionStyles.card}>
+            <Text style={styles.salonTypeTitle}>Select salon type</Text>
+            <Text style={styles.salonTypeHint}>
+              Service packs will automatically hide opposite-gender-specific services. Unisex combines both.
+            </Text>
+            <View style={styles.salonTypeRow}>
+              {SALON_TYPE_OPTIONS.map((option) => (
+                <Button
+                  key={option.value}
+                  title={option.label}
+                  variant={salonType === option.value ? 'secondary' : 'outline'}
+                  onPress={() => void changeSalonType(option.value)}
+                  disabled={savingSalonType}
+                  style={styles.salonTypeButton}
+                />
+              ))}
+            </View>
+          </Card>
+          <Card style={sectionStyles.card}>
             {services.length === 0 ? (
               <Text style={sectionStyles.emptyText}>{t.noServicesYet}</Text>
             ) : (
@@ -218,7 +267,13 @@ export default function OwnerOnboardingScreen({ salonId }: { salonId: string }) 
             style={styles.catalogToggle}
           />
           {showCatalog && (
-            <ServiceCatalogPicker salonId={salonId} services={services} onChanged={() => void load()} />
+            <ServiceCatalogPicker
+              key={salonType}
+              salonId={salonId}
+              services={services}
+              salonType={salonType}
+              onChanged={() => void load()}
+            />
           )}
         </>
       )}
@@ -326,6 +381,21 @@ const styles = StyleSheet.create({
   progressDotDone: { backgroundColor: color.goldSoft },
   progressDotActive: { backgroundColor: color.accent },
   catalogToggle: { marginTop: space[2] },
+  salonTypeTitle: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.base,
+    color: color.ink,
+    marginBottom: space[1],
+  },
+  salonTypeHint: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.xs,
+    color: color.muted,
+    marginBottom: space[3],
+    lineHeight: 18,
+  },
+  salonTypeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2] },
+  salonTypeButton: { flexGrow: 1, minWidth: 105 },
   navRow: { flexDirection: 'row', gap: space[2], marginTop: space[4] },
   navButton: { flex: 1 },
   goLiveButton: { marginTop: space[2] },

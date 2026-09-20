@@ -15,6 +15,7 @@ import {
   PhotoType,
   PrepaymentRequirement,
   SalonStatus,
+  SalonType,
   StaffMemberStatus,
   UserStatus,
   VerificationStatus,
@@ -248,6 +249,11 @@ export const registerSalonSchema = z
     });
   });
 export type RegisterSalonInput = z.infer<typeof registerSalonSchema>;
+
+export const updateSalonTypeSchema = z.object({
+  salonType: z.nativeEnum(SalonType),
+});
+export type UpdateSalonTypeInput = z.infer<typeof updateSalonTypeSchema>;
 
 // GET /salons query params — validated the same way on backend (ZodValidationPipe on @Query())
 // and client (search form) so both agree on shape before a request is ever made.

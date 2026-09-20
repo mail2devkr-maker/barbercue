@@ -29,6 +29,7 @@ import {
   updateSalonProfileSchema,
   updateSalonServiceSchema,
   updateSalonStaffSchema,
+  updateSalonTypeSchema,
   updateSalonStatusSchema,
   updateSalonTimezoneSchema,
   type AuthenticatedUser,
@@ -45,6 +46,7 @@ import {
   type UpdateSalonProfileInput,
   type UpdateSalonServiceInput,
   type UpdateSalonStaffInput,
+  type UpdateSalonTypeInput,
   type UpdateSalonStatusInput,
   type UpdateSalonTimezoneInput,
 } from '@barbercue/shared';
@@ -228,6 +230,24 @@ export class SalonSetupController {
   }
 
   // ---------- Services ----------
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`)
+  getSalonType(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.services.getSalonType(user.id, salonId);
+  }
+
+  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`)
+  updateSalonType(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(updateSalonTypeSchema))
+    body: UpdateSalonTypeInput,
+  ) {
+    return this.services.updateSalonType(user.id, salonId, body);
+  }
 
   @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}`)
   listServices(

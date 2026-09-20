@@ -7,10 +7,12 @@ import {
   SERVICE_CATALOG_PACKS,
   normalizeServiceIdentity,
   serviceAvailableInPack,
+  serviceAvailableForSalonType,
   suggestedServicePriceInr,
   type ServiceCatalogItem,
   type ServiceDto,
   type ServicePackId,
+  type SalonType,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
@@ -43,14 +45,23 @@ export function findExistingServiceForPreset(
 export function ServiceCatalogPicker({
   salonId,
   services,
+  salonType,
   onChanged,
 }: {
   salonId: string;
   services: ServiceDto[];
+  salonType: SalonType;
   onChanged: () => void;
 }) {
   const [pack, setPack] = useState<ServicePackId>("BASIC");
-  const [category, setCategory] = useState<string>(SERVICE_CATALOG_CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(
+    () =>
+      SERVICE_CATALOG.find(
+        (item) =>
+          serviceAvailableInPack(item, "BASIC") &&
+          serviceAvailableForSalonType(item, salonType),
+      )?.category ?? SERVICE_CATALOG_CATEGORIES[0],
+  );
   const [selected, setSelected] = useState<Record<string, PresetDraft>>({});
   const [saving, setSaving] = useState(false);
   const [reactivatingId, setReactivatingId] = useState<string | null>(null);
@@ -65,13 +76,24 @@ export function ServiceCatalogPicker({
     [services],
   );
   const visible = SERVICE_CATALOG.filter(
-    (preset) => serviceAvailableInPack(preset, pack) && preset.category === category,
+    (preset) =>
+      serviceAvailableInPack(preset, pack) &&
+      serviceAvailableForSalonType(preset, salonType) &&
+      preset.category === category,
   );
   const selectablePack = SERVICE_CATALOG.filter(
-    (preset) => serviceAvailableInPack(preset, pack) && !findExistingServiceForPreset(services, preset),
+    (preset) =>
+      serviceAvailableInPack(preset, pack) &&
+      serviceAvailableForSalonType(preset, salonType) &&
+      !findExistingServiceForPreset(services, preset),
   );
   const packCategories = SERVICE_CATALOG_CATEGORIES.filter((name) =>
-    SERVICE_CATALOG.some((item) => serviceAvailableInPack(item, pack) && item.category === name),
+    SERVICE_CATALOG.some(
+      (item) =>
+        serviceAvailableInPack(item, pack) &&
+        serviceAvailableForSalonType(item, salonType) &&
+        item.category === name,
+    ),
   );
 
   function selectCurrentPack() {
@@ -200,7 +222,7 @@ export function ServiceCatalogPicker({
         <View style={styles.headingCopy}>
           <Text style={styles.title}>Choose a service pack</Text>
           <Text style={styles.hint}>
-            Core services can have different suggested prices by salon tier. Pick Basic, Standard or Advance; price and time are prefilled and editable.
+            Packs are filtered for this salon type. Basic has essential services, Standard adds more, and Advance shows the full eligible range; prices/times are prefilled and editable.
           </Text>
         </View>
         <Text style={styles.selectionCount}>{Object.keys(selected).length} selected</Text>
@@ -221,7 +243,9 @@ export function ServiceCatalogPicker({
               setPack(packOption.id);
               setSelected({});
               const firstCategory = SERVICE_CATALOG.find(
-                (item) => serviceAvailableInPack(item, packOption.id),
+                (item) =>
+                  serviceAvailableInPack(item, packOption.id) &&
+                  serviceAvailableForSalonType(item, salonType),
               )?.category;
               if (firstCategory) setCategory(firstCategory);
               setError(null);

@@ -1,7 +1,9 @@
+import { SalonType } from '../enums';
 import {
   SERVICE_CATALOG,
   SERVICE_CATALOG_PACKS,
   serviceAvailableInPack,
+  serviceAvailableForSalonType,
   suggestedServicePriceInr,
   type ServicePackId,
 } from '../catalog/service-catalog';
@@ -35,75 +37,48 @@ describe('service catalog onboarding packs', () => {
   });
 
   it('uses the pack as both service breadth and salon tier', () => {
-    const basic = SERVICE_CATALOG.filter((service) =>
-      serviceAvailableInPack(service, 'BASIC'),
-    );
-    const standard = SERVICE_CATALOG.filter((service) =>
-      serviceAvailableInPack(service, 'STANDARD'),
-    );
-    const advanced = SERVICE_CATALOG.filter((service) =>
-      serviceAvailableInPack(service, 'ADVANCED'),
-    );
+    const basic = SERVICE_CATALOG.filter((service) => serviceAvailableInPack(service, 'BASIC'));
+    const standard = SERVICE_CATALOG.filter((service) => serviceAvailableInPack(service, 'STANDARD'));
+    const advanced = SERVICE_CATALOG.filter((service) => serviceAvailableInPack(service, 'ADVANCED'));
 
-    // Small barber: essential men's grooming + basic colour/care only.
-    expect(basic).toHaveLength(20);
-    expect(basic.map((service) => service.id)).toEqual(
-      expect.arrayContaining([
-        'classic-haircut',
-        'beard-trim',
-        'clean-shave',
-        'head-massage',
-        'root-touch-up',
-        'global-hair-colour',
-      ]),
-    );
-    for (const id of [
-      'womens-haircut',
-      'cleanup',
-      'manicure',
-      'party-makeup',
-      'bridal-makeup',
-    ]) {
-      expect(basic.map((service) => service.id)).not.toContain(id);
-    }
-
-    // Standard salon: Basic + broader unisex beauty/grooming services.
+    // Unisex sees the combined catalogue: essential gents + ladies at Basic, more at Standard,
+    // and all beauty services at Advance.
+    expect(basic).toHaveLength(44);
     expect(standard).toHaveLength(73);
-    expect(standard.map((service) => service.id)).toEqual(
-      expect.arrayContaining([
-        'classic-haircut',
-        'womens-haircut',
-        'hair-spa',
-        'cleanup',
-        'eyebrows',
-        'full-legs',
-        'manicure',
-        'party-makeup',
-        'back-massage',
-      ]),
-    );
-    for (const id of [
-      'keratin-treatment',
-      'nail-extensions',
-      'bridal-makeup',
-      'full-body-wax',
-    ]) {
-      expect(standard.map((service) => service.id)).not.toContain(id);
-    }
-
-    // Advance salon: complete catalog, including every premium/technical beauty service.
-    expect(advanced).toHaveLength(SERVICE_CATALOG.length);
     expect(advanced).toHaveLength(98);
-    expect(advanced.map((service) => service.id)).toEqual(
-      expect.arrayContaining([
-        'classic-haircut',
-        'keratin-treatment',
-        'nail-extensions',
-        'bridal-makeup',
-        'full-body-wax',
-        'body-polish',
-      ]),
-    );
+    expect(advanced).toHaveLength(SERVICE_CATALOG.length);
+  });
+
+  it('filters every pack by Gents, Ladies or Unisex salon type', () => {
+    const count = (salonType: SalonType, pack: ServicePackId) =>
+      SERVICE_CATALOG.filter(
+        (service) =>
+          serviceAvailableInPack(service, pack) &&
+          serviceAvailableForSalonType(service, salonType),
+      ).length;
+
+    expect({
+      gents: [count(SalonType.GENTS, 'BASIC'), count(SalonType.GENTS, 'STANDARD'), count(SalonType.GENTS, 'ADVANCED')],
+      ladies: [count(SalonType.LADIES, 'BASIC'), count(SalonType.LADIES, 'STANDARD'), count(SalonType.LADIES, 'ADVANCED')],
+      unisex: [count(SalonType.UNISEX, 'BASIC'), count(SalonType.UNISEX, 'STANDARD'), count(SalonType.UNISEX, 'ADVANCED')],
+    }).toEqual({
+      gents: [23, 41, 52],
+      ladies: [28, 56, 80],
+      unisex: [44, 73, 98],
+    });
+
+    const haircut = SERVICE_CATALOG.find((service) => service.id === 'classic-haircut')!;
+    const womensHaircut = SERVICE_CATALOG.find((service) => service.id === 'womens-haircut')!;
+    const headMassage = SERVICE_CATALOG.find((service) => service.id === 'head-massage')!;
+
+    expect(serviceAvailableForSalonType(haircut, SalonType.GENTS)).toBe(true);
+    expect(serviceAvailableForSalonType(haircut, SalonType.LADIES)).toBe(false);
+    expect(serviceAvailableForSalonType(womensHaircut, SalonType.LADIES)).toBe(true);
+    expect(serviceAvailableForSalonType(womensHaircut, SalonType.GENTS)).toBe(false);
+    expect(serviceAvailableForSalonType(headMassage, SalonType.GENTS)).toBe(true);
+    expect(serviceAvailableForSalonType(headMassage, SalonType.LADIES)).toBe(true);
+    expect(serviceAvailableForSalonType(haircut, SalonType.UNISEX)).toBe(true);
+    expect(serviceAvailableForSalonType(womensHaircut, SalonType.UNISEX)).toBe(true);
   });
 
   it('gives every available service a positive editable price and valid duration', () => {

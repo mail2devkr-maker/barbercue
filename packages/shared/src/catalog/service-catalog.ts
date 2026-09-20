@@ -1,3 +1,5 @@
+import { SalonType } from '../enums';
+
 /**
  * Reusable owner service presets. FastQue supplies India-oriented suggested starting prices and
  * durations to make onboarding fast. Both are editable before the owner saves the services; they
@@ -38,6 +40,11 @@ export interface ServiceCatalogItem {
   category: string;
   defaultDurationMinutes: number;
   /**
+   * Intended salon audience for preset filtering. UNISEX services are shown to all salon types;
+   * GENTS/LADIES-specific services are hidden from the opposite salon type.
+   */
+  salonAudience: SalonType;
+  /**
    * Lowest salon tier where this service appears. Packs are nested:
    * BASIC ⊂ STANDARD ⊂ ADVANCED.
    */
@@ -57,7 +64,7 @@ export interface ServiceCatalogItem {
 // services such as Haircut can appear in Basic, Standard and Advance with different suggested
 // prices, while premium-only services appear only where they make sense.
 const BASIC_SERVICE_IDS = new Set([
-  // Core men's barbering / grooming — services a small local barber can commonly provide.
+  // Essential gents barber services.
   'classic-haircut',
   'skin-fade',
   'zero-fade',
@@ -74,7 +81,34 @@ const BASIC_SERVICE_IDS = new Set([
   'clean-shave',
   'moustache-trim',
   'beard-colour',
-  // Basic colour / care commonly offered by neighbourhood barber shops.
+
+  // Essential ladies-parlour services.
+  'womens-haircut',
+  'hair-trim',
+  'fringe-bangs-trim',
+  'girls-kids-haircut',
+  'shampoo-conditioning',
+  'blow-dry',
+  'basic-hairdo',
+  'cleanup',
+  'de-tan',
+  'bleach',
+  'eyebrows',
+  'upper-lip',
+  'chin',
+  'forehead',
+  'side-face',
+  'underarms',
+  'half-arms',
+  'full-arms',
+  'half-legs',
+  'full-legs',
+  'manicure',
+  'pedicure',
+  'nail-cut-file',
+  'nail-polish',
+
+  // Core unisex colour/care offered by many neighbourhood shops.
   'root-touch-up',
   'global-hair-colour',
   'henna',
@@ -85,16 +119,9 @@ const STANDARD_SERVICE_IDS = new Set([
   // Premium men's grooming beyond the essential barber set.
   'premium-luxury-shave',
 
-  // Unisex / women's hair services suitable for a standard full-service salon.
-  'womens-haircut',
-  'hair-trim',
-  'fringe-bangs-trim',
-  'girls-kids-haircut',
-  'shampoo-conditioning',
-  'blow-dry',
+  // Expanded ladies/unisex hair styling.
   'hair-ironing',
   'hair-curling',
-  'basic-hairdo',
   'party-hairdo',
 
   // Broader colour services; balayage/ombre remain Advance.
@@ -109,47 +136,28 @@ const STANDARD_SERVICE_IDS = new Set([
   'scalp-treatment',
 
   // Mainstream facial / skin services. Specialist intensive facials remain Advance.
-  'cleanup',
   'fruit-facial',
   'gold-facial',
   'diamond-facial',
   'hydrating-facial',
   'brightening-facial',
-  'de-tan',
-  'bleach',
   'face-polish',
 
-  // Threading.
-  'eyebrows',
-  'upper-lip',
-  'chin',
-  'forehead',
-  'side-face',
+  // Expanded threading / waxing.
   'full-face-threading',
-
-  // Mainstream waxing. Full-body and bikini remain Advance.
-  'underarms',
-  'half-arms',
-  'full-arms',
-  'half-legs',
-  'full-legs',
   'full-face-wax',
   'stomach',
   'back',
 
-  // Basic nail care. Spa/gel/art/extensions remain Advance.
-  'manicure',
-  'pedicure',
-  'nail-cut-file',
-  'nail-polish',
+  // Nail care below the advanced extension/art tier.
   'gel-removal',
 
-  // Occasion services that do not require the premium bridal/HD/airbrush tier.
+  // Occasion services below bridal/HD/airbrush tier.
   'party-makeup',
   'eye-makeup',
   'saree-draping',
 
-  // Mainstream massage/body care; intensive body treatments remain Advance.
+  // Mainstream massage/body care.
   'foot-massage',
   'hand-massage',
   'head-neck-shoulder-massage',
@@ -274,6 +282,26 @@ function packFor(id: string): ServicePackId {
   return 'ADVANCED';
 }
 
+function salonAudienceFor(category: string, id: string): SalonType {
+  if (category === "Men's Hair & Grooming" || category === 'Beard & Shaving') {
+    return SalonType.GENTS;
+  }
+  if (
+    category === "Women's Hair" ||
+    category === 'Threading' ||
+    category === 'Waxing' ||
+    category === 'Hands, Feet & Nails'
+  ) {
+    return SalonType.LADIES;
+  }
+  if (category === 'Makeup & Occasion') {
+    return id === 'groom-makeup-grooming' ? SalonType.GENTS : SalonType.LADIES;
+  }
+  // Hair colour/care, facial/skin and spa/body-care services are intentionally shared.
+  return SalonType.UNISEX;
+}
+
+
 function roundSuggestedPrice(value: number): number {
   if (value < 100) return Math.max(20, Math.round(value / 10) * 10);
   if (value < 500) return Math.round(value / 50) * 50;
@@ -309,6 +337,7 @@ function item(
   defaultDurationMinutes: number,
 ): ServiceCatalogItem {
   const pack = packFor(id);
+  const salonAudience = salonAudienceFor(category, id);
   const defaultPriceInrByPack = pricesFor(id, pack);
   const defaultPriceInr = defaultPriceInrByPack[pack];
   if (defaultPriceInr === undefined) {
@@ -319,6 +348,7 @@ function item(
     id,
     name,
     defaultDurationMinutes,
+    salonAudience,
     defaultPriceInrByPack,
     defaultPriceInr,
     pack,
@@ -327,6 +357,17 @@ function item(
 
 export function serviceAvailableInPack(item: ServiceCatalogItem, pack: ServicePackId): boolean {
   return PACK_RANK[pack] >= PACK_RANK[item.pack];
+}
+
+export function serviceAvailableForSalonType(
+  item: ServiceCatalogItem,
+  salonType: SalonType,
+): boolean {
+  return (
+    salonType === SalonType.UNISEX ||
+    item.salonAudience === SalonType.UNISEX ||
+    item.salonAudience === salonType
+  );
 }
 
 export function suggestedServicePriceInr(item: ServiceCatalogItem, pack: ServicePackId): number {

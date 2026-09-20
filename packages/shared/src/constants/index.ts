@@ -296,6 +296,7 @@ export const DASHBOARD_PATHS = {
   // DIFFERENT route from Phase 11's `dashboard/salons/:salonId/staff/:staffId`; the `salons/`
   // prefix keeps them from colliding.
   services: 'services',
+  salonType: 'salon-type',
   chairs: 'chairs',
   // Salon photos. URL-based for now — no object storage is configured, so an owner links an
   // image they already host rather than uploading a file.

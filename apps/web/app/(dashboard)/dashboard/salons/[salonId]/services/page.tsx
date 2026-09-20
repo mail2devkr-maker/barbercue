@@ -1,8 +1,8 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { DASHBOARD_PATHS, Role, formatMoney } from "@barbercue/shared";
-import type { SalonServiceDto } from "@barbercue/shared";
+import { DASHBOARD_PATHS, Role, SalonType, formatMoney } from "@barbercue/shared";
+import type { SalonServiceDto, SalonTypeResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { ServiceCatalogPicker } from "../../../../../../components/dashboard/ServiceCatalogPicker";
@@ -13,6 +13,24 @@ import styles from "../../../../../../components/dashboard/dashboard.module.css"
 const MAX_PRICE = 1_000_000;
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 480;
+
+const SALON_TYPE_OPTIONS = [
+  {
+    value: SalonType.GENTS,
+    label: "Gents Parlor",
+    help: "Shows gents + genuinely unisex services only.",
+  },
+  {
+    value: SalonType.LADIES,
+    label: "Ladies Parlor",
+    help: "Shows ladies + genuinely unisex services only.",
+  },
+  {
+    value: SalonType.UNISEX,
+    label: "Unisex Salon",
+    help: "Combines eligible gents, ladies and unisex services.",
+  },
+] as const;
 
 interface Draft {
   name: string;
@@ -60,6 +78,8 @@ export default function DashboardServicesPage({
   const { salonId } = use(params);
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.services}`;
   const [services, setServices] = useState<SalonServiceDto[] | null>(null);
+  const [salonType, setSalonType] = useState<SalonType | null>(null);
+  const [savingSalonType, setSavingSalonType] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -72,15 +92,39 @@ export default function DashboardServicesPage({
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<SalonServiceDto[]>(base)
-      .then((list) => {
-        if (!cancelled) setServices(list);
+    Promise.all([
+      apiFetch<SalonServiceDto[]>(base),
+      apiFetch<SalonTypeResultDto>(`${base}/${DASHBOARD_PATHS.salonType}`),
+    ])
+      .then(([list, typeResult]) => {
+        if (cancelled) return;
+        setServices(list);
+        setSalonType(typeResult.salonType);
       })
       .catch((fetchError) => {
         if (!cancelled) setError(fetchError instanceof ApiError ? fetchError.message : "Could not load services.");
       });
     return () => { cancelled = true; };
   }, [base]);
+
+  async function saveSalonType(nextType: SalonType) {
+    if (nextType === salonType || savingSalonType) return;
+    setSavingSalonType(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await apiFetch<SalonTypeResultDto>(
+        `${base}/${DASHBOARD_PATHS.salonType}`,
+        { method: "PATCH", body: JSON.stringify({ salonType: nextType }) },
+      );
+      setSalonType(result.salonType);
+      setNotice(`${SALON_TYPE_OPTIONS.find((option) => option.value === result.salonType)?.label ?? "Salon type"} saved. Service packs updated.`);
+    } catch (saveError) {
+      setError(saveError instanceof ApiError ? saveError.message : "Could not save salon type.");
+    } finally {
+      setSavingSalonType(false);
+    }
+  }
 
   function replaceService(updated: SalonServiceDto) {
     setServices((current) => (current ?? []).map((service) =>
@@ -176,15 +220,53 @@ export default function DashboardServicesPage({
       </p>
       <SetupNavigation salonId={salonId} currentStep="services" section="steps" />
 
+      <section aria-labelledby="salon-type-heading" style={{ margin: "18px 0 22px" }}>
+        <p className={styles.eyebrow}>Step 1</p>
+        <h2 id="salon-type-heading" className={styles.sectionHeading}>Select salon type</h2>
+        <p className={styles.hint} style={{ marginBottom: 12 }}>
+          This controls which services appear inside Basic, Standard and Advance packs. You can change it later.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+          {SALON_TYPE_OPTIONS.map((option) => {
+            const active = salonType === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                disabled={savingSalonType}
+                aria-pressed={active}
+                onClick={() => void saveSalonType(option.value)}
+                style={{
+                  textAlign: "left",
+                  padding: 14,
+                  borderRadius: 14,
+                  border: active ? "2px solid var(--bc-accent)" : "1px solid var(--bc-border)",
+                  background: active ? "var(--bc-accent-soft)" : "var(--bc-surface)",
+                  color: "var(--bc-ink)",
+                  cursor: savingSalonType ? "wait" : "pointer",
+                }}
+              >
+                <strong style={{ display: "block", marginBottom: 4 }}>{option.label}</strong>
+                <span style={{ display: "block", fontSize: 12, color: "var(--bc-muted)", lineHeight: 1.45 }}>
+                  {option.help}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       {error && <p className={`${styles.banner} ${styles.bannerError}`} role="alert">{error}</p>}
       {notice && <p className={`${styles.banner} ${styles.bannerNotice}`} role="status">{notice}</p>}
-      {services === null && !error && <p className={styles.loadingText}>Loading services…</p>}
+      {(services === null || salonType === null) && !error && <p className={styles.loadingText}>Loading services…</p>}
 
-      {services && (
+      {services && salonType && (
         <ServiceCatalogPicker
+          key={salonType}
           basePath={base}
           services={services}
           currencyLabel={currencyLabel}
+          salonType={salonType}
           onCreated={(created) => {
             setServices((current) => [...(current ?? []), ...created]);
             setNotice(`${created.length} service${created.length === 1 ? "" : "s"} added.`);

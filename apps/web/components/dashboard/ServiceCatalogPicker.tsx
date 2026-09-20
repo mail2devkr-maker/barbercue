@@ -7,8 +7,10 @@ import {
   SERVICE_CATALOG_PACKS,
   normalizeServiceIdentity,
   serviceAvailableInPack,
+  serviceAvailableForSalonType,
   suggestedServicePriceInr,
   type SalonServiceDto,
+  type SalonType,
   type ServiceCatalogItem,
   type ServicePackId,
 } from "@barbercue/shared";
@@ -45,6 +47,7 @@ export function ServiceCatalogPicker({
   basePath,
   services,
   currencyLabel,
+  salonType,
   onCreated,
   onReactivated,
   onError,
@@ -52,6 +55,7 @@ export function ServiceCatalogPicker({
   basePath: string;
   services: SalonServiceDto[];
   currencyLabel: string;
+  salonType: SalonType;
   onCreated: (created: SalonServiceDto[]) => void;
   onReactivated: (service: SalonServiceDto) => void;
   onError: (message: string | null) => void;
@@ -76,10 +80,11 @@ export function ServiceCatalogPicker({
     const search = query.trim().toLowerCase();
     return SERVICE_CATALOG.filter((catalogItem) =>
       serviceAvailableInPack(catalogItem, pack) &&
+      serviceAvailableForSalonType(catalogItem, salonType) &&
       (category === "all" || catalogItem.category === category) &&
       (!search || `${catalogItem.name} ${catalogItem.category}`.toLowerCase().includes(search)),
     );
-  }, [category, pack, query]);
+  }, [category, pack, query, salonType]);
 
   // Bulk selection is intentionally pack-scoped: owners can pick a whole pack instead of
   // clicking dozens of services. Suggested price/time defaults make the pack immediately ready.
@@ -87,13 +92,19 @@ export function ServiceCatalogPicker({
     () => SERVICE_CATALOG.filter(
       (catalogItem) =>
         serviceAvailableInPack(catalogItem, pack) &&
+        serviceAvailableForSalonType(catalogItem, salonType) &&
         !existingByIdentity.has(normalizeServiceIdentity(catalogItem.name, catalogItem.category)),
     ),
-    [existingByIdentity, pack],
+    [existingByIdentity, pack, salonType],
   );
   const allSelected = selectableCatalog.length > 0 && selectableCatalog.every((item) => selected[item.id]);
   const packCategories = SERVICE_CATALOG_CATEGORIES.filter((name) =>
-    SERVICE_CATALOG.some((item) => serviceAvailableInPack(item, pack) && item.category === name),
+    SERVICE_CATALOG.some(
+      (item) =>
+        serviceAvailableInPack(item, pack) &&
+        serviceAvailableForSalonType(item, salonType) &&
+        item.category === name,
+    ),
   );
 
   function toggle(item: ServiceCatalogItem) {
@@ -255,7 +266,11 @@ export function ServiceCatalogPicker({
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10, marginBottom: 18 }}>
         {SERVICE_CATALOG_PACKS.map((packOption) => {
-          const count = SERVICE_CATALOG.filter((item) => serviceAvailableInPack(item, packOption.id)).length;
+          const count = SERVICE_CATALOG.filter(
+            (item) =>
+              serviceAvailableInPack(item, packOption.id) &&
+              serviceAvailableForSalonType(item, salonType),
+          ).length;
           const active = pack === packOption.id;
           return (
             <button

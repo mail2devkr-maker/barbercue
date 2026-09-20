@@ -3,6 +3,8 @@ import {
   BookingErrorCode,
   SalonSetupErrorCode,
   normalizeServiceIdentity,
+  type SalonTypeResultDto,
+  type UpdateSalonTypeInput,
   type CreateSalonServiceInput,
   type SalonServiceDto,
   type UpdateSalonServiceInput,
@@ -27,6 +29,67 @@ export class SalonServicesService {
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
   ) {}
+
+  async getSalonType(
+    userId: string,
+    salonId: string,
+  ): Promise<SalonTypeResultDto> {
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { salonType: true },
+    });
+    if (!salon) {
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Salon not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return { salonType: salon.salonType };
+  }
+
+  async updateSalonType(
+    userId: string,
+    salonId: string,
+    input: UpdateSalonTypeInput,
+  ): Promise<SalonTypeResultDto> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const existing = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { salonType: true },
+    });
+    if (!existing) {
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Salon not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const salon = await this.prisma.salon.update({
+      where: { id: salonId },
+      data: { salonType: input.salonType },
+      select: { salonType: true },
+    });
+
+    if (actor === 'PLATFORM_ADMIN') {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'ADMIN_SALON_TYPE_UPDATED',
+          entityType: 'Salon',
+          entityId: salonId,
+          metadata: {
+            before: existing.salonType,
+            after: salon.salonType,
+          },
+        },
+      });
+    }
+
+    return { salonType: salon.salonType };
+  }
 
   async list(userId: string, salonId: string): Promise<SalonServiceDto[]> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
