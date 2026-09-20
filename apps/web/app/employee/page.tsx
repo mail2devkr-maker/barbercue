@@ -82,7 +82,6 @@ export default function EmployeeDashboardPage() {
   });
 
   const refreshAll = useCallback(async () => {
-    setLoading(true);
     try {
       const [nextDashboard, nextLeads, nextVisits, nextFollowUps] = await Promise.all([
         apiFetch<EmployeeCrmDashboardDto>(`${employeeBase}/${EMPLOYEE_PATHS.dashboard}`),
