@@ -28,6 +28,16 @@ describe('service catalog onboarding packs', () => {
     );
   });
 
+  it('gives every service an editable onboarding price and duration default', () => {
+    for (const service of SERVICE_CATALOG) {
+      expect(Number.isFinite(service.defaultPriceInr)).toBe(true);
+      expect(service.defaultPriceInr).toBeGreaterThan(0);
+      expect(Number.isInteger(service.defaultDurationMinutes)).toBe(true);
+      expect(service.defaultDurationMinutes).toBeGreaterThanOrEqual(5);
+      expect(service.defaultDurationMinutes).toBeLessThanOrEqual(480);
+    }
+  });
+
   it('uses the owner-requested pack labels', () => {
     expect(SERVICE_CATALOG_PACKS.map((pack) => pack.label)).toEqual([
       'Basic Salon Services',
