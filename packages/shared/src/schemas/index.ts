@@ -654,9 +654,9 @@ export const updateSalonChairSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateSalonChairInput = z.infer<typeof updateSalonChairSchema>;
 
-// POST dashboard/salons/:salonId/staff — onboard a barber. Phone is the required stable contact;
-// email is optional and enables the existing password invitation flow. MVP is BARBER-only (see
-// ARCHITECTURE.md §22): MANAGER exists in the schema but carries no distinct permissions yet.
+// POST dashboard/salons/:salonId/staff — onboard a staff member quickly. Name is the only
+// required field. Phone/email are optional: when an email is supplied the existing invitation
+// flow can create a login; a contact-less roster member still contributes to staffing/capacity.
 export const e164PhoneSchema = z
   .string()
   .trim()
@@ -664,7 +664,7 @@ export const e164PhoneSchema = z
 
 export const createSalonStaffSchema = z.object({
   displayName: z.string().trim().min(1).max(120),
-  phone: e164PhoneSchema,
+  phone: e164PhoneSchema.optional(),
   email: z.string().trim().email().optional(),
 });
 export type CreateSalonStaffInput = z.infer<typeof createSalonStaffSchema>;
