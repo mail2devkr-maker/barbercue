@@ -222,6 +222,8 @@ enum NotificationCategory {
   BOOKING_UPDATES
   QUEUE_UPDATES
   REMINDERS
+  // Time-critical operator prompts (the T-5 arrival check) - a separate toggle from BOOKING_UPDATES.
+  ARRIVAL_ALERTS
   PROMOTIONAL
 }
 

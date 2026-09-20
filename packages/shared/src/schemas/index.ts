@@ -509,6 +509,7 @@ export const setNotificationPreferenceSchema = z.object({
     NotificationCategory.BOOKING_UPDATES,
     NotificationCategory.QUEUE_UPDATES,
     NotificationCategory.REMINDERS,
+    NotificationCategory.ARRIVAL_ALERTS,
     NotificationCategory.PROMOTIONAL,
   ]),
   channel: z.enum([

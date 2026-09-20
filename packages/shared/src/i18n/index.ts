@@ -14,7 +14,7 @@
 // LANGUAGE_LABELS entry below — TypeScript's Record<Language, ...> makes an incomplete addition a
 // compile error, not a silent English fallback for the new language.
 
-import { Language } from '../enums';
+import { Language, type NotificationCategory } from '../enums';
 import { NOTIFICATION_TYPES, type NotificationType } from '../types';
 
 export interface VoiceAnnouncements {
@@ -842,6 +842,31 @@ export interface UiStrings {
   contactPhoneHint: string;
   contactNameRequiredError: string;
   contactPhoneInvalidError: string;
+  notificationSettingsTitle: string;
+  notificationSettingsIntro: string;
+  notificationSettingsOsNote: string;
+  notificationSettingsOsDenied: string;
+  notificationSettingsOpenOs: string;
+  notificationSettingsOperationalHeading: string;
+  notificationSettingsPromoHeading: string;
+  notificationSettingsPromoNote: string;
+  notificationSettingsArrivalNote: string;
+  notificationChannelPush: string;
+  notificationChannelInApp: string;
+  notificationCategoryBookingTitle: string;
+  notificationCategoryBookingDesc: string;
+  notificationCategoryQueueTitle: string;
+  notificationCategoryQueueDesc: string;
+  notificationCategoryArrivalTitle: string;
+  notificationCategoryArrivalDesc: string;
+  notificationCategoryRemindersTitle: string;
+  notificationCategoryRemindersDesc: string;
+  notificationCategoryPromoTitle: string;
+  notificationCategoryPromoDesc: string;
+  notificationSettingsLoadFailed: string;
+  notificationSettingsSaveFailed: string;
+  notificationSettingsRetry: string;
+  notificationSettingsPushNote: string;
   assignAction: string;
   noShowAction: string;
   barberLabel: string;
@@ -1554,6 +1579,31 @@ const enUi: UiStrings = {
   contactPhoneHint: 'The shop uses this to reach you about your turn.',
   contactNameRequiredError: 'Please enter your name (at least 2 letters).',
   contactPhoneInvalidError: 'Enter a valid mobile number, with a country code if it is not Indian.',
+  notificationSettingsTitle: 'Notification settings',
+  notificationSettingsIntro: 'Choose which alerts FastQue sends you, and where.',
+  notificationSettingsOsNote: "Your phone's notification permission, mute and Do Not Disturb settings always apply, whatever you choose here.",
+  notificationSettingsOsDenied: 'Notifications are turned off for FastQue in your phone settings, so push alerts cannot reach you.',
+  notificationSettingsOpenOs: 'Open phone settings',
+  notificationSettingsOperationalHeading: 'Operational alerts',
+  notificationSettingsPromoHeading: 'Offers',
+  notificationSettingsPromoNote: 'Offers are separate from operational alerts. Turning one off never affects the other.',
+  notificationSettingsArrivalNote: 'The full-screen arrival prompt still appears while FastQue is open.',
+  notificationChannelPush: 'Push',
+  notificationChannelInApp: 'In-app list',
+  notificationCategoryBookingTitle: 'Booking updates',
+  notificationCategoryBookingDesc: 'New, changed, cancelled or missed bookings.',
+  notificationCategoryQueueTitle: 'Queue updates',
+  notificationCategoryQueueDesc: 'Walk-ins joining and customers assigned to you.',
+  notificationCategoryArrivalTitle: 'Arrival alerts',
+  notificationCategoryArrivalDesc: 'Time-critical "has the customer arrived?" checks before an appointment.',
+  notificationCategoryRemindersTitle: 'Reminders',
+  notificationCategoryRemindersDesc: 'A heads-up before an appointment.',
+  notificationCategoryPromoTitle: 'Offers & promotions',
+  notificationCategoryPromoDesc: 'Deals and news from FastQue and shops.',
+  notificationSettingsLoadFailed: 'Could not load your notification settings.',
+  notificationSettingsSaveFailed: 'Could not save that change. Please try again.',
+  notificationSettingsRetry: 'Try again',
+  notificationSettingsPushNote: 'Push alerts are delivered to the FastQue app on your phone.',
   assignAction: 'Assign',
   noShowAction: 'No-show',
   barberLabel: 'Barber',
@@ -2241,6 +2291,31 @@ const hiUi: UiStrings = {
   contactPhoneHint: 'दुकान आपकी बारी के बारे में इसी नंबर पर संपर्क करेगी।',
   contactNameRequiredError: 'कृपया अपना नाम दर्ज करें (कम से कम 2 अक्षर)।',
   contactPhoneInvalidError: 'सही मोबाइल नंबर दर्ज करें; भारतीय नंबर न हो तो देश कोड के साथ।',
+  notificationSettingsTitle: 'सूचना सेटिंग्स',
+  notificationSettingsIntro: 'चुनें कि FastQue आपको कौन-सी सूचनाएं और कहां भेजे।',
+  notificationSettingsOsNote: 'आपके फ़ोन की सूचना अनुमति, म्यूट और डू नॉट डिस्टर्ब सेटिंग्स हमेशा लागू रहती हैं, आप यहां जो भी चुनें।',
+  notificationSettingsOsDenied: 'आपके फ़ोन की सेटिंग्स में FastQue की सूचनाएं बंद हैं, इसलिए पुश अलर्ट आप तक नहीं पहुंच सकते।',
+  notificationSettingsOpenOs: 'फ़ोन सेटिंग्स खोलें',
+  notificationSettingsOperationalHeading: 'संचालन अलर्ट',
+  notificationSettingsPromoHeading: 'ऑफ़र',
+  notificationSettingsPromoNote: 'ऑफ़र संचालन अलर्ट से अलग हैं। एक को बंद करने से दूसरा प्रभावित नहीं होता।',
+  notificationSettingsArrivalNote: 'FastQue खुला होने पर पूरी स्क्रीन वाला आगमन प्रॉम्प्ट फिर भी दिखेगा।',
+  notificationChannelPush: 'पुश',
+  notificationChannelInApp: 'ऐप के अंदर सूची',
+  notificationCategoryBookingTitle: 'बुकिंग अपडेट',
+  notificationCategoryBookingDesc: 'नई, बदली, रद्द या छूटी हुई बुकिंग।',
+  notificationCategoryQueueTitle: 'कतार अपडेट',
+  notificationCategoryQueueDesc: 'वॉक-इन जुड़ना और आपको सौंपे गए ग्राहक।',
+  notificationCategoryArrivalTitle: 'आगमन अलर्ट',
+  notificationCategoryArrivalDesc: 'अपॉइंटमेंट से पहले "क्या ग्राहक आ गया?" की समय-संवेदी जांच।',
+  notificationCategoryRemindersTitle: 'रिमाइंडर',
+  notificationCategoryRemindersDesc: 'अपॉइंटमेंट से पहले याद दिलाना।',
+  notificationCategoryPromoTitle: 'ऑफ़र और प्रचार',
+  notificationCategoryPromoDesc: 'FastQue और दुकानों की डील व समाचार।',
+  notificationSettingsLoadFailed: 'आपकी सूचना सेटिंग्स लोड नहीं हो सकीं।',
+  notificationSettingsSaveFailed: 'वह बदलाव सहेजा नहीं जा सका। कृपया फिर कोशिश करें।',
+  notificationSettingsRetry: 'फिर कोशिश करें',
+  notificationSettingsPushNote: 'पुश अलर्ट आपके फ़ोन के FastQue ऐप में भेजे जाते हैं।',
   assignAction: 'नियुक्त करें',
   noShowAction: 'नो-शो',
   barberLabel: 'बार्बर',
@@ -2498,4 +2573,22 @@ export const PUSH_COPY: Readonly<Record<Language, PushCopy>> = {
 /** Same never-throws fallback-to-English convention as voiceAnnouncementsFor/uiStringsFor. */
 export function pushCopyFor(language: Language | null | undefined): PushCopy {
   return (language && PUSH_COPY[language]) || PUSH_COPY[Language.EN];
+}
+
+/**
+ * Localized title + one-line description for a notification category, for settings screens on every
+ * client. A full Record so a newly added category cannot ship without copy.
+ */
+export function notificationCategoryCopy(
+  t: UiStrings,
+  category: NotificationCategory,
+): { title: string; description: string } {
+  const copy: Record<NotificationCategory, { title: string; description: string }> = {
+    BOOKING_UPDATES: { title: t.notificationCategoryBookingTitle, description: t.notificationCategoryBookingDesc },
+    QUEUE_UPDATES: { title: t.notificationCategoryQueueTitle, description: t.notificationCategoryQueueDesc },
+    ARRIVAL_ALERTS: { title: t.notificationCategoryArrivalTitle, description: t.notificationCategoryArrivalDesc },
+    REMINDERS: { title: t.notificationCategoryRemindersTitle, description: t.notificationCategoryRemindersDesc },
+    PROMOTIONAL: { title: t.notificationCategoryPromoTitle, description: t.notificationCategoryPromoDesc },
+  };
+  return copy[category];
 }

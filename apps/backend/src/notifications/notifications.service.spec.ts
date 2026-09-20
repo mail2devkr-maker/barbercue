@@ -206,17 +206,144 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('preferences: default ON and explicit OFF (IN_APP delivery)', () => {
+    const TYPES_BY_CATEGORY: Array<[string, string]> = [
+      ['booking.confirmed', 'BOOKING_UPDATES'],
+      ['owner.booking.created', 'BOOKING_UPDATES'],
+      ['owner.booking.no_show', 'BOOKING_UPDATES'],
+      ['queue.turn_approaching', 'QUEUE_UPDATES'],
+      ['owner.walk_in.joined', 'QUEUE_UPDATES'],
+      ['owner.booking.arrival_check', 'ARRIVAL_ALERTS'],
+      ['booking.reminder', 'REMINDERS'],
+    ];
+    const stored = (rows: Record<string, boolean>) =>
+      prisma.notificationPreference.findUnique.mockImplementation(
+        async ({ where }: { where: { userId_category_channel: { category: string; channel: string } } }) => {
+          const { category, channel } = where.userId_category_channel;
+          const key = `${category}:${channel}`;
+          return key in rows ? { enabled: rows[key] } : null;
+        },
+      );
+
+    it.each(TYPES_BY_CATEGORY)('DEFAULT ON: %s (%s) is delivered to a user who never configured anything', async (type) => {
+      // no preference rows exist for this user
+      const delivered = await service.notify('user-with-no-rows', type as never);
+      expect(delivered).toBe(true);
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(TYPES_BY_CATEGORY)('EXPLICIT OFF: %s is NOT delivered when %s is OFF on IN_APP', async (type, category) => {
+      stored({ [`${category}:IN_APP`]: false });
+      const delivered = await service.notify('user1', type as never);
+      expect(delivered).toBe(false);
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('the arrival check is governed by ARRIVAL_ALERTS, not BOOKING_UPDATES', async () => {
+      stored({ 'BOOKING_UPDATES:IN_APP': false });
+      expect(await service.notify('user1', 'owner.booking.arrival_check')).toBe(true);
+      prisma.notification.create.mockClear();
+      stored({ 'ARRIVAL_ALERTS:IN_APP': false });
+      expect(await service.notify('user1', 'owner.booking.arrival_check')).toBe(false);
+      expect(await service.notify('user1', 'owner.booking.created')).toBe(true); // bookings unaffected
+    });
+
+    it('OFF is per category: queue updates off leaves booking updates and reminders flowing', async () => {
+      stored({ 'QUEUE_UPDATES:IN_APP': false });
+      expect(await service.notify('user1', 'owner.walk_in.joined')).toBe(false);
+      expect(await service.notify('user1', 'booking.confirmed')).toBe(true);
+      expect(await service.notify('user1', 'booking.reminder')).toBe(true);
+    });
+
+    it('OFF is per channel: a PUSH-off preference never suppresses the in-app notification', async () => {
+      stored({ 'BOOKING_UPDATES:PUSH': false, 'ARRIVAL_ALERTS:PUSH': false });
+      expect(await service.notify('user1', 'owner.booking.created')).toBe(true);
+      expect(await service.notify('user1', 'owner.booking.arrival_check')).toBe(true);
+    });
+
+    it('promotional is a separate toggle: promotional off changes nothing operational, and operational off changes nothing promotional', async () => {
+      stored({ 'PROMOTIONAL:IN_APP': false });
+      expect(await service.notify('user1', 'booking.confirmed')).toBe(true);
+      expect(await service.notify('user1', 'owner.booking.arrival_check')).toBe(true);
+      const prefs = await (async () => {
+        prisma.notificationPreference.findMany.mockResolvedValueOnce([
+          { category: 'BOOKING_UPDATES', channel: 'IN_APP', enabled: false },
+        ]);
+        return service.getPreferences('user1');
+      })();
+      const promo = prefs.categories.find((c) => c.category === 'PROMOTIONAL')!;
+      expect(promo.channels.find((c) => c.channel === 'IN_APP')!.enabled).toBe(true);
+    });
+
+    it('an explicit ON row behaves like the default, and turning a category back ON resumes delivery', async () => {
+      stored({ 'ARRIVAL_ALERTS:IN_APP': false });
+      expect(await service.notify('user1', 'owner.booking.arrival_check')).toBe(false);
+      stored({ 'ARRIVAL_ALERTS:IN_APP': true });
+      expect(await service.notify('user1', 'owner.booking.arrival_check')).toBe(true);
+    });
+
+    it('the gate is applied inside notifyInTransaction too, on the transaction client', async () => {
+      const txFindUnique = jest.fn().mockResolvedValue({ enabled: false });
+      const tx = { notificationPreference: { findUnique: txFindUnique }, notification: { create: jest.fn() } };
+      const delivered = await service.notifyInTransaction(tx as never, 'user1', 'owner.booking.arrival_check');
+      expect(delivered).toBe(false);
+      expect(tx.notification.create).not.toHaveBeenCalled();
+      expect(txFindUnique).toHaveBeenCalledWith({
+        where: { userId_category_channel: { userId: 'user1', category: 'ARRIVAL_ALERTS', channel: 'IN_APP' } },
+      });
+    });
+
+    it('reading preferences NEVER writes a row: an unconfigured user is not silently given OFF (or any) rows', async () => {
+      await service.getPreferences('user-with-no-rows');
+      await service.notify('user-with-no-rows', 'owner.booking.arrival_check');
+      expect(prisma.notificationPreference.upsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getPreferences: every category is ON for a user who never configured anything', () => {
+    it('reports all five categories ON on every channel when there are no rows', async () => {
+      const result = await service.getPreferences('user-with-no-rows');
+      expect(result.categories.map((c) => c.category)).toEqual([
+        'BOOKING_UPDATES',
+        'QUEUE_UPDATES',
+        'ARRIVAL_ALERTS',
+        'REMINDERS',
+        'PROMOTIONAL',
+      ]);
+      for (const category of result.categories) {
+        for (const channel of category.channels) expect(channel.enabled).toBe(true);
+      }
+    });
+
+    it('operational categories come before promotional, which stays its own separate entry', async () => {
+      const result = await service.getPreferences('user1');
+      const order = result.categories.map((c) => c.category);
+      expect(order.indexOf('PROMOTIONAL')).toBe(order.length - 1);
+      expect(order.slice(0, -1)).not.toContain('PROMOTIONAL');
+    });
+
+    it('reflects only the explicit change: one OFF row turns exactly that category+channel OFF', async () => {
+      prisma.notificationPreference.findMany.mockResolvedValueOnce([
+        { category: 'ARRIVAL_ALERTS', channel: 'PUSH', enabled: false },
+      ]);
+      const result = await service.getPreferences('user1');
+      const flat = result.categories.flatMap((c) => c.channels.map((ch) => [`${c.category}:${ch.channel}`, ch.enabled] as const));
+      const off = flat.filter(([, enabled]) => !enabled).map(([key]) => key);
+      expect(off).toEqual(['ARRIVAL_ALERTS:PUSH']);
+    });
+  });
+
   describe('getPreferences', () => {
     it('returns every category x channel combination, defaulting to enabled', async () => {
       const result = await service.getPreferences('user1');
-      expect(result.categories).toHaveLength(4);
+      expect(result.categories).toHaveLength(5);
       for (const cat of result.categories) {
         expect(cat.channels).toHaveLength(5);
         expect(cat.channels.every((c) => c.enabled)).toBe(true);
       }
     });
 
-    it('reports IN_APP as the only available channel', async () => {
+    it('reports IN_APP and PUSH as the available channels (the two FastQue really delivers on)', async () => {
       const result = await service.getPreferences('user1');
       const bookingUpdates = result.categories.find(
         (c) => c.category === 'BOOKING_UPDATES',
@@ -226,7 +353,7 @@ describe('NotificationsService', () => {
       );
       expect(byChannel).toEqual({
         IN_APP: true,
-        PUSH: false,
+        PUSH: true,
         EMAIL: false,
         SMS: false,
         WHATSAPP: false,
@@ -274,7 +401,65 @@ describe('NotificationsService', () => {
         'IN_APP',
         false,
       );
-      expect(result.categories).toHaveLength(4);
+      expect(result.categories).toHaveLength(5);
+    });
+  });
+
+  // Persistence round trip against a small in-memory stand-in for the preference table: what a
+  // user sets is exactly what a later read shows AND what delivery then honours.
+  describe('setPreference -> getPreferences -> delivery round trip', () => {
+    beforeEach(() => {
+      const table = new Map<string, boolean>();
+      const keyOf = (w: { category: string; channel: string }) => `${w.category}:${w.channel}`;
+      prisma.notificationPreference.upsert.mockImplementation(
+        async ({ where, create }: { where: { userId_category_channel: { category: string; channel: string } }; create: { enabled: boolean } }) => {
+          table.set(keyOf(where.userId_category_channel), create.enabled);
+          return {};
+        },
+      );
+      prisma.notificationPreference.findMany.mockImplementation(async () =>
+        [...table.entries()].map(([k, enabled]) => {
+          const [category, channel] = k.split(':');
+          return { category, channel, enabled };
+        }),
+      );
+      prisma.notificationPreference.findUnique.mockImplementation(
+        async ({ where }: { where: { userId_category_channel: { category: string; channel: string } } }) => {
+          const key = keyOf(where.userId_category_channel);
+          return table.has(key) ? { enabled: table.get(key) } : null;
+        },
+      );
+    });
+
+    const flag = (
+      prefs: Awaited<ReturnType<NotificationsService['getPreferences']>>,
+      category: string,
+      channel: string,
+    ) => prefs.categories.find((c) => c.category === category)!.channels.find((c) => c.channel === channel)!.enabled;
+
+    it('an OFF choice persists and reloads OFF, touching nothing else, and stops that category+channel', async () => {
+      const before = await service.getPreferences('u1');
+      expect(flag(before, 'ARRIVAL_ALERTS', 'PUSH')).toBe(true);
+
+      const after = await service.setPreference('u1', 'ARRIVAL_ALERTS', 'PUSH', false);
+      expect(flag(after, 'ARRIVAL_ALERTS', 'PUSH')).toBe(false);
+
+      const reloaded = await service.getPreferences('u1'); // a fresh read, as after an app restart
+      expect(flag(reloaded, 'ARRIVAL_ALERTS', 'PUSH')).toBe(false);
+      expect(flag(reloaded, 'ARRIVAL_ALERTS', 'IN_APP')).toBe(true);
+      expect(flag(reloaded, 'BOOKING_UPDATES', 'PUSH')).toBe(true);
+      expect(flag(reloaded, 'PROMOTIONAL', 'PUSH')).toBe(true);
+
+      // IN_APP for the same category still delivers - PUSH-off is per channel.
+      expect(await service.notify('u1', 'owner.booking.arrival_check')).toBe(true);
+    });
+
+    it('turning it back ON persists and reloads ON', async () => {
+      await service.setPreference('u1', 'QUEUE_UPDATES', 'IN_APP', false);
+      expect(await service.notify('u1', 'owner.walk_in.joined')).toBe(false);
+      await service.setPreference('u1', 'QUEUE_UPDATES', 'IN_APP', true);
+      expect(flag(await service.getPreferences('u1'), 'QUEUE_UPDATES', 'IN_APP')).toBe(true);
+      expect(await service.notify('u1', 'owner.walk_in.joined')).toBe(true);
     });
   });
 });

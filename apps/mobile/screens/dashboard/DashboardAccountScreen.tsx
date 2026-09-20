@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AUTH_PATHS, Role, type AuthSession, type UiStrings } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
@@ -8,6 +9,7 @@ import { useAuth } from '../../lib/auth-context';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, InlineError, LanguageSwitcher } from '../../components/ui';
+import type { DashboardAccountStackParamList } from '../../navigation/DashboardAccountStack';
 
 function roleLabel(t: UiStrings, role: string): string {
   const labels: Record<string, string> = {
@@ -30,6 +32,7 @@ function roleLabel(t: UiStrings, role: string): string {
 export default function DashboardAccountScreen() {
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
+  const navigation = useNavigation<NativeStackNavigationProp<DashboardAccountStackParamList>>();
   const [sessions, setSessions] = useState<AuthSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,6 +112,13 @@ export default function DashboardAccountScreen() {
           ))}
         {error && <InlineError message={error} />}
       </Card>
+
+      <Button
+        title={t.notificationSettingsTitle}
+        variant="outline"
+        onPress={() => navigation.navigate('NotificationSettings')}
+        style={styles.logoutButton}
+      />
 
       <Button title={t.signOutThisDevice} variant="secondary" onPress={() => void logout()} style={styles.logoutButton} />
     </Screen>
