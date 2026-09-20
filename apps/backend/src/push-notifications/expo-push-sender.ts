@@ -23,6 +23,7 @@ export interface ExpoPushMessage {
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  categoryId?: string;
 }
 
 export interface ExpoPushTicket {
