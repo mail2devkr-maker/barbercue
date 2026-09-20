@@ -30,7 +30,7 @@ export default function RegisterShopPage() {
             an approval that will never arrive. */}
         <p className={styles.intro}>
           You&apos;ll get a unique shop ID and a dashboard to manage bookings and your live queue.
-          Your shop starts closed. Add your services, chairs and barbers, then open it yourself
+          Your shop starts closed. Add your services, chairs and staff, then open it yourself
           from your dashboard — there&apos;s no waiting for approval.
         </p>
         </div>

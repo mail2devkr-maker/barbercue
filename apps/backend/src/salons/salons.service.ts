@@ -627,6 +627,27 @@ export class SalonsService {
               salonId: created.id,
             },
           });
+
+          // Fast onboarding defaults. These are persisted in the same registration transaction,
+          // so every client (web, mobile or API) starts from the same ready-to-edit baseline:
+          // 09:00-21:00 on every day and ten active chairs. Owners can edit/deactivate either
+          // later; nothing here affects already-existing shops.
+          await tx.operatingHours.createMany({
+            data: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+              salonId: created.id,
+              dayOfWeek,
+              openTime: '09:00',
+              closeTime: '21:00',
+              isClosed: false,
+            })),
+          });
+          await tx.chair.createMany({
+            data: Array.from({ length: 10 }, (_, index) => ({
+              salonId: created.id,
+              label: `Chair ${index + 1}`,
+              status: ChairStatus.ACTIVE,
+            })),
+          });
           return created;
         });
 

@@ -44,6 +44,123 @@
   line-height: 1.75;
 }
 
+
+.aboutHeroGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 48px;
+  align-items: center;
+}
+
+.aboutHeroImage {
+  overflow: hidden;
+  border-radius: 30px;
+  box-shadow: 0 22px 54px rgba(32, 24, 20, 0.14);
+}
+
+.aboutHeroImage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 360px;
+  object-fit: cover;
+}
+
+.featureSplit {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.88fr) minmax(0, 1.12fr);
+  gap: 54px;
+  align-items: start;
+}
+
+.featureSplitReverse {
+  grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
+}
+
+.featureVisual {
+  position: sticky;
+  top: 96px;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #efe8df;
+  box-shadow: 0 18px 46px rgba(32, 24, 20, 0.09);
+}
+
+.featureVisual img {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 520px;
+  object-fit: cover;
+}
+
+.featureHeading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.featureLead {
+  margin: 16px 0 24px;
+  color: #6d665f;
+  line-height: 1.7;
+}
+
+.featureList {
+  display: grid;
+  gap: 12px;
+}
+
+.featureItem {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(29, 26, 23, 0.1);
+}
+
+.featureTick {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff0f3;
+  color: #d83359;
+  font-weight: 900;
+}
+
+.featureItem h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 1.18rem;
+  font-weight: 600;
+}
+
+.featureItem p {
+  margin: 0;
+  color: #6d665f;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.imageStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.imageStrip img {
+  display: block;
+  width: 100%;
+  height: 250px;
+  object-fit: cover;
+  border-radius: 22px;
+}
+
 .heroActions,
 .cardActions {
   display: flex;
@@ -252,6 +369,30 @@
     gap: 24px;
     padding: 32px;
   }
+
+  .aboutHeroGrid,
+  .featureSplit,
+  .featureSplitReverse {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .featureVisual {
+    position: static;
+  }
+
+  .featureVisual img {
+    min-height: 360px;
+    max-height: 520px;
+  }
+
+  .imageStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .imageStrip img {
+    height: 320px;
+  }
 }
 
 @media (max-width: 620px) {
@@ -275,5 +416,14 @@
   .detailRow {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .aboutHeroImage img,
+  .featureVisual img {
+    min-height: 280px;
+  }
+
+  .imageStrip img {
+    height: 240px;
   }
 }

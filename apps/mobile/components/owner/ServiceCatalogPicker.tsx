@@ -4,9 +4,11 @@ import {
   DASHBOARD_PATHS,
   SERVICE_CATALOG,
   SERVICE_CATALOG_CATEGORIES,
+  SERVICE_CATALOG_PACKS,
   normalizeServiceIdentity,
   type ServiceCatalogItem,
   type ServiceDto,
+  type ServicePackId,
 } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
@@ -45,6 +47,7 @@ export function ServiceCatalogPicker({
   services: ServiceDto[];
   onChanged: () => void;
 }) {
+  const [pack, setPack] = useState<ServicePackId>("BASIC");
   const [category, setCategory] = useState<string>(SERVICE_CATALOG_CATEGORIES[0]);
   const [selected, setSelected] = useState<Record<string, PresetDraft>>({});
   const [saving, setSaving] = useState(false);
@@ -59,7 +62,27 @@ export function ServiceCatalogPicker({
       ),
     [services],
   );
-  const visible = SERVICE_CATALOG.filter((preset) => preset.category === category);
+  const visible = SERVICE_CATALOG.filter((preset) => preset.pack === pack && preset.category === category);
+  const selectablePack = SERVICE_CATALOG.filter(
+    (preset) => preset.pack === pack && !findExistingServiceForPreset(services, preset),
+  );
+  const packCategories = SERVICE_CATALOG_CATEGORIES.filter((name) =>
+    SERVICE_CATALOG.some((item) => item.pack === pack && item.category === name),
+  );
+
+  function selectCurrentPack() {
+    if (saving) return;
+    setSelected((current) => {
+      const next = { ...current };
+      for (const preset of selectablePack) {
+        if (!next[preset.id]) {
+          next[preset.id] = { price: "", durationMinutes: String(preset.defaultDurationMinutes) };
+        }
+      }
+      return next;
+    });
+    setError(null);
+  }
 
   function toggle(preset: ServiceCatalogItem) {
     if (existingByPresetId.get(preset.id) || saving) return;
@@ -168,9 +191,9 @@ export function ServiceCatalogPicker({
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.title}>Start with popular services</Text>
+          <Text style={styles.title}>Choose a service pack</Text>
           <Text style={styles.hint}>
-            Choose only what your shop offers. Enter your own price and adjust the suggested time.
+            Start with Basic, Standard or Advance services. Prices stay yours to confirm.
           </Text>
         </View>
         <Text style={styles.selectionCount}>{Object.keys(selected).length} selected</Text>
@@ -181,7 +204,39 @@ export function ServiceCatalogPicker({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoryScroller}
       >
-        {SERVICE_CATALOG_CATEGORIES.map((name) => (
+        {SERVICE_CATALOG_PACKS.map((packOption) => (
+          <Pressable
+            key={packOption.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected: pack === packOption.id }}
+            onPress={() => {
+              setPack(packOption.id);
+              const firstCategory = SERVICE_CATALOG.find((item) => item.pack === packOption.id)?.category;
+              if (firstCategory) setCategory(firstCategory);
+              setError(null);
+            }}
+            style={[styles.categoryChip, pack === packOption.id && styles.categoryChipSelected]}
+          >
+            <Text style={[styles.categoryChipText, pack === packOption.id && styles.categoryChipTextSelected]}>
+              {packOption.label}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <Button
+        title={`Select all ${SERVICE_CATALOG_PACKS.find((item) => item.id === pack)?.label ?? "services"}`}
+        variant="outline"
+        onPress={selectCurrentPack}
+        disabled={saving || selectablePack.length === 0}
+        style={styles.addButton}
+      />
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryScroller}
+      >
+        {packCategories.map((name) => (
           <Pressable
             key={name}
             accessibilityRole="button"

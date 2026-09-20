@@ -56,6 +56,8 @@ describe('SalonsService', () => {
     locality: { findUnique: jest.Mock };
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
     user: { findUniqueOrThrow: jest.Mock };
+    operatingHours: { createMany: jest.Mock };
+    chair: { createMany: jest.Mock };
     $transaction: jest.Mock;
   };
   let citiesService: {
@@ -90,6 +92,8 @@ describe('SalonsService', () => {
         upsert: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
       },
+      operatingHours: { createMany: jest.fn().mockResolvedValue({ count: 7 }) },
+      chair: { createMany: jest.fn().mockResolvedValue({ count: 10 }) },
       // registerSalon's post-grant re-read — default shape carries exactly the newly-granted
       // SALON_OWNER role so existing registerSalon tests (which don't care about the minted
       // session) keep passing without each needing to stub this individually.
@@ -1257,6 +1261,22 @@ describe('SalonsService', () => {
         slug: 'fresh-cuts-co',
         name: 'Fresh Cuts & Co.',
         status: 'PENDING',
+      });
+      expect(prisma.operatingHours.createMany).toHaveBeenCalledWith({
+        data: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+          salonId: 's1',
+          dayOfWeek,
+          openTime: '09:00',
+          closeTime: '21:00',
+          isClosed: false,
+        })),
+      });
+      expect(prisma.chair.createMany).toHaveBeenCalledWith({
+        data: Array.from({ length: 10 }, (_, index) => ({
+          salonId: 's1',
+          label: `Chair ${index + 1}`,
+          status: 'ACTIVE',
+        })),
       });
     });
 

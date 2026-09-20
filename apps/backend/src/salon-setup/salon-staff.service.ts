@@ -65,7 +65,8 @@ export class SalonStaffService {
   }
 
   /**
-   * Creates (or links) the barber's account. When email was supplied it issues an invitation and
+   * Creates (or links) the staff member's account. Name is sufficient for a roster-only member;
+   * phone/email are optional. When email was supplied it issues an invitation and
    * returns the link in `inviteUrl` only outside production — identical dev-convenience rule to
    * AuthService.forgotPassword's `devResetUrl`, since no email provider is wired yet
    * (ConsoleEmailSender logs the link). In production the link is delivered by email only.
@@ -77,7 +78,7 @@ export class SalonStaffService {
   ): Promise<StaffInviteResultDto> {
     const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
 
-    const phone = input.phone.trim();
+    const phone = input.phone?.trim() || null;
     const email = input.email?.trim().toLowerCase() || null;
     // Do not create a passwordless staff account and only then discover that its invitation
     // cannot be delivered. Email-less roster members remain intentionally supported.
@@ -87,11 +88,20 @@ export class SalonStaffService {
       ? buildPasswordLink(passwordWebBaseUrl(), rawToken, 'staff', 'invite')
       : null;
     const staffId = await this.prisma.$transaction(async (tx) => {
-      const users = await tx.user.findMany({
-        where: { OR: [{ phone }, ...(email ? [{ email }] : [])] },
-      });
-      const byPhone =
-        users.find((candidate) => candidate.phone === phone) ?? null;
+      const identityPredicates = [
+        ...(phone ? [{ phone }] : []),
+        ...(email ? [{ email }] : []),
+      ];
+      // Contact-less staff are valid roster members. In that case there is intentionally no
+      // identity lookup to perform: a fresh User row backs the staff FK but cannot authenticate
+      // until contact/login details are later added through a dedicated flow.
+      const users =
+        identityPredicates.length > 0
+          ? await tx.user.findMany({ where: { OR: identityPredicates } })
+          : [];
+      const byPhone = phone
+        ? (users.find((candidate) => candidate.phone === phone) ?? null)
+        : null;
       const byEmail = email
         ? (users.find(
             (candidate) => candidate.email?.toLowerCase() === email,
@@ -117,7 +127,7 @@ export class SalonStaffService {
 
       if (
         existingUser &&
-        ((existingUser.phone && existingUser.phone !== phone) ||
+        ((phone && existingUser.phone && existingUser.phone !== phone) ||
           (email &&
             existingUser.email &&
             existingUser.email.toLowerCase() !== email))
@@ -133,7 +143,7 @@ export class SalonStaffService {
       // different existing identity is never overwritten or silently merged.
       const identityPatch = existingUser
         ? {
-            ...(!existingUser.phone && { phone }),
+            ...(phone && !existingUser.phone && { phone }),
             ...(email && !existingUser.email && { email }),
           }
         : null;
@@ -145,7 +155,11 @@ export class SalonStaffService {
             })
           : existingUser
         : await tx.user.create({
-            data: { phone, ...(email && { email }), status: UserStatus.ACTIVE },
+            data: {
+              ...(phone && { phone }),
+              ...(email && { email }),
+              status: UserStatus.ACTIVE,
+            },
           });
 
       const alreadyOnRoster = await tx.salonStaff.findFirst({
@@ -230,7 +244,7 @@ export class SalonStaffService {
       : { staff, invitationSent: true, inviteUrl };
   }
 
-  /** Re-issues an invitation link — for a barber who never redeemed the first one, or lost it. */
+  /** Re-issues an invitation link — for a staff member who never redeemed the first one, or lost it. */
   async resendInvite(
     userId: string,
     salonId: string,

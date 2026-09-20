@@ -4,9 +4,11 @@ import { useMemo, useState } from "react";
 import {
   SERVICE_CATALOG,
   SERVICE_CATALOG_CATEGORIES,
+  SERVICE_CATALOG_PACKS,
   normalizeServiceIdentity,
   type SalonServiceDto,
   type ServiceCatalogItem,
+  type ServicePackId,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
@@ -54,6 +56,7 @@ export function ServiceCatalogPicker({
   onError: (message: string | null) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [pack, setPack] = useState<ServicePackId>("BASIC");
   const [category, setCategory] = useState("all");
   const [selected, setSelected] = useState<Record<string, CatalogDraft>>({});
   const [bulkPrice, setBulkPrice] = useState("");
@@ -71,22 +74,26 @@ export function ServiceCatalogPicker({
   const visible = useMemo(() => {
     const search = query.trim().toLowerCase();
     return SERVICE_CATALOG.filter((catalogItem) =>
+      catalogItem.pack === pack &&
       (category === "all" || catalogItem.category === category) &&
       (!search || `${catalogItem.name} ${catalogItem.category}`.toLowerCase().includes(search)),
     );
-  }, [category, query]);
+  }, [category, pack, query]);
 
-  // Select All operates on the full catalog, not just the current search/category filter — the
-  // point is offering everything without clicking through every category, which a filtered
-  // "select all" wouldn't achieve. Items already added to the shop are never selectable (same
-  // guard as the individual toggle below).
+  // Bulk selection is intentionally pack-scoped: owners can pick a whole pack instead of
+  // clicking dozens of services, while prices remain owner-confirmed before save.
   const selectableCatalog = useMemo(
     () => SERVICE_CATALOG.filter(
-      (catalogItem) => !existingByIdentity.has(normalizeServiceIdentity(catalogItem.name, catalogItem.category)),
+      (catalogItem) =>
+        catalogItem.pack === pack &&
+        !existingByIdentity.has(normalizeServiceIdentity(catalogItem.name, catalogItem.category)),
     ),
-    [existingByIdentity],
+    [existingByIdentity, pack],
   );
   const allSelected = selectableCatalog.length > 0 && selectableCatalog.every((item) => selected[item.id]);
+  const packCategories = SERVICE_CATALOG_CATEGORIES.filter((name) =>
+    SERVICE_CATALOG.some((item) => item.pack === pack && item.category === name),
+  );
 
   function toggle(item: ServiceCatalogItem) {
     const existing = existingByIdentity.get(normalizeServiceIdentity(item.name, item.category));
@@ -116,11 +123,15 @@ export function ServiceCatalogPicker({
     onError(null);
   }
 
-  // Deselecting must not leave a stale draft behind for any item — clearing the whole map is the
-  // only way "every selected service" and "every hidden payload" stay in sync.
-  function clearAll() {
-    setSelected({});
-    setBulkPrice("");
+  function clearCurrentPack() {
+    const packIds = new Set(
+      SERVICE_CATALOG.filter((item) => item.pack === pack).map((item) => item.id),
+    );
+    setSelected((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([id]) => !packIds.has(id)),
+      ),
+    );
     onError(null);
   }
 
@@ -222,20 +233,57 @@ export function ServiceCatalogPicker({
       <div className={styles.catalogHeadingRow}>
         <div>
           <p className={styles.eyebrow}>Quick setup</p>
-          <h2 id="service-catalog-heading" className={styles.sectionHeading}>Choose common services</h2>
-          <p className={styles.hint}>Select what you offer, then enter your own prices.</p>
+          <h2 id="service-catalog-heading" className={styles.sectionHeading}>Choose a service pack</h2>
+          <p className={styles.hint}>Start with Basic, Standard or Advance services, then enter your own prices.</p>
         </div>
         <div className={styles.catalogHeadingActions}>
           <span className={styles.selectionCount}>{Object.keys(selected).length} selected</span>
           <Button
             type="button"
             variant="outline"
-            onClick={() => (allSelected ? clearAll() : selectAll())}
+            onClick={() => (allSelected ? clearCurrentPack() : selectAll())}
             disabled={selectableCatalog.length === 0}
           >
-            {allSelected ? "Clear all selections" : "Select all services"}
+            {allSelected ? "Clear pack selection" : `Select all in ${SERVICE_CATALOG_PACKS.find((item) => item.id === pack)?.label ?? "this pack"}`}
           </Button>
         </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10, marginBottom: 18 }}>
+        {SERVICE_CATALOG_PACKS.map((packOption) => {
+          const count = SERVICE_CATALOG.filter((item) => item.pack === packOption.id).length;
+          const active = pack === packOption.id;
+          return (
+            <button
+              key={packOption.id}
+              type="button"
+              onClick={() => {
+                setPack(packOption.id);
+                setCategory("all");
+                setQuery("");
+                onError(null);
+              }}
+              aria-pressed={active}
+              style={{
+                textAlign: "left",
+                padding: 14,
+                borderRadius: 14,
+                border: active ? "2px solid var(--bc-accent)" : "1px solid var(--bc-border)",
+                background: active ? "var(--bc-accent-soft)" : "var(--bc-surface)",
+                color: "var(--bc-ink)",
+                cursor: "pointer",
+              }}
+            >
+              <strong style={{ display: "block", marginBottom: 4 }}>{packOption.label}</strong>
+              <span style={{ display: "block", fontSize: 12, color: "var(--bc-muted)", lineHeight: 1.45 }}>
+                {packOption.description}
+              </span>
+              <span style={{ display: "block", marginTop: 6, fontSize: 12, fontWeight: 700 }}>
+                {count} services
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div className={styles.catalogFilters}>
@@ -259,7 +307,7 @@ export function ServiceCatalogPicker({
             className={styles.select}
           >
             <option value="all">All categories</option>
-            {SERVICE_CATALOG_CATEGORIES.map((name) => <option key={name} value={name}>{name}</option>)}
+            {packCategories.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
       </div>

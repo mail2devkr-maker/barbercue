@@ -2,11 +2,118 @@
  * Reusable owner service presets. Prices are deliberately absent: every shop must enter and
  * confirm its own price. Durations are operational starting points only and stay editable.
  */
+export type ServicePackId = 'BASIC' | 'STANDARD' | 'ADVANCED';
+
+export interface ServicePackDefinition {
+  id: ServicePackId;
+  label: string;
+  description: string;
+}
+
+export const SERVICE_CATALOG_PACKS: readonly ServicePackDefinition[] = [
+  {
+    id: 'BASIC',
+    label: 'Basic Salon Services',
+    description: 'Everyday, high-frequency services for quick salon setup.',
+  },
+  {
+    id: 'STANDARD',
+    label: 'Standard Salon Services',
+    description: 'Expanded grooming, colour, facial, waxing and styling services.',
+  },
+  {
+    id: 'ADVANCED',
+    label: 'Advance Salon Services',
+    description: 'Premium, technical, bridal, nail-extension and intensive treatment services.',
+  },
+] as const;
+
 export interface ServiceCatalogItem {
   id: string;
   name: string;
   category: string;
   defaultDurationMinutes: number;
+  pack: ServicePackId;
+}
+
+// Every catalog service belongs to exactly one onboarding pack. Keeping the partition in one
+// place lets web and mobile offer the same one-tap pack selection without duplicating business
+// rules across clients.
+const BASIC_SERVICE_IDS = new Set([
+  'classic-haircut',
+  'buzz-cut',
+  'crew-cut',
+  'kids-haircut',
+  'hair-wash',
+  'head-shave',
+  'beard-trim',
+  'beard-shape-line-up',
+  'clean-shave',
+  'moustache-trim',
+  'womens-haircut',
+  'hair-trim',
+  'fringe-bangs-trim',
+  'girls-kids-haircut',
+  'shampoo-conditioning',
+  'blow-dry',
+  'hair-ironing',
+  'basic-hairdo',
+  'deep-conditioning',
+  'head-massage',
+  'cleanup',
+  'de-tan',
+  'bleach',
+  'eyebrows',
+  'upper-lip',
+  'chin',
+  'forehead',
+  'side-face',
+  'underarms',
+  'half-arms',
+  'full-arms',
+  'half-legs',
+  'full-legs',
+  'manicure',
+  'pedicure',
+  'nail-cut-file',
+  'nail-polish',
+  'foot-massage',
+  'hand-massage',
+  'head-neck-shoulder-massage',
+]);
+
+const ADVANCED_SERVICE_IDS = new Set([
+  'balayage',
+  'ombre',
+  'keratin-treatment',
+  'smoothening',
+  'rebonding-straightening',
+  'hair-botox',
+  'anti-ageing-facial',
+  'acne-control-facial',
+  'full-body-wax',
+  'bikini-wax',
+  'spa-manicure',
+  'spa-pedicure',
+  'gel-polish',
+  'nail-art',
+  'nail-extensions',
+  'nail-extension-removal',
+  'hd-makeup',
+  'airbrush-makeup',
+  'engagement-makeup',
+  'bridal-makeup',
+  'groom-makeup-grooming',
+  'bridal-hairdo',
+  'pre-bridal-package',
+  'body-scrub',
+  'body-polish',
+]);
+
+function packFor(id: string): ServicePackId {
+  if (BASIC_SERVICE_IDS.has(id)) return 'BASIC';
+  if (ADVANCED_SERVICE_IDS.has(id)) return 'ADVANCED';
+  return 'STANDARD';
 }
 
 function item(
@@ -15,7 +122,7 @@ function item(
   name: string,
   defaultDurationMinutes: number,
 ): ServiceCatalogItem {
-  return { category, id, name, defaultDurationMinutes };
+  return { category, id, name, defaultDurationMinutes, pack: packFor(id) };
 }
 
 export const SERVICE_CATALOG_CATEGORIES = [
