@@ -94,6 +94,50 @@ enum StaffMemberStatus {
   INACTIVE
 }
 
+enum CrmLeadStatus {
+  NEW
+  CONTACTED
+  INTERESTED
+  DEMO_SCHEDULED
+  FOLLOW_UP
+  ONBOARDED
+  LOST
+}
+
+enum CrmLeadSource {
+  FIELD_VISIT
+  REFERRAL
+  COLD_CALL
+  WHATSAPP
+  SOCIAL_MEDIA
+  INBOUND
+  OTHER
+}
+
+enum CrmVisitOutcome {
+  CONTACTED
+  INTERESTED
+  DEMO_COMPLETED
+  FOLLOW_UP_REQUIRED
+  NOT_INTERESTED
+  ONBOARDING_ASSISTED
+  OTHER
+}
+
+enum CrmFollowUpChannel {
+  CALL
+  WHATSAPP
+  VISIT
+  EMAIL
+  OTHER
+}
+
+enum CrmFollowUpStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
 enum ChairStatus {
   ACTIVE
   INACTIVE
@@ -358,7 +402,80 @@ model EmployeeProfile {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  crmLeads     EmployeeCrmLead[]
+  crmVisits    EmployeeCrmVisit[]
+  crmFollowUps EmployeeCrmFollowUp[]
+
   @@map("employee_profiles")
+}
+
+model EmployeeCrmLead {
+  id                String          @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  shopName          String
+  contactName       String?
+  phone             String?
+  email             String?
+  city              String?
+  locality          String?
+  addressLine       String?
+  source            CrmLeadSource   @default(FIELD_VISIT)
+  status            CrmLeadStatus   @default(NEW)
+  notes             String?
+  lostReason        String?
+  onboardedSalonId  String?         @unique
+  onboardedSalon    Salon?          @relation("CrmLeadOnboardedSalon", fields: [onboardedSalonId], references: [id], onDelete: SetNull)
+  onboardedAt       DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  visits            EmployeeCrmVisit[]
+  followUps         EmployeeCrmFollowUp[]
+
+  @@index([employeeProfileId, status])
+  @@index([employeeProfileId, createdAt])
+  @@index([phone])
+  @@index([email])
+  @@map("employee_crm_leads")
+}
+
+model EmployeeCrmVisit {
+  id                String          @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  leadId            String?
+  lead              EmployeeCrmLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  shopName          String
+  visitedAt         DateTime        @default(now())
+  outcome           CrmVisitOutcome
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([employeeProfileId, visitedAt])
+  @@index([leadId, visitedAt])
+  @@map("employee_crm_visits")
+}
+
+model EmployeeCrmFollowUp {
+  id                String            @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile   @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  leadId            String
+  lead              EmployeeCrmLead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  dueAt             DateTime
+  channel           CrmFollowUpChannel
+  status            CrmFollowUpStatus  @default(OPEN)
+  notes             String?
+  outcome           String?
+  completedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([employeeProfileId, status, dueAt])
+  @@index([leadId, dueAt])
+  @@map("employee_crm_follow_ups")
 }
 
 model RefreshToken {
@@ -670,6 +787,8 @@ model Salon {
   verification          VerificationRequest?
   subsidyEntries        PlatformShopSubsidyEntry[]
   manualChairOccupancies ManualChairOccupancy[]
+  // FastQue internal field CRM attribution — at most one employee lead may claim a registered shop.
+  crmLeadAttribution    EmployeeCrmLead? @relation("CrmLeadOnboardedSalon")
 
   @@unique([cityId, slug])
   @@map("salons")
