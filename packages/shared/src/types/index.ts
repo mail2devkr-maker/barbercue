@@ -5,6 +5,11 @@ import type {
   ChargeType,
   CreditFundingSource,
   CreditTransactionType,
+  CrmFollowUpChannel,
+  CrmFollowUpStatus,
+  CrmLeadSource,
+  CrmLeadStatus,
+  CrmVisitOutcome,
   Language,
   LedgerReason,
   LedgerStatus,
@@ -87,6 +92,103 @@ export interface AdminEmployeeDto extends EmployeeProfileDto {
   passwordConfigured: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EmployeeCrmLeadDto {
+  id: string;
+  shopName: string;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  city: string | null;
+  locality: string | null;
+  addressLine: string | null;
+  source: CrmLeadSource;
+  status: CrmLeadStatus;
+  notes: string | null;
+  lostReason: string | null;
+  onboardedAt: string | null;
+  onboardedSalon: { id: string; publicId: string; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmployeeCrmVisitDto {
+  id: string;
+  leadId: string | null;
+  leadShopName: string | null;
+  shopName: string;
+  visitedAt: string;
+  outcome: CrmVisitOutcome;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface EmployeeCrmFollowUpDto {
+  id: string;
+  leadId: string;
+  leadShopName: string;
+  dueAt: string;
+  channel: CrmFollowUpChannel;
+  status: CrmFollowUpStatus;
+  notes: string | null;
+  outcome: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmployeeCrmDashboardDto {
+  profile: EmployeeProfileDto;
+  counts: {
+    leads: number;
+    onboarded: number;
+    visitsLast30Days: number;
+    openFollowUps: number;
+    overdueFollowUps: number;
+  };
+  conversionRatePercent: number;
+  recentLeads: EmployeeCrmLeadDto[];
+  recentVisits: EmployeeCrmVisitDto[];
+  upcomingFollowUps: EmployeeCrmFollowUpDto[];
+}
+
+export interface AdminCrmEmployeePerformanceDto {
+  employee: EmployeeProfileDto & { status: UserStatus };
+  leads: number;
+  onboarded: number;
+  visitsLast30Days: number;
+  openFollowUps: number;
+  overdueFollowUps: number;
+  conversionRatePercent: number;
+}
+
+export interface AdminCrmLeadDto extends EmployeeCrmLeadDto {
+  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+}
+
+export interface AdminCrmVisitDto extends EmployeeCrmVisitDto {
+  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+}
+
+export interface AdminCrmFollowUpDto extends EmployeeCrmFollowUpDto {
+  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+}
+
+export interface AdminCrmOverviewDto {
+  counts: {
+    employees: number;
+    leads: number;
+    onboarded: number;
+    visitsLast30Days: number;
+    openFollowUps: number;
+    overdueFollowUps: number;
+  };
+  conversionRatePercent: number;
+  performance: AdminCrmEmployeePerformanceDto[];
+  recentLeads: AdminCrmLeadDto[];
+  recentVisits: AdminCrmVisitDto[];
+  dueFollowUps: AdminCrmFollowUpDto[];
 }
 
 export interface AuthTokens {
