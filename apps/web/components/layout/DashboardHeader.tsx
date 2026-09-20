@@ -76,9 +76,9 @@ export function DashboardHeader() {
                 fontWeight: 600,
                 padding: "6px 10px",
                 borderRadius: 8,
-                border: "1px solid var(--bc-border)",
-                background: "var(--bc-surface)",
-                color: "var(--bc-ink)",
+                border: "1px solid rgba(255, 255, 255, 0.14)",
+                background: "rgba(255, 255, 255, 0.05)",
+                color: "#f7f5f4",
                 maxWidth: 220,
               }}
             >
