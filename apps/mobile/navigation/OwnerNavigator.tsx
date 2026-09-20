@@ -18,6 +18,7 @@ import { useEffect } from 'react';
 import { useSalon } from '../lib/salon-context';
 import { navigationRef } from './navigation-ref';
 import { subscribeToOwnerBookingPushNavigation } from '../lib/push-navigation';
+import { OwnerArrivalPromptCoordinator } from '../components/owner/OwnerArrivalPromptCoordinator';
 
 export type OwnerTabParamList = {
   OwnerDashboardTab: undefined;
@@ -38,6 +39,7 @@ export default function OwnerNavigator() {
   return (
     <SalonProvider>
       <OwnerPushNavigationBridge />
+      <OwnerArrivalPromptCoordinator />
       <OwnerNavigatorGate />
     </SalonProvider>
   );
