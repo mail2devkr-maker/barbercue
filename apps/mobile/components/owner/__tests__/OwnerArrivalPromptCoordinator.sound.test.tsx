@@ -9,6 +9,10 @@ import { requestOwnerArrivalPrompt } from '../../../lib/arrival-prompt';
 import { apiFetch } from '../../../lib/api';
 import { onReconnect } from '../../../lib/realtime';
 
+// The first render pulls in the real theme/Button, which is slow to cold-load when the machine is
+// busy (e.g. the whole monorepo test run in parallel); the default 5s is not enough there.
+jest.setTimeout(30_000);
+
 jest.mock('expo-notifications', () => ({
   scheduleNotificationAsync: jest.fn(async () => 'local-1'),
   dismissNotificationAsync: jest.fn(async () => undefined),
