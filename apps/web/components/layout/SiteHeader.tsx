@@ -19,13 +19,17 @@ import styles from "../landing/landing.module.css";
 
 const SALON_SCOPED_PATH = /^\/dashboard\/salons\/([^/]+)(\/.*)?$/;
 
-const PRIMARY_LINKS = [
+const PRIMARY_LINKS: ReadonlyArray<{
+  href: string;
+  label: string;
+  aboutOnly?: boolean;
+}> = [
   { href: "/search", label: "Find a barber" },
   { href: "/#services", label: "Services" },
   { href: "/#book-or-queue", label: "How it works" },
   { href: "/#for-shops", label: "For shops" },
   { href: "/about-us", label: "About Us", aboutOnly: true },
-] as const;
+];
 
 export function SiteHeader() {
   const pathname = usePathname();
