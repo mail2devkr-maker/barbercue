@@ -68,12 +68,17 @@ async function guard(): Promise<void> {
 }
 
 async function bootstrapAdmin(): Promise<void> {
-  const existing = await prisma.user.findUnique({ where: { email: MIGRATION_BOOTSTRAP_EMAIL } });
-  if (existing) return log('bootstrap-admin: row already exists - nothing to do.');
-  await prisma.user.create({
-    data: { email: MIGRATION_BOOTSTRAP_EMAIL, status: UserStatus.ACTIVE, emailVerifiedAt: new Date() },
-  });
-  log('bootstrap-admin: created the bare migration-guard row (no password, cannot sign in).');
+  // Raw SQL on purpose: this runs while the migration history is only PARTLY applied (it stops at the
+  // guard migration), so the generated Prisma client - which knows every later column - cannot be used.
+  const inserted = await prisma.$executeRaw`
+    INSERT INTO "users" ("id", "email", "status", "emailVerifiedAt", "updatedAt")
+    VALUES (gen_random_uuid()::text, ${MIGRATION_BOOTSTRAP_EMAIL}, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT ("email") DO NOTHING`;
+  log(
+    inserted > 0
+      ? 'bootstrap-admin: created the bare migration-guard row (no password, cannot sign in).'
+      : 'bootstrap-admin: row already exists - nothing to do.',
+  );
 }
 
 async function upsertLoginUser(local: string, password: string): Promise<string> {
