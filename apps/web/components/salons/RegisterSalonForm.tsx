@@ -106,7 +106,18 @@ export function RegisterSalonForm() {
     // one dropdown. It still exists and is unchanged — this form simply no longer calls it.
     apiFetch<CountryDto[]>(COUNTRY_PATHS.countries)
       .then((list) => {
-        if (!cancelled) setCountries(orderCountriesForDisplay(list));
+        if (cancelled) return;
+        const ordered = orderCountriesForDisplay(list);
+        setCountries(ordered);
+        // FastQue onboarding currently targets India first. Keep the selector editable for
+        // international shops, but remove one unnecessary click for the default path.
+        const india = ordered.find((country) => country.isoCode2 === "IN");
+        if (india) {
+          setCountryId(india.id);
+          setForm((current) =>
+            current.countryCode ? current : { ...current, countryCode: "IN" },
+          );
+        }
       })
       .catch(() => undefined);
     return () => {
