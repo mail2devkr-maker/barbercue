@@ -628,7 +628,7 @@ export function AddStaffForm({ salonId, onAdded }: { salonId: string; onAdded: (
     <View style={styles.editPanel}>
       {error && <InlineError message={error} />}
       <TextInput style={styles.input} value={displayName} onChangeText={setDisplayName} placeholder={t.barberNamePlaceholder} placeholderTextColor={color.muted} />
-      <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder={t.phoneNumberPlaceholder} placeholderTextColor={color.muted} keyboardType="phone-pad" />
+      <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder={t.staffPhoneOptionalPlaceholder} placeholderTextColor={color.muted} keyboardType="phone-pad" />
       <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder={t.emailOptionalPlaceholder} placeholderTextColor={color.muted} keyboardType="email-address" autoCapitalize="none" />
       <View style={styles.actionRow}>
         <Button title={t.addAction} onPress={() => void submit()} loading={saving} disabled={!displayName.trim()} style={styles.actionButton} />
