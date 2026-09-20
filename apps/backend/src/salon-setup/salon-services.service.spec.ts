@@ -1,3 +1,4 @@
+import { SalonType } from '@barbercue/shared';
 import { SalonServicesService } from './salon-services.service';
 
 function decimal(value: string) {
@@ -7,7 +8,7 @@ function decimal(value: string) {
 describe('SalonServicesService', () => {
   let service: SalonServicesService;
   let prisma: {
-    salon: { findUnique: jest.Mock };
+    salon: { findUnique: jest.Mock; update: jest.Mock };
     service: {
       findMany: jest.Mock;
       findFirst: jest.Mock;
@@ -22,7 +23,10 @@ describe('SalonServicesService', () => {
   beforeEach(() => {
     prisma = {
       // toDto now reads the owning salon's currency so prices can be formatted per-country.
-      salon: { findUnique: jest.fn().mockResolvedValue({ currency: 'INR' }) },
+      salon: {
+        findUnique: jest.fn().mockResolvedValue({ currency: 'INR', salonType: SalonType.UNISEX }),
+        update: jest.fn(),
+      },
       service: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
@@ -36,6 +40,55 @@ describe('SalonServicesService', () => {
       assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER'),
     };
     service = new SalonServicesService(prisma as never, salonAccess as never);
+  });
+
+  describe('salon type', () => {
+    it('returns the persisted salon type after checking owner/admin access', async () => {
+      prisma.salon.findUnique.mockResolvedValueOnce({ salonType: SalonType.GENTS });
+
+      await expect(service.getSalonType('owner-1', 'salon-1')).resolves.toEqual({
+        salonType: SalonType.GENTS,
+      });
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
+    });
+
+    it('lets an owner switch salon type without touching existing service rows', async () => {
+      prisma.salon.findUnique.mockResolvedValueOnce({ salonType: SalonType.UNISEX });
+      prisma.salon.update.mockResolvedValueOnce({ salonType: SalonType.LADIES });
+
+      await expect(
+        service.updateSalonType('owner-1', 'salon-1', { salonType: SalonType.LADIES }),
+      ).resolves.toEqual({ salonType: SalonType.LADIES });
+
+      expect(prisma.salon.update).toHaveBeenCalledWith({
+        where: { id: 'salon-1' },
+        data: { salonType: SalonType.LADIES },
+        select: { salonType: true },
+      });
+      expect(prisma.service.update).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('audits a delegated PLATFORM_ADMIN salon-type change', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      prisma.salon.findUnique.mockResolvedValueOnce({ salonType: SalonType.UNISEX });
+      prisma.salon.update.mockResolvedValueOnce({ salonType: SalonType.GENTS });
+
+      await service.updateSalonType('admin-1', 'salon-1', { salonType: SalonType.GENTS });
+
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_SALON_TYPE_UPDATED',
+          entityType: 'Salon',
+          entityId: 'salon-1',
+          metadata: {
+            before: SalonType.UNISEX,
+            after: SalonType.GENTS,
+          },
+        }),
+      });
+    });
   });
 
   describe('salon isolation', () => {
