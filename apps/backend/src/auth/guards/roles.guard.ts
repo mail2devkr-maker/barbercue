@@ -48,6 +48,9 @@ export class RolesGuard {
       if (role === Role.PLATFORM_ADMIN) {
         return user.audience === SessionAudience.ADMIN;
       }
+      if (role === Role.FIELD_EXECUTIVE) {
+        return user.audience === SessionAudience.EMPLOYEE;
+      }
       return true;
     });
     if (!hasValidMatch) {
