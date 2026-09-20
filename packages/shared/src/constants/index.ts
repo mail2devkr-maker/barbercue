@@ -13,6 +13,7 @@ export const AUTH_PATHS = {
   otpVerify: 'otp/verify',
   google: 'google',
   staffLogin: 'staff/login',
+  employeeLogin: 'employee/login',
   // Google Sign-In restricted to accounts that already hold SALON_OWNER and/or SALON_STAFF —
   // deliberately a separate endpoint from `google` above, not a shared one branching on a role
   // param: the two have opposite account-creation semantics (customer Google sign-in creates a
@@ -37,6 +38,11 @@ export const AUTH_PATHS = {
   methods: 'methods',
   // PATCH auth/language (Phase 14) — sets User.preferredLanguage, returns the updated MeResponse.
   language: 'language',
+} as const;
+
+export const EMPLOYEE_PATHS = {
+  employee: 'employee',
+  me: 'me',
 } as const;
 
 export const ADMIN_PATHS = {
