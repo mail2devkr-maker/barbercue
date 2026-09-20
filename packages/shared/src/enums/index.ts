@@ -71,6 +71,13 @@ export const SalonStatus = {
 } as const;
 export type SalonStatus = (typeof SalonStatus)[keyof typeof SalonStatus];
 
+export const SalonType = {
+  GENTS: 'GENTS',
+  LADIES: 'LADIES',
+  UNISEX: 'UNISEX',
+} as const;
+export type SalonType = (typeof SalonType)[keyof typeof SalonType];
+
 export const SalonStaffRole = {
   OWNER: 'OWNER',
   MANAGER: 'MANAGER',
