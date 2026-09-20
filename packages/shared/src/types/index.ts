@@ -72,6 +72,14 @@ export interface AuthMethodsDto {
   phoneOtp: boolean;
 }
 
+export interface EmployeeProfileDto {
+  id: string;
+  employeeCode: string;
+  fullName: string;
+  territory: string | null;
+  joinedAt: string;
+}
+
 export interface AuthTokens {
   accessToken: string;
   // Present in the response body for mobile (stored via secure storage); web instead relies on
