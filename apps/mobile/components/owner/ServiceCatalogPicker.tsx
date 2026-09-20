@@ -76,7 +76,10 @@ export function ServiceCatalogPicker({
       const next = { ...current };
       for (const preset of selectablePack) {
         if (!next[preset.id]) {
-          next[preset.id] = { price: "", durationMinutes: String(preset.defaultDurationMinutes) };
+          next[preset.id] = {
+            price: String(preset.defaultPriceInr),
+            durationMinutes: String(preset.defaultDurationMinutes),
+          };
         }
       }
       return next;
@@ -95,7 +98,7 @@ export function ServiceCatalogPicker({
       return {
         ...current,
         [preset.id]: {
-          price: '',
+          price: String(preset.defaultPriceInr),
           durationMinutes: String(preset.defaultDurationMinutes),
         },
       };
@@ -193,7 +196,7 @@ export function ServiceCatalogPicker({
         <View style={styles.headingCopy}>
           <Text style={styles.title}>Choose a service pack</Text>
           <Text style={styles.hint}>
-            Start with Basic, Standard or Advance services. Prices stay yours to confirm.
+            Suggested India prices and service times are already filled. Keep them or edit before saving.
           </Text>
         </View>
         <Text style={styles.selectionCount}>{Object.keys(selected).length} selected</Text>
@@ -272,7 +275,7 @@ export function ServiceCatalogPicker({
               <View style={styles.presetCopy}>
                 <Text style={styles.presetName}>{preset.name}</Text>
                 <Text style={styles.presetMeta}>
-                  {preset.defaultDurationMinutes} min suggested
+                  ₹{preset.defaultPriceInr} · {preset.defaultDurationMinutes} min suggested
                 </Text>
               </View>
               {existing?.isActive && <Text style={styles.addedBadge}>Added</Text>}
@@ -298,7 +301,7 @@ export function ServiceCatalogPicker({
                   value={draft.price}
                   onChangeText={(value) => update(preset.id, { price: value })}
                   keyboardType="decimal-pad"
-                  placeholder="Price"
+                  placeholder="Suggested price"
                   placeholderTextColor={color.muted}
                 />
                 <TextInput
