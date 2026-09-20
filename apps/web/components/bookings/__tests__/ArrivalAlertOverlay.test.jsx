@@ -7,6 +7,7 @@ import { useAuth } from '../../../lib/auth-context';
 import { setVoiceEnabled } from '../../../lib/voice-preference';
 
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
+jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: jest.fn(() => 'idem-arrival-test') }));
 jest.mock('../../../lib/realtime', () => ({
   getRealtimeSocket: jest.fn(),
   joinSalonRoom: jest.fn(),
@@ -102,7 +103,10 @@ it('ARRIVED requires a second confirmation before calling the backend', async ()
   await act(async () => findByText('button', 'Confirm Arrived').props.onClick());
   expect(apiFetch).toHaveBeenCalledWith(
     expect.stringContaining('bookings/b1/arrive'),
-    expect.objectContaining({ method: 'POST' }),
+    expect.objectContaining({
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'idem-arrival-test' },
+    }),
   );
 });
 
@@ -136,7 +140,10 @@ it('NOT ARRIVED after grace expiry escalates to a backend-authoritative Mark No 
   await act(async () => findByText('button', 'Confirm No Show').props.onClick());
   expect(apiFetch).toHaveBeenCalledWith(
     expect.stringContaining('bookings/b1/no-show'),
-    expect.objectContaining({ method: 'POST' }),
+    expect.objectContaining({
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'idem-arrival-test' },
+    }),
   );
 });
 
