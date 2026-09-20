@@ -735,6 +735,7 @@ export interface UiStrings {
   minutesPlaceholder: string;
   chairLabelPlaceholder: string;
   barberNamePlaceholder: string;
+  staffPhoneOptionalPlaceholder: string;
   emailOptionalPlaceholder: string;
   inactiveSuffix: string;
   invitePendingSuffix: string;
@@ -1450,6 +1451,7 @@ const enUi: UiStrings = {
   minutesPlaceholder: 'Minutes',
   chairLabelPlaceholder: 'Chair label',
   barberNamePlaceholder: 'Staff name',
+  staffPhoneOptionalPlaceholder: 'Mobile number (optional)',
   emailOptionalPlaceholder: 'Email (optional, for account invite)',
   inactiveSuffix: ' · Inactive',
   invitePendingSuffix: ' · Invite pending',
@@ -2137,6 +2139,7 @@ const hiUi: UiStrings = {
   minutesPlaceholder: 'मिनट',
   chairLabelPlaceholder: 'कुर्सी लेबल',
   barberNamePlaceholder: 'स्टाफ का नाम',
+  staffPhoneOptionalPlaceholder: 'मोबाइल नंबर (वैकल्पिक)',
   emailOptionalPlaceholder: 'ईमेल (वैकल्पिक, खाता आमंत्रण हेतु)',
   inactiveSuffix: ' · निष्क्रिय',
   invitePendingSuffix: ' · आमंत्रण लंबित',
