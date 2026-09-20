@@ -169,7 +169,11 @@ function EntryRow({
 
       {entry.status === 'CALLED' && !assigning && (
         <View style={styles.actionRow}>
-          {arrived && <Button title={t.assignAction} onPress={() => setAssigning(true)} style={styles.actionButton} />}
+          {/* Assign is offered for EVERY called entry, exactly as before arrival tracking existed. It must
+              never be gated on `arrived`: the backend seats a WAITING/CALLED entry and records the arrival
+              itself (QueueService.assign sets arrivedAt), so requiring a separate "Mark arrived" tap first
+              blocked the normal Call -> Assign flow for every remote/QR join. */}
+          <Button title={t.assignAction} onPress={() => setAssigning(true)} style={styles.actionButton} />
           <Button
             title={t.noShowAction}
             variant="outline"

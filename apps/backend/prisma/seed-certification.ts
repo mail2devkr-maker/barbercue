@@ -11,6 +11,9 @@
  *   bootstrap-admin   fresh database only: the bare row migration 20260830215000 requires (no password)
  *   seed              salon + owner + assigned staff + other staff + policy; writes login credentials
  *                     to CERT_CREDENTIALS_FILE (never printed)
+ *   queue-fixtures    two active chairs and staff qualified for both services (needed for Live Queue
+ *                     Assign); idempotent
+ *   walk-in           [--count N] WAITING walk-in queue entries with fictional contact details
  *   appointment       a CONFIRMED appointment for a fresh test customer:
  *                       --in <minutes>          slot start relative to now (negative = already past)
  *                       --staff assigned|other|any   who the customer picked (default: assigned)
@@ -25,6 +28,9 @@ import { writeFileSync } from 'fs';
 import { PrismaClient } from '@prisma/client';
 import {
   BookingSource,
+  ChairStatus,
+  QueueEntrySource,
+  QueueEntryStatus,
   BookingStatus,
   ChargeType,
   Role,
@@ -202,6 +208,56 @@ async function seed(): Promise<void> {
   log('seed: created the certification salon, owner, assigned staff and other staff. Logins written to CERT_CREDENTIALS_FILE (not printed).');
 }
 
+async function queueFixtures(): Promise<void> {
+  const salon = await prisma.salon.findFirstOrThrow({ where: { slug: CERT_SALON_SLUG } });
+  for (const label of ['Cert Chair 1', 'Cert Chair 2']) {
+    const existing = await prisma.chair.findFirst({ where: { salonId: salon.id, label } });
+    if (!existing) await prisma.chair.create({ data: { salonId: salon.id, label, status: ChairStatus.ACTIVE } });
+  }
+  const [staff, services] = await Promise.all([
+    prisma.salonStaff.findMany({ where: { salonId: salon.id } }),
+    prisma.service.findMany({ where: { salonId: salon.id } }),
+  ]);
+  for (const member of staff) {
+    for (const service of services) {
+      await prisma.staffService.upsert({
+        where: { staffId_serviceId: { staffId: member.id, serviceId: service.id } },
+        update: {},
+        create: { staffId: member.id, serviceId: service.id },
+      });
+    }
+  }
+  log(`queue-fixtures: ${2} chairs, ${staff.length} staff qualified for ${services.length} services.`);
+}
+
+async function walkIns(): Promise<void> {
+  const salon = await prisma.salon.findFirstOrThrow({ where: { slug: CERT_SALON_SLUG } });
+  const service = await prisma.service.findFirstOrThrow({ where: { salonId: salon.id, name: 'Cert Haircut' } });
+  const count = Number(flag('count') ?? '1');
+  const last = await prisma.queueEntry.findFirst({ where: { salonId: salon.id }, orderBy: { tokenNumber: 'desc' } });
+  let token = (last?.tokenNumber ?? 0) + 1;
+  for (let i = 0; i < count; i += 1) {
+    const suffix = randomBytes(4).toString('hex');
+    const customer = await prisma.user.create({
+      data: { email: email(`cert-walkin-${suffix}`), status: UserStatus.ACTIVE, emailVerifiedAt: new Date(), roles: { create: { role: Role.CUSTOMER } } },
+    });
+    const entry = await prisma.queueEntry.create({
+      data: {
+        salonId: salon.id,
+        customerId: customer.id,
+        serviceId: service.id,
+        source: QueueEntrySource.WALK_IN,
+        tokenNumber: token,
+        status: QueueEntryStatus.WAITING,
+        contactName: `Cert Walk-in ${token}`,
+        contactPhone: `+91 00000 0${String(token).padStart(4, '0')}`,
+      },
+    });
+    log(`walk-in created: token #${token}, entry ${entry.id}`);
+    token += 1;
+  }
+}
+
 async function appointment(): Promise<void> {
   const salon = await prisma.salon.findFirstOrThrow({ where: { slug: CERT_SALON_SLUG } });
   const services = await prisma.service.findMany({ where: { salonId: salon.id, isActive: true }, orderBy: { name: 'asc' } });
@@ -263,8 +319,10 @@ async function main(): Promise<void> {
   await guard();
   if (command === 'bootstrap-admin') await bootstrapAdmin();
   else if (command === 'seed') await seed();
+  else if (command === 'queue-fixtures') await queueFixtures();
+  else if (command === 'walk-in') await walkIns();
   else if (command === 'appointment') await appointment();
-  else throw new Error('Usage: seed-certification.ts <bootstrap-admin|seed|appointment> [--in N] [--staff assigned|other|any] [--multi]');
+  else throw new Error('Usage: seed-certification.ts <bootstrap-admin|seed|queue-fixtures|walk-in|appointment> [--in N] [--staff assigned|other|any] [--multi]');
 }
 
 main()
