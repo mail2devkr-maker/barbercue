@@ -21,14 +21,13 @@ interface CatalogDraft {
   description: string;
 }
 
-// Duration has a real canonical default (ServiceCatalogItem.defaultDurationMinutes); price
-// deliberately does not (see service-catalog.ts's own doc comment) — every shop must enter and
-// confirm its own price, so this never fabricates one. Shared by both the individual toggle and
-// Select All so both paths create a new draft identically.
+// FastQue provides editable India-oriented suggested price + duration defaults. Shared by both
+// the individual toggle and Select All so a whole pack becomes immediately saveable without
+// repetitive typing; owners can still change either value before saving.
 function emptyDraft(item: ServiceCatalogItem): CatalogDraft {
   return {
     item,
-    price: "",
+    price: String(item.defaultPriceInr),
     durationMinutes: String(item.defaultDurationMinutes),
     description: "",
   };
@@ -81,7 +80,7 @@ export function ServiceCatalogPicker({
   }, [category, pack, query]);
 
   // Bulk selection is intentionally pack-scoped: owners can pick a whole pack instead of
-  // clicking dozens of services, while prices remain owner-confirmed before save.
+  // clicking dozens of services. Suggested price/time defaults make the pack immediately ready.
   const selectableCatalog = useMemo(
     () => SERVICE_CATALOG.filter(
       (catalogItem) =>
@@ -109,9 +108,8 @@ export function ServiceCatalogPicker({
     onError(null);
   }
 
-  // Adds a fresh draft (canonical default duration, blank price) for every selectable catalog
-  // item that isn't already selected — an already-selected item's draft, including any price/
-  // duration the owner already edited, is left completely untouched, never recreated.
+  // Adds a fresh draft with suggested price + duration for every selectable catalog item that
+  // isn't already selected. Any owner edits already made stay untouched.
   function selectAll() {
     setSelected((current) => {
       const next = { ...current };
@@ -135,9 +133,7 @@ export function ServiceCatalogPicker({
     onError(null);
   }
 
-  // Fast bulk price entry without fabricating a number: the owner types one real price and it
-  // applies only to currently-selected drafts whose price is still blank — a price the owner
-  // already typed into an individual row is never overwritten.
+  // Optional bulk override for owners who intentionally want one price across the selected pack.
   function applyBulkPrice() {
     if (!priceIsValid(bulkPrice)) {
       onError("Enter a valid price to apply to all selected services.");
@@ -146,7 +142,7 @@ export function ServiceCatalogPicker({
     setSelected((current) => {
       const next = { ...current };
       for (const id of Object.keys(next)) {
-        if (next[id].price.trim() === "") next[id] = { ...next[id], price: bulkPrice };
+        next[id] = { ...next[id], price: bulkPrice };
       }
       return next;
     });
@@ -234,7 +230,7 @@ export function ServiceCatalogPicker({
         <div>
           <p className={styles.eyebrow}>Quick setup</p>
           <h2 id="service-catalog-heading" className={styles.sectionHeading}>Choose a service pack</h2>
-          <p className={styles.hint}>Start with Basic, Standard or Advance services, then enter your own prices.</p>
+          <p className={styles.hint}>Choose a pack with suggested India prices and service times already filled. Keep them or edit anything before saving.</p>
         </div>
         <div className={styles.catalogHeadingActions}>
           <span className={styles.selectionCount}>{Object.keys(selected).length} selected</span>
@@ -332,7 +328,7 @@ export function ServiceCatalogPicker({
                   />
                   <span>
                     <strong>{item.name}</strong>
-                    <small>{item.category} · {item.defaultDurationMinutes} min suggested</small>
+                    <small>{item.category} · ₹{item.defaultPriceInr} · {item.defaultDurationMinutes} min suggested</small>
                   </span>
                 </label>
                 {existing?.isActive && <span className={styles.addedBadge}>Added</span>}
@@ -352,7 +348,7 @@ export function ServiceCatalogPicker({
                 <div className={styles.catalogDraftFields}>
                   <div className={styles.fieldWrap}>
                     <label className={styles.fieldLabel} htmlFor={`catalog-price-${item.id}`}>
-                      Price{currencyLabel} (required)
+                      Price{currencyLabel} (suggested — editable)
                     </label>
                     <input
                       id={`catalog-price-${item.id}`}
@@ -364,7 +360,7 @@ export function ServiceCatalogPicker({
                       aria-required="true"
                       value={draft.price}
                       onChange={(event) => updateDraft(item.id, { price: event.target.value })}
-                      placeholder="Enter price"
+                      placeholder="Suggested price"
                       className={styles.input}
                     />
                   </div>
@@ -405,7 +401,7 @@ export function ServiceCatalogPicker({
         <div className={styles.catalogBulkPriceBar}>
           <div className={styles.fieldWrap}>
             <label className={styles.fieldLabel} htmlFor="catalog-bulk-price">
-              Apply one price to every selected service that doesn&apos;t have one yet{currencyLabel}
+              Apply one price to all selected services (overrides suggested prices){currencyLabel}
             </label>
             <input
               id="catalog-bulk-price"
