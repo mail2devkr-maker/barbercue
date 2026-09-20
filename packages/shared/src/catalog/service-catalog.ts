@@ -1,6 +1,7 @@
 /**
- * Reusable owner service presets. Prices are deliberately absent: every shop must enter and
- * confirm its own price. Durations are operational starting points only and stay editable.
+ * Reusable owner service presets. FastQue supplies India-oriented suggested starting prices and
+ * durations to make onboarding fast. Both are editable before the owner saves the services; they
+ * are convenience defaults, not enforced market prices.
  */
 export type ServicePackId = 'BASIC' | 'STANDARD' | 'ADVANCED';
 
@@ -33,6 +34,8 @@ export interface ServiceCatalogItem {
   name: string;
   category: string;
   defaultDurationMinutes: number;
+  /** Suggested India onboarding price in rupees; editable by the salon owner before save. */
+  defaultPriceInr: number;
   pack: ServicePackId;
 }
 
@@ -110,6 +113,111 @@ const ADVANCED_SERVICE_IDS = new Set([
   'body-polish',
 ]);
 
+
+// Curated FastQue onboarding suggestions for India. These are intentionally round, editable
+// starting points rather than claims of a single nationwide market price. Keeping them beside the
+// shared catalog gives web and mobile exactly the same defaults.
+const SUGGESTED_PRICE_INR_BY_ID: Readonly<Record<string, number>> = {
+  "classic-haircut": 250,
+  "skin-fade": 350,
+  "zero-fade": 300,
+  "buzz-cut": 200,
+  "crew-cut": 250,
+  "kids-haircut": 200,
+  "hair-wash": 150,
+  "blow-dry-styling": 250,
+  "hair-setting": 250,
+  "head-shave": 200,
+  "haircut-beard": 400,
+  "beard-trim": 150,
+  "beard-shape-line-up": 200,
+  "clean-shave": 150,
+  "premium-luxury-shave": 350,
+  "moustache-trim": 100,
+  "beard-colour": 300,
+  "womens-haircut": 500,
+  "hair-trim": 350,
+  "fringe-bangs-trim": 200,
+  "girls-kids-haircut": 300,
+  "shampoo-conditioning": 250,
+  "blow-dry": 400,
+  "hair-ironing": 400,
+  "hair-curling": 600,
+  "basic-hairdo": 700,
+  "party-hairdo": 1200,
+  "root-touch-up": 1200,
+  "global-hair-colour": 2500,
+  "highlights": 3000,
+  "lowlights": 3000,
+  "balayage": 4500,
+  "ombre": 4500,
+  "henna": 600,
+  "hair-spa": 800,
+  "deep-conditioning": 600,
+  "head-massage": 300,
+  "anti-dandruff-treatment": 800,
+  "anti-hairfall-treatment": 900,
+  "scalp-treatment": 1000,
+  "keratin-treatment": 4000,
+  "smoothening": 3500,
+  "rebonding-straightening": 4500,
+  "hair-botox": 5000,
+  "cleanup": 500,
+  "fruit-facial": 700,
+  "gold-facial": 1000,
+  "diamond-facial": 1200,
+  "hydrating-facial": 1000,
+  "brightening-facial": 1000,
+  "anti-ageing-facial": 1500,
+  "acne-control-facial": 1200,
+  "de-tan": 500,
+  "bleach": 400,
+  "face-polish": 700,
+  "eyebrows": 50,
+  "upper-lip": 30,
+  "chin": 30,
+  "forehead": 30,
+  "side-face": 60,
+  "full-face-threading": 150,
+  "underarms": 150,
+  "half-arms": 250,
+  "full-arms": 400,
+  "half-legs": 350,
+  "full-legs": 600,
+  "full-face-wax": 250,
+  "stomach": 350,
+  "back": 500,
+  "full-body-wax": 1800,
+  "bikini-wax": 800,
+  "manicure": 500,
+  "pedicure": 700,
+  "spa-manicure": 800,
+  "spa-pedicure": 1000,
+  "nail-cut-file": 150,
+  "nail-polish": 200,
+  "gel-polish": 600,
+  "gel-removal": 300,
+  "nail-art": 800,
+  "nail-extensions": 1800,
+  "nail-extension-removal": 500,
+  "party-makeup": 2000,
+  "hd-makeup": 3500,
+  "airbrush-makeup": 4000,
+  "engagement-makeup": 5000,
+  "bridal-makeup": 8000,
+  "groom-makeup-grooming": 2500,
+  "eye-makeup": 800,
+  "saree-draping": 500,
+  "bridal-hairdo": 2500,
+  "pre-bridal-package": 6000,
+  "foot-massage": 400,
+  "hand-massage": 300,
+  "head-neck-shoulder-massage": 500,
+  "back-massage": 700,
+  "body-scrub": 1000,
+  "body-polish": 1500
+};
+
 function packFor(id: string): ServicePackId {
   if (BASIC_SERVICE_IDS.has(id)) return 'BASIC';
   if (ADVANCED_SERVICE_IDS.has(id)) return 'ADVANCED';
@@ -122,7 +230,11 @@ function item(
   name: string,
   defaultDurationMinutes: number,
 ): ServiceCatalogItem {
-  return { category, id, name, defaultDurationMinutes, pack: packFor(id) };
+  const defaultPriceInr = SUGGESTED_PRICE_INR_BY_ID[id];
+  if (defaultPriceInr === undefined) {
+    throw new Error(`Missing suggested service price for catalog item: ${id}`);
+  }
+  return { category, id, name, defaultDurationMinutes, defaultPriceInr, pack: packFor(id) };
 }
 
 export const SERVICE_CATALOG_CATEGORIES = [
