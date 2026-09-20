@@ -357,6 +357,9 @@ export const QueueErrorCode = {
   CHECK_IN_TOO_EARLY: 'CHECK_IN_TOO_EARLY',
   NOT_YOUR_STAFF_PROFILE: 'NOT_YOUR_STAFF_PROFILE',
   SERVICE_REQUIRED: 'SERVICE_REQUIRED',
+  // Live Queue join: no phone could be resolved (neither supplied with the join nor on the account),
+  // so the entry would be uncontactable. The client must collect a mobile number and retry.
+  CONTACT_PHONE_REQUIRED: 'CONTACT_PHONE_REQUIRED',
 } as const;
 export type QueueErrorCode = (typeof QueueErrorCode)[keyof typeof QueueErrorCode];
 

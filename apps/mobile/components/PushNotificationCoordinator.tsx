@@ -20,15 +20,31 @@ import {
   type OwnerBookingPushData,
 } from '../lib/push-navigation';
 import { requestOwnerArrivalPrompt } from '../lib/arrival-prompt';
+import {
+  LOCAL_ARRIVAL_ALERT_TYPE,
+  foregroundArrivalPushBehavior,
+  localArrivalAlertBehavior,
+  markArrivalAlerted,
+} from '../lib/arrival-alert-sound';
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
+    handleNotification: async (notification) => {
+      const data = notification.request.content.data;
+      // The in-app arrival alert (a local notification): heads-up + sound, never left in the tray.
+      if (data?.type === LOCAL_ARRIVAL_ALERT_TYPE) return localArrivalAlertBehavior();
+      // The real arrival-check push while the app is open: audible unless the in-app alert already
+      // sounded for this booking - one alert per eligible arrival, never two.
+      if (data?.type === 'booking.arrival_check') {
+        return foregroundArrivalPushBehavior(typeof data.bookingId === 'string' ? data.bookingId : null);
+      }
+      return {
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      };
+    },
   });
 }
 
@@ -65,6 +81,8 @@ export function PushNotificationCoordinator() {
     const payload = parseOwnerBookingPushData(response.notification.request.content.data);
     if (!payload) return false;
     if (payload.type === 'booking.arrival_check') {
+      // The owner tapped the push (which already sounded) - opening the prompt must stay silent.
+      markArrivalAlerted(payload.bookingId);
       const initialAction =
         response.actionIdentifier === ARRIVAL_ACTION_ARRIVED
           ? 'arrived'
@@ -80,6 +98,9 @@ export function PushNotificationCoordinator() {
 
   function scheduleForegroundVoiceFallback(payload: OwnerBookingPushData): void {
     if (payload.type === 'booking.arrival_check') {
+      // Sound for this push is decided by the notification handler above; just keep the in-app
+      // alert from doubling it.
+      markArrivalAlerted(payload.bookingId);
       requestOwnerArrivalPrompt(payload);
       return;
     }

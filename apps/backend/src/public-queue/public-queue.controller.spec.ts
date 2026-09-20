@@ -92,7 +92,22 @@ describe('PublicQueueController', () => {
 
       await controller.join(user('u1'), 'tok-for-salon-a', { serviceId: 'svc-1' });
 
-      expect(queueService.joinWalkIn).toHaveBeenCalledWith('u1', 'salon-from-token', 'svc-1');
+      expect(queueService.joinWalkIn).toHaveBeenCalledWith('u1', 'salon-from-token', 'svc-1', {
+        name: undefined,
+        phone: undefined,
+      });
+    });
+
+    it('forwards the contact name/phone given with the join to the queue engine (never anywhere else)', async () => {
+      tokenService.resolveToken.mockResolvedValue({ id: 'salon-from-token', name: 'Fresh Cuts', status: 'ACTIVE' });
+      queueService.joinWalkIn.mockResolvedValue({ id: 'entry-1' });
+
+      await controller.join(user('u1'), 'tok', { contactName: 'Ravi Kumar', contactPhone: '+919811122233' });
+
+      expect(queueService.joinWalkIn).toHaveBeenCalledWith('u1', 'salon-from-token', undefined, {
+        name: 'Ravi Kumar',
+        phone: '+919811122233',
+      });
     });
 
     it('passes the authenticated caller\'s own id, never a client-supplied one', async () => {
@@ -101,7 +116,10 @@ describe('PublicQueueController', () => {
 
       await controller.join(user('the-real-caller'), 'tok', {});
 
-      expect(queueService.joinWalkIn).toHaveBeenCalledWith('the-real-caller', 's1', undefined);
+      expect(queueService.joinWalkIn).toHaveBeenCalledWith('the-real-caller', 's1', undefined, {
+        name: undefined,
+        phone: undefined,
+      });
     });
 
     it('delegates to the existing QueueService.joinWalkIn and returns its result unmodified', async () => {

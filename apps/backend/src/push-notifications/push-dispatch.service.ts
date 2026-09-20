@@ -15,7 +15,16 @@ export interface PushPayload {
   /** Ids-only, same convention as RealtimeGateway's emits — never customer PII. */
   data?: Record<string, unknown>;
   categoryId?: string;
+  channelId?: string;
+  sound?: 'default' | null;
+  priority?: 'default' | 'normal' | 'high';
 }
+
+// The Android channel the mobile app creates at push registration (lib/push-notifications.ts:
+// ANDROID_BOOKING_CHANNEL_ID) — HIGH importance, default sound, vibration. The arrival check is
+// the one push where silence defeats its purpose, so it names the channel explicitly and requests
+// the default tone rather than relying on Expo/FCM's fallback channel.
+const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
 
 // Only for log lines — never the full token. A stable-but-non-reversible-looking prefix is enough
 // to correlate log lines with a specific device during debugging without exposing the credential.
@@ -67,7 +76,14 @@ export class PushDispatchService {
       title,
       body,
       data,
-      ...(kind === 'arrivalCheck' ? { categoryId: 'booking_arrival_check' } : {}),
+      ...(kind === 'arrivalCheck'
+        ? {
+            categoryId: 'booking_arrival_check',
+            channelId: ANDROID_BOOKING_CHANNEL_ID,
+            sound: 'default' as const,
+            priority: 'high' as const,
+          }
+        : {}),
     });
   }
 
@@ -94,6 +110,9 @@ export class PushDispatchService {
       body: payload.body,
       data: payload.data,
       ...(payload.categoryId ? { categoryId: payload.categoryId } : {}),
+      ...(payload.channelId ? { channelId: payload.channelId } : {}),
+      ...(payload.sound !== undefined ? { sound: payload.sound } : {}),
+      ...(payload.priority ? { priority: payload.priority } : {}),
     }));
 
     let tickets: ExpoPushTicket[];

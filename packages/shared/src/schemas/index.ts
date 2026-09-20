@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import {
+  CONTACT_NAME_MAX_LENGTH,
+  CONTACT_NAME_MIN_LENGTH,
+  normalizeContactName,
+  normalizeContactPhone,
+} from '../contact';
+import {
   ChairStatus,
   ChargeType,
   CreditFundingSource,
@@ -143,6 +149,23 @@ export type StaffListQueryInput = z.infer<typeof staffListQuerySchema>;
 
 export const joinQueueSchema = z.object({
   serviceId: z.string().uuid().optional(),
+  // Live Queue contact details (see ./contact). Both optional on the wire so an older client that
+  // does not send them keeps working when the account already has a phone; the server still refuses
+  // to create an uncontactable entry (CONTACT_PHONE_REQUIRED) when no phone can be resolved.
+  contactName: z
+    .string()
+    .transform((value) => normalizeContactName(value))
+    .refine((value): value is string => value !== null, {
+      message: `name must be ${CONTACT_NAME_MIN_LENGTH}-${CONTACT_NAME_MAX_LENGTH} characters`,
+    })
+    .optional(),
+  contactPhone: z
+    .string()
+    .transform((value) => normalizeContactPhone(value))
+    .refine((value): value is string => value !== null, {
+      message: 'enter a valid mobile number, with a country code if it is not an Indian number',
+    })
+    .optional(),
 });
 export type JoinQueueInput = z.infer<typeof joinQueueSchema>;
 

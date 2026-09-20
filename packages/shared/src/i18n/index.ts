@@ -821,6 +821,27 @@ export interface UiStrings {
   avgWaitLabel: string;
   couldNotCompleteAction: string;
   callAction: string;
+  phoneCustomerAction: string;
+  markArrivedAction: string;
+  arrivedStatus: string;
+  notYetArrivedStatus: string;
+  customerNameMissing: string;
+  customerPhoneMissing: string;
+  keepEntryAction: string;
+  confirmCancelEntryTitle: string;
+  confirmCancelEntryBody: string;
+  confirmNoShowEntryTitle: string;
+  confirmNoShowEntryBody: string;
+  confirmCompleteServiceTitle: string;
+  confirmCompleteServiceBody: string;
+  queueEntryChangedError: string;
+  queueActionNotAllowedError: string;
+  queueNetworkError: string;
+  contactNameLabel: string;
+  contactPhoneLabel: string;
+  contactPhoneHint: string;
+  contactNameRequiredError: string;
+  contactPhoneInvalidError: string;
   assignAction: string;
   noShowAction: string;
   barberLabel: string;
@@ -1512,6 +1533,27 @@ const enUi: UiStrings = {
   avgWaitLabel: 'Avg wait',
   couldNotCompleteAction: 'Could not complete that action.',
   callAction: 'Call',
+  phoneCustomerAction: 'Phone customer',
+  markArrivedAction: 'Mark arrived',
+  arrivedStatus: 'Arrived in shop',
+  notYetArrivedStatus: 'Not yet arrived',
+  customerNameMissing: 'Name not provided',
+  customerPhoneMissing: 'No phone number',
+  keepEntryAction: 'Keep',
+  confirmCancelEntryTitle: 'Cancel this queue entry?',
+  confirmCancelEntryBody: 'The customer will be removed from the live queue.',
+  confirmNoShowEntryTitle: 'Mark as no-show?',
+  confirmNoShowEntryBody: 'Use this only if the customer was called and did not come.',
+  confirmCompleteServiceTitle: 'Complete this service?',
+  confirmCompleteServiceBody: 'This marks the visit as successfully served.',
+  queueEntryChangedError: 'This queue entry has changed. The list was refreshed.',
+  queueActionNotAllowedError: 'You do not have permission to do that.',
+  queueNetworkError: 'Could not reach FastQue. Check your connection and try again.',
+  contactNameLabel: 'Your name',
+  contactPhoneLabel: 'Mobile number',
+  contactPhoneHint: 'The shop uses this to reach you about your turn.',
+  contactNameRequiredError: 'Please enter your name (at least 2 letters).',
+  contactPhoneInvalidError: 'Enter a valid mobile number, with a country code if it is not Indian.',
   assignAction: 'Assign',
   noShowAction: 'No-show',
   barberLabel: 'Barber',
@@ -2178,6 +2220,27 @@ const hiUi: UiStrings = {
   avgWaitLabel: 'औसत प्रतीक्षा',
   couldNotCompleteAction: 'वह कार्रवाई पूरी नहीं हो सकी।',
   callAction: 'बुलाएं',
+  phoneCustomerAction: 'ग्राहक को फ़ोन करें',
+  markArrivedAction: 'आगमन दर्ज करें',
+  arrivedStatus: 'दुकान में पहुंच गए',
+  notYetArrivedStatus: 'अभी पहुंचे नहीं',
+  customerNameMissing: 'नाम नहीं दिया गया',
+  customerPhoneMissing: 'फ़ोन नंबर नहीं है',
+  keepEntryAction: 'रहने दें',
+  confirmCancelEntryTitle: 'यह कतार प्रविष्टि रद्द करें?',
+  confirmCancelEntryBody: 'ग्राहक को लाइव कतार से हटा दिया जाएगा।',
+  confirmNoShowEntryTitle: 'नो-शो चिह्नित करें?',
+  confirmNoShowEntryBody: 'इसे केवल तब उपयोग करें जब ग्राहक को बुलाया गया हो और वह न आया हो।',
+  confirmCompleteServiceTitle: 'यह सेवा पूर्ण करें?',
+  confirmCompleteServiceBody: 'इससे यह विज़िट सफलतापूर्वक पूरी चिह्नित हो जाएगी।',
+  queueEntryChangedError: 'यह कतार प्रविष्टि बदल गई है। सूची ताज़ा कर दी गई है।',
+  queueActionNotAllowedError: 'आपको यह करने की अनुमति नहीं है।',
+  queueNetworkError: 'FastQue तक नहीं पहुंच सके। कनेक्शन जांचें और फिर कोशिश करें।',
+  contactNameLabel: 'आपका नाम',
+  contactPhoneLabel: 'मोबाइल नंबर',
+  contactPhoneHint: 'दुकान आपकी बारी के बारे में इसी नंबर पर संपर्क करेगी।',
+  contactNameRequiredError: 'कृपया अपना नाम दर्ज करें (कम से कम 2 अक्षर)।',
+  contactPhoneInvalidError: 'सही मोबाइल नंबर दर्ज करें; भारतीय नंबर न हो तो देश कोड के साथ।',
   assignAction: 'नियुक्त करें',
   noShowAction: 'नो-शो',
   barberLabel: 'बार्बर',

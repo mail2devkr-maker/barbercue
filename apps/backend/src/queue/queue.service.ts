@@ -184,6 +184,9 @@ export class QueueService {
             source: QueueEntrySource.APPOINTMENT,
             tokenNumber,
             status: QueueEntryStatus.WAITING,
+            // An appointment entry only exists because arrival was confirmed — by the customer's
+            // own check-in or the owner's ARRIVED confirmation — so it is arrived from the start.
+            arrivedAt: new Date(),
           },
         });
         return created.id;
@@ -215,11 +218,31 @@ export class QueueService {
     customerId: string,
     salonId: string,
     serviceId?: string,
+    contact?: { name?: string; phone?: string },
   ): Promise<QueueEntryDetailDto> {
     const salon = await this.availability.getSalonOrThrow(salonId);
     if (serviceId)
       await this.availability.getServiceOrThrow(salonId, serviceId);
     await this.assertNotAlreadyInQueue(customerId);
+
+    // A queue entry must always be contactable by the shop. Prefer the number given with this join;
+    // otherwise fall back to the account's own phone. Google-sign-in accounts have neither by
+    // default, so refuse here rather than silently creating an entry nobody can reach.
+    let contactPhone = contact?.phone ?? null;
+    if (!contactPhone) {
+      const account = await this.prisma.user.findUnique({
+        where: { id: customerId },
+        select: { phone: true },
+      });
+      contactPhone = account?.phone ?? null;
+    }
+    if (!contactPhone) {
+      throw new AppException(
+        QueueErrorCode.CONTACT_PHONE_REQUIRED,
+        'A mobile number is required so the shop can reach you about your turn.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
 
     const entryId = await this.prisma.$transaction(async (tx) => {
       const tokenNumber = await this.nextTokenNumber(tx, salonId);
@@ -231,6 +254,8 @@ export class QueueService {
           source: QueueEntrySource.WALK_IN,
           tokenNumber,
           status: QueueEntryStatus.WAITING,
+          contactName: contact?.name ?? null,
+          contactPhone,
         },
       });
       return created.id;
@@ -591,6 +616,61 @@ export class QueueService {
     return this.getDetailOrThrow(entryId);
   }
 
+  /**
+   * Live Queue operations mission — staff/owner acknowledge that a queue customer is physically in
+   * the shop. A remote or QR join does not prove presence, so it starts un-arrived; this records
+   * the acknowledgement authoritatively (QueueEntry.arrivedAt) rather than as a UI-only label.
+   * Idempotent: acknowledging an already-arrived entry returns it unchanged, and two staff
+   * tapping at once converge on the first timestamp (the claim only ever fills a NULL).
+   */
+  async markArrived(userId: string, entryId: string): Promise<QueueEntryDetailDto> {
+    const entry = await this.getEntryOrThrow(entryId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+
+    if (
+      entry.status !== QueueEntryStatus.WAITING &&
+      entry.status !== QueueEntryStatus.CALLED
+    ) {
+      throw new AppException(
+        QueueErrorCode.INVALID_QUEUE_TRANSITION,
+        'Only a waiting or called entry can be marked arrived.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    if (!entry.arrivedAt) {
+      const claim = await this.prisma.queueEntry.updateMany({
+        where: {
+          id: entryId,
+          arrivedAt: null,
+          status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+        },
+        data: { arrivedAt: new Date() },
+      });
+      if (claim.count > 0) {
+        await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_ARRIVED', entryId, {
+          salonId: entry.salonId,
+        });
+        this.realtime.emitQueueUpdated(entry.salonId);
+      } else {
+        // Lost a race: either another operator acknowledged it first (fine — idempotent) or the
+        // entry left the active states underneath us (a real conflict).
+        const current = await this.prisma.queueEntry.findUnique({
+          where: { id: entryId },
+          select: { arrivedAt: true },
+        });
+        if (!current?.arrivedAt) {
+          throw new AppException(
+            QueueErrorCode.INVALID_QUEUE_TRANSITION,
+            'This entry can no longer be marked arrived.',
+            HttpStatus.CONFLICT,
+          );
+        }
+      }
+    }
+    return this.getDetailOrThrow(entryId);
+  }
+
   async assign(
     userId: string,
     entryId: string,
@@ -653,6 +733,9 @@ export class QueueService {
           assignedStaffId: input.staffId,
           assignedChairId: input.chairId,
           serviceId,
+          // Seating someone in a chair means they are physically in the shop: acknowledge arrival
+          // implicitly (never overwriting an earlier explicit acknowledgement).
+          ...(entry.arrivedAt ? {} : { arrivedAt: new Date() }),
         },
       });
       if (claim.count === 0) {
@@ -1286,7 +1369,9 @@ export class QueueService {
       serviceId: entry.serviceId,
       serviceName,
       position,
-      customerPhone: entry.customer?.phone ?? null,
+      customerPhone: entry.contactPhone ?? entry.customer?.phone ?? null,
+      customerName: entry.contactName ?? null,
+      arrivedAt: entry.arrivedAt?.toISOString() ?? null,
       assignedStaffName: entry.assignedStaff?.displayName ?? null,
       assignedChairLabel: entry.assignedChair?.label ?? null,
       activeServiceSessionId: entry.serviceSessions[0]?.id ?? null,

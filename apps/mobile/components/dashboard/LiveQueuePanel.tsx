@@ -1,10 +1,18 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { DASHBOARD_PATHS, type ChairOptionDto, type DashboardQueueDto, type QueueEntryDetailDto, type StaffStatusDto } from '@barbercue/shared';
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  DASHBOARD_PATHS,
+  telHrefFor,
+  type ChairOptionDto,
+  type DashboardQueueDto,
+  type QueueEntryDetailDto,
+  type StaffStatusDto,
+} from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
+import { friendlyQueueActionError, liveQueuePaths, type LiveQueueAction } from '../../lib/live-queue-actions';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Card, Button, EmptyState, Skeleton, InlineError } from '../ui';
@@ -44,33 +52,49 @@ function EntryRow({
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function run(label: string, action: () => Promise<unknown>) {
-    setSubmitting(label);
+  const arrived = entry.arrivedAt !== null && entry.arrivedAt !== undefined;
+  const telHref = telHrefFor(entry.customerPhone);
+
+  async function run(action: LiveQueueAction, request: () => Promise<unknown>) {
+    setSubmitting(action);
     setError(null);
     try {
-      await action();
+      await request();
       setAssigning(false);
       onAction();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
+      setError(friendlyQueueActionError(err, t, action));
+      // A conflict means the list is stale (another operator acted first) - refresh to current truth.
+      if (err instanceof ApiError && (err.status === 409 || err.status === 404)) onAction();
     } finally {
       setSubmitting(null);
     }
   }
 
+  // Cancel / no-show / complete are final, so they always ask first.
+  function confirmThen(title: string, body: string, actionLabel: string, proceed: () => void) {
+    Alert.alert(title, body, [
+      { text: t.keepEntryAction, style: 'cancel' },
+      { text: actionLabel, style: 'destructive', onPress: proceed },
+    ]);
+  }
+
   function call() {
-    return run('call', () => apiFetch(`${DASHBOARD_PATHS.queueEntries}/${entry.id}/${DASHBOARD_PATHS.call}`, { method: 'POST' }));
+    return run('call', () => apiFetch(liveQueuePaths.call(entry.id), { method: 'POST' }));
+  }
+  function markArrived() {
+    return run('arrive', () => apiFetch(liveQueuePaths.arrive(entry.id), { method: 'POST' }));
   }
   function noShow() {
-    return run('no-show', () => apiFetch(`${DASHBOARD_PATHS.queueEntries}/${entry.id}/${DASHBOARD_PATHS.noShow}`, { method: 'POST' }));
+    return run('noShow', () => apiFetch(liveQueuePaths.noShow(entry.id), { method: 'POST' }));
   }
   function cancel() {
-    return run('cancel', () => apiFetch(`${DASHBOARD_PATHS.queueEntries}/${entry.id}/${DASHBOARD_PATHS.cancel}`, { method: 'POST' }));
+    return run('cancel', () => apiFetch(liveQueuePaths.cancel(entry.id), { method: 'POST' }));
   }
   function confirmAssign() {
     if (!staffId || !chairId) return;
     return run('assign', () =>
-      apiFetch(`${DASHBOARD_PATHS.queueEntries}/${entry.id}/${DASHBOARD_PATHS.assign}`, {
+      apiFetch(liveQueuePaths.assign(entry.id), {
         method: 'POST',
         headers: { 'Idempotency-Key': newIdempotencyKey() },
         body: JSON.stringify({ staffId, chairId, ...(entry.serviceId ? { serviceId: entry.serviceId } : {}) }),
@@ -78,11 +102,22 @@ function EntryRow({
     );
   }
   function complete() {
-    if (!entry.activeServiceSessionId) return;
-    return run('complete', () =>
-      apiFetch(`${DASHBOARD_PATHS.serviceSessions}/${entry.activeServiceSessionId}/${DASHBOARD_PATHS.complete}`, { method: 'POST' }),
-    );
+    const sessionId = entry.activeServiceSessionId;
+    if (!sessionId) return;
+    return run('complete', () => apiFetch(liveQueuePaths.complete(sessionId), { method: 'POST' }));
   }
+  // A separate, explicit telephone action - deliberately NOT the queue-state "Call" above.
+  async function phoneCustomer() {
+    if (!telHref) return;
+    setError(null);
+    try {
+      await Linking.openURL(telHref);
+    } catch {
+      setError(t.couldNotCompleteAction);
+    }
+  }
+
+  const active = entry.status === 'WAITING' || entry.status === 'CALLED';
 
   return (
     <Card style={styles.entryCard}>
@@ -90,26 +125,65 @@ function EntryRow({
         <Text style={styles.token}>#{entry.tokenNumber}</Text>
         <Text style={styles.statusBadge}>{statusLabel(t, entry.status)}</Text>
       </View>
+
+      <Text style={[styles.customerName, !entry.customerName && styles.customerMissing]}>
+        {entry.customerName ?? t.customerNameMissing}
+      </Text>
+      <View style={styles.phoneRow}>
+        <Text style={[styles.phoneText, !entry.customerPhone && styles.customerMissing]}>
+          {entry.customerPhone ?? t.customerPhoneMissing}
+        </Text>
+        {telHref && (
+          <Button title={t.phoneCustomerAction} variant="outline" onPress={() => void phoneCustomer()} style={styles.phoneButton} />
+        )}
+      </View>
+
       {entry.serviceName && <Text style={styles.meta}>{entry.serviceName}</Text>}
+      <Text style={[styles.arrivalState, arrived ? styles.arrivalYes : styles.arrivalNo]}>
+        {arrived ? t.arrivedStatus : t.notYetArrivedStatus}
+      </Text>
       {entry.assignedStaffName && (
         <Text style={styles.meta}>
           {entry.assignedStaffName}
-          {entry.assignedChairLabel ? ` — ${entry.assignedChairLabel}` : ''}
+          {entry.assignedChairLabel ? ` - ${entry.assignedChairLabel}` : ''}
         </Text>
       )}
       {error && <InlineError message={error} />}
 
+      {active && !arrived && (
+        <Button title={t.markArrivedAction} onPress={() => void markArrived()} loading={submitting === 'arrive'} style={styles.fullButton} />
+      )}
+
       {entry.status === 'WAITING' && (
         <View style={styles.actionRow}>
-          <Button title={t.callAction} onPress={() => void call()} loading={submitting === 'call'} style={styles.actionButton} />
-          <Button title={t.cancelAction} variant="outline" onPress={() => void cancel()} loading={submitting === 'cancel'} style={styles.actionButton} />
+          <Button title={t.callAction} variant={arrived ? 'primary' : 'outline'} onPress={() => void call()} loading={submitting === 'call'} style={styles.actionButton} />
+          <Button
+            title={t.cancelAction}
+            variant="outline"
+            onPress={() => confirmThen(t.confirmCancelEntryTitle, t.confirmCancelEntryBody, t.cancelAction, () => void cancel())}
+            loading={submitting === 'cancel'}
+            style={styles.actionButton}
+          />
         </View>
       )}
 
       {entry.status === 'CALLED' && !assigning && (
         <View style={styles.actionRow}>
-          <Button title={t.assignAction} onPress={() => setAssigning(true)} style={styles.actionButton} />
-          <Button title={t.noShowAction} variant="outline" onPress={() => void noShow()} loading={submitting === 'no-show'} style={styles.actionButton} />
+          {arrived && <Button title={t.assignAction} onPress={() => setAssigning(true)} style={styles.actionButton} />}
+          <Button
+            title={t.noShowAction}
+            variant="outline"
+            onPress={() => confirmThen(t.confirmNoShowEntryTitle, t.confirmNoShowEntryBody, t.noShowAction, () => void noShow())}
+            loading={submitting === 'noShow'}
+            style={styles.actionButton}
+          />
+          <Button
+            title={t.cancelAction}
+            variant="outline"
+            onPress={() => confirmThen(t.confirmCancelEntryTitle, t.confirmCancelEntryBody, t.cancelAction, () => void cancel())}
+            loading={submitting === 'cancel'}
+            style={styles.actionButton}
+          />
         </View>
       )}
 
@@ -145,7 +219,12 @@ function EntryRow({
       )}
 
       {entry.status === 'IN_SERVICE' && (
-        <Button title={t.completeAction} onPress={() => void complete()} loading={submitting === 'complete'} style={styles.fullButton} />
+        <Button
+          title={t.completeAction}
+          onPress={() => confirmThen(t.confirmCompleteServiceTitle, t.confirmCompleteServiceBody, t.completeAction, () => void complete())}
+          loading={submitting === 'complete'}
+          style={styles.fullButton}
+        />
       )}
     </Card>
   );
@@ -176,16 +255,36 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   const [error, setError] = useState<string | null>(null);
   const [chairBusyId, setChairBusyId] = useState<string | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    return apiFetch<DashboardQueueDto>(dashboardBase(salonId))
-      .then(setData)
-      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : t.couldNotLoadQueue))
-      .finally(() => setLoading(false));
-  }, [salonId, t]);
+  const hasDataRef = useRef(false);
 
-  useImperativeHandle(ref, () => ({ refresh: load }), [load]);
+  // `silent` refreshes (after an operator action, on a realtime event, after a reconnect) keep the
+  // list mounted. A non-silent load swaps the whole panel for skeletons, which remounts every card
+  // and would wipe an in-progress assignment or the error message the owner is reading.
+  const load = useCallback(
+    (silent = false) => {
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      return apiFetch<DashboardQueueDto>(dashboardBase(salonId))
+        .then((next) => {
+          hasDataRef.current = true;
+          setData(next);
+          setError(null);
+        })
+        .catch((err: unknown) => {
+          // A failed background refresh must not replace a list the owner is already looking at.
+          if (silent && hasDataRef.current) return;
+          setError(err instanceof ApiError ? err.message : t.couldNotLoadQueue);
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [salonId, t],
+  );
+
+  useImperativeHandle(ref, () => ({ refresh: () => load() }), [load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -197,11 +296,11 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     const socket = getRealtimeSocket();
     joinSalonRoom(salonId);
     function onUpdate(payload: { salonId: string }) {
-      if (payload.salonId === salonId) void load();
+      if (payload.salonId === salonId) void load(true);
     }
     socket.on('queue.updated', onUpdate);
     socket.on('queue.entry.called', onUpdate);
-    const unsubscribeReconnect = onReconnect(() => void load()); // Phase 15: resync after reconnect
+    const unsubscribeReconnect = onReconnect(() => void load(true)); // Phase 15: resync after reconnect
     return () => {
       socket.off('queue.updated', onUpdate);
       socket.off('queue.entry.called', onUpdate);
@@ -215,7 +314,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     try {
       const action = occupy ? DASHBOARD_PATHS.occupyLocal : DASHBOARD_PATHS.freeLocal;
       await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairOccupancy}/${chair.id}/${action}`, { method: 'POST' });
-      await load();
+      await load(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
     } finally {
@@ -273,7 +372,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     <>
       {chairStatus}
       {activeEntries.map((entry) => (
-        <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} onAction={() => void load()} />
+        <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} onAction={() => void load(true)} />
       ))}
     </>
   );
@@ -292,6 +391,14 @@ const styles = StyleSheet.create({
     color: color.gold,
     textTransform: 'uppercase',
   },
+  customerName: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink, marginTop: space[1] },
+  customerMissing: { color: color.muted, fontFamily: font.bodyRegular },
+  phoneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[2], marginTop: space[1] },
+  phoneText: { flex: 1, fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink },
+  phoneButton: { minWidth: 0 },
+  arrivalState: { fontFamily: font.bodyBold, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), marginTop: space[1], textTransform: 'uppercase', letterSpacing: 0.4 },
+  arrivalYes: { color: color.gold },
+  arrivalNo: { color: color.muted },
   meta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted, marginTop: space[1] },
   actionRow: { flexDirection: 'row', gap: space[2], marginTop: space[3] },
   actionButton: { flex: 1 },

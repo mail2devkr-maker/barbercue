@@ -106,7 +106,10 @@ export class PublicQueueController {
         HttpStatus.NOT_FOUND,
       );
     }
-    return this.queueService.joinWalkIn(user.id, salon.id, body.serviceId);
+    return this.queueService.joinWalkIn(user.id, salon.id, body.serviceId, {
+      name: body.contactName,
+      phone: body.contactPhone,
+    });
   }
 
   // Authenticated owner/staff/admin endpoint. PLATFORM_ADMIN needs this read-only QR while

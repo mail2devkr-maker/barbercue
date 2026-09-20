@@ -729,7 +729,18 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
   serviceId: string | null;
   serviceName: string | null;
   position: number | null; // 1-based rank among WAITING entries at this salon, null once past WAITING
+  // The contact number given when joining, else the account's own phone. Present so a shop can
+  // reach the customer; only ever returned by owner/staff dashboard reads and to the customer
+  // themselves — never by the public queue status APIs.
   customerPhone: string | null;
+  // The display name the customer gave when joining. Null for entries that never provided one
+  // (older joins, appointment check-ins) — FastQue stores no customer name anywhere else, so it is
+  // never derived from an email or phone.
+  customerName: string | null;
+  // Authoritative "is this person physically in the shop" acknowledgement. Set the moment an
+  // appointment check-in creates the entry, when staff mark a remote join as arrived, or implicitly
+  // when staff assign it to a chair. Null = remote join not yet acknowledged.
+  arrivedAt: string | null; // ISO 8601
   assignedStaffName: string | null;
   assignedChairLabel: string | null;
   activeServiceSessionId: string | null; // target id for POST .../service-sessions/:id/complete
