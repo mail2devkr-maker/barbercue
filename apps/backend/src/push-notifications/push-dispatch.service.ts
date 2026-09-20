@@ -14,6 +14,7 @@ export interface PushPayload {
   body: string;
   /** Ids-only, same convention as RealtimeGateway's emits — never customer PII. */
   data?: Record<string, unknown>;
+  categoryId?: string;
 }
 
 // Only for log lines — never the full token. A stable-but-non-reversible-looking prefix is enough
@@ -62,7 +63,12 @@ export class PushDispatchService {
       this.logger.warn(`Could not load recipient language, defaulting to English push copy: ${errorMessage(err)}`);
     }
     const { title, body } = pushCopyFor(preferredLanguage)[kind](serviceName);
-    await this.dispatchToUser(userId, { title, body, data });
+    await this.dispatchToUser(userId, {
+      title,
+      body,
+      data,
+      ...(kind === 'arrivalCheck' ? { categoryId: 'booking-arrival-check' } : {}),
+    });
   }
 
   /**
@@ -87,6 +93,7 @@ export class PushDispatchService {
       title: payload.title,
       body: payload.body,
       data: payload.data,
+      ...(payload.categoryId ? { categoryId: payload.categoryId } : {}),
     }));
 
     let tickets: ExpoPushTicket[];
