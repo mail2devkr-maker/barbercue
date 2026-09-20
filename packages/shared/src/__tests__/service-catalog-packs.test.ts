@@ -43,9 +43,9 @@ describe('service catalog onboarding packs', () => {
 
     // Unisex sees the combined catalogue: essential gents + ladies at Basic, more at Standard,
     // and all beauty services at Advance.
-    expect(basic).toHaveLength(44);
-    expect(standard).toHaveLength(73);
-    expect(advanced).toHaveLength(98);
+    expect(basic).toHaveLength(49);
+    expect(standard).toHaveLength(109);
+    expect(advanced).toHaveLength(145);
     expect(advanced).toHaveLength(SERVICE_CATALOG.length);
   });
 
@@ -62,21 +62,26 @@ describe('service catalog onboarding packs', () => {
       ladies: [count(SalonType.LADIES, 'BASIC'), count(SalonType.LADIES, 'STANDARD'), count(SalonType.LADIES, 'ADVANCED')],
       unisex: [count(SalonType.UNISEX, 'BASIC'), count(SalonType.UNISEX, 'STANDARD'), count(SalonType.UNISEX, 'ADVANCED')],
     }).toEqual({
-      gents: [23, 41, 52],
+      gents: [21, 53, 67],
       ladies: [28, 56, 80],
-      unisex: [44, 73, 98],
+      unisex: [49, 109, 145],
     });
 
     const haircut = SERVICE_CATALOG.find((service) => service.id === 'classic-haircut')!;
     const womensHaircut = SERVICE_CATALOG.find((service) => service.id === 'womens-haircut')!;
-    const headMassage = SERVICE_CATALOG.find((service) => service.id === 'head-massage')!;
+    const gentsHeadMassage = SERVICE_CATALOG.find((service) => service.id === 'gents-head-massage')!;
+    const ladiesHeadMassage = SERVICE_CATALOG.find((service) => service.id === 'ladies-head-massage')!;
 
     expect(serviceAvailableForSalonType(haircut, SalonType.GENTS)).toBe(true);
     expect(serviceAvailableForSalonType(haircut, SalonType.LADIES)).toBe(false);
     expect(serviceAvailableForSalonType(womensHaircut, SalonType.LADIES)).toBe(true);
     expect(serviceAvailableForSalonType(womensHaircut, SalonType.GENTS)).toBe(false);
-    expect(serviceAvailableForSalonType(headMassage, SalonType.GENTS)).toBe(true);
-    expect(serviceAvailableForSalonType(headMassage, SalonType.LADIES)).toBe(true);
+    expect(serviceAvailableForSalonType(gentsHeadMassage, SalonType.GENTS)).toBe(true);
+    expect(serviceAvailableForSalonType(gentsHeadMassage, SalonType.LADIES)).toBe(false);
+    expect(serviceAvailableForSalonType(ladiesHeadMassage, SalonType.LADIES)).toBe(true);
+    expect(serviceAvailableForSalonType(ladiesHeadMassage, SalonType.GENTS)).toBe(false);
+    expect(serviceAvailableForSalonType(gentsHeadMassage, SalonType.UNISEX)).toBe(true);
+    expect(serviceAvailableForSalonType(ladiesHeadMassage, SalonType.UNISEX)).toBe(true);
     expect(serviceAvailableForSalonType(haircut, SalonType.UNISEX)).toBe(true);
     expect(serviceAvailableForSalonType(womensHaircut, SalonType.UNISEX)).toBe(true);
   });
@@ -99,8 +104,8 @@ describe('service catalog onboarding packs', () => {
     const expectations = [
       ['classic-haircut', 50, 100, 200],
       ['beard-trim', 50, 100, 200],
-      ['head-massage', 100, 200, 400],
-      ['global-hair-colour', 500, 1000, 2000],
+      ['gents-head-massage', 80, 150, 300],
+      ['ladies-head-massage', 150, 250, 500],
     ] as const;
 
     for (const [id, basicPrice, standardPrice, advancedPrice] of expectations) {
@@ -110,6 +115,34 @@ describe('service catalog onboarding packs', () => {
       expect(suggestedServicePriceInr(service!, 'STANDARD')).toBe(standardPrice);
       expect(suggestedServicePriceInr(service!, 'ADVANCED')).toBe(advancedPrice);
     }
+  });
+
+  it('keeps common Unisex services separate for Gents and Ladies pricing/time', () => {
+    const gentsColour = SERVICE_CATALOG.find(
+      (service) => service.id === 'gents-global-hair-colour',
+    )!;
+    const ladiesColour = SERVICE_CATALOG.find(
+      (service) => service.id === 'ladies-global-hair-colour',
+    )!;
+    const gentsSpa = SERVICE_CATALOG.find((service) => service.id === 'gents-hair-spa')!;
+    const ladiesSpa = SERVICE_CATALOG.find((service) => service.id === 'ladies-hair-spa')!;
+
+    expect(gentsColour.name).toBe('Gents Global Hair Colour');
+    expect(ladiesColour.name).toBe('Ladies Global Hair Colour');
+    expect(gentsColour.defaultDurationMinutes).toBe(60);
+    expect(ladiesColour.defaultDurationMinutes).toBe(120);
+    expect(suggestedServicePriceInr(gentsColour, 'STANDARD')).toBe(500);
+    expect(suggestedServicePriceInr(ladiesColour, 'STANDARD')).toBe(1200);
+
+    expect(gentsSpa.defaultDurationMinutes).toBe(45);
+    expect(ladiesSpa.defaultDurationMinutes).toBe(60);
+    expect(suggestedServicePriceInr(gentsSpa, 'STANDARD')).toBe(500);
+    expect(suggestedServicePriceInr(ladiesSpa, 'STANDARD')).toBe(900);
+
+    const ambiguousSharedNames = SERVICE_CATALOG.filter((service) =>
+      ['Global Hair Colour', 'Hair Spa', 'Cleanup', 'Head Massage'].includes(service.name),
+    );
+    expect(ambiguousSharedNames).toHaveLength(0);
   });
 
   it('uses the owner-requested pack labels', () => {
