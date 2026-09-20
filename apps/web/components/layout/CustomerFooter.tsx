@@ -15,6 +15,8 @@ export function CustomerFooter({ dark }: { dark?: boolean }) {
           <Link href="/account/bookings">My Bookings</Link>
           <Link href="/style-advisor">Style Advisor</Link>
           <Link href="/account/profile">Account</Link>
+          <Link href="/about-us">About Us</Link>
+          <Link href="/contact-us">Contact Us</Link>
           <Link href="/privacy-policy">Privacy Policy</Link>
           <Link href="/account-deletion">Account Deletion</Link>
         </nav>
