@@ -20,6 +20,12 @@ export default function AdminEmployeesPage() {
   const [territory, setTerritory] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [specialNumber, setSpecialNumber] = useState("1");
+  const [specialFullName, setSpecialFullName] = useState("");
+  const [specialTerritory, setSpecialTerritory] = useState("");
+  const [specialPassword, setSpecialPassword] = useState("");
+  const [specialConfirmPassword, setSpecialConfirmPassword] = useState("");
+  const [specialTotp, setSpecialTotp] = useState("");
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
@@ -63,6 +69,55 @@ export default function AdminEmployeesPage() {
       setSuccess(`Created ${employee.employeeCode} for ${employee.fullName}. Share the Employee ID and temporary password securely.`);
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : "Could not create employee.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function createSpecialEmployee(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSuccess(null);
+    const employeeNumber = Number(specialNumber);
+    if (!Number.isInteger(employeeNumber) || employeeNumber < 1 || employeeNumber > 100) {
+      setError("Reserved employee number must be between 1 and 100.");
+      return;
+    }
+    if (specialPassword !== specialConfirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (!/^\d{6}$/.test(specialTotp)) {
+      setError("Enter the current 6-digit authenticator code.");
+      return;
+    }
+    if (!window.confirm(`Use reserved FastQue Employee ID FQ-FE-${String(employeeNumber).padStart(5, "0")}? This range is owner-controlled.`)) return;
+
+    setBusyId("special");
+    try {
+      const employee = await apiFetch<AdminEmployeeDto>(
+        `${ADMIN_PATHS.admin}/${ADMIN_PATHS.employees}/${ADMIN_PATHS.special}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            employeeNumber,
+            fullName: specialFullName,
+            territory: specialTerritory || undefined,
+            password: specialPassword,
+            confirmPassword: specialConfirmPassword,
+            totpCode: specialTotp,
+          }),
+        },
+      );
+      setEmployees((current) => [employee, ...current]);
+      setSpecialFullName("");
+      setSpecialTerritory("");
+      setSpecialPassword("");
+      setSpecialConfirmPassword("");
+      setSpecialTotp("");
+      setSuccess(`Reserved ID ${employee.employeeCode} created after authenticator verification.`);
+    } catch (requestError) {
+      setError(requestError instanceof ApiError ? requestError.message : "Could not create the reserved employee ID.");
     } finally {
       setBusyId(null);
     }
@@ -136,7 +191,7 @@ export default function AdminEmployeesPage() {
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
           <h2>Add employee</h2>
-          <span>Employee ID is generated automatically</span>
+          <span>Standard IDs start at FQ-FE-00101</span>
         </div>
         <form className={styles.employeeForm} onSubmit={createEmployee}>
           <label>
@@ -161,7 +216,45 @@ export default function AdminEmployeesPage() {
             </Button>
           </div>
         </form>
-        <p className={styles.formHint}>Passwords are stored only as secure hashes. FastQue does not display the password again after creation.</p>
+        <p className={styles.formHint}>IDs FQ-FE-00001 through FQ-FE-00100 are reserved and will never be issued by this standard form. Passwords are stored only as secure hashes.</p>
+      </section>
+
+      <section className={styles.section}>
+        <details>
+          <summary><strong>Reserved special employee IDs (1–100)</strong></summary>
+          <p className={styles.formHint}>Owner-controlled range only. Creating one requires your current 6-digit FastQue admin authenticator code in addition to your signed-in admin session.</p>
+          <form className={styles.employeeForm} onSubmit={createSpecialEmployee}>
+            <label>
+              Reserved number
+              <input type="number" min={1} max={100} value={specialNumber} onChange={(event) => setSpecialNumber(event.target.value)} required />
+            </label>
+            <label>
+              Full name
+              <input value={specialFullName} onChange={(event) => setSpecialFullName(event.target.value)} minLength={2} maxLength={120} required />
+            </label>
+            <label>
+              Territory / area
+              <input value={specialTerritory} onChange={(event) => setSpecialTerritory(event.target.value)} maxLength={160} placeholder="Patna, Bihar" />
+            </label>
+            <label>
+              Temporary password
+              <input type="password" value={specialPassword} onChange={(event) => setSpecialPassword(event.target.value)} minLength={8} maxLength={72} required autoComplete="new-password" />
+            </label>
+            <label>
+              Confirm password
+              <input type="password" value={specialConfirmPassword} onChange={(event) => setSpecialConfirmPassword(event.target.value)} minLength={8} maxLength={72} required autoComplete="new-password" />
+            </label>
+            <label>
+              Authenticator code
+              <input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={specialTotp} onChange={(event) => setSpecialTotp(event.target.value.replace(/\D/g, "").slice(0, 6))} required autoComplete="one-time-code" placeholder="6-digit code" />
+            </label>
+            <div className={styles.formAction}>
+              <Button type="submit" disabled={busyId === "special"}>
+                {busyId === "special" ? "Authenticating…" : "Authenticate & create reserved ID"}
+              </Button>
+            </div>
+          </form>
+        </details>
       </section>
 
       <section className={styles.section}>
