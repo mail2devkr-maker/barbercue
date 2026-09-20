@@ -1,12 +1,15 @@
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { Role, type MeResponse } from '@barbercue/shared';
+import { Language, Role, type MeResponse } from '@barbercue/shared';
 import { apiFetch } from './api';
 import { deleteItem, getItem, setItem } from './secure-storage';
 
 const PUSH_DEVICE_STORAGE_KEY = 'barbercue_expo_push_device';
 export const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
+export const ARRIVAL_CHECK_CATEGORY_ID = 'booking-arrival-check';
+export const ARRIVAL_ACTION_ARRIVED = 'ARRIVED';
+export const ARRIVAL_ACTION_NOT_ARRIVED = 'NOT_ARRIVED';
 
 interface StoredPushDevice {
   expoPushToken: string;
@@ -52,6 +55,32 @@ export async function ensureBookingNotificationChannel(): Promise<void> {
   });
 }
 
+/**
+ * Adds OS-level actions to the T-5 arrival-check notification. The buttons deliberately only
+ * open FastQue and preselect the owner's intent; the in-app prompt still requires confirmation
+ * before any booking/financial state changes, preventing an accidental notification tap from
+ * marking a customer arrived or no-show.
+ */
+export async function ensureArrivalCheckNotificationCategory(language: Language | null | undefined): Promise<void> {
+  if (!isNativePlatform()) return;
+  const isHindi = language === Language.HI;
+  await Notifications.setNotificationCategoryAsync(
+    ARRIVAL_CHECK_CATEGORY_ID,
+    [
+      {
+        identifier: ARRIVAL_ACTION_ARRIVED,
+        buttonTitle: isHindi ? 'आ गए' : 'Arrived',
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: ARRIVAL_ACTION_NOT_ARRIVED,
+        buttonTitle: isHindi ? 'अभी नहीं आए' : 'Not arrived',
+        options: { opensAppToForeground: true },
+      },
+    ],
+  );
+}
+
 async function getGrantedPermission(): Promise<boolean> {
   const existing = await Notifications.getPermissionsAsync();
   if (existing.granted) return true;
@@ -85,6 +114,7 @@ export async function registerPushDeviceForUser(user: MeResponse | null): Promis
 
   try {
     await ensureBookingNotificationChannel();
+    await ensureArrivalCheckNotificationCategory(user.preferredLanguage);
   } catch (err) {
     console.warn('[push] could not create the Android notification channel', err);
     // Non-fatal: getExpoPushTokenAsync can still succeed without a channel pre-created.
