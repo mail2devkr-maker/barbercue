@@ -20,7 +20,13 @@ export function CustomerFooter({ dark }: { dark?: boolean }) {
           <Link href="/privacy-policy">Privacy Policy</Link>
           <Link href="/account-deletion">Account Deletion</Link>
         </nav>
-        <p className={styles.footerNote}>© {new Date().getFullYear()} FastQue. · Created by Devdutta Kumar Pandey</p>
+        <p className={styles.footerNote}>
+          <span>© {new Date().getFullYear()} FastQue.</span>
+          <span className={styles.poweredByBadge} aria-label="Powered By DCW">
+            <span className={styles.poweredByText}>Powered By</span>
+            <span className={styles.poweredByDcw}>DCW</span>
+          </span>
+        </p>
       </div>
     </footer>
   );
