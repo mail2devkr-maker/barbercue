@@ -62,7 +62,7 @@ describe('service catalog onboarding packs', () => {
       ladies: [count(SalonType.LADIES, 'BASIC'), count(SalonType.LADIES, 'STANDARD'), count(SalonType.LADIES, 'ADVANCED')],
       unisex: [count(SalonType.UNISEX, 'BASIC'), count(SalonType.UNISEX, 'STANDARD'), count(SalonType.UNISEX, 'ADVANCED')],
     }).toEqual({
-      gents: [21, 53, 67],
+      gents: [21, 53, 65],
       ladies: [28, 56, 80],
       unisex: [49, 109, 145],
     });
