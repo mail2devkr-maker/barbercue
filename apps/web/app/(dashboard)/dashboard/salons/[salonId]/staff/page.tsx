@@ -12,9 +12,8 @@ import { StaffProfileEditor } from "../../../../../../components/dashboard/Staff
 import { StaffVerificationPanel } from "../../../../../../components/dashboard/StaffVerificationPanel";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
-// Barber roster (Phase 11) — replaces the previous placeholder. Adding a barber creates (or
-// links) their login account and issues an invitation link; the barber sets their own password
-// and then signs in at /staff/login. The owner never handles a password.
+// Staff roster. Name is the only onboarding requirement. Optional phone/email can link an
+// existing account; email enables the password invitation flow and independent staff login.
 export default function DashboardStaffPage({
   params,
 }: {
@@ -59,11 +58,11 @@ export default function DashboardStaffPage({
     setInviteUrl(null);
     const parsed = createSalonStaffSchema.safeParse({
       displayName: displayName.trim(),
-      phone: phone.replace(/[\s()-]/g, ""),
+      phone: phone.replace(/[\s()-]/g, "") || undefined,
       email: email.trim() || undefined,
     });
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Check the barber's details.");
+      setError(parsed.error.issues[0]?.message ?? "Check the staff details.");
       return;
     }
     setSubmitting(true);
@@ -76,14 +75,14 @@ export default function DashboardStaffPage({
       setInviteUrl(result.inviteUrl ?? null);
       setNotice(
         result.invitationSent && result.staff.email
-          ? `Barber added. Invitation sent to ${result.staff.email}.`
-          : "Barber added. No email invitation was sent.",
+          ? `Staff member added. Invitation sent to ${result.staff.email}.`
+          : "Staff member added. Contact details can be added later.",
       );
       setDisplayName("");
       setPhone("");
       setEmail("");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not add that barber.");
+      setError(err instanceof ApiError ? err.message : "Could not add that staff member.");
     } finally {
       setSubmitting(false);
     }
@@ -119,18 +118,18 @@ export default function DashboardStaffPage({
       });
       setStaff((prev) => (prev ?? []).map((s) => (s.id === updated.id ? updated : s)));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not update that barber.");
+      setError(err instanceof ApiError ? err.message : "Could not update that staff member.");
     }
   }
 
   return (
     <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
-      <h1 className={styles.pageTitle}>Barbers</h1>
+      <h1 className={styles.pageTitle}>Staff</h1>
       <p className={styles.pageSubtitle}>
-        A name and international mobile number are required. Email is optional; when provided,
-        the barber receives the existing password setup invitation and can sign in at <code>/staff/login</code>.
-        Email-less barbers still work normally for staffing, assignments and queue capacity.
+        Only the staff member&apos;s name is required. Mobile number and email are optional.
+        If an email is provided, FastQue sends the password setup invitation for independent login.
+        Staff without contact details can still be used for assignments and queue capacity.
       </p>
       <SetupNavigation salonId={salonId} currentStep="staff" section="steps" />
 
@@ -141,7 +140,7 @@ export default function DashboardStaffPage({
         <div className={`${styles.banner} ${styles.bannerWarning}`}>
           <strong style={{ fontSize: 14 }}>Invitation link</strong>
           <p style={{ fontSize: 13, margin: "4px 0 8px" }}>
-            No email provider is connected yet, so send this to the barber yourself. It expires in
+            No email provider is connected yet, so send this to the staff member yourself. It expires in
             7 days and can only be used once.
           </p>
           <code style={{ fontSize: 12, wordBreak: "break-all" }}>{inviteUrl}</code>
@@ -150,10 +149,10 @@ export default function DashboardStaffPage({
 
       <form onSubmit={handleCreate} className={styles.form}>
         <div style={{ flex: "1 1 180px" }} className={styles.fieldWrap}>
-          <label className={styles.fieldLabel} htmlFor="staff-name">Barber&apos;s name</label>
+          <label className={styles.fieldLabel} htmlFor="staff-name">Staff name</label>
           <input
             id="staff-name"
-            placeholder="Marcus"
+            placeholder="Staff member name"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             required
@@ -163,7 +162,7 @@ export default function DashboardStaffPage({
           />
         </div>
         <div style={{ flex: "1 1 220px" }} className={styles.fieldWrap}>
-          <label className={styles.fieldLabel} htmlFor="staff-phone">Mobile number</label>
+          <label className={styles.fieldLabel} htmlFor="staff-phone">Mobile number (optional)</label>
           <input
             id="staff-phone"
             type="tel"
@@ -175,7 +174,7 @@ export default function DashboardStaffPage({
             autoComplete="tel"
             className={styles.input}
           />
-          <p className={styles.hint}>Use country code and number, such as +919876543210.</p>
+          <p className={styles.hint}>Optional. If entered, use country code, such as +919876543210.</p>
         </div>
         <div style={{ flex: "1 1 220px" }} className={styles.fieldWrap}>
           <label className={styles.fieldLabel} htmlFor="staff-email">Email (optional)</label>
@@ -191,12 +190,12 @@ export default function DashboardStaffPage({
           />
         </div>
         <Button type="submit" variant="secondary" fullWidth disabled={submitting}>
-          {submitting ? "Adding barber…" : "Add barber"}
+          {submitting ? "Adding staff…" : "Add staff"}
         </Button>
       </form>
 
       {staff === null && !error && <p className={styles.loadingText}>Loading…</p>}
-      {staff?.length === 0 && <p className={styles.emptyState}>No barbers yet. Add your first one above.</p>}
+      {staff?.length === 0 && <p className={styles.emptyState}>No staff yet. Add your first staff member above.</p>}
       {staff && staff.length > 0 && (
         <ul className={styles.rowList}>
           {staff.map((m) => (
@@ -206,7 +205,7 @@ export default function DashboardStaffPage({
                   {m.displayName}
                 </span>
                 <div className={styles.rowMeta} style={{ wordBreak: "break-word" }}>
-                  {m.phone ?? "Mobile not recorded (legacy staff)"}
+                  {m.phone ?? (m.email ? "Mobile not provided" : "No contact details")}
                   {m.email && ` · ${m.email}`}
                   {m.status !== StaffMemberStatus.ACTIVE && " · not working"}
                   {m.email && !m.hasPassword && " · hasn't set their password yet"}
