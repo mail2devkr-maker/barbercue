@@ -17,6 +17,7 @@ import type {
   Role,
   SalonStaffRole,
   SalonStatus,
+  SalonType,
   SessionAudience,
   StaffMemberStatus,
   SubscriptionStatus,
@@ -1039,6 +1040,10 @@ export interface PublicQueueQrDto {
 
 // Owner-facing view of a Service. Distinct from the public ServiceDto above, which is only ever
 // returned for ACTIVE salons and never exposes inactive rows — an owner must see and manage both.
+export interface SalonTypeResultDto {
+  salonType: SalonType;
+}
+
 export interface SalonServiceDto {
   id: string;
   name: string;
