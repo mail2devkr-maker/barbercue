@@ -15,9 +15,11 @@ import {
   updateSalonStatusSchema,
   type AuthenticatedUser,
   createEmployeeSchema,
+  createSpecialEmployeeSchema,
   resetEmployeePasswordSchema,
   updateEmployeeSchema,
   type CreateEmployeeInput,
+  type CreateSpecialEmployeeInput,
   type DecideVerificationInput,
   type ResetEmployeePasswordInput,
   type UpdateEmployeeInput,
@@ -96,6 +98,15 @@ export class AdminController {
     @Body(new ZodValidationPipe(createEmployeeSchema)) body: CreateEmployeeInput,
   ) {
     return this.employees.create(user.id, body);
+  }
+
+  @Post(`${ADMIN_PATHS.employees}/${ADMIN_PATHS.special}`)
+  createSpecialEmployee(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createSpecialEmployeeSchema))
+    body: CreateSpecialEmployeeInput,
+  ) {
+    return this.employees.createSpecial(user.id, body);
   }
 
   @Patch(`${ADMIN_PATHS.employees}/:id`)
