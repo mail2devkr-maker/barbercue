@@ -7,7 +7,7 @@ import { deleteItem, getItem, setItem } from './secure-storage';
 
 const PUSH_DEVICE_STORAGE_KEY = 'barbercue_expo_push_device';
 export const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
-export const ARRIVAL_CHECK_CATEGORY_ID = 'booking-arrival-check';
+export const ARRIVAL_CHECK_CATEGORY_ID = 'booking_arrival_check';
 export const ARRIVAL_ACTION_ARRIVED = 'ARRIVED';
 export const ARRIVAL_ACTION_NOT_ARRIVED = 'NOT_ARRIVED';
 
