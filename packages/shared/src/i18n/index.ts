@@ -876,6 +876,9 @@ export interface UiStrings {
   arrivalNotificationsOffTitle: string;
   arrivalNotificationsOffBody: string;
   arrivalNotificationsOffAction: string;
+  arrivalChannelMutedTitle: string;
+  arrivalChannelMutedBody: string;
+  arrivalChannelMutedAction: string;
   assignAction: string;
   noShowAction: string;
   barberLabel: string;
@@ -1622,6 +1625,9 @@ const enUi: UiStrings = {
   arrivalNotificationsOffTitle: 'Notifications are turned off for FastQue',
   arrivalNotificationsOffBody: 'Turn notifications on in your phone settings, or FastQue cannot alert you when a customer is due.',
   arrivalNotificationsOffAction: 'Open notification settings',
+  arrivalChannelMutedTitle: 'The arrival alert sound is turned off on this phone',
+  arrivalChannelMutedBody: 'Your phone has silenced or downgraded the FastQue arrival alert. Open its settings and set it to make sound and pop on screen, or you may miss a customer who is due.',
+  arrivalChannelMutedAction: 'Open arrival alert settings',
   assignAction: 'Assign',
   noShowAction: 'No-show',
   barberLabel: 'Barber',
@@ -2343,6 +2349,9 @@ const hiUi: UiStrings = {
   arrivalNotificationsOffTitle: 'FastQue के लिए नोटिफ़िकेशन बंद हैं',
   arrivalNotificationsOffBody: 'अपने फ़ोन की सेटिंग्स में नोटिफ़िकेशन चालू करें, वरना ग्राहक का समय होने पर FastQue आपको अलर्ट नहीं कर पाएगा।',
   arrivalNotificationsOffAction: 'नोटिफ़िकेशन सेटिंग्स खोलें',
+  arrivalChannelMutedTitle: 'इस फ़ोन पर आगमन अलर्ट की आवाज़ बंद है',
+  arrivalChannelMutedBody: 'आपके फ़ोन ने FastQue के आगमन अलर्ट को म्यूट या कम प्राथमिकता वाला कर दिया है। उसकी सेटिंग्स खोलकर आवाज़ और स्क्रीन पर पॉप-अप चालू करें, वरना आप समय पर आए ग्राहक को चूक सकते हैं।',
+  arrivalChannelMutedAction: 'आगमन अलर्ट सेटिंग्स खोलें',
   assignAction: 'नियुक्त करें',
   noShowAction: 'नो-शो',
   barberLabel: 'बार्बर',

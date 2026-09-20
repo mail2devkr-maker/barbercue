@@ -13,6 +13,7 @@ import {
 import { apiFetch } from '../../lib/api';
 import {
   getArrivalAlertReadiness,
+  openArrivalChannelSettings,
   openArrivalNotificationSettings,
   openFullScreenIntentSettings,
   type ArrivalAlertReadiness,
@@ -200,6 +201,12 @@ export default function NotificationSettingsScreen() {
               <Text style={styles.osDeniedText}>{t.arrivalNotificationsOffTitle}</Text>
               <Text style={styles.osNote}>{t.arrivalNotificationsOffBody}</Text>
               <Button title={t.arrivalNotificationsOffAction} variant="outline" onPress={openArrivalNotificationSettings} />
+            </View>
+          ) : readiness.arrivalChannelMuted ? (
+            <View testID="arrival-readiness-channel-muted" style={styles.osDenied}>
+              <Text style={styles.osDeniedText}>{t.arrivalChannelMutedTitle}</Text>
+              <Text style={styles.osNote}>{t.arrivalChannelMutedBody}</Text>
+              <Button title={t.arrivalChannelMutedAction} variant="outline" onPress={openArrivalChannelSettings} />
             </View>
           ) : !readiness.fullScreenIntentAllowed ? (
             <View testID="arrival-readiness-fullscreen" style={styles.osDenied}>

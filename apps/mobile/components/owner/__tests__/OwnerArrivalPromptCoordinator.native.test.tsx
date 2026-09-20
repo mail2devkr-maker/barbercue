@@ -7,6 +7,7 @@ import { OwnerArrivalPromptCoordinator } from '../OwnerArrivalPromptCoordinator'
 import { __resetArrivalAlertsForTests } from '../../../lib/arrival-alert-sound';
 import { apiFetch } from '../../../lib/api';
 import { navigationRef } from '../../../navigation/navigation-ref';
+import { requestOwnerArrivalPrompt } from '../../../lib/arrival-prompt';
 import {
   cancelNativeArrivalAlert,
   readNativeArrivalState,
@@ -228,6 +229,45 @@ describe('snooze', () => {
     });
     await flush();
     expect(tree!.toJSON()).not.toBeNull();
+  });
+});
+
+describe('a refresh never undoes where the owner is (native action hand-off)', () => {
+  it('keeps the confirmation step the owner is on across the 30-second safety refresh', async () => {
+    await mount([alert('b1')]);
+    await press('Not arrived');
+    expect(JSON.stringify(tree!.toJSON())).toContain('Customer not here yet?');
+    await act(async () => {
+      jest.advanceTimersByTime(30_000 * 2);
+    });
+    await flush();
+    expect(JSON.stringify(tree!.toJSON())).toContain('Customer not here yet?'); // still on the confirm step
+  });
+
+  it('a native "Arrived" button press survives the resume refresh that follows the hand-off', async () => {
+    await mount([alert('b1')]);
+    await act(async () => {
+      requestOwnerArrivalPrompt({ type: 'booking.arrival_check', salonId: 's1', bookingId: 'b1', initialAction: 'arrived' });
+    });
+    await flush();
+    // The app-resume refresh (no initial action) completes right after the deep-link's own refresh.
+    await act(async () => {
+      appStateHandler?.('active');
+    });
+    await flush();
+    expect(JSON.stringify(tree!.toJSON())).toContain('Confirm customer arrival?');
+  });
+
+  it('a DIFFERENT booking still starts on the first screen', async () => {
+    await mount([alert('b1')]);
+    await press('Not arrived');
+    (apiFetch as jest.Mock).mockResolvedValue([alert('b2')]);
+    await act(async () => {
+      appStateHandler?.('active');
+    });
+    await flush();
+    expect(JSON.stringify(tree!.toJSON())).not.toContain('Customer not here yet?');
+    expect(JSON.stringify(tree!.toJSON())).toContain('Has the customer arrived?');
   });
 });
 

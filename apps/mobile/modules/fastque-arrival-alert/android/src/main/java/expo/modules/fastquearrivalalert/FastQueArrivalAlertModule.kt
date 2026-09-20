@@ -23,6 +23,12 @@ class FastQueArrivalAlertModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("FastQueArrivalAlert")
 
+    // Create the arrival channel as soon as the app loads (not only at the first alert), so the owner can
+    // inspect / configure it in Android settings beforehand and the readiness card can report its state.
+    OnCreate {
+      appContext.reactContext?.let { ArrivalAlertNotifier.ensureChannel(it) }
+    }
+
     // Setup / readiness for the Settings screen and the owner banner.
     Function("getReadiness") {
       val ctx = context
@@ -31,6 +37,8 @@ class FastQueArrivalAlertModule : Module() {
         "sdkInt" to Build.VERSION.SDK_INT,
         "notificationsEnabled" to ArrivalAlertNotifier.notificationsEnabled(ctx),
         "fullScreenIntentAllowed" to ArrivalAlertNotifier.canUseFullScreenIntent(ctx),
+        // The arrival channel exists but the phone silenced/downgraded it (an OEM default or the owner's choice).
+        "arrivalChannelMuted" to ArrivalAlertNotifier.channelAlertsMuted(ctx),
         // Android 14+ lets the owner revoke it, so FastQue must guide them to grant it.
         "fullScreenIntentNeedsUserGrant" to (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE),
       )
@@ -44,6 +52,18 @@ class FastQueArrivalAlertModule : Module() {
         notificationSettingsIntent(ctx)
       }
       launchSettings(ctx, target)
+    }
+
+    Function("openArrivalChannelSettings") {
+      val ctx = context
+      val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+          .putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+          .putExtra(Settings.EXTRA_CHANNEL_ID, ArrivalAlertNotifier.CHANNEL_ID)
+      } else {
+        notificationSettingsIntent(ctx)
+      }
+      launchSettings(ctx, intent)
     }
 
     Function("openNotificationSettings") {

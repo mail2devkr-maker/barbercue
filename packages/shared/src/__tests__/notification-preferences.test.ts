@@ -137,6 +137,9 @@ describe('arrival readiness / required-screen copy', () => {
       'arrivalNotificationsOffTitle',
       'arrivalNotificationsOffBody',
       'arrivalNotificationsOffAction',
+      'arrivalChannelMutedTitle',
+      'arrivalChannelMutedBody',
+      'arrivalChannelMutedAction',
     ]) {
       expect(t[key]).toBeTruthy();
     }

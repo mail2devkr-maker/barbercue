@@ -40,7 +40,7 @@ Both recipients can answer at the same moment (or race the customer's own check-
 ## Pieces
 
 - `apps/mobile/modules/fastque-arrival-alert` - local Expo module (autolinked, no third-party dependency):
-  - `FastQueArrivalMessagingService` extends expo-notifications' `ExpoFirebaseMessagingService` at manifest priority 100 (Expo's is -1). FCM delivers each message to exactly one service; anything that is not `booking.arrival_check`, and every push while the app is in front, is passed straight to Expo unchanged.
+  - `FastQueArrivalMessagingService` extends expo-notifications' `ExpoFirebaseMessagingService` at manifest priority 100 (Expo's is -1). FCM delivers each message to exactly one service; anything that is not `booking.arrival_check` is passed straight to Expo unchanged. An arrival push while the app is in front is swallowed (the React Native prompt is already driven by the realtime event / backend refresh and makes the one sound).
   - `ArrivalAlertNotifier` - HIGH-importance channel `fastque-arrival-check`, `setFullScreenIntent(..., true)` when allowed, category REMINDER (deliberately not ALARM, so Do Not Disturb keeps working), Arrived / Not arrived / Remind actions.
   - `FastQueArrivalAlertActivity` - `setShowWhenLocked` + `setTurnScreenOn`, programmatic UI (time, service, three buttons). Arrived / Not arrived request keyguard dismissal, then deep-link into FastQue.
   - `ArrivalAlertStore` - SharedPreferences episode store: one alert per booking per episode across process death; 12 h TTL.
@@ -97,3 +97,16 @@ The `physical-test` build MUST NOT talk to the production backend: it runs unmer
 - **Certification database:** an empty, disposable Postgres (staging Neon project - never a branch of production, which would copy real customers). Bring-up on a fresh database: `prisma migrate deploy` (it stops at `20260830215000_ensure_primary_platform_admin`), `seed-certification.ts bootstrap-admin`, `prisma migrate resolve --rolled-back 20260830215000_ensure_primary_platform_admin`, `prisma migrate deploy` again, then `seed-certification.ts seed`.
 - **Seed:** `apps/backend/prisma/seed-certification.ts` refuses to run unless `CERT_SEED_CONFIRM=fastque-cert-temp` AND the database holds nothing but certification rows (no other salon, no phone/real-email user) - see `certification-seed-guard.ts`. It creates one test salon (3-minute arrival grace, flat INR 50 no-show charge), an owner, an assigned staff member, an unassigned staff member, and - on demand - `appointment --in <minutes> [--staff assigned|other|any] [--multi]` test appointments for fresh fictional customers. Logins are generated and written to a local file outside the repository; they are never printed or committed.
 - Tear down after certification: delete the Railway project and the Neon project.
+
+## The arrival push MUST be data-only (root cause of the 1.0.5 lock-screen regression)
+
+An Expo push that carries a `title`/`body` becomes an FCM *notification message*. While the app is backgrounded, locked or killed, Android's FCM SDK displays such a message itself (notification tag `FCM-Notification:...`, on the channel named in the payload, **no full-screen intent**) and never calls the app's messaging service - so the native full-screen alert never ran and the screen stayed off. Proven with adb / logcat / `dumpsys notification` on an Android 13 emulator against the certification backend:
+
+| Push shape | What happened on a locked, screen-off emulator |
+|---|---|
+| title + body + channelId + sound (1.0.5 backend) | System-displayed `FCM-Notification` on `booking-updates`; screen stayed asleep; `FastQueArrivalMessagingService` never ran; channel `fastque-arrival-check` was never created. |
+| data-only + priority high (fixed backend) | Service ran; `fastque-arrival-check` posted with a full-screen intent (`sysui_fullscreen_notification`); exactly one `notification_alert` (buzz + beep); `FastQueArrivalAlertActivity` resumed over the keyguard; the screen woke. |
+
+`PushDispatchService` therefore sends the arrival check with no title/body/sound/channel/category, `priority: high`, `ttl: 600`; the phone builds the localized notification from `data` (ids + `lang`). Do not add a title/body back to it. Also verified on the emulator: "Remind me in 2 minutes" re-alerts exactly once (inexact alarm, ~1.5 min late while asleep); "Arrived" asks the system for unlock, then hands off to the React Native prompt.
+
+Emulator results are diagnosis only. **Still physical-device-specific:** the phone's own state for the `fastque-arrival-check` channel (OEM/user sound + importance defaults - the Settings readiness card now reports "arrival alert sound is turned off" and opens that channel's settings), Android 14+ full-screen special access, OEM battery/background restrictions, DND / ringer, and the lock-screen visibility the phone applies.

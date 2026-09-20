@@ -7,6 +7,7 @@ const mockModule = {
   getReadiness: jest.fn(),
   openFullScreenIntentSettings: jest.fn(),
   openNotificationSettings: jest.fn(),
+  openArrivalChannelSettings: jest.fn(),
   dismissNotification: jest.fn(),
   cancelAlert: jest.fn(),
   scheduleSnooze: jest.fn(),
@@ -61,12 +62,14 @@ describe('with the native module', () => {
       sdkInt: 34,
       notificationsEnabled: true,
       fullScreenIntentAllowed: false,
+      arrivalChannelMuted: true,
       fullScreenIntentNeedsUserGrant: true,
     });
     expect(native.isNativeArrivalAlertAvailable()).toBe(true);
     expect(native.getArrivalAlertReadiness()).toEqual({
       notificationsEnabled: true,
       fullScreenIntentAllowed: false,
+      arrivalChannelMuted: true,
       fullScreenIntentNeedsUserGrant: true,
     });
   });
@@ -99,6 +102,8 @@ describe('with the native module', () => {
     native.dismissNativeArrivalNotification('b2');
     native.openFullScreenIntentSettings();
     native.openArrivalNotificationSettings();
+    native.openArrivalChannelSettings();
+    expect(mockModule.openArrivalChannelSettings).toHaveBeenCalledTimes(1);
     expect(mockModule.reconcile).toHaveBeenCalledWith('s1', ['b1', 'b2']);
     expect(mockModule.cancelAlert).toHaveBeenCalledWith('b1');
     expect(mockModule.dismissNotification).toHaveBeenCalledWith('b2');

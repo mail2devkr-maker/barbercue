@@ -84,6 +84,24 @@ object ArrivalAlertNotifier {
     return true
   }
 
+  /**
+   * The arrival channel's real state on this phone. Android (and OEM skins) can silence or downgrade a
+   * channel after it is created - the app cannot change that afterwards - so the Settings readiness card
+   * reads this rather than trusting the importance the channel was created with.
+   */
+  fun channelAlertsMuted(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+    val channel = context.getSystemService(NotificationManager::class.java)?.getNotificationChannel(CHANNEL_ID) ?: return false
+    if (channel.importance == NotificationManager.IMPORTANCE_NONE) return false // reported as notifications off
+    return channel.importance < NotificationManager.IMPORTANCE_HIGH || channel.sound == null
+  }
+
+  fun channelImportance(context: Context): Int {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return NotificationManager.IMPORTANCE_HIGH
+    return context.getSystemService(NotificationManager::class.java)?.getNotificationChannel(CHANNEL_ID)?.importance
+      ?: NotificationManager.IMPORTANCE_UNSPECIFIED
+  }
+
   /** Android 14+: a special access the owner grants; earlier versions: allowed by the manifest permission. */
   fun canUseFullScreenIntent(context: Context): Boolean {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
@@ -183,6 +201,11 @@ object ArrivalAlertNotifier {
 
     return try {
       NotificationManagerCompat.from(app).notify(notificationId(payload.bookingId), builder.build())
+      Log.i(
+        TAG,
+        "arrival notification posted booking=${payload.bookingId} channelImportance=${channelImportance(app)} " +
+          "fullScreenIntent=${canUseFullScreenIntent(app)} muted=${channelAlertsMuted(app)}",
+      )
       true
     } catch (error: SecurityException) {
       Log.w(TAG, "Notification permission missing; arrival alert not shown", error)

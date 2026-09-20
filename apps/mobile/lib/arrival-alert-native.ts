@@ -19,9 +19,11 @@ interface NativeArrivalAlertModule {
     sdkInt: number;
     notificationsEnabled: boolean;
     fullScreenIntentAllowed: boolean;
+    arrivalChannelMuted: boolean;
     fullScreenIntentNeedsUserGrant: boolean;
   };
   openFullScreenIntentSettings(): void;
+  openArrivalChannelSettings(): void;
   openNotificationSettings(): void;
   dismissNotification(bookingId: string): void;
   cancelAlert(bookingId: string): void;
@@ -48,6 +50,8 @@ export interface ArrivalAlertReadiness {
   notificationsEnabled: boolean;
   /** On Android 14+ this is a special access the owner must grant; earlier versions grant it by default. */
   fullScreenIntentAllowed: boolean;
+  /** The phone silenced / downgraded the arrival alert channel (an OEM default or the owner's choice). */
+  arrivalChannelMuted: boolean;
   fullScreenIntentNeedsUserGrant: boolean;
 }
 
@@ -59,6 +63,7 @@ export function getArrivalAlertReadiness(): ArrivalAlertReadiness | null {
     return {
       notificationsEnabled: readiness.notificationsEnabled,
       fullScreenIntentAllowed: readiness.fullScreenIntentAllowed,
+      arrivalChannelMuted: readiness.arrivalChannelMuted === true,
       fullScreenIntentNeedsUserGrant: readiness.fullScreenIntentNeedsUserGrant,
     };
   } catch {
@@ -71,6 +76,14 @@ export function openFullScreenIntentSettings(): void {
     nativeModule?.openFullScreenIntentSettings();
   } catch {
     /* settings are a convenience; a missing screen must not break the app */
+  }
+}
+
+export function openArrivalChannelSettings(): void {
+  try {
+    nativeModule?.openArrivalChannelSettings();
+  } catch {
+    /* see above */
   }
 }
 

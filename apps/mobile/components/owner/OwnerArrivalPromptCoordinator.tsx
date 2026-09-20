@@ -121,6 +121,8 @@ export function OwnerArrivalPromptCoordinator({ audience = 'owner' }: { audience
   const snoozedUntilRef = useRef<Map<string, number>>(new Map());
   const snoozeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const armSnoozeRef = useRef<(alert: ArrivalAlertDto, until: number) => void>(() => undefined);
+  // The booking currently on screen, readable inside chooseAlert without re-creating it.
+  const activeRef = useRef<ArrivalAlertDto | null>(null);
   const copy = copyFor(language);
   const languageRef = useRef(language);
   useEffect(() => {
@@ -151,8 +153,14 @@ export function OwnerArrivalPromptCoordinator({ audience = 'owner' }: { audience
       (preferredBookingId ? eligible.find((item) => item.bookingId === preferredBookingId) : undefined) ??
       eligible[0] ??
       null;
+    // A refresh (30 s safety net, realtime event, app resume) that lands on the SAME booking must not undo
+    // where the owner is: it used to reset the confirmation step, so a native "Arrived" / "Not arrived"
+    // button press was lost the moment the resume refresh completed, and an owner reading a "Confirm No
+    // Show" step was bounced back to the first screen every 30 seconds.
+    const sameBooking = Boolean(next) && activeRef.current?.bookingId === next?.bookingId;
+    activeRef.current = next;
     setActive(next);
-    setError(null);
+    if (!sameBooking || initialAction) setError(null);
     if (!next) {
       setConfirmStep(null);
       return;
@@ -177,8 +185,12 @@ export function OwnerArrivalPromptCoordinator({ audience = 'owner' }: { audience
     if (initialAction === 'arrived') setConfirmStep('arrived');
     else if (initialAction === 'not-arrived') {
       setConfirmStep(next.graceExpired ? 'not-arrived-late' : 'not-arrived-early');
-    } else setConfirmStep(null);
+    } else if (!sameBooking) setConfirmStep(null);
   }, []);
+  // Keep the ref in step with every other place that clears or sets the active prompt (snooze, resolve).
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   const refreshSalon = useCallback(
     (salonId: string, request?: OwnerArrivalPromptRequest) =>

@@ -8,6 +8,7 @@ import NotificationSettingsScreen from '../NotificationSettingsScreen';
 import { apiFetch } from '../../../lib/api';
 import {
   getArrivalAlertReadiness,
+  openArrivalChannelSettings,
   openArrivalNotificationSettings,
   openFullScreenIntentSettings,
 } from '../../../lib/arrival-alert-native';
@@ -16,6 +17,7 @@ jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn() }));
 jest.mock('../../../lib/arrival-alert-native', () => ({
   getArrivalAlertReadiness: jest.fn(() => null),
   openArrivalNotificationSettings: jest.fn(),
+  openArrivalChannelSettings: jest.fn(),
   openFullScreenIntentSettings: jest.fn(),
 }));
 jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
@@ -270,6 +272,20 @@ describe('arrival screen readiness (native Android)', () => {
     await press(t.arrivalFullScreenAccessAction);
     expect(openFullScreenIntentSettings).toHaveBeenCalledTimes(1);
     expect(putCalls()).toHaveLength(0);
+  });
+
+  it('warns when the phone has silenced the arrival alert channel and opens exactly that channel\'s settings', async () => {
+    (getArrivalAlertReadiness as jest.Mock).mockReturnValue({
+      notificationsEnabled: true,
+      fullScreenIntentAllowed: true,
+      arrivalChannelMuted: true,
+      fullScreenIntentNeedsUserGrant: true,
+    });
+    await mount();
+    expect(screenText()).toContain(t.arrivalChannelMutedTitle);
+    expect(screenText()).not.toContain(t.arrivalReadinessReady); // "ready" is never claimed while the alert is silent
+    await press(t.arrivalChannelMutedAction);
+    expect(openArrivalChannelSettings).toHaveBeenCalledTimes(1);
   });
 
   it('warns when notifications are turned off for FastQue and opens the notification settings', async () => {
