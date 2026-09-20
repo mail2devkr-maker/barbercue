@@ -12,6 +12,7 @@ export const Role = {
   CUSTOMER: 'CUSTOMER',
   SALON_STAFF: 'SALON_STAFF',
   SALON_OWNER: 'SALON_OWNER',
+  FIELD_EXECUTIVE: 'FIELD_EXECUTIVE',
   PLATFORM_ADMIN: 'PLATFORM_ADMIN',
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
@@ -25,6 +26,7 @@ export type Role = (typeof Role)[keyof typeof Role];
 export const SessionAudience = {
   CUSTOMER: 'CUSTOMER',
   STAFF: 'STAFF',
+  EMPLOYEE: 'EMPLOYEE',
   ADMIN: 'ADMIN',
 } as const;
 export type SessionAudience = (typeof SessionAudience)[keyof typeof SessionAudience];
