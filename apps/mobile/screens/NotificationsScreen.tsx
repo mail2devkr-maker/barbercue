@@ -6,6 +6,7 @@ import type { NotificationDto, UiStrings } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, radius, space } from '../lib/theme';
+import { requestOwnerArrivalPrompt } from '../lib/arrival-prompt';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton } from '../components/ui';
 
 function timeAgo(t: UiStrings, iso: string): string {
@@ -58,9 +59,21 @@ export default function NotificationsScreen() {
   );
 
   function markRead(n: NotificationDto) {
-    if (n.readAt) return;
-    apiFetch(`${NOTIFICATION_PATHS.notifications}/${n.id}/${NOTIFICATION_PATHS.read}`, { method: 'POST' }).catch(() => {});
-    setItems((prev) => (prev ?? []).map((it) => (it.id === n.id ? { ...it, readAt: new Date().toISOString() } : it)));
+    if (!n.readAt) {
+      apiFetch(`${NOTIFICATION_PATHS.notifications}/${n.id}/${NOTIFICATION_PATHS.read}`, { method: 'POST' }).catch(() => {});
+      setItems((prev) => (prev ?? []).map((it) => (it.id === n.id ? { ...it, readAt: new Date().toISOString() } : it)));
+    }
+    if (
+      n.type === 'owner.booking.arrival_check' &&
+      typeof n.payload?.salonId === 'string' &&
+      typeof n.payload?.bookingId === 'string'
+    ) {
+      requestOwnerArrivalPrompt({
+        type: 'booking.arrival_check',
+        salonId: n.payload.salonId,
+        bookingId: n.payload.bookingId,
+      });
+    }
   }
 
   function markAllRead() {
