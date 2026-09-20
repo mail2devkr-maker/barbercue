@@ -91,6 +91,59 @@ export const StaffMemberStatus = {
 } as const;
 export type StaffMemberStatus = (typeof StaffMemberStatus)[keyof typeof StaffMemberStatus];
 
+// FastQue internal field CRM — kept separate from salon/customer CRM concepts. These values
+// describe the employee sales/onboarding pipeline only.
+export const CrmLeadStatus = {
+  NEW: 'NEW',
+  CONTACTED: 'CONTACTED',
+  INTERESTED: 'INTERESTED',
+  DEMO_SCHEDULED: 'DEMO_SCHEDULED',
+  FOLLOW_UP: 'FOLLOW_UP',
+  ONBOARDED: 'ONBOARDED',
+  LOST: 'LOST',
+} as const;
+export type CrmLeadStatus = (typeof CrmLeadStatus)[keyof typeof CrmLeadStatus];
+
+export const CrmLeadSource = {
+  FIELD_VISIT: 'FIELD_VISIT',
+  REFERRAL: 'REFERRAL',
+  COLD_CALL: 'COLD_CALL',
+  WHATSAPP: 'WHATSAPP',
+  SOCIAL_MEDIA: 'SOCIAL_MEDIA',
+  INBOUND: 'INBOUND',
+  OTHER: 'OTHER',
+} as const;
+export type CrmLeadSource = (typeof CrmLeadSource)[keyof typeof CrmLeadSource];
+
+export const CrmVisitOutcome = {
+  CONTACTED: 'CONTACTED',
+  INTERESTED: 'INTERESTED',
+  DEMO_COMPLETED: 'DEMO_COMPLETED',
+  FOLLOW_UP_REQUIRED: 'FOLLOW_UP_REQUIRED',
+  NOT_INTERESTED: 'NOT_INTERESTED',
+  ONBOARDING_ASSISTED: 'ONBOARDING_ASSISTED',
+  OTHER: 'OTHER',
+} as const;
+export type CrmVisitOutcome = (typeof CrmVisitOutcome)[keyof typeof CrmVisitOutcome];
+
+export const CrmFollowUpChannel = {
+  CALL: 'CALL',
+  WHATSAPP: 'WHATSAPP',
+  VISIT: 'VISIT',
+  EMAIL: 'EMAIL',
+  OTHER: 'OTHER',
+} as const;
+export type CrmFollowUpChannel =
+  (typeof CrmFollowUpChannel)[keyof typeof CrmFollowUpChannel];
+
+export const CrmFollowUpStatus = {
+  OPEN: 'OPEN',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type CrmFollowUpStatus =
+  (typeof CrmFollowUpStatus)[keyof typeof CrmFollowUpStatus];
+
 export const ChairStatus = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
