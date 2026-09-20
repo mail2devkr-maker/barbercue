@@ -67,7 +67,7 @@ export class PushDispatchService {
       title,
       body,
       data,
-      ...(kind === 'arrivalCheck' ? { categoryId: 'booking-arrival-check' } : {}),
+      ...(kind === 'arrivalCheck' ? { categoryId: 'booking_arrival_check' } : {}),
     });
   }
 
