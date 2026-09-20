@@ -15,17 +15,20 @@ export const SERVICE_CATALOG_PACKS: readonly ServicePackDefinition[] = [
   {
     id: 'BASIC',
     label: 'Basic Salon Services',
-    description: 'Everyday, high-frequency services for quick salon setup.',
+    description:
+      'Essential small-barber services: haircuts, fades, shaving, beard/moustache grooming, basic hair colour and head massage — with lower suggested prices.',
   },
   {
     id: 'STANDARD',
     label: 'Standard Salon Services',
-    description: 'Expanded grooming, colour, facial, waxing and styling services.',
+    description:
+      'Everything in Basic plus wider unisex hair, facial, threading, waxing, manicure/pedicure, party styling and body-care services — with mid-range suggested prices.',
   },
   {
     id: 'ADVANCED',
     label: 'Advance Salon Services',
-    description: 'Premium, technical, bridal, nail-extension and intensive treatment services.',
+    description:
+      'The complete FastQue beauty catalog, including every Basic/Standard service plus technical hair treatments, premium facials, full-body waxing, advanced nails, bridal/HD makeup and intensive body care — with premium suggested prices.',
   },
 ] as const;
 
@@ -54,16 +57,35 @@ export interface ServiceCatalogItem {
 // services such as Haircut can appear in Basic, Standard and Advance with different suggested
 // prices, while premium-only services appear only where they make sense.
 const BASIC_SERVICE_IDS = new Set([
+  // Core men's barbering / grooming — services a small local barber can commonly provide.
   'classic-haircut',
+  'skin-fade',
+  'zero-fade',
   'buzz-cut',
   'crew-cut',
   'kids-haircut',
   'hair-wash',
+  'blow-dry-styling',
+  'hair-setting',
   'head-shave',
+  'haircut-beard',
   'beard-trim',
   'beard-shape-line-up',
   'clean-shave',
   'moustache-trim',
+  'beard-colour',
+  // Basic colour / care commonly offered by neighbourhood barber shops.
+  'root-touch-up',
+  'global-hair-colour',
+  'henna',
+  'head-massage',
+]);
+
+const STANDARD_SERVICE_IDS = new Set([
+  // Premium men's grooming beyond the essential barber set.
+  'premium-luxury-shave',
+
+  // Unisex / women's hair services suitable for a standard full-service salon.
   'womens-haircut',
   'hair-trim',
   'fringe-bangs-trim',
@@ -71,57 +93,67 @@ const BASIC_SERVICE_IDS = new Set([
   'shampoo-conditioning',
   'blow-dry',
   'hair-ironing',
+  'hair-curling',
   'basic-hairdo',
+  'party-hairdo',
+
+  // Broader colour services; balayage/ombre remain Advance.
+  'highlights',
+  'lowlights',
+
+  // Non-technical hair care. Chemical/technical transformations remain Advance.
+  'hair-spa',
   'deep-conditioning',
-  'head-massage',
+  'anti-dandruff-treatment',
+  'anti-hairfall-treatment',
+  'scalp-treatment',
+
+  // Mainstream facial / skin services. Specialist intensive facials remain Advance.
   'cleanup',
+  'fruit-facial',
+  'gold-facial',
+  'diamond-facial',
+  'hydrating-facial',
+  'brightening-facial',
   'de-tan',
   'bleach',
+  'face-polish',
+
+  // Threading.
   'eyebrows',
   'upper-lip',
   'chin',
   'forehead',
   'side-face',
+  'full-face-threading',
+
+  // Mainstream waxing. Full-body and bikini remain Advance.
   'underarms',
   'half-arms',
   'full-arms',
   'half-legs',
   'full-legs',
+  'full-face-wax',
+  'stomach',
+  'back',
+
+  // Basic nail care. Spa/gel/art/extensions remain Advance.
   'manicure',
   'pedicure',
   'nail-cut-file',
   'nail-polish',
+  'gel-removal',
+
+  // Occasion services that do not require the premium bridal/HD/airbrush tier.
+  'party-makeup',
+  'eye-makeup',
+  'saree-draping',
+
+  // Mainstream massage/body care; intensive body treatments remain Advance.
   'foot-massage',
   'hand-massage',
   'head-neck-shoulder-massage',
-]);
-
-const ADVANCED_SERVICE_IDS = new Set([
-  'balayage',
-  'ombre',
-  'keratin-treatment',
-  'smoothening',
-  'rebonding-straightening',
-  'hair-botox',
-  'anti-ageing-facial',
-  'acne-control-facial',
-  'full-body-wax',
-  'bikini-wax',
-  'spa-manicure',
-  'spa-pedicure',
-  'gel-polish',
-  'nail-art',
-  'nail-extensions',
-  'nail-extension-removal',
-  'hd-makeup',
-  'airbrush-makeup',
-  'engagement-makeup',
-  'bridal-makeup',
-  'groom-makeup-grooming',
-  'bridal-hairdo',
-  'pre-bridal-package',
-  'body-scrub',
-  'body-polish',
+  'back-massage',
 ]);
 
 
@@ -130,22 +162,22 @@ const ADVANCED_SERVICE_IDS = new Set([
 // shared catalog gives web and mobile exactly the same defaults.
 const STANDARD_REFERENCE_PRICE_INR_BY_ID: Readonly<Record<string, number>> = {
   "classic-haircut": 100,
-  "skin-fade": 350,
-  "zero-fade": 300,
-  "buzz-cut": 200,
-  "crew-cut": 250,
-  "kids-haircut": 200,
-  "hair-wash": 150,
-  "blow-dry-styling": 250,
-  "hair-setting": 250,
-  "head-shave": 200,
-  "haircut-beard": 400,
-  "beard-trim": 150,
-  "beard-shape-line-up": 200,
-  "clean-shave": 150,
+  "skin-fade": 200,
+  "zero-fade": 200,
+  "buzz-cut": 100,
+  "crew-cut": 150,
+  "kids-haircut": 100,
+  "hair-wash": 100,
+  "blow-dry-styling": 150,
+  "hair-setting": 150,
+  "head-shave": 100,
+  "haircut-beard": 200,
+  "beard-trim": 100,
+  "beard-shape-line-up": 100,
+  "clean-shave": 100,
   "premium-luxury-shave": 350,
-  "moustache-trim": 100,
-  "beard-colour": 300,
+  "moustache-trim": 50,
+  "beard-colour": 200,
   "womens-haircut": 500,
   "hair-trim": 350,
   "fringe-bangs-trim": 200,
@@ -156,16 +188,16 @@ const STANDARD_REFERENCE_PRICE_INR_BY_ID: Readonly<Record<string, number>> = {
   "hair-curling": 600,
   "basic-hairdo": 700,
   "party-hairdo": 1200,
-  "root-touch-up": 1200,
-  "global-hair-colour": 2500,
+  "root-touch-up": 600,
+  "global-hair-colour": 1000,
   "highlights": 3000,
   "lowlights": 3000,
   "balayage": 4500,
   "ombre": 4500,
-  "henna": 600,
+  "henna": 400,
   "hair-spa": 800,
   "deep-conditioning": 600,
-  "head-massage": 300,
+  "head-massage": 200,
   "anti-dandruff-treatment": 800,
   "anti-hairfall-treatment": 900,
   "scalp-treatment": 1000,
@@ -237,8 +269,9 @@ const PACK_RANK: Readonly<Record<ServicePackId, number>> = {
 
 function packFor(id: string): ServicePackId {
   if (BASIC_SERVICE_IDS.has(id)) return 'BASIC';
-  if (ADVANCED_SERVICE_IDS.has(id)) return 'ADVANCED';
-  return 'STANDARD';
+  if (STANDARD_SERVICE_IDS.has(id)) return 'STANDARD';
+  // Anything not explicitly offered by Basic or Standard is an Advance-only beauty service.
+  return 'ADVANCED';
 }
 
 function roundSuggestedPrice(value: number): number {

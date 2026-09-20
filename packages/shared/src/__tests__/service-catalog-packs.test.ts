@@ -34,6 +34,78 @@ describe('service catalog onboarding packs', () => {
     }
   });
 
+  it('uses the pack as both service breadth and salon tier', () => {
+    const basic = SERVICE_CATALOG.filter((service) =>
+      serviceAvailableInPack(service, 'BASIC'),
+    );
+    const standard = SERVICE_CATALOG.filter((service) =>
+      serviceAvailableInPack(service, 'STANDARD'),
+    );
+    const advanced = SERVICE_CATALOG.filter((service) =>
+      serviceAvailableInPack(service, 'ADVANCED'),
+    );
+
+    // Small barber: essential men's grooming + basic colour/care only.
+    expect(basic).toHaveLength(20);
+    expect(basic.map((service) => service.id)).toEqual(
+      expect.arrayContaining([
+        'classic-haircut',
+        'beard-trim',
+        'clean-shave',
+        'head-massage',
+        'root-touch-up',
+        'global-hair-colour',
+      ]),
+    );
+    for (const id of [
+      'womens-haircut',
+      'cleanup',
+      'manicure',
+      'party-makeup',
+      'bridal-makeup',
+    ]) {
+      expect(basic.map((service) => service.id)).not.toContain(id);
+    }
+
+    // Standard salon: Basic + broader unisex beauty/grooming services.
+    expect(standard).toHaveLength(73);
+    expect(standard.map((service) => service.id)).toEqual(
+      expect.arrayContaining([
+        'classic-haircut',
+        'womens-haircut',
+        'hair-spa',
+        'cleanup',
+        'eyebrows',
+        'full-legs',
+        'manicure',
+        'party-makeup',
+        'back-massage',
+      ]),
+    );
+    for (const id of [
+      'keratin-treatment',
+      'nail-extensions',
+      'bridal-makeup',
+      'full-body-wax',
+    ]) {
+      expect(standard.map((service) => service.id)).not.toContain(id);
+    }
+
+    // Advance salon: complete catalog, including every premium/technical beauty service.
+    expect(advanced).toHaveLength(SERVICE_CATALOG.length);
+    expect(advanced).toHaveLength(98);
+    expect(advanced.map((service) => service.id)).toEqual(
+      expect.arrayContaining([
+        'classic-haircut',
+        'keratin-treatment',
+        'nail-extensions',
+        'bridal-makeup',
+        'full-body-wax',
+        'body-polish',
+      ]),
+    );
+  });
+
   it('gives every available service a positive editable price and valid duration', () => {
     const packs: ServicePackId[] = ['BASIC', 'STANDARD', 'ADVANCED'];
     for (const service of SERVICE_CATALOG) {
@@ -48,12 +120,21 @@ describe('service catalog onboarding packs', () => {
     }
   });
 
-  it('supports different prices for the same service by pack', () => {
-    const haircut = SERVICE_CATALOG.find((service) => service.id === 'classic-haircut');
-    expect(haircut).toBeDefined();
-    expect(suggestedServicePriceInr(haircut!, 'BASIC')).toBe(50);
-    expect(suggestedServicePriceInr(haircut!, 'STANDARD')).toBe(100);
-    expect(suggestedServicePriceInr(haircut!, 'ADVANCED')).toBe(200);
+  it('supports lower Basic, mid Standard and higher Advance prices for shared services', () => {
+    const expectations = [
+      ['classic-haircut', 50, 100, 200],
+      ['beard-trim', 50, 100, 200],
+      ['head-massage', 100, 200, 400],
+      ['global-hair-colour', 500, 1000, 2000],
+    ] as const;
+
+    for (const [id, basicPrice, standardPrice, advancedPrice] of expectations) {
+      const service = SERVICE_CATALOG.find((candidate) => candidate.id === id);
+      expect(service).toBeDefined();
+      expect(suggestedServicePriceInr(service!, 'BASIC')).toBe(basicPrice);
+      expect(suggestedServicePriceInr(service!, 'STANDARD')).toBe(standardPrice);
+      expect(suggestedServicePriceInr(service!, 'ADVANCED')).toBe(advancedPrice);
+    }
   });
 
   it('uses the owner-requested pack labels', () => {
