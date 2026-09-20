@@ -221,6 +221,32 @@ function speakHindi(params: {
   });
 }
 
+/**
+ * Whether an announcement in `language` can actually be spoken on this phone right now: a TTS engine with
+ * voices exists and, for Hindi, a genuine Hindi-family voice (Hindi text is never read with an English
+ * voice). Callers that must always make SOME sound (the arrival check) use this to fall back to a tone
+ * instead of staying silent.
+ */
+export async function canSpeak(language: Language): Promise<boolean> {
+  try {
+    const voices = await getVoices();
+    if (voices.length === 0) return false;
+    if (language === Language.HI) return rankedHindiVoiceCandidates(voices, SPEECH_LOCALE[Language.HI]).length > 0;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function speakBooking(params: {
+  event: 'booking.arrival_check';
+  bookingId: string;
+  language: Language;
+  serviceName: string | null;
+  time: string | null;
+  onHindiVoiceMissing?: () => void;
+}): void;
+
 export function speakBooking(params: {
   event: 'booking.created';
   bookingId: string;
@@ -248,6 +274,14 @@ export function speakBooking(params: {
 }): void;
 export function speakBooking(
   params:
+    | {
+        event: 'booking.arrival_check';
+        bookingId: string;
+        language: Language;
+        serviceName: string | null;
+        time: string | null;
+        onHindiVoiceMissing?: () => void;
+      }
     | {
         event: 'booking.created';
         bookingId: string;
@@ -280,7 +314,9 @@ export function speakBooking(
       ? t.newBookingReceived(params.serviceName, params.barberName, params.salonName, params.date, params.time)
       : params.event === 'booking.rescheduled'
         ? t.bookingRescheduled(params.date, params.time)
-        : t.bookingCancelled();
+        : params.event === 'booking.arrival_check'
+          ? t.arrivalCheck(params.serviceName, params.time)
+          : t.bookingCancelled();
   const requestedLocale = SPEECH_LOCALE[params.language] ?? SPEECH_LOCALE[Language.EN];
 
   if (params.language === Language.HI) {

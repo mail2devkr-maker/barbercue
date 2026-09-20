@@ -7,8 +7,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.util.Log
@@ -34,7 +32,11 @@ import androidx.core.app.NotificationManagerCompat
  * all still applied by the OS. Nothing here bypasses DND (no bypass-DND flag).
  */
 object ArrivalAlertNotifier {
-  const val CHANNEL_ID = "fastque-arrival-check"
+  // No sound of its own (see ArrivalAlertVoice): the phone speaks the announcement - or plays the default
+  // tone if it cannot - so a channel whose sound an OEM skin defaulted to silent cannot swallow the alert.
+  // The old id ("fastque-arrival-check", created by build 1.0.5 with a channel sound) is deleted on start.
+  const val CHANNEL_ID = "fastque-arrival-alert"
+  private const val LEGACY_CHANNEL_ID = "fastque-arrival-check"
   const val SNOOZE_MS = 2L * 60 * 1000
   const val ACTION_SNOOZE_NOW = "expo.modules.fastquearrivalalert.SNOOZE_NOW"
   const val ACTION_SNOOZE_FIRED = "expo.modules.fastquearrivalalert.SNOOZE_FIRED"
@@ -56,6 +58,7 @@ object ArrivalAlertNotifier {
   fun ensureChannel(context: Context, lang: String = "EN") {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val manager = context.getSystemService(NotificationManager::class.java) ?: return
+    if (manager.getNotificationChannel(LEGACY_CHANNEL_ID) != null) manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
     if (manager.getNotificationChannel(CHANNEL_ID) != null) return
     val strings = ArrivalAlertStrings.forLang(lang)
     val channel = NotificationChannel(CHANNEL_ID, strings.channelName, NotificationManager.IMPORTANCE_HIGH).apply {
@@ -63,13 +66,7 @@ object ArrivalAlertNotifier {
       enableVibration(true)
       vibrationPattern = VIBRATION
       lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-      setSound(
-        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-        AudioAttributes.Builder()
-          .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-          .build(),
-      )
+      setSound(null, null)
     }
     manager.createNotificationChannel(channel)
   }
@@ -93,7 +90,7 @@ object ArrivalAlertNotifier {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
     val channel = context.getSystemService(NotificationManager::class.java)?.getNotificationChannel(CHANNEL_ID) ?: return false
     if (channel.importance == NotificationManager.IMPORTANCE_NONE) return false // reported as notifications off
-    return channel.importance < NotificationManager.IMPORTANCE_HIGH || channel.sound == null
+    return channel.importance < NotificationManager.IMPORTANCE_HIGH
   }
 
   fun channelImportance(context: Context): Int {
@@ -180,7 +177,6 @@ object ArrivalAlertNotifier {
       .setCategory(NotificationCompat.CATEGORY_REMINDER)
       .setPriority(NotificationCompat.PRIORITY_MAX)
       .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-      .setDefaults(NotificationCompat.DEFAULT_ALL)
       .setOnlyAlertOnce(true)
       // Persistent: stays (with its buttons visible) until the owner acts, opens it, snoozes, or the
       // backend says the arrival is resolved. Tapping still dismisses it.
@@ -206,6 +202,8 @@ object ArrivalAlertNotifier {
         "arrival notification posted booking=${payload.bookingId} channelImportance=${channelImportance(app)} " +
           "fullScreenIntent=${canUseFullScreenIntent(app)} muted=${channelAlertsMuted(app)}",
       )
+      // The single audible part of the alert: a spoken announcement, or the default tone if speech is unavailable.
+      ArrivalAlertVoice.announce(app, payload)
       true
     } catch (error: SecurityException) {
       Log.w(TAG, "Notification permission missing; arrival alert not shown", error)

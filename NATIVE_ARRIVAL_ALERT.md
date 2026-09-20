@@ -41,7 +41,8 @@ Both recipients can answer at the same moment (or race the customer's own check-
 
 - `apps/mobile/modules/fastque-arrival-alert` - local Expo module (autolinked, no third-party dependency):
   - `FastQueArrivalMessagingService` extends expo-notifications' `ExpoFirebaseMessagingService` at manifest priority 100 (Expo's is -1). FCM delivers each message to exactly one service; anything that is not `booking.arrival_check` is passed straight to Expo unchanged. An arrival push while the app is in front is swallowed (the React Native prompt is already driven by the realtime event / backend refresh and makes the one sound).
-  - `ArrivalAlertNotifier` - HIGH-importance channel `fastque-arrival-check`, `setFullScreenIntent(..., true)` when allowed, category REMINDER (deliberately not ALARM, so Do Not Disturb keeps working), Arrived / Not arrived / Remind actions.
+  - `ArrivalAlertNotifier` - HIGH-importance channel `fastque-arrival-alert` (deliberately **no channel sound**; 1.0.5's `fastque-arrival-check` is deleted on start), `setFullScreenIntent(..., true)` when allowed, category REMINDER (deliberately not ALARM, so Do Not Disturb keeps working), Arrived / Not arrived / Remind actions.
+  - `ArrivalAlertVoice` - the one audible part of a native alert: the spoken announcement (see below), or the default notification tone if speech is impossible.
   - `FastQueArrivalAlertActivity` - `setShowWhenLocked` + `setTurnScreenOn`, programmatic UI (time, service, three buttons). Arrived / Not arrived request keyguard dismissal, then deep-link into FastQue.
   - `ArrivalAlertStore` - SharedPreferences episode store: one alert per booking per episode across process death; 12 h TTL.
   - `FastQueArrivalSnoozeReceiver` - "Remind me in 2 minutes" via `AlarmManager.setAndAllowWhileIdle` (no exact-alarm permission); re-alerts once.
@@ -110,3 +111,16 @@ An Expo push that carries a `title`/`body` becomes an FCM *notification message*
 `PushDispatchService` therefore sends the arrival check with no title/body/sound/channel/category, `priority: high`, `ttl: 600`; the phone builds the localized notification from `data` (ids + `lang`). Do not add a title/body back to it. Also verified on the emulator: "Remind me in 2 minutes" re-alerts exactly once (inexact alarm, ~1.5 min late while asleep); "Arrived" asks the system for unlock, then hands off to the React Native prompt.
 
 Emulator results are diagnosis only. **Still physical-device-specific:** the phone's own state for the `fastque-arrival-check` channel (OEM/user sound + importance defaults - the Settings readiness card now reports "arrival alert sound is turned off" and opens that channel's settings), Android 14+ full-screen special access, OEM battery/background restrictions, DND / ringer, and the lock-screen visibility the phone applies.
+
+## Spoken announcement (Regression 3) - what 1.0.3 announced, and how 1.0.5 keeps it
+
+Verified from code (`git show 69f3cb0`, the 1.0.3-era `PushNotificationCoordinator`) rather than assumed:
+
+- **Mobile 1.0.3 spoke owner booking events only** - new booking (service, barber, salon, date/time), reschedule, cancellation - through `speakBooking()` (+ `booking-voice-dedupe`) when the push is received by the running app. That path is unchanged in 1.0.5 and is pinned by `PushNotificationCoordinator.voice.test.tsx`.
+- **The mobile app never spoke the arrival check** (`arrivalCheck` appears nowhere in `apps/mobile` history). The arrival sentence - "Appointment reminder. Has the 6:30 PM <service> customer arrived? Please confirm arrived or not arrived." - lives in the shared `VoiceAnnouncements` and was spoken only by the **web** dashboard overlay (`ArrivalAlertOverlay`). A local speech-recognition pass over the supplied recording (`WhatsApp Ptt 2026-09-20 at 18.32.45.ogg`, 7 s) heard: "...6:30 PM classic ... customer ... please confirm [arrived] or not arrived" - i.e. that sentence, so the recording is the arrival announcement as the web overlay speaks it. (Low recognizer confidence; treat as corroboration, not proof.)
+- The 1.0.5 arrival branch did bypass `speakBooking()` - it only opened the prompt and played a tone. It now speaks.
+
+Design: **exactly one audible episode per arrival event - the spoken sentence, or the tone only if speech is impossible.**
+- App in front (React Native): `alertArrivalOnce` (the once-per-episode arbiter) calls `canSpeak()` then `speakBooking({ event: 'booking.arrival_check', ... })` - the same Android/Hindi voice pipeline as new-booking. Speech replaces the tone; if there is no TTS engine (or Hindi with no Hindi voice) it plays the tone instead.
+- App away / locked / killed (native): the arrival notification lives on a channel with no sound; `ArrivalAlertVoice` speaks the same EN/HI sentence with Android `TextToSpeech` (USAGE_NOTIFICATION, so volume / silent / Do Not Disturb apply), or plays the default notification tone if speech fails. If the owner or the phone turned the arrival channel below HIGH importance nothing is played.
+- Duplicates: the backend `arrivalAlertSentAt` claim, the native store claim, the React Native `alerted` set (push + realtime + reconcile + refresh), and a foreground arrival push being swallowed natively mean one alert episode speaks once; a snooze re-arm is one new episode.

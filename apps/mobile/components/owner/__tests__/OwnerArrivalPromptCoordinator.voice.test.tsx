@@ -2,15 +2,16 @@
 import { act, createElement } from 'react';
 import TestRenderer from 'react-test-renderer';
 import * as Notifications from 'expo-notifications';
-import { Platform, Vibration } from 'react-native';
+import { AppState, Platform, Vibration } from 'react-native';
+import { Language } from '@barbercue/shared';
 import { OwnerArrivalPromptCoordinator } from '../OwnerArrivalPromptCoordinator';
 import { __resetArrivalAlertsForTests } from '../../../lib/arrival-alert-sound';
-import { requestOwnerArrivalPrompt } from '../../../lib/arrival-prompt';
 import { apiFetch } from '../../../lib/api';
-import { onReconnect } from '../../../lib/realtime';
+import { canSpeak, speakBooking } from '../../../lib/voice-announce';
 
-// The first render pulls in the real theme/Button, which is slow to cold-load when the machine is
-// busy (e.g. the whole monorepo test run in parallel); the default 5s is not enough there.
+// One audible episode per arrival event, and it is SPOKEN: through push + realtime + reconcile + refresh
+// duplicates, speech happens exactly once, the tone never plays alongside it, and a snooze re-arm is one
+// new episode. If speech is impossible the tone plays instead, so the alert is never silent.
 jest.setTimeout(30_000);
 
 jest.mock('expo-notifications', () => ({
@@ -19,12 +20,7 @@ jest.mock('expo-notifications', () => ({
   AndroidNotificationPriority: { HIGH: 'high' },
 }));
 jest.mock('../../../lib/push-notifications', () => ({ ANDROID_BOOKING_CHANNEL_ID: 'booking-updates' }));
-// These suites pin the TONE path (speech impossible on the test phone); spoken behaviour is covered in *.voice.test.tsx.
-jest.mock('../../../lib/voice-announce', () => ({ canSpeak: jest.fn(async () => false), speakBooking: jest.fn() }));
-jest.mock('../../../lib/api', () => ({
-  apiFetch: jest.fn(),
-  ApiError: class ApiError extends Error {},
-}));
+jest.mock('../../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
 jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => 'key' }));
 jest.mock('../../../lib/language-context', () => ({ useLanguage: () => ({ language: 'EN' }) }));
 jest.mock('../../../lib/salon-context', () => {
@@ -35,36 +31,34 @@ jest.mock('../../../lib/salon-context', () => {
 jest.mock('../../../navigation/navigation-ref', () => ({ navigationRef: { isReady: () => false, navigate: jest.fn() } }));
 jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: require('react-native').View }));
 jest.mock('../../ui', () => ({ Button: require('../../ui/Button').Button }));
-
 const mockSocketHandlers = new Map<string, (payload: { salonId: string }) => void>();
-let mockReconnectCallback: (() => void) | null = null;
 jest.mock('../../../lib/realtime', () => ({
   getRealtimeSocket: () => ({
     on: (event: string, handler: (payload: { salonId: string }) => void) => mockSocketHandlers.set(event, handler),
     off: (event: string) => mockSocketHandlers.delete(event),
   }),
   joinSalonRoom: jest.fn(),
-  onReconnect: jest.fn((cb: () => void) => {
-    mockReconnectCallback = cb;
-    return () => undefined;
-  }),
+  onReconnect: jest.fn(() => () => undefined),
 }));
+jest.mock('../../../lib/voice-announce', () => ({ canSpeak: jest.fn(), speakBooking: jest.fn() }));
 
 const alert = (bookingId: string) => ({
   bookingId,
   salonId: 's1',
-  slotStart: '2026-09-20T11:00:00.000Z',
-  serviceName: 'Beard',
-  customerDisplayName: 'Your Beard customer',
+  slotStart: '2026-09-20T13:00:00.000Z',
+  serviceName: 'Classic Haircut',
+  customerDisplayName: 'Your Classic Haircut customer',
   graceExpired: false,
   noShowChargePreview: null,
   currency: 'INR',
 });
 
 let tree: ReturnType<typeof TestRenderer.create> | undefined;
-const scheduled = () => (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls.length;
+const tones = () => (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls.length;
+const spoken = () => (speakBooking as jest.Mock).mock.calls.filter(([p]) => p.event === 'booking.arrival_check').length;
 const flush = async () => {
   await act(async () => {
+    await Promise.resolve();
     await Promise.resolve();
   });
 };
@@ -78,7 +72,6 @@ const press = async (title: string) => {
     button.props.onPress();
   });
 };
-
 async function mount(alerts: ReturnType<typeof alert>[]) {
   (apiFetch as jest.Mock).mockResolvedValue(alerts);
   await act(async () => {
@@ -91,10 +84,11 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   mockSocketHandlers.clear();
-  mockReconnectCallback = null;
   __resetArrivalAlertsForTests();
+  (canSpeak as jest.Mock).mockResolvedValue(true);
   jest.spyOn(Vibration, 'vibrate').mockImplementation(() => undefined);
   jest.replaceProperty(Platform, 'OS', 'android');
+  Object.defineProperty(AppState, 'currentState', { value: 'active', configurable: true, writable: true });
 });
 afterEach(async () => {
   if (tree) await act(async () => tree!.unmount());
@@ -103,69 +97,61 @@ afterEach(async () => {
   jest.restoreAllMocks();
 });
 
-it('sounds and vibrates exactly once when the prompt appears from backend truth', async () => {
+it('SPEAKS the arrival check with the service and time, and plays no tone', async () => {
   await mount([alert('b1')]);
-  expect(scheduled()).toBe(1);
-  expect(Vibration.vibrate).toHaveBeenCalledTimes(1);
-  const content = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls[0][0];
-  expect(content.content.title).toBe('Appointment arrival check');
-  expect(content.content.body).toContain('Beard');
+  expect(spoken()).toBe(1);
+  expect(speakBooking).toHaveBeenCalledWith(
+    expect.objectContaining({ event: 'booking.arrival_check', bookingId: 'b1', language: Language.EN, serviceName: 'Classic Haircut' }),
+  );
+  const { time } = (speakBooking as jest.Mock).mock.calls[0][0];
+  expect(typeof time).toBe('string');
+  expect(tones()).toBe(0);
 });
 
-it('does not repeat the sound on realtime refreshes, socket reconnects or the 30-second safety refresh', async () => {
+it('exactly one spoken episode through realtime events, reconnects and the 30-second safety refresh', async () => {
   await mount([alert('b1')]);
   for (const event of ['booking.arrival_alert', 'queue.updated', 'booking.no_show']) {
     await act(async () => mockSocketHandlers.get(event)?.({ salonId: 's1' }));
     await flush();
   }
-  await act(async () => mockReconnectCallback?.());
-  await flush();
   await act(async () => {
     jest.advanceTimersByTime(30_000 * 3);
   });
   await flush();
-  expect(onReconnect).toHaveBeenCalled();
-  expect(scheduled()).toBe(1);
-  expect(Vibration.vibrate).toHaveBeenCalledTimes(1);
+  expect(spoken()).toBe(1);
+  expect(tones()).toBe(0);
 });
 
-it('sounds again when a snoozed reminder becomes eligible again', async () => {
+it('a snooze re-arm is one new spoken episode - not two', async () => {
   await mount([alert('b1')]);
-  expect(scheduled()).toBe(1);
   await press('Remind me in 2 minutes');
-  expect(tree!.toJSON()).toBeNull(); // snoozed: prompt hidden, no sound while snoozed
   await act(async () => {
-    jest.advanceTimersByTime(119_000);
+    jest.advanceTimersByTime(121_000);
   });
   await flush();
-  expect(scheduled()).toBe(1);
+  expect(spoken()).toBe(2);
   await act(async () => {
-    jest.advanceTimersByTime(2_000);
+    jest.advanceTimersByTime(30_000 * 2);
   });
   await flush();
-  expect(scheduled()).toBe(2);
-  expect(tree!.toJSON()).not.toBeNull(); // the prompt is back
+  expect(spoken()).toBe(2);
 });
 
-it('stays silent when the owner opens the prompt themselves (push tap / Notification Center)', async () => {
+it('falls back to the tone, never silence, when this phone cannot speak', async () => {
+  (canSpeak as jest.Mock).mockResolvedValue(false);
+  await mount([alert('b1')]);
+  expect(spoken()).toBe(0);
+  expect(tones()).toBe(1);
+});
+
+it('does not speak when the owner opened the prompt themselves (push tap / Notification Center)', async () => {
+  const { requestOwnerArrivalPrompt } = jest.requireActual('../../../lib/arrival-prompt');
   await mount([]);
   (apiFetch as jest.Mock).mockResolvedValue([alert('b2')]);
   await act(async () => {
     requestOwnerArrivalPrompt({ type: 'booking.arrival_check', salonId: 's1', bookingId: 'b2' });
   });
   await flush();
-  expect(tree!.toJSON()).not.toBeNull();
-  expect(scheduled()).toBe(0);
-  // ...and the periodic refresh must not then sound for it either.
-  await act(async () => {
-    jest.advanceTimersByTime(30_000);
-  });
-  await flush();
-  expect(scheduled()).toBe(0);
-});
-
-it('does not sound when there is nothing to attend to', async () => {
-  await mount([]);
-  expect(scheduled()).toBe(0);
-  expect(tree!.toJSON()).toBeNull();
+  expect(spoken()).toBe(0);
+  expect(tones()).toBe(0);
 });

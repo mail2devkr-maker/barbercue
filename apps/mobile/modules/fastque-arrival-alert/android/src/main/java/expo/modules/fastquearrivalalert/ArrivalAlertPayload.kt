@@ -80,7 +80,11 @@ class ArrivalAlertStrings private constructor(
   val notArrived: String,
   val snooze: String,
   val hint: String,
+  private val spoken: (time: String?, serviceName: String?) -> String,
 ) {
+  /** The sentence read aloud - the same wording as the shared VoiceAnnouncements.arrivalCheck (web + app). */
+  fun spokenAnnouncement(time: String?, serviceName: String?): String = spoken(time, serviceName)
+
   companion object {
     fun forLang(lang: String): ArrivalAlertStrings = if (lang == "HI") HI else EN
 
@@ -93,6 +97,11 @@ class ArrivalAlertStrings private constructor(
       notArrived = "Not arrived",
       snooze = "Remind me in 2 minutes",
       hint = "You will confirm inside FastQue before anything changes.",
+      spoken = { time, service ->
+        val who = if (service.isNullOrBlank()) "customer" else "$service customer"
+        val whenPart = if (time.isNullOrBlank()) "" else " $time"
+        "Appointment reminder. Has the$whenPart $who arrived? Please confirm arrived or not arrived."
+      },
     )
 
     private val HI = ArrivalAlertStrings(
@@ -104,6 +113,11 @@ class ArrivalAlertStrings private constructor(
       notArrived = "अभी नहीं आए",
       snooze = "2 मिनट बाद याद दिलाएं",
       hint = "कुछ भी बदलने से पहले आप FastQue के अंदर पुष्टि करेंगे।",
+      spoken = { time, service ->
+        val who = if (service.isNullOrBlank()) "अपॉइंटमेंट के ग्राहक" else "$service ग्राहक"
+        val whenPart = if (time.isNullOrBlank()) "" else "$time बजे के "
+        "अपॉइंटमेंट रिमाइंडर। क्या $whenPart$who पहुंच चुका है? कृपया पुष्टि करें, आया या नहीं आया।"
+      },
     )
   }
 }

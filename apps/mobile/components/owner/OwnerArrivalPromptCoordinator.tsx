@@ -180,6 +180,11 @@ export function OwnerArrivalPromptCoordinator({ audience = 'owner' }: { audience
         salonId: next.salonId,
         title: activeCopy.eyebrow,
         body: `${formatTime(next.slotStart, languageRef.current)} · ${next.serviceName} · ${activeCopy.title}`,
+        voice: {
+          language: languageRef.current,
+          serviceName: next.serviceName,
+          time: formatTime(next.slotStart, languageRef.current),
+        },
       });
     }
     if (initialAction === 'arrived') setConfirmStep('arrived');

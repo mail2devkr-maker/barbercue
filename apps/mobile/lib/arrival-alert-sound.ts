@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import { Platform, Vibration } from 'react-native';
+import type { Language } from '@barbercue/shared';
 import { ANDROID_BOOKING_CHANNEL_ID } from './push-notifications';
+import { canSpeak, speakBooking } from './voice-announce';
 
 /**
  * Audible + haptic attention for the owner arrival check.
@@ -94,10 +96,34 @@ export async function alertArrivalOnce(input: {
   salonId: string;
   title: string;
   body: string;
+  /**
+   * When given, the alert is SPOKEN ("Appointment reminder. Has the 6:30 PM Haircut customer arrived?
+   * Please confirm arrived or not arrived." - the shared VoiceAnnouncements.arrivalCheck sentence, through
+   * the same speakBooking pipeline as the new-booking announcement). Speech REPLACES the notification tone:
+   * exactly one audible thing per episode. Only when speech is impossible on this phone (no TTS engine, or
+   * Hindi with no Hindi voice) does it fall back to the tone, so the alert is never silent.
+   */
+  voice?: { language: Language; serviceName: string | null; time: string | null };
 }): Promise<boolean> {
   if (alerted.has(input.bookingId)) return false;
   alerted.add(input.bookingId);
   vibrate();
+  if (input.voice) {
+    try {
+      if (await canSpeak(input.voice.language)) {
+        speakBooking({
+          event: 'booking.arrival_check',
+          bookingId: input.bookingId,
+          language: input.voice.language,
+          serviceName: input.voice.serviceName,
+          time: input.voice.time,
+        });
+        return true;
+      }
+    } catch (err) {
+      console.warn('[arrival-alert] speech failed, falling back to the tone', err);
+    }
+  }
   try {
     const id = await Notifications.scheduleNotificationAsync({
       content: {

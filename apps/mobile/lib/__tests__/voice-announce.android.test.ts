@@ -8,6 +8,7 @@ jest.mock('expo-speech', () => ({
 import * as Speech from 'expo-speech';
 import {
   androidSpeechLanguageFor,
+  canSpeak,
   speakBooking,
   __resetHindiVoiceWarningThrottleForTests,
   __resetVoiceCacheForTests,
@@ -169,5 +170,66 @@ describe('voice-announce.android — Expo SDK 57 Locale(String) workaround', () 
     expect(onHindiVoiceMissing).not.toHaveBeenCalled();
     jest.advanceTimersByTime(8_000);
     expect(onHindiVoiceMissing).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('arrival check announcement (mobile parity with the web overlay)', () => {
+  const englishVoice = { identifier: 'en-in-x', name: 'en', language: 'en-IN', quality: 'Default' };
+  const hindiVoice = { identifier: 'hi-in-x', name: 'hi', language: 'hi-IN', quality: 'Default' };
+
+  beforeEach(() => {
+    jest.useRealTimers();
+    jest.resetAllMocks();
+    __resetVoiceCacheForTests();
+    __resetHindiVoiceWarningThrottleForTests();
+    speakMock.mockImplementation((_text: string, options: { onStart?: () => void; onDone?: () => void }) => {
+      options.onStart?.();
+      options.onDone?.();
+    });
+  });
+
+  it('speaks the shared arrivalCheck sentence in English, with the time and service', async () => {
+    getVoicesMock.mockResolvedValue([englishVoice]);
+    speakBooking({ event: 'booking.arrival_check', bookingId: 'b1', language: Language.EN, serviceName: 'Haircut', time: '6:30 PM' });
+    await flush();
+    expect(speakMock).toHaveBeenCalledTimes(1);
+    expect(speakMock.mock.calls[0][0]).toBe(
+      'Appointment reminder. Has the 6:30 PM Haircut customer arrived? Please confirm arrived or not arrived.',
+    );
+  });
+
+  it('never invents a service or time when the alert has none', async () => {
+    getVoicesMock.mockResolvedValue([englishVoice]);
+    speakBooking({ event: 'booking.arrival_check', bookingId: 'b1', language: Language.EN, serviceName: null, time: null });
+    await flush();
+    expect(speakMock.mock.calls[0][0]).toBe('Appointment reminder. Has the customer arrived? Please confirm arrived or not arrived.');
+  });
+
+  it('speaks Hindi text only with a real Hindi voice', async () => {
+    getVoicesMock.mockResolvedValue([englishVoice, hindiVoice]);
+    speakBooking({ event: 'booking.arrival_check', bookingId: 'b1', language: Language.HI, serviceName: 'Haircut', time: '6:30 PM' });
+    await flush();
+    await flush();
+    expect(speakMock).toHaveBeenCalledTimes(1);
+    expect(speakMock.mock.calls[0][0]).toContain('अपॉइंटमेंट रिमाइंडर');
+    expect(speakMock.mock.calls[0][1]).toMatchObject({ voice: 'hi-in-x' });
+  });
+
+  it('canSpeak: true with an English voice; false with no engine; Hindi only with a Hindi voice', async () => {
+    getVoicesMock.mockResolvedValue([englishVoice]);
+    await expect(canSpeak(Language.EN)).resolves.toBe(true);
+    await expect(canSpeak(Language.HI)).resolves.toBe(false); // never an English voice for Hindi text
+    __resetVoiceCacheForTests();
+    getVoicesMock.mockResolvedValue([]);
+    await expect(canSpeak(Language.EN)).resolves.toBe(false);
+    __resetVoiceCacheForTests();
+    getVoicesMock.mockResolvedValue([hindiVoice]);
+    await expect(canSpeak(Language.HI)).resolves.toBe(true);
+  });
+
+  it('canSpeak is false (not a crash) when the voice lookup fails', async () => {
+    getVoicesMock.mockRejectedValue(new Error('no tts'));
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await expect(canSpeak(Language.EN)).resolves.toBe(false);
   });
 });

@@ -7,6 +7,8 @@
   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <uses-permission android:name="android.permission.VIBRATE" />
+  <!-- Keeps the process alive for the few seconds the spoken announcement takes when the phone is asleep. -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
 
   <application>
     <!-- Higher priority than expo-notifications' own service (-1): FCM delivers to exactly one
