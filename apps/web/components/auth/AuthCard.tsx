@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandLockup } from "../ui/BrandLockup";
+import { SiteFooter } from "../layout/SiteFooter";
 import styles from "./customer-auth.module.css";
 
 export type AuthAudience = "customer" | "owner" | "staff" | "employee" | "admin" | "recovery";
@@ -60,6 +61,7 @@ export function AuthCard({
   const story = STORIES[audience];
 
   return (
+    <>
     <main className={`${styles.page} ${styles.darkPage}`}>
       <header className={styles.topBar}>
         <Link href="/" className={styles.wordmark} aria-label="FastQue home">
@@ -116,6 +118,8 @@ export function AuthCard({
         </section>
       </div>
     </main>
+    <SiteFooter />
+    </>
   );
 }
 
