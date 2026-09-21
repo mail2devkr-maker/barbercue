@@ -1,8 +1,21 @@
 "use client";
 
 import type { ServiceDto } from "@barbercue/shared";
-import { formatMoney, summarizeServiceNames } from "@barbercue/shared";
+import {
+  computePercentageDiscountPaise,
+  formatMoney,
+  numberToPaise,
+  paiseToRupees,
+  summarizeServiceNames,
+} from "@barbercue/shared";
 import styles from "./booking.module.css";
+
+function discountedPrice(price: number, percent: number): number {
+  const originalPaise = numberToPaise(price);
+  return paiseToRupees(
+    originalPaise - computePercentageDiscountPaise(originalPaise, percent),
+  );
+}
 
 // Multi-service booking core mission — a customer may select multiple services for one
 // appointment. The combined duration/price shown here is a display-only preview (the backend
@@ -14,6 +27,7 @@ export function ServiceStep({
   onToggle,
   currency,
   countryCode,
+  onlineBookingDiscountPercent = 0,
 }: {
   services: ServiceDto[];
   selectedServiceIds: string[];
@@ -21,10 +35,14 @@ export function ServiceStep({
   // Threaded from the owning salon — a service price is denominated in its salon's currency.
   currency: string | null;
   countryCode?: string | null;
+  onlineBookingDiscountPercent?: number;
 }) {
   const selected = services.filter((s) => selectedServiceIds.includes(s.id));
   const combinedDurationMinutes = selected.reduce((sum, s) => sum + s.durationMinutes, 0);
-  const combinedPrice = selected.reduce((sum, s) => sum + s.price, 0);
+  const combinedPrice = selected.reduce(
+    (sum, s) => sum + discountedPrice(s.price, onlineBookingDiscountPercent),
+    0,
+  );
 
   return (
     <section className={styles.stepCard}>
@@ -49,7 +67,24 @@ export function ServiceStep({
                   </span>
                   <span className={styles.optionName}>{service.name}</span>
                 </span>
-                <span className={styles.optionPrice}>{formatMoney(service.price, currency, countryCode)}</span>
+                <span className={styles.optionPrice}>
+                  {onlineBookingDiscountPercent > 0 ? (
+                    <>
+                      <span style={{ textDecoration: "line-through", opacity: 0.6, marginRight: 6 }}>
+                        {formatMoney(service.price, currency, countryCode)}
+                      </span>
+                      <strong>
+                        {formatMoney(
+                          discountedPrice(service.price, onlineBookingDiscountPercent),
+                          currency,
+                          countryCode,
+                        )}
+                      </strong>
+                    </>
+                  ) : (
+                    formatMoney(service.price, currency, countryCode)
+                  )}
+                </span>
               </div>
               <div className={styles.optionMeta}>{service.durationMinutes} min</div>
             </button>
@@ -63,6 +98,7 @@ export function ServiceStep({
           </span>
           <span className={styles.selectionSummaryTotals}>
             {combinedDurationMinutes} min · {formatMoney(combinedPrice, currency, countryCode)}
+            {onlineBookingDiscountPercent > 0 ? ` · ${onlineBookingDiscountPercent}% FastQue offer` : ""}
           </span>
         </div>
       )}
