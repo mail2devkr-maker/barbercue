@@ -27,6 +27,8 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
+      {} as never,
     );
     await expect(controller.overview()).resolves.toBe(overview);
   });
@@ -94,7 +96,14 @@ describe('AdminController authorization', () => {
     const verification = { list: jest.fn(), getOne: jest.fn(), startReview: jest.fn(), decide: jest.fn() };
     const salonManagement = { deleteSalon: jest.fn() };
     const activation = { updateStatusAsAdmin: jest.fn().mockResolvedValue({ id: 'salon-1', status: 'ACTIVE' }) };
-    const controller = new AdminController(monitoring as never, verification as never, salonManagement as never, activation as never);
+    const controller = new AdminController(
+      monitoring as never,
+      verification as never,
+      salonManagement as never,
+      activation as never,
+      {} as never,
+      {} as never,
+    );
     await expect(controller.updateShopStatus({ id: 'admin-1' } as never, 'salon-1', { status: 'ACTIVE' } as never)).resolves.toEqual({ id: 'salon-1', status: 'ACTIVE' });
     expect(activation.updateStatusAsAdmin).toHaveBeenCalledWith('admin-1', 'salon-1', { status: 'ACTIVE' });
   });
