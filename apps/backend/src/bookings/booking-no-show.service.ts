@@ -302,7 +302,7 @@ export class BookingNoShowService {
   private computeNoShowCharge(
     booking: {
       serviceId: string;
-      onlineBookingDiscountAmount: Prisma.Decimal;
+      onlineBookingDiscountAmount?: Prisma.Decimal;
       service: { name: string; durationMinutes: number; price: Prisma.Decimal };
       services: Array<{
         serviceId: string;
@@ -325,7 +325,9 @@ export class BookingNoShowService {
       Math.max(
         0,
         originalSubtotalPaise -
-          decimalStringToPaise(booking.onlineBookingDiscountAmount.toString()),
+          (booking.onlineBookingDiscountAmount
+            ? decimalStringToPaise(booking.onlineBookingDiscountAmount.toString())
+            : 0),
       ),
     );
     return computeCancellationCharge(policy, appointmentPrice, 0, true);
