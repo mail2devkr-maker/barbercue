@@ -132,6 +132,7 @@ export default function AdminDashboardPage() {
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
           <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
+          <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>
           <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
           <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
         </div>

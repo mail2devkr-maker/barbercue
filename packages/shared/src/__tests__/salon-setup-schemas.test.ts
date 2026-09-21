@@ -8,7 +8,13 @@ import {
 } from '..';
 
 describe('owner setup contracts', () => {
-  it('requires a country-agnostic E.164 phone and keeps email optional for staff', () => {
+  it('keeps staff phone/email optional but validates either value when supplied', () => {
+    expect(createSalonStaffSchema.safeParse({
+      displayName: 'Marcus',
+    }).success).toBe(true);
+    expect(createSalonStaffSchema.safeParse({
+      displayName: 'Marcus', email: 'marcus@example.com',
+    }).success).toBe(true);
     expect(createSalonStaffSchema.safeParse({
       displayName: 'Marcus', phone: '+919876543210',
     }).success).toBe(true);
@@ -16,10 +22,10 @@ describe('owner setup contracts', () => {
       displayName: 'Marcus', phone: '+442071838750', email: 'marcus@example.com',
     }).success).toBe(true);
     expect(createSalonStaffSchema.safeParse({
-      displayName: 'Marcus', email: 'marcus@example.com',
+      displayName: 'Marcus', phone: '9876543210',
     }).success).toBe(false);
     expect(createSalonStaffSchema.safeParse({
-      displayName: 'Marcus', phone: '9876543210',
+      displayName: 'Marcus', email: 'not-an-email',
     }).success).toBe(false);
   });
 
@@ -33,14 +39,20 @@ describe('owner setup contracts', () => {
     }).success).toBe(false);
   });
 
-  it('ships the complete extensible preset categories without any default prices', () => {
+  it('ships the complete preset catalog with editable onboarding price/time defaults', () => {
     expect(SERVICE_CATALOG_CATEGORIES).toHaveLength(11);
     expect(SERVICE_CATALOG.length).toBeGreaterThanOrEqual(90);
     expect(SERVICE_CATALOG).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'Classic Haircut', category: "Men's Hair & Grooming" }),
       expect.objectContaining({ name: 'Bridal Makeup', category: 'Makeup & Occasion' }),
-      expect.objectContaining({ name: 'Full Body Wax', category: 'Waxing' }),
+      expect.objectContaining({ name: 'Gents Full Body Wax', category: 'Waxing' }),
+      expect.objectContaining({ name: 'Ladies Full Body Wax', category: 'Waxing' }),
     ]));
+    for (const preset of SERVICE_CATALOG) {
+      expect(preset.defaultDurationMinutes).toBeGreaterThan(0);
+      expect(preset.defaultPriceInr).toBeGreaterThan(0);
+    }
+    // Saved salon price remains owner-controlled; presets expose suggestions, not a persisted price.
     expect(SERVICE_CATALOG.some((preset) => 'price' in preset)).toBe(false);
   });
 

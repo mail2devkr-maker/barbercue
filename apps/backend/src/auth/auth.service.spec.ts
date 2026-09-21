@@ -75,6 +75,9 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
+    // Railway/CI runs tests with NODE_ENV=production; make password-link tests hermetic instead of
+    // depending on whichever WEB_BASE_URL happens to exist in the build environment.
+    process.env.WEB_BASE_URL = 'https://fastque.test';
     prisma = {
       user: {
         findUnique: jest.fn(),
@@ -122,6 +125,7 @@ describe('AuthService', () => {
         const allowed: Record<SessionAudience, Role[]> = {
           [SessionAudience.CUSTOMER]: [Role.CUSTOMER],
           [SessionAudience.STAFF]: [Role.SALON_STAFF, Role.SALON_OWNER],
+          [SessionAudience.EMPLOYEE]: [Role.FIELD_EXECUTIVE],
           [SessionAudience.ADMIN]: [Role.PLATFORM_ADMIN],
         };
         return roles.filter((role) => allowed[audience].includes(role));
@@ -1013,10 +1017,20 @@ describe('AuthService', () => {
         roles: [{ role: Role.SALON_OWNER }],
       });
       prisma.passwordResetToken.create.mockResolvedValue({});
-      const result = await service.forgotPassword('owner@salon.com');
-      expect(prisma.passwordResetToken.create).toHaveBeenCalled();
-      expect(emailSender.sendPasswordReset).toHaveBeenCalled();
-      expect(result.devResetUrl).toContain('/reset-password?token=');
+
+      // devResetUrl is deliberately hidden in production. This test specifically verifies the
+      // non-production developer convenience URL, so pin the environment locally and restore it
+      // even when an assertion fails. Runtime production behavior is unchanged.
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'test';
+      try {
+        const result = await service.forgotPassword('owner@salon.com');
+        expect(prisma.passwordResetToken.create).toHaveBeenCalled();
+        expect(emailSender.sendPasswordReset).toHaveBeenCalled();
+        expect(result.devResetUrl).toContain('/reset-password?token=');
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
     });
 
     it('rejects an unknown or already-used reset token', async () => {

@@ -5,7 +5,7 @@ describe('PublicQueueController', () => {
   let controller: PublicQueueController;
   let tokenService: { resolveToken: jest.Mock; isQueueAvailable: jest.Mock; getOrCreateToken: jest.Mock; buildPublicQueueUrl: jest.Mock };
   let queueService: { joinWalkIn: jest.Mock };
-  let salonAccess: { assertAccess: jest.Mock };
+  let salonAccess: { assertAccessOrAdminAccess: jest.Mock };
   let prisma: { service: { findMany: jest.Mock }; queueEntry: { count: jest.Mock } };
 
   beforeEach(() => {
@@ -16,7 +16,7 @@ describe('PublicQueueController', () => {
       buildPublicQueueUrl: jest.fn(),
     };
     queueService = { joinWalkIn: jest.fn() };
-    salonAccess = { assertAccess: jest.fn().mockResolvedValue(undefined) };
+    salonAccess = { assertAccessOrAdminAccess: jest.fn().mockResolvedValue(undefined) };
     prisma = {
       service: { findMany: jest.fn().mockResolvedValue([]) },
       queueEntry: { count: jest.fn().mockResolvedValue(0) },
@@ -145,11 +145,11 @@ describe('PublicQueueController', () => {
 
       await controller.getQueueQr(user('owner-1'), 'salon-1');
 
-      expect(salonAccess.assertAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
+      expect(salonAccess.assertAccessOrAdminAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
     });
 
     it('propagates SALON_ACCESS_DENIED for an unauthorized caller, never generating/returning a token', async () => {
-      salonAccess.assertAccess.mockRejectedValue(
+      salonAccess.assertAccessOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
 
