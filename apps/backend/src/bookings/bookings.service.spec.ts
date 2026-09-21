@@ -656,6 +656,33 @@ describe('BookingsService', () => {
       expect(data.prepaymentRequiredAmount).toBe(150);
     });
 
+    it('calculates PARTIAL prepayment from the discounted booking value', async () => {
+      availability.getSalonOrThrow.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        name: 'KAYA SPA',
+        ownerUserId: 'owner1',
+        currency: 'INR',
+        onlineBookingDiscountPercent: 40,
+      });
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+        ...PAYMENT_POLICY_WITH_QR,
+        prepaymentRequirement: 'PARTIAL',
+        prepaymentPercentage: 50,
+      });
+
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-discount-prepay',
+      );
+
+      const data = lastCreateData(prisma.booking.create);
+      expect(data.onlineBookingDiscountAmount).toBe('120.00');
+      expect(data.prepaymentRequiredAmount).toBe(90); // 50% of Rs.180 after the 40% offer
+    });
+
     it('creates a PENDING_PAYMENT booking for the full service price when the policy requires FULL prepayment', async () => {
       prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
         ...PAYMENT_POLICY_WITH_QR,
