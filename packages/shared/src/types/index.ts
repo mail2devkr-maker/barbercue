@@ -404,6 +404,9 @@ export interface SalonListItemDto extends SalonSummary {
   // currently WAITING/CALLED/IN_SERVICE at this salon. Clients should only surface this when > 0
   // (a real "3 waiting" beats a meaningless "0 waiting" on every card).
   waitingCount: number;
+  // Shop-configured percentage applied only to FastQue APP/WEB bookings. Service.price remains the
+  // shop's original list price; clients use this value only for an honest pre-booking preview.
+  onlineBookingDiscountPercent?: number;
 }
 
 // GET salons/:salonId/booking/recent-activity — Issue #13 Mission H, the per-shop "last 30
@@ -558,6 +561,11 @@ export interface BookingDto {
   // nothing". There is deliberately no "credits earned" field — completing a service never
   // automatically grants credit in this product (see CreditTransactionType.PROMO_GRANT).
   creditsRedeemedAmount: number | null;
+  // Snapshotted at booking creation. Zero means no online-booking offer applied.
+  onlineBookingDiscountPercent?: number;
+  // Exact snapshotted money amount removed from the original service subtotal before credits,
+  // prepayment and cancellation/no-show percentage calculations.
+  onlineBookingDiscountAmount?: number;
 }
 
 // ---------- AI Style Advisor (Phase E) ----------
@@ -652,12 +660,15 @@ export interface BookingDetailDto extends BookingDto {
   serviceName: string;
   serviceDurationMinutes: number;
   servicePrice: number;
+  // Original service subtotal minus onlineBookingDiscountAmount. This is the amount FastQue treats
+  // as the booking value before any FastQue Credits redemption.
+  discountedServicePrice?: number;
   // Multi-service booking core mission — the complete, ordered per-service breakdown. See
   // BookingServiceItemDto's own doc comment; always has at least one entry, for every booking.
   services: BookingServiceItemDto[];
-  // FastQue Credits / Wallet V1: servicePrice minus creditsRedeemedAmount, floored at 0 — the
-  // actual amount the customer needs to pay via the salon's payment QR. Always present (not just
-  // when credits were redeemed) so a client never has to duplicate this subtraction itself.
+  // FastQue Credits / Wallet V1: discountedServicePrice minus creditsRedeemedAmount, floored at
+  // 0 — the actual amount the customer needs to pay. Always present so a client never has to
+  // duplicate discount/credit arithmetic itself.
   payableAmount: number;
   preferredStaffName: string | null;
   // Phase 16 (Ratings & Reviews) — whether the Review.bookingId-unique row already exists for this

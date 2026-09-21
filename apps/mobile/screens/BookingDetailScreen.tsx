@@ -135,7 +135,7 @@ export default function BookingDetailScreen({ route }: Props) {
         `${DISCOVERY_PATHS.salons}/${booking.salonId}/booking/${SALON_BOOKING_INFO_PATHS.cancellationPolicy}`,
       );
       const minutesUntilSlot = (new Date(booking.slotStart).getTime() - Date.now()) / 60_000;
-      setPreview(computeCancellationCharge(policy, booking.servicePrice, minutesUntilSlot, false));
+      setPreview(computeCancellationCharge(policy, booking.discountedServicePrice ?? booking.servicePrice, minutesUntilSlot, false));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.couldNotLoadCancellationPolicy);
       setConfirming(false);
@@ -253,7 +253,21 @@ export default function BookingDetailScreen({ route }: Props) {
             ))}
           </View>
         )}
-        <Text style={styles.line}>{formatMoney(booking.servicePrice, booking.currency)}</Text>
+        {(booking.onlineBookingDiscountPercent ?? 0) > 0 ? (
+          <>
+            <Text style={styles.line}>
+              {formatMoney(booking.servicePrice, booking.currency)} →{' '}
+              {formatMoney(
+                booking.discountedServicePrice ??
+                  Math.max(0, booking.servicePrice - (booking.onlineBookingDiscountAmount ?? 0)),
+                booking.currency,
+              )}
+            </Text>
+            <Text style={styles.line}>{booking.onlineBookingDiscountPercent}% FastQue booking offer applied</Text>
+          </>
+        ) : (
+          <Text style={styles.line}>{formatMoney(booking.servicePrice, booking.currency)}</Text>
+        )}
         {booking.preferredStaffName && <Text style={styles.line}>{t.preferredBarberPrefix}{booking.preferredStaffName}</Text>}
         {booking.selectedStyleName && <Text style={styles.line}>{t.styleLabelPrefix}{booking.selectedStyleName}</Text>}
         {booking.prepaymentRequiredAmount !== null && booking.prepaymentRequiredAmount > 0 && (

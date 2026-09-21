@@ -25,6 +25,7 @@ const noShowCandidateSelect = {
   slotStart: true,
   status: true,
   serviceId: true,
+  onlineBookingDiscountAmount: true,
   service: { select: { name: true, durationMinutes: true, price: true } },
   services: {
     orderBy: { sortOrder: 'asc' as const },
@@ -301,6 +302,7 @@ export class BookingNoShowService {
   private computeNoShowCharge(
     booking: {
       serviceId: string;
+      onlineBookingDiscountAmount?: Prisma.Decimal;
       service: { name: string; durationMinutes: number; price: Prisma.Decimal };
       services: Array<{
         serviceId: string;
@@ -315,10 +317,17 @@ export class BookingNoShowService {
     // appointment value, never only Booking.service (the primary/first compatibility pointer).
     // Integer-paise summation avoids float drift.
     const effectiveServices = resolveEffectiveBookingServices(booking);
+    const originalSubtotalPaise = effectiveServices.reduce(
+      (sum, service) => sum + decimalStringToPaise(service.price.toString()),
+      0,
+    );
     const appointmentPrice = paiseToRupees(
-      effectiveServices.reduce(
-        (sum, service) => sum + decimalStringToPaise(service.price.toString()),
+      Math.max(
         0,
+        originalSubtotalPaise -
+          (booking.onlineBookingDiscountAmount
+            ? decimalStringToPaise(booking.onlineBookingDiscountAmount.toString())
+            : 0),
       ),
     );
     return computeCancellationCharge(policy, appointmentPrice, 0, true);

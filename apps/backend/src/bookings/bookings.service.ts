@@ -10,6 +10,7 @@ import {
   QueueEntryStatus,
   SubsidyLedgerStatus,
   computeCancellationCharge,
+  computePercentageDiscountPaise,
   decimalStringToPaise,
   formatMoney,
   isSlotBookable,
@@ -130,6 +131,23 @@ export class BookingsService {
     );
     const totalPrice = paiseToDecimalString(totalPricePaise);
 
+    // Shop-specific online offer: APP/WEB bookings receive the salon's currently configured
+    // percentage, while the underlying Service prices remain untouched. The exact amount is
+    // snapshotted on Booking below so changing/ending the offer never rewrites booking history.
+    const onlineBookingDiscountPercent =
+      source === BookingSource.APP || source === BookingSource.WEB
+        ? (salon.onlineBookingDiscountPercent ?? 0)
+        : 0;
+    const onlineBookingDiscountAmountPaise = computePercentageDiscountPaise(
+      totalPricePaise,
+      onlineBookingDiscountPercent,
+    );
+    const discountedTotalPricePaise = Math.max(
+      0,
+      totalPricePaise - onlineBookingDiscountAmountPaise,
+    );
+    const discountedTotalPrice = paiseToDecimalString(discountedTotalPricePaise);
+
     const slotStart = new Date(input.slotStart);
     if (slotStart.getTime() <= Date.now()) {
       throw new AppException(
@@ -236,7 +254,7 @@ export class BookingsService {
     // Number(price) — so the authoritative cap is derived via integer paise, not a float division
     // of the price. Multi-service booking core mission: the cap now applies to the COMBINED price
     // of every selected service, never just the first/primary one.
-    const maxCreditsAllowed = this.credits.computeMaxRedeemable(totalPrice);
+    const maxCreditsAllowed = this.credits.computeMaxRedeemable(discountedTotalPrice);
 
     const prepaymentRequirement =
       paymentPolicy?.prepaymentRequirement ?? PrepaymentRequirement.NONE;
@@ -255,7 +273,12 @@ export class BookingsService {
     // just the first selected service — same float-percentage computation as before, applied to
     // the correct total.
     const prepaymentRequiredAmount = requiresPrepayment
-      ? Number(totalPrice) * (prepaymentPercentage / 100)
+      ? paiseToRupees(
+          computePercentageDiscountPaise(
+            discountedTotalPricePaise,
+            prepaymentPercentage,
+          ),
+        )
       : null;
 
     const bookingId = await this.prisma.$transaction(async (tx) => {
@@ -336,6 +359,8 @@ export class BookingsService {
           idempotencyKey,
           preferredStaffId: input.preferredStaffId ?? null,
           prepaymentRequiredAmount,
+          onlineBookingDiscountPercent,
+          onlineBookingDiscountAmount: paiseToDecimalString(onlineBookingDiscountAmountPaise),
           selectedStyleName: input.selectedStyleName ?? null,
           checkInOpensMinutesBefore: EARLY_CHECKIN_WINDOW_MINUTES,
           checkInDueGraceMinutes: arrivalPolicy.appointmentArrivalGraceMinutes,
@@ -503,7 +528,12 @@ export class BookingsService {
     // every service on this appointment, never just the first/primary one.
     const chargeAmount = computeCancellationCharge(
       policy,
-      paiseToRupees(this.totalServicePricePaise(effectiveServices)),
+      paiseToRupees(
+        this.discountedServicePricePaise(
+          effectiveServices,
+          booking.onlineBookingDiscountAmount,
+        ),
+      ),
       minutesUntilSlot,
       false,
     );
@@ -881,6 +911,8 @@ export class BookingsService {
         booking.creditsRedeemedAmount !== null
           ? Number(booking.creditsRedeemedAmount)
           : null,
+      onlineBookingDiscountPercent: booking.onlineBookingDiscountPercent,
+      onlineBookingDiscountAmount: Number(booking.onlineBookingDiscountAmount),
       // Salon-scoped: a booking's amounts are denominated in its salon's currency.
       currency: booking.salon.currency,
       salonName: booking.salon.name,
@@ -910,6 +942,12 @@ export class BookingsService {
       serviceName: summarizeServiceNames(effectiveServices.map((s) => s.serviceName)),
       serviceDurationMinutes: effectiveServices.reduce((sum, s) => sum + s.durationMinutes, 0),
       servicePrice: paiseToRupees(this.totalServicePricePaise(effectiveServices)),
+      discountedServicePrice: paiseToRupees(
+        this.discountedServicePricePaise(
+          effectiveServices,
+          booking.onlineBookingDiscountAmount,
+        ),
+      ),
       // The complete, ordered per-service breakdown — every booking (including one created before
       // this mission existed, backfilled by this mission's migration, AND one a rolling-deploy old
       // backend created with zero BookingService rows) has at least one entry here.
@@ -921,15 +959,15 @@ export class BookingsService {
           price: Number(s.price),
         }),
       ),
-      // Part 11 precision hardening: the payable invariant (servicePrice = payableAmount +
-      // creditsRedeemed) is computed in integer paise, never via float subtraction of two
-      // Number(decimal) values — Number(...) is only used once more here, at the very end, to
-      // produce the display/DTO number (a controlled boundary conversion, not further arithmetic).
-      // Multi-service booking core mission: against the COMBINED price of every selected service.
+      // Payable invariant is computed in integer paise:
+      // original service subtotal - shop online discount - FastQue Credits.
       payableAmount: paiseToRupees(
         Math.max(
           0,
-          this.totalServicePricePaise(effectiveServices) -
+          this.discountedServicePricePaise(
+            effectiveServices,
+            booking.onlineBookingDiscountAmount,
+          ) -
             (booking.creditsRedeemedAmount
               ? decimalStringToPaise(booking.creditsRedeemedAmount.toString())
               : 0),
@@ -938,6 +976,17 @@ export class BookingsService {
       preferredStaffName: booking.preferredStaff?.displayName ?? null,
       hasReview: booking.reviews.length > 0,
     };
+  }
+
+  private discountedServicePricePaise(
+    services: readonly { price: Prisma.Decimal }[],
+    discountAmount: Prisma.Decimal | null | undefined,
+  ): number {
+    return Math.max(
+      0,
+      this.totalServicePricePaise(services) -
+        (discountAmount ? decimalStringToPaise(discountAmount.toString()) : 0),
+    );
   }
 
   /**

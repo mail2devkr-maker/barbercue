@@ -252,6 +252,7 @@ export default async function SalonPage({
               services={salon.services}
               currency={salon.currency}
               countryCode={salon.countryCode}
+              onlineBookingDiscountPercent={salon.onlineBookingDiscountPercent ?? 0}
             />
           </section>
 

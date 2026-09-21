@@ -407,6 +407,7 @@ export class SalonsService {
           },
         },
       }),
+      onlineBookingDiscountPercent: salon.onlineBookingDiscountPercent,
       description: salon.description,
       phone: salon.phone,
       services: salon.services.map((s) => ({
@@ -863,6 +864,7 @@ export class SalonsService {
       isOpenNow: isOpenNow(salon.operatingHours, salon),
       verified: salon.verification?.status === VerificationStatus.APPROVED,
       waitingCount,
+      onlineBookingDiscountPercent: salon.onlineBookingDiscountPercent,
     };
   }
 

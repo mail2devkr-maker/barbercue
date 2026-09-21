@@ -1,6 +1,7 @@
 import {
   InvalidMoneyValueError,
   computeMaxRedeemableCreditsPaise,
+  computePercentageDiscountPaise,
   decimalStringToPaise,
   numberToPaise,
   paiseToDecimalString,
@@ -122,6 +123,31 @@ describe('computeMaxRedeemableCreditsPaise — the frozen slab formula, paise-ex
 
   it('rejects a negative paise amount', () => {
     expect(() => computeMaxRedeemableCreditsPaise(-100)).toThrow(InvalidMoneyValueError);
+  });
+});
+
+describe('computePercentageDiscountPaise', () => {
+  it.each([
+    ['100.00', 40, '40.00'],
+    ['999.99', 40, '400.00'],
+    ['1.01', 40, '0.40'],
+    ['0.01', 40, '0.00'],
+    ['0.02', 40, '0.01'],
+    ['123.45', 0, '0.00'],
+    ['123.45', 100, '123.45'],
+  ])('Rs.%s at %i%% -> Rs.%s discount', (subtotal, percent, expected) => {
+    expect(
+      paiseToDecimalString(
+        computePercentageDiscountPaise(decimalStringToPaise(subtotal), percent),
+      ),
+    ).toBe(expected);
+  });
+
+  it('rejects invalid percentages and negative subtotals', () => {
+    expect(() => computePercentageDiscountPaise(100, -1)).toThrow(InvalidMoneyValueError);
+    expect(() => computePercentageDiscountPaise(100, 101)).toThrow(InvalidMoneyValueError);
+    expect(() => computePercentageDiscountPaise(100, 40.5)).toThrow(InvalidMoneyValueError);
+    expect(() => computePercentageDiscountPaise(-1, 40)).toThrow(InvalidMoneyValueError);
   });
 });
 

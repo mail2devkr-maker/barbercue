@@ -54,7 +54,14 @@ export function CancelBookingDialog({
       .then((policy) => {
         if (cancelled) return;
         const minutesUntilSlot = (new Date(booking.slotStart).getTime() - Date.now()) / 60_000;
-        setPreview(computeCancellationCharge(policy, booking.servicePrice, minutesUntilSlot, false));
+        setPreview(
+          computeCancellationCharge(
+            policy,
+            booking.discountedServicePrice ?? booking.servicePrice,
+            minutesUntilSlot,
+            false,
+          ),
+        );
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -71,7 +78,7 @@ export function CancelBookingDialog({
     return () => {
       cancelled = true;
     };
-  }, [booking.salonId, booking.slotStart, booking.servicePrice]);
+  }, [booking.salonId, booking.slotStart, booking.servicePrice, booking.discountedServicePrice]);
 
   async function handleConfirm() {
     setSubmitting(true);
