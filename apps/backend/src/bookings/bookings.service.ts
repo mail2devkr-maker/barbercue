@@ -136,7 +136,7 @@ export class BookingsService {
     // snapshotted on Booking below so changing/ending the offer never rewrites booking history.
     const onlineBookingDiscountPercent =
       source === BookingSource.APP || source === BookingSource.WEB
-        ? salon.onlineBookingDiscountPercent
+        ? (salon.onlineBookingDiscountPercent ?? 0)
         : 0;
     const onlineBookingDiscountAmountPaise = computePercentageDiscountPaise(
       totalPricePaise,
@@ -975,12 +975,12 @@ export class BookingsService {
 
   private discountedServicePricePaise(
     services: readonly { price: Prisma.Decimal }[],
-    discountAmount: Prisma.Decimal,
+    discountAmount: Prisma.Decimal | null | undefined,
   ): number {
     return Math.max(
       0,
       this.totalServicePricePaise(services) -
-        decimalStringToPaise(discountAmount.toString()),
+        (discountAmount ? decimalStringToPaise(discountAmount.toString()) : 0),
     );
   }
 
