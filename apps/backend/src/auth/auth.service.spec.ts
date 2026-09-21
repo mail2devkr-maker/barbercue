@@ -1017,10 +1017,20 @@ describe('AuthService', () => {
         roles: [{ role: Role.SALON_OWNER }],
       });
       prisma.passwordResetToken.create.mockResolvedValue({});
-      const result = await service.forgotPassword('owner@salon.com');
-      expect(prisma.passwordResetToken.create).toHaveBeenCalled();
-      expect(emailSender.sendPasswordReset).toHaveBeenCalled();
-      expect(result.devResetUrl).toContain('/reset-password?token=');
+
+      // devResetUrl is deliberately hidden in production. This test specifically verifies the
+      // non-production developer convenience URL, so pin the environment locally and restore it
+      // even when an assertion fails. Runtime production behavior is unchanged.
+      const originalNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'test';
+      try {
+        const result = await service.forgotPassword('owner@salon.com');
+        expect(prisma.passwordResetToken.create).toHaveBeenCalled();
+        expect(emailSender.sendPasswordReset).toHaveBeenCalled();
+        expect(result.devResetUrl).toContain('/reset-password?token=');
+      } finally {
+        process.env.NODE_ENV = originalNodeEnv;
+      }
     });
 
     it('rejects an unknown or already-used reset token', async () => {
