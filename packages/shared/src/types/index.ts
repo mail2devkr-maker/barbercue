@@ -304,7 +304,7 @@ export interface SalonListItemDto extends SalonSummary {
   waitingCount: number;
   // Shop-configured percentage applied only to FastQue APP/WEB bookings. Service.price remains the
   // shop's original list price; clients use this value only for an honest pre-booking preview.
-  onlineBookingDiscountPercent: number;
+  onlineBookingDiscountPercent?: number;
 }
 
 // GET salons/:salonId/booking/recent-activity — Issue #13 Mission H, the per-shop "last 30
@@ -460,10 +460,10 @@ export interface BookingDto {
   // automatically grants credit in this product (see CreditTransactionType.PROMO_GRANT).
   creditsRedeemedAmount: number | null;
   // Snapshotted at booking creation. Zero means no online-booking offer applied.
-  onlineBookingDiscountPercent: number;
+  onlineBookingDiscountPercent?: number;
   // Exact snapshotted money amount removed from the original service subtotal before credits,
   // prepayment and cancellation/no-show percentage calculations.
-  onlineBookingDiscountAmount: number;
+  onlineBookingDiscountAmount?: number;
 }
 
 // ---------- AI Style Advisor (Phase E) ----------
@@ -560,7 +560,7 @@ export interface BookingDetailDto extends BookingDto {
   servicePrice: number;
   // Original service subtotal minus onlineBookingDiscountAmount. This is the amount FastQue treats
   // as the booking value before any FastQue Credits redemption.
-  discountedServicePrice: number;
+  discountedServicePrice?: number;
   // Multi-service booking core mission — the complete, ordered per-service breakdown. See
   // BookingServiceItemDto's own doc comment; always has at least one entry, for every booking.
   services: BookingServiceItemDto[];
