@@ -39,9 +39,13 @@ export function ServiceStep({
 }) {
   const selected = services.filter((s) => selectedServiceIds.includes(s.id));
   const combinedDurationMinutes = selected.reduce((sum, s) => sum + s.durationMinutes, 0);
-  const combinedPrice = selected.reduce(
-    (sum, s) => sum + discountedPrice(s.price, onlineBookingDiscountPercent),
+  const combinedOriginalPaise = selected.reduce(
+    (sum, s) => sum + numberToPaise(s.price),
     0,
+  );
+  const combinedPrice = paiseToRupees(
+    combinedOriginalPaise -
+      computePercentageDiscountPaise(combinedOriginalPaise, onlineBookingDiscountPercent),
   );
 
   return (
