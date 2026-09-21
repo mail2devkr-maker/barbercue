@@ -44,10 +44,14 @@ export function SiteFooter() {
 
         <p className={styles.footerNote}>
           <span>© 2026 FastQue Private Limited. All Rights Reserved.</span>
-          <span className={styles.sitePoweredBy} aria-label="Powered By DCW">
+          <a
+            className={styles.sitePoweredBy}
+            href="https://dcw.co.in/what-is-dcw"
+            aria-label="Powered By DCW — learn what DCW is"
+          >
             <span className={styles.sitePoweredByText}>Powered By</span>
             <span className={styles.sitePoweredByDcw}>DCW</span>
-          </span>
+          </a>
         </p>
       </div>
     </footer>
