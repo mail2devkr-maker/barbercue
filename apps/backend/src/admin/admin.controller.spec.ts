@@ -50,6 +50,8 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
+      {} as never,
     );
 
     await controller.listVerification('SUBMITTED', undefined, undefined);
@@ -85,6 +87,8 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
+      {} as never,
     );
 
     await controller.deleteShop({ id: 'admin-1' } as never, 'salon-1');
