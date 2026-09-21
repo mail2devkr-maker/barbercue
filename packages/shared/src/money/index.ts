@@ -139,5 +139,5 @@ export function computePercentageDiscountPaise(
     );
   }
   // +50 before /100 implements conventional half-up rounding for non-negative values.
-  return Number((BigInt(subtotalPaise) * BigInt(percent) + 50n) / 100n);
+  return Number((BigInt(subtotalPaise) * BigInt(percent) + BigInt(50)) / BigInt(100));
 }
