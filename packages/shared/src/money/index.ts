@@ -117,3 +117,27 @@ export function computeMaxRedeemableCreditsPaise(serviceSubtotalPaise: number): 
   const slabs = BigInt(serviceSubtotalPaise) / slabPaise; // exact integer division (truncation == floor for non-negative operands)
   return Number(slabs * creditPerSlabPaise);
 }
+
+/**
+ * Computes an integer-percentage discount from an integer-paise subtotal, rounded half-up to the
+ * nearest paise. BigInt keeps the multiplication/division exact even at Decimal(10,2)'s upper
+ * bound. This is suitable for server-side financial authority and client previews that need to
+ * mirror it exactly.
+ */
+export function computePercentageDiscountPaise(
+  subtotalPaise: number,
+  percent: number,
+): number {
+  if (!Number.isInteger(subtotalPaise) || subtotalPaise < 0) {
+    throw new InvalidMoneyValueError(
+      `${subtotalPaise} is not a valid non-negative integer paise amount.`,
+    );
+  }
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
+    throw new InvalidMoneyValueError(
+      `${percent} is not a valid integer percentage from 0 to 100.`,
+    );
+  }
+  // +50 before /100 implements conventional half-up rounding for non-negative values.
+  return Number((BigInt(subtotalPaise) * BigInt(percent) + 50n) / 100n);
+}
