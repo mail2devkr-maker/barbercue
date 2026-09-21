@@ -640,6 +640,9 @@ model Salon {
   // Owner-selected service audience used to filter onboarding presets. Existing salons default to
   // UNISEX so the migration is backwards-compatible and never hides already-configured services.
   salonType        SalonType   @default(UNISEX)
+  // Percentage discount applied by FastQue only to APP/WEB bookings for this salon. The Service
+  // rows remain the owner's original list prices; 0 means no platform-booking offer is active.
+  onlineBookingDiscountPercent Int @default(0)
 
   // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
   planId                String?
@@ -958,6 +961,10 @@ model Booking {
   // automatically grant credits in this product (see CreditTransactionType.PROMO_GRANT) — credits
   // only ever enter a wallet through an authorized promotional grant or a redemption restoration.
   creditsRedeemedAmount    Decimal?      @db.Decimal(10, 2)
+  // Shop-funded promotional discount active when this booking was created. These are immutable
+  // snapshots: later enabling/disabling/changing the salon offer never rewrites booking history.
+  onlineBookingDiscountPercent Int          @default(0)
+  onlineBookingDiscountAmount  Decimal      @default(0) @db.Decimal(10, 2)
   // Part 5 completion (arrival guidance) — same snapshot rationale as prepaymentRequiredAmount/
   // cancellationChargeAmount/creditsRedeemedAmount above: captured once, at creation time, from
   // whatever rule was actually in effect then, so a later change to the salon's

@@ -8,6 +8,9 @@ import {
   DISCOVERY_PATHS,
   SALON_BOOKING_INFO_PATHS,
   computeMaxRedeemableCredits,
+  computePercentageDiscountPaise,
+  numberToPaise,
+  paiseToRupees,
   summarizeServiceNames,
   type AvailabilitySlotDto,
   type BookingDetailDto,
@@ -43,6 +46,13 @@ import styles from "./booking.module.css";
 // your appointment" — but only ever the real effective window, never a hard-coded "1 hour" when a
 // salon's own policy is more generous. 60/120/etc render as whole hours; anything else falls back
 // to a plain minute count rather than an awkward "1 hour 30 minutes".
+function discountedPrice(price: number, percent: number): number {
+  const originalPaise = numberToPaise(price);
+  return paiseToRupees(
+    originalPaise - computePercentageDiscountPaise(originalPaise, percent),
+  );
+}
+
 function formatFreeCancellationWindow(minutes: number): string {
   if (minutes % 60 === 0) {
     const hours = minutes / 60;
@@ -59,6 +69,7 @@ export function BookingFlow({
   currency,
   countryCode,
   salonTimezone,
+  onlineBookingDiscountPercent = 0,
   initialServiceIds,
   initialStaffId,
 }: {
@@ -73,6 +84,9 @@ export function BookingFlow({
   // customer device's zone, so the displayed appointment time never silently jumps once the
   // booking actually confirms (BookingDetailDto.salonTimezone is the exact same resolution).
   salonTimezone: string | null;
+  // Current shop-funded APP/WEB offer. Preview only; the backend snapshots and enforces the
+  // authoritative discount at booking creation.
+  onlineBookingDiscountPercent?: number;
   // AI Style Advisor hand-off (major-upgrade phase) — set only when this flow was reached via
   // "Try This Look"; threaded straight into the booking-creation body when present.
   selectedStyleName?: string;
@@ -419,6 +433,18 @@ export function BookingFlow({
               </strong>
             </p>
           )}
+          {(booking.onlineBookingDiscountPercent ?? 0) > 0 && (
+            <p className={styles.summaryLine}>
+              <strong>{booking.onlineBookingDiscountPercent}% FastQue booking offer:</strong>{" "}
+              {formatMoney(booking.servicePrice, currency, countryCode)} →{" "}
+              {formatMoney(
+                booking.discountedServicePrice ??
+                  Math.max(0, booking.servicePrice - (booking.onlineBookingDiscountAmount ?? 0)),
+                currency,
+                countryCode,
+              )}
+            </p>
+          )}
           {booking.selectedStyleName && <p className={styles.summaryLine}>Style: {booking.selectedStyleName}</p>}
           <p className={styles.summaryLine}>
             <span className={`${styles.statusBadge} ${statusClass}`}>{booking.status.replace(/_/g, " ")}</span>
@@ -524,6 +550,7 @@ export function BookingFlow({
         onToggle={toggleService}
         currency={currency}
         countryCode={countryCode}
+        onlineBookingDiscountPercent={onlineBookingDiscountPercent}
       />
 
       {selectedServiceIds.length > 0 && (
@@ -580,7 +607,11 @@ export function BookingFlow({
                       <li key={s.id} className={styles.serviceBreakdownItem}>
                         <span>{s.name}</span>
                         <span>
-                          {s.durationMinutes} min · {formatMoney(s.price, currency, countryCode)}
+                          {s.durationMinutes} min · {formatMoney(
+                            discountedPrice(s.price, onlineBookingDiscountPercent),
+                            currency,
+                            countryCode,
+                          )}
                         </span>
                       </li>
                     ))}
@@ -589,6 +620,11 @@ export function BookingFlow({
               </>
             );
           })()}
+          {onlineBookingDiscountPercent > 0 && (
+            <p className={styles.summaryLine}>
+              <strong>{onlineBookingDiscountPercent}% FastQue booking offer applied.</strong>
+            </p>
+          )}
           {selectedStyleName && <p className={styles.summaryLine}>Style: {selectedStyleName}</p>}
           {cancellationPolicy && (
             <p className={styles.summaryLine}>
@@ -601,9 +637,16 @@ export function BookingFlow({
             // Multi-service booking core mission: the redemption-cap preview must use the COMBINED
             // price of every selected service, never just one — matching the server's own
             // authoritative computation in BookingsService.create.
-            const combinedPrice = services
+            const combinedOriginalPaise = services
               .filter((s) => selectedServiceIds.includes(s.id))
-              .reduce((sum, s) => sum + s.price, 0);
+              .reduce((sum, s) => sum + numberToPaise(s.price), 0);
+            const combinedPrice = paiseToRupees(
+              combinedOriginalPaise -
+                computePercentageDiscountPaise(
+                  combinedOriginalPaise,
+                  onlineBookingDiscountPercent,
+                ),
+            );
             // FastQue Credits / Wallet V1: the redemption cap is price-based (floor(price/50)*10),
             // NOT "whatever the wallet balance happens to be" — a customer can never redeem more
             // than 20% of the combined price even with a much larger balance. This is only a

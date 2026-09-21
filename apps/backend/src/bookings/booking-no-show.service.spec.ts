@@ -59,6 +59,7 @@ describe('BookingNoShowService', () => {
         },
       ],
       queueEntries: [],
+      onlineBookingDiscountAmount: 0,
       salon: { ownerUserId: 'owner-1' },
       ...overrides,
     };
@@ -190,6 +191,30 @@ describe('BookingNoShowService', () => {
           status: 'OUTSTANDING',
         },
       });
+    });
+
+    it('charges a percentage against the discounted booking value when an online offer was snapshotted', async () => {
+      prisma.booking.findUnique.mockResolvedValue(
+        overdueBooking({
+          service: { name: 'Haircut', durationMinutes: 30, price: 300 },
+          services: [
+            { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: 300 },
+          ],
+          onlineBookingDiscountAmount: 120,
+        }),
+      );
+      cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+        ...FLAT_ZERO_POLICY,
+        noShowChargeType: 'PERCENTAGE',
+        noShowChargeValue: 50,
+      });
+
+      const result = await service.markNoShow('op-1', 'b1');
+
+      expect(result.chargeAmount).toBe(90); // 50% of Rs.180 after a Rs.120 offer discount
+      expect(tx.booking.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: 'NO_SHOW', cancellationChargeAmount: 90 } }),
+      );
     });
 
     it('charges a percentage against the COMPLETE multi-service appointment price', async () => {

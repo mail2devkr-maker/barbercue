@@ -42,6 +42,8 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     prepaymentRequiredAmount: null,
     cancellationChargeAmount: null,
     creditsRedeemedAmount: null,
+    onlineBookingDiscountPercent: 0,
+    onlineBookingDiscountAmount: decimal('0'),
     // Part 5 completion (arrival guidance) — a normal booking's snapshot, so every existing test
     // that doesn't care about arrival guidance still exercises the real derivation path (rather
     // than the "no snapshot" null case) unless it explicitly overrides these.
@@ -195,6 +197,7 @@ describe('BookingsService', () => {
         name: 'BarberCue Demo Salon',
         ownerUserId: 'owner1',
         currency: 'INR',
+        onlineBookingDiscountPercent: 0,
       }),
       getServiceOrThrow: jest
         .fn<Promise<unknown>, [string, string]>()
@@ -574,6 +577,32 @@ describe('BookingsService', () => {
       expect(data.idempotencyKey).toBe('key-1');
     });
 
+    it('applies a 40% salon online-booking offer without rewriting the service price', async () => {
+      availability.getSalonOrThrow.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        name: 'KAYA SPA',
+        ownerUserId: 'owner1',
+        currency: 'INR',
+        onlineBookingDiscountPercent: 40,
+      });
+
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-discount',
+      );
+
+      const data = lastCreateData(prisma.booking.create);
+      expect(data.onlineBookingDiscountPercent).toBe(40);
+      expect(data.onlineBookingDiscountAmount).toBe('120.00');
+      expect(
+        ((data.services as { create: Array<{ price: { toString(): string } }> }).create[0].price).toString(),
+      ).toBe('300');
+      expect(String(credits.computeMaxRedeemable.mock.calls[0][0])).toBe('180.00');
+    });
+
     it('emits booking.created exactly once after a successful create', async () => {
       await service.create(
         'c1',
@@ -625,6 +654,33 @@ describe('BookingsService', () => {
       const data = lastCreateData(prisma.booking.create);
       expect(data.status).toBe('PENDING_PAYMENT');
       expect(data.prepaymentRequiredAmount).toBe(150);
+    });
+
+    it('calculates PARTIAL prepayment from the discounted booking value', async () => {
+      availability.getSalonOrThrow.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        name: 'KAYA SPA',
+        ownerUserId: 'owner1',
+        currency: 'INR',
+        onlineBookingDiscountPercent: 40,
+      });
+      prisma.salonPaymentPolicy.findUnique.mockResolvedValue({
+        ...PAYMENT_POLICY_WITH_QR,
+        prepaymentRequirement: 'PARTIAL',
+        prepaymentPercentage: 50,
+      });
+
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-discount-prepay',
+      );
+
+      const data = lastCreateData(prisma.booking.create);
+      expect(data.onlineBookingDiscountAmount).toBe('120.00');
+      expect(data.prepaymentRequiredAmount).toBe(90); // 50% of Rs.180 after the 40% offer
     });
 
     it('creates a PENDING_PAYMENT booking for the full service price when the policy requires FULL prepayment', async () => {
@@ -1533,6 +1589,38 @@ describe('BookingsService', () => {
           { serviceId: 'sv1', name: 'Haircut', durationMinutes: 30, price: 300 },
         ]);
         expect(detail.payableAmount).toBe(300);
+      });
+
+      it('cancellation percentage charge uses the snapshotted discounted booking value', async () => {
+        const soonSlot = new Date(Date.now() + 10 * 60_000);
+        prisma.booking.findFirst.mockResolvedValue(
+          legacyBookingRow({
+            slotStart: soonSlot,
+            onlineBookingDiscountPercent: 40,
+            onlineBookingDiscountAmount: decimal('120'),
+          }),
+        );
+        prisma.booking.update.mockResolvedValue(
+          legacyBookingRow({
+            slotStart: soonSlot,
+            status: 'CANCELLED',
+            onlineBookingDiscountPercent: 40,
+            onlineBookingDiscountAmount: decimal('120'),
+          }),
+        );
+        cancellationPolicy.getEffectivePolicy.mockResolvedValue({
+          salonId: 's1',
+          freeCancellationWindowMinutes: 60,
+          lateCancellationChargeType: 'PERCENTAGE',
+          lateCancellationChargeValue: 50,
+          noShowChargeType: 'PERCENTAGE',
+          noShowChargeValue: 100,
+          appointmentArrivalGraceMinutes: 10,
+          queueCallResponseGraceMinutes: 3,
+        });
+
+        const result = await service.cancel('c1', 'b1');
+        expect(result.chargeAmount).toBe(90); // 50% of Rs.180 after the 40% offer
       });
 
       it('cancellation charges the correct live-Service price, never 0', async () => {
