@@ -637,12 +637,16 @@ export function BookingFlow({
             // Multi-service booking core mission: the redemption-cap preview must use the COMBINED
             // price of every selected service, never just one — matching the server's own
             // authoritative computation in BookingsService.create.
-            const combinedPrice = services
+            const combinedOriginalPaise = services
               .filter((s) => selectedServiceIds.includes(s.id))
-              .reduce(
-                (sum, s) => sum + discountedPrice(s.price, onlineBookingDiscountPercent),
-                0,
-              );
+              .reduce((sum, s) => sum + numberToPaise(s.price), 0);
+            const combinedPrice = paiseToRupees(
+              combinedOriginalPaise -
+                computePercentageDiscountPaise(
+                  combinedOriginalPaise,
+                  onlineBookingDiscountPercent,
+                ),
+            );
             // FastQue Credits / Wallet V1: the redemption cap is price-based (floor(price/50)*10),
             // NOT "whatever the wallet balance happens to be" — a customer can never redeem more
             // than 20% of the combined price even with a much larger balance. This is only a
