@@ -43,7 +43,7 @@ export function SiteFooter() {
         </nav>
 
         <p className={styles.footerNote}>
-          <span>© {new Date().getFullYear()} FastQue.</span>
+          <span>© 2026 FastQue Private Limited. All Rights Reserved.</span>
           <span className={styles.sitePoweredBy} aria-label="Powered By DCW">
             <span className={styles.sitePoweredByText}>Powered By</span>
             <span className={styles.sitePoweredByDcw}>DCW</span>
