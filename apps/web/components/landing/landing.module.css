@@ -57,8 +57,59 @@
   border-bottom: 1px solid var(--fq-hairline);
 }
 
+.hiringBar {
+  background: linear-gradient(90deg, #f20a83 0%, #ff3e57 56%, #ff7a45 100%);
+  color: #fff;
+}
+
+.hiringInner {
+  width: min(100% - 48px, 1280px);
+  min-height: 36px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.hiringBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: rgba(9, 9, 12, 0.88);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hiringText {
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.hiringCta {
+  color: #fff;
+  font-weight: 800;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hiringInner:hover .hiringCta,
+.hiringInner:focus-visible .hiringCta {
+  text-decoration-thickness: 2px;
+}
+
 .siteHeaderSpacer {
-  height: 116px;
+  height: 152px;
   flex: 0 0 auto;
 }
 
@@ -1481,7 +1532,7 @@
   .headerNav { display: none; }
   .mobileNavHost { display: block; }
 
-  .siteHeaderSpacer { height: 76px; }
+  .siteHeaderSpacer { height: 112px; }
   .siteMobileBell { display: block; }
 
   /* Header space is now reserved globally by SiteHeader; this is only hero breathing room. */
@@ -1533,7 +1584,23 @@
   .utilityLeft { gap: 12px; }
   .utilityRight { gap: 12px; }
 
-  .siteHeaderSpacer { height: 64px; }
+  .hiringInner {
+    width: min(100% - 24px, 1280px);
+    min-height: 42px;
+    gap: 8px;
+    font-size: 0.68rem;
+    line-height: 1.25;
+  }
+
+  .hiringText {
+    max-width: 220px;
+  }
+
+  .hiringCta {
+    display: none;
+  }
+
+  .siteHeaderSpacer { height: 106px; }
 
   /* Fixed header space is handled globally; retain only the hero's own internal breathing room. */
   .hero { padding: 36px 16px 56px; min-height: 0; }
@@ -1647,6 +1714,21 @@
 }
 
 @media (max-width: 390px) {
+  .hiringInner {
+    justify-content: flex-start;
+    overflow: hidden;
+  }
+
+  .hiringBadge {
+    flex-shrink: 0;
+  }
+
+  .hiringText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .heroHeadline { font-size: clamp(2.2rem, 11vw, 3rem); }
   .heroSub { font-size: 1rem; }
   .featureRow { grid-template-columns: repeat(2, minmax(0, 1fr)); display: grid; gap: 14px; }
