@@ -36,6 +36,20 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "production-login-test": {
+      "environment": "production",
+      "channel": "production-login-test",
+      "distribution": "internal",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://barbercuebackend-production.up.railway.app/api/v1",
+        "EXPO_PUBLIC_WEB_ORIGIN": "https://fastque.com",
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
