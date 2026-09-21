@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FFF7ED"/>
+      <stop offset="55%" stop-color="#FFFDF9"/>
+      <stop offset="100%" stop-color="#F4F4F5"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#FF6A21"/>
+      <stop offset="100%" stop-color="#F24700"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#111827" flood-opacity=".12"/>
+    </filter>
+  </defs>
+  <rect width="1080" height="1350" fill="url(#bg)"/>
+  <circle cx="964" cy="110" r="210" fill="#FF6A21" opacity=".10"/>
+  <circle cx="92" cy="1230" r="220" fill="#111827" opacity=".05"/>
+
+  <g transform="translate(64 52)">
+    <text x="0" y="72" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="800" fill="#111111">Fast<tspan fill="#FF5A1F">Que</tspan></text>
+    <text x="2" y="112" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="600" fill="#5B5B5B">Bookings • Queue • Business Growth</text>
+  </g>
+
+  <g transform="translate(64 190)">
+    <rect x="0" y="0" rx="18" width="248" height="54" fill="#111111"/>
+    <text x="124" y="36" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#FFFFFF">WE’RE HIRING</text>
+    <text x="0" y="132" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="800" fill="#111111">Field Sales &amp;</text>
+    <text x="0" y="210" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="800" fill="#111111">Shop Onboarding</text>
+    <text x="0" y="288" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="800" fill="#FF5A1F">Executive</text>
+    <text x="0" y="344" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="500" fill="#4B5563">Help salons, barbershops &amp; beauty parlours go digital with FastQue.</text>
+  </g>
+
+  <g transform="translate(64 610)" filter="url(#shadow)">
+    <rect x="0" y="0" width="952" height="388" rx="36" fill="#FFFFFF"/>
+    <g transform="translate(42 42)">
+      <circle cx="34" cy="34" r="34" fill="#FFF0E8"/>
+      <path d="M20 34h28M34 20v28" stroke="#FF5A1F" stroke-width="6" stroke-linecap="round"/>
+      <text x="90" y="26" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#111111">No prior experience required</text>
+      <text x="90" y="62" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#6B7280">First-time applicants are welcome</text>
+
+      <circle cx="34" cy="126" r="34" fill="#FFF0E8"/>
+      <path d="M17 132c6-20 29-20 35 0M34 100a12 12 0 1 0 0 .1" stroke="#FF5A1F" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <text x="90" y="118" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#111111">Meet &amp; onboard local businesses</text>
+      <text x="90" y="154" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#6B7280">Salons • Barbershops • Beauty Parlours • Spas</text>
+
+      <circle cx="34" cy="218" r="34" fill="#FFF0E8"/>
+      <text x="34" y="229" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="800" fill="#FF5A1F">₹</text>
+      <text x="90" y="210" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#111111">₹10,000–₹12,000 / month</text>
+      <text x="90" y="246" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#6B7280">Target-linked monthly compensation</text>
+
+      <circle cx="34" cy="310" r="34" fill="#FFF0E8"/>
+      <path d="M17 327V307h9v20M31 327V297h9v30M45 327V285h9v42" stroke="#FF5A1F" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <text x="90" y="302" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#111111">Monthly target: 150 verified onboardings</text>
+      <text x="90" y="338" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#6B7280">Build real relationships with genuine local shops</text>
+    </g>
+  </g>
+
+  <g transform="translate(64 1040)">
+    <rect x="0" y="0" width="952" height="196" rx="34" fill="#111111"/>
+    <text x="42" y="58" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#FFFFFF">READY TO START?</text>
+    <text x="42" y="112" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800" fill="#FFFFFF">Apply at <tspan fill="#FF6A21">fastque.com/careers</tspan></text>
+    <text x="42" y="158" font-family="Arial, Helvetica, sans-serif" font-size="23" fill="#D1D5DB">FastQue — built for local beauty &amp; grooming businesses</text>
+
+    <g transform="translate(782 42)">
+      <rect x="0" y="0" width="128" height="112" rx="28" fill="url(#orange)"/>
+      <path d="M35 56h58M70 35l23 21-23 21" stroke="#FFFFFF" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+
+  <text x="64" y="1308" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="600" fill="#6B7280">INDIA • LOCAL • TOGETHER</text>
+  <text x="1016" y="1308" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="600" fill="#6B7280">fastque.com</text>
+</svg>
