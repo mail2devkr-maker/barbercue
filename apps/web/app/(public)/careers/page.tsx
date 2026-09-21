@@ -6,7 +6,7 @@ import styles from "../../../components/landing/info-page.module.css";
 
 const TITLE = "Careers — Field Sales & Shop Onboarding";
 const DESCRIPTION =
-  "FastQue is hiring Field Sales and Shop Onboarding Executives. No prior experience required. Target-linked monthly salary ₹10,000–₹12,000 for 150 verified shop onboardings.";
+  "FastQue is hiring Field Sales and Shop Onboarding Executives. No prior experience required. Target-linked monthly compensation ₹10,000–₹12,000 for 150 verified shop onboardings.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -55,7 +55,7 @@ export default function CareersPage() {
             <p className={styles.eyebrow}>Monthly compensation</p>
             <h2>₹10,000–₹12,000</h2>
             <p>
-              This is target-linked monthly salary. To qualify for this salary range, the monthly
+              This is target-linked monthly compensation. To qualify for this range, the monthly
               target is at least 150 verified shop onboardings.
             </p>
           </article>
@@ -137,7 +137,8 @@ export default function CareersPage() {
           <h2>Start with a short introduction.</h2>
           <p>
             Email your name, city, mobile number and a brief introduction. Prior experience is not
-            required, so first-time applicants are welcome to apply.
+            required, so first-time applicants are welcome to apply. Do not send Aadhaar, PAN, bank
+            details, OTPs or passwords with your initial application.
           </p>
           <div className={styles.cardActions}>
             <a href={APPLY_EMAIL} className={styles.primary}>Apply to FastQue</a>
