@@ -273,7 +273,12 @@ export class BookingsService {
     // just the first selected service — same float-percentage computation as before, applied to
     // the correct total.
     const prepaymentRequiredAmount = requiresPrepayment
-      ? Number(discountedTotalPrice) * (prepaymentPercentage / 100)
+      ? paiseToRupees(
+          computePercentageDiscountPaise(
+            discountedTotalPricePaise,
+            prepaymentPercentage,
+          ),
+        )
       : null;
 
     const bookingId = await this.prisma.$transaction(async (tx) => {
