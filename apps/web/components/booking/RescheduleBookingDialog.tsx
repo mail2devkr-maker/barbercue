@@ -105,10 +105,16 @@ export function RescheduleBookingDialog({
       );
       onRescheduled(updated);
     } catch (err) {
-      // The slot grid is advisory; the reschedule transaction is authoritative. If another
-      // booking took this slot concurrently, drop the stale selection and reload the grid so the
-      // now-occupied time shows disabled instead of staying selectable.
-      if (err instanceof ApiError && err.code === "SLOT_FULL" && selectedDate) {
+      // The slot grid is advisory; the reschedule transaction is authoritative. If another booking
+      // took this slot concurrently (SLOT_FULL), or this exact preferred barber's reservation was
+      // just taken/is still held through its own slotEnd (STAFF_SLOT_UNAVAILABLE — see the
+      // booking/queue resource-reservation mission), drop the stale selection and reload the grid
+      // so the now-occupied time shows disabled instead of staying selectable.
+      if (
+        err instanceof ApiError &&
+        (err.code === "SLOT_FULL" || err.code === "STAFF_SLOT_UNAVAILABLE") &&
+        selectedDate
+      ) {
         setSelectedSlot(null);
         const params = new URLSearchParams({ serviceIds, date: selectedDate });
         if (booking.preferredStaffId) params.set("staffId", booking.preferredStaffId);

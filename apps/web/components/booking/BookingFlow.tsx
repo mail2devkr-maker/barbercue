@@ -313,9 +313,16 @@ export function BookingFlow({
       }
     } catch (err) {
       // The availability grid is advisory; the booking transaction is authoritative. If another
-      // customer won the last capacity concurrently, clear the stale selection and immediately
-      // reload the grid so the occupied state is visible without a page refresh.
-      if (err instanceof ApiError && err.code === "SLOT_FULL" && selectedDate) {
+      // customer won the last capacity concurrently (SLOT_FULL) — or, with a specific barber
+      // selected, that exact professional's reservation was just taken or is still held by a
+      // booking that completed early but hasn't reached its own slotEnd yet (STAFF_SLOT_UNAVAILABLE
+      // — see the booking/queue resource-reservation mission) — clear the stale selection and
+      // immediately reload the grid so the occupied state is visible without a page refresh.
+      if (
+        err instanceof ApiError &&
+        (err.code === "SLOT_FULL" || err.code === "STAFF_SLOT_UNAVAILABLE") &&
+        selectedDate
+      ) {
         setSelectedSlot(null);
         const params = new URLSearchParams({ serviceIds: selectedServiceIds.join(","), date: selectedDate });
         if (selectedStaffId) params.set("staffId", selectedStaffId);
