@@ -72,14 +72,15 @@ function entry(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function dashboard(entries: unknown[]) {
+function dashboard(entries: unknown[], staffRoster?: unknown[]) {
   return {
     entries,
-    staffRoster: [{ id: 'st1', displayName: 'Sam', status: 'ACTIVE' }],
+    staffRoster: staffRoster ?? [{ id: 'st1', displayName: 'Sam', status: 'ACTIVE' }],
     chairs: [{ id: 'ch1', label: 'Chair 1', occupancy: 'FREE' }],
     services: [],
   };
 }
+let staffRoster: unknown[] | undefined;
 
 let tree: ReturnType<typeof TestRenderer.create> | undefined;
 let queue: unknown[];
@@ -122,9 +123,10 @@ async function render() {
 beforeEach(() => {
   jest.clearAllMocks();
   queue = [entry()];
+  staffRoster = undefined;
   (apiFetch as jest.Mock).mockImplementation(async (path: string, init?: { method?: string }) => {
     if (init?.method === 'POST') return {};
-    if (path.endsWith('/queue')) return dashboard(queue);
+    if (path.endsWith('/queue')) return dashboard(queue, staffRoster);
     return {};
   });
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -223,6 +225,54 @@ describe('operator actions use the authoritative /dashboard routes', () => {
     expect(call.path).toBe('dashboard/queue-entries/q1/assign');
     expect(JSON.parse(call.init.body)).toEqual({ staffId: 'st1', chairId: 'ch1', serviceId: 'sv1' });
     expect(call.init.headers['Idempotency-Key']).toBe('idem-key');
+  });
+
+  it('CASE N — locks an appointment entry\'s barber choice to the customer\'s preferred staff, and shows the lock note', async () => {
+    staffRoster = [
+      { id: 'st1', displayName: 'Sam', status: 'ACTIVE' },
+      { id: 'st2', displayName: 'Dinesh', status: 'ACTIVE' },
+    ];
+    queue = [
+      entry({
+        status: 'CALLED',
+        arrivedAt: '2026-09-20T10:05:00.000Z',
+        source: 'APPOINTMENT',
+        bookingId: 'bk1',
+        preferredStaffId: 'st1',
+        preferredStaffName: 'Sam',
+      }),
+    ];
+    await render();
+    await press(t.assignAction);
+    expect(screenText()).toContain('Booked with ');
+    expect(screenText()).toContain('Sam');
+    const chip = (label: string) =>
+      allNodes((n) => typeof n.props?.onPress === 'function' && n.findAll((c) => Boolean(c.children?.includes(label))).length > 0)[0];
+    expect(chip('Sam')).toBeDefined();
+    expect(chip('Dinesh')).toBeUndefined(); // never offered as a silent substitute
+  });
+
+  it('CASE M — shows a reservation-busy barber as unavailable and does not let the operator select them', async () => {
+    staffRoster = [
+      { id: 'st1', displayName: 'Sam', status: 'ACTIVE' },
+      {
+        id: 'st2',
+        displayName: 'Dinesh',
+        status: 'ACTIVE',
+        availabilityState: 'RESERVED',
+        busyUntil: '2026-09-20T09:30:00.000Z',
+      },
+    ];
+    queue = [entry({ status: 'CALLED', arrivedAt: '2026-09-20T10:05:00.000Z' })];
+    await render();
+    await press(t.assignAction);
+    expect(screenText()).toContain('Booked');
+    const dineshChip = allNodes(
+      (n) =>
+        typeof n.props?.onPress === 'function' &&
+        n.findAll((c) => typeof c.children?.[0] === 'string' && (c.children[0] as string).startsWith('Dinesh')).length > 0,
+    )[0];
+    expect(dineshChip.props.disabled).toBe(true);
   });
 
   it('Complete Service asks first, then POSTs dashboard/service-sessions/:sessionId/complete (the ServiceSession route, not a queue-entry write)', async () => {
