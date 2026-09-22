@@ -379,6 +379,14 @@
   font-weight: 650;
 }
 
+/* Booking/queue resource-reservation mission (Part 18) — the preferred-barber lock note under the
+   Assign form's staff select; a plain, low-emphasis caption, not an error. */
+.assignHint {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-xs);
+  font-weight: 500;
+}
+
 .queueTools {
   margin-bottom: var(--bc-space-4);
   padding: 10px 12px;

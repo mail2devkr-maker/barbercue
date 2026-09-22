@@ -432,6 +432,18 @@ export const QueueErrorCode = {
   // Live Queue join: no phone could be resolved (neither supplied with the join nor on the account),
   // so the entry would be uncontactable. The client must collect a mobile number and retry.
   CONTACT_PHONE_REQUIRED: 'CONTACT_PHONE_REQUIRED',
+  // Booking/queue resource-reservation mission — assign()/reassign() target staff member has an
+  // overlapping appointment Booking reservation (CONFIRMED/PENDING_PAYMENT, or COMPLETED still
+  // within its booked slotEnd) for the candidate service interval. Distinct from
+  // STAFF_ALREADY_OCCUPIED (an ACTIVE ServiceSession right now): this is a booked-but-not-yet-
+  // started (or already-finished-but-still-reserved) future/current appointment window.
+  STAFF_RESERVED_FOR_APPOINTMENT: 'STAFF_RESERVED_FOR_APPOINTMENT',
+  // assign()'s normal path on an APPOINTMENT-sourced queue entry must go to the customer's own
+  // Booking.preferredStaffId when one is set — a customer who explicitly chose a barber must never
+  // silently receive a different one through the same control a walk-in uses. An explicit
+  // reassignment/override workflow is a deliberate follow-up (see PR description), not implemented
+  // here; normal assignment to any other staff member is rejected outright.
+  APPOINTMENT_STAFF_LOCKED: 'APPOINTMENT_STAFF_LOCKED',
 } as const;
 export type QueueErrorCode = (typeof QueueErrorCode)[keyof typeof QueueErrorCode];
 

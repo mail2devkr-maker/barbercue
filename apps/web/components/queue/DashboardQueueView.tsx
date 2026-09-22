@@ -38,6 +38,25 @@ function statusBadgeClass(status: string): string {
   return styles.statusNeutral;
 }
 
+// Booking/queue resource-reservation mission (Part 18) — this dashboard is opened on-site, so the
+// viewer's own device-local time reads the same as the salon's wall clock; no timezone conversion
+// needed the way a customer-facing, possibly-remote view would need one.
+function formatClockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+// Part 9/18 — a short, non-PII label for a barber's derived operational availability, distinct
+// from their working/clock-in `status`. Undefined (an older cached response) degrades to no label
+// at all rather than a misleading default.
+function availabilityLabel(member: StaffStatusDto): string | null {
+  if (member.availabilityState === "RESERVED" && member.busyUntil) {
+    return `Booked until ${formatClockTime(member.busyUntil)}`;
+  }
+  if (member.availabilityState === "IN_SERVICE") return "In service";
+  if (member.availabilityState === "RESERVED") return "Booked";
+  return null;
+}
+
 function AssignForm({
   entry,
   staff,
@@ -51,12 +70,19 @@ function AssignForm({
   services: ServiceOptionDto[];
   onAssigned: () => void;
 }) {
-  const [staffId, setStaffId] = useState("");
+  // Part 7 — an appointment booked with a specific barber locks normal assignment to that barber
+  // server-side (QueueErrorCode.APPOINTMENT_STAFF_LOCKED); pre-selecting it here means the common
+  // case never even shows a choice that would just be rejected. Reassign (a separate, explicit
+  // action, once already in service) remains the deliberate override channel.
+  const [staffId, setStaffId] = useState(entry.preferredStaffId ?? "");
   const [chairId, setChairId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const activeStaff = staff.filter((s) => s.status === StaffMemberStatus.ACTIVE);
+  const staffOptions = entry.preferredStaffId
+    ? activeStaff.filter((s) => s.id === entry.preferredStaffId)
+    : activeStaff;
   // A walk-in that picked a service when joining already has one on the entry — QueueService.
   // assign() only needs one supplied when it doesn't, and re-asking here would just be confusing
   // ("didn't I already say Haircut?").
@@ -98,14 +124,28 @@ function AssignForm({
       )}
       <label className={styles.assignField}>
         <span>Barber</span>
-        <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={styles.assignSelect}>
+        <select
+          value={staffId}
+          onChange={(e) => setStaffId(e.target.value)}
+          className={styles.assignSelect}
+          disabled={!!entry.preferredStaffId}
+        >
         <option value="">Staff…</option>
-        {activeStaff.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.displayName}
-          </option>
-        ))}
+        {staffOptions.map((s) => {
+          const label = availabilityLabel(s);
+          return (
+            <option key={s.id} value={s.id} disabled={s.availabilityState === "RESERVED" || s.availabilityState === "IN_SERVICE"}>
+              {s.displayName}
+              {label ? ` — ${label}` : ""}
+            </option>
+          );
+        })}
         </select>
+        {entry.preferredStaffId && (
+          <span className={styles.assignHint}>
+            Booked with {entry.preferredStaffName ?? "a specific barber"}. Use reassignment after check-in to change it.
+          </span>
+        )}
       </label>
       <label className={styles.assignField}>
         <span>Chair</span>
@@ -174,7 +214,18 @@ function ReassignForm({
       <label className={styles.assignField}>
         <span>Move to barber</span>
         <select value={staffId} onChange={(event) => setStaffId(event.target.value)} className={styles.assignSelect}>
-          {activeStaff.map((member) => <option key={member.id} value={member.id}>{member.displayName}</option>)}
+          {activeStaff.map((member) => {
+            // Informational only, not disabled — reassignment is the deliberate override channel
+            // (Part 7), so a busy barber can still be picked here on purpose (e.g. correcting a
+            // mistaken assignment), unlike the first Assign control above.
+            const label = member.id === entry.assignedStaffId ? null : availabilityLabel(member);
+            return (
+              <option key={member.id} value={member.id}>
+                {member.displayName}
+                {label ? ` — ${label}` : ""}
+              </option>
+            );
+          })}
         </select>
       </label>
       <label className={styles.assignField}>
@@ -505,6 +556,18 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
               >
                 {s.status}
               </span>
+              {/* Part 9 — the derived, point-in-time answer to "can this person actually take a
+                  customer right now," alongside (not instead of) the working/clock-in status
+                  above. Omitted for an older cached response (availabilityState undefined). */}
+              {s.availabilityState && (
+                <span className={styles.assignHint}>
+                  {s.availabilityState === "AVAILABLE"
+                    ? "Available"
+                    : s.availabilityState === "OFF_DUTY"
+                      ? "Off duty"
+                      : (availabilityLabel(s) ?? s.availabilityState)}
+                </span>
+              )}
               <Button
                 type="button"
                 variant="outline"

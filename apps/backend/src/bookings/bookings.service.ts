@@ -34,6 +34,7 @@ import { PushDispatchService } from '../push-notifications/push-dispatch.service
 import { QueueService, EARLY_CHECKIN_WINDOW_MINUTES } from '../queue/queue.service';
 import { CustomerCreditsService } from '../credits/customer-credits.service';
 import { AvailabilityService } from './availability.service';
+import { ReservationService } from './reservation.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { computeArrivalGuidance } from './arrival-guidance';
 import { resolveEffectiveBookingServices } from './effective-booking-services';
@@ -101,6 +102,7 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly availability: AvailabilityService,
+    private readonly reservations: ReservationService,
     private readonly cancellationPolicy: CancellationPolicyService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
@@ -300,16 +302,15 @@ export class BookingsService {
         input.salonId,
         input.serviceIds,
       );
-      const overlapping = await tx.booking.count({
-        where: {
-          salonId: input.salonId,
-          status: {
-            in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
-          },
-          slotStart: { lt: slotEnd },
-          slotEnd: { gt: slotStart },
-        },
-      });
+      // Booking/queue resource-reservation mission — reuses the same reservation authority
+      // AvailabilityService's grid uses (reserving Bookings + genuine walk-in ACTIVE sessions),
+      // so a slot this transaction accepts can never disagree with what the customer was shown.
+      const overlapping = await this.reservations.countPoolReservations(
+        tx,
+        input.salonId,
+        slotStart,
+        slotEnd,
+      );
       if (!isSlotBookable(slotCapacity, overlapping)) {
         throw new AppException(
           BookingErrorCode.SLOT_FULL,
@@ -320,21 +321,20 @@ export class BookingsService {
 
       // A specific staff member is a real exclusivity constraint (not the salon-wide pool check
       // above): that one professional cannot be double-booked, even if the salon otherwise has
-      // spare pool capacity. Checked inside the same per-salon advisory-locked transaction, so
-      // this is race-safe against a second concurrent request for the same staff/interval.
+      // spare pool capacity — nor already actively serving someone else through this interval
+      // (Part 4: an ACTIVE ServiceSession is real occupancy too, not just other Booking rows).
+      // Checked inside the same per-salon advisory-locked transaction, so this is race-safe
+      // against a second concurrent request for the same staff/interval, including a competing
+      // queue assignment (see QueueService.assign()'s matching per-salon lock).
       if (input.preferredStaffId) {
-        const staffOverlapping = await tx.booking.count({
-          where: {
-            salonId: input.salonId,
-            preferredStaffId: input.preferredStaffId,
-            status: {
-              in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
-            },
-            slotStart: { lt: slotEnd },
-            slotEnd: { gt: slotStart },
-          },
-        });
-        if (staffOverlapping > 0) {
+        const staffCheck = await this.reservations.isStaffFreeForInterval(
+          tx,
+          input.salonId,
+          input.preferredStaffId,
+          slotStart,
+          slotEnd,
+        );
+        if (!staffCheck.free) {
           throw new AppException(
             BookingErrorCode.STAFF_SLOT_UNAVAILABLE,
             'This barber is already booked at the requested time. Please choose another time or barber.',
@@ -424,6 +424,12 @@ export class BookingsService {
     // surface below. See summarizeServiceNames's own doc comment for the exact rule.
     const serviceSummary = summarizeServiceNames(services.map((s) => s.name));
     this.realtime.emitBookingCreated(input.salonId, bookingId);
+    // Booking/queue resource-reservation mission (Part 15) — a new appointment can immediately
+    // change a barber's derived operational availability (Part 9) on the owner/staff Live Queue
+    // dashboard, which only listens for queue.updated, not the booking.* events. Without this, the
+    // dashboard would show a barber as freely assignable until some unrelated queue mutation
+    // happened to refresh it.
+    this.realtime.emitQueueUpdated(input.salonId);
     await this.notifications.notify(
       customerId,
       'booking.confirmed',
@@ -785,17 +791,15 @@ export class BookingsService {
         booking.salonId,
         effectiveServices.map((s) => s.serviceId),
       );
-      const overlapping = await tx.booking.count({
-        where: {
-          id: { not: bookingId },
-          salonId: booking.salonId,
-          status: {
-            in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
-          },
-          slotStart: { lt: newSlotEnd },
-          slotEnd: { gt: newSlotStart },
-        },
-      });
+      // Same reservation authority create() uses, excluding this booking's own (about-to-move)
+      // reservation from the count — see Part 14: reschedule must never conflict with itself.
+      const overlapping = await this.reservations.countPoolReservations(
+        tx,
+        booking.salonId,
+        newSlotStart,
+        newSlotEnd,
+        { excludeBookingId: bookingId },
+      );
       if (!isSlotBookable(slotCapacity, overlapping)) {
         throw new AppException(
           BookingErrorCode.SLOT_FULL,
@@ -805,21 +809,18 @@ export class BookingsService {
       }
 
       // Same per-staff exclusivity constraint create() enforces — a reschedule to a new time
-      // competes for that specific staff member exactly like a new booking would.
+      // competes for that specific staff member exactly like a new booking would (including
+      // against that staff's own currently-ACTIVE session, if any).
       if (booking.preferredStaffId) {
-        const staffOverlapping = await tx.booking.count({
-          where: {
-            id: { not: bookingId },
-            salonId: booking.salonId,
-            preferredStaffId: booking.preferredStaffId,
-            status: {
-              in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
-            },
-            slotStart: { lt: newSlotEnd },
-            slotEnd: { gt: newSlotStart },
-          },
-        });
-        if (staffOverlapping > 0) {
+        const staffCheck = await this.reservations.isStaffFreeForInterval(
+          tx,
+          booking.salonId,
+          booking.preferredStaffId,
+          newSlotStart,
+          newSlotEnd,
+          { excludeBookingId: bookingId },
+        );
+        if (!staffCheck.free) {
           throw new AppException(
             BookingErrorCode.STAFF_SLOT_UNAVAILABLE,
             'This barber is already booked at the requested time. Please choose another time or barber.',
@@ -851,6 +852,10 @@ export class BookingsService {
     }, TRANSACTION_OPTIONS);
 
     this.realtime.emitBookingRescheduled(booking.salonId, bookingId);
+    // See the matching comment in create() above — a reschedule moves (or newly creates) a
+    // reservation window, which must reach the Live Queue dashboard's staff-availability display
+    // the same way.
+    this.realtime.emitQueueUpdated(booking.salonId);
     void this.pushDispatch.dispatchLocalizedToUser(
       booking.salon.ownerUserId,
       'bookingRescheduled',

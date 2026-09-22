@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
+  Language,
   telHrefFor,
   type ChairOptionDto,
   type DashboardQueueDto,
@@ -34,6 +35,19 @@ function statusLabel(t: UiStrings, status: string): string {
   return labels[status] ?? status;
 }
 
+// Booking/queue resource-reservation mission (Part 19) — the same derived, non-PII operational
+// availability the web dashboard shows (Part 18), so this chip list stops presenting every
+// ACTIVE-status barber as equally assignable. The assign POST remains the authority regardless —
+// this is presentation only, matching the backend's own StaffStatusDto.availabilityState.
+function staffAvailabilityLabel(s: StaffStatusDto, language: Language): string | null {
+  if (s.availabilityState === 'RESERVED' && s.busyUntil) {
+    return `Booked · ${new Date(s.busyUntil).toLocaleTimeString(language === Language.HI ? 'hi-IN' : 'en-IN', { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  if (s.availabilityState === 'IN_SERVICE') return 'In service';
+  if (s.availabilityState === 'RESERVED') return 'Booked';
+  return null;
+}
+
 function EntryRow({
   entry,
   chairs,
@@ -45,12 +59,18 @@ function EntryRow({
   activeStaff: StaffStatusDto[];
   onAction: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [assigning, setAssigning] = useState(false);
-  const [staffId, setStaffId] = useState<string | null>(null);
+  // Part 7 — an appointment booked with a specific barber locks normal assignment to that barber
+  // server-side (QueueErrorCode.APPOINTMENT_STAFF_LOCKED); pre-selecting it here means the common
+  // case never even shows a choice that would just be rejected.
+  const [staffId, setStaffId] = useState<string | null>(entry.preferredStaffId);
   const [chairId, setChairId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const staffOptions = entry.preferredStaffId
+    ? activeStaff.filter((s) => s.id === entry.preferredStaffId)
+    : activeStaff;
 
   const arrived = entry.arrivedAt !== null && entry.arrivedAt !== undefined;
   const telHref = telHrefFor(entry.customerPhone);
@@ -190,12 +210,29 @@ function EntryRow({
       {entry.status === 'CALLED' && assigning && (
         <View style={styles.assignPanel}>
           <Text style={styles.assignLabel}>{t.barberLabel}</Text>
+          {entry.preferredStaffId && (
+            <Text style={styles.meta}>
+              Booked with {entry.preferredStaffName ?? 'a specific barber'}. Use Reassign after check-in to change it.
+            </Text>
+          )}
           <View style={styles.chipRow}>
-            {activeStaff.map((s) => (
-              <Pressable key={s.id} style={[styles.chip, staffId === s.id && styles.chipActive]} onPress={() => setStaffId(s.id)}>
-                <Text style={[styles.chipText, staffId === s.id && styles.chipTextActive]}>{s.displayName}</Text>
-              </Pressable>
-            ))}
+            {staffOptions.map((s) => {
+              const busy = s.availabilityState === 'RESERVED' || s.availabilityState === 'IN_SERVICE';
+              const label = staffAvailabilityLabel(s, language);
+              return (
+                <Pressable
+                  key={s.id}
+                  disabled={busy}
+                  style={[styles.chip, staffId === s.id && styles.chipActive, busy && styles.chipDisabled]}
+                  onPress={() => setStaffId(s.id)}
+                >
+                  <Text style={[styles.chipText, staffId === s.id && styles.chipTextActive]}>
+                    {s.displayName}
+                    {label ? ` · ${label}` : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
           <Text style={styles.assignLabel}>{t.chairLabel}</Text>
           <View style={styles.chipRow}>
@@ -425,6 +462,9 @@ const styles = StyleSheet.create({
     borderColor: color.border,
   },
   chipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
+  // Part 19 — a reserved/in-service barber's chip reads as unavailable rather than an equally
+  // pickable option; the assign POST still rejects it regardless if this is somehow bypassed.
+  chipDisabled: { opacity: 0.5 },
   chipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted },
   chipTextActive: { color: color.accent },
 });
