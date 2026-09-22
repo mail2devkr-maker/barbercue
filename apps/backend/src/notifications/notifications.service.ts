@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ALL_NOTIFICATION_CATEGORIES,
   NotificationCategory,
   NotificationChannel,
   NotificationStatus,
+  resolveNotificationPreference,
   type NotificationChannelPreferenceDto,
   type NotificationDto,
   type NotificationPreferencesDto,
@@ -11,6 +13,7 @@ import {
   type PaginatedResult,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { isNotificationEnabled } from './notification-preference';
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -31,15 +34,11 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'owner.booking.expired': NotificationCategory.BOOKING_UPDATES,
   'owner.walk_in.joined': NotificationCategory.QUEUE_UPDATES,
   'staff.assigned': NotificationCategory.QUEUE_UPDATES,
-  'owner.booking.arrival_check': NotificationCategory.BOOKING_UPDATES,
+  'owner.booking.arrival_check': NotificationCategory.ARRIVAL_ALERTS,
 };
 
-const ALL_CATEGORIES: NotificationCategory[] = [
-  NotificationCategory.BOOKING_UPDATES,
-  NotificationCategory.QUEUE_UPDATES,
-  NotificationCategory.REMINDERS,
-  NotificationCategory.PROMOTIONAL,
-];
+// Operational categories first, promotional last (shared ALL_NOTIFICATION_CATEGORIES).
+const ALL_CATEGORIES: NotificationCategory[] = [...ALL_NOTIFICATION_CATEGORIES];
 const ALL_CHANNELS: NotificationChannel[] = [
   NotificationChannel.IN_APP,
   NotificationChannel.PUSH,
@@ -47,11 +46,13 @@ const ALL_CHANNELS: NotificationChannel[] = [
   NotificationChannel.SMS,
   NotificationChannel.WHATSAPP,
 ];
-// The only channel with a real, configured provider today — see EmailSender/ConsoleEmailSender's
-// own doc comment for why EMAIL isn't in this set (no production email provider is wired either).
-// Single source of truth for both notify()'s gating and getPreferences()'s `available` field.
+// The channels FastQue really delivers on: the in-app Notification Center and Expo push. EMAIL, SMS
+// and WHATSAPP have no production provider wired (see EmailSender/ConsoleEmailSender), so they stay
+// unavailable. Both delivery gates honour the user's preference for the channel they deliver on:
+// notify() below for IN_APP, and PushDispatchService for PUSH (via isNotificationEnabled).
 const AVAILABLE_CHANNELS = new Set<NotificationChannel>([
   NotificationChannel.IN_APP,
+  NotificationChannel.PUSH,
 ]);
 
 /**
@@ -175,10 +176,7 @@ export class NotificationsService {
     category: NotificationCategory,
     channel: NotificationChannel,
   ): Promise<boolean> {
-    const row = await db.notificationPreference.findUnique({
-      where: { userId_category_channel: { userId, category, channel } },
-    });
-    return row?.enabled ?? true;
+    return isNotificationEnabled(db, userId, category, channel);
   }
 
   async getPreferences(userId: string): Promise<NotificationPreferencesDto> {
@@ -195,7 +193,8 @@ export class NotificationsService {
         channels: ALL_CHANNELS.map(
           (channel): NotificationChannelPreferenceDto => ({
             channel,
-            enabled: byKey.get(`${category}:${channel}`) ?? true,
+            // Read-only: an unconfigured pair resolves to the default and is never written here.
+            enabled: resolveNotificationPreference(byKey.get(`${category}:${channel}`), category),
             available: AVAILABLE_CHANNELS.has(channel),
           }),
         ),

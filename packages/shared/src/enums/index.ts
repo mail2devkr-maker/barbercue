@@ -353,6 +353,9 @@ export const NotificationCategory = {
   BOOKING_UPDATES: 'BOOKING_UPDATES',
   QUEUE_UPDATES: 'QUEUE_UPDATES',
   REMINDERS: 'REMINDERS',
+  // Time-critical operator prompts (the T-5 "has the customer arrived?" check) - its own toggle,
+  // separate from ordinary booking updates so an owner can tune noise without losing arrival checks.
+  ARRIVAL_ALERTS: 'ARRIVAL_ALERTS',
   PROMOTIONAL: 'PROMOTIONAL',
 } as const;
 export type NotificationCategory =

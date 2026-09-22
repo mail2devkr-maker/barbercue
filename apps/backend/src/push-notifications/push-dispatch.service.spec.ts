@@ -12,7 +12,7 @@ describe('PushDispatchService', () => {
     removeStaleTokens: jest.Mock;
   };
   let expo: { send: jest.Mock };
-  let prisma: { user: { findUnique: jest.Mock } };
+  let prisma: { user: { findUnique: jest.Mock }; notificationPreference: { findUnique: jest.Mock } };
 
   beforeEach(async () => {
     devices = {
@@ -20,7 +20,11 @@ describe('PushDispatchService', () => {
       removeStaleTokens: jest.fn().mockResolvedValue(undefined),
     };
     expo = { send: jest.fn().mockResolvedValue([]) };
-    prisma = { user: { findUnique: jest.fn().mockResolvedValue({ preferredLanguage: Language.EN }) } };
+    prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue({ preferredLanguage: Language.EN }) },
+      // No stored preference row by default = the user never configured anything = the default (ON).
+      notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         PushDispatchService,
@@ -33,7 +37,7 @@ describe('PushDispatchService', () => {
   });
 
   it('does nothing when the user has no registered devices (the common case pre-mobile-rollout)', async () => {
-    await service.dispatchToUser('u1', { title: 'New booking', body: 'x' });
+    await service.dispatchToUser('u1', { category: 'BOOKING_UPDATES', title: 'New booking', body: 'x' });
     expect(expo.send).not.toHaveBeenCalled();
   });
 
@@ -44,6 +48,7 @@ describe('PushDispatchService', () => {
     ]);
     expo.send.mockResolvedValue([{ status: 'ok' }, { status: 'ok' }]);
     await service.dispatchToUser('u1', {
+      category: 'BOOKING_UPDATES',
       title: 'New booking',
       body: 'Haircut booked for your shop.',
       data: { type: 'booking.created', salonId: 's1', bookingId: 'b1' },
@@ -73,7 +78,7 @@ describe('PushDispatchService', () => {
       { status: 'error', details: { error: 'DeviceNotRegistered' } },
       { status: 'ok' },
     ]);
-    await service.dispatchToUser('u1', { title: 't', body: 'b' });
+    await service.dispatchToUser('u1', { category: 'BOOKING_UPDATES', title: 't', body: 'b' });
     expect(devices.removeStaleTokens).toHaveBeenCalledWith([
       'ExponentPushToken[stale]',
     ]);
@@ -86,14 +91,14 @@ describe('PushDispatchService', () => {
     expo.send.mockResolvedValue([
       { status: 'error', details: { error: 'MessageRateExceeded' } },
     ]);
-    await service.dispatchToUser('u1', { title: 't', body: 'b' });
+    await service.dispatchToUser('u1', { category: 'BOOKING_UPDATES', title: 't', body: 'b' });
     expect(devices.removeStaleTokens).not.toHaveBeenCalled();
   });
 
   it('never throws when loading devices fails — a push failure must never break booking creation', async () => {
     devices.devicesForUser.mockRejectedValue(new Error('db down'));
     await expect(
-      service.dispatchToUser('u1', { title: 't', body: 'b' }),
+      service.dispatchToUser('u1', { category: 'BOOKING_UPDATES', title: 't', body: 'b' }),
     ).resolves.toBeUndefined();
   });
 
@@ -103,7 +108,7 @@ describe('PushDispatchService', () => {
     ]);
     expo.send.mockRejectedValue(new Error('network error'));
     await expect(
-      service.dispatchToUser('u1', { title: 't', body: 'b' }),
+      service.dispatchToUser('u1', { category: 'BOOKING_UPDATES', title: 't', body: 'b' }),
     ).resolves.toBeUndefined();
   });
 });
@@ -114,7 +119,7 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
   let service: PushDispatchService;
   let devices: { devicesForUser: jest.Mock; removeStaleTokens: jest.Mock };
   let expo: { send: jest.Mock };
-  let prisma: { user: { findUnique: jest.Mock } };
+  let prisma: { user: { findUnique: jest.Mock }; notificationPreference: { findUnique: jest.Mock } };
 
   beforeEach(async () => {
     devices = {
@@ -122,7 +127,11 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
       removeStaleTokens: jest.fn().mockResolvedValue(undefined),
     };
     expo = { send: jest.fn().mockResolvedValue([{ status: 'ok' }]) };
-    prisma = { user: { findUnique: jest.fn() } };
+    prisma = {
+      user: { findUnique: jest.fn() },
+      // No stored row = never configured = the default (ON).
+      notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         PushDispatchService,
@@ -208,6 +217,109 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     expect(messages[0]).not.toHaveProperty('channelId');
     expect(messages[0]).not.toHaveProperty('sound');
     expect(messages[0]).not.toHaveProperty('priority');
+  });
+
+  describe('notification preferences gate delivery (PUSH channel)', () => {
+    const oneDevice = () => devices.devicesForUser.mockResolvedValue([{ expoPushToken: 'ExponentPushToken[a]' }]);
+    const stored = (rows: Record<string, boolean>) =>
+      prisma.notificationPreference.findUnique.mockImplementation(
+        async ({ where }: { where: { userId_category_channel: { category: string; channel: string } } }) => {
+          const { category, channel } = where.userId_category_channel;
+          const key = `${category}:${channel}`;
+          return key in rows ? { enabled: rows[key] } : null;
+        },
+      );
+    const send = (kind: 'newBooking' | 'bookingRescheduled' | 'bookingCancelled' | 'arrivalCheck') =>
+      service.dispatchLocalizedToUser('owner-1', kind, 'Haircut', { type: 'x', salonId: 's1', bookingId: 'b1' });
+
+    it('DEFAULT ON: a user with no preference rows at all receives every operational push kind', async () => {
+      oneDevice();
+      for (const kind of ['newBooking', 'bookingRescheduled', 'bookingCancelled', 'arrivalCheck'] as const) {
+        expo.send.mockClear();
+        await send(kind);
+        expect(expo.send).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('checks the PUSH channel for the right category (BOOKING_UPDATES for bookings, ARRIVAL_ALERTS for the arrival check)', async () => {
+      oneDevice();
+      await send('newBooking');
+      await send('arrivalCheck');
+      const asked = prisma.notificationPreference.findUnique.mock.calls.map(
+        ([arg]) => `${arg.where.userId_category_channel.category}:${arg.where.userId_category_channel.channel}`,
+      );
+      expect(asked).toEqual(['BOOKING_UPDATES:PUSH', 'ARRIVAL_ALERTS:PUSH']);
+    });
+
+    it.each([
+      ['newBooking', 'BOOKING_UPDATES'],
+      ['bookingRescheduled', 'BOOKING_UPDATES'],
+      ['bookingCancelled', 'BOOKING_UPDATES'],
+      ['arrivalCheck', 'ARRIVAL_ALERTS'],
+    ] as const)('EXPLICIT OFF: %s sends nothing when %s is OFF on PUSH - and never even loads the user\'s devices', async (kind, category) => {
+      oneDevice();
+      stored({ [`${category}:PUSH`]: false });
+      await send(kind);
+      expect(expo.send).not.toHaveBeenCalled();
+      expect(devices.devicesForUser).not.toHaveBeenCalled();
+    });
+
+    it('OFF is per category: turning BOOKING_UPDATES off does not stop arrival-check pushes, and vice versa', async () => {
+      oneDevice();
+      stored({ 'BOOKING_UPDATES:PUSH': false });
+      await send('arrivalCheck');
+      expect(expo.send).toHaveBeenCalledTimes(1);
+
+      expo.send.mockClear();
+      stored({ 'ARRIVAL_ALERTS:PUSH': false });
+      await send('newBooking');
+      expect(expo.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('OFF is per channel: turning the IN_APP channel off does not stop push', async () => {
+      oneDevice();
+      stored({ 'BOOKING_UPDATES:IN_APP': false, 'ARRIVAL_ALERTS:IN_APP': false });
+      await send('newBooking');
+      await send('arrivalCheck');
+      expect(expo.send).toHaveBeenCalledTimes(2);
+    });
+
+    it('an explicit ON row behaves like the default', async () => {
+      oneDevice();
+      stored({ 'ARRIVAL_ALERTS:PUSH': true });
+      await send('arrivalCheck');
+      expect(expo.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('turning a category back ON resumes delivery', async () => {
+      oneDevice();
+      stored({ 'ARRIVAL_ALERTS:PUSH': false });
+      await send('arrivalCheck');
+      expect(expo.send).not.toHaveBeenCalled();
+      stored({ 'ARRIVAL_ALERTS:PUSH': true });
+      await send('arrivalCheck');
+      expect(expo.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('never writes a preference row - reading the gate cannot create an OFF row', async () => {
+      oneDevice();
+      await send('arrivalCheck');
+      expect(Object.keys(prisma.notificationPreference)).toEqual(['findUnique']);
+    });
+
+    it('sends by default when the preference itself cannot be read (unknown is not off), and says so in the log', async () => {
+      oneDevice();
+      prisma.notificationPreference.findUnique.mockRejectedValue(new Error('db down'));
+      await send('arrivalCheck');
+      expect(expo.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('the gate applies to direct dispatchToUser too - a payload cannot skip its category', async () => {
+      oneDevice();
+      stored({ 'REMINDERS:PUSH': false });
+      await service.dispatchToUser('owner-1', { category: 'REMINDERS', title: 't', body: 'b' });
+      expect(expo.send).not.toHaveBeenCalled();
+    });
   });
 
   it('degrades to English rather than failing when the recipient-language lookup itself throws', async () => {

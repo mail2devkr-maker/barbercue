@@ -1,7 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { PushDevice } from '@prisma/client';
-import { Language, pushCopyFor } from '@barbercue/shared';
+import {
+  Language,
+  NotificationCategory,
+  NotificationChannel,
+  pushCopyFor,
+} from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { isNotificationEnabled } from '../notifications/notification-preference';
 import { PushDeviceService } from './push-device.service';
 import {
   ExpoPushSender,
@@ -10,6 +16,10 @@ import {
 } from './expo-push-sender';
 
 export interface PushPayload {
+  // Required, not optional: every push belongs to a notification category, and the user's PUSH
+  // preference for that category is checked before anything is sent (see dispatchToUser). Making it
+  // mandatory means no future push can bypass the gate by simply omitting it.
+  category: NotificationCategory;
   title: string;
   body: string;
   /** Ids-only, same convention as RealtimeGateway's emits — never customer PII. */
@@ -25,6 +35,17 @@ export interface PushPayload {
 // the one push where silence defeats its purpose, so it names the channel explicitly and requests
 // the default tone rather than relying on Expo/FCM's fallback channel.
 const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
+
+type PushKind = 'newBooking' | 'bookingRescheduled' | 'bookingCancelled' | 'arrivalCheck';
+
+// Which preference category governs each push kind. Typed as a full Record so adding a kind without
+// deciding its category is a compile error.
+const PUSH_KIND_CATEGORY: Record<PushKind, NotificationCategory> = {
+  newBooking: NotificationCategory.BOOKING_UPDATES,
+  bookingRescheduled: NotificationCategory.BOOKING_UPDATES,
+  bookingCancelled: NotificationCategory.BOOKING_UPDATES,
+  arrivalCheck: NotificationCategory.ARRIVAL_ALERTS,
+};
 
 // Only for log lines — never the full token. A stable-but-non-reversible-looking prefix is enough
 // to correlate log lines with a specific device during debugging without exposing the credential.
@@ -57,7 +78,7 @@ export class PushDispatchService {
    */
   async dispatchLocalizedToUser(
     userId: string,
-    kind: 'newBooking' | 'bookingRescheduled' | 'bookingCancelled' | 'arrivalCheck',
+    kind: PushKind,
     serviceName: string | null,
     data: Record<string, unknown>,
   ): Promise<void> {
@@ -73,6 +94,7 @@ export class PushDispatchService {
     }
     const { title, body } = pushCopyFor(preferredLanguage)[kind](serviceName);
     await this.dispatchToUser(userId, {
+      category: PUSH_KIND_CATEGORY[kind],
       title,
       body,
       data,
@@ -88,6 +110,20 @@ export class PushDispatchService {
   }
 
   /**
+   * Reads (never writes) the user's PUSH preference. No stored row means the default, which is ON.
+   * If the preference itself cannot be read the push is still sent: an unreadable preference is
+   * "unknown", not "off", and these are operational alerts - the failure is logged, not silent.
+   */
+  private async isPushEnabled(userId: string, category: NotificationCategory): Promise<boolean> {
+    try {
+      return await isNotificationEnabled(this.prisma, userId, category, NotificationChannel.PUSH);
+    } catch (err) {
+      this.logger.warn(`Could not read push preference, sending by default: ${errorMessage(err)}`);
+      return true;
+    }
+  }
+
+  /**
    * Fire-and-forget from the caller's perspective (see bookings.service.ts's call site: `void
    * this.pushDispatch.dispatchToUser(...)`) — a push failure must never affect booking success,
    * so every failure mode here is caught and logged, never rethrown. No-op with zero registered
@@ -95,6 +131,11 @@ export class PushDispatchService {
    * registration wired — Codex's mobile-side half of this handoff).
    */
   async dispatchToUser(userId: string, payload: PushPayload): Promise<void> {
+    // The user's PUSH preference for this category is authoritative for whether FastQue sends at
+    // all. It is checked first, before even loading device tokens, so an OFF category costs
+    // nothing and reaches no device. (Whether a phone then shows/sounds it is up to the OS.)
+    if (!(await this.isPushEnabled(userId, payload.category))) return;
+
     let devices: PushDevice[];
     try {
       devices = await this.devices.devicesForUser(userId);

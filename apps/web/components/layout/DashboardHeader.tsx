@@ -90,6 +90,9 @@ export function DashboardHeader() {
             </select>
           )}
           <NotificationBell />
+          <Link href="/dashboard/notifications" className={styles.publicLink}>
+            Notification settings
+          </Link>
           <Link href="/" className={styles.publicLink}>
             <span aria-hidden="true">←</span> Visit public site
           </Link>
