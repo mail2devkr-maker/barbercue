@@ -873,6 +873,12 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
   arrivedAt: string | null; // ISO 8601
   assignedStaffName: string | null;
   assignedChairLabel: string | null;
+  // Booking/queue resource-reservation mission (Part 7) — the customer's own barber preference at
+  // booking time (Booking.preferredStaffId), surfaced so assignment UI can show it and default to
+  // it, instead of only discovering the mismatch after an assign() rejection. Always null for a
+  // WALK_IN-sourced entry (no linked booking) or an APPOINTMENT booked "Any Staff".
+  preferredStaffId: string | null;
+  preferredStaffName: string | null;
   activeServiceSessionId: string | null; // target id for POST .../service-sessions/:id/complete
   joinedAt: string; // ISO 8601
   calledAt: string | null;
@@ -1020,11 +1026,31 @@ export interface QueueStatusDto {
   estimatedWaitRangeMinutes: { min: number; max: number } | null;
 }
 
-// PATCH /dashboard/staff/:id/status response.
+// Booking/queue resource-reservation mission — SalonStaff.status stays exactly what it always
+// was (working/clock-in state: ACTIVE/INACTIVE), never overloaded to mean "currently free". This
+// is the SEPARATE, derived, point-in-time answer to "can this person actually take a customer
+// right now": an ACTIVE staff member can still be RESERVED (an appointment's booked interval is
+// current) or IN_SERVICE (an ACTIVE ServiceSession, walk-in or appointment-check-in). OFF_DUTY
+// mirrors status === INACTIVE, surfaced here too so a UI can render every roster row from this one
+// field instead of combining it with `status` itself.
+export type StaffAvailabilityState = 'AVAILABLE' | 'RESERVED' | 'IN_SERVICE' | 'OFF_DUTY';
+
+// PATCH /dashboard/staff/:id/status response, and the roster entries in DashboardQueueDto below.
 export interface StaffStatusDto {
   id: string;
   displayName: string;
   status: StaffMemberStatus;
+  // Optional for wire/backward compatibility with older cached clients — omitted rather than
+  // computed as a guess when the caller doesn't need it. No customer PII: only this barber's own
+  // derived state and timing, never who they are currently/next serving.
+  availabilityState?: StaffAvailabilityState;
+  // ISO 8601 — when this barber's current reservation/service is expected to free them, or null
+  // when AVAILABLE/OFF_DUTY. For an overrunning ACTIVE service this is a conservative "at least
+  // until now" estimate, never a past instant (see ReservationService's own doc comment).
+  busyUntil?: string | null;
+  // ISO 8601 — this barber's next upcoming appointment reservation start, if any, regardless of
+  // their current availabilityState (useful even while AVAILABLE, to warn "free now, booked soon").
+  nextBookingStart?: string | null;
 }
 
 export interface SalonPaymentPolicyDto {
