@@ -5,6 +5,7 @@ import { QueueService } from './queue.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { AvailabilityService } from '../bookings/availability.service';
+import { ReservationService } from '../bookings/reservation.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -85,9 +86,13 @@ interface PrismaMock {
   service: {
     aggregate: jest.Mock<Promise<unknown>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+    // Booking/queue resource-reservation mission — assign()/reassign() now fetch the trusted
+    // server-side duration for the reservation-window guard.
+    findFirst: jest.Mock<Promise<unknown>, [unknown]>;
   };
   booking: {
     findFirst: jest.Mock<Promise<unknown>, [unknown]>;
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
     findUnique: jest.Mock<Promise<unknown>, [unknown]>;
     update: jest.Mock<Promise<unknown>, [unknown]>;
     count: jest.Mock<Promise<number>, [unknown]>;
@@ -181,9 +186,13 @@ describe('QueueService', () => {
         findMany: jest
           .fn<Promise<unknown[]>, [unknown]>()
           .mockResolvedValue([]),
+        findFirst: jest
+          .fn<Promise<unknown>, [unknown]>()
+          .mockResolvedValue({ durationMinutes: 30 }),
       },
       booking: {
         findFirst: jest.fn<Promise<unknown>, [unknown]>(),
+        findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
         findUnique: jest.fn<Promise<unknown>, [unknown]>(),
         update: jest.fn<Promise<unknown>, [unknown]>(),
         count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(0),
@@ -253,6 +262,7 @@ describe('QueueService', () => {
         QueueService,
         { provide: PrismaService, useValue: prisma },
         { provide: AvailabilityService, useValue: availability },
+        ReservationService,
         { provide: SalonAccessService, useValue: salonAccess },
         { provide: RealtimeGateway, useValue: realtime },
         { provide: NotificationsService, useValue: notifications },
@@ -767,6 +777,21 @@ describe('QueueService', () => {
       startedAt: new Date('2026-08-28T05:15:00.000Z'),
     };
 
+    // Booking/queue resource-reservation mission — serviceSession.findFirst is now called from
+    // two different places with two different shapes: reassign()'s own "find the current active
+    // session for this queue entry" (where.queueEntryId) and ReservationService's own guard "does
+    // the NEW target staff already have an active session" (where.staffId). The default here
+    // answers the first with the fixture and the second with "no session" (st2 is free), which is
+    // what every pre-existing test in this block already assumed.
+    function mockServiceSessionFindFirst(currentSession: unknown) {
+      prisma.serviceSession.findFirst.mockImplementation((args: unknown) => {
+        // Only ReservationService's own guard query filters by staffId; reassign()'s "find the
+        // current session for this queue entry" lookup never does.
+        const where = (args as { where?: { staffId?: string } })?.where;
+        return Promise.resolve(where?.staffId ? null : currentSession);
+      });
+    }
+
     beforeEach(() => {
       prisma.queueEntry.findUnique
         .mockResolvedValueOnce(activeEntry)
@@ -777,7 +802,7 @@ describe('QueueService', () => {
             assignedChairId: 'ch2',
           }),
         );
-      prisma.serviceSession.findFirst.mockResolvedValue(activeSession);
+      mockServiceSessionFindFirst(activeSession);
       prisma.chair.findFirst.mockResolvedValue({
         id: 'ch2',
         salonId: 's1',
@@ -826,7 +851,7 @@ describe('QueueService', () => {
       prisma.queueEntry.findUnique
         .mockResolvedValueOnce(activeEntry)
         .mockResolvedValue(makeDetailEntry(activeEntry));
-      prisma.serviceSession.findFirst.mockResolvedValue(activeSession);
+      mockServiceSessionFindFirst(activeSession);
       prisma.chair.findFirst.mockResolvedValue({
         id: 'ch2',
         salonId: 's1',

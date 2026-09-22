@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { BookingSource } from '@barbercue/shared';
 import { BookingsService } from './bookings.service';
 import { AvailabilityService } from './availability.service';
+import { ReservationService } from './reservation.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -92,6 +93,13 @@ interface PrismaMock {
     create: jest.Mock<Promise<unknown>, [unknown]>;
     updateMany: jest.Mock<Promise<{ count: number }>, [unknown]>;
   };
+  // Booking/queue resource-reservation mission — ReservationService (a REAL instance, not
+  // mocked, since it has no injected dependencies of its own) drives its pool/staff checks
+  // through this same prisma mock's booking.count/findFirst and this new serviceSession model.
+  serviceSession: {
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+    findFirst: jest.Mock<Promise<unknown>, [unknown]>;
+  };
   $executeRaw: jest.Mock<Promise<unknown>, [unknown]>;
   $transaction: jest.Mock;
 }
@@ -179,6 +187,12 @@ describe('BookingsService', () => {
         updateMany: jest
           .fn<Promise<{ count: number }>, [unknown]>()
           .mockResolvedValue({ count: 0 }),
+      },
+      // Defaults: no active sessions at all, so every pre-existing test (written before Part 3/4
+      // existed) keeps exercising only the booking.count/findFirst paths it already configured.
+      serviceSession: {
+        findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+        findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(null),
       },
       $executeRaw: jest.fn<Promise<unknown>, [unknown]>(),
       $transaction: jest.fn(),
@@ -301,6 +315,7 @@ describe('BookingsService', () => {
         BookingsService,
         { provide: PrismaService, useValue: prisma },
         { provide: AvailabilityService, useValue: availability },
+        ReservationService,
         { provide: CancellationPolicyService, useValue: cancellationPolicy },
         { provide: RealtimeGateway, useValue: realtime },
         { provide: NotificationsService, useValue: notifications },
@@ -612,6 +627,16 @@ describe('BookingsService', () => {
       );
       expect(realtime.emitBookingCreated).toHaveBeenCalledTimes(1);
       expect(realtime.emitBookingCreated).toHaveBeenCalledWith('s1', 'b1');
+    });
+
+    it('Part 15 — also emits queue.updated, so the owner/staff Live Queue dashboard (which only listens for that event) reflects the new reservation without a manual refresh', async () => {
+      await service.create(
+        'c1',
+        { salonId: 's1', serviceIds: ['sv1'], slotStart: futureSlot },
+        BookingSource.WEB,
+        'key-1',
+      );
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
     });
 
     it('dispatches a localized push to the salon owner exactly once after a successful create, with an ids-only data payload (no customer PII)', async () => {
@@ -1387,6 +1412,9 @@ describe('BookingsService', () => {
         'Haircut',
         { type: 'booking.rescheduled', salonId: 's1', bookingId: 'b1' },
       );
+      // Part 15 — same reasoning as create()'s matching test: a reschedule moves the reservation
+      // window, and the Live Queue dashboard only listens for queue.updated.
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
     });
 
     it("re-checks the existing preferred barber's working hours against the new slot (Phase 7)", async () => {

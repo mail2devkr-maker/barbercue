@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { AvailabilityService } from './availability.service';
+import { ReservationService } from './reservation.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 function futureDateString(daysAhead: number): string {
@@ -24,6 +25,9 @@ interface PrismaMock {
   staffWorkingHours: { findUnique: jest.Mock<Promise<unknown>, [unknown]> };
   booking: { findMany: jest.Mock<Promise<unknown[]>, [unknown]> };
   queueEntry: { findMany: jest.Mock<Promise<unknown[]>, [unknown]> };
+  // Booking/queue resource-reservation mission — Part 3/4: a genuine walk-in ACTIVE ServiceSession
+  // is a second reservation source getAvailability now consults alongside Booking rows.
+  serviceSession: { findMany: jest.Mock<Promise<unknown[]>, [unknown]> };
 }
 
 describe('AvailabilityService', () => {
@@ -50,10 +54,15 @@ describe('AvailabilityService', () => {
       },
       booking: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
       queueEntry: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
+      serviceSession: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
     };
+    // Default: no active sessions, so every pre-existing test (written before Part 3/4 existed)
+    // behaves exactly as before unless it deliberately configures one.
+    prisma.serviceSession.findMany.mockResolvedValue([]);
     const moduleRef = await Test.createTestingModule({
       providers: [
         AvailabilityService,
+        ReservationService,
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();

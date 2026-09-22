@@ -6,6 +6,7 @@ import {
   ChairStatus,
   MAX_SERVICES_PER_BOOKING,
   SalonStatus,
+  ServiceSessionStatus,
   StaffMemberStatus,
   computeSlotCapacity,
   isSlotBookable,
@@ -15,6 +16,7 @@ import {
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
+import { ReservationService } from './reservation.service';
 import {
   resolveSalonTimeZone,
   zonedDateToDayOfWeek,
@@ -40,7 +42,10 @@ export type Db = PrismaService | Prisma.TransactionClient;
 
 @Injectable()
 export class AvailabilityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reservations: ReservationService,
+  ) {}
 
   // Issue #13 Mission H — real, privacy-safe recent-activity signal for a salon's public profile
   // page. Deliberately anonymized (see RecentActivityItemDto's own doc comment for why: this
@@ -509,17 +514,43 @@ export class AvailabilityService {
       serviceIds,
     );
 
+    // Booking/queue resource-reservation mission — reservingBookingWhere() (CONFIRMED,
+    // PENDING_PAYMENT, and now COMPLETED) replaces the old [CONFIRMED, PENDING_PAYMENT]-only
+    // filter: a COMPLETED appointment whose service finished early must still occupy its slot
+    // grid cells through its original slotEnd (see ReservationService's own header comment for
+    // why). The per-slot overlap filter below is what naturally stops a COMPLETED booking from
+    // blocking anything once real time passes its slotEnd — no separate cutoff needed.
     const overlapCandidates = await this.prisma.booking.findMany({
       where: {
         salonId,
-        status: {
-          in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
-        },
+        ...this.reservations.reservingBookingWhere(),
         slotStart: { lt: closeAt },
         slotEnd: { gt: openAt },
       },
       select: { slotStart: true, slotEnd: true, preferredStaffId: true },
     });
+    // Part 3/4 — an ACTIVE ServiceSession (walk-in or appointment check-in) is a second, separate
+    // reservation source layered on top of Booking rows: a barber (or the pool) currently serving
+    // someone is truly occupied even though that fact may not exist as a future Booking row at
+    // all (a walk-in has none). Fetched once for the whole day-grid request — bounded by this
+    // salon's chair count, never an unbounded scan — and filtered in memory per slot exactly like
+    // overlapCandidates above, so this stays O(chairs) DB work regardless of how many 15-minute
+    // slots the day produces.
+    const activeSessions = await this.prisma.serviceSession.findMany({
+      where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
+      select: {
+        staffId: true,
+        startedAt: true,
+        service: { select: { durationMinutes: true } },
+        queueEntry: { select: { bookingId: true } },
+      },
+    });
+    const projectedSessions = activeSessions.map((s) => ({
+      staffId: s.staffId,
+      isWalkIn: s.queueEntry.bookingId === null,
+      start: s.startedAt,
+      end: this.reservations.projectedActiveSessionEnd(s.startedAt, s.service.durationMinutes, now),
+    }));
 
     const slots: AvailabilitySlotDto[] = [];
     for (
@@ -531,17 +562,26 @@ export class AvailabilityService {
     ) {
       if (slotStart <= now) continue;
       const slotEnd = new Date(slotStart.getTime() + durationMs);
-      const overlappingHere = overlapCandidates.filter(
+      const overlappingBookings = overlapCandidates.filter(
         (b) => b.slotStart < slotEnd && b.slotEnd > slotStart,
+      );
+      // A genuine walk-in session (no linked booking) is a real pool unit not otherwise
+      // represented above; an appointment's own check-in session is already counted via its
+      // Booking row and would double-count the same reservation if included here too.
+      const overlappingWalkInSessions = projectedSessions.filter(
+        (s) => s.isWalkIn && this.reservations.intervalsOverlap(s.start, s.end, slotStart, slotEnd),
       );
       // Pool capacity governs "Any Staff" bookability regardless of who holds each overlapping
       // slot. A specific requested staffId additionally needs that exact professional free — the
       // pool could have room while that one named barber is already taken, and vice versa.
       const staffTaken =
         !!staffId &&
-        overlappingHere.some((b) => b.preferredStaffId === staffId);
-      const available =
-        isSlotBookable(slotCapacity, overlappingHere.length) && !staffTaken;
+        (overlappingBookings.some((b) => b.preferredStaffId === staffId) ||
+          projectedSessions.some(
+            (s) => s.staffId === staffId && this.reservations.intervalsOverlap(s.start, s.end, slotStart, slotEnd),
+          ));
+      const consumed = overlappingBookings.length + overlappingWalkInSessions.length;
+      const available = isSlotBookable(slotCapacity, consumed) && !staffTaken;
       slots.push({
         slotStart: slotStart.toISOString(),
         slotEnd: slotEnd.toISOString(),
