@@ -11,8 +11,17 @@ export type OwnerBookingPushData =
   | (OwnerBookingPushBase & { type: 'booking.arrival_check' });
 type OwnerBookingPushListener = (payload: OwnerBookingPushData) => boolean;
 
+export type CustomerBookingPushData = {
+  type: 'booking.reminder';
+  salonId: string;
+  bookingId: string;
+};
+type CustomerBookingPushListener = (payload: CustomerBookingPushData) => boolean;
+
 let pendingOwnerBookingPush: OwnerBookingPushData | null = null;
 const ownerBookingPushListeners = new Set<OwnerBookingPushListener>();
+let pendingCustomerBookingPush: CustomerBookingPushData | null = null;
+const customerBookingPushListeners = new Set<CustomerBookingPushListener>();
 
 /**
  * Narrowly accepts the IDs-only booking payload the backend emits. Notification data is an
@@ -36,6 +45,36 @@ export function parseOwnerBookingPushData(value: unknown): OwnerBookingPushData 
 export function requestOwnerBookingPushNavigation(payload: OwnerBookingPushData): void {
   pendingOwnerBookingPush = payload;
   replayPendingOwnerBookingPushNavigation();
+}
+
+export function parseCustomerBookingPushData(value: unknown): CustomerBookingPushData | null {
+  if (!value || typeof value !== 'object') return null;
+  const data = value as Record<string, unknown>;
+  if (data.type !== 'booking.reminder') return null;
+  if (typeof data.salonId !== 'string' || data.salonId.length === 0) return null;
+  if (typeof data.bookingId !== 'string' || data.bookingId.length === 0) return null;
+  return { type: 'booking.reminder', salonId: data.salonId, bookingId: data.bookingId };
+}
+
+export function requestCustomerBookingPushNavigation(payload: CustomerBookingPushData): void {
+  pendingCustomerBookingPush = payload;
+  replayPendingCustomerBookingPushNavigation();
+}
+
+export function subscribeToCustomerBookingPushNavigation(listener: CustomerBookingPushListener): () => void {
+  customerBookingPushListeners.add(listener);
+  replayPendingCustomerBookingPushNavigation();
+  return () => customerBookingPushListeners.delete(listener);
+}
+
+export function replayPendingCustomerBookingPushNavigation(): void {
+  if (!pendingCustomerBookingPush) return;
+  for (const listener of customerBookingPushListeners) {
+    if (listener(pendingCustomerBookingPush)) {
+      pendingCustomerBookingPush = null;
+      return;
+    }
+  }
 }
 
 /**

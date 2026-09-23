@@ -11,6 +11,7 @@ import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
 import { resolvePostAuthCustomerNavigation, takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { navigationRef } from './navigation-ref';
+import { subscribeToCustomerBookingPushNavigation } from '../lib/push-navigation';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
 import { TabIcon, type TabIconName } from '../components/ui/TabIcon';
@@ -71,6 +72,18 @@ function CustomerDestinationHandoffBridge() {
   return null;
 }
 
+function CustomerBookingPushNavigationBridge() {
+  useEffect(
+    () => subscribeToCustomerBookingPushNavigation(() => {
+      if (!navigationRef.isReady()) return false;
+      navigationRef.navigate('BookingsTab', { screen: 'MyBookings' });
+      return true;
+    }),
+    [],
+  );
+  return null;
+}
+
 // Mounted only when authenticated (see App.tsx) — every screen here assumes a logged-in
 // customer, matching the web app's book/layout.tsx + account/layout.tsx RequireRole gates.
 // Text-only tab labels (no icon library added) — active tab reads via color + weight, matching
@@ -84,6 +97,7 @@ export default function RootNavigator() {
     <>
       <GuestBookingHandoffBridge />
       <CustomerDestinationHandoffBridge />
+      <CustomerBookingPushNavigationBridge />
       <Tab.Navigator
         screenOptions={{
         headerShown: false,

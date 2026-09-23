@@ -170,6 +170,22 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     expect(messages[0].title).not.toBe('Booking cancelled');
   });
 
+  it('localizes a customer booking reminder with IDs-only navigation data', async () => {
+    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
+    await service.dispatchLocalizedToUser('customer-1', 'bookingReminder', 'Haircut', {
+      type: 'booking.reminder',
+      bookingId: 'b1',
+      salonId: 's1',
+    });
+    expect(expo.send).toHaveBeenCalledWith([
+      expect.objectContaining({
+        title: 'Appointment reminder',
+        body: expect.stringContaining('15 minutes'),
+        data: { type: 'booking.reminder', bookingId: 'b1', salonId: 's1' },
+      }),
+    ]);
+  });
+
   it('marks arrival-check pushes with the actionable notification category', async () => {
     prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
     await service.dispatchLocalizedToUser('owner-1', 'arrivalCheck', 'Haircut', {

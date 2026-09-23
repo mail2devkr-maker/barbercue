@@ -16,6 +16,8 @@ import {
 } from '../lib/push-notifications';
 import {
   parseOwnerBookingPushData,
+  parseCustomerBookingPushData,
+  requestCustomerBookingPushNavigation,
   requestOwnerBookingPushNavigation,
   type OwnerBookingPushData,
 } from '../lib/push-navigation';
@@ -50,6 +52,10 @@ if (Platform.OS !== 'web') {
 
 function isOwner(user: MeResponse | null): user is MeResponse {
   return Boolean(user?.roles.includes(Role.SALON_OWNER));
+}
+
+function isCustomer(user: MeResponse | null): user is MeResponse {
+  return Boolean(user?.roles.includes(Role.CUSTOMER));
 }
 
 function bookingDetailPath(salonId: string, bookingId: string): string {
@@ -93,6 +99,14 @@ export function PushNotificationCoordinator() {
       return true;
     }
     requestOwnerBookingPushNavigation(payload);
+    return true;
+  }
+
+  function handleCustomerBookingResponse(response: Notifications.NotificationResponse, actor: MeResponse | null): boolean {
+    if (!isCustomer(actor)) return false;
+    const payload = parseCustomerBookingPushData(response.notification.request.content.data);
+    if (!payload) return false;
+    requestCustomerBookingPushNavigation(payload);
     return true;
   }
 
@@ -166,7 +180,7 @@ export function PushNotificationCoordinator() {
     });
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      if (!handleOwnerBookingResponse(response, currentUserRef.current)) {
+      if (!handleOwnerBookingResponse(response, currentUserRef.current) && !handleCustomerBookingResponse(response, currentUserRef.current)) {
         deferredResponseRef.current = response;
       }
     });
@@ -177,7 +191,7 @@ export function PushNotificationCoordinator() {
     void Notifications.getLastNotificationResponseAsync()
       .then((response) => {
         if (!mounted || !response) return;
-        if (handleOwnerBookingResponse(response, currentUserRef.current)) {
+        if (handleOwnerBookingResponse(response, currentUserRef.current) || handleCustomerBookingResponse(response, currentUserRef.current)) {
           void Notifications.clearLastNotificationResponseAsync();
         } else {
           deferredResponseRef.current = response;
@@ -200,7 +214,7 @@ export function PushNotificationCoordinator() {
     void registerPushDeviceForUser(user);
 
     const deferredResponse = deferredResponseRef.current;
-    if (deferredResponse && handleOwnerBookingResponse(deferredResponse, user)) {
+    if (deferredResponse && (handleOwnerBookingResponse(deferredResponse, user) || handleCustomerBookingResponse(deferredResponse, user))) {
       deferredResponseRef.current = null;
       void Notifications.clearLastNotificationResponseAsync();
     }

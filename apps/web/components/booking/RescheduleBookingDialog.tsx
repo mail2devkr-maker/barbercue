@@ -12,6 +12,7 @@ import {
   zonedDateKey,
   type AvailabilitySlotDto,
   type BookingDetailDto,
+  isCustomerBookingActionable,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
@@ -91,7 +92,10 @@ export function RescheduleBookingDialog({
   }, [selectedDate, booking.salonId, serviceIds, booking.preferredStaffId]);
 
   async function handleConfirm() {
-    if (!selectedSlot) return;
+    if (!selectedSlot || !isCustomerBookingActionable(booking)) {
+      if (!isCustomerBookingActionable(booking)) onClose();
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {

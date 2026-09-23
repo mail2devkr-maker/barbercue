@@ -7,6 +7,8 @@ import { BOOKING_PATHS, QUEUE_ENTRIES_PATH,
   formatMoney,
   formatZonedDateTime,
   zonedDateKey,
+  isCustomerBookingActionable,
+  isCustomerBookingUpcoming,
 } from "@barbercue/shared";
 import type {
   BookingDetailDto,
@@ -28,7 +30,6 @@ import { Button, LinkButton } from "../../../../components/ui/Button";
 import styles from "./bookings.module.css";
 
 const CANCELLABLE_STATUSES = new Set(["CONFIRMED", "PENDING_PAYMENT"]);
-const UPCOMING_STATUSES = new Set(["CONFIRMED", "PENDING_PAYMENT"]);
 
 function loadPage(cursor?: string): Promise<PaginatedResult<BookingDetailDto>> {
   const query = cursor ? `?cursor=${cursor}` : "";
@@ -109,7 +110,7 @@ function BookingRow({
       {booking.cancellationChargeAmount !== null && booking.cancellationChargeAmount > 0 && (
         <p className={styles.bookingRowMeta}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</p>
       )}
-      {CANCELLABLE_STATUSES.has(booking.status) && (
+      {CANCELLABLE_STATUSES.has(booking.status) && isCustomerBookingActionable(booking) && (
         <div style={{ marginTop: 8 }}>
           <Button type="button" variant="outline" onClick={() => onCancel(booking)}>
             Cancel
@@ -228,8 +229,8 @@ export default function MyBookingsPage() {
     setBookings((prev) => prev.map((b) => (b.id === bookingId ? { ...b, hasReview: true } : b)));
   }
 
-  const upcoming = bookings.filter((b) => UPCOMING_STATUSES.has(b.status));
-  const past = bookings.filter((b) => !UPCOMING_STATUSES.has(b.status));
+  const upcoming = bookings.filter((b) => isCustomerBookingUpcoming(b));
+  const past = bookings.filter((b) => !isCustomerBookingUpcoming(b));
   const nextBooking = [...upcoming].sort(
     (a, b) => new Date(a.slotStart).getTime() - new Date(b.slotStart).getTime(),
   )[0];
@@ -299,7 +300,7 @@ export default function MyBookingsPage() {
               {formatStatus(nextBooking.status)}
             </span>
             <div className={styles.nextChairActions}>
-              {CANCELLABLE_STATUSES.has(nextBooking.status) && (
+              {CANCELLABLE_STATUSES.has(nextBooking.status) && isCustomerBookingActionable(nextBooking) && (
                 <Button variant="outline" onClick={() => setCancelTarget(nextBooking)}>
                   Cancel
                 </Button>

@@ -9,6 +9,8 @@ import {
   formatBookingArrivalTime,
   formatMoney,
   formatZonedDateTime,
+  isCustomerBookingActionable,
+  isBookingSlotInFuture,
 } from '@barbercue/shared';
 import type {
   BookingDetailDto,
@@ -39,7 +41,7 @@ const EARLY_CHECKIN_WINDOW_MINUTES = 15;
 function canCheckIn(booking: BookingDetailDto): boolean {
   if (booking.status !== 'CONFIRMED') return false;
   const minutesUntilSlot = (new Date(booking.slotStart).getTime() - Date.now()) / 60_000;
-  return minutesUntilSlot <= EARLY_CHECKIN_WINDOW_MINUTES;
+  return isBookingSlotInFuture(booking.slotStart) && minutesUntilSlot <= EARLY_CHECKIN_WINDOW_MINUTES;
 }
 
 function statusColor(status: string): string {
@@ -126,7 +128,7 @@ export default function BookingDetailScreen({ route }: Props) {
   }
 
   async function startCancelFlow() {
-    if (!booking) return;
+    if (!booking || !isCustomerBookingActionable(booking)) return;
     setConfirming(true);
     setPreviewLoading(true);
     setError(null);
@@ -145,7 +147,10 @@ export default function BookingDetailScreen({ route }: Props) {
   }
 
   async function confirmCancel() {
-    if (!booking) return;
+    if (!booking || !isCustomerBookingActionable(booking)) {
+      setConfirming(false);
+      return;
+    }
     setCancelling(true);
     try {
       const result = await apiFetch<CancelBookingResponseDto>(
@@ -303,7 +308,7 @@ export default function BookingDetailScreen({ route }: Props) {
       {actionError && <InlineError message={actionError} />}
       {rebookError && <InlineError message={rebookError} />}
 
-      {CANCELLABLE_STATUSES.has(booking.status) && !confirming && (
+      {CANCELLABLE_STATUSES.has(booking.status) && isCustomerBookingActionable(booking) && !confirming && (
         <View style={styles.linkRow}>
           <Button title={t.cancelBookingAction} variant="secondary" onPress={() => void startCancelFlow()} style={styles.linkButton} />
           <Button
@@ -315,7 +320,7 @@ export default function BookingDetailScreen({ route }: Props) {
         </View>
       )}
 
-      {rescheduling && (
+      {rescheduling && isCustomerBookingActionable(booking) && (
         <RescheduleSheet
           booking={booking}
           onClose={() => setRescheduling(false)}
