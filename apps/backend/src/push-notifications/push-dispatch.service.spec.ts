@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { Language } from '@barbercue/shared';
+import { Language, NotificationCategory, NotificationChannel } from '@barbercue/shared';
 import { PushDispatchService } from './push-dispatch.service';
 import { PushDeviceService } from './push-device.service';
 import { ExpoPushSender } from './expo-push-sender';
@@ -12,7 +12,7 @@ describe('PushDispatchService', () => {
     removeStaleTokens: jest.Mock;
   };
   let expo: { send: jest.Mock };
-  let prisma: { user: { findUnique: jest.Mock } };
+  let prisma: { user: { findUnique: jest.Mock }; notificationPreference: { findUnique: jest.Mock } };
 
   beforeEach(async () => {
     devices = {
@@ -20,7 +20,10 @@ describe('PushDispatchService', () => {
       removeStaleTokens: jest.fn().mockResolvedValue(undefined),
     };
     expo = { send: jest.fn().mockResolvedValue([]) };
-    prisma = { user: { findUnique: jest.fn().mockResolvedValue({ preferredLanguage: Language.EN }) } };
+    prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue({ preferredLanguage: Language.EN }) },
+      notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         PushDispatchService,
@@ -114,7 +117,7 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
   let service: PushDispatchService;
   let devices: { devicesForUser: jest.Mock; removeStaleTokens: jest.Mock };
   let expo: { send: jest.Mock };
-  let prisma: { user: { findUnique: jest.Mock } };
+  let prisma: { user: { findUnique: jest.Mock }; notificationPreference: { findUnique: jest.Mock } };
 
   beforeEach(async () => {
     devices = {
@@ -122,7 +125,10 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
       removeStaleTokens: jest.fn().mockResolvedValue(undefined),
     };
     expo = { send: jest.fn().mockResolvedValue([{ status: 'ok' }]) };
-    prisma = { user: { findUnique: jest.fn() } };
+    prisma = {
+      user: { findUnique: jest.fn() },
+      notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         PushDispatchService,
@@ -224,6 +230,38 @@ describe('PushDispatchService.dispatchLocalizedToUser', () => {
     expect(messages[0]).not.toHaveProperty('channelId');
     expect(messages[0]).not.toHaveProperty('sound');
     expect(messages[0]).not.toHaveProperty('priority');
+  });
+
+  it('does not dispatch when PUSH is disabled for the matching category', async () => {
+    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
+    prisma.notificationPreference.findUnique.mockResolvedValue({ enabled: false });
+    await service.dispatchLocalizedToUser('customer-1', 'bookingReminder', 'Haircut', {
+      type: 'booking.reminder',
+      bookingId: 'b1',
+      salonId: 's1',
+    });
+    expect(devices.devicesForUser).not.toHaveBeenCalled();
+    expect(expo.send).not.toHaveBeenCalled();
+  });
+
+  it('checks PUSH preference independently from the IN_APP channel', async () => {
+    prisma.user.findUnique.mockResolvedValue({ preferredLanguage: Language.EN });
+    prisma.notificationPreference.findUnique.mockResolvedValue({ enabled: true });
+    await service.dispatchLocalizedToUser('customer-1', 'bookingReminder', 'Haircut', {
+      type: 'booking.reminder',
+      bookingId: 'b1',
+      salonId: 's1',
+    });
+    expect(prisma.notificationPreference.findUnique).toHaveBeenCalledWith({
+      where: {
+        userId_category_channel: {
+          userId: 'customer-1',
+          category: NotificationCategory.REMINDERS,
+          channel: NotificationChannel.PUSH,
+        },
+      },
+    });
+    expect(expo.send).toHaveBeenCalledTimes(1);
   });
 
   it('degrades to English rather than failing when the recipient-language lookup itself throws', async () => {

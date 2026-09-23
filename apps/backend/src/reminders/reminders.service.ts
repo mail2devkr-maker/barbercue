@@ -15,8 +15,9 @@ export const REMINDER_WINDOW_MINUTES = 15;
  * Appointment reminders (Phase 12) — a periodic sweep, not a per-booking scheduled job (no job
  * queue infrastructure exists in this codebase, and one isn't warranted for a once-per-booking
  * reminder at this scale). Every CONFIRMED/PENDING_PAYMENT booking entering the reminder window
- * gets exactly one in-app notification, tracked via Booking.reminderSentAt so the sweep never
- * double-reminds even if it overlaps its own previous run.
+ * is durably claimed exactly once, tracked via Booking.reminderSentAt so the sweep never
+ * double-reminds even if it overlaps its own previous run. When the IN_APP channel is enabled,
+ * that claim also creates one in-app notification; native PUSH is gated independently afterward.
  *
  * The in-app row is committed with the claim; the native OS push is dispatched only after that
  * transaction succeeds, so provider/network work can never hold a database transaction open.
@@ -38,7 +39,7 @@ export class RemindersService {
   }
 
   /** The actual sweep logic, separated from the @Cron wrapper so it's directly unit-testable
-   * without simulating cron timing. Returns how many reminders were sent. */
+   * without simulating cron timing. Returns how many reminder claims committed. */
   async sendDueReminders(): Promise<number> {
     const now = new Date();
     const windowEnd = new Date(
@@ -97,7 +98,10 @@ export class RemindersService {
         });
         if (claim.count === 0) return false;
 
-        return this.notifications.notifyInTransaction(
+        // IN_APP preference gating is intentionally independent from the durable reminder claim.
+        // The native PUSH preference is evaluated after commit by PushDispatchService, so an
+        // in-app opt-out must not suppress an enabled native push.
+        await this.notifications.notifyInTransaction(
           tx,
           booking.customerId,
           'booking.reminder',
@@ -109,6 +113,7 @@ export class RemindersService {
           },
           'account/bookings',
         );
+        return true;
       });
       if (sent) {
         sentCount += 1;

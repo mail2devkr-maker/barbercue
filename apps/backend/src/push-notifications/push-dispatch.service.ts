@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { PushDevice } from '@prisma/client';
-import { Language, pushCopyFor } from '@barbercue/shared';
+import {
+  Language,
+  NotificationCategory,
+  NotificationChannel,
+  pushCopyFor,
+} from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushDeviceService } from './push-device.service';
 import {
@@ -25,6 +30,17 @@ export interface PushPayload {
 // the one push where silence defeats its purpose, so it names the channel explicitly and requests
 // the default tone rather than relying on Expo/FCM's fallback channel.
 const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
+
+const PUSH_KIND_CATEGORY: Record<
+  'newBooking' | 'bookingRescheduled' | 'bookingCancelled' | 'bookingReminder' | 'arrivalCheck',
+  NotificationCategory
+> = {
+  newBooking: NotificationCategory.BOOKING_UPDATES,
+  bookingRescheduled: NotificationCategory.BOOKING_UPDATES,
+  bookingCancelled: NotificationCategory.BOOKING_UPDATES,
+  bookingReminder: NotificationCategory.REMINDERS,
+  arrivalCheck: NotificationCategory.BOOKING_UPDATES,
+};
 
 // Only for log lines — never the full token. A stable-but-non-reversible-looking prefix is enough
 // to correlate log lines with a specific device during debugging without exposing the credential.
@@ -61,6 +77,10 @@ export class PushDispatchService {
     serviceName: string | null,
     data: Record<string, unknown>,
   ): Promise<void> {
+    // PUSH is deliberately gated independently from the IN_APP notification center. A reminder
+    // may be opted out of in-app while its native push remains enabled (and vice versa).
+    if (!(await this.isPushEnabled(userId, PUSH_KIND_CATEGORY[kind]))) return;
+
     let preferredLanguage: Language | null = null;
     try {
       const recipient = await this.prisma.user.findUnique({
@@ -85,6 +105,28 @@ export class PushDispatchService {
           }
         : {}),
     });
+  }
+
+  private async isPushEnabled(
+    userId: string,
+    category: NotificationCategory,
+  ): Promise<boolean> {
+    try {
+      const preference = await this.prisma.notificationPreference.findUnique({
+        where: {
+          userId_category_channel: {
+            userId,
+            category,
+            channel: NotificationChannel.PUSH,
+          },
+        },
+      });
+      return preference?.enabled ?? true;
+    } catch (err) {
+      // Preference lookup failure must not turn a booking event into a silent notification loss.
+      this.logger.warn(`Could not load push preference, defaulting to enabled: ${errorMessage(err)}`);
+      return true;
+    }
   }
 
   /**

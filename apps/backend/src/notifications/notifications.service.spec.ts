@@ -216,7 +216,7 @@ describe('NotificationsService', () => {
       }
     });
 
-    it('reports IN_APP as the only available channel', async () => {
+    it('reports native PUSH and IN_APP as available channels', async () => {
       const result = await service.getPreferences('user1');
       const bookingUpdates = result.categories.find(
         (c) => c.category === 'BOOKING_UPDATES',
@@ -226,7 +226,7 @@ describe('NotificationsService', () => {
       );
       expect(byChannel).toEqual({
         IN_APP: true,
-        PUSH: false,
+        PUSH: true,
         EMAIL: false,
         SMS: false,
         WHATSAPP: false,

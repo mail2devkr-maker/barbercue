@@ -99,12 +99,12 @@ describe('RemindersService', () => {
     expect(slotStart.lte.getTime()).toBeGreaterThan(slotStart.gt.getTime());
   });
 
-  it('does not dispatch a push when the in-app notification preference declines the row', async () => {
+  it('keeps the durable claim and dispatches PUSH when IN_APP preference declines the row', async () => {
     prisma.booking.findMany.mockResolvedValueOnce([makeDueBooking()]);
     notifications.notifyInTransaction.mockResolvedValueOnce(false);
-    await expect(service.sendDueReminders()).resolves.toBe(0);
+    await expect(service.sendDueReminders()).resolves.toBe(1);
     expect(tx.booking.updateMany).toHaveBeenCalledTimes(1);
-    expect(pushDispatch.dispatchLocalizedToUser).not.toHaveBeenCalled();
+    expect(pushDispatch.dispatchLocalizedToUser).toHaveBeenCalledTimes(1);
   });
 
   it('rolls the claim back on notification failure so a later sweep can retry', async () => {
