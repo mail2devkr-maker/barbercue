@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BOOKING_PATHS, type BookingDetailDto, type QueueEntryDetailDto } from "@barbercue/shared";
+import { BOOKING_PATHS, isBookingSlotInFuture, type BookingDetailDto, type QueueEntryDetailDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { Button } from "../ui/Button";
@@ -15,7 +15,7 @@ const EARLY_CHECKIN_WINDOW_MINUTES = 15;
 export function canCheckIn(booking: BookingDetailDto): boolean {
   if (booking.status !== "CONFIRMED") return false;
   const minutesUntilSlot = (new Date(booking.slotStart).getTime() - Date.now()) / 60_000;
-  return minutesUntilSlot <= EARLY_CHECKIN_WINDOW_MINUTES;
+  return isBookingSlotInFuture(booking.slotStart) && minutesUntilSlot <= EARLY_CHECKIN_WINDOW_MINUTES;
 }
 
 /** Once checked in, a booking can never be checked in again (the backend keys ALREADY_CHECKED_IN

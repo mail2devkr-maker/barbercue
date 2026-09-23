@@ -47,11 +47,13 @@ const ALL_CHANNELS: NotificationChannel[] = [
   NotificationChannel.SMS,
   NotificationChannel.WHATSAPP,
 ];
-// The only channel with a real, configured provider today — see EmailSender/ConsoleEmailSender's
-// own doc comment for why EMAIL isn't in this set (no production email provider is wired either).
-// Single source of truth for both notify()'s gating and getPreferences()'s `available` field.
+// Native PUSH is now a configured provider alongside the in-app notification center. Email/SMS/
+// WhatsApp remain unavailable until their delivery providers are wired. This is the single source
+// of truth for getPreferences()'s `available` field; each channel is gated independently by its
+// own preference row.
 const AVAILABLE_CHANNELS = new Set<NotificationChannel>([
   NotificationChannel.IN_APP,
+  NotificationChannel.PUSH,
 ]);
 
 /**

@@ -2446,6 +2446,7 @@ export interface PushCopy {
   newBooking(serviceName: string | null): { title: string; body: string };
   bookingRescheduled(serviceName: string | null): { title: string; body: string };
   bookingCancelled(serviceName: string | null): { title: string; body: string };
+  bookingReminder(serviceName: string | null): { title: string; body: string };
   /** P0 arrival-alert mission — the one-shot T-5-minute push. Never a customer name (see
    * ArrivalAlertDto's own comment on why one is never invented). */
   arrivalCheck(serviceName: string | null): { title: string; body: string };
@@ -2463,6 +2464,10 @@ const enPush: PushCopy = {
   bookingCancelled: (serviceName) => ({
     title: 'Booking cancelled',
     body: serviceName ? `${serviceName} booking was cancelled.` : 'A booking at your shop was cancelled.',
+  }),
+  bookingReminder: (serviceName) => ({
+    title: 'Appointment reminder',
+    body: serviceName ? `${serviceName} appointment starts in about 15 minutes.` : 'Your appointment starts in about 15 minutes.',
   }),
   arrivalCheck: (serviceName) => ({
     title: 'Appointment in 5 minutes',
@@ -2484,6 +2489,10 @@ const hiPush: PushCopy = {
   bookingCancelled: (serviceName) => ({
     title: 'बुकिंग रद्द हुई',
     body: serviceName ? `${serviceName} बुकिंग रद्द कर दी गई।` : 'आपकी दुकान की एक बुकिंग रद्द कर दी गई।',
+  }),
+  bookingReminder: (serviceName) => ({
+    title: 'अपॉइंटमेंट रिमाइंडर',
+    body: serviceName ? `${serviceName} अपॉइंटमेंट लगभग 15 मिनट में शुरू होगी।` : 'आपकी अपॉइंटमेंट लगभग 15 मिनट में शुरू होगी।',
   }),
   arrivalCheck: (serviceName) => ({
     title: 'अपॉइंटमेंट 5 मिनट में',

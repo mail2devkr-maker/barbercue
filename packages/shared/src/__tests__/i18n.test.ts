@@ -148,6 +148,7 @@ describe('pushCopyFor', () => {
       expect(copy.newBooking('Haircut').body).toBeTruthy();
       expect(copy.bookingCancelled('Haircut').title).toBeTruthy();
       expect(copy.bookingCancelled('Haircut').body).toBeTruthy();
+      expect(copy.bookingReminder('Haircut').body).toContain('15');
     }
   });
 

@@ -3,28 +3,24 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { BookingStatus, summarizeServiceNames } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 
 // How far ahead of a booking's slotStart the reminder fires. A single fixed window for V1 — no
 // per-user configurable window UI exists yet (that's Phase 13's communication-preferences job) —
 // but it's a named constant precisely so that becomes a one-line change, not a rewrite.
-export const REMINDER_WINDOW_MINUTES = 60;
-// The sweep runs every 5 minutes, so a booking could in principle enter the reminder window up to
-// ~5 minutes before the sweep notices it; this floor keeps a booking that's already essentially
-// starting from getting a "your appointment is coming up" reminder that arrives after the fact.
-const REMINDER_MIN_LEAD_MINUTES = 5;
+export const REMINDER_WINDOW_MINUTES = 15;
 
 /**
  * Appointment reminders (Phase 12) — a periodic sweep, not a per-booking scheduled job (no job
  * queue infrastructure exists in this codebase, and one isn't warranted for a once-per-booking
  * reminder at this scale). Every CONFIRMED/PENDING_PAYMENT booking entering the reminder window
- * gets exactly one in-app notification, tracked via Booking.reminderSentAt so the sweep never
- * double-reminds even if it overlaps its own previous run.
+ * is durably claimed exactly once, tracked via Booking.reminderSentAt so the sweep never
+ * double-reminds even if it overlaps its own previous run. When the IN_APP channel is enabled,
+ * that claim also creates one in-app notification; native PUSH is gated independently afterward.
  *
- * This is in-app/foreground only — see BARBERCUE_NON_PAYMENT_FEATURE_STATUS.md for the explicit
- * BLOCKED status on true Android background push (no FCM V1 credentials configured). A customer
- * only sees this reminder if the app/site is open when NotificationBell polls, or the next time
- * they open it — never a system-tray push while the app is closed.
+ * The in-app row is committed with the claim; the native OS push is dispatched only after that
+ * transaction succeeds, so provider/network work can never hold a database transaction open.
  */
 @Injectable()
 export class RemindersService {
@@ -33,32 +29,29 @@ export class RemindersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly pushDispatch: PushDispatchService,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_MINUTE)
   async sweep(): Promise<void> {
     const count = await this.sendDueReminders();
     if (count > 0) this.logger.log(`Sent ${count} appointment reminder(s).`);
   }
 
   /** The actual sweep logic, separated from the @Cron wrapper so it's directly unit-testable
-   * without simulating cron timing. Returns how many reminders were sent. */
+   * without simulating cron timing. Returns how many reminder claims committed. */
   async sendDueReminders(): Promise<number> {
     const now = new Date();
     const windowEnd = new Date(
       now.getTime() + REMINDER_WINDOW_MINUTES * 60_000,
     );
-    const windowStart = new Date(
-      now.getTime() + REMINDER_MIN_LEAD_MINUTES * 60_000,
-    );
-
     const due = await this.prisma.booking.findMany({
       where: {
         status: {
           in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
         },
         reminderSentAt: null,
-        slotStart: { gte: windowStart, lt: windowEnd },
+        slotStart: { gt: now, lte: windowEnd },
       },
       select: {
         id: true,
@@ -99,13 +92,16 @@ export class RemindersService {
               in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
             },
             reminderSentAt: null,
-            slotStart: { gte: windowStart, lt: windowEnd },
+            slotStart: { gt: now, lte: windowEnd },
           },
           data: { reminderSentAt: now },
         });
         if (claim.count === 0) return false;
 
-        return this.notifications.notifyInTransaction(
+        // IN_APP preference gating is intentionally independent from the durable reminder claim.
+        // The native PUSH preference is evaluated after commit by PushDispatchService, so an
+        // in-app opt-out must not suppress an enabled native push.
+        await this.notifications.notifyInTransaction(
           tx,
           booking.customerId,
           'booking.reminder',
@@ -117,8 +113,19 @@ export class RemindersService {
           },
           'account/bookings',
         );
+        return true;
       });
-      if (sent) sentCount += 1;
+      if (sent) {
+        sentCount += 1;
+        // Push delivery is deliberately after commit. PushDispatchService is best-effort and
+        // catches provider failures; reminderSentAt + the in-app notification remain durable.
+        await this.pushDispatch.dispatchLocalizedToUser(
+          booking.customerId,
+          'bookingReminder',
+          serviceName,
+          { type: 'booking.reminder', bookingId: booking.id, salonId: booking.salonId },
+        );
+      }
     }
 
     return sentCount;

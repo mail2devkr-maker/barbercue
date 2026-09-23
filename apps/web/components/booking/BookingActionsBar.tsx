@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { BookingDetailDto } from "@barbercue/shared";
+import { isCustomerBookingActionable, type BookingDetailDto } from "@barbercue/shared";
 import { directionsUrl, rebookUrl, salonPageUrl, shareOrCopy, whatsappShareUrl } from "../../lib/booking-actions";
 import styles from "./booking.module.css";
 
@@ -51,7 +51,7 @@ export function BookingActionsBar({
       <Link href={rebookUrl(booking)} className={styles.actionLink}>
         Book again
       </Link>
-      {onReschedule && CANCELLABLE_STATUSES.has(booking.status) && (
+      {onReschedule && CANCELLABLE_STATUSES.has(booking.status) && isCustomerBookingActionable(booking) && (
         <button type="button" className={styles.actionLink} onClick={() => onReschedule(booking)}>
           Reschedule
         </button>

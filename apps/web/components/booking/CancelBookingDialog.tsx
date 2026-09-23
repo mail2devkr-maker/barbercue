@@ -10,6 +10,7 @@ import {
   type BookingDetailDto,
   type CancelBookingResponseDto,
   type CancellationPolicyDto,
+  isCustomerBookingActionable,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
@@ -81,6 +82,10 @@ export function CancelBookingDialog({
   }, [booking.salonId, booking.slotStart, booking.servicePrice, booking.discountedServicePrice]);
 
   async function handleConfirm() {
+    if (!isCustomerBookingActionable(booking)) {
+      onClose();
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {

@@ -16,7 +16,9 @@ interface StoredPushDevice {
   userId: string;
 }
 export function isPushEligibleUser(user: MeResponse | null): user is MeResponse {
-  return Boolean(user?.roles.some((role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF));
+  return Boolean(user?.roles.some((role) =>
+    role === Role.CUSTOMER || role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+  ));
 }
 
 function isNativePlatform(): boolean {
@@ -100,7 +102,9 @@ async function registerExpoPushToken(user: MeResponse, expoPushToken: string): P
 /**
  * Best-effort registration only. A denied permission, unsupported runtime, offline call or missing
  * EAS project identity never interferes with the authenticated product flow; the coordinator
- * retries on the next eligible app start and on Expo token refresh.
+ * retries on the next eligible app start and on Expo token refresh. Customers are eligible too so
+ * native booking reminders can reach the account that owns the appointment; browser NotificationBell
+ * polling remains a separate in-app web channel.
  *
  * Issue 6 (mobile stabilization mission) — a real device reported voice announcements working but
  * Android OS push never arriving, and production had zero PushDevice rows despite an actively-used
