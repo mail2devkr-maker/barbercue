@@ -237,12 +237,42 @@ export class CitiesService {
     // Prisma stores every String/id field as Postgres `text`, never a native `uuid` column
     // (confirmed via \d cities) -- comparing against the zod-validated UUID string directly, no
     // ::uuid cast (which would fail with "operator does not exist: text = uuid").
+    // Prefer the normalized Country/Region foreign keys, but keep registration/search usable
+    // for legacy/manual City rows that still only have countryCode/regionCode populated. Those
+    // rows are valid enough for the existing registration contract (which already re-checks the
+    // chosen countryCode) and must not disappear merely because the global-location enrichment
+    // has not linked their nullable countryId/regionId yet. This is exactly the failure mode that
+    // can make an existing business city such as Jharsuguda invisible to the live typeahead.
+    //
+    // The fallback remains scoped by the caller's selected Country/Region rows; it never becomes
+    // an unscoped global name search.
     const conditions: Prisma.Sql[] = [
-      Prisma.sql`c."countryId" = ${query.countryId}`,
-      Prisma.sql`c.name ILIKE ${containsPattern} ESCAPE '\\'`,
+      Prisma.sql`(
+        c."countryId" = ${query.countryId}
+        OR (
+          c."countryId" IS NULL
+          AND c."countryCode" = (
+            SELECT country."isoCode2"
+            FROM "Country" country
+            WHERE country.id = ${query.countryId}
+          )
+        )
+      )`,
+      Prisma.sql`c.name ILIKE ${containsPattern} ESCAPE '\\\\'`,
     ];
     if (query.regionId) {
-      conditions.push(Prisma.sql`c."regionId" = ${query.regionId}`);
+      conditions.push(Prisma.sql`(
+        c."regionId" = ${query.regionId}
+        OR (
+          c."regionId" IS NULL
+          AND c."regionCode" = (
+            SELECT region.code
+            FROM "Region" region
+            WHERE region.id = ${query.regionId}
+              AND region."countryId" = ${query.countryId}
+          )
+        )
+      )`);
     }
 
     const rows = await this.prisma.$queryRaw<CitySearchRow[]>(Prisma.sql`

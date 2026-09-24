@@ -216,12 +216,64 @@ describe('CitiesService', () => {
       ]);
     });
 
+    it('keeps a legacy city searchable when countryId is still null but countryCode matches the selected country', async () => {
+      prisma.$queryRaw.mockResolvedValue([
+        {
+          id: 'jharsuguda-city',
+          name: 'Jharsuguda',
+          slug: 'jharsuguda',
+          countryCode: 'IN',
+          regionId: null,
+          regionName: null,
+          regionCode: null,
+        },
+      ]);
+
+      const result = await service.searchCities({
+        countryId: 'india-country-id',
+        q: 'Jharsuguda',
+      });
+
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      const sqlText = sqlFragment.strings.join(' ');
+      expect(sqlText).toContain('c."countryId" IS NULL');
+      expect(sqlText).toContain('FROM "Country" country');
+      expect(sqlText).toContain('c."countryCode"');
+      expect(sqlFragment.values.filter((value: unknown) => value === 'india-country-id')).toHaveLength(2);
+      expect(result).toEqual([
+        {
+          id: 'jharsuguda-city',
+          name: 'Jharsuguda',
+          slug: 'jharsuguda',
+          countryCode: 'IN',
+          region: null,
+        },
+      ]);
+    });
+
     it('includes the region filter in the query parameters when regionId is provided', async () => {
       prisma.$queryRaw.mockResolvedValue([]);
       await service.searchCities({ countryId: 'country-1', regionId: 'region-1', q: 'mum' });
       const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
       expect(sqlFragment.values).toContain('country-1');
       expect(sqlFragment.values).toContain('region-1');
+    });
+    it('falls back to regionCode when a legacy city has no regionId but the owner selected a region', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+
+      await service.searchCities({
+        countryId: 'india-country-id',
+        regionId: 'odisha-region-id',
+        q: 'jhar',
+      });
+
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      const sqlText = sqlFragment.strings.join(' ');
+      expect(sqlText).toContain('c."regionId" IS NULL');
+      expect(sqlText).toContain('c."regionCode"');
+      expect(sqlText).toContain('FROM "Region" region');
+      expect(sqlFragment.values).toContain('odisha-region-id');
+      expect(sqlFragment.values).toContain('india-country-id');
     });
 
     it('maps a city with no region to region: null', async () => {
