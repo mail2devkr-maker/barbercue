@@ -216,6 +216,16 @@ describe('CitiesService', () => {
       ]);
     });
 
+    it('does not emit an explicit LIKE ESCAPE clause that Postgres can reject as multi-character', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+
+      await service.searchCities({ countryId: 'country-1', q: 'jhar' });
+
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      const sqlText = sqlFragment.strings.join(' ');
+      expect(sqlText).not.toContain('ESCAPE');
+    });
+
     it('keeps a legacy city searchable when countryId is still null but countryCode matches the selected country', async () => {
       prisma.$queryRaw.mockResolvedValue([
         {
