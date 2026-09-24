@@ -2,12 +2,17 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   BookingErrorCode,
   BookingStatus,
+  ChairStatus,
   QueueEntrySource,
   ServiceSessionStatus,
+  type BarberValueDto,
+  type DailyServiceValueDto,
   type HourCountDto,
+  type HourServiceValueDto,
   type OwnerAnalyticsDto,
   type OwnerAnalyticsRange,
   type ServicePopularityDto,
+  type ServiceValueDto,
   type UtilizationEntryDto,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,26 +32,37 @@ import {
 
 const PEAK_SLOW_HOUR_COUNT = 5;
 
+type ValueFact = {
+  at: Date;
+  value: number;
+  serviceId: string;
+  serviceName: string;
+  source: 'BOOKING' | 'WALK_IN';
+};
+
+type AnalyticsSession = {
+  staffId: string;
+  chairId: string;
+  startedAt: Date;
+  endedAt: Date | null;
+  staff?: { displayName: string } | null;
+  chair?: { label: string } | null;
+  service?: { id?: string; name: string; price: unknown } | null;
+  queueEntry?: {
+    bookingId: string | null;
+    source: QueueEntrySource;
+    booking?: BookingWithServiceSnapshot | null;
+  } | null;
+};
+
 /**
- * Owner operational analytics (Phase 9) — real DB aggregates only, no external analytics provider
- * and no invented numbers. Every query is scoped by salonId via
- * SalonAccessService.assertOwnerOrAdminAccess (Part 2: also admits a delegated PLATFORM_ADMIN on
- * an ACTIVE salon), same isolation guarantee as every other owner dashboard endpoint. Read-only —
- * no mutation happens here, so unlike the salon-setup services there is nothing to attribute to an
- * AuditLog row for the admin path.
+ * Owner operational analytics — real DB aggregates only, no external analytics provider and no
+ * invented numbers. Every query is salon-scoped through SalonAccessService.
  *
- * estimatedServiceValue is a clearly-labeled estimate (listed price x completed bookings) — never
- * a record of money actually collected, since BarberCue does not process payment. See its own doc
- * comment on OwnerAnalyticsDto.
- *
- * Production-safety hardening (P1) — multi-service booking core mission follow-up:
- * estimatedServiceValue and servicePopularity both used to read only a completed booking's
- * PRIMARY service (Booking.serviceId), silently under-counting/under-valuing every other selected
- * service on a multi-service appointment. Both now derive from resolveEffectiveBookingServices'
- * full per-booking service list (falling back to the live Service join for a rolling-deploy
- * booking with zero BookingService rows — see that helper's own doc comment), so a Haircut +
- * Beard Trim appointment counts toward BOTH services' popularity and contributes its COMPLETE
- * combined price to estimatedServiceValue, not just Haircut's.
+ * FastQue does not observe a salon's complete cash/card settlement ledger, so the business-value
+ * charts are intentionally derived from listed-price snapshots for completed appointments plus
+ * listed prices for completed walk-ins. The API and UI call these numbers "estimated service
+ * value", never audited sales/revenue.
  */
 @Injectable()
 export class DashboardAnalyticsService {
@@ -88,14 +104,21 @@ export class DashboardAnalyticsService {
     }
 
     const { from, to } = this.resolveRange(timeZone, rangeRaw, fromRaw, toRaw);
+    const now = new Date();
+    const capacityTo = new Date(Math.min(to.getTime(), now.getTime()));
 
     const [
       statusCounts,
       completedBookings,
+      lostBookings,
       walkInCount,
       allBookingsInRange,
       queueWaitSamples,
       completedSessions,
+      operatingHours,
+      activeChairCount,
+      capacitySessions,
+      manualOccupancies,
     ] = await Promise.all([
       this.prisma.booking.groupBy({
         by: ['status'],
@@ -109,11 +132,25 @@ export class DashboardAnalyticsService {
           slotStart: { gte: from, lt: to },
         },
         select: {
+          id: true,
           customerId: true,
+          slotStart: true,
           serviceId: true,
-          // Multi-service booking core mission (P1 follow-up) — the full selection, not just the
-          // primary service; `service` is kept too as resolveEffectiveBookingServices' fallback for
-          // a rolling-deploy booking with zero BookingService rows.
+          service: { select: { name: true, durationMinutes: true, price: true } },
+          services: {
+            select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+          },
+        },
+      }),
+      this.prisma.booking.findMany({
+        where: {
+          salonId,
+          status: { in: [BookingStatus.CANCELLED, BookingStatus.NO_SHOW] },
+          slotStart: { gte: from, lt: to },
+        },
+        select: {
+          status: true,
+          serviceId: true,
           service: { select: { name: true, durationMinutes: true, price: true } },
           services: {
             select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
@@ -152,16 +189,98 @@ export class DashboardAnalyticsService {
           endedAt: true,
           staff: { select: { displayName: true } },
           chair: { select: { label: true } },
+          service: { select: { id: true, name: true, price: true } },
+          queueEntry: {
+            select: {
+              bookingId: true,
+              source: true,
+              booking: {
+                select: {
+                  serviceId: true,
+                  service: { select: { name: true, durationMinutes: true, price: true } },
+                  services: {
+                    select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+                  },
+                },
+              },
+            },
+          },
         },
+      }),
+      this.prisma.operatingHours.findMany({
+        where: { salonId },
+        select: { dayOfWeek: true, openTime: true, closeTime: true, isClosed: true },
+      }),
+      this.prisma.chair.count({
+        where: { salonId, status: ChairStatus.ACTIVE },
+      }),
+      this.prisma.serviceSession.findMany({
+        where: {
+          chair: { salonId },
+          startedAt: { lt: capacityTo },
+          OR: [{ endedAt: null }, { endedAt: { gt: from } }],
+        },
+        select: { startedAt: true, endedAt: true },
+      }),
+      this.prisma.manualChairOccupancy.findMany({
+        where: {
+          salonId,
+          startedAt: { lt: capacityTo },
+          OR: [{ endedAt: null }, { endedAt: { gt: from } }],
+        },
+        select: { startedAt: true, endedAt: true },
       }),
     ]);
 
     const countByStatus = new Map<string, number>();
-    for (const row of statusCounts)
-      countByStatus.set(row.status, row._count._all);
+    for (const row of statusCounts) countByStatus.set(row.status, row._count._all);
 
-    const { newCustomerCount, repeatCustomerCount } =
-      await this.classifyCustomers(salonId, completedBookings, from);
+    const customerClassification = await this.classifyCustomers(
+      salonId,
+      completedBookings,
+      from,
+    );
+
+    const completedSessionRows = completedSessions as unknown as AnalyticsSession[];
+    const valueFacts = this.valueFacts(completedBookings, completedSessionRows);
+    const walkInCompletedSessions = completedSessionRows.filter(
+      (session) => session.queueEntry?.source === QueueEntrySource.WALK_IN,
+    );
+
+    const newCustomerEstimatedServiceValue = completedBookings.reduce(
+      (sum, booking) =>
+        customerClassification.newVisitBookings.has(booking)
+          ? sum + this.bookingValue(booking)
+          : sum,
+      0,
+    );
+    const repeatCustomerEstimatedServiceValue = completedBookings.reduce(
+      (sum, booking) =>
+        customerClassification.newVisitBookings.has(booking)
+          ? sum
+          : sum + this.bookingValue(booking),
+      0,
+    );
+
+    const cancelledEstimatedServiceValue = lostBookings
+      .filter((booking) => booking.status === BookingStatus.CANCELLED)
+      .reduce((sum, booking) => sum + this.bookingValue(booking), 0);
+    const noShowEstimatedServiceValue = lostBookings
+      .filter((booking) => booking.status === BookingStatus.NO_SHOW)
+      .reduce((sum, booking) => sum + this.bookingValue(booking), 0);
+
+    const busyChairMinutes =
+      this.occupiedMinutesInRange(capacitySessions, from, capacityTo) +
+      this.occupiedMinutesInRange(manualOccupancies, from, capacityTo);
+    const openMinutes =
+      capacityTo > from
+        ? this.openMinutesInRange(from, capacityTo, timeZone, operatingHours)
+        : 0;
+    const chairCapacityMinutes = activeChairCount * openMinutes;
+    const canCalculateIdle = activeChairCount > 0 && operatingHours.length > 0;
+    const idleChairMinutes = canCalculateIdle
+      ? Math.max(0, Math.round(chairCapacityMinutes - busyChairMinutes))
+      : null;
 
     return {
       from: from.toISOString(),
@@ -169,33 +288,48 @@ export class DashboardAnalyticsService {
       currency: salon.currency ?? null,
       appointmentsBooked: allBookingsInRange.length,
       completedCount: countByStatus.get(BookingStatus.COMPLETED) ?? 0,
+      confirmedCount: countByStatus.get(BookingStatus.CONFIRMED) ?? 0,
+      pendingPaymentCount: countByStatus.get(BookingStatus.PENDING_PAYMENT) ?? 0,
       cancelledCount: countByStatus.get(BookingStatus.CANCELLED) ?? 0,
       noShowCount: countByStatus.get(BookingStatus.NO_SHOW) ?? 0,
+      expiredCount: countByStatus.get(BookingStatus.EXPIRED) ?? 0,
       walkInCount,
-      newCustomerCount,
-      repeatCustomerCount,
+      newCustomerCount: customerClassification.newCustomerCount,
+      repeatCustomerCount: customerClassification.repeatCustomerCount,
       averageWaitMinutes: this.averageWaitMinutes(queueWaitSamples),
-      averageServiceDurationMinutes:
-        this.averageServiceDurationMinutes(completedSessions),
+      averageServiceDurationMinutes: this.averageServiceDurationMinutes(completedSessionRows),
       barberUtilization: this.utilizationBy(
-        completedSessions,
-        (s) => s.staffId,
-        (s) => s.staff?.displayName ?? null,
+        completedSessionRows,
+        (session) => session.staffId,
+        (session) => session.staff?.displayName ?? null,
       ),
       chairUtilization: this.utilizationBy(
-        completedSessions,
-        (s) => s.chairId,
-        (s) => s.chair?.label ?? null,
+        completedSessionRows,
+        (session) => session.chairId,
+        (session) => session.chair?.label ?? null,
       ),
       ...this.hourDistribution(allBookingsInRange, timeZone),
-      servicePopularity: this.servicePopularity(completedBookings),
-      // Multi-service booking core mission (P1 follow-up) — the COMPLETE combined price of every
-      // selected service on each completed booking, never just the primary one.
-      estimatedServiceValue: completedBookings.reduce(
-        (sum, b) =>
-          sum + resolveEffectiveBookingServices(b).reduce((s, svc) => s + Number(svc.price), 0),
-        0,
-      ),
+      servicePopularity: this.servicePopularity(valueFacts),
+      estimatedServiceValue: valueFacts.reduce((sum, fact) => sum + fact.value, 0),
+      dailyServiceValue: this.dailyServiceValue(valueFacts, from, to, timeZone),
+      serviceValue: this.serviceValue(valueFacts),
+      barberValue: this.barberValue(completedSessionRows),
+      sourceMix: {
+        bookingCompletedCount: completedBookings.length,
+        walkInCompletedCount: walkInCompletedSessions.length,
+      },
+      hourlyServiceValue: this.hourlyServiceValue(valueFacts, timeZone),
+      newCustomerEstimatedServiceValue,
+      repeatCustomerEstimatedServiceValue,
+      lostOpportunity: {
+        cancelledEstimatedServiceValue,
+        noShowEstimatedServiceValue,
+        idleChairMinutes,
+        idleChairPercent:
+          idleChairMinutes !== null && chairCapacityMinutes > 0
+            ? Math.round((idleChairMinutes / chairCapacityMinutes) * 100)
+            : null,
+      },
     };
   }
 
@@ -213,11 +347,7 @@ export class DashboardAnalyticsService {
     if (range === 'custom' && fromRaw && toRaw) {
       const from = new Date(fromRaw);
       const to = new Date(toRaw);
-      if (
-        !Number.isNaN(from.getTime()) &&
-        !Number.isNaN(to.getTime()) &&
-        from < to
-      ) {
+      if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && from < to) {
         return { from, to };
       }
       throw new AppException(
@@ -227,10 +357,6 @@ export class DashboardAnalyticsService {
       );
     }
 
-    // Calendar-day arithmetic, not a fixed 24h-per-day assumption: a local day spans 23 or 25
-    // real hours across a DST transition, so "tomorrow midnight" and "N days ago" are computed by
-    // adding whole calendar days in the salon's own zone, then converting each boundary to an
-    // instant — never by adding N * 86_400_000 milliseconds to an instant.
     const today = utcToZonedDateStr(new Date(), timeZone);
     const daysBack = range === '7d' ? 7 : range === '30d' ? 30 : 1;
     const fromDate = addZonedCalendarDays(today, -(daysBack - 1));
@@ -247,23 +373,27 @@ export class DashboardAnalyticsService {
     return { from, to };
   }
 
-  /**
-   * A customer is "new" in this range if the completed booking(s) they have here are their only
-   * ones ever — i.e. no completed booking at this salon strictly before `from`. Everyone else who
-   * completed a visit in-range is "repeat". Purely a completed-visit-count fact, same principle as
-   * OwnerCustomerSummaryDto's segment field.
-   */
   private async classifyCustomers(
     salonId: string,
-    completedBookings: { customerId: string }[],
+    completedBookings: Array<{
+      customerId: string;
+      slotStart?: Date;
+    }>,
     from: Date,
-  ): Promise<{ newCustomerCount: number; repeatCustomerCount: number }> {
-    const customerIds = [
-      ...new Set(completedBookings.map((b) => b.customerId)),
-    ];
+  ): Promise<{
+    newCustomerCount: number;
+    repeatCustomerCount: number;
+    newVisitBookings: Set<(typeof completedBookings)[number]>;
+  }> {
+    const customerIds = [...new Set(completedBookings.map((booking) => booking.customerId))];
     if (customerIds.length === 0) {
-      return { newCustomerCount: 0, repeatCustomerCount: 0 };
+      return {
+        newCustomerCount: 0,
+        repeatCustomerCount: 0,
+        newVisitBookings: new Set(),
+      };
     }
+
     const priorVisitors = await this.prisma.booking.groupBy({
       by: ['customerId'],
       where: {
@@ -274,14 +404,208 @@ export class DashboardAnalyticsService {
       },
       _count: { _all: true },
     });
-    const priorIds = new Set(priorVisitors.map((r) => r.customerId));
-    const repeatCustomerCount = customerIds.filter((id) =>
-      priorIds.has(id),
-    ).length;
-    return {
-      newCustomerCount: customerIds.length - repeatCustomerCount,
-      repeatCustomerCount,
-    };
+    const priorCustomerIds = new Set(priorVisitors.map((row) => row.customerId));
+    const visitsByCustomer = new Map<string, (typeof completedBookings)[number][]>();
+    for (const booking of completedBookings) {
+      const visits = visitsByCustomer.get(booking.customerId) ?? [];
+      visits.push(booking);
+      visitsByCustomer.set(booking.customerId, visits);
+    }
+
+    const newVisitBookings = new Set<(typeof completedBookings)[number]>();
+    let newCustomerCount = 0;
+    let repeatCustomerCount = 0;
+
+    for (const [customerId, visits] of visitsByCustomer) {
+      visits.sort(
+        (a, b) =>
+          (a.slotStart?.getTime() ?? 0) - (b.slotStart?.getTime() ?? 0),
+      );
+      if (priorCustomerIds.has(customerId)) {
+        repeatCustomerCount += 1;
+        continue;
+      }
+      newCustomerCount += 1;
+      if (visits[0]) newVisitBookings.add(visits[0]);
+      if (visits.length > 1) repeatCustomerCount += 1;
+    }
+
+    return { newCustomerCount, repeatCustomerCount, newVisitBookings };
+  }
+
+  private bookingValue(booking: BookingWithServiceSnapshot): number {
+    return resolveEffectiveBookingServices(booking).reduce(
+      (sum, service) => sum + Number(service.price),
+      0,
+    );
+  }
+
+  private sessionValue(session: AnalyticsSession): number {
+    if (session.queueEntry?.booking) {
+      return this.bookingValue(session.queueEntry.booking);
+    }
+    return Number(session.service?.price ?? 0);
+  }
+
+  private valueFacts(
+    completedBookings: Array<BookingWithServiceSnapshot & { slotStart: Date }>,
+    sessions: AnalyticsSession[],
+  ): ValueFact[] {
+    const facts: ValueFact[] = [];
+    for (const booking of completedBookings) {
+      for (const service of resolveEffectiveBookingServices(booking)) {
+        facts.push({
+          at: booking.slotStart ?? new Date(0),
+          value: Number(service.price),
+          serviceId: service.serviceId,
+          serviceName: service.serviceName,
+          source: 'BOOKING',
+        });
+      }
+    }
+    for (const session of sessions) {
+      if (session.queueEntry?.source !== QueueEntrySource.WALK_IN) continue;
+      if (!session.service) continue;
+      facts.push({
+        at: session.endedAt ?? session.startedAt,
+        value: Number(session.service.price),
+        serviceId: session.service.id ?? session.service.name,
+        serviceName: session.service.name,
+        source: 'WALK_IN',
+      });
+    }
+    return facts;
+  }
+
+  private dailyServiceValue(
+    facts: ValueFact[],
+    from: Date,
+    to: Date,
+    timeZone: string,
+  ): DailyServiceValueDto[] {
+    const byDate = new Map<string, DailyServiceValueDto>();
+    for (const fact of facts) {
+      const date = utcToZonedDateStr(fact.at, timeZone);
+      const existing = byDate.get(date);
+      if (existing) {
+        existing.completedCount += 1;
+        existing.estimatedServiceValue += fact.value;
+      } else {
+        byDate.set(date, { date, completedCount: 1, estimatedServiceValue: fact.value });
+      }
+    }
+
+    const result: DailyServiceValueDto[] = [];
+    let date = utcToZonedDateStr(from, timeZone);
+    const finalDate = utcToZonedDateStr(new Date(to.getTime() - 1), timeZone);
+    while (date <= finalDate) {
+      result.push(
+        byDate.get(date) ?? { date, completedCount: 0, estimatedServiceValue: 0 },
+      );
+      date = addZonedCalendarDays(date, 1);
+    }
+    return result;
+  }
+
+  private serviceValue(facts: ValueFact[]): ServiceValueDto[] {
+    const byService = new Map<string, ServiceValueDto>();
+    for (const fact of facts) {
+      const existing = byService.get(fact.serviceId);
+      if (existing) {
+        existing.completedCount += 1;
+        existing.estimatedServiceValue += fact.value;
+      } else {
+        byService.set(fact.serviceId, {
+          serviceId: fact.serviceId,
+          name: fact.serviceName,
+          completedCount: 1,
+          estimatedServiceValue: fact.value,
+        });
+      }
+    }
+    return [...byService.values()].sort(
+      (a, b) => b.estimatedServiceValue - a.estimatedServiceValue,
+    );
+  }
+
+  private barberValue(sessions: AnalyticsSession[]): BarberValueDto[] {
+    const byStaff = new Map<string, BarberValueDto>();
+    for (const session of sessions) {
+      const value = this.sessionValue(session);
+      const existing = byStaff.get(session.staffId);
+      if (existing) {
+        existing.completedSessions += 1;
+        existing.estimatedServiceValue += value;
+      } else {
+        byStaff.set(session.staffId, {
+          staffId: session.staffId,
+          displayName: session.staff?.displayName ?? 'Unknown',
+          completedSessions: 1,
+          estimatedServiceValue: value,
+        });
+      }
+    }
+    return [...byStaff.values()].sort(
+      (a, b) => b.estimatedServiceValue - a.estimatedServiceValue,
+    );
+  }
+
+  private hourlyServiceValue(
+    facts: ValueFact[],
+    timeZone: string,
+  ): HourServiceValueDto[] {
+    const rows = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      completedCount: 0,
+      estimatedServiceValue: 0,
+    }));
+    for (const fact of facts) {
+      const hour = zonedHourOf(fact.at, timeZone);
+      rows[hour].completedCount += 1;
+      rows[hour].estimatedServiceValue += fact.value;
+    }
+    return rows;
+  }
+
+  private openMinutesInRange(
+    from: Date,
+    to: Date,
+    timeZone: string,
+    hours: Array<{
+      dayOfWeek: number;
+      openTime: string;
+      closeTime: string;
+      isClosed: boolean;
+    }>,
+  ): number {
+    if (hours.length === 0) return 0;
+    const byDay = new Map(hours.map((row) => [row.dayOfWeek, row]));
+    let date = utcToZonedDateStr(from, timeZone);
+    const finalDate = utcToZonedDateStr(new Date(to.getTime() - 1), timeZone);
+    let total = 0;
+
+    while (date <= finalDate) {
+      const dayOfWeek = new Date(`${date}T12:00:00.000Z`).getUTCDay();
+      const row = byDay.get(dayOfWeek);
+      if (row && !row.isClosed) {
+        const open = zonedWallTimeToUtc(date, row.openTime, timeZone);
+        const overnight = this.timeToMinutes(row.closeTime) <= this.timeToMinutes(row.openTime);
+        const closeDate = overnight ? addZonedCalendarDays(date, 1) : date;
+        const close = zonedWallTimeToUtc(closeDate, row.closeTime, timeZone);
+        if (open && close) {
+          const overlapStart = Math.max(open.getTime(), from.getTime());
+          const overlapEnd = Math.min(close.getTime(), to.getTime());
+          if (overlapEnd > overlapStart) total += (overlapEnd - overlapStart) / 60_000;
+        }
+      }
+      date = addZonedCalendarDays(date, 1);
+    }
+    return total;
+  }
+
+  private timeToMinutes(value: string): number {
+    const [hour = '0', minute = '0'] = value.split(':');
+    return Number(hour) * 60 + Number(minute);
   }
 
   private averageWaitMinutes(
@@ -289,79 +613,73 @@ export class DashboardAnalyticsService {
   ): number | null {
     const waits = samples
       .filter(
-        (s): s is { joinedAt: Date; calledAt: Date } => s.calledAt !== null,
+        (sample): sample is { joinedAt: Date; calledAt: Date } =>
+          sample.calledAt !== null && sample.calledAt >= sample.joinedAt,
       )
-      .map((s) => (s.calledAt.getTime() - s.joinedAt.getTime()) / 60_000);
+      .map((sample) => (sample.calledAt.getTime() - sample.joinedAt.getTime()) / 60_000);
     if (waits.length === 0) return null;
-    return Math.round(waits.reduce((sum, m) => sum + m, 0) / waits.length);
+    return Math.round(waits.reduce((sum, minutes) => sum + minutes, 0) / waits.length);
   }
 
   private averageServiceDurationMinutes(
     sessions: { startedAt: Date; endedAt: Date | null }[],
   ): number | null {
     const durations = sessions
-      .filter(
-        (s): s is { startedAt: Date; endedAt: Date } => s.endedAt !== null,
-      )
-      .map((s) => (s.endedAt.getTime() - s.startedAt.getTime()) / 60_000);
+      .filter((session): session is { startedAt: Date; endedAt: Date } => session.endedAt !== null)
+      .map((session) => (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000);
     if (durations.length === 0) return null;
-    return Math.round(
-      durations.reduce((sum, m) => sum + m, 0) / durations.length,
-    );
+    const average = durations.reduce((sum, minutes) => sum + minutes, 0) / durations.length;
+    return Math.round(average * 10) / 10;
   }
 
   private utilizationBy(
-    sessions: {
-      startedAt: Date;
-      endedAt: Date | null;
-      staffId: string;
-      chairId: string;
-      staff?: { displayName: string } | null;
-      chair?: { label: string } | null;
-    }[],
-    keyOf: (s: (typeof sessions)[number]) => string,
-    nameOf: (s: (typeof sessions)[number]) => string | null,
+    sessions: AnalyticsSession[],
+    keyOf: (session: AnalyticsSession) => string,
+    nameOf: (session: AnalyticsSession) => string | null,
   ): UtilizationEntryDto[] {
-    const byKey = new Map<string, UtilizationEntryDto>();
+    const raw = new Map<
+      string,
+      { id: string; displayName: string; completedSessions: number; totalServiceMinutes: number }
+    >();
     for (const session of sessions) {
       const id = keyOf(session);
       const name = nameOf(session) ?? 'Unknown';
       const minutes = session.endedAt
-        ? (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000
+        ? Math.max(0, (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000)
         : 0;
-      const existing = byKey.get(id);
+      const existing = raw.get(id);
       if (existing) {
         existing.completedSessions += 1;
-        existing.totalServiceMinutes += Math.round(minutes);
+        existing.totalServiceMinutes += minutes;
       } else {
-        byKey.set(id, {
+        raw.set(id, {
           id,
           displayName: name,
           completedSessions: 1,
-          totalServiceMinutes: Math.round(minutes),
+          totalServiceMinutes: minutes,
         });
       }
     }
-    return [...byKey.values()].sort(
-      (a, b) => b.completedSessions - a.completedSessions,
-    );
+    return [...raw.values()]
+      .map((row) => ({
+        ...row,
+        totalServiceMinutes: Math.round(row.totalServiceMinutes * 10) / 10,
+      }))
+      .sort((a, b) => b.completedSessions - a.completedSessions);
   }
 
   private hourDistribution(
     bookings: { slotStart: Date }[],
     timeZone: string,
-  ): {
-    peakHours: HourCountDto[];
-    slowHours: HourCountDto[];
-  } {
+  ): { peakHours: HourCountDto[]; slowHours: HourCountDto[] } {
     const counts = new Map<number, number>();
-    for (const b of bookings) {
-      const hour = zonedHourOf(b.slotStart, timeZone);
+    for (const booking of bookings) {
+      const hour = zonedHourOf(booking.slotStart, timeZone);
       counts.set(hour, (counts.get(hour) ?? 0) + 1);
     }
     const entries: HourCountDto[] = [...counts.entries()]
       .map(([hour, count]) => ({ hour, count }))
-      .filter((e) => e.count > 0);
+      .filter((entry) => entry.count > 0);
     const peakHours = [...entries]
       .sort((a, b) => b.count - a.count)
       .slice(0, PEAK_SLOW_HOUR_COUNT);
@@ -371,28 +689,34 @@ export class DashboardAnalyticsService {
     return { peakHours, slowHours };
   }
 
-  // Multi-service booking core mission (P1 follow-up) — "popularity" now means "how many completed
-  // appointments included this service," counting every selected service once per booking it
-  // appears in (not only the primary one). A Haircut + Beard Trim appointment increments BOTH
-  // services' completedCount, not just Haircut's.
-  private servicePopularity(
-    bookings: BookingWithServiceSnapshot[],
-  ): ServicePopularityDto[] {
+  private servicePopularity(facts: ValueFact[]): ServicePopularityDto[] {
     const byService = new Map<string, ServicePopularityDto>();
-    for (const b of bookings) {
-      for (const svc of resolveEffectiveBookingServices(b)) {
-        const existing = byService.get(svc.serviceId);
-        if (existing) existing.completedCount += 1;
-        else
-          byService.set(svc.serviceId, {
-            serviceId: svc.serviceId,
-            name: svc.serviceName,
-            completedCount: 1,
-          });
+    for (const fact of facts) {
+      const existing = byService.get(fact.serviceId);
+      if (existing) {
+        existing.completedCount += 1;
+      } else {
+        byService.set(fact.serviceId, {
+          serviceId: fact.serviceId,
+          name: fact.serviceName,
+          completedCount: 1,
+        });
       }
     }
-    return [...byService.values()].sort(
-      (a, b) => b.completedCount - a.completedCount,
-    );
+    return [...byService.values()].sort((a, b) => b.completedCount - a.completedCount);
   }
+
+  private occupiedMinutesInRange(
+    rows: Array<{ startedAt: Date; endedAt: Date | null }>,
+    from: Date,
+    to: Date,
+  ): number {
+    if (to <= from) return 0;
+    return rows.reduce((sum, row) => {
+      const start = Math.max(row.startedAt.getTime(), from.getTime());
+      const end = Math.min((row.endedAt ?? to).getTime(), to.getTime());
+      return sum + (end > start ? (end - start) / 60_000 : 0);
+    }, 0);
+  }
+
 }

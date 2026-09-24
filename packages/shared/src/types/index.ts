@@ -760,8 +760,11 @@ export interface OwnerCustomerSummaryDto {
   currency: string | null;
   totalBookings: number;
   completedCount: number;
+  confirmedCount: number;
+  pendingPaymentCount: number;
   cancelledCount: number;
   noShowCount: number;
+  expiredCount: number;
   firstVisitAt: string | null; // ISO 8601 — earliest COMPLETED booking's slotStart
   lastVisitAt: string | null; // ISO 8601 — latest COMPLETED booking's slotStart
   preferredServiceName: string | null; // most-completed service at this salon, if any
@@ -815,9 +818,43 @@ export interface ServicePopularityDto {
   completedCount: number;
 }
 
-// BarberCue does not process payment (see the mission's explicit scope), so this is never a
-// record of money actually collected - purely listed-price x completed-bookings within the range,
-// clearly labeled as an estimate everywhere it's shown. Never call this "revenue" in any UI copy.
+export interface DailyServiceValueDto {
+  date: string; // YYYY-MM-DD in the salon's local timezone
+  completedCount: number;
+  estimatedServiceValue: number;
+}
+
+export interface ServiceValueDto {
+  serviceId: string;
+  name: string;
+  completedCount: number;
+  estimatedServiceValue: number;
+}
+
+export interface BarberValueDto {
+  staffId: string;
+  displayName: string;
+  completedSessions: number;
+  estimatedServiceValue: number;
+}
+
+export interface HourServiceValueDto {
+  hour: number; // 0-23 in the salon's local wall clock
+  completedCount: number;
+  estimatedServiceValue: number;
+}
+
+export interface LostOpportunityDto {
+  cancelledEstimatedServiceValue: number;
+  noShowEstimatedServiceValue: number;
+  idleChairMinutes: number | null;
+  idleChairPercent: number | null;
+}
+
+// FastQue does not observe a salon's complete cash/card settlement ledger, so these values are
+// never presented as audited revenue. They are operational service-value estimates derived from
+// listed-price snapshots for completed appointments plus listed prices for completed walk-ins.
+// This preserves the existing product rule: never call an estimate "revenue" in UI copy.
 export interface OwnerAnalyticsDto {
   from: string; // ISO 8601 — inclusive
   to: string; // ISO 8601 — exclusive
@@ -837,6 +874,17 @@ export interface OwnerAnalyticsDto {
   slowHours: HourCountDto[]; // bottom 5 hours that had at least one booking, ascending by count
   servicePopularity: ServicePopularityDto[]; // descending by completedCount
   estimatedServiceValue: number;
+  dailyServiceValue: DailyServiceValueDto[];
+  serviceValue: ServiceValueDto[];
+  barberValue: BarberValueDto[];
+  sourceMix: {
+    bookingCompletedCount: number;
+    walkInCompletedCount: number;
+  };
+  hourlyServiceValue: HourServiceValueDto[]; // always 24 rows, including zero-value hours
+  newCustomerEstimatedServiceValue: number;
+  repeatCustomerEstimatedServiceValue: number;
+  lostOpportunity: LostOpportunityDto;
 }
 
 export interface QueueEntryDto {
