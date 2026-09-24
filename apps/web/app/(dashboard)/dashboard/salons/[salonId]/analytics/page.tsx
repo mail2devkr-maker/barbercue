@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { DASHBOARD_PATHS, formatMoney, OWNER_ANALYTICS_RANGES } from "@barbercue/shared";
 import type {
   BarberValueDto,
@@ -81,7 +81,7 @@ function SectionCard({
 }: {
   title: string;
   subtitle?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section
