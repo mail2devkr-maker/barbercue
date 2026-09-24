@@ -523,18 +523,25 @@ describe('DashboardAnalyticsService', () => {
       }
       return Promise.resolve([]);
     });
-    prisma.serviceSession.findMany.mockResolvedValueOnce([
-      {
-        staffId: 'st1',
-        chairId: 'ch1',
-        startedAt: new Date('2026-06-01T04:30:00.000Z'),
-        endedAt: new Date('2026-06-01T05:30:00.000Z'),
-        staff: { displayName: 'Marcus' },
-        chair: { label: 'Chair 1' },
-        service: { id: 'sv1', name: 'Haircut', price: decimal('300') },
-        queueEntry: { bookingId: null, source: 'WALK_IN', booking: null },
-      },
-    ]);
+    prisma.serviceSession.findMany
+      .mockResolvedValueOnce([
+        {
+          staffId: 'st1',
+          chairId: 'ch1',
+          startedAt: new Date('2026-06-01T04:30:00.000Z'),
+          endedAt: new Date('2026-06-01T05:30:00.000Z'),
+          staff: { displayName: 'Marcus' },
+          chair: { label: 'Chair 1' },
+          service: { id: 'sv1', name: 'Haircut', price: decimal('300') },
+          queueEntry: { bookingId: null, source: 'WALK_IN', booking: null },
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          startedAt: new Date('2026-06-01T04:30:00.000Z'),
+          endedAt: new Date('2026-06-01T05:30:00.000Z'),
+        },
+      ]);
     prisma.operatingHours.findMany.mockResolvedValueOnce([
       { dayOfWeek: 1, openTime: '09:00', closeTime: '17:00', isClosed: false },
     ]);
@@ -552,6 +559,105 @@ describe('DashboardAnalyticsService', () => {
     expect(result.lostOpportunity.noShowEstimatedServiceValue).toBe(500);
     expect(result.lostOpportunity.idleChairMinutes).toBe(900);
     expect(result.lostOpportunity.idleChairPercent).toBe(94);
+  });
+
+  it('reconciles every scheduled appointment status so the headline total has no unexplained remainder', async () => {
+    prisma.booking.groupBy.mockResolvedValueOnce([
+      { status: 'COMPLETED', _count: { _all: 4 } },
+      { status: 'CONFIRMED', _count: { _all: 1 } },
+      { status: 'PENDING_PAYMENT', _count: { _all: 2 } },
+      { status: 'CANCELLED', _count: { _all: 3 } },
+      { status: 'NO_SHOW', _count: { _all: 1 } },
+      { status: 'EXPIRED', _count: { _all: 2 } },
+    ]);
+    prisma.booking.findMany.mockImplementation((args: any) => {
+      if (args.select?.slotStart && !args.where?.status) {
+        return Promise.resolve(Array.from({ length: 13 }, () => ({ slotStart: new Date() })));
+      }
+      return Promise.resolve([]);
+    });
+
+    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+
+    expect(result.appointmentsBooked).toBe(13);
+    expect(
+      result.completedCount +
+        result.confirmedCount +
+        result.pendingPaymentCount +
+        result.cancelledCount +
+        result.noShowCount +
+        result.expiredCount,
+    ).toBe(13);
+  });
+
+  it('counts a newly acquired customer as returning too when they complete another visit inside the selected range', async () => {
+    const first = new Date('2026-06-01T04:00:00.000Z');
+    const second = new Date('2026-06-02T04:00:00.000Z');
+    prisma.booking.findMany.mockResolvedValueOnce([
+      {
+        customerId: 'c1',
+        slotStart: first,
+        serviceId: 'sv1',
+        service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+        services: [],
+      },
+      {
+        customerId: 'c1',
+        slotStart: second,
+        serviceId: 'sv1',
+        service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+        services: [],
+      },
+    ]);
+
+    const result = await service.getAnalytics('owner1', 's1', '7d', undefined, undefined);
+
+    expect(result.newCustomerCount).toBe(1);
+    expect(result.repeatCustomerCount).toBe(1);
+    expect(result.newCustomerEstimatedServiceValue).toBe(300);
+    expect(result.repeatCustomerEstimatedServiceValue).toBe(300);
+  });
+
+  it('preserves sub-minute service duration instead of rounding genuine activity down to zero', async () => {
+    const start = new Date('2026-06-01T10:00:00.000Z');
+    prisma.serviceSession.findMany.mockResolvedValueOnce([
+      {
+        staffId: 'st1',
+        chairId: 'ch1',
+        startedAt: start,
+        endedAt: new Date(start.getTime() + 24_000),
+        staff: { displayName: 'Marcus' },
+        chair: { label: 'Chair 1' },
+      },
+    ]);
+
+    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+
+    expect(result.averageServiceDurationMinutes).toBe(0.4);
+    expect(result.barberUtilization[0]?.totalServiceMinutes).toBe(0.4);
+  });
+
+  it('includes completed walk-ins in service popularity and estimated service value', async () => {
+    prisma.serviceSession.findMany.mockResolvedValueOnce([
+      {
+        staffId: 'st1',
+        chairId: 'ch1',
+        startedAt: new Date('2026-06-01T10:00:00.000Z'),
+        endedAt: new Date('2026-06-01T10:20:00.000Z'),
+        staff: { displayName: 'Marcus' },
+        chair: { label: 'Chair 1' },
+        service: { id: 'sv-walk', name: 'Shave', price: decimal('175') },
+        queueEntry: { bookingId: null, source: 'WALK_IN', booking: null },
+      },
+    ]);
+
+    const result = await service.getAnalytics('owner1', 's1', 'today', undefined, undefined);
+
+    expect(result.estimatedServiceValue).toBe(175);
+    expect(result.servicePopularity).toEqual([
+      { serviceId: 'sv-walk', name: 'Shave', completedCount: 1 },
+    ]);
+    expect(result.sourceMix.walkInCompletedCount).toBe(1);
   });
 
 });
