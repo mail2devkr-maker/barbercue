@@ -119,6 +119,13 @@ function formatDay(date: string): string {
   });
 }
 
+function formatMinutes(value: number | null): string {
+  if (value === null) return "—";
+  if (value > 0 && value < 1) return "<1m";
+  if (Number.isInteger(value)) return `${value}m`;
+  return `${value.toFixed(1)}m`;
+}
+
 function LineChart({
   rows,
   currency,
@@ -460,24 +467,23 @@ export default function DashboardAnalyticsPage({
           {view === "overview" && (
             <>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 24 }}>
-                <StatTile label="Appointments booked" value={data.appointmentsBooked} />
+                <StatTile label="Appointments scheduled" value={data.appointmentsBooked} />
                 <StatTile label="Completed" value={data.completedCount} />
+                <StatTile label="Confirmed" value={data.confirmedCount} />
+                <StatTile label="Pending payment" value={data.pendingPaymentCount} />
                 <StatTile label="Cancelled" value={data.cancelledCount} />
                 <StatTile label="No-show" value={data.noShowCount} />
-                <StatTile label="Walk-ins" value={data.walkInCount} />
-                <StatTile label="New customers" value={data.newCustomerCount} />
-                <StatTile label="Repeat customers" value={data.repeatCustomerCount} />
+                <StatTile label="Expired" value={data.expiredCount} />
+                <StatTile label="Walk-ins joined" value={data.walkInCount} />
+                <StatTile label="New customers acquired" value={data.newCustomerCount} />
+                <StatTile label="Returning customers served" value={data.repeatCustomerCount} />
                 <StatTile
                   label="Avg wait"
-                  value={data.averageWaitMinutes !== null ? `${data.averageWaitMinutes}m` : "—"}
+                  value={formatMinutes(data.averageWaitMinutes)}
                 />
                 <StatTile
                   label="Avg service time"
-                  value={
-                    data.averageServiceDurationMinutes !== null
-                      ? `${data.averageServiceDurationMinutes}m`
-                      : "—"
-                  }
+                  value={formatMinutes(data.averageServiceDurationMinutes)}
                 />
                 <StatTile
                   label="Estimated service value"
@@ -510,7 +516,7 @@ export default function DashboardAnalyticsPage({
                   )}
                 </SectionCard>
 
-                <SectionCard title="Barber utilization">
+                <SectionCard title="Barber activity">
                   {data.barberUtilization.length === 0 ? (
                     <p className={styles.emptyState}>No completed sessions yet.</p>
                   ) : (
@@ -519,7 +525,7 @@ export default function DashboardAnalyticsPage({
                         <li key={row.id} className={styles.row}>
                           <span className={styles.rowTitle}>{row.displayName}</span>
                           <span className={styles.rowMeta}>
-                            {row.completedSessions} sessions · {row.totalServiceMinutes} min
+                            {row.completedSessions} sessions · {formatMinutes(row.totalServiceMinutes)}
                           </span>
                         </li>
                       ))}
@@ -527,7 +533,7 @@ export default function DashboardAnalyticsPage({
                   )}
                 </SectionCard>
 
-                <SectionCard title="Chair utilization">
+                <SectionCard title="Chair activity">
                   {data.chairUtilization.length === 0 ? (
                     <p className={styles.emptyState}>No completed sessions yet.</p>
                   ) : (
@@ -536,7 +542,7 @@ export default function DashboardAnalyticsPage({
                         <li key={row.id} className={styles.row}>
                           <span className={styles.rowTitle}>{row.displayName}</span>
                           <span className={styles.rowMeta}>
-                            {row.completedSessions} sessions · {row.totalServiceMinutes} min
+                            {row.completedSessions} sessions · {formatMinutes(row.totalServiceMinutes)}
                           </span>
                         </li>
                       ))}
@@ -587,7 +593,7 @@ export default function DashboardAnalyticsPage({
                   />
                 </SectionCard>
 
-                <SectionCard title="New vs repeat value" subtitle="Completed booked-appointment value by customer relationship.">
+                <SectionCard title="New vs repeat value" subtitle="Booked-appointment value by visit history: the first completed visit is new; later completed visits are repeat.">
                   <SplitBar
                     leftLabel="New"
                     leftValue={data.newCustomerEstimatedServiceValue}
@@ -629,9 +635,9 @@ export default function DashboardAnalyticsPage({
                     )}
                   />
                   <StatTile
-                    label="Booking opportunity"
+                    label="Cancelled + no-show value"
                     value={formatMoney(totalLostBookingValue, data.currency)}
-                    hint="Cancelled + no-show listed value"
+                    hint="Booked listed value; not guaranteed lost revenue"
                   />
                   <StatTile
                     label="Idle chair time"
@@ -656,7 +662,7 @@ export default function DashboardAnalyticsPage({
                   gap: 18,
                 }}
               >
-                <SectionCard title="Peak / slow booking hours">
+                <SectionCard title="Booking demand hours">
                   {data.peakHours.length === 0 ? (
                     <p className={styles.emptyState}>Not enough bookings yet.</p>
                   ) : (
@@ -677,7 +683,7 @@ export default function DashboardAnalyticsPage({
                   )}
                 </SectionCard>
 
-                <SectionCard title="Chair utilization">
+                <SectionCard title="Chair activity">
                   {data.chairUtilization.length === 0 ? (
                     <p className={styles.emptyState}>No completed sessions yet.</p>
                   ) : (
@@ -686,7 +692,7 @@ export default function DashboardAnalyticsPage({
                         <li key={row.id} className={styles.row}>
                           <span className={styles.rowTitle}>{row.displayName}</span>
                           <span className={styles.rowMeta}>
-                            {row.completedSessions} sessions · {row.totalServiceMinutes} min
+                            {row.completedSessions} sessions · {formatMinutes(row.totalServiceMinutes)}
                           </span>
                         </li>
                       ))}
