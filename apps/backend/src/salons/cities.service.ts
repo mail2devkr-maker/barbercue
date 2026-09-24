@@ -258,7 +258,7 @@ export class CitiesService {
           )
         )
       )`,
-      Prisma.sql`c.name ILIKE ${containsPattern} ESCAPE '\\\\'`,
+      Prisma.sql`c.name ILIKE ${containsPattern}`,
     ];
     if (query.regionId) {
       conditions.push(Prisma.sql`(
@@ -288,7 +288,7 @@ export class CitiesService {
       LEFT JOIN "Region" r ON r.id = c."regionId"
       WHERE ${Prisma.join(conditions, ' AND ')}
       ORDER BY
-        (c.name ILIKE ${prefixPattern} ESCAPE '\\') DESC,
+        (c.name ILIKE ${prefixPattern}) DESC,
         c.population DESC NULLS LAST,
         similarity(c.name, ${rawQuery}) DESC,
         c.name ASC
