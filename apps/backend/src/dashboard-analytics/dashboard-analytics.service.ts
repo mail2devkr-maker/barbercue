@@ -416,7 +416,7 @@ export class DashboardAnalyticsService {
     for (const booking of completedBookings) {
       for (const service of resolveEffectiveBookingServices(booking)) {
         facts.push({
-          at: booking.slotStart,
+          at: booking.slotStart ?? new Date(0),
           value: Number(service.price),
           serviceId: service.serviceId,
           serviceName: service.serviceName,
