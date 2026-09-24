@@ -14,6 +14,8 @@ describe('DashboardAnalyticsService', () => {
     booking: { groupBy: jest.Mock; findMany: jest.Mock };
     queueEntry: { count: jest.Mock; findMany: jest.Mock };
     serviceSession: { findMany: jest.Mock };
+    operatingHours: { findMany: jest.Mock };
+    chair: { count: jest.Mock };
   };
   let salonAccess: {
     assertOwnerOrAdminAccess: jest.Mock<
@@ -45,6 +47,8 @@ describe('DashboardAnalyticsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       serviceSession: { findMany: jest.fn().mockResolvedValue([]) },
+      operatingHours: { findMany: jest.fn().mockResolvedValue([]) },
+      chair: { count: jest.fn().mockResolvedValue(0) },
     };
     salonAccess = {
       assertOwnerOrAdminAccess: jest
@@ -411,4 +415,141 @@ describe('DashboardAnalyticsService', () => {
       true,
     );
   });
+  it('builds estimated value trend, service mix, barber mix, source mix, and new/repeat value from completed work', async () => {
+    prisma.booking.findMany.mockImplementation((args: any) => {
+      if (args.where?.status === 'COMPLETED') {
+        return Promise.resolve([
+          {
+            customerId: 'first-timer',
+            slotStart: new Date('2026-06-01T04:00:00.000Z'),
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: decimal('300') },
+              { serviceId: 'sv2', serviceName: 'Beard', durationMinutes: 15, price: decimal('150') },
+            ],
+          },
+          {
+            customerId: 'regular',
+            slotStart: new Date('2026-06-02T04:00:00.000Z'),
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+            services: [
+              { serviceId: 'sv1', serviceName: 'Haircut', durationMinutes: 30, price: decimal('300') },
+            ],
+          },
+        ]);
+      }
+      if (args.where?.status?.in) return Promise.resolve([]);
+      return Promise.resolve([
+        { slotStart: new Date('2026-06-01T04:00:00.000Z') },
+        { slotStart: new Date('2026-06-02T04:00:00.000Z') },
+      ]);
+    });
+    prisma.booking.groupBy.mockImplementation((args: { by: string[] }) => {
+      if (args.by.includes('customerId')) {
+        return Promise.resolve([{ customerId: 'regular', _count: { _all: 1 } }]);
+      }
+      return Promise.resolve([]);
+    });
+    prisma.serviceSession.findMany.mockResolvedValueOnce([
+      {
+        staffId: 'st1',
+        chairId: 'ch1',
+        startedAt: new Date('2026-06-02T08:30:00.000Z'),
+        endedAt: new Date('2026-06-02T09:00:00.000Z'),
+        staff: { displayName: 'Marcus' },
+        chair: { label: 'Chair 1' },
+        service: { id: 'sv3', name: 'Shave', price: decimal('200') },
+        queueEntry: { bookingId: null, source: 'WALK_IN', booking: null },
+      },
+    ]);
+
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'custom',
+      '2026-05-31T18:30:00.000Z',
+      '2026-06-03T18:30:00.000Z',
+    );
+
+    expect(result.estimatedServiceValue).toBe(950);
+    expect(result.sourceMix).toEqual({
+      bookingCompletedCount: 2,
+      walkInCompletedCount: 1,
+    });
+    expect(result.serviceValue).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ serviceId: 'sv1', estimatedServiceValue: 600 }),
+        expect.objectContaining({ serviceId: 'sv2', estimatedServiceValue: 150 }),
+        expect.objectContaining({ serviceId: 'sv3', estimatedServiceValue: 200 }),
+      ]),
+    );
+    expect(result.barberValue).toEqual([
+      {
+        staffId: 'st1',
+        displayName: 'Marcus',
+        completedSessions: 1,
+        estimatedServiceValue: 200,
+      },
+    ]);
+    expect(result.newCustomerEstimatedServiceValue).toBe(450);
+    expect(result.repeatCustomerEstimatedServiceValue).toBe(300);
+    expect(result.dailyServiceValue).toHaveLength(3);
+    expect(result.hourlyServiceValue).toHaveLength(24);
+    expect(result.hourlyServiceValue.find((row) => row.hour === 14)?.estimatedServiceValue).toBe(200);
+  });
+
+  it('calculates cancellation/no-show opportunity and idle-chair capacity from configured opening hours', async () => {
+    prisma.booking.findMany.mockImplementation((args: any) => {
+      if (args.where?.status === 'COMPLETED') return Promise.resolve([]);
+      if (args.where?.status?.in) {
+        return Promise.resolve([
+          {
+            status: 'CANCELLED',
+            serviceId: 'sv1',
+            service: { name: 'Haircut', durationMinutes: 30, price: decimal('300') },
+            services: [],
+          },
+          {
+            status: 'NO_SHOW',
+            serviceId: 'sv2',
+            service: { name: 'Facial', durationMinutes: 60, price: decimal('500') },
+            services: [],
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    prisma.serviceSession.findMany.mockResolvedValueOnce([
+      {
+        staffId: 'st1',
+        chairId: 'ch1',
+        startedAt: new Date('2026-06-01T04:30:00.000Z'),
+        endedAt: new Date('2026-06-01T05:30:00.000Z'),
+        staff: { displayName: 'Marcus' },
+        chair: { label: 'Chair 1' },
+        service: { id: 'sv1', name: 'Haircut', price: decimal('300') },
+        queueEntry: { bookingId: null, source: 'WALK_IN', booking: null },
+      },
+    ]);
+    prisma.operatingHours.findMany.mockResolvedValueOnce([
+      { dayOfWeek: 1, openTime: '09:00', closeTime: '17:00', isClosed: false },
+    ]);
+    prisma.chair.count.mockResolvedValueOnce(2);
+
+    const result = await service.getAnalytics(
+      'owner1',
+      's1',
+      'custom',
+      '2026-05-31T18:30:00.000Z',
+      '2026-06-01T18:30:00.000Z',
+    );
+
+    expect(result.lostOpportunity.cancelledEstimatedServiceValue).toBe(300);
+    expect(result.lostOpportunity.noShowEstimatedServiceValue).toBe(500);
+    expect(result.lostOpportunity.idleChairMinutes).toBe(900);
+    expect(result.lostOpportunity.idleChairPercent).toBe(94);
+  });
+
 });
