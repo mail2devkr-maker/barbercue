@@ -612,7 +612,10 @@ export class DashboardAnalyticsService {
     samples: { joinedAt: Date; calledAt: Date | null }[],
   ): number | null {
     const waits = samples
-      .filter((sample): sample is { joinedAt: Date; calledAt: Date } => sample.calledAt !== null)
+      .filter(
+        (sample): sample is { joinedAt: Date; calledAt: Date } =>
+          sample.calledAt !== null && sample.calledAt >= sample.joinedAt,
+      )
       .map((sample) => (sample.calledAt.getTime() - sample.joinedAt.getTime()) / 60_000);
     if (waits.length === 0) return null;
     return Math.round(waits.reduce((sum, minutes) => sum + minutes, 0) / waits.length);
