@@ -478,7 +478,7 @@ export default function DashboardAnalyticsPage({
                 <StatTile label="New customers acquired" value={data.newCustomerCount} />
                 <StatTile label="Returning customers served" value={data.repeatCustomerCount} />
                 <StatTile
-                  label="Avg wait"
+                  label="Avg queue wait"
                   value={formatMinutes(data.averageWaitMinutes)}
                 />
                 <StatTile
