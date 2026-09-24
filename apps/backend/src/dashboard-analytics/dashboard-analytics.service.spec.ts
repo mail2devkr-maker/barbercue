@@ -16,6 +16,7 @@ describe('DashboardAnalyticsService', () => {
     serviceSession: { findMany: jest.Mock };
     operatingHours: { findMany: jest.Mock };
     chair: { count: jest.Mock };
+    manualChairOccupancy: { findMany: jest.Mock };
   };
   let salonAccess: {
     assertOwnerOrAdminAccess: jest.Mock<
@@ -49,6 +50,7 @@ describe('DashboardAnalyticsService', () => {
       serviceSession: { findMany: jest.fn().mockResolvedValue([]) },
       operatingHours: { findMany: jest.fn().mockResolvedValue([]) },
       chair: { count: jest.fn().mockResolvedValue(0) },
+      manualChairOccupancy: { findMany: jest.fn().mockResolvedValue([]) },
     };
     salonAccess = {
       assertOwnerOrAdminAccess: jest
