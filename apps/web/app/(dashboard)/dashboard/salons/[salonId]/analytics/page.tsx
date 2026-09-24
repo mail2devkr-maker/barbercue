@@ -644,7 +644,7 @@ export default function DashboardAnalyticsPage({
                     value={
                       data.lostOpportunity.idleChairPercent === null
                         ? "—"
-                        : `${Math.round(data.lostOpportunity.idleChairMinutes / 60)}h`
+                        : `${Math.round((data.lostOpportunity.idleChairMinutes ?? 0) / 60)}h`
                     }
                     hint={
                       data.lostOpportunity.idleChairPercent === null

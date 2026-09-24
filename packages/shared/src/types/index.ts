@@ -760,11 +760,8 @@ export interface OwnerCustomerSummaryDto {
   currency: string | null;
   totalBookings: number;
   completedCount: number;
-  confirmedCount: number;
-  pendingPaymentCount: number;
   cancelledCount: number;
   noShowCount: number;
-  expiredCount: number;
   firstVisitAt: string | null; // ISO 8601 — earliest COMPLETED booking's slotStart
   lastVisitAt: string | null; // ISO 8601 — latest COMPLETED booking's slotStart
   preferredServiceName: string | null; // most-completed service at this salon, if any
@@ -861,8 +858,11 @@ export interface OwnerAnalyticsDto {
   currency: string | null;
   appointmentsBooked: number;
   completedCount: number;
+  confirmedCount: number;
+  pendingPaymentCount: number;
   cancelledCount: number;
   noShowCount: number;
+  expiredCount: number;
   walkInCount: number;
   newCustomerCount: number;
   repeatCustomerCount: number;
