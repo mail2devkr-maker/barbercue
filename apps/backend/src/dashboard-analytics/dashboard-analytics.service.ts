@@ -104,6 +104,8 @@ export class DashboardAnalyticsService {
     }
 
     const { from, to } = this.resolveRange(timeZone, rangeRaw, fromRaw, toRaw);
+    const now = new Date();
+    const capacityTo = new Date(Math.min(to.getTime(), now.getTime()));
 
     const [
       statusCounts,
@@ -115,6 +117,8 @@ export class DashboardAnalyticsService {
       completedSessions,
       operatingHours,
       activeChairCount,
+      capacitySessions,
+      manualOccupancies,
     ] = await Promise.all([
       this.prisma.booking.groupBy({
         by: ['status'],
@@ -128,6 +132,7 @@ export class DashboardAnalyticsService {
           slotStart: { gte: from, lt: to },
         },
         select: {
+          id: true,
           customerId: true,
           slotStart: true,
           serviceId: true,
@@ -209,6 +214,22 @@ export class DashboardAnalyticsService {
       this.prisma.chair.count({
         where: { salonId, status: ChairStatus.ACTIVE },
       }),
+      this.prisma.serviceSession.findMany({
+        where: {
+          chair: { salonId },
+          startedAt: { lt: capacityTo },
+          OR: [{ endedAt: null }, { endedAt: { gt: from } }],
+        },
+        select: { startedAt: true, endedAt: true },
+      }),
+      this.prisma.manualChairOccupancy.findMany({
+        where: {
+          salonId,
+          startedAt: { lt: capacityTo },
+          OR: [{ endedAt: null }, { endedAt: { gt: from } }],
+        },
+        select: { startedAt: true, endedAt: true },
+      }),
     ]);
 
     const countByStatus = new Map<string, number>();
@@ -222,26 +243,22 @@ export class DashboardAnalyticsService {
 
     const completedSessionRows = completedSessions as unknown as AnalyticsSession[];
     const valueFacts = this.valueFacts(completedBookings, completedSessionRows);
-    const appointmentValue = completedBookings.reduce(
-      (sum, booking) => sum + this.bookingValue(booking),
-      0,
-    );
     const walkInCompletedSessions = completedSessionRows.filter(
-      (session) => !session.queueEntry?.bookingId,
+      (session) => session.queueEntry?.source === QueueEntrySource.WALK_IN,
     );
 
     const newCustomerEstimatedServiceValue = completedBookings.reduce(
       (sum, booking) =>
-        customerClassification.repeatCustomerIds.has(booking.customerId)
-          ? sum
-          : sum + this.bookingValue(booking),
+        customerClassification.newVisitBookings.has(booking)
+          ? sum + this.bookingValue(booking)
+          : sum,
       0,
     );
     const repeatCustomerEstimatedServiceValue = completedBookings.reduce(
       (sum, booking) =>
-        customerClassification.repeatCustomerIds.has(booking.customerId)
-          ? sum + this.bookingValue(booking)
-          : sum,
+        customerClassification.newVisitBookings.has(booking)
+          ? sum
+          : sum + this.bookingValue(booking),
       0,
     );
 
@@ -252,18 +269,18 @@ export class DashboardAnalyticsService {
       .filter((booking) => booking.status === BookingStatus.NO_SHOW)
       .reduce((sum, booking) => sum + this.bookingValue(booking), 0);
 
-    const busyChairMinutes = completedSessionRows.reduce(
-      (sum, session) =>
-        sum +
-        (session.endedAt
-          ? Math.max(0, (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000)
-          : 0),
-      0,
-    );
-    const chairCapacityMinutes =
-      activeChairCount *
-      this.openMinutesInRange(from, to, timeZone, operatingHours);
-    const idleChairMinutes = Math.max(0, Math.round(chairCapacityMinutes - busyChairMinutes));
+    const busyChairMinutes =
+      this.occupiedMinutesInRange(capacitySessions, from, capacityTo) +
+      this.occupiedMinutesInRange(manualOccupancies, from, capacityTo);
+    const openMinutes =
+      capacityTo > from
+        ? this.openMinutesInRange(from, capacityTo, timeZone, operatingHours)
+        : 0;
+    const chairCapacityMinutes = activeChairCount * openMinutes;
+    const canCalculateIdle = activeChairCount > 0 && operatingHours.length > 0;
+    const idleChairMinutes = canCalculateIdle
+      ? Math.max(0, Math.round(chairCapacityMinutes - busyChairMinutes))
+      : null;
 
     return {
       from: from.toISOString(),
@@ -271,8 +288,11 @@ export class DashboardAnalyticsService {
       currency: salon.currency ?? null,
       appointmentsBooked: allBookingsInRange.length,
       completedCount: countByStatus.get(BookingStatus.COMPLETED) ?? 0,
+      confirmedCount: countByStatus.get(BookingStatus.CONFIRMED) ?? 0,
+      pendingPaymentCount: countByStatus.get(BookingStatus.PENDING_PAYMENT) ?? 0,
       cancelledCount: countByStatus.get(BookingStatus.CANCELLED) ?? 0,
       noShowCount: countByStatus.get(BookingStatus.NO_SHOW) ?? 0,
+      expiredCount: countByStatus.get(BookingStatus.EXPIRED) ?? 0,
       walkInCount,
       newCustomerCount: customerClassification.newCustomerCount,
       repeatCustomerCount: customerClassification.repeatCustomerCount,
@@ -289,13 +309,8 @@ export class DashboardAnalyticsService {
         (session) => session.chair?.label ?? null,
       ),
       ...this.hourDistribution(allBookingsInRange, timeZone),
-      servicePopularity: this.servicePopularity(completedBookings),
-      estimatedServiceValue:
-        appointmentValue +
-        walkInCompletedSessions.reduce(
-          (sum, session) => sum + this.sessionValue(session),
-          0,
-        ),
+      servicePopularity: this.servicePopularity(valueFacts),
+      estimatedServiceValue: valueFacts.reduce((sum, fact) => sum + fact.value, 0),
       dailyServiceValue: this.dailyServiceValue(valueFacts, from, to, timeZone),
       serviceValue: this.serviceValue(valueFacts),
       barberValue: this.barberValue(completedSessionRows),
@@ -311,7 +326,7 @@ export class DashboardAnalyticsService {
         noShowEstimatedServiceValue,
         idleChairMinutes,
         idleChairPercent:
-          chairCapacityMinutes > 0
+          idleChairMinutes !== null && chairCapacityMinutes > 0
             ? Math.round((idleChairMinutes / chairCapacityMinutes) * 100)
             : null,
       },
@@ -360,21 +375,25 @@ export class DashboardAnalyticsService {
 
   private async classifyCustomers(
     salonId: string,
-    completedBookings: { customerId: string }[],
+    completedBookings: Array<{
+      customerId: string;
+      slotStart?: Date;
+    }>,
     from: Date,
   ): Promise<{
     newCustomerCount: number;
     repeatCustomerCount: number;
-    repeatCustomerIds: Set<string>;
+    newVisitBookings: Set<(typeof completedBookings)[number]>;
   }> {
     const customerIds = [...new Set(completedBookings.map((booking) => booking.customerId))];
     if (customerIds.length === 0) {
       return {
         newCustomerCount: 0,
         repeatCustomerCount: 0,
-        repeatCustomerIds: new Set<string>(),
+        newVisitBookings: new Set(),
       };
     }
+
     const priorVisitors = await this.prisma.booking.groupBy({
       by: ['customerId'],
       where: {
@@ -385,13 +404,33 @@ export class DashboardAnalyticsService {
       },
       _count: { _all: true },
     });
-    const repeatCustomerIds = new Set(priorVisitors.map((row) => row.customerId));
-    const repeatCustomerCount = customerIds.filter((id) => repeatCustomerIds.has(id)).length;
-    return {
-      newCustomerCount: customerIds.length - repeatCustomerCount,
-      repeatCustomerCount,
-      repeatCustomerIds,
-    };
+    const priorCustomerIds = new Set(priorVisitors.map((row) => row.customerId));
+    const visitsByCustomer = new Map<string, (typeof completedBookings)[number][]>();
+    for (const booking of completedBookings) {
+      const visits = visitsByCustomer.get(booking.customerId) ?? [];
+      visits.push(booking);
+      visitsByCustomer.set(booking.customerId, visits);
+    }
+
+    const newVisitBookings = new Set<(typeof completedBookings)[number]>();
+    let newCustomerCount = 0;
+    let repeatCustomerCount = 0;
+
+    for (const [customerId, visits] of visitsByCustomer) {
+      visits.sort(
+        (a, b) =>
+          (a.slotStart?.getTime() ?? 0) - (b.slotStart?.getTime() ?? 0),
+      );
+      if (priorCustomerIds.has(customerId)) {
+        repeatCustomerCount += 1;
+        continue;
+      }
+      newCustomerCount += 1;
+      if (visits[0]) newVisitBookings.add(visits[0]);
+      if (visits.length > 1) repeatCustomerCount += 1;
+    }
+
+    return { newCustomerCount, repeatCustomerCount, newVisitBookings };
   }
 
   private bookingValue(booking: BookingWithServiceSnapshot): number {
@@ -425,7 +464,7 @@ export class DashboardAnalyticsService {
       }
     }
     for (const session of sessions) {
-      if (session.queueEntry?.bookingId) continue;
+      if (session.queueEntry?.source !== QueueEntrySource.WALK_IN) continue;
       if (!session.service) continue;
       facts.push({
         at: session.endedAt ?? session.startedAt,
@@ -586,7 +625,8 @@ export class DashboardAnalyticsService {
       .filter((session): session is { startedAt: Date; endedAt: Date } => session.endedAt !== null)
       .map((session) => (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000);
     if (durations.length === 0) return null;
-    return Math.round(durations.reduce((sum, minutes) => sum + minutes, 0) / durations.length);
+    const average = durations.reduce((sum, minutes) => sum + minutes, 0) / durations.length;
+    return Math.round(average * 10) / 10;
   }
 
   private utilizationBy(
@@ -594,27 +634,35 @@ export class DashboardAnalyticsService {
     keyOf: (session: AnalyticsSession) => string,
     nameOf: (session: AnalyticsSession) => string | null,
   ): UtilizationEntryDto[] {
-    const byKey = new Map<string, UtilizationEntryDto>();
+    const raw = new Map<
+      string,
+      { id: string; displayName: string; completedSessions: number; totalServiceMinutes: number }
+    >();
     for (const session of sessions) {
       const id = keyOf(session);
       const name = nameOf(session) ?? 'Unknown';
       const minutes = session.endedAt
-        ? (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000
+        ? Math.max(0, (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000)
         : 0;
-      const existing = byKey.get(id);
+      const existing = raw.get(id);
       if (existing) {
         existing.completedSessions += 1;
-        existing.totalServiceMinutes += Math.round(minutes);
+        existing.totalServiceMinutes += minutes;
       } else {
-        byKey.set(id, {
+        raw.set(id, {
           id,
           displayName: name,
           completedSessions: 1,
-          totalServiceMinutes: Math.round(minutes),
+          totalServiceMinutes: minutes,
         });
       }
     }
-    return [...byKey.values()].sort((a, b) => b.completedSessions - a.completedSessions);
+    return [...raw.values()]
+      .map((row) => ({
+        ...row,
+        totalServiceMinutes: Math.round(row.totalServiceMinutes * 10) / 10,
+      }))
+      .sort((a, b) => b.completedSessions - a.completedSessions);
   }
 
   private hourDistribution(
@@ -638,24 +686,34 @@ export class DashboardAnalyticsService {
     return { peakHours, slowHours };
   }
 
-  private servicePopularity(
-    bookings: BookingWithServiceSnapshot[],
-  ): ServicePopularityDto[] {
+  private servicePopularity(facts: ValueFact[]): ServicePopularityDto[] {
     const byService = new Map<string, ServicePopularityDto>();
-    for (const booking of bookings) {
-      for (const service of resolveEffectiveBookingServices(booking)) {
-        const existing = byService.get(service.serviceId);
-        if (existing) {
-          existing.completedCount += 1;
-        } else {
-          byService.set(service.serviceId, {
-            serviceId: service.serviceId,
-            name: service.serviceName,
-            completedCount: 1,
-          });
-        }
+    for (const fact of facts) {
+      const existing = byService.get(fact.serviceId);
+      if (existing) {
+        existing.completedCount += 1;
+      } else {
+        byService.set(fact.serviceId, {
+          serviceId: fact.serviceId,
+          name: fact.serviceName,
+          completedCount: 1,
+        });
       }
     }
     return [...byService.values()].sort((a, b) => b.completedCount - a.completedCount);
   }
+
+  private occupiedMinutesInRange(
+    rows: Array<{ startedAt: Date; endedAt: Date | null }>,
+    from: Date,
+    to: Date,
+  ): number {
+    if (to <= from) return 0;
+    return rows.reduce((sum, row) => {
+      const start = Math.max(row.startedAt.getTime(), from.getTime());
+      const end = Math.min((row.endedAt ?? to).getTime(), to.getTime());
+      return sum + (end > start ? (end - start) / 60_000 : 0);
+    }, 0);
+  }
+
 }
