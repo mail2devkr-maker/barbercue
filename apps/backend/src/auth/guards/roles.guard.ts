@@ -45,7 +45,7 @@ export class RolesGuard {
     const user = request.user;
     const hasValidMatch = !!user && requiredRoles.some((role) => {
       if (!user.roles.includes(role)) return false;
-      if (role === Role.PLATFORM_ADMIN) {
+      if (role === Role.PLATFORM_ADMIN || role === Role.PLATFORM_VIEWER) {
         return user.audience === SessionAudience.ADMIN;
       }
       if (role === Role.FIELD_EXECUTIVE) {
