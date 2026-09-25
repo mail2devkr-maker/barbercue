@@ -114,6 +114,89 @@ const hi: VoiceAnnouncements = {
   },
 };
 
+
+/**
+ * Owner-facing voice can be independent of the app UI language. This is deliberately a speech
+ * presentation preference, not another UI locale: an owner may keep the dashboard in English and
+ * still ask FastQue to announce bookings in Hindi.
+ *
+ * "HINDI_BIHAR" uses straightforward Bihar-friendly Hindi wording with the normal hi-IN TTS
+ * locale. It does not pretend that "Bihari" is one language or that the device has a Bihar-specific
+ * synthetic accent; the exact audible voice still comes from the installed TTS engine.
+ */
+export const OWNER_VOICE_STYLES = ['ACCOUNT', 'HINDI', 'ENGLISH', 'HINDI_BIHAR'] as const;
+export type OwnerVoiceStyle = (typeof OWNER_VOICE_STYLES)[number];
+
+export const OWNER_VOICE_STYLE_LABELS: Readonly<Record<OwnerVoiceStyle, string>> = {
+  ACCOUNT: 'Same as app language',
+  HINDI: 'Hindi',
+  ENGLISH: 'English (India)',
+  HINDI_BIHAR: 'Hindi (Bihar style)',
+};
+
+export const OWNER_VOICE_TONES = ['NATURAL', 'LIGHT', 'DEEP'] as const;
+export type OwnerVoiceTone = (typeof OWNER_VOICE_TONES)[number];
+
+export const OWNER_VOICE_TONE_LABELS: Readonly<Record<OwnerVoiceTone, string>> = {
+  NATURAL: 'Natural',
+  LIGHT: 'Female-style (lighter)',
+  DEEP: 'Male-style (deeper)',
+};
+
+export const OWNER_VOICE_PITCH: Readonly<Record<OwnerVoiceTone, number>> = {
+  NATURAL: 1,
+  LIGHT: 1.15,
+  DEEP: 0.86,
+};
+
+const hiBihar: VoiceAnnouncements = {
+  turnApproaching: () => 'आपकी बारी अब आने वाली है।',
+  waitTimeChanged: () => 'आपके इंतज़ार के समय में बदलाव हुआ है।',
+  newBookingReceived: (serviceName, barberName, salonName, date, time) => {
+    const parts = ['नई बुकिंग आई है।'];
+    if (serviceName) parts.push(`${serviceName} सेवा के लिए`);
+    if (barberName) parts.push(`${barberName} के नाम पर`);
+    if (salonName) parts.push(`${salonName} में`);
+    if (date) parts.push(`${date} को`);
+    if (time) parts.push(`${time} बजे`);
+    parts.push('कृपया देख लीजिए।');
+    if (!barberName) parts.push('अभी बार्बर तय नहीं है।');
+    return parts.join(' ');
+  },
+  bookingRescheduled: (date, time) => {
+    const when = [date ? `${date} को` : null, time ? `${time} बजे` : null].filter(Boolean).join(' ');
+    return when ? `बुकिंग का समय बदल गया है। नया समय ${when} है।` : 'बुकिंग का समय बदल गया है।';
+  },
+  bookingCancelled: () => 'बुकिंग रद्द हो गई है।',
+  newCustomerJoined: (tokenNumber, serviceName) =>
+    `कतार में नया ग्राहक आया है। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
+  voiceAnnouncementsOn: () => 'आवाज़ वाली सूचना चालू हो गई है।',
+  arrivalCheck: (serviceName, time) => {
+    const service = serviceName ? `${serviceName} वाले ग्राहक` : 'अपॉइंटमेंट वाले ग्राहक';
+    const when = time ? `${time} बजे के ` : '';
+    return `अपॉइंटमेंट रिमाइंडर। ${when}${service} पहुंचे हैं कि नहीं, कृपया देख लीजिए।`;
+  },
+};
+
+export function voiceAnnouncementsForStyle(
+  style: OwnerVoiceStyle,
+  accountLanguage: Language | null | undefined,
+): VoiceAnnouncements {
+  if (style === 'HINDI') return hi;
+  if (style === 'ENGLISH') return en;
+  if (style === 'HINDI_BIHAR') return hiBihar;
+  return voiceAnnouncementsFor(accountLanguage);
+}
+
+export function speechLocaleForVoiceStyle(
+  style: OwnerVoiceStyle,
+  accountLanguage: Language | null | undefined,
+): string {
+  if (style === 'HINDI' || style === 'HINDI_BIHAR') return 'hi-IN';
+  if (style === 'ENGLISH') return 'en-IN';
+  return accountLanguage ? SPEECH_LOCALE[accountLanguage] : SPEECH_LOCALE[Language.EN];
+}
+
 export const VOICE_ANNOUNCEMENTS: Readonly<Record<Language, VoiceAnnouncements>> = {
   [Language.EN]: en,
   [Language.HI]: hi,
