@@ -48,6 +48,7 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
       pendingRefresh: false,
     };
     this.jobs.set(job.name, state);
+    this.logger.log(`Registered adaptive DB deadline job: ${job.name} (${job.domain})`);
     this.ensureReconcileTimer();
     this.queueRefresh(state, 0);
     return () => this.unregister(job.name);
