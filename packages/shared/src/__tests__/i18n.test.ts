@@ -10,6 +10,9 @@ import {
   pushCopyFor,
   uiStringsFor,
   voiceAnnouncementsFor,
+  voiceAnnouncementsForStyle,
+  speechLocaleForVoiceStyle,
+  OWNER_VOICE_PITCH,
 } from '../i18n';
 
 describe('ordinalDay', () => {
@@ -86,6 +89,47 @@ describe('voiceAnnouncementsFor(HI).newBookingReceived', () => {
   it('appends the not-assigned-yet notice instead of inventing a barber', () => {
     const sentence = hi.newBookingReceived('Haircut', null, 'Handsome Center', '5th September', '10 AM');
     expect(sentence).toContain('अभी तक बार्बर तय नहीं हुआ है');
+  });
+});
+
+
+describe('owner voice profiles', () => {
+  it('can force Hindi speech while the app/account language remains English', () => {
+    const text = voiceAnnouncementsForStyle('HINDI', Language.EN).bookingCancelled();
+    expect(text).toBe('बुकिंग रद्द कर दी गई है।');
+    expect(speechLocaleForVoiceStyle('HINDI', Language.EN)).toBe('hi-IN');
+  });
+
+  it('can force Indian English speech while the app/account language remains Hindi', () => {
+    const text = voiceAnnouncementsForStyle('ENGLISH', Language.HI).bookingCancelled();
+    expect(text).toBe('Booking cancelled.');
+    expect(speechLocaleForVoiceStyle('ENGLISH', Language.HI)).toBe('en-IN');
+  });
+
+  it('provides Bihar-style Hindi wording without pretending it is a separate TTS locale', () => {
+    const text = voiceAnnouncementsForStyle('HINDI_BIHAR', Language.EN).newBookingReceived(
+      'Haircut',
+      'Ravi',
+      'FastQue Salon',
+      '5th September',
+      '10 AM',
+    );
+    expect(text).toContain('नई बुकिंग आई है');
+    expect(text).toContain('कृपया देख लीजिए');
+    expect(speechLocaleForVoiceStyle('HINDI_BIHAR', Language.EN)).toBe('hi-IN');
+  });
+
+  it('keeps account-language mode backward compatible', () => {
+    expect(voiceAnnouncementsForStyle('ACCOUNT', Language.HI).bookingCancelled()).toBe(
+      voiceAnnouncementsFor(Language.HI).bookingCancelled(),
+    );
+    expect(speechLocaleForVoiceStyle('ACCOUNT', Language.EN)).toBe('en-IN');
+  });
+
+  it('defines bounded pitch profiles for natural/lighter/deeper voices', () => {
+    expect(OWNER_VOICE_PITCH.NATURAL).toBe(1);
+    expect(OWNER_VOICE_PITCH.LIGHT).toBeGreaterThan(1);
+    expect(OWNER_VOICE_PITCH.DEEP).toBeLessThan(1);
   });
 });
 
