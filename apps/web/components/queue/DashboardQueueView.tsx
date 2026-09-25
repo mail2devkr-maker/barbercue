@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DASHBOARD_PATHS,
-  SPEECH_LOCALE,
   StaffMemberStatus,
-  voiceAnnouncementsFor,
   type AssignQueueEntryInput,
   type ChairOptionDto,
   type DashboardQueueDto,
@@ -18,7 +16,12 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
-import { setVoiceEnabled as setSharedVoiceEnabled, useVoiceEnabled } from "../../lib/voice-preference";
+import {
+  ownerVoiceAnnouncements,
+  setVoiceEnabled as setSharedVoiceEnabled,
+  speakOwnerVoice,
+  useVoiceEnabled,
+} from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
 import styles from "./queue.module.css";
 
@@ -273,11 +276,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
   }, [user?.preferredLanguage]);
 
   const speak = useCallback((text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    if (preferredLanguageRef.current) utterance.lang = SPEECH_LOCALE[preferredLanguageRef.current];
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    speakOwnerVoice(text, preferredLanguageRef.current);
   }, []);
 
   const playChime = useCallback(() => {
@@ -313,7 +312,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
         setNewEntryNotice(latest);
         if (soundEnabledRef.current) playChime();
         if (voiceEnabledRef.current) {
-          const announcements = voiceAnnouncementsFor(preferredLanguageRef.current);
+          const announcements = ownerVoiceAnnouncements(preferredLanguageRef.current);
           speak(announcements.newCustomerJoined(latest.tokenNumber, latest.serviceName));
         }
       }
@@ -498,7 +497,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     }
     voiceEnabledRef.current = true;
     setSharedVoiceEnabled(true);
-    speak(voiceAnnouncementsFor(preferredLanguageRef.current).voiceAnnouncementsOn());
+    speak(ownerVoiceAnnouncements(preferredLanguageRef.current).voiceAnnouncementsOn());
   }
 
   if (loading) return <p className={styles.stepLoading}>Loading…</p>;

@@ -4,9 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DASHBOARD_PATHS,
   OWNER_BOOKING_FILTERS,
-  SPEECH_LOCALE,
   formatVoiceDateTime,
-  voiceAnnouncementsFor,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
@@ -15,7 +13,12 @@ import {
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
-import { setVoiceEnabled as setSharedVoiceEnabled, useVoiceEnabled } from "../../lib/voice-preference";
+import {
+  ownerVoiceAnnouncements,
+  setVoiceEnabled as setSharedVoiceEnabled,
+  speakOwnerVoice,
+  useVoiceEnabled,
+} from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
 import styles from "./bookings.module.css";
 
@@ -231,11 +234,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
   }, []);
 
   const speak = useCallback((text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    if (preferredLanguageRef.current) utterance.lang = SPEECH_LOCALE[preferredLanguageRef.current];
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    speakOwnerVoice(text, preferredLanguageRef.current);
   }, []);
 
   // A real bidirectional toggle, not a one-way "enable" — the button previously stayed
@@ -324,7 +323,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
                 ? formatVoiceDateTime(detail.slotStart, timeZone)
                 : { date: null, time: null };
             speak(
-              voiceAnnouncementsFor(preferredLanguageRef.current).newBookingReceived(
+              ownerVoiceAnnouncements(preferredLanguageRef.current).newBookingReceived(
                 detail.serviceName ?? null,
                 barberName,
                 detail.salonName ?? null,
@@ -343,7 +342,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
       if (payload.salonId !== salonId) return;
       void loadPage(filterRef.current, undefined, false);
       setCancelNotice(payload.bookingId);
-      if (alertsEnabledRef.current) speak(voiceAnnouncementsFor(preferredLanguageRef.current).bookingCancelled());
+      if (alertsEnabledRef.current) speak(ownerVoiceAnnouncements(preferredLanguageRef.current).bookingCancelled());
     }
 
     // A NO_SHOW booking corrected to COMPLETED — nothing to announce, just refresh the list so the
