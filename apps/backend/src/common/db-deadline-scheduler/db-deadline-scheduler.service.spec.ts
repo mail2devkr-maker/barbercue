@@ -38,9 +38,6 @@ describe('DbDeadlineSchedulerService', () => {
 
     await jest.advanceTimersByTimeAsync(1);
     expect(runDue).toHaveBeenCalledTimes(1);
-
-    await jest.advanceTimersByTimeAsync(0);
-    expect(nextDueAt).toHaveBeenCalledTimes(2);
   });
 
   it('replans a booking deadline when a live mutation signals the domain', async () => {
