@@ -48,7 +48,7 @@ function AdminLoginForm() {
         setNeedsTotp(true);
         setError("Enter the 6-digit code from your authenticator app.");
       } else if (err instanceof ApiError && err.code === AuthErrorCode.TOTP_SETUP_REQUIRED) {
-        setError("Authenticator setup is required. Use Continue with Google once to securely enroll this admin account.");
+        setError("Authenticator setup is required. Use Continue with Google once to securely enroll this dashboard account.");
       } else {
         setError(err instanceof ApiError ? err.message : "Login failed. Please try again.");
       }
@@ -134,7 +134,7 @@ function AdminLoginForm() {
     <AuthCard
       audience="admin"
       title="Platform admin sign in"
-      subtitle="Restricted to existing FastQue platform administrators. Google or password confirms your identity; your authenticator code is always required."
+      subtitle="Restricted to approved FastQue platform administrators and read-only dashboard viewers. Google or password confirms your identity; your authenticator code is always required."
       showAudienceLinks={false}
     >
       <div className={authStyles.form}>
@@ -142,7 +142,7 @@ function AdminLoginForm() {
         {!googleIdToken && (
           <GoogleIdentityButton
             onCredential={handleGoogle}
-            audienceLabel="platform admin"
+            audienceLabel="FastQue admin dashboard"
             disabled={submitting}
           />
         )}
