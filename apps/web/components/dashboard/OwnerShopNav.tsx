@@ -25,7 +25,7 @@ import styles from "./dashboard.module.css";
 // list, removed once this component started covering the same ground).
 const SHOP_SECTIONS = [
   { id: "queue", label: "Live queue", adminEnabled: false },
-  { id: "settings", label: "Set up & open", adminEnabled: true },
+  { id: "settings", label: "Settings", adminEnabled: true },
   { id: "bookings", label: "Bookings", adminEnabled: true },
   { id: "schedule", label: "Schedule", adminEnabled: false },
   { id: "customers", label: "Customers", adminEnabled: false },
