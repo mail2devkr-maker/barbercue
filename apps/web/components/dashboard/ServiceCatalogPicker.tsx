@@ -43,6 +43,20 @@ function priceIsValid(price: string): boolean {
   return Number.isFinite(value) && value >= 0;
 }
 
+function normalizeCatalogSearch(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+export function serviceMatchesCatalogQuery(item: ServiceCatalogItem, query: string): boolean {
+  const search = normalizeCatalogSearch(query.trim());
+  if (!search) return true;
+  return normalizeCatalogSearch(item.name).includes(search);
+}
+
 export function ServiceCatalogPicker({
   basePath,
   services,
@@ -76,15 +90,17 @@ export function ServiceCatalogPicker({
     [services],
   );
 
-  const visible = useMemo(() => {
-    const search = query.trim().toLowerCase();
-    return SERVICE_CATALOG.filter((catalogItem) =>
-      serviceAvailableInPack(catalogItem, pack) &&
-      serviceAvailableForSalonType(catalogItem, salonType) &&
-      (category === "all" || catalogItem.category === category) &&
-      (!search || `${catalogItem.name} ${catalogItem.category}`.toLowerCase().includes(search)),
-    );
-  }, [category, pack, query, salonType]);
+  const visible = useMemo(
+    () =>
+      SERVICE_CATALOG.filter(
+        (catalogItem) =>
+          serviceAvailableInPack(catalogItem, pack) &&
+          serviceAvailableForSalonType(catalogItem, salonType) &&
+          (category === "all" || catalogItem.category === category) &&
+          serviceMatchesCatalogQuery(catalogItem, query),
+      ),
+    [category, pack, query, salonType],
+  );
 
   // Bulk selection is intentionally pack-scoped: owners can pick a whole pack instead of
   // clicking dozens of services. Suggested price/time defaults make the pack immediately ready.
