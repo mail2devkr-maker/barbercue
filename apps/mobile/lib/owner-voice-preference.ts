@@ -68,6 +68,7 @@ export function hydrateOwnerVoiceProfile(): Promise<MobileOwnerVoiceProfile> {
 
 export async function setMobileOwnerVoiceProfile(profile: MobileOwnerVoiceProfile): Promise<void> {
   publish(profile);
+  hydrationPromise = Promise.resolve(profile);
   await setItem(STORAGE_KEY, JSON.stringify(profile)).catch(() => {
     // Keep the in-memory preference for this session even if device storage is temporarily unavailable.
   });
