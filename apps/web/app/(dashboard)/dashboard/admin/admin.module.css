@@ -33,6 +33,88 @@
 .header p { margin: 0; color: #a7a7b4; }
 .eyebrow { color: #ff6f91 !important; font-size: 0.72rem; font-weight: 750; letter-spacing: 0.11em; text-transform: uppercase; }
 
+.growthCounters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.growthCounter {
+  position: relative;
+  overflow: hidden;
+  min-height: 184px;
+  padding: clamp(20px, 3vw, 30px);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255,124,180,.24), transparent 42%),
+    radial-gradient(circle at 0% 100%, rgba(124,132,255,.22), transparent 44%),
+    linear-gradient(135deg, #171722, #101017);
+  box-shadow: 0 24px 54px rgba(0,0,0,.28);
+}
+
+.growthCounter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,.04), transparent 42%);
+}
+
+.growthCounterTopline {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #f5f5fa;
+  font-size: .78rem;
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+
+.growthCounterTopline em {
+  padding: 5px 8px;
+  border: 1px solid rgba(159,255,205,.28);
+  border-radius: 999px;
+  background: rgba(62,186,126,.12);
+  color: #9ff5c9;
+  font-size: .62rem;
+  font-style: normal;
+  letter-spacing: .08em;
+}
+
+.growthCounter > strong {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin: 18px 0 8px;
+  font-family: var(--font-display);
+  font-size: clamp(2.8rem, 7vw, 5.4rem);
+  font-weight: 600;
+  line-height: .95;
+  letter-spacing: -.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.growthCounter > p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: 50ch;
+  color: #b5b5c2;
+  font-size: var(--bc-text-xs);
+  line-height: 1.55;
+}
+
+.counterTruthNote {
+  margin: 0 0 20px;
+  color: #858594;
+  font-size: .72rem;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -138,4 +220,8 @@
   .headerActions > * { flex: 1 1 auto; }
   .peopleList li { flex-direction: column; }
   .peopleList li > div:last-child { text-align: left; }
+}
+
+@media (max-width: 720px) {
+  .growthCounters { grid-template-columns: 1fr; }
 }
