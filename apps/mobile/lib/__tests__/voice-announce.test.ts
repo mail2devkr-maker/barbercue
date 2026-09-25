@@ -5,7 +5,12 @@ jest.mock('expo-speech', () => ({
   getAvailableVoicesAsync: jest.fn(),
 }));
 
+jest.mock('../owner-voice-preference', () => ({
+  hydrateOwnerVoiceProfile: jest.fn(),
+}));
+
 import * as Speech from 'expo-speech';
+import { hydrateOwnerVoiceProfile } from '../owner-voice-preference';
 import {
   speakBooking,
   __resetVoiceCacheForTests,
@@ -14,9 +19,12 @@ import {
 
 const speakMock = Speech.speak as jest.Mock;
 const getVoicesMock = Speech.getAvailableVoicesAsync as jest.Mock;
+const hydrateVoiceProfileMock = hydrateOwnerVoiceProfile as jest.Mock;
 
 // Flushes the getVoices() -> .then(...) -> Speech.speak() microtask chain inside speakBooking.
 async function flush(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -29,6 +37,11 @@ describe('speakBooking — Hindi voice-selection hardening (Build 10 physical re
     // permanently-failing engine — clearAllMocks only resets call history, not implementations,
     // which would otherwise leak that failing behavior into every later test in this file.
     jest.resetAllMocks();
+    hydrateVoiceProfileMock.mockResolvedValue({
+      style: 'ACCOUNT',
+      tone: 'NATURAL',
+      voiceIdentifier: null,
+    });
     __resetVoiceCacheForTests();
     __resetHindiVoiceWarningThrottleForTests();
   });
@@ -412,6 +425,73 @@ describe('speakBooking — Hindi voice-selection hardening (Build 10 physical re
       expect(getVoicesMock).toHaveBeenCalledTimes(1); // a known-good result is never re-queried
       expect(speakMock).toHaveBeenCalledTimes(2);
       nowSpy.mockRestore();
+    });
+  });
+
+  describe('owner-selected voice profile', () => {
+    it('can force Hindi announcements while the app language remains English', async () => {
+      hydrateVoiceProfileMock.mockResolvedValue({
+        style: 'HINDI',
+        tone: 'NATURAL',
+        voiceIdentifier: null,
+      });
+      getVoicesMock.mockResolvedValue([
+        { identifier: 'hi-in-voice', name: 'Hindi India', language: 'hi-IN', quality: 'Default' },
+      ]);
+
+      speakBooking({ event: 'booking.cancelled', bookingId: 'profile-hi', language: Language.EN });
+      await flush();
+
+      expect(speakMock).toHaveBeenCalledTimes(1);
+      expect(speakMock.mock.calls[0][0]).toBe('बुकिंग रद्द कर दी गई है।');
+      expect(speakMock.mock.calls[0][1].language).toBe('hi-IN');
+    });
+
+    it('uses Bihar-style Hindi copy with the normal safe Hindi TTS family', async () => {
+      hydrateVoiceProfileMock.mockResolvedValue({
+        style: 'HINDI_BIHAR',
+        tone: 'NATURAL',
+        voiceIdentifier: null,
+      });
+      getVoicesMock.mockResolvedValue([
+        { identifier: 'hi-in-voice', name: 'Hindi India', language: 'hi-IN', quality: 'Default' },
+      ]);
+
+      speakBooking({
+        event: 'booking.created',
+        bookingId: 'profile-bihar',
+        language: Language.EN,
+        serviceName: 'Haircut',
+        barberName: 'Ravi',
+        salonName: 'FastQue Salon',
+        date: null,
+        time: null,
+      });
+      await flush();
+
+      expect(speakMock.mock.calls[0][0]).toContain('नई बुकिंग आई है');
+      expect(speakMock.mock.calls[0][0]).toContain('कृपया देख लीजिए');
+      expect(speakMock.mock.calls[0][1].language).toBe('hi-IN');
+    });
+
+    it('applies the selected lighter/deeper pitch and prioritizes the exact installed voice', async () => {
+      hydrateVoiceProfileMock.mockResolvedValue({
+        style: 'ENGLISH',
+        tone: 'LIGHT',
+        voiceIdentifier: 'preferred-en',
+      });
+      getVoicesMock.mockResolvedValue([
+        { identifier: 'other-en', name: 'English A', language: 'en-IN', quality: 'Default' },
+        { identifier: 'preferred-en', name: 'English B', language: 'en-IN', quality: 'Enhanced' },
+      ]);
+
+      speakBooking({ event: 'preview', bookingId: 'voice-preview', language: Language.HI });
+      await flush();
+
+      expect(speakMock.mock.calls[0][1].voice).toBe('preferred-en');
+      expect(speakMock.mock.calls[0][1].pitch).toBeGreaterThan(1);
+      expect(speakMock.mock.calls[0][1].language).toBe('en-IN');
+      expect(speakMock.mock.calls[0][0]).toBe('Voice announcements on.');
     });
   });
 
