@@ -126,7 +126,7 @@ describe('AuthService', () => {
           [SessionAudience.CUSTOMER]: [Role.CUSTOMER],
           [SessionAudience.STAFF]: [Role.SALON_STAFF, Role.SALON_OWNER],
           [SessionAudience.EMPLOYEE]: [Role.FIELD_EXECUTIVE],
-          [SessionAudience.ADMIN]: [Role.PLATFORM_ADMIN],
+          [SessionAudience.ADMIN]: [Role.PLATFORM_ADMIN, Role.PLATFORM_VIEWER],
         };
         return roles.filter((role) => allowed[audience].includes(role));
       }),
@@ -916,6 +916,29 @@ describe('AuthService', () => {
       expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
         'admin1',
         [Role.PLATFORM_ADMIN],
+        SessionAudience.ADMIN,
+        undefined,
+      );
+    });
+
+    it('signs in an approved PLATFORM_VIEWER only after valid TOTP and never grants PLATFORM_ADMIN', async () => {
+      const viewer = {
+        ...admin,
+        id: 'viewer1',
+        email: 'viewer@example.com',
+        roles: [{ role: Role.PLATFORM_VIEWER, salonId: null }],
+      };
+      prisma.authIdentity.findUnique.mockResolvedValue({ user: viewer });
+      totpService.verifyToken.mockResolvedValue(true);
+
+      const result = await service.adminGoogleLogin('id-token', '123456');
+
+      expect(result.user.roles).toEqual([Role.PLATFORM_VIEWER]);
+      expect(result.user.roles).not.toContain(Role.PLATFORM_ADMIN);
+      expect(result.user.audience).toBe(SessionAudience.ADMIN);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'viewer1',
+        [Role.PLATFORM_VIEWER],
         SessionAudience.ADMIN,
         undefined,
       );
