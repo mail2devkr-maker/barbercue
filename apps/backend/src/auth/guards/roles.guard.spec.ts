@@ -122,6 +122,50 @@ describe('RolesGuard', () => {
     ).toBe(true);
   });
 
+
+  it('allows PLATFORM_VIEWER only from an ADMIN-audience session', () => {
+    const reflector = {
+      getAllAndOverride: () => [Role.PLATFORM_VIEWER],
+    } as unknown as Reflector;
+    const guard = new RolesGuard(reflector);
+
+    expect(
+      guard.canActivate(
+        makeContext({
+          id: 'viewer1',
+          roles: [Role.PLATFORM_VIEWER],
+          audience: SessionAudience.ADMIN,
+        }),
+      ),
+    ).toBe(true);
+
+    expect(() =>
+      guard.canActivate(
+        makeContext({
+          id: 'viewer1',
+          roles: [Role.PLATFORM_VIEWER],
+          audience: SessionAudience.CUSTOMER,
+        }),
+      ),
+    ).toThrow(AppException);
+  });
+
+  it('does not let PLATFORM_VIEWER satisfy a PLATFORM_ADMIN-only write route', () => {
+    const reflector = {
+      getAllAndOverride: () => [Role.PLATFORM_ADMIN],
+    } as unknown as Reflector;
+    const guard = new RolesGuard(reflector);
+    expect(() =>
+      guard.canActivate(
+        makeContext({
+          id: 'viewer1',
+          roles: [Role.PLATFORM_VIEWER],
+          audience: SessionAudience.ADMIN,
+        }),
+      ),
+    ).toThrow(AppException);
+  });
+
   it('[Test L] a mixed-role route (SALON_OWNER or PLATFORM_ADMIN) still admits a legitimate STAFF-audience owner', () => {
     const reflector = {
       getAllAndOverride: () => [Role.SALON_OWNER, Role.PLATFORM_ADMIN],

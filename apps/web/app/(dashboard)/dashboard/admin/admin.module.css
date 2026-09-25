@@ -225,3 +225,26 @@
 @media (max-width: 720px) {
   .growthCounters { grid-template-columns: 1fr; }
 }
+
+
+.readOnlyNotice {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(159, 245, 201, .24);
+  border-radius: 12px;
+  background: rgba(62, 186, 126, .08);
+  color: #bdebd3;
+  font-size: .78rem;
+}
+
+.readOnlyBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 999px;
+  color: #b8b8c4;
+  font-size: .72rem;
+  font-weight: 700;
+}

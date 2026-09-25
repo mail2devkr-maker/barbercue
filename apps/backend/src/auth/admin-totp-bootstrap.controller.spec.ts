@@ -81,6 +81,30 @@ describe('AdminTotpBootstrapController recovery', () => {
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 
+
+  it('allows an approved global PLATFORM_VIEWER to enroll TOTP', async () => {
+    const { controller, prisma, crypto } = build();
+    prisma.authIdentity.findUnique.mockResolvedValue({
+      user: {
+        ...adminUser,
+        id: 'viewer-1',
+        email: 'viewer@example.com',
+        twoFactorEnabled: false,
+        totpSecret: null,
+        roles: [{ role: Role.PLATFORM_VIEWER, salonId: null }],
+      },
+    });
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
+    crypto.encrypt.mockReturnValue('viewer-encrypted-secret');
+
+    await expect(
+      controller.setup({ idToken: 'valid-google-token' }),
+    ).resolves.toEqual({
+      otpAuthUri: 'otpauth://new',
+      manualKey: 'NEW-TOTP-SECRET',
+    });
+  });
+
   it('still resolves only an already-authorized global platform admin', async () => {
     const { controller, prisma, crypto } = build();
     prisma.authIdentity.findUnique.mockResolvedValue({

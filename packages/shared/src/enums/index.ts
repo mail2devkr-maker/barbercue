@@ -14,6 +14,7 @@ export const Role = {
   SALON_OWNER: 'SALON_OWNER',
   FIELD_EXECUTIVE: 'FIELD_EXECUTIVE',
   PLATFORM_ADMIN: 'PLATFORM_ADMIN',
+  PLATFORM_VIEWER: 'PLATFORM_VIEWER',
 } as const;
 export type Role = (typeof Role)[keyof typeof Role];
 

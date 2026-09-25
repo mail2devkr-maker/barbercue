@@ -31,7 +31,7 @@ const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<Record<SessionAudience, ReadonlySet<R
   [SessionAudience.CUSTOMER]: new Set([Role.CUSTOMER]),
   [SessionAudience.STAFF]: new Set([Role.SALON_STAFF, Role.SALON_OWNER]),
   [SessionAudience.EMPLOYEE]: new Set([Role.FIELD_EXECUTIVE]),
-  [SessionAudience.ADMIN]: new Set([Role.PLATFORM_ADMIN]),
+  [SessionAudience.ADMIN]: new Set([Role.PLATFORM_ADMIN, Role.PLATFORM_VIEWER]),
 };
 
 function hashToken(rawToken: string): string {
@@ -195,10 +195,16 @@ export class TokenService {
     // time, not merely present. A malformed salon-scoped PLATFORM_ADMIN row must never grant admin
     // authority here, matching the same invariant the admin login paths enforce.
     if (audience === SessionAudience.ADMIN) {
-      const hasGlobalAdmin = claimed.user.roles.some(
-        (r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null,
-      );
-      if (!hasGlobalAdmin) scopedRoles = [];
+      // ADMIN-audience sessions may carry either full PLATFORM_ADMIN authority or the strictly
+      // read-only PLATFORM_VIEWER role, but both are global-only. Rebuild from raw UserRole rows
+      // here so a malformed salon-scoped row can never survive refresh into a privileged token.
+      scopedRoles = claimed.user.roles
+        .filter(
+          (r) =>
+            r.salonId === null &&
+            (r.role === Role.PLATFORM_ADMIN || r.role === Role.PLATFORM_VIEWER),
+        )
+        .map((r) => r.role);
     }
     if (audience === SessionAudience.EMPLOYEE) {
       const hasGlobalFieldExecutive = claimed.user.roles.some(

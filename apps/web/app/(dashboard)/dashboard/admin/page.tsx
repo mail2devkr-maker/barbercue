@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ADMIN_PATHS, SalonStatus, type PlatformAdminOverviewDto } from "@barbercue/shared";
+import { ADMIN_PATHS, Role, SalonStatus, type PlatformAdminOverviewDto } from "@barbercue/shared";
 import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { Button, LinkButton } from "../../../../components/ui/Button";
@@ -28,6 +28,10 @@ export function getNextShopStatus(status: SalonStatus): { status: SalonStatus; l
 
 export default function AdminDashboardPage() {
   const { user, logout } = useAuth();
+  const readOnlyViewer =
+    !!user &&
+    user.roles.includes(Role.PLATFORM_VIEWER) &&
+    !user.roles.includes(Role.PLATFORM_ADMIN);
   const [data, setData] = useState<PlatformAdminOverviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -135,14 +139,23 @@ export default function AdminDashboardPage() {
           <Button type="button" variant="outline" onClick={() => void loadOverview()} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
-          <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
-          <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>
-          <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
+          {!readOnlyViewer && (
+            <>
+              <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
+              <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>
+              <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
+            </>
+          )}
           <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
         </div>
       </header>
 
-      {error && <p className={styles.error} role="alert">{error}</p>}
+      {readOnlyViewer && (
+        <p className={styles.readOnlyNotice} role="status">
+          Read-only access · contact details are masked · create, edit, approval, password-reset and deletion actions are disabled.
+        </p>
+      )}
+      {error && <p className={styles.error} role="alert">{error}</p>
       {!data && !error && <p className={styles.loading} role="status">Loading platform activity…</p>}
 
       {data && (
@@ -218,15 +231,21 @@ export default function AdminDashboardPage() {
                   <td>{shop.staffCount} staff · {shop.bookingCount} bookings · {shop.liveQueueCount} live</td>
                   <td>{shop.subscriptionStatus}</td>
                   <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <LinkButton href={`/dashboard/salons/${shop.id}/settings`} variant="secondary">Manage</LinkButton>
-                    {getNextShopStatus(shop.status) && (
-                      <Button type="button" variant={shop.status === SalonStatus.ACTIVE ? "outline" : "primary"} disabled={statusShopId === shop.id} onClick={() => void handleStatusChange(shop.id, shop.name, shop.status)}>
-                        {statusShopId === shop.id ? "Saving…" : getNextShopStatus(shop.status)?.label}
-                      </Button>
+                    {readOnlyViewer ? (
+                      <span className={styles.readOnlyBadge}>Read only</span>
+                    ) : (
+                      <>
+                        <LinkButton href={`/dashboard/salons/${shop.id}/settings`} variant="secondary">Manage</LinkButton>
+                        {getNextShopStatus(shop.status) && (
+                          <Button type="button" variant={shop.status === SalonStatus.ACTIVE ? "outline" : "primary"} disabled={statusShopId === shop.id} onClick={() => void handleStatusChange(shop.id, shop.name, shop.status)}>
+                            {statusShopId === shop.id ? "Saving…" : getNextShopStatus(shop.status)?.label}
+                          </Button>
+                        )}
+                        <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleDeleteShop(shop.id, shop.name)}>
+                          {deletingShopId === shop.id ? "Deleting…" : "Delete"}
+                        </Button>
+                      </>
                     )}
-                    <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleDeleteShop(shop.id, shop.name)}>
-                      {deletingShopId === shop.id ? "Deleting…" : "Delete"}
-                    </Button>
                   </td>
                 </tr>)}</tbody>
               </table>

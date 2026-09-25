@@ -56,11 +56,15 @@ export class AdminTotpBootstrapController {
     // one credential the admin login flows are gated on.
     if (
       !user ||
-      !user.roles.some(({ role, salonId }) => role === Role.PLATFORM_ADMIN && salonId === null)
+      !user.roles.some(
+        ({ role, salonId }) =>
+          salonId === null &&
+          (role === Role.PLATFORM_ADMIN || role === Role.PLATFORM_VIEWER),
+      )
     ) {
       throw new AppException(
         AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
-        'This Google account is not registered as a platform administrator.',
+        'This Google account is not registered for FastQue admin-dashboard access.',
         HttpStatus.UNAUTHORIZED,
       );
     }
@@ -147,7 +151,7 @@ export class AdminTotpBootstrapController {
 
     return {
       otpAuthUri: this.totpService.buildOtpAuthUri(
-        user.email ?? 'platform-admin',
+        user.email ?? 'fastque-admin-dashboard',
         secret,
       ),
       manualKey: secret,

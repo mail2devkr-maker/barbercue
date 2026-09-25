@@ -28,6 +28,16 @@ import {
 
 const PASSWORD_RESET_TTL_MINUTES = 15;
 
+function hasGlobalAdminDashboardRole(
+  roles: Array<{ role: Role; salonId: string | null }>,
+): boolean {
+  return roles.some(
+    ({ role, salonId }) =>
+      salonId === null &&
+      (role === Role.PLATFORM_ADMIN || role === Role.PLATFORM_VIEWER),
+  );
+}
+
 function hashResetToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
 }
@@ -541,9 +551,7 @@ export class AuthService {
       // must not grant admin-login eligibility here.
       if (
         !candidate ||
-        !candidate.roles.some(
-          (role) => role.role === Role.PLATFORM_ADMIN && role.salonId === null,
-        )
+        !hasGlobalAdminDashboardRole(candidate.roles)
       ) {
         return null;
       }
@@ -558,15 +566,12 @@ export class AuthService {
       return candidate;
     });
 
-    const isGlobalAdmin =
-      !!user &&
-      user.roles.some(
-        (role) => role.role === Role.PLATFORM_ADMIN && role.salonId === null,
-      );
-    if (!user || !isGlobalAdmin) {
+    const hasAdminDashboardAccess =
+      !!user && hasGlobalAdminDashboardRole(user.roles);
+    if (!user || !hasAdminDashboardAccess) {
       throw new AppException(
         AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
-        'This Google account is not registered as a platform administrator.',
+        'This Google account is not registered for FastQue admin-dashboard access.',
         HttpStatus.UNAUTHORIZED,
       );
     }
@@ -613,11 +618,8 @@ export class AuthService {
     });
     // Global-admin-scope fix: PLATFORM_ADMIN is only ever a global role (salonId: null) — a
     // salon-scoped PLATFORM_ADMIN row must never grant admin-login eligibility.
-    const isAdmin =
-      !!user &&
-      user.roles.some(
-        (r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null,
-      );
+    const hasAdminDashboardAccess =
+      !!user && hasGlobalAdminDashboardRole(user.roles);
 
     const passwordHash =
       user?.passwordHash ??
@@ -627,7 +629,7 @@ export class AuthService {
       passwordHash,
     );
 
-    if (!user || !isAdmin || !passwordMatches) {
+    if (!user || !hasAdminDashboardAccess || !passwordMatches) {
       throw new AppException(
         AuthErrorCode.INVALID_CREDENTIALS,
         'Incorrect email or password.',
@@ -919,7 +921,8 @@ export class AuthService {
       ({ role }) =>
         role === Role.SALON_OWNER ||
         role === Role.SALON_STAFF ||
-        role === Role.PLATFORM_ADMIN,
+        role === Role.PLATFORM_ADMIN ||
+        role === Role.PLATFORM_VIEWER,
     );
     if (!user || !eligible) {
       return {};
