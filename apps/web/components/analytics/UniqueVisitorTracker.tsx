@@ -1,21 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
 import { SITE_METRICS_PATHS } from "@barbercue/shared";
 
 const VISITOR_ID_KEY = "fastque_site_visitor_id_v1";
 const REGISTERED_KEY = "fastque_site_visitor_registered_v1";
 const COOKIE_NAME = "fq_vid";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-// Internal operations surfaces are deliberately excluded from the growth counter. A shop owner,
-// staff member, employee or platform admin repeatedly using FastQue to run operations is not a new
-// marketplace visitor. Public/customer pages (including search, shop profiles, booking, queue and
-// customer account) are included.
-function isInternalOperationsPath(pathname: string): boolean {
-  return pathname.startsWith("/dashboard") || pathname.startsWith("/employee");
-}
 
 function cookieVisitorId(): string | null {
   const prefix = `${COOKIE_NAME}=`;
@@ -78,10 +69,8 @@ function markRegistered(): void {
 }
 
 export function UniqueVisitorTracker() {
-  const pathname = usePathname();
-
   useEffect(() => {
-    if (!pathname || isInternalOperationsPath(pathname) || alreadyRegistered()) return;
+    if (alreadyRegistered()) return;
 
     const visitorId = getOrCreateVisitorId();
     const controller = new AbortController();
@@ -102,7 +91,7 @@ export function UniqueVisitorTracker() {
       });
 
     return () => controller.abort();
-  }, [pathname]);
+  }, []);
 
   return null;
 }
