@@ -69,6 +69,7 @@ describe('TokenService', () => {
       [SessionAudience.STAFF, [Role.SALON_OWNER, Role.PLATFORM_ADMIN], [Role.SALON_OWNER]],
       [SessionAudience.STAFF, [Role.SALON_STAFF, Role.CUSTOMER], [Role.SALON_STAFF]],
       [SessionAudience.ADMIN, [Role.PLATFORM_ADMIN, Role.CUSTOMER], [Role.PLATFORM_ADMIN]],
+      [SessionAudience.ADMIN, [Role.PLATFORM_VIEWER, Role.CUSTOMER], [Role.PLATFORM_VIEWER]],
       [SessionAudience.CUSTOMER, [Role.SALON_OWNER, Role.PLATFORM_ADMIN], []],
     ])('audience %s keeps only its own allowed roles out of %j -> %j', (audience, input, expected) => {
       expect(service.scopeRolesToAudience(input, audience)).toEqual(expected);
@@ -231,6 +232,40 @@ describe('TokenService', () => {
           audience: SessionAudience.ADMIN,
           // PLATFORM_ADMIN is present, but salon-scoped — must not count as global admin.
           user: { roles: [{ role: Role.PLATFORM_ADMIN, salonId: 's1' }] },
+        }),
+      );
+
+      await expect(service.rotateRefreshToken('raw-token')).rejects.toMatchObject({
+        code: AuthErrorCode.REFRESH_TOKEN_INVALID,
+      } as Partial<AppException>);
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+    });
+
+
+    it('preserves a valid global PLATFORM_VIEWER role in ADMIN audience refresh', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({
+          audience: SessionAudience.ADMIN,
+          user: { roles: [{ role: Role.PLATFORM_VIEWER, salonId: null }] },
+        }),
+      );
+
+      await service.rotateRefreshToken('raw-token');
+
+      const jwt = (service as unknown as { jwt: { sign: jest.Mock } }).jwt;
+      const payload = jwt.sign.mock.calls[0][0];
+      expect(payload.roles).toEqual([Role.PLATFORM_VIEWER]);
+      expect(payload.roles).not.toContain(Role.PLATFORM_ADMIN);
+      expect(payload.audience).toBe(SessionAudience.ADMIN);
+    });
+
+    it('rejects a malformed salon-scoped PLATFORM_VIEWER on refresh', async () => {
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+      prisma.refreshToken.findFirst.mockResolvedValue(
+        makeRow({
+          audience: SessionAudience.ADMIN,
+          user: { roles: [{ role: Role.PLATFORM_VIEWER, salonId: 's1' }] },
         }),
       );
 
