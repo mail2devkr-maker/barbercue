@@ -3,15 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   DASHBOARD_PATHS,
-  SPEECH_LOCALE,
-  voiceAnnouncementsFor,
   type ArrivalAlertDto,
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { useAuth } from "../../lib/auth-context";
-import { getVoiceEnabled, useVoiceEnabled } from "../../lib/voice-preference";
+import {
+  getVoiceEnabled,
+  ownerVoiceAnnouncements,
+  speakOwnerVoice,
+  useVoiceEnabled,
+} from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
 import styles from "./arrival-alert-overlay.module.css";
 
@@ -131,13 +134,9 @@ export function ArrivalAlertOverlay({ salonId }: { salonId: string }) {
       .sort((a, b) => new Date(a.slotStart).getTime() - new Date(b.slotStart).getTime())[0] ?? null;
 
   const speak = useCallback((text: string) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     if (!getVoiceEnabled()) return;
     if (!tryAcquireVoiceLock()) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    if (preferredLanguageRef.current) utterance.lang = SPEECH_LOCALE[preferredLanguageRef.current];
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+    speakOwnerVoice(text, preferredLanguageRef.current);
   }, []);
 
   const stopVoice = useCallback(() => {
@@ -160,7 +159,7 @@ export function ArrivalAlertOverlay({ salonId }: { salonId: string }) {
     if (!active || confirmStep || !voiceEnabled) return;
     const announce = () => {
       speak(
-        voiceAnnouncementsFor(preferredLanguageRef.current).arrivalCheck(
+        ownerVoiceAnnouncements(preferredLanguageRef.current).arrivalCheck(
           active.serviceName,
           formatTime(active.slotStart),
         ),
