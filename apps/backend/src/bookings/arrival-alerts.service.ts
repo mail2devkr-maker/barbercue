@@ -1,5 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   ARRIVAL_ALERT_LEAD_MINUTES,
   BookingStatus,
@@ -16,6 +15,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { resolveEffectiveBookingServices } from './effective-booking-services';
+import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-deadline-scheduler.service';
 
 const arrivalCandidateSelect = {
   id: true,
@@ -55,9 +55,33 @@ export class ArrivalAlertsService {
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
     private readonly pushDispatch: PushDispatchService,
+    @Optional() private readonly deadlineScheduler?: DbDeadlineSchedulerService,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  onModuleInit(): void {
+    this.deadlineScheduler?.register({
+      name: 'arrival-alerts',
+      domain: 'booking',
+      nextDueAt: () => this.findNextDueAt(),
+      runDue: () => this.sweep(),
+    });
+  }
+
+  private async findNextDueAt(): Promise<Date | null> {
+    const next = await this.prisma.booking.findFirst({
+      where: {
+        status: BookingStatus.CONFIRMED,
+        arrivalAlertSentAt: null,
+        queueEntries: { none: {} },
+      },
+      orderBy: { slotStart: 'asc' },
+      select: { slotStart: true },
+    });
+    return next
+      ? new Date(next.slotStart.getTime() - ARRIVAL_ALERT_LEAD_MINUTES * 60_000)
+      : null;
+  }
+
   async sweep(): Promise<void> {
     const count = await this.sendDueAlerts();
     if (count > 0) this.logger.log(`Sent ${count} arrival alert(s).`);
