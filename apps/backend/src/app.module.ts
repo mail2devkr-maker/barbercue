@@ -33,11 +33,13 @@ import { VerificationModule } from './verification/verification.module';
 import { CustomerCreditsModule } from './credits/customer-credits.module';
 import { EmployeeModule } from './employee/employee.module';
 import { DbDeadlineSchedulerModule } from './common/db-deadline-scheduler/db-deadline-scheduler.module';
+import { SiteMetricsModule } from './site-metrics/site-metrics.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DbDeadlineSchedulerModule,
+    SiteMetricsModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
     PrismaModule,
