@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "../lib/auth-context";
 import { SiteHeader } from "../components/layout/SiteHeader";
 import { SiteFooter } from "../components/layout/SiteFooter";
+import { UniqueVisitorTracker } from "../components/analytics/UniqueVisitorTracker";
 
 // next/font self-hosts these at build time (no runtime request to Google, no layout shift) and
 // exposes each as a CSS variable so globals.css can assign them without a hardcoded font stack
@@ -58,6 +59,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${fraunces.variable} ${workSans.variable}`}>
       <body>
+        <UniqueVisitorTracker />
         <AuthProvider>
           <SiteHeader />
           {children}

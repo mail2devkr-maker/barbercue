@@ -32,6 +32,7 @@ export class AdminMonitoringService {
       bookingCount,
       liveQueueCount,
       premiumCount,
+      visitorStats,
       shops,
       staff,
       customers,
@@ -58,6 +59,10 @@ export class AdminMonitoringService {
           status: CustomerSubscriptionStatus.ACTIVE,
           periodEnd: { gt: now },
         },
+      }),
+      this.prisma.siteVisitor.aggregate({
+        _count: { _all: true },
+        _min: { firstSeenAt: true },
       }),
       this.prisma.salon.findMany({
         take: MONITORING_LIMIT,
@@ -135,12 +140,14 @@ export class AdminMonitoringService {
 
     return {
       generatedAt: now.toISOString(),
+      visitorTrackingStartedAt: visitorStats._min.firstSeenAt?.toISOString() ?? null,
       counts: {
         shops: shopCount,
         owners: ownerCount,
         staff: staffUserCount,
         customers: customerCount,
         bookings: bookingCount,
+        websiteVisitors: visitorStats._count._all,
         liveQueueEntries: liveQueueCount,
         activePremiumSubscriptions: premiumCount,
       },

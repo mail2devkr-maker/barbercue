@@ -905,3 +905,12 @@ export const grantPromotionalCreditsSchema = z.object({
   expiresAt: z.string().datetime().optional(),
 });
 export type GrantPromotionalCreditsInput = z.infer<typeof grantPromotionalCreditsSchema>;
+
+
+// First-party FastQue visitor registration. The browser-generated UUID is never stored raw in the
+// database; the backend hashes it before persistence. This endpoint records one durable unique
+// browser/device visitor, not every page view.
+export const siteVisitSchema = z.object({
+  visitorId: z.string().uuid(),
+});
+export type SiteVisitInput = z.infer<typeof siteVisitSchema>;

@@ -54,6 +54,11 @@ export const EMPLOYEE_RESERVED_ID_MIN = 1;
 export const EMPLOYEE_RESERVED_ID_MAX = 100;
 export const EMPLOYEE_STANDARD_ID_START = 101;
 
+export const SITE_METRICS_PATHS = {
+  siteMetrics: 'site-metrics',
+  visit: 'visit',
+} as const;
+
 export const ADMIN_PATHS = {
   admin: 'admin',
   overview: 'overview',
