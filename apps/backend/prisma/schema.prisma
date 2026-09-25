@@ -27,6 +27,7 @@ enum Role {
   SALON_OWNER
   FIELD_EXECUTIVE
   PLATFORM_ADMIN
+  PLATFORM_VIEWER
 }
 
 // Auth security fix (session-audience scoping): which login SURFACE a session was authenticated
