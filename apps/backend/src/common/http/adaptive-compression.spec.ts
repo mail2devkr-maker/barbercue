@@ -1,5 +1,7 @@
+import type { NextFunction, Request, Response } from 'express';
 import * as zlib from 'node:zlib';
 import {
+  adaptiveCompressionMiddleware,
   compressBuffer,
   getRuntimeSupportedEncodings,
   negotiateContentEncoding,
@@ -62,6 +64,56 @@ describe('adaptive HTTP compression', () => {
     expect(negotiateContentEncoding('*;q=1', ['zstd', 'br', 'gzip'])).toBe(
       'zstd',
     );
+  });
+
+  it('compresses a serialized JSON response and emits the negotiation headers', async () => {
+    let sentBody: unknown;
+    let markSent!: () => void;
+    const sent = new Promise<void>((resolve) => {
+      markSent = resolve;
+    });
+    const headers = new Map<string, string>([
+      ['content-type', 'application/json; charset=utf-8'],
+    ]);
+
+    const response = {
+      statusCode: 200,
+      headersSent: false,
+      writableEnded: false,
+      getHeader(name: string) {
+        return headers.get(name.toLowerCase());
+      },
+      setHeader(name: string, value: string | number | readonly string[]) {
+        headers.set(name.toLowerCase(), Array.isArray(value) ? value.join(', ') : String(value));
+        return this;
+      },
+      removeHeader(name: string) {
+        headers.delete(name.toLowerCase());
+      },
+      send(body?: unknown) {
+        sentBody = body;
+        markSent();
+        return this;
+      },
+    } as unknown as Response;
+    const request = {
+      method: 'GET',
+      headers: { 'accept-encoding': 'gzip' },
+    } as unknown as Request;
+
+    adaptiveCompressionMiddleware(
+      request,
+      response,
+      (() => undefined) as NextFunction,
+    );
+    response.send(JSON.stringify({ payload: 'FastQue '.repeat(500) }));
+    await sent;
+
+    expect(response.getHeader('Content-Encoding')).toBe('gzip');
+    expect(String(response.getHeader('Vary'))).toContain('Accept-Encoding');
+    expect(Buffer.isBuffer(sentBody)).toBe(true);
+    const restored = zlib.gunzipSync(sentBody as Buffer).toString('utf8');
+    expect(JSON.parse(restored)).toEqual({ payload: 'FastQue '.repeat(500) });
   });
 
   it('round-trips gzip', async () => {
