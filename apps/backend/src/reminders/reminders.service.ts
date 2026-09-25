@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BookingStatus, summarizeServiceNames } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
+import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-deadline-scheduler.service';
 
 // How far ahead of a booking's slotStart the reminder fires. A single fixed window for V1 — no
 // per-user configurable window UI exists yet (that's Phase 13's communication-preferences job) —
@@ -30,9 +30,36 @@ export class RemindersService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly pushDispatch: PushDispatchService,
+    @Optional() private readonly deadlineScheduler?: DbDeadlineSchedulerService,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  onModuleInit(): void {
+    this.deadlineScheduler?.register({
+      name: 'booking-reminders',
+      domain: 'booking',
+      nextDueAt: () => this.findNextDueAt(),
+      runDue: () => this.sweep(),
+    });
+  }
+
+  private async findNextDueAt(): Promise<Date | null> {
+    const now = new Date();
+    const next = await this.prisma.booking.findFirst({
+      where: {
+        status: {
+          in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+        },
+        reminderSentAt: null,
+        slotStart: { gt: now },
+      },
+      orderBy: { slotStart: 'asc' },
+      select: { slotStart: true },
+    });
+    return next
+      ? new Date(next.slotStart.getTime() - REMINDER_WINDOW_MINUTES * 60_000)
+      : null;
+  }
+
   async sweep(): Promise<void> {
     const count = await this.sendDueReminders();
     if (count > 0) this.logger.log(`Sent ${count} appointment reminder(s).`);

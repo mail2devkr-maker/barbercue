@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BookingStatus } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-deadline-scheduler.service';
 
 // STATE_MACHINES.md: "PENDING_PAYMENT --> EXPIRED: payment hold timeout (10 min) — capacity
 // released." This is a fixed platform timeout on the *checkout* itself, not a per-salon setting
@@ -38,12 +38,29 @@ export class BookingExpiryService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly deadlineScheduler?: DbDeadlineSchedulerService,
   ) {}
 
-  // A 15-minute sweep interval against a 10-minute timeout would let an abandoned hold survive up
-  // to 25 minutes before being caught — every 5 minutes bounds the worst case to 15, much closer
-  // to the documented "10 min" contract.
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  onModuleInit(): void {
+    this.deadlineScheduler?.register({
+      name: 'booking-payment-expiry',
+      domain: 'booking',
+      nextDueAt: () => this.findNextDueAt(),
+      runDue: () => this.sweep(),
+    });
+  }
+
+  private async findNextDueAt(): Promise<Date | null> {
+    const next = await this.prisma.booking.findFirst({
+      where: { status: BookingStatus.PENDING_PAYMENT },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    });
+    return next
+      ? new Date(next.createdAt.getTime() + PAYMENT_HOLD_TIMEOUT_MINUTES * 60_000)
+      : null;
+  }
+
   async sweep(): Promise<void> {
     const count = await this.expireOverdueBookings();
     if (count > 0) this.logger.log(`Expired ${count} abandoned payment hold(s).`);

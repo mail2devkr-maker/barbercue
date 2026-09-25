@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -13,6 +13,7 @@ import { UserStatus, type AuthenticatedUser } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { JwtPayload } from '../auth/services/token.service';
 import { resolveCorsOrigins } from '../common/cors-origins';
+import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-deadline-scheduler.service';
 
 /**
  * API.md's `/realtime` namespace. JWT verified at handshake (`client.handshake.auth.token`),
@@ -43,6 +44,7 @@ export class RealtimeGateway implements OnGatewayConnection {
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    @Optional() private readonly deadlineScheduler?: DbDeadlineSchedulerService,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -83,6 +85,8 @@ export class RealtimeGateway implements OnGatewayConnection {
   }
 
   emitQueueUpdated(salonId: string): void {
+    this.deadlineScheduler?.signal('queue');
+    this.deadlineScheduler?.signal('booking');
     this.server.to(`salon:${salonId}`).emit('queue.updated', { salonId });
   }
 
@@ -130,18 +134,21 @@ export class RealtimeGateway implements OnGatewayConnection {
   // authoritative booking data via the existing owner bookings API rather than trusting a payload
   // shape here, so this event can never leak customer details by itself.
   emitBookingCreated(salonId: string, bookingId: string): void {
+    this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
       .emit('booking.created', { salonId, bookingId });
   }
 
   emitBookingCancelled(salonId: string, bookingId: string): void {
+    this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
       .emit('booking.cancelled', { salonId, bookingId });
   }
 
   emitBookingRescheduled(salonId: string, bookingId: string): void {
+    this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
       .emit('booking.rescheduled', { salonId, bookingId });
@@ -151,12 +158,14 @@ export class RealtimeGateway implements OnGatewayConnection {
   // every other booking emit, so the owner dashboard and the customer's own bookings page refetch
   // exactly like they already do for a customer-initiated cancellation.
   emitBookingNoShow(salonId: string, bookingId: string): void {
+    this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
       .emit('booking.no_show', { salonId, bookingId });
   }
 
   emitBookingExpired(salonId: string, bookingId: string): void {
+    this.deadlineScheduler?.signal('booking');
     this.server
       .to(`salon:${salonId}`)
       .emit('booking.expired', { salonId, bookingId });
@@ -167,6 +176,7 @@ export class RealtimeGateway implements OnGatewayConnection {
   // read this as a new no-show. Salon room for operator surfaces, customer room so the customer's
   // own bookings view can refetch. Ids-only, same convention as every emit here.
   emitBookingCorrected(salonId: string, bookingId: string, customerId: string): void {
+    this.deadlineScheduler?.signal('booking');
     const payload = { salonId, bookingId };
     this.server.to(`salon:${salonId}`).emit('booking.corrected', payload);
     this.server.to(`customer:${customerId}`).emit('booking.corrected', payload);
