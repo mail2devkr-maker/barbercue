@@ -361,11 +361,11 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
         {paymentInfo?.onlinePaymentAvailable ? (
           <Text style={styles.hint}>Online UPI payment is available. FastQue will show the shop QR and the exact server-confirmed amount after your booking is created.</Text>
         ) : paymentInfoError ? (
-          <Text style={styles.hint}>Payment information could not be loaded. FastQue will still verify the shop payment setup when you confirm.</Text>
+          <Text style={styles.hint}>Online payment information could not be loaded. You can still confirm your booking and pay at the shop.</Text>
         ) : paymentInfo ? (
-          <Text style={styles.paymentError}>Online booking is unavailable because this shop has not configured online payment yet.</Text>
+          <Text style={styles.hint}>Online UPI payment is not configured for this shop. You can still confirm your booking and pay at the shop.</Text>
         ) : (
-          <Text style={styles.hint}>Checking shop payment setup…</Text>
+          <Text style={styles.hint}>Checking online payment options… You can still confirm your booking.</Text>
         )}
       </Card>
       {error && <InlineError message={error} />}
@@ -375,7 +375,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
           Web (found while verifying this screen through the web target), which would silently
           make this button do nothing. */}
       {status === 'authenticated' ? (
-        <Button title={t.confirm} onPress={() => void handleConfirm()} loading={submitting} disabled={paymentInfo !== null && !paymentInfo.onlinePaymentAvailable} style={styles.actionButton} />
+        <Button title={t.confirm} onPress={() => void handleConfirm()} loading={submitting} style={styles.actionButton} />
       ) : (
         // Issue 2 (mobile launch mission) — browse-first, auth-last: a guest reaches this exact
         // screen with a real slot already chosen. Signing in here (not earlier) is what makes
