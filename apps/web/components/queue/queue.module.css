@@ -267,19 +267,27 @@
   align-items: center;
   gap: 10px;
   background: #ffffff;
+  /* This pill stays white even when the dashboard uses the dark theme, so its text must use
+     light-surface colors rather than theme-adaptive --bc-ink/--bc-muted values. */
+  color: #1c1a17;
 }
 
 .staffChipName {
   font-weight: 600;
-  color: var(--bc-ink);
+  color: #1c1a17;
   font-size: var(--bc-text-sm);
 }
 
 .staffChipStatus {
   font-weight: 700;
+  color: #6b6357;
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+}
+
+.staffChip .assignHint {
+  color: #6b6357;
 }
 
 .entryList {
