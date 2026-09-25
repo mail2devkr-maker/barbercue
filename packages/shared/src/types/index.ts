@@ -1388,12 +1388,16 @@ export interface SalonSetupReadinessDto {
 
 export interface PlatformAdminOverviewDto {
   generatedAt: string;
+  // Null only before the first real browser/device has registered. We intentionally do not
+  // fabricate a historical visitor estimate for traffic that predates first-party tracking.
+  visitorTrackingStartedAt: string | null;
   counts: {
     shops: number;
     owners: number;
     staff: number;
     customers: number;
     bookings: number;
+    websiteVisitors: number;
     liveQueueEntries: number;
     activePremiumSubscriptions: number;
   };
