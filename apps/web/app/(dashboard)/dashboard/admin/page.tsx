@@ -15,6 +15,10 @@ function dateTime(value: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function formatCount(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
+}
+
 export function getNextShopStatus(status: SalonStatus): { status: SalonStatus; label: string } | null {
   if (status === SalonStatus.PENDING) return { status: SalonStatus.ACTIVE, label: "Open shop" };
   if (status === SalonStatus.ACTIVE) return { status: SalonStatus.SUSPENDED, label: "Suspend" };
@@ -143,13 +147,40 @@ export default function AdminDashboardPage() {
 
       {data && (
         <>
+          <section className={styles.growthCounters} aria-label="FastQue real growth counters">
+            <article className={styles.growthCounter}>
+              <div className={styles.growthCounterTopline}>
+                <span>Bookings done till now</span>
+                <em>LIVE DB</em>
+              </div>
+              <strong>{formatCount(data.counts.bookings)}</strong>
+              <p>All booking records created in FastQue production.</p>
+            </article>
+
+            <article className={styles.growthCounter}>
+              <div className={styles.growthCounterTopline}>
+                <span>People visited fastque.com</span>
+                <em>FIRST-PARTY</em>
+              </div>
+              <strong>{formatCount(data.counts.websiteVisitors)}</strong>
+              <p>
+                Unique browser/device visitors; obvious bots excluded.
+                {data.visitorTrackingStartedAt
+                  ? ` Tracking started ${dateTime(data.visitorTrackingStartedAt)}.`
+                  : " Tracking is live; no visitor has been recorded yet."}
+              </p>
+            </article>
+          </section>
+          <p className={styles.counterTruthNote}>
+            Visitor count starts from first-party tracking rollout only—no estimated or fabricated historical backfill.
+          </p>
+
           <section className={styles.metrics} aria-label="Platform totals">
             {Object.entries({
               Shops: data.counts.shops,
               Owners: data.counts.owners,
               Staff: data.counts.staff,
               Customers: data.counts.customers,
-              Bookings: data.counts.bookings,
               "Live queue": data.counts.liveQueueEntries,
               "Active Premium": data.counts.activePremiumSubscriptions,
             }).map(([label, value]) => (
