@@ -1,5 +1,11 @@
 import * as Speech from 'expo-speech';
-import { Language, SPEECH_LOCALE, voiceAnnouncementsFor } from '@barbercue/shared';
+import {
+  Language,
+  OWNER_VOICE_PITCH,
+  speechLocaleForVoiceStyle,
+  voiceAnnouncementsForStyle,
+} from '@barbercue/shared';
+import { hydrateOwnerVoiceProfile } from './owner-voice-preference';
 
 // Build 10 physical-device retest (Hindi TTS blocker): Hindi new-booking spoke ENGLISH, and Hindi
 // cancellation produced total SILENCE. A prior pass already ruled out a stale "language" race (see
@@ -194,6 +200,12 @@ export function speakBooking(params: {
   language: Language;
   onHindiVoiceMissing?: () => void;
 }): void;
+export function speakBooking(params: {
+  event: 'preview';
+  bookingId: string;
+  language: Language;
+  onHindiVoiceMissing?: () => void;
+}): void;
 export function speakBooking(
   params:
     | {
@@ -208,27 +220,43 @@ export function speakBooking(
         onHindiVoiceMissing?: () => void;
       }
     | { event: 'booking.rescheduled'; bookingId: string; language: Language; date: string | null; time: string | null; onHindiVoiceMissing?: () => void }
-    | { event: 'booking.cancelled'; bookingId: string; language: Language; onHindiVoiceMissing?: () => void },
+    | { event: 'booking.cancelled'; bookingId: string; language: Language; onHindiVoiceMissing?: () => void }
+    | { event: 'preview'; bookingId: string; language: Language; onHindiVoiceMissing?: () => void },
 ): void {
   const { event, bookingId, language, onHindiVoiceMissing } = params;
-  const t = voiceAnnouncementsFor(language);
-  const text =
-    event === 'booking.created'
-      ? t.newBookingReceived(params.serviceName, params.barberName, params.salonName, params.date, params.time)
-      : event === 'booking.rescheduled'
-        ? t.bookingRescheduled(params.date, params.time)
-        : t.bookingCancelled();
-  // Persisted/selected app language is authoritative here — `language` is whatever the caller's
-  // own LanguageProvider-backed state currently holds, never re-derived or guessed from the device.
-  const requestedLocale = SPEECH_LOCALE[language] ?? SPEECH_LOCALE[Language.EN];
-  const isHindi = language === Language.HI;
-  const now = Date.now();
 
-  if (isHindi) maybeRefreshStaleNegativeCache(now);
+  void hydrateOwnerVoiceProfile().then((profile) => {
+    const t = voiceAnnouncementsForStyle(profile.style, language);
+    const text =
+      event === 'booking.created'
+        ? t.newBookingReceived(params.serviceName, params.barberName, params.salonName, params.date, params.time)
+        : event === 'booking.rescheduled'
+          ? t.bookingRescheduled(params.date, params.time)
+          : event === 'preview'
+            ? t.voiceAnnouncementsOn()
+            : t.bookingCancelled();
 
-  void getVoices().then((voices) => {
+    // Announcement language is intentionally independent of the UI language. "Same as app
+    // language" resolves back to `language`; explicit Hindi/English/Bihar-style choices override
+    // only speech, not the rest of the app.
+    const requestedLocale = speechLocaleForVoiceStyle(profile.style, language);
+    const isHindi = primarySubtagOf(requestedLocale) === 'hi';
+    const now = Date.now();
+
+    if (isHindi) maybeRefreshStaleNegativeCache(now);
+
+    void getVoices().then((voices) => {
     if (isHindi) {
-      const candidates = rankedHindiVoiceCandidates(voices, requestedLocale);
+      let candidates = rankedHindiVoiceCandidates(voices, requestedLocale);
+      if (profile.voiceIdentifier) {
+        const selectedIndex = candidates.findIndex((voice) => voice.identifier === profile.voiceIdentifier);
+        if (selectedIndex > 0) {
+          candidates = [
+            candidates[selectedIndex],
+            ...candidates.filter((_, index) => index !== selectedIndex),
+          ];
+        }
+      }
 
       // The core Hindi-blocker fix: never knowingly speak Hindi with an unmatched (English/
       // default) voice. Skip entirely rather than call Speech.speak and hope.
@@ -258,6 +286,7 @@ export function speakBooking(
         Speech.speak(text, {
           language: candidate.language ?? requestedLocale,
           voice: candidate.identifier,
+          pitch: OWNER_VOICE_PITCH[profile.tone],
           onStart: () => debugVoiceLog('[voice] onStart', { event, bookingId, voiceIdentifier: candidate.identifier }),
           onDone: () => debugVoiceLog('[voice] onDone', { event, bookingId, voiceIdentifier: candidate.identifier }),
           onStopped: () => debugVoiceLog('[voice] onStopped', { event, bookingId, voiceIdentifier: candidate.identifier }),
@@ -295,7 +324,15 @@ export function speakBooking(
     // English path — unchanged from before this follow-up. English's own physical retest already
     // passed with exactly this behavior: speak with the requested locale tag (with a matched voice
     // id when one exists), retry once with the bare primary subtag on a genuine engine error.
-    const matchedVoice = findMatchingVoice(voices, requestedLocale);
+    const requestedPrimary = primarySubtagOf(requestedLocale);
+    const selectedVoice = profile.voiceIdentifier
+      ? voices.find(
+          (voice) =>
+            voice.identifier === profile.voiceIdentifier &&
+            primarySubtagOf(voice.language ?? '') === requestedPrimary,
+        ) ?? null
+      : null;
+    const matchedVoice = selectedVoice ?? findMatchingVoice(voices, requestedLocale);
     debugVoiceLog('[voice] speaking', {
       event,
       bookingId,
@@ -311,6 +348,7 @@ export function speakBooking(
       Speech.speak(text, {
         language: languageTag,
         ...(matchedVoice ? { voice: matchedVoice.identifier } : {}),
+        pitch: OWNER_VOICE_PITCH[profile.tone],
         onStart: () => debugVoiceLog('[voice] onStart', { event, bookingId, languageTag }),
         onDone: () => debugVoiceLog('[voice] onDone', { event, bookingId, languageTag }),
         onStopped: () => debugVoiceLog('[voice] onStopped', { event, bookingId, languageTag }),
@@ -331,5 +369,6 @@ export function speakBooking(
       });
     }
     attempt(requestedLocale);
+    });
   });
 }
