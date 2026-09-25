@@ -155,7 +155,7 @@ export default function AdminDashboardPage() {
           Read-only access · contact details are masked · create, edit, approval, password-reset and deletion actions are disabled.
         </p>
       )}
-      {error && <p className={styles.error} role="alert">{error}</p>
+      {error && <p className={styles.error} role="alert">{error}</p>}
       {!data && !error && <p className={styles.loading} role="status">Loading platform activity…</p>}
 
       {data && (
