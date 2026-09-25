@@ -149,6 +149,11 @@ export function speakOwnerVoice(
   utterance.rate = 1;
 
   const compatibleVoices = matchingBrowserVoices(accountLanguage);
+  // Match mobile's proven Hindi safety rule: never knowingly hand Hindi text to an unrelated
+  // English/default voice. Some browser/OS engines ignore an unsupported hi-IN tag and keep their
+  // current English voice, which is worse than staying silent and asking the owner to install one.
+  if (primarySubtag(locale) === "hi" && compatibleVoices.length === 0) return false;
+
   const selected = profile.voiceURI
     ? compatibleVoices.find((voice) => voice.voiceURI === profile.voiceURI)
     : null;
