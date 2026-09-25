@@ -51,8 +51,12 @@ export class AdminController {
   ) {}
 
   @Get(ADMIN_PATHS.overview)
-  overview() {
-    return this.monitoring.getOverview();
+  @Roles(Role.PLATFORM_ADMIN, Role.PLATFORM_VIEWER)
+  overview(@CurrentUser() user: AuthenticatedUser) {
+    const readOnlyViewer =
+      user.roles.includes(Role.PLATFORM_VIEWER) &&
+      !user.roles.includes(Role.PLATFORM_ADMIN);
+    return this.monitoring.getOverview({ maskPii: readOnlyViewer });
   }
 
   @Get(ADMIN_PATHS.verification)
