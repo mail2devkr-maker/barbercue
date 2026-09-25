@@ -17,10 +17,10 @@ describe('DbDeadlineSchedulerService', () => {
   it('waits until the real deadline instead of polling every minute', async () => {
     const dueAt = new Date(Date.now() + 5_000);
     const nextDueAt = jest
-      .fn<Promise<Date | null>, []>()
+      .fn(async (): Promise<Date | null> => dueAt)
       .mockResolvedValueOnce(dueAt)
       .mockResolvedValueOnce(null);
-    const runDue = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
+    const runDue = jest.fn(async (): Promise<void> => undefined);
 
     service.register({
       name: 'test-job',
@@ -47,11 +47,11 @@ describe('DbDeadlineSchedulerService', () => {
     const firstDue = new Date(Date.now() + 60_000);
     const earlierDue = new Date(Date.now() + 2_000);
     const nextDueAt = jest
-      .fn<Promise<Date | null>, []>()
+      .fn(async (): Promise<Date | null> => firstDue)
       .mockResolvedValueOnce(firstDue)
       .mockResolvedValueOnce(earlierDue)
       .mockResolvedValueOnce(null);
-    const runDue = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
+    const runDue = jest.fn(async (): Promise<void> => undefined);
 
     service.register({
       name: 'test-job',
