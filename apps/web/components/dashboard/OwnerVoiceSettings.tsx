@@ -26,6 +26,7 @@ export function OwnerVoiceSettings() {
   const profile = useOwnerVoiceProfile();
   const accountLanguage = user?.preferredLanguage ?? Language.EN;
   const [voiceVersion, setVoiceVersion] = useState(0);
+  const [previewWarning, setPreviewWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -43,15 +44,26 @@ export function OwnerVoiceSettings() {
   );
 
   function updateStyle(style: OwnerVoiceStyle) {
+    setPreviewWarning(null);
     setOwnerVoiceProfile({ ...profile, style, voiceURI: null });
   }
 
   function updateTone(tone: OwnerVoiceTone) {
+    setPreviewWarning(null);
     setOwnerVoiceProfile({ ...profile, tone });
   }
 
   function preview() {
-    speakOwnerVoice(ownerVoiceAnnouncements(accountLanguage).voiceAnnouncementsOn(), accountLanguage);
+    setPreviewWarning(null);
+    const started = speakOwnerVoice(
+      ownerVoiceAnnouncements(accountLanguage).voiceAnnouncementsOn(),
+      accountLanguage,
+    );
+    if (!started) {
+      setPreviewWarning(
+        "No compatible Hindi voice is installed or exposed by this browser. Install/enable a Hindi text-to-speech voice, then try Preview again.",
+      );
+    }
   }
 
   return (
@@ -108,9 +120,10 @@ export function OwnerVoiceSettings() {
           </span>
           <select
             value={profile.voiceURI ?? ""}
-            onChange={(event) =>
-              setOwnerVoiceProfile({ ...profile, voiceURI: event.target.value || null })
-            }
+            onChange={(event) => {
+              setPreviewWarning(null);
+              setOwnerVoiceProfile({ ...profile, voiceURI: event.target.value || null });
+            }}
             className={styles.select}
           >
             <option value="">Automatic best match</option>
@@ -128,6 +141,11 @@ export function OwnerVoiceSettings() {
           )}
         </label>
 
+        {previewWarning && (
+          <p role="alert" style={{ margin: 0, color: "var(--bc-warn)", fontSize: 12 }}>
+            {previewWarning}
+          </p>
+        )}
         <div>
           <Button type="button" variant="outline" onClick={preview}>
             Preview selected voice
