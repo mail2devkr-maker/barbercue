@@ -11,7 +11,12 @@ describe('AdminController authorization', () => {
     ]);
   });
 
-  it('delegates the read-only monitoring operation', async () => {
+  it('allows PLATFORM_VIEWER on overview while keeping controller-level writes PLATFORM_ADMIN-only', async () => {
+    const reflector = new Reflector();
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.overview)).toEqual([
+      Role.PLATFORM_ADMIN,
+      Role.PLATFORM_VIEWER,
+    ]);
     const overview = { generatedAt: '2026-08-28T00:00:00.000Z' };
     const monitoring = { getOverview: jest.fn().mockResolvedValue(overview) };
     const verification = {
@@ -30,7 +35,23 @@ describe('AdminController authorization', () => {
       {} as never,
       {} as never,
     );
-    await expect(controller.overview()).resolves.toBe(overview);
+    await expect(
+      controller.overview({
+        id: 'viewer-1',
+        roles: [Role.PLATFORM_VIEWER],
+        audience: 'ADMIN',
+      } as never),
+    ).resolves.toBe(overview);
+    expect(monitoring.getOverview).toHaveBeenCalledWith({ maskPii: true });
+
+    monitoring.getOverview.mockClear();
+    monitoring.getOverview.mockResolvedValue(overview);
+    await controller.overview({
+      id: 'admin-1',
+      roles: [Role.PLATFORM_ADMIN],
+      audience: 'ADMIN',
+    } as never);
+    expect(monitoring.getOverview).toHaveBeenCalledWith({ maskPii: false });
   });
 
   // Phase 18 — the only mutating surface on this otherwise read-only controller: a human
