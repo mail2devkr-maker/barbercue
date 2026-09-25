@@ -4,15 +4,27 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { mkdirSync } from 'node:fs';
 import { AppModule } from './app.module';
+import { resolveCorsOrigins } from './common/cors-origins';
+import {
+  adaptiveCompressionMiddleware,
+  getRuntimeSupportedEncodings,
+} from './common/http/adaptive-compression';
 import {
   inspectLocalStorageConfig,
   LOCAL_STORAGE_URL_PREFIX,
 } from './storage/local-disk-storage-driver';
-import { resolveCorsOrigins } from './common/cors-origins';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Negotiate ordinary HTTP response compression from the client's real Accept-Encoding header.
+  // Runtime support is capability-detected so older local Node versions cannot break startup:
+  // zstd (when available) -> br -> gzip -> identity.
+  app.use(adaptiveCompressionMiddleware);
+  logger.log(
+    `HTTP response compression enabled: ${getRuntimeSupportedEncodings().join(' -> ')} -> identity.`,
+  );
 
   // API.md: base path /api/v1/...
   app.setGlobalPrefix('api/v1');
