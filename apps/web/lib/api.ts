@@ -43,6 +43,10 @@ function rawFetch(path: string, options: RequestInit): Promise<Response> {
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   if (!isFormData && !headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+  // Do not set Accept-Encoding here. Browsers own that forbidden request header and advertise only
+  // codecs they can actually decode. The backend negotiates zstd/br/gzip/identity from that real
+  // capability signal, and fetch transparently decodes the selected Content-Encoding.
+  //
   // Same-origin in production and development: the web app's Next.js rewrite forwards these
   // requests to the backend while the browser keeps the refresh cookie on the web origin.
   return fetch(`${API_BASE_URL}/${path}`, { ...options, headers, credentials: "include" });

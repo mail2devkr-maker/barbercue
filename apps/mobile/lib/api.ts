@@ -68,6 +68,10 @@ function rawFetch(path: string, options: RequestInit): Promise<Response> {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   if (!isFormData && !headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  // Do not force Accept-Encoding from JavaScript. The native HTTP stack must advertise only the
+  // codecs it can actually decode; the backend negotiates zstd/br/gzip/identity from that real
+  // capability signal and the transport transparently decodes the selected Content-Encoding.
+  //
   // No cookies on native — the refresh token travels explicitly in the request body instead
   // (see AuthController: body takes precedence over cookie, and mobile never sets a cookie).
   return fetch(`${API_BASE_URL}/${path}`, { ...options, headers });
