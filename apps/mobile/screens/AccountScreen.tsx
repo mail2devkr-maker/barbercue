@@ -20,6 +20,7 @@ import { useLanguage } from '../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Card, Button } from '../components/ui';
 import { InlineError } from '../components/ui/ErrorState';
+import { OwnerVoiceSettingsCard } from '../components/owner/OwnerVoiceSettingsCard';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import type { AccountStackParamList, TabParamList } from '../navigation/types';
 
@@ -141,6 +142,7 @@ export default function AccountScreen() {
 
   const otherSessionCount = sessions.filter((s) => !s.current).length;
   const isCustomerOnly = user?.roles.length === 1 && user.roles[0] === Role.CUSTOMER;
+  const isSalonOwner = Boolean(user?.roles.includes(Role.SALON_OWNER));
 
   return (
     <Screen refreshing={refreshing} onRefresh={() => void handleRefresh()}>
@@ -179,6 +181,8 @@ export default function AccountScreen() {
           ))}
         </View>
       </Card>
+
+      {isSalonOwner && <OwnerVoiceSettingsCard />}
 
       <Card style={styles.card}>
         <Text style={styles.cardTitle}>{t.listYourShopCta}</Text>
