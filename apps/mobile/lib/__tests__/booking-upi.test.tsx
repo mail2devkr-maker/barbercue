@@ -78,10 +78,22 @@ it('QR-only salon can confirm and pay by QR without an intent button', async () 
   paymentInfo = { ...info, upiVpa: null, upiPayeeName: null } as never;
   await render(); await confirm(); expect(qrImages()).toHaveLength(1); expect(payButtons()).toHaveLength(0);
 });
-it('unconfigured QR keeps confirm disabled', async () => {
+it('unconfigured QR still allows booking and pay-at-shop fallback', async () => {
   paymentInfo = { ...info, onlinePaymentAvailable: false, paymentQrImageUrl: null } as never;
-  await render(); expect(tree.root.findAllByType(Button).some((button: TestNode) => button.props.disabled)).toBe(true);
-  expect(qrImages()).toHaveLength(0); expect(payButtons()).toHaveLength(0);
+  await render();
+  const confirmButton = tree.root.findAllByType(Button).find(
+    (button: TestNode) => button.props.title === require('@barbercue/shared').uiStringsFor('EN').confirm,
+  )!;
+  expect(confirmButton.props.disabled).not.toBe(true);
+  expect(screenText()).toContain('You can still confirm your booking and pay at the shop');
+  expect(qrImages()).toHaveLength(0);
+  expect(payButtons()).toHaveLength(0);
+
+  await confirm();
+
+  expect((apiFetch as jest.Mock).mock.calls.filter(([, opts]) => opts?.method === 'POST')).toHaveLength(1);
+  expect(qrImages()).toHaveLength(0);
+  expect(payButtons()).toHaveLength(0);
 });
 it('server PAYMENT_QR_REQUIRED after a stale capability read never exposes pay action/QR', async () => {
   createBooking = async () => { throw new ApiError(400, { error: { code: 'PAYMENT_QR_REQUIRED', message: 'Shop payment QR is required' } }); };
