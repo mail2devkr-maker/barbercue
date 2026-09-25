@@ -1,5 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   QueueEntryStatus,
   type CancellationPolicyDto,
@@ -15,6 +14,7 @@ import {
   zonedWallTimeToUtc,
 } from '../common/timezone/timezone';
 import { QueueService } from './queue.service';
+import { DbDeadlineSchedulerService } from '../common/db-deadline-scheduler/db-deadline-scheduler.service';
 
 interface OperatingHoursRow {
   dayOfWeek: number;
@@ -83,9 +83,87 @@ export class QueueEntryExpiryService {
     private readonly availability: AvailabilityService,
     private readonly realtime: RealtimeGateway,
     private readonly queueService: QueueService,
+    @Optional() private readonly deadlineScheduler?: DbDeadlineSchedulerService,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  onModuleInit(): void {
+    this.deadlineScheduler?.register({
+      name: 'queue-expiry',
+      domain: 'queue',
+      nextDueAt: () => this.findNextDueAt(),
+      runDue: () => this.sweep(),
+    });
+  }
+
+  private async findNextDueAt(): Promise<Date | null> {
+    let earliest: Date | null = null;
+    const consider = (candidate: Date | null) => {
+      if (candidate && (!earliest || candidate.getTime() < earliest.getTime())) earliest = candidate;
+    };
+
+    const called = await this.prisma.queueEntry.findMany({
+      where: { status: QueueEntryStatus.CALLED },
+      select: { salonId: true, calledAt: true },
+    });
+    const policyCache = new Map<string, CancellationPolicyDto>();
+    for (const entry of called) {
+      if (!entry.calledAt) continue;
+      let policy = policyCache.get(entry.salonId);
+      if (!policy) {
+        policy = await this.cancellationPolicy.getEffectivePolicy(entry.salonId);
+        policyCache.set(entry.salonId, policy);
+      }
+      consider(
+        new Date(
+          entry.calledAt.getTime() +
+            policy.queueCallResponseGraceMinutes * 60_000,
+        ),
+      );
+    }
+
+    const waiting = await this.prisma.queueEntry.findMany({
+      where: { status: QueueEntryStatus.WAITING },
+      select: { salonId: true, joinedAt: true },
+    });
+    const timeZoneCache = new Map<string, string | null>();
+    const hoursCache = new Map<string, OperatingHoursRow[]>();
+
+    for (const entry of waiting) {
+      let timeZone = timeZoneCache.get(entry.salonId);
+      if (timeZone === undefined) {
+        timeZone = await this.availability.getSalonTimeZone(entry.salonId);
+        timeZoneCache.set(entry.salonId, timeZone);
+      }
+      if (!timeZone) continue;
+
+      let hours = hoursCache.get(entry.salonId);
+      if (!hours) {
+        hours = await this.prisma.operatingHours.findMany({
+          where: { salonId: entry.salonId },
+          select: {
+            dayOfWeek: true,
+            openTime: true,
+            closeTime: true,
+            isClosed: true,
+          },
+        });
+        hoursCache.set(entry.salonId, hours);
+      }
+
+      const dayEnd = zonedDayBounds(entry.joinedAt, timeZone)?.end ?? null;
+      const joinDateStr = utcToZonedDateStr(entry.joinedAt, timeZone);
+      const dayOfWeek = zonedDateToDayOfWeek(joinDateStr);
+      const today = hours.find((h) => h.dayOfWeek === dayOfWeek);
+      const boundary =
+        today && !today.isClosed
+          ? (zonedWallTimeToUtc(joinDateStr, today.closeTime, timeZone) ?? dayEnd)
+          : dayEnd;
+      consider(boundary);
+    }
+
+    return earliest;
+  }
+
   async sweep(): Promise<void> {
     const noShowCount = await this.markOverdueNoShows();
     if (noShowCount > 0) {
