@@ -17,12 +17,31 @@ const LIVE_QUEUE_STATUSES = [
   QueueEntryStatus.IN_SERVICE,
 ];
 
+
+function maskEmail(value: string | null): string | null {
+  if (!value) return value;
+  const [local, domain] = value.split('@');
+  if (!domain) return '***';
+  const visible = local.slice(0, Math.min(3, local.length));
+  return `${visible}***@${domain}`;
+}
+
+function maskPhone(value: string | null): string | null {
+  if (!value) return value;
+  const digits = value.replace(/\D/g, '');
+  if (digits.length <= 4) return '****';
+  const suffix = digits.slice(-2);
+  const prefix = value.trim().startsWith('+') ? '+' : '';
+  return `${prefix}******${suffix}`;
+}
+
 /** Bounded, read-only operational snapshot. No auth internals or credentials are selected. */
 @Injectable()
 export class AdminMonitoringService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOverview(): Promise<PlatformAdminOverviewDto> {
+  async getOverview(options: { maskPii?: boolean } = {}): Promise<PlatformAdminOverviewDto> {
+    const maskPii = options.maskPii === true;
     const now = new Date();
     const [
       shopCount,
@@ -157,8 +176,8 @@ export class AdminMonitoringService {
         name: shop.name,
         status: shop.status,
         subscriptionStatus: shop.subscriptionStatus,
-        ownerEmail: shop.owner.email,
-        ownerPhone: shop.owner.phone,
+        ownerEmail: maskPii ? maskEmail(shop.owner.email) : shop.owner.email,
+        ownerPhone: maskPii ? maskPhone(shop.owner.phone) : shop.owner.phone,
         staffCount: shop._count.staff,
         bookingCount: shop._count.bookings,
         liveQueueCount: shop._count.queueEntries,
@@ -170,14 +189,14 @@ export class AdminMonitoringService {
         status: member.status,
         salonName: member.salon.name,
         salonPublicId: member.salon.publicId,
-        email: member.user.email,
-        phone: member.user.phone,
+        email: maskPii ? maskEmail(member.user.email) : member.user.email,
+        phone: maskPii ? maskPhone(member.user.phone) : member.user.phone,
       })),
       customers: customers.map((customer) => ({
         id: customer.id,
         status: customer.status,
-        email: customer.email,
-        phone: customer.phone,
+        email: maskPii ? maskEmail(customer.email) : customer.email,
+        phone: maskPii ? maskPhone(customer.phone) : customer.phone,
         bookingCount: customer._count.bookings,
         queueEntryCount: customer._count.queueEntries,
         isPremium: customer.premiumSubscriptions.length > 0,
@@ -191,8 +210,8 @@ export class AdminMonitoringService {
         serviceName: summarizeServiceNames(
           resolveEffectiveBookingServices(booking).map((service) => service.serviceName),
         ),
-        customerEmail: booking.customer.email,
-        customerPhone: booking.customer.phone,
+        customerEmail: maskPii ? maskEmail(booking.customer.email) : booking.customer.email,
+        customerPhone: maskPii ? maskPhone(booking.customer.phone) : booking.customer.phone,
       })),
       recentQueue: recentQueue.map((entry) => ({
         id: entry.id,
@@ -201,7 +220,7 @@ export class AdminMonitoringService {
         joinedAt: entry.joinedAt.toISOString(),
         salonName: entry.salon.name,
         serviceName: entry.service?.name ?? null,
-        customerPhone: entry.customer?.phone ?? null,
+        customerPhone: maskPii ? maskPhone(entry.customer?.phone ?? null) : (entry.customer?.phone ?? null),
         assignedStaffName: entry.assignedStaff?.displayName ?? null,
         assignedChairLabel: entry.assignedChair?.label ?? null,
       })),
@@ -210,8 +229,8 @@ export class AdminMonitoringService {
         status: subscription.status,
         planName: subscription.plan.name,
         periodEnd: subscription.periodEnd.toISOString(),
-        customerEmail: subscription.user.email,
-        customerPhone: subscription.user.phone,
+        customerEmail: maskPii ? maskEmail(subscription.user.email) : subscription.user.email,
+        customerPhone: maskPii ? maskPhone(subscription.user.phone) : subscription.user.phone,
       })),
     };
   }
