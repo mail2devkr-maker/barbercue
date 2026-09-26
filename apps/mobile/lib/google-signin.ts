@@ -12,8 +12,9 @@ import { Platform } from 'react-native';
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
-// Whether this build has a Google web client ID at all — screens use this to decide whether to
-// render a "Continue with Google" button in the first place.
+// Whether this build has the native OAuth material required for the current platform. Android
+// needs the web client ID plus google-services.json; iOS additionally needs its iOS OAuth client
+// ID so the matching callback URL scheme can be generated at native build time.
 export const GOOGLE_SIGNIN_CONFIGURED = Boolean(
   GOOGLE_WEB_CLIENT_ID && (Platform.OS !== 'ios' || GOOGLE_IOS_CLIENT_ID),
 );
