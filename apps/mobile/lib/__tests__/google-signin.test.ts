@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 import type { UiStrings } from '@barbercue/shared';
+import { Platform } from 'react-native';
 
 const mockConfigure = jest.fn();
 const mockCheckPlayServices = jest.fn();
@@ -30,12 +31,17 @@ const t = {
   couldNotCompleteGoogleSignIn: 'Could not complete Google sign-in. Please try again.',
 } as UiStrings;
 
-function loadGoogleSignIn(webClientId?: string) {
+function loadGoogleSignIn(webClientId?: string, iosClientId?: string) {
   jest.resetModules();
   if (webClientId === undefined) {
     delete process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
   } else {
     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = webClientId;
+  }
+  if (iosClientId === undefined) {
+    delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  } else {
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = iosClientId;
   }
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('../google-signin') as typeof import('../google-signin');
@@ -43,6 +49,7 @@ function loadGoogleSignIn(webClientId?: string) {
 
 describe('native Google Sign-In service', () => {
   const originalWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const originalIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -53,6 +60,11 @@ describe('native Google Sign-In service', () => {
       delete process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     } else {
       process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = originalWebClientId;
+    }
+    if (originalIosClientId === undefined) {
+      delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+    } else {
+      process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = originalIosClientId;
     }
   });
 
@@ -69,17 +81,25 @@ describe('native Google Sign-In service', () => {
   });
 
   it('configures Credential Manager and invokes the Google action for a configured build', async () => {
-    const { getGoogleIdToken } = loadGoogleSignIn('web-client-id.apps.googleusercontent.com');
+    const iosClientId = Platform.OS === 'ios' ? 'ios-client-id.apps.googleusercontent.com' : undefined;
+    const { getGoogleIdToken } = loadGoogleSignIn('web-client-id.apps.googleusercontent.com', iosClientId);
     mockSignIn.mockResolvedValue({ kind: 'success', data: { idToken: 'id-token' } });
 
     await expect(getGoogleIdToken(t)).resolves.toEqual({ type: 'success', idToken: 'id-token' });
-    expect(mockConfigure).toHaveBeenCalledWith({ webClientId: 'web-client-id.apps.googleusercontent.com' });
+    expect(mockConfigure).toHaveBeenCalledWith(
+      Platform.OS === 'ios'
+        ? { webClientId: 'web-client-id.apps.googleusercontent.com', iosClientId: 'ios-client-id.apps.googleusercontent.com' }
+        : { webClientId: 'web-client-id.apps.googleusercontent.com' },
+    );
     expect(mockCheckPlayServices).toHaveBeenCalledTimes(1);
     expect(mockSignIn).toHaveBeenCalledTimes(1);
   });
 
   it('uses the documented interactive fallbacks for a first-time Google user', async () => {
-    const { getGoogleIdToken } = loadGoogleSignIn('web-client-id.apps.googleusercontent.com');
+    const { getGoogleIdToken } = loadGoogleSignIn(
+      'web-client-id.apps.googleusercontent.com',
+      Platform.OS === 'ios' ? 'ios-client-id.apps.googleusercontent.com' : undefined,
+    );
     mockSignIn.mockResolvedValue({ kind: 'no-saved-credential' });
     mockCreateAccount.mockResolvedValue({ kind: 'no-saved-credential' });
     mockPresentExplicitSignIn.mockResolvedValue({ kind: 'success', data: { idToken: 'id-token' } });
@@ -90,7 +110,10 @@ describe('native Google Sign-In service', () => {
   });
 
   it('returns a typed account-picker error for the UI to show when native Google authentication fails', async () => {
-    const { getGoogleIdToken } = loadGoogleSignIn('web-client-id.apps.googleusercontent.com');
+    const { getGoogleIdToken } = loadGoogleSignIn(
+      'web-client-id.apps.googleusercontent.com',
+      Platform.OS === 'ios' ? 'ios-client-id.apps.googleusercontent.com' : undefined,
+    );
     mockSignIn.mockRejectedValue(new Error('native configuration failed'));
 
     await expect(getGoogleIdToken(t)).resolves.toEqual({
