@@ -89,10 +89,35 @@ jobs:
           fi
           ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" fastque-ios-simulator.zip
 
+      - name: Launch on iOS Simulator
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find ios-derived/Build/Products/Release-iphonesimulator -maxdepth 1 -name '*.app' -type d -print -quit)"
+          if [[ -z "$APP_PATH" ]]; then
+            echo "Simulator .app not found" >&2
+            exit 1
+          fi
+          UDID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); candidates=[x for arr in d["devices"].values() for x in arr if x.get("isAvailable") and x.get("name","").startswith("iPhone")]; assert candidates, "No available iPhone simulator"; print(candidates[0]["udid"])')"
+          echo "simulator=$UDID"
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP_PATH"
+          LAUNCH_OUTPUT="$(xcrun simctl launch "$UDID" com.dcw.fastque)"
+          echo "$LAUNCH_OUTPUT"
+          sleep 8
+          xcrun simctl io "$UDID" screenshot fastque-ios-simulator-launch.png
+          test -s fastque-ios-simulator-launch.png
+          xcrun simctl terminate "$UDID" com.dcw.fastque
+          xcrun simctl shutdown "$UDID"
+
       - name: Upload simulator artifact
         uses: actions/upload-artifact@v4
         with:
           name: fastque-ios-simulator
-          path: apps/mobile/fastque-ios-simulator.zip
+          path: |
+            apps/mobile/fastque-ios-simulator.zip
+            apps/mobile/fastque-ios-simulator-launch.png
           if-no-files-found: error
           retention-days: 7
