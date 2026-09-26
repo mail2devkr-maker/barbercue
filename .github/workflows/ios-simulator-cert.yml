@@ -73,7 +73,12 @@ jobs:
             echo "No .xcworkspace generated" >&2
             exit 1
           fi
-          SCHEME="$(xcodebuild -list -json -workspace "$WORKSPACE" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["workspace"]["schemes"][0])')"
+          SCHEME="FastQue"
+          if ! xcodebuild -list -json -workspace "$WORKSPACE" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert "FastQue" in d["workspace"]["schemes"]'; then
+            echo "FastQue app scheme not found in workspace" >&2
+            xcodebuild -list -workspace "$WORKSPACE"
+            exit 1
+          fi
           echo "workspace=$WORKSPACE"
           echo "scheme=$SCHEME"
           xcodebuild             -workspace "$WORKSPACE"             -scheme "$SCHEME"             -configuration Release             -sdk iphonesimulator             -destination 'generic/platform=iOS Simulator'             -derivedDataPath ios-derived             CODE_SIGNING_ALLOWED=NO             build
