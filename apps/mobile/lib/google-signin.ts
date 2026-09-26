@@ -7,12 +7,16 @@ import {
   statusCodes,
 } from 'react-native-nitro-google-signin';
 import type { UiStrings } from '@barbercue/shared';
+import { Platform } from 'react-native';
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
 // Whether this build has a Google web client ID at all — screens use this to decide whether to
 // render a "Continue with Google" button in the first place.
-export const GOOGLE_SIGNIN_CONFIGURED = Boolean(GOOGLE_WEB_CLIENT_ID);
+export const GOOGLE_SIGNIN_CONFIGURED = Boolean(
+  GOOGLE_WEB_CLIENT_ID && (Platform.OS !== 'ios' || GOOGLE_IOS_CLIENT_ID),
+);
 
 // GoogleOneTapSignIn.configure() is a native singleton — calling it more than once is wasted work
 // (and, on some SDK versions, redundant native calls). Both the customer and owner/staff login
@@ -23,7 +27,12 @@ export const GOOGLE_SIGNIN_CONFIGURED = Boolean(GOOGLE_WEB_CLIENT_ID);
 let configured = false;
 function ensureConfigured(): void {
   if (configured || !GOOGLE_WEB_CLIENT_ID) return;
-  GoogleOneTapSignIn.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+  if (Platform.OS === 'ios') {
+    if (!GOOGLE_IOS_CLIENT_ID) return;
+    GoogleOneTapSignIn.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, iosClientId: GOOGLE_IOS_CLIENT_ID });
+  } else {
+    GoogleOneTapSignIn.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+  }
   configured = true;
 }
 
@@ -41,7 +50,7 @@ export type GoogleSignInResult =
 // user like a dead button with nothing in the logs. Callers must not log idToken or any other
 // token value from the result.
 export async function getGoogleIdToken(t: UiStrings): Promise<GoogleSignInResult> {
-  if (!GOOGLE_WEB_CLIENT_ID) {
+  if (!GOOGLE_WEB_CLIENT_ID || (Platform.OS === 'ios' && !GOOGLE_IOS_CLIENT_ID)) {
     return { type: 'error', stage: 'PLAY_SERVICES', message: t.googleSignInUnavailable };
   }
   ensureConfigured();
