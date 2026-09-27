@@ -463,6 +463,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
             value={q}
             onChangeText={(value) => {
               setQ(value);
+              setService(null);
               setServiceSuggestionsOpen(true);
             }}
             onFocus={() => setServiceSuggestionsOpen(true)}
@@ -492,6 +493,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                 style={styles.serviceSuggestion}
                 onPress={() => {
                   setQ(suggestion.name);
+                  setService(null);
                   setServiceSuggestionsOpen(false);
                 }}
                 accessibilityRole="button"
