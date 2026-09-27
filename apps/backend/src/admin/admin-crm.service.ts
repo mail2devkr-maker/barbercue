@@ -1,15 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import {
+  CrmErrorCode,
   CrmFollowUpStatus,
   CrmLeadStatus,
+  CrmTaskStatus,
   type AdminCrmEmployeePerformanceDto,
   type AdminCrmFollowUpDto,
   type AdminCrmLeadDto,
   type AdminCrmOverviewDto,
+  type AdminCrmTaskDto,
   type AdminCrmVisitDto,
+  type CreateCrmTaskInput,
   type EmployeeProfileDto,
+  type UpdateAdminCrmTaskInput,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { AppException } from '../common/exceptions/app.exception';
 
 const ADMIN_LIST_LIMIT = 500;
 const OVERVIEW_ACTIVITY_LIMIT = 50;
@@ -32,10 +38,13 @@ export class AdminCrmService {
       visitsLast30Days,
       openFollowUps,
       overdueFollowUps,
+      openTasks,
+      overdueTasks,
       performance,
       recentLeadRows,
       recentVisitRows,
       dueFollowUpRows,
+      dueTaskRows,
     ] = await Promise.all([
       this.prisma.employeeCrmLead.count(),
       this.prisma.employeeCrmLead.count({ where: { status: CrmLeadStatus.ONBOARDED } }),
@@ -44,10 +53,27 @@ export class AdminCrmService {
       this.prisma.employeeCrmFollowUp.count({
         where: { status: CrmFollowUpStatus.OPEN, dueAt: { lt: now } },
       }),
+      this.prisma.employeeCrmTask.count({
+        where: { status: { in: [CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS] } },
+      }),
+      this.prisma.employeeCrmTask.count({
+        where: {
+          status: { in: [CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS] },
+          dueAt: { lt: now },
+        },
+      }),
       Promise.all(
         employees.map(async (employee): Promise<AdminCrmEmployeePerformanceDto> => {
-          const [employeeLeads, employeeOnboarded, employeeVisits, employeeOpen, employeeOverdue] =
-            await Promise.all([
+          const [
+            employeeLeads,
+            employeeOnboarded,
+            employeeVisits,
+            employeeOpen,
+            employeeOverdue,
+            employeeOpenTasks,
+            employeeOverdueTasks,
+            employeeCompletedTasks,
+          ] = await Promise.all([
               this.prisma.employeeCrmLead.count({
                 where: { employeeProfileId: employee.id },
               }),
@@ -76,6 +102,26 @@ export class AdminCrmService {
                   dueAt: { lt: now },
                 },
               }),
+              this.prisma.employeeCrmTask.count({
+                where: {
+                  employeeProfileId: employee.id,
+                  status: { in: [CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS] },
+                },
+              }),
+              this.prisma.employeeCrmTask.count({
+                where: {
+                  employeeProfileId: employee.id,
+                  status: { in: [CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS] },
+                  dueAt: { lt: now },
+                },
+              }),
+              this.prisma.employeeCrmTask.count({
+                where: {
+                  employeeProfileId: employee.id,
+                  status: CrmTaskStatus.COMPLETED,
+                  completedAt: { gte: thirtyDaysAgo },
+                },
+              }),
             ]);
           return {
             employee: {
@@ -91,6 +137,9 @@ export class AdminCrmService {
             visitsLast30Days: employeeVisits,
             openFollowUps: employeeOpen,
             overdueFollowUps: employeeOverdue,
+            openTasks: employeeOpenTasks,
+            overdueTasks: employeeOverdueTasks,
+            completedTasksLast30Days: employeeCompletedTasks,
             conversionRatePercent:
               employeeLeads > 0
                 ? Math.round((employeeOnboarded / employeeLeads) * 1000) / 10
@@ -117,6 +166,12 @@ export class AdminCrmService {
         take: OVERVIEW_ACTIVITY_LIMIT,
         include: { employeeProfile: true, lead: { select: { shopName: true } } },
       }),
+      this.prisma.employeeCrmTask.findMany({
+        where: { status: { in: [CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS] } },
+        orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+        take: OVERVIEW_ACTIVITY_LIMIT,
+        include: { employeeProfile: true },
+      }),
     ]);
 
     return {
@@ -127,12 +182,15 @@ export class AdminCrmService {
         visitsLast30Days,
         openFollowUps,
         overdueFollowUps,
+        openTasks,
+        overdueTasks,
       },
       conversionRatePercent: leads > 0 ? Math.round((onboarded / leads) * 1000) / 10 : 0,
       performance,
       recentLeads: recentLeadRows.map((row) => this.leadDto(row)),
       recentVisits: recentVisitRows.map((row) => this.visitDto(row)),
       dueFollowUps: dueFollowUpRows.map((row) => this.followUpDto(row)),
+      dueTasks: dueTaskRows.map((row) => this.taskDto(row)),
     };
   }
 
@@ -184,6 +242,142 @@ export class AdminCrmService {
       include: { employeeProfile: true, lead: { select: { shopName: true } } },
     });
     return rows.map((row) => this.followUpDto(row));
+  }
+
+  async listTasks(
+    employeeProfileId?: string,
+    status?: string,
+  ): Promise<AdminCrmTaskDto[]> {
+    const normalizedStatus =
+      status && Object.values(CrmTaskStatus).includes(status as CrmTaskStatus)
+        ? (status as CrmTaskStatus)
+        : undefined;
+    const rows = await this.prisma.employeeCrmTask.findMany({
+      where: {
+        ...(employeeProfileId ? { employeeProfileId } : {}),
+        ...(normalizedStatus ? { status: normalizedStatus } : {}),
+      },
+      orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { createdAt: 'desc' }],
+      take: ADMIN_LIST_LIMIT,
+      include: { employeeProfile: true },
+    });
+    return rows.map((row) => this.taskDto(row));
+  }
+
+  async createTask(
+    actorUserId: string,
+    input: CreateCrmTaskInput,
+  ): Promise<AdminCrmTaskDto> {
+    const employee = await this.prisma.employeeProfile.findUnique({
+      where: { id: input.employeeProfileId },
+    });
+    if (!employee) {
+      throw new AppException(
+        'EMPLOYEE_NOT_FOUND',
+        'Employee not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const row = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.employeeCrmTask.create({
+        data: {
+          employeeProfileId: employee.id,
+          createdByUserId: actorUserId,
+          title: input.title.trim(),
+          description: input.description?.trim() || null,
+          dueAt: input.dueAt ? new Date(input.dueAt) : null,
+          priority: input.priority,
+        },
+        include: { employeeProfile: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'CRM_TASK_ASSIGNED',
+          entityType: 'EmployeeCrmTask',
+          entityId: created.id,
+          metadata: {
+            employeeCode: employee.employeeCode,
+            priority: created.priority,
+            dueAt: created.dueAt?.toISOString() ?? null,
+          },
+        },
+      });
+      return created;
+    });
+    return this.taskDto(row);
+  }
+
+  async updateTask(
+    actorUserId: string,
+    taskId: string,
+    input: UpdateAdminCrmTaskInput,
+  ): Promise<AdminCrmTaskDto> {
+    const existing = await this.prisma.employeeCrmTask.findUnique({
+      where: { id: taskId },
+    });
+    if (!existing) {
+      throw new AppException(
+        CrmErrorCode.TASK_NOT_FOUND,
+        'Task not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (input.employeeProfileId) {
+      const employee = await this.prisma.employeeProfile.findUnique({
+        where: { id: input.employeeProfileId },
+        select: { id: true },
+      });
+      if (!employee) {
+        throw new AppException(
+          'EMPLOYEE_NOT_FOUND',
+          'Employee not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+    }
+
+    const nextStatus = input.status ?? existing.status;
+    const completed = nextStatus === CrmTaskStatus.COMPLETED;
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.employeeCrmTask.update({
+        where: { id: taskId },
+        data: {
+          ...(input.employeeProfileId !== undefined
+            ? { employeeProfileId: input.employeeProfileId }
+            : {}),
+          ...(input.title !== undefined ? { title: input.title.trim() } : {}),
+          ...(input.description !== undefined
+            ? { description: input.description?.trim() || null }
+            : {}),
+          ...(input.dueAt !== undefined
+            ? { dueAt: input.dueAt ? new Date(input.dueAt) : null }
+            : {}),
+          ...(input.priority !== undefined ? { priority: input.priority } : {}),
+          ...(input.status !== undefined ? { status: input.status } : {}),
+          ...(input.completionNotes !== undefined
+            ? { completionNotes: input.completionNotes?.trim() || null }
+            : {}),
+          ...(input.status !== undefined ? { completedAt: completed ? new Date() : null } : {}),
+        },
+        include: { employeeProfile: true },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId,
+          action: 'CRM_TASK_ADMIN_UPDATED',
+          entityType: 'EmployeeCrmTask',
+          entityId: updated.id,
+          metadata: {
+            previousStatus: existing.status,
+            status: updated.status,
+            employeeCode: updated.employeeProfile.employeeCode,
+          },
+        },
+      });
+      return updated;
+    });
+    return this.taskDto(row);
   }
 
   private employeeSummary(profile: {
@@ -273,6 +467,40 @@ export class AdminCrmService {
       outcome: row.outcome,
       notes: row.notes,
       createdAt: row.createdAt.toISOString(),
+      employee: this.employeeSummary(row.employeeProfile),
+    };
+  }
+
+  private taskDto(row: {
+    id: string;
+    title: string;
+    description: string | null;
+    dueAt: Date | null;
+    priority: AdminCrmTaskDto['priority'];
+    status: AdminCrmTaskDto['status'];
+    completedAt: Date | null;
+    completionNotes: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    employeeProfile: {
+      id: string;
+      employeeCode: string;
+      fullName: string;
+      territory: string | null;
+      joinedAt: Date;
+    };
+  }): AdminCrmTaskDto {
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      dueAt: row.dueAt?.toISOString() ?? null,
+      priority: row.priority,
+      status: row.status,
+      completedAt: row.completedAt?.toISOString() ?? null,
+      completionNotes: row.completionNotes,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
       employee: this.employeeSummary(row.employeeProfile),
     };
   }
