@@ -34,7 +34,7 @@ function organizationJsonLd() {
     url: SITE_URL,
     potentialAction: {
       "@type": "SearchAction",
-      target: `${SITE_URL}/search?q={search_term_string}`,
+      target: `${SITE_URL}/search?service={search_term_string}`,
       "query-input": "required name=search_term_string",
     },
   };
@@ -94,9 +94,8 @@ export default async function HomePage() {
             </div>
 
             {/* Reference B's search bar — shown at the standard/mobile tiers instead of the CTA
-                pair above. Suggests real cities and real shops as you type; picking one submits
-                the canonical params those results actually need (see HeroSearchField's own
-                comment), free text still searches shop/service via the real "q" param. */}
+                pair above. Service-only autocomplete is backed by real active FastQue services;
+                city/locality refinement, including manual city entry, lives on the full search page. */}
             <HeroSearchField cities={cities} />
 
             <HeroFeatureRow />
