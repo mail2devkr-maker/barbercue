@@ -4,6 +4,7 @@ import {
   CrmFollowUpStatus,
   CrmLeadStatus,
   CrmTaskStatus,
+  UserStatus,
   type AdminCrmEmployeePerformanceDto,
   type AdminCrmFollowUpDto,
   type AdminCrmLeadDto,
@@ -268,8 +269,11 @@ export class AdminCrmService {
     actorUserId: string,
     input: CreateCrmTaskInput,
   ): Promise<AdminCrmTaskDto> {
-    const employee = await this.prisma.employeeProfile.findUnique({
-      where: { id: input.employeeProfileId },
+    const employee = await this.prisma.employeeProfile.findFirst({
+      where: {
+        id: input.employeeProfileId,
+        user: { status: UserStatus.ACTIVE },
+      },
     });
     if (!employee) {
       throw new AppException(
@@ -324,8 +328,11 @@ export class AdminCrmService {
       );
     }
     if (input.employeeProfileId) {
-      const employee = await this.prisma.employeeProfile.findUnique({
-        where: { id: input.employeeProfileId },
+      const employee = await this.prisma.employeeProfile.findFirst({
+        where: {
+          id: input.employeeProfileId,
+          user: { status: UserStatus.ACTIVE },
+        },
         select: { id: true },
       });
       if (!employee) {
