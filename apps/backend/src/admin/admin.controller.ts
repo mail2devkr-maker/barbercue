@@ -11,9 +11,12 @@ import {
 import {
   ADMIN_PATHS,
   Role,
+  createCrmTaskSchema,
   decideVerificationSchema,
+  updateAdminCrmTaskSchema,
   updateSalonStatusSchema,
   type AuthenticatedUser,
+  type CreateCrmTaskInput,
   createEmployeeSchema,
   createSpecialEmployeeSchema,
   resetEmployeePasswordSchema,
@@ -22,6 +25,7 @@ import {
   type CreateSpecialEmployeeInput,
   type DecideVerificationInput,
   type ResetEmployeePasswordInput,
+  type UpdateAdminCrmTaskInput,
   type UpdateEmployeeInput,
   type UpdateSalonStatusInput,
 } from '@barbercue/shared';
@@ -158,6 +162,32 @@ export class AdminController {
     @Query('status') status?: string,
   ) {
     return this.crm.listFollowUps(employeeId, status);
+  }
+
+  @Get(`${ADMIN_PATHS.crm}/${ADMIN_PATHS.tasks}`)
+  crmTasks(
+    @Query('employeeId') employeeId?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.crm.listTasks(employeeId, status);
+  }
+
+  @Post(`${ADMIN_PATHS.crm}/${ADMIN_PATHS.tasks}`)
+  createCrmTask(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createCrmTaskSchema)) body: CreateCrmTaskInput,
+  ) {
+    return this.crm.createTask(user.id, body);
+  }
+
+  @Patch(`${ADMIN_PATHS.crm}/${ADMIN_PATHS.tasks}/:id`)
+  updateCrmTask(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateAdminCrmTaskSchema))
+    body: UpdateAdminCrmTaskInput,
+  ) {
+    return this.crm.updateTask(user.id, id, body);
   }
 
   @Delete(`${ADMIN_PATHS.shops}/:id`)
