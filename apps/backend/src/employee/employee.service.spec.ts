@@ -3,6 +3,8 @@ import {
   CrmFollowUpStatus,
   CrmLeadSource,
   CrmLeadStatus,
+  CrmTaskPriority,
+  CrmTaskStatus,
   CrmVisitOutcome,
 } from '@barbercue/shared';
 import { EmployeeService } from './employee.service';
@@ -52,6 +54,9 @@ describe('EmployeeService CRM', () => {
       employeeCrmVisit: {
         create: jest.fn(),
       },
+      employeeCrmTask: {
+        update: jest.fn(),
+      },
       auditLog: {
         create: jest.fn().mockResolvedValue({}),
       },
@@ -73,6 +78,12 @@ describe('EmployeeService CRM', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       employeeCrmFollowUp: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        update: jest.fn(),
+      },
+      employeeCrmTask: {
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
@@ -270,5 +281,96 @@ describe('EmployeeService CRM', () => {
       include: { lead: { select: { shopName: true } } },
     });
     expect(result.status).toBe(CrmFollowUpStatus.OPEN);
+  });
+
+  it('lists only tasks assigned to the authenticated employee', async () => {
+    prisma.employeeCrmTask.findMany.mockResolvedValue([]);
+    await service.listTasks('user-1', CrmTaskStatus.IN_PROGRESS);
+    expect(prisma.employeeCrmTask.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          employeeProfileId: profile.id,
+          status: CrmTaskStatus.IN_PROGRESS,
+        },
+      }),
+    );
+  });
+
+  it('lets an employee start an assigned task and writes an audit event', async () => {
+    const existing = {
+      id: 'task-1',
+      employeeProfileId: profile.id,
+      createdByUserId: 'admin-1',
+      title: 'Visit 10 salons',
+      description: null,
+      dueAt: new Date('2026-09-30T10:00:00.000Z'),
+      priority: CrmTaskPriority.HIGH,
+      status: CrmTaskStatus.TODO,
+      completedAt: null,
+      completionNotes: null,
+      createdAt: new Date('2026-09-28T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-28T00:00:00.000Z'),
+    };
+    prisma.employeeCrmTask.findFirst.mockResolvedValue(existing);
+    prisma.__tx.employeeCrmTask.update.mockResolvedValue({
+      ...existing,
+      status: CrmTaskStatus.IN_PROGRESS,
+      updatedAt: new Date('2026-09-28T01:00:00.000Z'),
+    });
+
+    const result = await service.updateTask('user-1', 'task-1', {
+      status: CrmTaskStatus.IN_PROGRESS,
+    });
+
+    expect(result.status).toBe(CrmTaskStatus.IN_PROGRESS);
+    expect(prisma.__tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: 'user-1',
+        action: 'CRM_TASK_EMPLOYEE_UPDATED',
+        entityId: 'task-1',
+      }),
+    });
+  });
+
+  it('persists completion notes when the employee completes a task', async () => {
+    const existing = {
+      id: 'task-2',
+      employeeProfileId: profile.id,
+      createdByUserId: 'admin-1',
+      title: 'Demo salon',
+      description: null,
+      dueAt: null,
+      priority: CrmTaskPriority.MEDIUM,
+      status: CrmTaskStatus.IN_PROGRESS,
+      completedAt: null,
+      completionNotes: null,
+      createdAt: new Date('2026-09-28T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-28T00:00:00.000Z'),
+    };
+    prisma.employeeCrmTask.findFirst.mockResolvedValue(existing);
+    prisma.__tx.employeeCrmTask.update.mockResolvedValue({
+      ...existing,
+      status: CrmTaskStatus.COMPLETED,
+      completedAt: new Date('2026-09-28T02:00:00.000Z'),
+      completionNotes: 'Visited and completed demo',
+      updatedAt: new Date('2026-09-28T02:00:00.000Z'),
+    });
+
+    const result = await service.updateTask('user-1', 'task-2', {
+      status: CrmTaskStatus.COMPLETED,
+      completionNotes: 'Visited and completed demo',
+    });
+
+    expect(result.status).toBe(CrmTaskStatus.COMPLETED);
+    expect(result.completionNotes).toBe('Visited and completed demo');
+    expect(prisma.__tx.employeeCrmTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: CrmTaskStatus.COMPLETED,
+          completionNotes: 'Visited and completed demo',
+          completedAt: expect.any(Date),
+        }),
+      }),
+    );
   });
 });
