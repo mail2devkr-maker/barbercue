@@ -16,6 +16,8 @@ import {
   StaffMemberStatus,
   VerificationStatus,
   type LiveStatsDto,
+  type ServiceSuggestionDto,
+  type ServiceSuggestionQueryInput,
   type SalonListItemDto,
   type SalonProfileDto,
   type PublicSalonStatusDto,
@@ -116,21 +118,48 @@ export class SalonsService {
   // empty platform, never a fabricated placeholder; the homepage hides a stat rather than render a
   // misleading "0" (see LiveStatsDto's own doc comment).
   async getLiveStats(): Promise<LiveStatsDto> {
-    const [activeShopCount, liveWaitingCount] = await Promise.all([
-      this.prisma.salon.count({ where: { status: SalonStatus.ACTIVE } }),
-      this.prisma.queueEntry.count({
-        where: {
-          status: {
-            in: [
-              QueueEntryStatus.WAITING,
-              QueueEntryStatus.CALLED,
-              QueueEntryStatus.IN_SERVICE,
-            ],
-          },
+    const liveWaitingCount = await this.prisma.queueEntry.count({
+      where: {
+        status: {
+          in: [
+            QueueEntryStatus.WAITING,
+            QueueEntryStatus.CALLED,
+            QueueEntryStatus.IN_SERVICE,
+          ],
         },
-      }),
-    ]);
-    return { activeShopCount, liveWaitingCount };
+      },
+    });
+    return { liveWaitingCount };
+  }
+
+  async serviceSuggestions(
+    query: ServiceSuggestionQueryInput,
+  ): Promise<ServiceSuggestionDto[]> {
+    const term = query.q.trim();
+    const limit = query.limit ?? 12;
+    const rows = await this.prisma.service.findMany({
+      where: {
+        isActive: true,
+        salon: { status: SalonStatus.ACTIVE },
+        OR: [
+          { name: { contains: term, mode: 'insensitive' } },
+          { category: { contains: term, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: [{ name: 'asc' }, { category: 'asc' }],
+      take: Math.min(limit * 5, 100),
+      select: { name: true, category: true },
+    });
+    const seen = new Set<string>();
+    const suggestions: ServiceSuggestionDto[] = [];
+    for (const row of rows) {
+      const key = row.name.trim().toLocaleLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      suggestions.push({ name: row.name, category: row.category });
+      if (suggestions.length >= limit) break;
+    }
+    return suggestions;
   }
 
   async search(
@@ -147,8 +176,26 @@ export class SalonsService {
       where.city = query.countryCode
         ? { slug: query.city, countryCode: query.countryCode.toUpperCase() }
         : { slug: query.city };
+    } else if (query.cityText) {
+      where.city = query.countryCode
+        ? {
+            name: { contains: query.cityText, mode: 'insensitive' },
+            countryCode: query.countryCode.toUpperCase(),
+          }
+        : { name: { contains: query.cityText, mode: 'insensitive' } };
     }
-    if (query.locality) where.locality = { slug: query.locality };
+    if (query.locality) {
+      where.locality = { slug: query.locality };
+    } else if (query.localityText) {
+      where.AND = [
+        {
+          OR: [
+            { locality: { name: { contains: query.localityText, mode: 'insensitive' } } },
+            { addressLine: { contains: query.localityText, mode: 'insensitive' } },
+          ],
+        },
+      ];
+    }
 
     // Part 8/9 correction: a price filter must be satisfied by the SAME service that matched the
     // text search, never any unrelated service the salon happens to also offer. Searching "Haircut"
