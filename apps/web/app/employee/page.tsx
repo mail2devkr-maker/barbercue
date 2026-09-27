@@ -7,19 +7,21 @@ import {
   CrmFollowUpStatus,
   CrmLeadSource,
   CrmLeadStatus,
+  CrmTaskStatus,
   CrmVisitOutcome,
   EMPLOYEE_PATHS,
   Role,
   type EmployeeCrmDashboardDto,
   type EmployeeCrmFollowUpDto,
   type EmployeeCrmLeadDto,
+  type EmployeeCrmTaskDto,
   type EmployeeCrmVisitDto,
 } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import styles from "./employee.module.css";
 
-type Tab = "dashboard" | "leads" | "visits" | "followups";
+type Tab = "dashboard" | "leads" | "visits" | "followups" | "tasks";
 
 const employeeBase = EMPLOYEE_PATHS.employee;
 
@@ -50,6 +52,8 @@ export default function EmployeeDashboardPage() {
   const [leads, setLeads] = useState<EmployeeCrmLeadDto[]>([]);
   const [visits, setVisits] = useState<EmployeeCrmVisitDto[]>([]);
   const [followUps, setFollowUps] = useState<EmployeeCrmFollowUpDto[]>([]);
+  const [tasks, setTasks] = useState<EmployeeCrmTaskDto[]>([]);
+  const [taskNotes, setTaskNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,16 +87,18 @@ export default function EmployeeDashboardPage() {
 
   const refreshAll = useCallback(async () => {
     try {
-      const [nextDashboard, nextLeads, nextVisits, nextFollowUps] = await Promise.all([
+      const [nextDashboard, nextLeads, nextVisits, nextFollowUps, nextTasks] = await Promise.all([
         apiFetch<EmployeeCrmDashboardDto>(`${employeeBase}/${EMPLOYEE_PATHS.dashboard}`),
         apiFetch<EmployeeCrmLeadDto[]>(`${employeeBase}/${EMPLOYEE_PATHS.leads}`),
         apiFetch<EmployeeCrmVisitDto[]>(`${employeeBase}/${EMPLOYEE_PATHS.visits}`),
         apiFetch<EmployeeCrmFollowUpDto[]>(`${employeeBase}/${EMPLOYEE_PATHS.followUps}`),
+        apiFetch<EmployeeCrmTaskDto[]>(`${employeeBase}/${EMPLOYEE_PATHS.tasks}`),
       ]);
       setDashboard(nextDashboard);
       setLeads(nextLeads);
       setVisits(nextVisits);
       setFollowUps(nextFollowUps);
+      setTasks(nextTasks);
       setError(null);
     } catch (requestError) {
       setError(errorMessage(requestError, "Could not load the CRM workspace."));
@@ -290,6 +296,38 @@ export default function EmployeeDashboardPage() {
     }
   }
 
+  async function updateTask(task: EmployeeCrmTaskDto, nextStatus: CrmTaskStatus) {
+    const completionNotes = (taskNotes[task.id] ?? "").trim();
+    if (nextStatus === CrmTaskStatus.COMPLETED && !completionNotes) {
+      setError("Add completion notes before marking a task complete.");
+      return;
+    }
+    setBusy(`task-${task.id}`);
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch<EmployeeCrmTaskDto>(
+        `${employeeBase}/${EMPLOYEE_PATHS.tasks}/${task.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: nextStatus,
+            completionNotes: nextStatus === CrmTaskStatus.COMPLETED ? completionNotes : undefined,
+          }),
+        },
+      );
+      if (nextStatus === CrmTaskStatus.COMPLETED) {
+        setTaskNotes((current) => ({ ...current, [task.id]: "" }));
+        setSuccess("Task completed and reported.");
+      }
+      await refreshAll();
+    } catch (requestError) {
+      setError(errorMessage(requestError, "Could not update the task."));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (status === "loading" || loading || !dashboard) {
     return (
       <main className={styles.page}>
@@ -332,7 +370,7 @@ export default function EmployeeDashboardPage() {
             <h1 className={styles.title}>Field work, follow-ups and onboarding—in one place.</h1>
             <p className={styles.sub}>
               Territory: <strong>{profile.territory ?? "Not assigned"}</strong>. Every lead, visit,
-              follow-up and onboarded shop below is attributed to your Employee ID.
+              follow-up, assigned task and onboarded shop below is attributed to your Employee ID.
             </p>
           </div>
         </section>
@@ -343,6 +381,7 @@ export default function EmployeeDashboardPage() {
             ["leads", `Leads (${leads.length})`],
             ["visits", `Visits (${visits.length})`],
             ["followups", `Follow-ups (${openFollowUps.length})`],
+            ["tasks", `Tasks (${dashboard.counts.openTasks})`],
           ] as const).map(([value, label]) => (
             <button
               key={value}
@@ -364,7 +403,11 @@ export default function EmployeeDashboardPage() {
           <article><strong>{dashboard.counts.visitsLast30Days}</strong><span>Visits · 30 days</span></article>
           <article><strong>{dashboard.counts.openFollowUps}</strong><span>Open follow-ups</span></article>
           <article className={dashboard.counts.overdueFollowUps > 0 ? styles.metricWarning : ""}>
-            <strong>{dashboard.counts.overdueFollowUps}</strong><span>Overdue</span>
+            <strong>{dashboard.counts.overdueFollowUps}</strong><span>Overdue follow-ups</span>
+          </article>
+          <article><strong>{dashboard.counts.openTasks}</strong><span>Open tasks</span></article>
+          <article className={dashboard.counts.overdueTasks > 0 ? styles.metricWarning : ""}>
+            <strong>{dashboard.counts.overdueTasks}</strong><span>Overdue tasks</span>
           </article>
           <article><strong>{dashboard.conversionRatePercent}%</strong><span>Conversion</span></article>
         </section>
@@ -389,6 +432,21 @@ export default function EmployeeDashboardPage() {
                     <span>{dateTime(item.dueAt)}</span>
                   </div>
                 ))}
+              </div>
+            </section>
+            <section className={styles.panel}>
+              <div className={styles.sectionHeader}><h2>Assigned tasks</h2><span>{dashboard.counts.overdueTasks} overdue</span></div>
+              <div className={styles.compactList}>
+                {dashboard.upcomingTasks.length === 0 && <p className={styles.empty}>No open tasks.</p>}
+                {dashboard.upcomingTasks.map((task) => {
+                  const overdue = !!task.dueAt && new Date(task.dueAt).getTime() < Date.now();
+                  return (
+                    <div key={task.id} className={overdue ? styles.overdueRow : styles.compactRow}>
+                      <div><strong>{task.title}</strong><small>{pretty(task.priority)} · {pretty(task.status)}</small></div>
+                      <span>{task.dueAt ? dateTime(task.dueAt) : "No due date"}</span>
+                    </div>
+                  );
+                })}
               </div>
             </section>
             <section className={styles.panel}>
@@ -517,6 +575,68 @@ export default function EmployeeDashboardPage() {
                 </tr>)}</tbody></table></div>
             </section>
           </>
+        )}
+
+        {tab === "tasks" && (
+          <section className={styles.panel}>
+            <div className={styles.sectionHeader}>
+              <h2>My assigned tasks</h2>
+              <span>Update progress and leave completion evidence</span>
+            </div>
+            <div className={styles.tableWrap}>
+              <table>
+                <thead><tr><th>Task</th><th>Priority</th><th>Due</th><th>Status</th><th>Completion notes</th><th>Action</th></tr></thead>
+                <tbody>
+                  {tasks.map((task) => {
+                    const open = task.status === CrmTaskStatus.TODO || task.status === CrmTaskStatus.IN_PROGRESS;
+                    const overdue = open && !!task.dueAt && new Date(task.dueAt).getTime() < Date.now();
+                    return (
+                      <tr key={task.id} className={overdue ? styles.overdueTableRow : undefined}>
+                        <td><strong>{task.title}</strong><small>{task.description ?? "No extra instructions"}</small></td>
+                        <td>{pretty(task.priority)}</td>
+                        <td>{task.dueAt ? dateTime(task.dueAt) : "No due date"}{overdue && <small className={styles.overdueText}>Overdue</small>}</td>
+                        <td><span className={styles.status}>{pretty(task.status)}</span></td>
+                        <td>
+                          {task.status === CrmTaskStatus.COMPLETED ? (
+                            task.completionNotes ?? "Completed"
+                          ) : (
+                            <input
+                              value={taskNotes[task.id] ?? ""}
+                              onChange={(event) => setTaskNotes((current) => ({ ...current, [task.id]: event.target.value }))}
+                              placeholder="What was completed / result"
+                            />
+                          )}
+                        </td>
+                        <td>
+                          {task.status === CrmTaskStatus.TODO && (
+                            <button
+                              type="button"
+                              className={styles.smallButton}
+                              disabled={busy === `task-${task.id}`}
+                              onClick={() => void updateTask(task, CrmTaskStatus.IN_PROGRESS)}
+                            >
+                              Start
+                            </button>
+                          )}
+                          {open && (
+                            <button
+                              type="button"
+                              className={styles.smallButton}
+                              disabled={busy === `task-${task.id}`}
+                              onClick={() => void updateTask(task, CrmTaskStatus.COMPLETED)}
+                            >
+                              Complete
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {tasks.length === 0 && <p className={styles.empty}>No tasks have been assigned to you.</p>}
+          </section>
         )}
 
         {tab === "followups" && (
