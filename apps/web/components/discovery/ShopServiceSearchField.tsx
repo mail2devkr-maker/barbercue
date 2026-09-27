@@ -6,7 +6,7 @@ import { DISCOVERY_PATHS, type ServiceSuggestionDto } from "@barbercue/shared";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 const SEARCH_DEBOUNCE_MS = 250;
 const MIN_QUERY_LENGTH = 1;
-const RESULT_LIMIT = 12;
+const RESULT_LIMIT = 30;
 
 type SuggestState =
   | { kind: "idle" }
