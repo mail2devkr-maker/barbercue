@@ -105,7 +105,7 @@ const SERVICE_ALL_ID = 'all';
 // button under the field instead of forcing both into an oversized row.
 const NARROW_SEARCH_ROW_WIDTH = 380;
 const SERVICE_SUGGESTION_DEBOUNCE_MS = 250;
-const SERVICE_SUGGESTION_LIMIT = 10;
+const SERVICE_SUGGESTION_LIMIT = 30;
 
 function pricePresetLabel(preset: PricePreset, t: UiStrings): string {
   if (preset.id === 'any') return t.priceFilterAny;
