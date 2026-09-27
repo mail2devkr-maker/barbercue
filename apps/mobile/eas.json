@@ -30,7 +30,8 @@
       "channel": "preview",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true"
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true",
+        "FASTQUE_IOS_BUILD": "true"
       },
       "ios": {
         "simulator": false
@@ -40,10 +41,18 @@
       "environment": "preview",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true"
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true",
+        "FASTQUE_IOS_BUILD": "true"
       },
       "ios": {
         "simulator": true
+      }
+    },
+    "ios-production": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false",
+        "FASTQUE_IOS_BUILD": "true"
       }
     }
   },
