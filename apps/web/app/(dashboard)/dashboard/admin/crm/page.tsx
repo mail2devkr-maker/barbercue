@@ -7,6 +7,7 @@ import {
   CrmLeadStatus,
   CrmTaskPriority,
   CrmTaskStatus,
+  UserStatus,
   type AdminCrmFollowUpDto,
   type AdminCrmLeadDto,
   type AdminCrmOverviewDto,
@@ -298,11 +299,13 @@ export default function AdminCrmPage() {
                   onChange={(event) => setTaskForm((current) => ({ ...current, employeeProfileId: event.target.value }))}
                 >
                   <option value="">Choose employee</option>
-                  {overview.performance.map((row) => (
-                    <option key={row.employee.id} value={row.employee.id}>
-                      {row.employee.employeeCode} · {row.employee.fullName}
-                    </option>
-                  ))}
+                  {overview.performance
+                    .filter((row) => row.employee.status === UserStatus.ACTIVE)
+                    .map((row) => (
+                      <option key={row.employee.id} value={row.employee.id}>
+                        {row.employee.employeeCode} · {row.employee.fullName}
+                      </option>
+                    ))}
                 </select>
               </div>
               <div>
