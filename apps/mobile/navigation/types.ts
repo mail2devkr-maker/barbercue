@@ -20,7 +20,7 @@ export type SearchStackParamList = {
   // initialQuery/initialLat/initialLng let Home's search card and Popular Services chips hand off
   // a query (and, when the customer's location is already known, coordinates) into this screen's
   // own search state without duplicating the search engine itself — SalonSearchScreen still owns
-  // `q`/`nearMe` and the one real request to DISCOVERY_PATHS.salons.
+  // service-text/`nearMe` and the one real request to DISCOVERY_PATHS.salons.
   SalonSearch: { selectedStyleName?: string; initialQuery?: string; initialLat?: number; initialLng?: number } | undefined;
   SalonProfile: {
     countryCode: string;
