@@ -129,4 +129,61 @@ describe('AdminCrmService', () => {
     expect(result.dueTasks[0].title).toBe('Visit 10 salons');
     expect(result.recentLeads[0].onboardedSalon?.publicId).toBe('BC-SHOP-000123');
   });
+
+  it('assigns tasks only to active employees and audits the assignment', async () => {
+    const employee = {
+      id: 'emp-active',
+      employeeCode: 'FQ-FE-00102',
+      fullName: 'Active Executive',
+      territory: 'Ghaziabad',
+      joinedAt: new Date('2026-09-25T00:00:00.000Z'),
+    };
+    const created = {
+      id: 'task-new',
+      employeeProfileId: employee.id,
+      createdByUserId: 'admin-1',
+      title: 'Visit 10 salons',
+      description: 'Cover Vaishali',
+      dueAt: new Date('2026-09-30T10:00:00.000Z'),
+      priority: CrmTaskPriority.HIGH,
+      status: CrmTaskStatus.TODO,
+      completedAt: null,
+      completionNotes: null,
+      createdAt: new Date('2026-09-28T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-28T00:00:00.000Z'),
+      employeeProfile: employee,
+    };
+    const tx = {
+      employeeCrmTask: { create: jest.fn().mockResolvedValue(created) },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma: any = {
+      employeeProfile: { findFirst: jest.fn().mockResolvedValue(employee) },
+      $transaction: jest.fn((callback: any) => callback(tx)),
+    };
+
+    const result = await new AdminCrmService(prisma).createTask('admin-1', {
+      employeeProfileId: employee.id,
+      title: 'Visit 10 salons',
+      description: 'Cover Vaishali',
+      dueAt: '2026-09-30T10:00:00.000Z',
+      priority: CrmTaskPriority.HIGH,
+    });
+
+    expect(prisma.employeeProfile.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: employee.id,
+        user: { status: UserStatus.ACTIVE },
+      },
+    });
+    expect(result.title).toBe('Visit 10 salons');
+    expect(tx.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: 'admin-1',
+        action: 'CRM_TASK_ASSIGNED',
+        entityId: 'task-new',
+      }),
+    });
+  });
+
 });
