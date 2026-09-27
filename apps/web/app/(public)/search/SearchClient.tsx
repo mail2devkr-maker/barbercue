@@ -459,7 +459,6 @@ export default function SearchClient() {
     else params.delete("service");
     if (customCityMode && customCity.trim()) {
       params.set("cityText", customCity.trim());
-      params.set("countryCode", "IN");
     } else if (selectedCity) {
       params.set("city", selectedCity.slug);
       params.set("countryCode", selectedCity.countryCode);
