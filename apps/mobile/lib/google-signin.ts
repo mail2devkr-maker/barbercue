@@ -9,6 +9,7 @@ import {
 import type { UiStrings } from '@barbercue/shared';
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
 // Whether this build has a Google web client ID at all — screens use this to decide whether to
 // render a "Continue with Google" button in the first place.
@@ -23,7 +24,10 @@ export const GOOGLE_SIGNIN_CONFIGURED = Boolean(GOOGLE_WEB_CLIENT_ID);
 let configured = false;
 function ensureConfigured(): void {
   if (configured || !GOOGLE_WEB_CLIENT_ID) return;
-  GoogleOneTapSignIn.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+  GoogleOneTapSignIn.configure({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    ...(GOOGLE_IOS_CLIENT_ID ? { iosClientId: GOOGLE_IOS_CLIENT_ID } : {}),
+  });
   configured = true;
 }
 
