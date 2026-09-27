@@ -324,7 +324,6 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       else if (filters.service) params.set('service', filters.service);
       if (cityText.trim()) {
         params.set('cityText', cityText.trim());
-        params.set('countryCode', 'IN');
       }
       if (localityText.trim()) params.set('localityText', localityText.trim());
       if (coords) {
