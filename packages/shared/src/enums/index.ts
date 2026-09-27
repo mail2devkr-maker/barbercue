@@ -145,10 +145,27 @@ export const CrmFollowUpStatus = {
 export type CrmFollowUpStatus =
   (typeof CrmFollowUpStatus)[keyof typeof CrmFollowUpStatus];
 
+export const CrmTaskStatus = {
+  TODO: 'TODO',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type CrmTaskStatus = (typeof CrmTaskStatus)[keyof typeof CrmTaskStatus];
+
+export const CrmTaskPriority = {
+  LOW: 'LOW',
+  MEDIUM: 'MEDIUM',
+  HIGH: 'HIGH',
+  URGENT: 'URGENT',
+} as const;
+export type CrmTaskPriority = (typeof CrmTaskPriority)[keyof typeof CrmTaskPriority];
+
 export const CrmErrorCode = {
   LEAD_NOT_FOUND: 'LEAD_NOT_FOUND',
   VISIT_NOT_FOUND: 'VISIT_NOT_FOUND',
   FOLLOW_UP_NOT_FOUND: 'FOLLOW_UP_NOT_FOUND',
+  TASK_NOT_FOUND: 'TASK_NOT_FOUND',
   SALON_NOT_FOUND: 'SALON_NOT_FOUND',
   SALON_ALREADY_ATTRIBUTED: 'SALON_ALREADY_ATTRIBUTED',
   INVALID_LEAD_TRANSITION: 'INVALID_LEAD_TRANSITION',

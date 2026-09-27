@@ -8,6 +8,7 @@ import {
   onboardCrmLeadSchema,
   updateCrmFollowUpSchema,
   updateCrmLeadSchema,
+  updateEmployeeCrmTaskSchema,
   type AuthenticatedUser,
   type CreateCrmFollowUpInput,
   type CreateCrmLeadInput,
@@ -15,6 +16,7 @@ import {
   type OnboardCrmLeadInput,
   type UpdateCrmFollowUpInput,
   type UpdateCrmLeadInput,
+  type UpdateEmployeeCrmTaskInput,
 } from '@barbercue/shared';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -108,5 +110,23 @@ export class EmployeeController {
     body: UpdateCrmFollowUpInput,
   ) {
     return this.employees.updateFollowUp(user.id, id, body);
+  }
+
+  @Get(EMPLOYEE_PATHS.tasks)
+  listTasks(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('status') status?: string,
+  ) {
+    return this.employees.listTasks(user.id, status);
+  }
+
+  @Patch(`${EMPLOYEE_PATHS.tasks}/:id`)
+  updateTask(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateEmployeeCrmTaskSchema))
+    body: UpdateEmployeeCrmTaskInput,
+  ) {
+    return this.employees.updateTask(user.id, id, body);
   }
 }

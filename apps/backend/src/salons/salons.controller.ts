@@ -15,9 +15,11 @@ import {
   Role,
   registerSalonSchema,
   salonSearchQuerySchema,
+  serviceSuggestionQuerySchema,
   type AuthenticatedUser,
   type RegisterSalonInput,
   type SalonSearchQueryInput,
+  type ServiceSuggestionQueryInput,
 } from '@barbercue/shared';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -40,6 +42,13 @@ export class SalonsController {
   @UsePipes(new ZodValidationPipe(salonSearchQuerySchema))
   search(@Query() query: SalonSearchQueryInput) {
     return this.salonsService.search(query);
+  }
+
+  @Public()
+  @Get(DISCOVERY_PATHS.serviceSuggestions)
+  @UsePipes(new ZodValidationPipe(serviceSuggestionQuerySchema))
+  serviceSuggestions(@Query() query: ServiceSuggestionQueryInput) {
+    return this.salonsService.serviceSuggestions(query);
   }
 
   // @Res({passthrough: true}) + setRefreshCookie: registerSalon mints a fresh STAFF-audience

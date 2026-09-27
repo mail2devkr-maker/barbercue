@@ -5,9 +5,13 @@ import {
   ADMIN_PATHS,
   CrmFollowUpStatus,
   CrmLeadStatus,
+  CrmTaskPriority,
+  CrmTaskStatus,
+  UserStatus,
   type AdminCrmFollowUpDto,
   type AdminCrmLeadDto,
   type AdminCrmOverviewDto,
+  type AdminCrmTaskDto,
   type AdminCrmVisitDto,
 } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../../../../lib/api";
@@ -36,6 +40,15 @@ export default function AdminCrmPage() {
   const [leads, setLeads] = useState<AdminCrmLeadDto[]>([]);
   const [visits, setVisits] = useState<AdminCrmVisitDto[]>([]);
   const [followUps, setFollowUps] = useState<AdminCrmFollowUpDto[]>([]);
+  const [tasks, setTasks] = useState<AdminCrmTaskDto[]>([]);
+  const [taskBusy, setTaskBusy] = useState<string | null>(null);
+  const [taskForm, setTaskForm] = useState({
+    employeeProfileId: "",
+    title: "",
+    description: "",
+    dueAt: "",
+    priority: CrmTaskPriority.MEDIUM as CrmTaskPriority,
+  });
   const [employeeId, setEmployeeId] = useState("ALL");
   const [leadStatus, setLeadStatus] = useState<"ALL" | CrmLeadStatus>("ALL");
   const [query, setQuery] = useState("");
@@ -45,16 +58,18 @@ export default function AdminCrmPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextOverview, nextLeads, nextVisits, nextFollowUps] = await Promise.all([
+      const [nextOverview, nextLeads, nextVisits, nextFollowUps, nextTasks] = await Promise.all([
         apiFetch<AdminCrmOverviewDto>(`${crmBase}/${ADMIN_PATHS.overview}`),
         apiFetch<AdminCrmLeadDto[]>(`${crmBase}/${ADMIN_PATHS.leads}`),
         apiFetch<AdminCrmVisitDto[]>(`${crmBase}/${ADMIN_PATHS.visits}`),
         apiFetch<AdminCrmFollowUpDto[]>(`${crmBase}/${ADMIN_PATHS.followUps}`),
+        apiFetch<AdminCrmTaskDto[]>(`${crmBase}/${ADMIN_PATHS.tasks}`),
       ]);
       setOverview(nextOverview);
       setLeads(nextLeads);
       setVisits(nextVisits);
       setFollowUps(nextFollowUps);
+      setTasks(nextTasks);
       setError(null);
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -108,13 +123,74 @@ export default function AdminCrmPage() {
     [employeeId, followUps, q],
   );
 
+  const filteredTasks = useMemo(
+    () =>
+      tasks.filter(
+        (task) =>
+          (employeeId === "ALL" || task.employee.id === employeeId) &&
+          (!q ||
+            `${task.title} ${task.description ?? ""} ${task.employee.fullName} ${task.employee.employeeCode} ${task.status} ${task.priority}`
+              .toLowerCase()
+              .includes(q)),
+      ),
+    [employeeId, q, tasks],
+  );
+
+  async function createTask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!taskForm.employeeProfileId || !taskForm.title.trim()) {
+      setError("Choose an employee and enter a task title.");
+      return;
+    }
+    setTaskBusy("create");
+    try {
+      await apiFetch<AdminCrmTaskDto>(`${crmBase}/${ADMIN_PATHS.tasks}`, {
+        method: "POST",
+        body: JSON.stringify({
+          employeeProfileId: taskForm.employeeProfileId,
+          title: taskForm.title.trim(),
+          description: taskForm.description.trim() || undefined,
+          dueAt: taskForm.dueAt ? new Date(taskForm.dueAt).toISOString() : undefined,
+          priority: taskForm.priority,
+        }),
+      });
+      setTaskForm({
+        employeeProfileId: taskForm.employeeProfileId,
+        title: "",
+        description: "",
+        dueAt: "",
+        priority: CrmTaskPriority.MEDIUM,
+      });
+      await load();
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setTaskBusy(null);
+    }
+  }
+
+  async function setTaskStatus(task: AdminCrmTaskDto, status: CrmTaskStatus) {
+    setTaskBusy(task.id);
+    try {
+      await apiFetch<AdminCrmTaskDto>(`${crmBase}/${ADMIN_PATHS.tasks}/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      await load();
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setTaskBusy(null);
+    }
+  }
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
         <div>
           <p className={styles.eyebrow}>FastQue field operations</p>
           <h1>CRM control center</h1>
-          <p>Leads, visits, follow-ups, employee performance and shop onboarding attribution.</p>
+          <p>Leads, visits, follow-ups, assigned tasks, employee performance and shop onboarding attribution.</p>
         </div>
         <div className={styles.headerActions}>
           <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
@@ -133,7 +209,9 @@ export default function AdminCrmPage() {
             <article><strong>{overview.counts.onboarded}</strong><span>Onboarded</span></article>
             <article><strong>{overview.counts.visitsLast30Days}</strong><span>Visits · 30 days</span></article>
             <article><strong>{overview.counts.openFollowUps}</strong><span>Open follow-ups</span></article>
-            <article><strong>{overview.counts.overdueFollowUps}</strong><span>Overdue</span></article>
+            <article><strong>{overview.counts.overdueFollowUps}</strong><span>Overdue follow-ups</span></article>
+            <article><strong>{overview.counts.openTasks}</strong><span>Open tasks</span></article>
+            <article><strong>{overview.counts.overdueTasks}</strong><span>Overdue tasks</span></article>
             <article><strong>{overview.conversionRatePercent}%</strong><span>Conversion</span></article>
           </section>
 
@@ -153,7 +231,10 @@ export default function AdminCrmPage() {
                     <th>Conversion</th>
                     <th>Visits · 30d</th>
                     <th>Open follow-ups</th>
-                    <th>Overdue</th>
+                    <th>Overdue follow-ups</th>
+                    <th>Open tasks</th>
+                    <th>Overdue tasks</th>
+                    <th>Tasks done · 30d</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -167,6 +248,9 @@ export default function AdminCrmPage() {
                       <td>{row.visitsLast30Days}</td>
                       <td>{row.openFollowUps}</td>
                       <td>{row.overdueFollowUps}</td>
+                      <td>{row.openTasks}</td>
+                      <td>{row.overdueTasks}</td>
+                      <td>{row.completedTasksLast30Days}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -198,6 +282,118 @@ export default function AdminCrmPage() {
                 {Object.values(CrmLeadStatus).map((value) => <option key={value} value={value}>{pretty(value)}</option>)}
               </select>
             </div>
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2>Employee tasks</h2>
+              <span>{filteredTasks.length} shown · assign and monitor field work</span>
+            </div>
+            <form className={styles.filters} onSubmit={createTask}>
+              <div>
+                <label htmlFor="task-employee">Assign to</label>
+                <select
+                  id="task-employee"
+                  required
+                  value={taskForm.employeeProfileId}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, employeeProfileId: event.target.value }))}
+                >
+                  <option value="">Choose employee</option>
+                  {overview.performance
+                    .filter((row) => row.employee.status === UserStatus.ACTIVE)
+                    .map((row) => (
+                      <option key={row.employee.id} value={row.employee.id}>
+                        {row.employee.employeeCode} · {row.employee.fullName}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="task-title">Task</label>
+                <input
+                  id="task-title"
+                  required
+                  minLength={2}
+                  value={taskForm.title}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="Visit 10 salons in Ghaziabad"
+                />
+              </div>
+              <div>
+                <label htmlFor="task-due">Due</label>
+                <input
+                  id="task-due"
+                  type="datetime-local"
+                  value={taskForm.dueAt}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, dueAt: event.target.value }))}
+                />
+              </div>
+              <div>
+                <label htmlFor="task-priority">Priority</label>
+                <select
+                  id="task-priority"
+                  value={taskForm.priority}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, priority: event.target.value as CrmTaskPriority }))}
+                >
+                  {Object.values(CrmTaskPriority).map((priority) => (
+                    <option key={priority} value={priority}>{pretty(priority)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="task-description">Instructions</label>
+                <input
+                  id="task-description"
+                  value={taskForm.description}
+                  onChange={(event) => setTaskForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Area, target, proof or notes"
+                />
+              </div>
+              <div>
+                <label>&nbsp;</label>
+                <button type="submit" disabled={taskBusy === "create"}>
+                  {taskBusy === "create" ? "Assigning…" : "Assign task"}
+                </button>
+              </div>
+            </form>
+            <div className={styles.tableWrap}>
+              <table>
+                <thead>
+                  <tr><th>Task</th><th>Employee</th><th>Priority</th><th>Due</th><th>Status</th><th>Completion</th><th>Admin action</th></tr>
+                </thead>
+                <tbody>
+                  {filteredTasks.map((task) => {
+                    const overdue =
+                      !!task.dueAt &&
+                      task.status !== CrmTaskStatus.COMPLETED &&
+                      task.status !== CrmTaskStatus.CANCELLED &&
+                      new Date(task.dueAt).getTime() < Date.now();
+                    return (
+                      <tr key={task.id}>
+                        <td><strong>{task.title}</strong><small>{task.description ?? "No extra instructions"}</small></td>
+                        <td><strong>{task.employee.fullName}</strong><small>{task.employee.employeeCode}</small></td>
+                        <td>{pretty(task.priority)}</td>
+                        <td>{task.dueAt ? dateTime(task.dueAt) : "No due date"}{overdue && <small>OVERDUE</small>}</td>
+                        <td><span className={styles.status}>{pretty(task.status)}</span></td>
+                        <td>{task.completedAt ? dateTime(task.completedAt) : "—"}<small>{task.completionNotes ?? ""}</small></td>
+                        <td>
+                          {task.status !== CrmTaskStatus.COMPLETED && task.status !== CrmTaskStatus.CANCELLED ? (
+                            <button
+                              type="button"
+                              disabled={taskBusy === task.id}
+                              onClick={() => void setTaskStatus(task, CrmTaskStatus.CANCELLED)}
+                            >
+                              Cancel
+                            </button>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {filteredTasks.length === 0 && <p className={styles.empty}>No tasks match these filters.</p>}
           </section>
 
           <section className={styles.section}>

@@ -297,7 +297,12 @@ function PriceFilterDropdown({
 export default function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [q, setQ] = useState(searchParams.get("q") ?? "");
+  const [q, setQ] = useState(searchParams.get("service") ?? searchParams.get("q") ?? "");
+  const [customCityMode, setCustomCityMode] = useState(searchParams.has("cityText"));
+  const [customCity, setCustomCity] = useState(searchParams.get("cityText") ?? "");
+  const [localityText, setLocalityText] = useState(
+    searchParams.get("localityText") ?? searchParams.get("locality") ?? "",
+  );
   // Issue #13 Mission D: real city autocomplete needs a country to scope the search to (the
   // backend's cities/search endpoint is deliberately country-scoped — see CitySearchField's own
   // doc comment on why an unscoped ~100K-row global search isn't safe to ship). This product's
@@ -400,7 +405,7 @@ export default function SearchClient() {
         if (india) setDefaultCountryId(india.id);
       })
       .catch(() => {
-        /* City autocomplete just stays disabled — "Shop or service" search and Near Me still work */
+        /* City autocomplete stays disabled; manual city + service search and Near Me still work. */
       });
   }, []);
 
@@ -408,7 +413,7 @@ export default function SearchClient() {
     const params = new URLSearchParams();
     // city/countryCode already arrive as real slugs/codes here (from CitySearchField's own
     // selection, or a shared/bookmarked URL) — no client-side normalization needed or safe to do.
-    for (const key of ["q", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm", "priceMin", "priceMax"]) {
+    for (const key of ["q", "city", "cityText", "countryCode", "locality", "localityText", "service", "lat", "lng", "radiusKm", "priceMin", "priceMax"]) {
       const value = searchParams.get(key);
       if (value) params.set(key, value);
     }
@@ -443,12 +448,22 @@ export default function SearchClient() {
 
   function handleSubmit(event?: React.FormEvent) {
     event?.preventDefault();
-    const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (selectedCity) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("q");
+    params.delete("city");
+    params.delete("cityText");
+    params.delete("countryCode");
+    params.delete("locality");
+    params.delete("localityText");
+    if (q.trim()) params.set("service", q.trim());
+    else params.delete("service");
+    if (customCityMode && customCity.trim()) {
+      params.set("cityText", customCity.trim());
+    } else if (selectedCity) {
       params.set("city", selectedCity.slug);
       params.set("countryCode", selectedCity.countryCode);
     }
+    if (localityText.trim()) params.set("localityText", localityText.trim());
     if (styleName) params.set("style", styleName);
     router.push(`/search${params.size ? `?${params.toString()}` : ""}`);
   }
@@ -486,22 +501,66 @@ export default function SearchClient() {
 
         <form className={styles.searchForm} onSubmit={handleSubmit} role="search">
           <div className={styles.field}>
-            <span id="search-q-label">Shop or service</span>
+            <span id="search-q-label">Service</span>
             <ShopServiceSearchField value={q} onChange={setQ} onSubmit={() => handleSubmit()} />
           </div>
           <div className={styles.field}>
             <span id="search-city-label">City</span>
-            {defaultCountryId ? (
-              <CitySearchField
-                countryId={defaultCountryId}
-                regionId=""
-                selectedCity={selectedCity}
-                onSelect={setSelectedCity}
-                labelledBy="search-city-label"
-              />
+            {customCityMode ? (
+              <>
+                <input
+                  type="search"
+                  value={customCity}
+                  onChange={(event) => setCustomCity(event.target.value)}
+                  placeholder="Type your city"
+                  aria-labelledby="search-city-label"
+                />
+                <button
+                  type="button"
+                  className={styles.textLink}
+                  onClick={() => {
+                    setCustomCityMode(false);
+                    setCustomCity("");
+                  }}
+                >
+                  Choose from city list
+                </button>
+              </>
+            ) : defaultCountryId ? (
+              <>
+                <CitySearchField
+                  countryId={defaultCountryId}
+                  regionId=""
+                  selectedCity={selectedCity}
+                  onSelect={setSelectedCity}
+                  labelledBy="search-city-label"
+                />
+                <button
+                  type="button"
+                  className={styles.textLink}
+                  onClick={() => {
+                    setSelectedCity(null);
+                    setCustomCityMode(true);
+                  }}
+                >
+                  City not listed? Enter manually
+                </button>
+              </>
             ) : (
-              <input type="search" placeholder="Loading cities…" disabled />
+              <button type="button" className={styles.textLink} onClick={() => setCustomCityMode(true)}>
+                Enter city manually
+              </button>
             )}
+          </div>
+          <div className={styles.field}>
+            <span id="search-locality-label">Locality / landmark</span>
+            <input
+              type="search"
+              value={localityText}
+              onChange={(event) => setLocalityText(event.target.value)}
+              placeholder="Sub-city, area or nearby landmark"
+              aria-labelledby="search-locality-label"
+            />
           </div>
           <Button type="submit" variant="primary">
             Find shops
@@ -606,6 +665,9 @@ export default function SearchClient() {
               onClick={() => {
                 setQ("");
                 setSelectedCity(null);
+                setCustomCity("");
+                setCustomCityMode(false);
+                setLocalityText("");
                 router.push("/search");
               }}
             >

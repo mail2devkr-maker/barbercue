@@ -9,6 +9,8 @@ import type {
   CrmFollowUpStatus,
   CrmLeadSource,
   CrmLeadStatus,
+  CrmTaskPriority,
+  CrmTaskStatus,
   CrmVisitOutcome,
   Language,
   LedgerReason,
@@ -138,6 +140,19 @@ export interface EmployeeCrmFollowUpDto {
   updatedAt: string;
 }
 
+export interface EmployeeCrmTaskDto {
+  id: string;
+  title: string;
+  description: string | null;
+  dueAt: string | null;
+  priority: CrmTaskPriority;
+  status: CrmTaskStatus;
+  completedAt: string | null;
+  completionNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EmployeeCrmDashboardDto {
   profile: EmployeeProfileDto;
   counts: {
@@ -146,11 +161,14 @@ export interface EmployeeCrmDashboardDto {
     visitsLast30Days: number;
     openFollowUps: number;
     overdueFollowUps: number;
+    openTasks: number;
+    overdueTasks: number;
   };
   conversionRatePercent: number;
   recentLeads: EmployeeCrmLeadDto[];
   recentVisits: EmployeeCrmVisitDto[];
   upcomingFollowUps: EmployeeCrmFollowUpDto[];
+  upcomingTasks: EmployeeCrmTaskDto[];
 }
 
 export interface AdminCrmEmployeePerformanceDto {
@@ -160,6 +178,9 @@ export interface AdminCrmEmployeePerformanceDto {
   visitsLast30Days: number;
   openFollowUps: number;
   overdueFollowUps: number;
+  openTasks: number;
+  overdueTasks: number;
+  completedTasksLast30Days: number;
   conversionRatePercent: number;
 }
 
@@ -175,6 +196,10 @@ export interface AdminCrmFollowUpDto extends EmployeeCrmFollowUpDto {
   employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
 }
 
+export interface AdminCrmTaskDto extends EmployeeCrmTaskDto {
+  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+}
+
 export interface AdminCrmOverviewDto {
   counts: {
     employees: number;
@@ -183,12 +208,15 @@ export interface AdminCrmOverviewDto {
     visitsLast30Days: number;
     openFollowUps: number;
     overdueFollowUps: number;
+    openTasks: number;
+    overdueTasks: number;
   };
   conversionRatePercent: number;
   performance: AdminCrmEmployeePerformanceDto[];
   recentLeads: AdminCrmLeadDto[];
   recentVisits: AdminCrmVisitDto[];
   dueFollowUps: AdminCrmFollowUpDto[];
+  dueTasks: AdminCrmTaskDto[];
 }
 
 export interface AuthTokens {
@@ -240,6 +268,11 @@ export interface ServiceDto {
   price: number;
   category: string;
   isActive: boolean;
+}
+
+export interface ServiceSuggestionDto {
+  name: string;
+  category: string | null;
 }
 
 // ---------- Discovery / SEO (Phase 3A) ----------
@@ -427,9 +460,8 @@ export interface RecentActivityItemDto {
 // Every field is a plain count; a genuinely empty platform returns real zeros, never a fabricated
 // placeholder — clients should hide a stat rather than render a misleading "0".
 export interface LiveStatsDto {
-  // Salons with status ACTIVE, platform-wide.
-  activeShopCount: number;
-  // Sum of QueueEntry rows currently WAITING/CALLED/IN_SERVICE, across every salon.
+  // Public discovery exposes live queue activity only. Platform shop inventory/counts are
+  // intentionally admin-only business metrics and must not leak through customer-facing APIs.
   liveWaitingCount: number;
 }
 

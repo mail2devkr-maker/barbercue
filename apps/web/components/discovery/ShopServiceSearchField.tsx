@@ -1,29 +1,19 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import Link from "next/link";
-import { DISCOVERY_PATHS } from "@barbercue/shared";
-import type { PaginatedResult, SalonListItemDto } from "@barbercue/shared";
+import { DISCOVERY_PATHS, type ServiceSuggestionDto } from "@barbercue/shared";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
-const SEARCH_DEBOUNCE_MS = 300;
-const MIN_QUERY_LENGTH = 2;
-const RESULT_LIMIT = 6;
+const SEARCH_DEBOUNCE_MS = 250;
+const MIN_QUERY_LENGTH = 1;
+const RESULT_LIMIT = 30;
 
 type SuggestState =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "results"; salons: SalonListItemDto[] }
+  | { kind: "results"; services: ServiceSuggestionDto[] }
   | { kind: "failed" };
 
-/**
- * Issue #13 Mission D: "Shop or service" previously had no live suggestions at all — typing
- * "bear" surfaced nothing, even after salons.service.ts's own q-param match was fixed to include
- * service names/categories (see that fix's own comment). This reuses that exact same, now-correct
- * GET /salons?q= endpoint for suggestions — real indexed data, never a fabricated static list —
- * and each suggestion links straight to the matching salon's real profile, since the user has
- * already found exactly what they were typing for.
- */
 export function ShopServiceSearchField({
   value,
   onChange,
@@ -37,31 +27,28 @@ export function ShopServiceSearchField({
   const [state, setState] = useState<SuggestState>({ kind: "idle" });
   const [activeIndex, setActiveIndex] = useState(0);
   const [open, setOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const requestSeqRef = useRef(0);
-
   const trimmed = value.trim();
   const tooShort = trimmed.length < MIN_QUERY_LENGTH;
 
   useEffect(() => {
-    // Nothing to search against yet. tooShort is handled by hiding the list at render time
-    // rather than by resetting state here (same reasoning as CitySearchField's own effect), so
-    // this effect never calls setState synchronously on its own body.
     if (tooShort) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       const seq = (requestSeqRef.current += 1);
       setState({ kind: "loading" });
       const params = new URLSearchParams({ q: trimmed, limit: String(RESULT_LIMIT) });
-      fetch(`${API_BASE_URL}/${DISCOVERY_PATHS.salons}?${params.toString()}`)
+      fetch(
+        `${API_BASE_URL}/${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.serviceSuggestions}?${params.toString()}`,
+      )
         .then((response) => {
-          if (!response.ok) throw new Error(`Search failed with ${response.status}`);
-          return response.json() as Promise<PaginatedResult<SalonListItemDto>>;
+          if (!response.ok) throw new Error(`Service suggestions failed with ${response.status}`);
+          return response.json() as Promise<ServiceSuggestionDto[]>;
         })
-        .then((data) => {
+        .then((services) => {
           if (cancelled || seq !== requestSeqRef.current) return;
           setActiveIndex(0);
-          setState({ kind: "results", salons: data.items });
+          setState({ kind: "results", services });
         })
         .catch(() => {
           if (cancelled || seq !== requestSeqRef.current) return;
@@ -74,34 +61,45 @@ export function ShopServiceSearchField({
     };
   }, [trimmed, tooShort]);
 
-  const salons = !tooShort && state.kind === "results" ? state.salons : [];
-  const expanded = open && salons.length > 0;
+  const services = !tooShort && state.kind === "results" ? state.services : [];
+  const expanded = open && services.length > 0;
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  function choose(name: string) {
+    onChange(name);
+    setOpen(false);
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      if (expanded && services[activeIndex]) {
+        event.preventDefault();
+        choose(services[activeIndex].name);
+        return;
+      }
+      onSubmit();
+      return;
+    }
     if (!expanded) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIndex((i) => (i + 1) % salons.length);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIndex((i) => (i - 1 + salons.length) % salons.length);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) => (index + 1) % services.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => (index - 1 + services.length) % services.length);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
       setOpen(false);
     }
-    // Enter is intentionally NOT swallowed here (unlike CitySearchField): this field's own
-    // "Find shops" submit is a valid, equally correct action, not a half-filled form to protect
-    // against — a suggestion is one option among several matches, not the only valid one.
   }
 
   return (
     <div style={{ position: "relative" }}>
       <input
-        ref={inputRef}
         type="search"
-        placeholder="Fade, beard trim, shop name…"
+        placeholder="Hair, haircut, beard trim, facial…"
         autoComplete="off"
         role="combobox"
+        aria-label="Service"
         aria-expanded={expanded}
         aria-controls={listboxId}
         aria-autocomplete="list"
@@ -115,7 +113,6 @@ export function ShopServiceSearchField({
         onBlur={() => setOpen(false)}
         onKeyDown={handleKeyDown}
       />
-
       {expanded && (
         <ul
           id={listboxId}
@@ -133,57 +130,47 @@ export function ShopServiceSearchField({
             border: "1px solid var(--bc-border)",
             borderRadius: "var(--bc-radius-sm)",
             boxShadow: "var(--bc-shadow-lg)",
-            maxHeight: 280,
+            maxHeight: 320,
             overflowY: "auto",
           }}
         >
-          {salons.map((salon, index) => (
+          {services.map((service, index) => (
             <li
-              key={salon.id}
+              key={`${service.name}:${service.category ?? ""}`}
               id={`${listboxId}-${index}`}
               role="option"
               aria-selected={index === activeIndex}
             >
-              <Link
-                href={`/${salon.countryCode}/${salon.citySlug}/${salon.slug}`}
-                // Prevents this click's mousedown from blurring the input first — a blur-triggered
-                // close (see onBlur below) would otherwise unmount this link before its own click
-                // event fires, same race CitySearchField's onMouseDown comment describes.
-                onMouseDown={(e) => e.preventDefault()}
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
                 onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => choose(service.name)}
                 style={{
-                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
                   padding: "9px 10px",
+                  border: 0,
                   borderRadius: 6,
-                  textDecoration: "none",
                   color: "var(--bc-ink)",
                   background: index === activeIndex ? "var(--bc-gold-soft)" : "transparent",
+                  cursor: "pointer",
                 }}
               >
-                <span style={{ fontSize: 15, fontWeight: 600 }}>{salon.name}</span>
-                {salon.priceMin !== null && (
-                  <span style={{ fontSize: 13, color: "var(--bc-muted)", display: "block" }}>
-                    From {salon.currency ?? ""} {salon.priceMin}
+                <span style={{ fontSize: 15, fontWeight: 600 }}>{service.name}</span>
+                {service.category && (
+                  <span style={{ fontSize: 12, color: "var(--bc-muted)", display: "block" }}>
+                    {service.category}
                   </span>
                 )}
-              </Link>
+              </button>
             </li>
           ))}
         </ul>
       )}
-
-      {open && !tooShort && state.kind === "results" && salons.length === 0 && (
+      {open && !tooShort && state.kind === "results" && services.length === 0 && (
         <p style={{ fontSize: 13, color: "var(--bc-muted)", marginTop: 6 }}>
-          No shops or services match &ldquo;{trimmed}&rdquo; yet — try{" "}
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={onSubmit}
-            style={{ color: "var(--bc-accent)", textDecoration: "underline", background: "none", border: "none", padding: 0, cursor: "pointer" }}
-          >
-            searching anyway
-          </button>
-          .
+          No matching services yet. Try another service name.
         </p>
       )}
     </div>

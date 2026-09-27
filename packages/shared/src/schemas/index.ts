@@ -12,6 +12,8 @@ import {
   CrmFollowUpStatus,
   CrmLeadSource,
   CrmLeadStatus,
+  CrmTaskPriority,
+  CrmTaskStatus,
   CrmVisitOutcome,
   CreditFundingSource,
   Language,
@@ -265,11 +267,13 @@ export type UpdateSalonTypeInput = z.infer<typeof updateSalonTypeSchema>;
 export const salonSearchQuerySchema = z
   .object({
     city: z.string().optional(),
+    cityText: z.string().trim().max(200).optional(),
     // ISO-3166-1 alpha-2, scopes `city` to an exact (countryCode, slug) match — see B9. Optional:
     // not every caller has a country in hand (free-text/service search), so omitting it falls back
     // to matching `city` by slug alone, exactly as before this field existed.
     countryCode: z.string().length(2).optional(),
     locality: z.string().optional(),
+    localityText: z.string().trim().max(200).optional(),
     service: z.string().optional(),
     q: z.string().optional(),
     cursor: z.string().uuid().optional(),
@@ -474,6 +478,50 @@ export const updateCrmFollowUpSchema = z
     message: 'No follow-up changes provided',
   });
 export type UpdateCrmFollowUpInput = z.infer<typeof updateCrmFollowUpSchema>;
+
+export const createCrmTaskSchema = z.object({
+  employeeProfileId: z.string().uuid(),
+  title: z.string().trim().min(2).max(180),
+  description: optionalCrmText(2000),
+  dueAt: z.string().datetime().optional(),
+  priority: z.nativeEnum(CrmTaskPriority).default(CrmTaskPriority.MEDIUM),
+});
+export type CreateCrmTaskInput = z.infer<typeof createCrmTaskSchema>;
+
+export const updateAdminCrmTaskSchema = z
+  .object({
+    employeeProfileId: z.string().uuid().optional(),
+    title: z.string().trim().min(2).max(180).optional(),
+    description: z.union([z.string().trim().max(2000), z.null()]).optional(),
+    dueAt: z.union([z.string().datetime(), z.null()]).optional(),
+    priority: z.nativeEnum(CrmTaskPriority).optional(),
+    status: z.nativeEnum(CrmTaskStatus).optional(),
+    completionNotes: z.union([z.string().trim().max(2000), z.null()]).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'No task changes provided',
+  });
+export type UpdateAdminCrmTaskInput = z.infer<typeof updateAdminCrmTaskSchema>;
+
+export const updateEmployeeCrmTaskSchema = z
+  .object({
+    status: z.enum([CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS, CrmTaskStatus.COMPLETED]),
+    completionNotes: z.union([z.string().trim().max(2000), z.null()]).optional(),
+  })
+  .refine(
+    (value) => value.status !== CrmTaskStatus.COMPLETED || !!value.completionNotes?.trim(),
+    {
+      message: 'Completion notes are required when completing a task',
+      path: ['completionNotes'],
+    },
+  );
+export type UpdateEmployeeCrmTaskInput = z.infer<typeof updateEmployeeCrmTaskSchema>;
+
+export const serviceSuggestionQuerySchema = z.object({
+  q: z.string().trim().min(1).max(120),
+  limit: z.coerce.number().int().min(1).max(30).optional(),
+});
+export type ServiceSuggestionQueryInput = z.infer<typeof serviceSuggestionQuerySchema>;
 
 export const adminLoginSchema = z.object({
   email: z.string().email(),
