@@ -32,12 +32,13 @@ function withIosGoogleUrlScheme(plugins, iosUrlScheme) {
 }
 
 module.exports = ({ config }) => {
+  const isIosBuild = process.env.FASTQUE_IOS_BUILD === 'true';
+  if (!isIosBuild) return config;
+
   const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
   const iosUrlScheme = googleIosUrlScheme(iosClientId);
-  const profile = process.env.EAS_BUILD_PROFILE;
-  const requiresIosGoogleConfig = profile === 'ios-physical' || profile === 'ios-simulator';
 
-  if (requiresIosGoogleConfig && !iosUrlScheme) {
+  if (!iosUrlScheme) {
     throw new Error(
       'FastQue iOS build requires EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID to be a valid Google iOS OAuth client ID.',
     );
