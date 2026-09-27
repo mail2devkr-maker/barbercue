@@ -47,6 +47,7 @@ export const EMPLOYEE_PATHS = {
   leads: 'leads',
   visits: 'visits',
   followUps: 'follow-ups',
+  tasks: 'tasks',
   onboard: 'onboard',
 } as const;
 
@@ -79,6 +80,7 @@ export const ADMIN_PATHS = {
   leads: 'leads',
   visits: 'visits',
   followUps: 'follow-ups',
+  tasks: 'tasks',
 } as const;
 
 // The ONLY place this wording is allowed to live — every surface that shows a Verified badge
@@ -118,6 +120,7 @@ export const DISCOVERY_PATHS = {
   // `mine`/`workplaces` below: registered before the three-segment :countryCode/:citySlug/
   // :salonSlug wildcard (B9) so it can never be shadowed by it regardless of declaration order.
   liveStats: 'live-stats',
+  serviceSuggestions: 'service-suggestions',
   // Owner-scoped reads under salons/mine[/...] — literal 'mine' segment, registered before the
   // :citySlug/:salonSlug wildcard route in SalonsController so it can never be shadowed by it.
   mine: 'mine',
