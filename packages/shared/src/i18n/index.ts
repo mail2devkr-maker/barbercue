@@ -438,6 +438,11 @@ export interface UiStrings {
   shopOrServiceLabel: string;
   shopOrServiceExample: string;
   cityLocationLabel: string;
+  manualCityLabel: string;
+  manualCityPlaceholder: string;
+  localityLandmarkLabel: string;
+  localityLandmarkPlaceholder: string;
+  serviceSuggestionsLabel: string;
   findABarberAction: string;
   findShopsAction: string;
   popularServicesTitle: string;
@@ -1195,6 +1200,11 @@ const enUi: UiStrings = {
   shopOrServiceLabel: 'Service',
   shopOrServiceExample: 'Haircut, fade, beard trim, massage…',
   cityLocationLabel: 'City / Location',
+  manualCityLabel: 'City',
+  manualCityPlaceholder: 'Type your city',
+  localityLandmarkLabel: 'Locality / landmark',
+  localityLandmarkPlaceholder: 'Area, sub-city or nearby landmark',
+  serviceSuggestionsLabel: 'Matching services',
   findABarberAction: 'Find a barber',
   findShopsAction: 'Find shops',
   popularServicesTitle: 'Popular Services',
@@ -1883,6 +1893,11 @@ const hiUi: UiStrings = {
   shopOrServiceLabel: 'सेवा',
   shopOrServiceExample: 'हेयरकट, फेड, बियर्ड ट्रिम, मसाज…',
   cityLocationLabel: 'शहर / स्थान',
+  manualCityLabel: 'शहर',
+  manualCityPlaceholder: 'अपना शहर टाइप करें',
+  localityLandmarkLabel: 'इलाका / लैंडमार्क',
+  localityLandmarkPlaceholder: 'इलाका, सब-सिटी या पास का लैंडमार्क',
+  serviceSuggestionsLabel: 'मिलती-जुलती सेवाएं',
   findABarberAction: 'बार्बर खोजें',
   findShopsAction: 'दुकानें खोजें',
   popularServicesTitle: 'लोकप्रिय सेवाएं',
