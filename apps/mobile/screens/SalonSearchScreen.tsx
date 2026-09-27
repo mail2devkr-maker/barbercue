@@ -13,7 +13,7 @@ import {
   type PricePreset,
   type UiStrings,
 } from '@barbercue/shared';
-import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
+import type { PaginatedResult, SalonListItemDto, ServiceSuggestionDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, fastQue, font, fontSize, premiumShadow, radius, space } from '../lib/theme';
 import {
@@ -104,6 +104,8 @@ const SERVICE_ALL_ID = 'all';
 // clipping the button off the right edge (the owner-reported hard-FAIL screenshot) — stack the
 // button under the field instead of forcing both into an oversized row.
 const NARROW_SEARCH_ROW_WIDTH = 380;
+const SERVICE_SUGGESTION_DEBOUNCE_MS = 250;
+const SERVICE_SUGGESTION_LIMIT = 10;
 
 function pricePresetLabel(preset: PricePreset, t: UiStrings): string {
   if (preset.id === 'any') return t.priceFilterAny;
@@ -259,6 +261,10 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const selectedStyleName = route.params?.selectedStyleName;
   const { initialQuery, initialLat, initialLng } = route.params ?? {};
   const [q, setQ] = useState(initialQuery ?? '');
+  const [serviceSuggestions, setServiceSuggestions] = useState<ServiceSuggestionDto[]>([]);
+  const [serviceSuggestionsOpen, setServiceSuggestionsOpen] = useState(false);
+  const [cityText, setCityText] = useState('');
+  const [localityText, setLocalityText] = useState('');
   const [results, setResults] = useState<SalonListItemDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -273,6 +279,33 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const [priceMin, setPriceMin] = useState<number | null>(null);
   const [priceMax, setPriceMax] = useState<number | null>(null);
   const [service, setService] = useState<string | null>(null);
+
+  useEffect(() => {
+    const term = q.trim();
+    if (!term) {
+      setServiceSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      apiFetch<ServiceSuggestionDto[]>(
+        `${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.serviceSuggestions}?${new URLSearchParams({
+          q: term,
+          limit: String(SERVICE_SUGGESTION_LIMIT),
+        })}`,
+      )
+        .then((items) => {
+          if (!cancelled) setServiceSuggestions(items);
+        })
+        .catch(() => {
+          if (!cancelled) setServiceSuggestions([]);
+        });
+    }, SERVICE_SUGGESTION_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [q]);
 
   async function runSearch(
     isRefresh: boolean,
@@ -289,8 +322,14 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     setSearched(true);
     try {
       const params = new URLSearchParams();
-      if (q.trim()) params.set('q', q.trim());
-      if (filters.service) params.set('service', filters.service);
+      const typedService = q.trim();
+      if (typedService) params.set('service', typedService);
+      else if (filters.service) params.set('service', filters.service);
+      if (cityText.trim()) {
+        params.set('cityText', cityText.trim());
+        params.set('countryCode', 'IN');
+      }
+      if (localityText.trim()) params.set('localityText', localityText.trim());
       if (coords) {
         params.set('lat', String(coords.lat));
         params.set('lng', String(coords.lng));
@@ -417,22 +456,83 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         </Text>
       )}
 
-      <View style={[styles.searchRow, stackSearchRow && styles.searchRowStacked]}>
-        <PremiumTextField
-          style={styles.input}
-          placeholder={t.searchByNamePlaceholder}
-          placeholderTextColor={fastQue.textMuted}
-          value={q}
-          onChangeText={setQ}
-          onSubmitEditing={() => void handleSearch()}
-          returnKeyType="search"
-        />
-        <PremiumButton
-          title={t.searchAction}
-          onPress={() => void handleSearch()}
-          loading={loading}
-          style={[styles.searchButton, stackSearchRow && styles.searchButtonStacked]}
-        />
+      <Text style={styles.searchFieldLabel}>{t.shopOrServiceLabel}</Text>
+      <View style={styles.serviceSearchWrap}>
+        <View style={[styles.searchRow, stackSearchRow && styles.searchRowStacked]}>
+          <PremiumTextField
+            style={styles.input}
+            placeholder={t.shopOrServiceExample}
+            placeholderTextColor={fastQue.textMuted}
+            value={q}
+            onChangeText={(value) => {
+              setQ(value);
+              setServiceSuggestionsOpen(true);
+            }}
+            onFocus={() => setServiceSuggestionsOpen(true)}
+            onBlur={() => setTimeout(() => setServiceSuggestionsOpen(false), 120)}
+            onSubmitEditing={() => {
+              setServiceSuggestionsOpen(false);
+              void handleSearch();
+            }}
+            returnKeyType="search"
+          />
+          <PremiumButton
+            title={t.searchAction}
+            onPress={() => {
+              setServiceSuggestionsOpen(false);
+              void handleSearch();
+            }}
+            loading={loading}
+            style={[styles.searchButton, stackSearchRow && styles.searchButtonStacked]}
+          />
+        </View>
+        {serviceSuggestionsOpen && q.trim() && serviceSuggestions.length > 0 && (
+          <View style={styles.serviceSuggestions}>
+            <Text style={styles.serviceSuggestionsLabel}>{t.serviceSuggestionsLabel}</Text>
+            {serviceSuggestions.map((suggestion) => (
+              <Pressable
+                key={`${suggestion.name}:${suggestion.category ?? ''}`}
+                style={styles.serviceSuggestion}
+                onPress={() => {
+                  setQ(suggestion.name);
+                  setServiceSuggestionsOpen(false);
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.serviceSuggestionName}>{suggestion.name}</Text>
+                {!!suggestion.category && (
+                  <Text style={styles.serviceSuggestionCategory}>{suggestion.category}</Text>
+                )}
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.locationSearchGrid}>
+        <View style={styles.locationSearchField}>
+          <Text style={styles.searchFieldLabel}>{t.manualCityLabel}</Text>
+          <TextInput
+            style={styles.locationInput}
+            value={cityText}
+            onChangeText={setCityText}
+            placeholder={t.manualCityPlaceholder}
+            placeholderTextColor={fastQue.textMuted}
+            returnKeyType="next"
+          />
+        </View>
+        <View style={styles.locationSearchField}>
+          <Text style={styles.searchFieldLabel}>{t.localityLandmarkLabel}</Text>
+          <TextInput
+            style={styles.locationInput}
+            value={localityText}
+            onChangeText={setLocalityText}
+            placeholder={t.localityLandmarkPlaceholder}
+            placeholderTextColor={fastQue.textMuted}
+            returnKeyType="search"
+            onSubmitEditing={() => void handleSearch()}
+          />
+        </View>
       </View>
 
       <PremiumButton
@@ -587,7 +687,57 @@ const styles = StyleSheet.create({
   // the Expo web preview the owner's screenshot was taken from). On very narrow phones the row
   // itself switches to a column (searchRowStacked) so the button gets its own full-width row
   // instead of squeezing beside the field.
-  searchRow: { flexDirection: 'row', gap: space[2], marginBottom: space[4] },
+  searchFieldLabel: {
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+    color: fastQue.textMuted,
+    marginBottom: space[1],
+  },
+  serviceSearchWrap: { position: 'relative', zIndex: 10 },
+  searchRow: { flexDirection: 'row', gap: space[2], marginBottom: space[2] },
+  serviceSuggestions: {
+    borderWidth: 1,
+    borderColor: fastQue.border,
+    borderRadius: radius.sm,
+    backgroundColor: fastQue.card,
+    marginBottom: space[3],
+    overflow: 'hidden',
+  },
+  serviceSuggestionsLabel: {
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    color: fastQue.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    paddingHorizontal: space[3],
+    paddingTop: space[2],
+    paddingBottom: space[1],
+  },
+  serviceSuggestion: {
+    minHeight: 46,
+    justifyContent: 'center',
+    paddingHorizontal: space[3],
+    paddingVertical: space[2],
+    borderTopWidth: 1,
+    borderTopColor: fastQue.border,
+  },
+  serviceSuggestionName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
+  serviceSuggestionCategory: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: 2 },
+  locationSearchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[3] },
+  locationSearchField: { flexGrow: 1, flexBasis: '47%', minWidth: 145 },
+  locationInput: {
+    minHeight: 48,
+    backgroundColor: fastQue.input,
+    borderWidth: 1,
+    borderColor: fastQue.border,
+    borderRadius: radius.sm,
+    color: fastQue.text,
+    fontFamily: font.bodyRegular,
+    paddingHorizontal: space[3],
+    fontSize: fontSize.sm,
+  },
   searchRowStacked: { flexDirection: 'column' },
   input: {
     flex: 1,
