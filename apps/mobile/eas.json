@@ -23,6 +23,28 @@
       "env": {
         "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false"
       }
+    },
+    "ios-physical": {
+      "distribution": "internal",
+      "environment": "preview",
+      "channel": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "ios-simulator": {
+      "environment": "preview",
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true"
+      },
+      "ios": {
+        "simulator": true
+      }
     }
   },
   "submit": {
