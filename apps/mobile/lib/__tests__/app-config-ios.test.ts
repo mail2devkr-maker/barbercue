@@ -9,12 +9,12 @@ type ExpoConfigFn = ((input: { config: Record<string, unknown> }) => Record<stri
 const appConfig = require('../../app.config.js') as ExpoConfigFn;
 
 describe('FastQue iOS Expo config', () => {
-  const originalProfile = process.env.EAS_BUILD_PROFILE;
+  const originalIosBuild = process.env.FASTQUE_IOS_BUILD;
   const originalIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
   afterEach(() => {
-    if (originalProfile === undefined) delete process.env.EAS_BUILD_PROFILE;
-    else process.env.EAS_BUILD_PROFILE = originalProfile;
+    if (originalIosBuild === undefined) delete process.env.FASTQUE_IOS_BUILD;
+    else process.env.FASTQUE_IOS_BUILD = originalIosBuild;
 
     if (originalIosClientId === undefined) delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
     else process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = originalIosClientId;
@@ -31,6 +31,7 @@ describe('FastQue iOS Expo config', () => {
   });
 
   it('injects iosUrlScheme into the Nitro Google Sign-In config plugin', () => {
+    process.env.FASTQUE_IOS_BUILD = 'true';
     process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID =
       '871155185690-example.apps.googleusercontent.com';
 
@@ -49,8 +50,17 @@ describe('FastQue iOS Expo config', () => {
     ]);
   });
 
-  it('fails closed for the physical iOS build profile when the iOS OAuth client ID is missing', () => {
-    process.env.EAS_BUILD_PROFILE = 'ios-physical';
+  it('leaves Android/native config untouched when the iOS build gate is off', () => {
+    delete process.env.FASTQUE_IOS_BUILD;
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID =
+      '871155185690-example.apps.googleusercontent.com';
+
+    const input = { plugins: ['react-native-nitro-google-signin'] };
+    expect(appConfig({ config: input })).toBe(input);
+  });
+
+  it('fails closed for an iOS build when the iOS OAuth client ID is missing', () => {
+    process.env.FASTQUE_IOS_BUILD = 'true';
     delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
     expect(() =>
