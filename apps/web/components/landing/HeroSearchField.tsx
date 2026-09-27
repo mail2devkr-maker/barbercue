@@ -9,7 +9,7 @@ import styles from "./landing.module.css";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const MIN_QUERY_LENGTH = 1;
-const RESULT_LIMIT = 10;
+const RESULT_LIMIT = 30;
 
 /**
  * Homepage discovery is deliberately service-first. Platform inventory and shop-name discovery
