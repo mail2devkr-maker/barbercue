@@ -270,6 +270,11 @@ export interface ServiceDto {
   isActive: boolean;
 }
 
+export interface ServiceSuggestionDto {
+  name: string;
+  category: string | null;
+}
+
 // ---------- Discovery / SEO (Phase 3A) ----------
 
 export interface CityDto {
@@ -455,9 +460,8 @@ export interface RecentActivityItemDto {
 // Every field is a plain count; a genuinely empty platform returns real zeros, never a fabricated
 // placeholder — clients should hide a stat rather than render a misleading "0".
 export interface LiveStatsDto {
-  // Salons with status ACTIVE, platform-wide.
-  activeShopCount: number;
-  // Sum of QueueEntry rows currently WAITING/CALLED/IN_SERVICE, across every salon.
+  // Public discovery exposes live queue activity only. Platform shop inventory/counts are
+  // intentionally admin-only business metrics and must not leak through customer-facing APIs.
   liveWaitingCount: number;
 }
 
