@@ -139,6 +139,20 @@ enum CrmFollowUpStatus {
   CANCELLED
 }
 
+enum CrmTaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum CrmTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum ChairStatus {
   ACTIVE
   INACTIVE
@@ -406,6 +420,7 @@ model EmployeeProfile {
   crmLeads     EmployeeCrmLead[]
   crmVisits    EmployeeCrmVisit[]
   crmFollowUps EmployeeCrmFollowUp[]
+  crmTasks     EmployeeCrmTask[]
 
   @@map("employee_profiles")
 }
@@ -477,6 +492,26 @@ model EmployeeCrmFollowUp {
   @@index([employeeProfileId, status, dueAt])
   @@index([leadId, dueAt])
   @@map("employee_crm_follow_ups")
+}
+
+model EmployeeCrmTask {
+  id                String          @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  createdByUserId   String
+  title             String
+  description       String?
+  dueAt             DateTime?
+  priority          CrmTaskPriority @default(MEDIUM)
+  status            CrmTaskStatus   @default(TODO)
+  completedAt       DateTime?
+  completionNotes   String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([employeeProfileId, status, dueAt])
+  @@index([status, dueAt])
+  @@map("employee_crm_tasks")
 }
 
 model RefreshToken {
