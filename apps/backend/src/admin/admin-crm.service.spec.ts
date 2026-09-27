@@ -2,6 +2,8 @@ import {
   CrmFollowUpStatus,
   CrmLeadSource,
   CrmLeadStatus,
+  CrmTaskPriority,
+  CrmTaskStatus,
   CrmVisitOutcome,
   UserStatus,
 } from '@barbercue/shared';
@@ -66,9 +68,27 @@ describe('AdminCrmService', () => {
       lead: { shopName: 'Test Salon' },
     };
 
+    const task = {
+      id: 'task-1',
+      employeeProfileId: employee.id,
+      createdByUserId: 'admin-1',
+      title: 'Visit 10 salons',
+      description: 'Cover assigned territory',
+      dueAt: new Date('2026-09-29T10:00:00.000Z'),
+      priority: CrmTaskPriority.HIGH,
+      status: CrmTaskStatus.TODO,
+      completedAt: null,
+      completionNotes: null,
+      createdAt: new Date('2026-09-21T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-21T00:00:00.000Z'),
+      employeeProfile: employee,
+    };
+
+
     let leadCountCalls = 0;
     let visitCountCalls = 0;
     let followUpCountCalls = 0;
+    let taskCountCalls = 0;
     const prisma: any = {
       employeeProfile: { findMany: jest.fn().mockResolvedValue([employee]) },
       employeeCrmLead: {
@@ -86,6 +106,13 @@ describe('AdminCrmService', () => {
         }),
         findMany: jest.fn().mockResolvedValue([followUp]),
       },
+      employeeCrmTask: {
+        count: jest.fn().mockImplementation(() => {
+          taskCountCalls += 1;
+          return Promise.resolve(taskCountCalls % 3 === 1 ? 4 : taskCountCalls % 3 === 2 ? 1 : 2);
+        }),
+        findMany: jest.fn().mockResolvedValue([task]),
+      },
     };
 
     const result = await new AdminCrmService(prisma).getOverview();
@@ -93,9 +120,13 @@ describe('AdminCrmService', () => {
     expect(result.counts.employees).toBe(1);
     expect(result.counts.leads).toBe(4);
     expect(result.counts.onboarded).toBe(2);
+    expect(result.counts.openTasks).toBe(4);
+    expect(result.counts.overdueTasks).toBe(1);
     expect(result.conversionRatePercent).toBe(50);
     expect(result.performance).toHaveLength(1);
     expect(result.performance[0].employee.employeeCode).toBe('FQ-FE-00101');
+    expect(result.performance[0].openTasks).toBe(2);
+    expect(result.dueTasks[0].title).toBe('Visit 10 salons');
     expect(result.recentLeads[0].onboardedSalon?.publicId).toBe('BC-SHOP-000123');
   });
 });
