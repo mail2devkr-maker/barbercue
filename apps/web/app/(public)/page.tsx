@@ -101,20 +101,12 @@ export default async function HomePage() {
 
             <HeroFeatureRow />
 
-            {liveStats && (liveStats.activeShopCount > 0 || liveStats.liveWaitingCount > 0) && (
+            {liveStats && liveStats.liveWaitingCount > 0 && (
               <p className={styles.liveStats} role="status">
-                {liveStats.activeShopCount > 0 && (
-                  <span>
-                    {liveStats.activeShopCount} {liveStats.activeShopCount === 1 ? "shop" : "shops"} on
-                    FastQue right now
-                  </span>
-                )}
-                {liveStats.liveWaitingCount > 0 && (
-                  <span>
-                    {liveStats.liveWaitingCount} {liveStats.liveWaitingCount === 1 ? "person" : "people"}{" "}
-                    in live queues right now
-                  </span>
-                )}
+                <span>
+                  {liveStats.liveWaitingCount} {liveStats.liveWaitingCount === 1 ? "person" : "people"}{" "}
+                  in live queues right now
+                </span>
               </p>
             )}
             <p className={styles.ownerPrompt}>
