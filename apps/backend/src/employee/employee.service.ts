@@ -5,6 +5,7 @@ import {
   CrmErrorCode,
   CrmFollowUpStatus,
   CrmLeadStatus,
+  CrmTaskStatus,
   CrmVisitOutcome,
   type CreateCrmFollowUpInput,
   type CreateCrmLeadInput,
@@ -12,11 +13,13 @@ import {
   type EmployeeCrmDashboardDto,
   type EmployeeCrmFollowUpDto,
   type EmployeeCrmLeadDto,
+  type EmployeeCrmTaskDto,
   type EmployeeCrmVisitDto,
   type EmployeeProfileDto,
   type OnboardCrmLeadInput,
   type UpdateCrmFollowUpInput,
   type UpdateCrmLeadInput,
+  type UpdateEmployeeCrmTaskInput,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
@@ -50,9 +53,12 @@ export class EmployeeService {
       visitsLast30Days,
       openFollowUps,
       overdueFollowUps,
+      openTasks,
+      overdueTasks,
       recentLeadRows,
       recentVisitRows,
       upcomingFollowUpRows,
+      upcomingTaskRows,
     ] = await Promise.all([
       this.prisma.employeeCrmLead.count({ where: { employeeProfileId: profile.id } }),
       this.prisma.employeeCrmLead.count({
@@ -68,6 +74,19 @@ export class EmployeeService {
         where: {
           employeeProfileId: profile.id,
           status: CrmFollowUpStatus.OPEN,
+          dueAt: { lt: now },
+        },
+      }),
+      this.prisma.employeeCrmTask.count({
+        where: {
+          employeeProfileId: profile.id,
+          status: { in: [CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS] },
+        },
+      }),
+      this.prisma.employeeCrmTask.count({
+        where: {
+          employeeProfileId: profile.id,
+          status: { in: [CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS] },
           dueAt: { lt: now },
         },
       }),
@@ -89,15 +108,32 @@ export class EmployeeService {
         take: DASHBOARD_LIMIT,
         include: { lead: { select: { shopName: true } } },
       }),
+      this.prisma.employeeCrmTask.findMany({
+        where: {
+          employeeProfileId: profile.id,
+          status: { in: [CrmTaskStatus.TODO, CrmTaskStatus.IN_PROGRESS] },
+        },
+        orderBy: [{ dueAt: 'asc' }, { createdAt: 'desc' }],
+        take: DASHBOARD_LIMIT,
+      }),
     ]);
 
     return {
       profile: this.profileDto(profile),
-      counts: { leads, onboarded, visitsLast30Days, openFollowUps, overdueFollowUps },
+      counts: {
+        leads,
+        onboarded,
+        visitsLast30Days,
+        openFollowUps,
+        overdueFollowUps,
+        openTasks,
+        overdueTasks,
+      },
       conversionRatePercent: leads > 0 ? Math.round((onboarded / leads) * 1000) / 10 : 0,
       recentLeads: recentLeadRows.map((row) => this.leadDto(row)),
       recentVisits: recentVisitRows.map((row) => this.visitDto(row)),
       upcomingFollowUps: upcomingFollowUpRows.map((row) => this.followUpDto(row)),
+      upcomingTasks: upcomingTaskRows.map((row) => this.taskDto(row)),
     };
   }
 
@@ -443,6 +479,80 @@ export class EmployeeService {
     return this.followUpDto(row);
   }
 
+  async listTasks(userId: string, status?: string): Promise<EmployeeCrmTaskDto[]> {
+    const profile = await this.getProfileEntity(userId);
+    const normalizedStatus =
+      status && Object.values(CrmTaskStatus).includes(status as CrmTaskStatus)
+        ? (status as CrmTaskStatus)
+        : undefined;
+    const rows = await this.prisma.employeeCrmTask.findMany({
+      where: {
+        employeeProfileId: profile.id,
+        ...(normalizedStatus ? { status: normalizedStatus } : {}),
+      },
+      orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { createdAt: 'desc' }],
+      take: LIST_LIMIT,
+    });
+    return rows.map((row) => this.taskDto(row));
+  }
+
+  async updateTask(
+    userId: string,
+    taskId: string,
+    input: UpdateEmployeeCrmTaskInput,
+  ): Promise<EmployeeCrmTaskDto> {
+    const profile = await this.getProfileEntity(userId);
+    const existing = await this.prisma.employeeCrmTask.findFirst({
+      where: { id: taskId, employeeProfileId: profile.id },
+    });
+    if (!existing) {
+      throw new AppException(
+        CrmErrorCode.TASK_NOT_FOUND,
+        'Task not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (
+      existing.status === CrmTaskStatus.CANCELLED ||
+      existing.status === CrmTaskStatus.COMPLETED
+    ) {
+      throw new AppException(
+        CrmErrorCode.TASK_NOT_FOUND,
+        'This task is already closed.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const completed = input.status === CrmTaskStatus.COMPLETED;
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.employeeCrmTask.update({
+        where: { id: existing.id },
+        data: {
+          status: input.status,
+          completionNotes:
+            input.completionNotes === undefined
+              ? existing.completionNotes
+              : emptyToNull(input.completionNotes) ?? null,
+          completedAt: completed ? new Date() : null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'CRM_TASK_EMPLOYEE_UPDATED',
+          entityType: 'EmployeeCrmTask',
+          entityId: existing.id,
+          metadata: {
+            employeeCode: profile.employeeCode,
+            previousStatus: existing.status,
+            status: input.status,
+          },
+        },
+      });
+      return updated;
+    });
+    return this.taskDto(row);
+  }
+
   private async requireOwnedLead(
     userId: string,
     leadId: string,
@@ -556,6 +666,32 @@ export class EmployeeService {
       outcome: row.outcome,
       notes: row.notes,
       createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  private taskDto(row: {
+    id: string;
+    title: string;
+    description: string | null;
+    dueAt: Date | null;
+    priority: EmployeeCrmTaskDto['priority'];
+    status: EmployeeCrmTaskDto['status'];
+    completedAt: Date | null;
+    completionNotes: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): EmployeeCrmTaskDto {
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      dueAt: row.dueAt?.toISOString() ?? null,
+      priority: row.priority,
+      status: row.status,
+      completedAt: row.completedAt?.toISOString() ?? null,
+      completionNotes: row.completionNotes,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     };
   }
 
