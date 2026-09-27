@@ -282,10 +282,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     const term = q.trim();
-    if (!term) {
-      setServiceSuggestions([]);
-      return;
-    }
+    if (!term) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       apiFetch<ServiceSuggestionDto[]>(
