@@ -114,9 +114,8 @@ export class SalonsService {
     private readonly tokenService: TokenService,
   ) {}
 
-  // Issue #13 Mission G — two cheap, independent count queries, no joins. Real zeros on a genuinely
-  // empty platform, never a fabricated placeholder; the homepage hides a stat rather than render a
-  // misleading "0" (see LiveStatsDto's own doc comment).
+  // Public live activity deliberately excludes the platform-wide salon inventory count. The
+  // admin monitoring surface owns that business metric; customer discovery gets queue activity only.
   async getLiveStats(): Promise<LiveStatsDto> {
     const liveWaitingCount = await this.prisma.queueEntry.count({
       where: {
@@ -136,7 +135,7 @@ export class SalonsService {
     query: ServiceSuggestionQueryInput,
   ): Promise<ServiceSuggestionDto[]> {
     const term = query.q.trim();
-    const limit = query.limit ?? 12;
+    const limit = query.limit ?? 30;
     const rows = await this.prisma.service.findMany({
       where: {
         isActive: true,
@@ -230,14 +229,9 @@ export class SalonsService {
         some: { isActive: true, ...withPrice(serviceRelevance(query.service)) },
       };
     }
-    // Issue #13 Mission D: the web search form's field is genuinely labeled "Shop or service" —
-    // typing "bear" (or "beard") for a real shop's real "Beard" service returned zero results,
-    // because this only ever matched salon name/description, never a service. Now mirrors the
-    // same name-or-category match query.service already uses above, so the field actually
-    // searches what it claims to. Its own service sub-clause gets the identical same-service price
-    // treatment as `query.service` above — this is the field the real search UI actually sends
-    // free-text through, so the "Haircut + ₹300 ceiling excludes an ₹800 Haircut" fix must apply
-    // here too, not only to the separate, rarely-used `service` param.
+    // Legacy/backward-compatible free-text search remains for old links/clients. Current customer
+    // UI is service-only and sends `service`; keeping `q` here avoids breaking historical URLs
+    // while new discovery no longer presents shop-name search as a primary control.
     if (query.q) {
       where.OR = [
         { name: { contains: query.q, mode: 'insensitive' } },
