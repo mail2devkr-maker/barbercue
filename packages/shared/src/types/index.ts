@@ -9,6 +9,8 @@ import type {
   CrmFollowUpStatus,
   CrmLeadSource,
   CrmLeadStatus,
+  CrmTaskPriority,
+  CrmTaskStatus,
   CrmVisitOutcome,
   Language,
   LedgerReason,
@@ -138,6 +140,19 @@ export interface EmployeeCrmFollowUpDto {
   updatedAt: string;
 }
 
+export interface EmployeeCrmTaskDto {
+  id: string;
+  title: string;
+  description: string | null;
+  dueAt: string | null;
+  priority: CrmTaskPriority;
+  status: CrmTaskStatus;
+  completedAt: string | null;
+  completionNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EmployeeCrmDashboardDto {
   profile: EmployeeProfileDto;
   counts: {
@@ -146,11 +161,14 @@ export interface EmployeeCrmDashboardDto {
     visitsLast30Days: number;
     openFollowUps: number;
     overdueFollowUps: number;
+    openTasks: number;
+    overdueTasks: number;
   };
   conversionRatePercent: number;
   recentLeads: EmployeeCrmLeadDto[];
   recentVisits: EmployeeCrmVisitDto[];
   upcomingFollowUps: EmployeeCrmFollowUpDto[];
+  upcomingTasks: EmployeeCrmTaskDto[];
 }
 
 export interface AdminCrmEmployeePerformanceDto {
@@ -160,6 +178,9 @@ export interface AdminCrmEmployeePerformanceDto {
   visitsLast30Days: number;
   openFollowUps: number;
   overdueFollowUps: number;
+  openTasks: number;
+  overdueTasks: number;
+  completedTasksLast30Days: number;
   conversionRatePercent: number;
 }
 
@@ -175,6 +196,10 @@ export interface AdminCrmFollowUpDto extends EmployeeCrmFollowUpDto {
   employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
 }
 
+export interface AdminCrmTaskDto extends EmployeeCrmTaskDto {
+  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+}
+
 export interface AdminCrmOverviewDto {
   counts: {
     employees: number;
@@ -183,12 +208,15 @@ export interface AdminCrmOverviewDto {
     visitsLast30Days: number;
     openFollowUps: number;
     overdueFollowUps: number;
+    openTasks: number;
+    overdueTasks: number;
   };
   conversionRatePercent: number;
   performance: AdminCrmEmployeePerformanceDto[];
   recentLeads: AdminCrmLeadDto[];
   recentVisits: AdminCrmVisitDto[];
   dueFollowUps: AdminCrmFollowUpDto[];
+  dueTasks: AdminCrmTaskDto[];
 }
 
 export interface AuthTokens {
