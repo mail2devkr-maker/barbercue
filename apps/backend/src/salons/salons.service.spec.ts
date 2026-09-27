@@ -51,7 +51,7 @@ describe('SalonsService', () => {
       count: jest.Mock;
     };
     review: { aggregate: jest.Mock };
-    service: { aggregate: jest.Mock };
+    service: { aggregate: jest.Mock; findMany: jest.Mock };
     queueEntry: { count: jest.Mock };
     locality: { findUnique: jest.Mock };
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
@@ -85,6 +85,7 @@ describe('SalonsService', () => {
         aggregate: jest
           .fn()
           .mockResolvedValue({ _min: { price: null }, _max: { price: null } }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       queueEntry: { count: jest.fn().mockResolvedValue(0) },
       locality: { findUnique: jest.fn() },
@@ -143,24 +144,42 @@ describe('SalonsService', () => {
   });
 
   describe('getLiveStats', () => {
-    it('returns real platform-wide counts, scoped to ACTIVE salons and live queue statuses', async () => {
-      prisma.salon.count.mockResolvedValue(2);
+    it('returns only privacy-safe live queue activity, never the platform shop inventory', async () => {
       prisma.queueEntry.count.mockResolvedValue(5);
       const result = await service.getLiveStats();
-      expect(result).toEqual({ activeShopCount: 2, liveWaitingCount: 5 });
-      expect(prisma.salon.count).toHaveBeenCalledWith({
-        where: { status: 'ACTIVE' },
-      });
+      expect(result).toEqual({ liveWaitingCount: 5 });
+      expect(prisma.salon.count).not.toHaveBeenCalled();
       expect(prisma.queueEntry.count).toHaveBeenCalledWith({
         where: { status: { in: ['WAITING', 'CALLED', 'IN_SERVICE'] } },
       });
     });
 
-    it('returns real zeros on a genuinely empty platform, never a fabricated placeholder', async () => {
-      prisma.salon.count.mockResolvedValue(0);
+    it('returns a real zero for an empty live queue', async () => {
       prisma.queueEntry.count.mockResolvedValue(0);
-      const result = await service.getLiveStats();
-      expect(result).toEqual({ activeShopCount: 0, liveWaitingCount: 0 });
+      await expect(service.getLiveStats()).resolves.toEqual({ liveWaitingCount: 0 });
+    });
+  });
+
+  describe('serviceSuggestions', () => {
+    it('returns unique active-service names from active salons only', async () => {
+      prisma.service.findMany.mockResolvedValue([
+        { name: 'Hair Cut', category: 'Hair' },
+        { name: 'Hair Cut', category: 'Hair' },
+        { name: 'Hair Spa', category: 'Hair' },
+      ]);
+      const result = await service.serviceSuggestions({ q: 'hair', limit: 12 });
+      expect(result).toEqual([
+        { name: 'Hair Cut', category: 'Hair' },
+        { name: 'Hair Spa', category: 'Hair' },
+      ]);
+      expect(prisma.service.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            isActive: true,
+            salon: { status: 'ACTIVE' },
+          }),
+        }),
+      );
     });
   });
 
@@ -196,6 +215,28 @@ describe('SalonsService', () => {
       await service.search({ city: 'bengaluru' });
       const { where } = prisma.salon.findMany.mock.calls[0][0];
       expect(where.city).toEqual({ slug: 'bengaluru' });
+    });
+
+    it('supports a manually-entered city plus free-text locality/landmark', async () => {
+      prisma.salon.findMany.mockResolvedValue([]);
+      await service.search({
+        cityText: 'Ghaziabad',
+        countryCode: 'in',
+        localityText: 'Vaishali Metro',
+      });
+      const { where } = prisma.salon.findMany.mock.calls[0][0] as any;
+      expect(where.city).toEqual({
+        name: { contains: 'Ghaziabad', mode: 'insensitive' },
+        countryCode: 'IN',
+      });
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            { locality: { name: { contains: 'Vaishali Metro', mode: 'insensitive' } } },
+            { addressLine: { contains: 'Vaishali Metro', mode: 'insensitive' } },
+          ],
+        },
+      ]);
     });
 
     // Issue #13 Mission D: the "Shop or service" field previously only matched salon
