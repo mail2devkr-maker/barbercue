@@ -1,0 +1,17 @@
+appId: com.dcw.fastque
+---
+- launchApp:
+    appId: com.dcw.fastque
+    clearState: true
+    clearKeychain: true
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Your Style."
+    timeout: 45000
+- tapOn: "Menu"
+- assertVisible: "Customer"
+- tapOn: "Customer"
+- extendedWaitUntil:
+    visible: "Continue with Google"
+    timeout: 20000
+- assertVisible: "Sign in"
