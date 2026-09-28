@@ -72,14 +72,14 @@ jobs:
           test -d ios/FastQue.xcworkspace
           xcodebuild -workspace ios/FastQue.xcworkspace -list
 
-      - name: Build for iOS Simulator without code signing
+      - name: Build standalone iOS Simulator app without code signing
         working-directory: apps/mobile
         run: |
           set -o pipefail
           xcodebuild \
             -workspace ios/FastQue.xcworkspace \
             -scheme FastQue \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
@@ -90,11 +90,19 @@ jobs:
         id: app
         run: |
           set -euxo pipefail
-          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/FastQue.app"
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphonesimulator/FastQue.app"
           test -d "$APP_PATH"
           echo "path=$APP_PATH" >> "$GITHUB_OUTPUT"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist"
+
+      - name: Verify standalone JS bundle is embedded
+        run: |
+          set -euxo pipefail
+          APP_PATH="${{ steps.app.outputs.path }}"
+          BUNDLE_PATH="$(find "$APP_PATH" -type f \( -name 'main.jsbundle' -o -name '*.jsbundle' \) -size +0c -print -quit)"
+          test -n "$BUNDLE_PATH"
+          echo "Embedded JS bundle: ${BUNDLE_PATH#$APP_PATH/}"
 
       - name: Boot an available iPhone Simulator
         id: sim
@@ -128,8 +136,21 @@ jobs:
             --style compact \
             --predicate 'process == "FastQue"' \
             > "$RUNNER_TEMP/fastque-simulator.log" 2>&1 || true
-          grep -E -i 'crash|fatal|uncaught exception|terminating app|abort' "$RUNNER_TEMP/fastque-simulator.log" \
+          grep -E -i 'No script URL provided|Could not connect to development server|Unhandled JS Exception|RCTFatal|terminating app due to uncaught exception|EXC_CRASH|SIGABRT' \
+            "$RUNNER_TEMP/fastque-simulator.log" \
             > "$RUNNER_TEMP/fastque-simulator-crash-scan.txt" || true
+
+      - name: Fail on runtime red-screen or fatal markers
+        if: steps.sim.outputs.udid != ''
+        run: |
+          set -euxo pipefail
+          test -f "$RUNNER_TEMP/fastque-ios-simulator.png"
+          test -f "$RUNNER_TEMP/fastque-simulator-crash-scan.txt"
+          if test -s "$RUNNER_TEMP/fastque-simulator-crash-scan.txt"; then
+            echo "FastQue simulator runtime failure markers detected:" >&2
+            cat "$RUNNER_TEMP/fastque-simulator-crash-scan.txt" >&2
+            exit 1
+          fi
 
       - name: Package simulator app
         if: success()
