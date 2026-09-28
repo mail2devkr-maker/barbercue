@@ -6,9 +6,8 @@ appId: com.dcw.fastque
     clearKeychain: true
     stopApp: true
 - extendedWaitUntil:
-    visible: "Your Style."
+    visible: "Menu"
     timeout: 45000
-- assertVisible: "Your Time."
 - assertVisible: "Choose location"
 - tapOn: "Book ahead"
 - extendedWaitUntil:
