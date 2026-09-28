@@ -15,7 +15,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     env:
-      DEVELOPER_DIR: "/Applications/Xcode_26.3.app/Contents/Developer"
+      DEVELOPER_DIR: "/Applications/Xcode_26.0.1.app/Contents/Developer"
       CI: "1"
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_API_BASE_URL: "https://barbercuebackend-production.up.railway.app/api/v1"
