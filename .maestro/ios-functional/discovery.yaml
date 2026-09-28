@@ -1,0 +1,27 @@
+appId: com.dcw.fastque
+---
+- launchApp:
+    appId: com.dcw.fastque
+    clearState: true
+    clearKeychain: true
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Your Style."
+    timeout: 45000
+- assertVisible: "Your Time."
+- assertVisible: "Choose location"
+- tapOn: "Book ahead"
+- extendedWaitUntil:
+    visible: "Find a salon"
+    timeout: 20000
+- assertVisible: "Search by name…"
+- assertVisible: "Distance"
+- assertVisible: "Price"
+- assertVisible: "Service"
+- tapOn: "Search by name…"
+- inputText: "__fastque_ios_smoke_no_match__"
+- tapOn: "Search"
+- extendedWaitUntil:
+    visible: "No salons found"
+    timeout: 25000
+- assertNotVisible: "Could not search salons."
