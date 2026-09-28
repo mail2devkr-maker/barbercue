@@ -6,7 +6,7 @@ appId: com.dcw.fastque
     clearKeychain: true
     stopApp: true
 - extendedWaitUntil:
-    visible: "Your Style."
+    visible: "Menu"
     timeout: 45000
 - pressKey: Home
 - extendedWaitUntil:
@@ -21,5 +21,5 @@ appId: com.dcw.fastque
     appId: com.dcw.fastque
     stopApp: true
 - extendedWaitUntil:
-    visible: "Your Style."
+    visible: "Menu"
     timeout: 45000
