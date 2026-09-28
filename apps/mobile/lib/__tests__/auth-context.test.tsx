@@ -32,7 +32,7 @@ describe('AuthProvider startup restore', () => {
   it('fails closed to unauthenticated when secure credential restore rejects instead of hanging in loading', async () => {
     (getPersistedRefreshToken as jest.Mock).mockRejectedValue(new Error('KEYCHAIN_UNAVAILABLE'));
     const seen: AuthStatus[] = [];
-    let tree: TestRenderer.ReactTestRenderer | undefined;
+    let tree: ReturnType<typeof TestRenderer.create> | undefined;
 
     await act(async () => {
       tree = TestRenderer.create(
