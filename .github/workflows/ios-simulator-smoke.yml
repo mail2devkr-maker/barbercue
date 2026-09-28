@@ -12,10 +12,10 @@ permissions:
 jobs:
   ios-simulator:
     name: macOS iOS simulator build + launch
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     env:
-      DEVELOPER_DIR: "/Applications/Xcode_26.0.1.app/Contents/Developer"
+      DEVELOPER_DIR: "/Applications/Xcode_26.4.1.app/Contents/Developer"
       CI: "1"
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_API_BASE_URL: "https://barbercuebackend-production.up.railway.app/api/v1"
@@ -49,31 +49,6 @@ jobs:
 
       - name: Install JavaScript dependencies
         run: npm ci
-
-      - name: Apply simulator-only ExpoModulesJSI Swift compatibility patch
-        run: |
-          set -euxo pipefail
-          node -e "const p=require('./node_modules/expo-modules-jsi/package.json'); if(p.version!=='57.0.4'){throw new Error('Unexpected expo-modules-jsi version: '+p.version)}"
-          python3 - <<'PY'
-          from pathlib import Path
-
-          root = Path("node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI")
-          if not root.is_dir():
-              raise SystemExit("ExpoModulesJSI Swift source directory missing")
-
-          replacements = 0
-          for path in root.rglob("*.swift"):
-              source = path.read_text()
-              patched = source.replace("weak let runtime:", "weak var runtime:")
-              if patched != source:
-                  replacements += source.count("weak let runtime:")
-                  path.write_text(patched)
-
-          if replacements < 1:
-              raise SystemExit("Expected weak-let runtime declarations were not found")
-
-          print(f"Applied simulator-only weak-let compatibility replacements: {replacements}")
-          PY
 
       - name: Build shared package
         run: npm run build:shared
