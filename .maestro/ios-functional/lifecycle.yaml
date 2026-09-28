@@ -1,0 +1,25 @@
+appId: com.dcw.fastque
+---
+- launchApp:
+    appId: com.dcw.fastque
+    clearState: true
+    clearKeychain: true
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Your Style."
+    timeout: 45000
+- pressKey: Home
+- extendedWaitUntil:
+    visible: "FastQue"
+    timeout: 15000
+- tapOn: "FastQue"
+- extendedWaitUntil:
+    visible: "Your Style."
+    timeout: 30000
+- stopApp
+- launchApp:
+    appId: com.dcw.fastque
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Your Style."
+    timeout: 45000
