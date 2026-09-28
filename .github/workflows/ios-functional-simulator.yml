@@ -1,0 +1,190 @@
+name: FastQue iOS Functional Simulator
+
+on:
+  push:
+    branches:
+      - chatgpt/fastque-ios-functional-ci
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  functional-ios:
+    name: exact-binary signed-out functional certification
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: "/Applications/Xcode_26.4.1.app/Contents/Developer"
+      TARGET_APP_SHA: "f5821e934aabcf620526e5f3e6ee343d1e523a05"
+      TARGET_SOURCE_RUN: "36433049603"
+      TARGET_SOURCE_ARTIFACT_ID: "10976006640"
+      TARGET_ARTIFACT_NAME: "fastque-ios-simulator-evidence"
+      EXPECTED_APP_ZIP_SHA256: "4c3b5c1022dd61f3ce15d4c96b0c6877fdeb43ed432e208eeb3ab1f4d4ed4a0a"
+      APP_ID: "com.dcw.fastque"
+      MAESTRO_VERSION: "2.10.0"
+
+    steps:
+      - name: Checkout functional harness
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Assert immutable target ancestry
+        run: |
+          set -euxo pipefail
+          git cat-file -e "$TARGET_APP_SHA^{commit}"
+          git merge-base --is-ancestor "$TARGET_APP_SHA" HEAD
+          {
+            echo "target_app_sha=$TARGET_APP_SHA"
+            echo "source_run=$TARGET_SOURCE_RUN"
+            echo "source_artifact_id=$TARGET_SOURCE_ARTIFACT_ID"
+            echo "harness_head=$GITHUB_SHA"
+          } | tee "$RUNNER_TEMP/functional-target.txt"
+
+      - name: Download exact successful simulator artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.TARGET_ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/source-evidence
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.TARGET_SOURCE_RUN }}
+
+      - name: Verify and extract exact simulator app
+        id: app
+        run: |
+          set -euxo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/source-evidence"
+          test -s "$EVIDENCE_DIR/FastQue-ios-simulator.zip"
+          ACTUAL_SHA="$(shasum -a 256 "$EVIDENCE_DIR/FastQue-ios-simulator.zip" | awk '{print $1}')"
+          test "$ACTUAL_SHA" = "$EXPECTED_APP_ZIP_SHA256"
+          echo "verified_app_zip_sha256=$ACTUAL_SHA" | tee -a "$RUNNER_TEMP/functional-target.txt"
+
+          EXTRACT_DIR="$RUNNER_TEMP/exact-app"
+          mkdir -p "$EXTRACT_DIR"
+          ditto -x -k "$EVIDENCE_DIR/FastQue-ios-simulator.zip" "$EXTRACT_DIR"
+          APP_PATH="$(find "$EXTRACT_DIR" -maxdepth 2 -type d -name 'FastQue.app' -print -quit)"
+          test -n "$APP_PATH"
+          test -s "$APP_PATH/main.jsbundle"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")" = "$APP_ID"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist"
+          echo "path=$APP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java 17 for Maestro
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install pinned Maestro CLI
+        id: maestro
+        run: |
+          set -euxo pipefail
+          ARCHIVE="$RUNNER_TEMP/maestro.zip"
+          INSTALL_DIR="$RUNNER_TEMP/maestro"
+          curl -L --fail --retry 3 --retry-delay 2             -o "$ARCHIVE"             "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip"
+          shasum -a 256 "$ARCHIVE" | tee "$RUNNER_TEMP/maestro-download.sha256"
+          mkdir -p "$INSTALL_DIR"
+          unzip -q "$ARCHIVE" -d "$INSTALL_DIR"
+          MAESTRO_BIN="$(find "$INSTALL_DIR" -type f -path '*/bin/maestro' -print -quit)"
+          test -n "$MAESTRO_BIN"
+          chmod +x "$MAESTRO_BIN"
+          VERSION="$("$MAESTRO_BIN" --version)"
+          echo "$VERSION"
+          echo "$VERSION" | grep -F "$MAESTRO_VERSION"
+          echo "bin=$MAESTRO_BIN" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Boot an available iPhone Simulator
+        id: sim
+        run: |
+          set -euxo pipefail
+          DEVICE_UDID="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; rows=[x for runtime in d.values() for x in runtime if x.get("isAvailable") and x.get("name","").startswith("iPhone")]; print(rows[0]["udid"] if rows else "")')"
+          test -n "$DEVICE_UDID"
+          echo "udid=$DEVICE_UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$DEVICE_UDID" || true
+          xcrun simctl bootstatus "$DEVICE_UDID" -b
+          xcrun simctl list devices | grep "$DEVICE_UDID" | tee "$RUNNER_TEMP/simulator-device.txt"
+
+      - name: Install exact FastQue app
+        run: |
+          set -euxo pipefail
+          DEVICE_UDID="${{ steps.sim.outputs.udid }}"
+          APP_PATH="${{ steps.app.outputs.path }}"
+          xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
+          xcrun simctl get_app_container "$DEVICE_UDID" "$APP_ID" app
+
+      - name: Run functional UI flows
+        id: flows
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          DEVICE_UDID="${{ steps.sim.outputs.udid }}"
+          MAESTRO_BIN="${{ steps.maestro.outputs.bin }}"
+          RESULTS="$RUNNER_TEMP/functional-results.txt"
+          : > "$RESULTS"
+          OVERALL=0
+
+          run_flow() {
+            NAME="$1"
+            FLOW="$2"
+            echo "===== FLOW: $NAME ====="
+            set +e
+            "$MAESTRO_BIN" --device "$DEVICE_UDID" test "$FLOW" 2>&1 | tee "$RUNNER_TEMP/maestro-$NAME.log"
+            RC=${PIPESTATUS[0]}
+            set -e
+            xcrun simctl io "$DEVICE_UDID" screenshot "$RUNNER_TEMP/functional-$NAME.png" || true
+            echo "$NAME=$RC" | tee -a "$RESULTS"
+            if test "$RC" -ne 0; then OVERALL=1; fi
+          }
+
+          set -e
+          run_flow "discovery" ".maestro/ios-functional/discovery.yaml"
+          run_flow "owner-login-shell" ".maestro/ios-functional/owner-login-shell.yaml"
+          run_flow "staff-login-shell" ".maestro/ios-functional/staff-login-shell.yaml"
+          run_flow "customer-login-shell" ".maestro/ios-functional/customer-login-shell.yaml"
+          run_flow "lifecycle" ".maestro/ios-functional/lifecycle.yaml"
+
+          cat "$RESULTS"
+          exit "$OVERALL"
+
+      - name: Capture functional simulator logs
+        if: always() && steps.sim.outputs.udid != ''
+        run: |
+          set -euxo pipefail
+          DEVICE_UDID="${{ steps.sim.outputs.udid }}"
+          xcrun simctl spawn "$DEVICE_UDID" log show             --last 30m             --style compact             --predicate 'process == "FastQue"'             > "$RUNNER_TEMP/fastque-functional-simulator.log" 2>&1 || true
+          grep -E -i 'No script URL provided|Could not connect to development server|Unhandled JS Exception|RCTFatal|terminating app due to uncaught exception|EXC_CRASH|SIGABRT'             "$RUNNER_TEMP/fastque-functional-simulator.log"             > "$RUNNER_TEMP/fastque-functional-crash-scan.txt" || true
+
+      - name: Upload functional evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastque-ios-functional-simulator-evidence
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/functional-target.txt
+            ${{ runner.temp }}/functional-results.txt
+            ${{ runner.temp }}/functional-*.png
+            ${{ runner.temp }}/maestro-*.log
+            ${{ runner.temp }}/maestro-download.sha256
+            ${{ runner.temp }}/simulator-device.txt
+            ${{ runner.temp }}/fastque-functional-simulator.log
+            ${{ runner.temp }}/fastque-functional-crash-scan.txt
+
+      - name: Enforce functional certification gate
+        if: always()
+        run: |
+          set -euxo pipefail
+          test -f "$RUNNER_TEMP/functional-results.txt"
+          cat "$RUNNER_TEMP/functional-results.txt"
+          test "$(grep -c '=0$' "$RUNNER_TEMP/functional-results.txt")" -eq 5
+          test -f "$RUNNER_TEMP/fastque-functional-crash-scan.txt"
+          if test -s "$RUNNER_TEMP/fastque-functional-crash-scan.txt"; then
+            echo "FastQue runtime failure markers detected:" >&2
+            cat "$RUNNER_TEMP/fastque-functional-crash-scan.txt" >&2
+            exit 1
+          fi
