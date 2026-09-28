@@ -15,6 +15,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     env:
+      DEVELOPER_DIR: "/Applications/Xcode_26.3.app/Contents/Developer"
       CI: "1"
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_API_BASE_URL: "https://barbercuebackend-production.up.railway.app/api/v1"
@@ -31,7 +32,9 @@ jobs:
         run: |
           set -euxo pipefail
           sw_vers
+          test -d "$DEVELOPER_DIR"
           xcodebuild -version
+          swift --version
           node --version
           npm --version
           ruby --version
