@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - chatgpt/fastque-ios-simulator-ci
+      - chatgpt/fastque-ios-physical-readiness
   workflow_dispatch:
 
 permissions:
