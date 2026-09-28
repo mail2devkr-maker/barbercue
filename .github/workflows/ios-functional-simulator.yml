@@ -94,7 +94,7 @@ jobs:
           chmod +x "$MAESTRO_BIN"
           VERSION_OUTPUT="$("$MAESTRO_BIN" --version 2>&1)"
           echo "$VERSION_OUTPUT"
-          VERSION="$(printf '%s\n' "$VERSION_OUTPUT" | grep -Eo '[0-9]+\\.[0-9]+\\.[0-9]+' | tail -1)"
+          VERSION="$(printf '%s\n' "$VERSION_OUTPUT" | tail -1 | tr -d '\r')"
           test "$VERSION" = "$MAESTRO_VERSION"
           echo "bin=$MAESTRO_BIN" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
