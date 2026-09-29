@@ -31,7 +31,8 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true",
-        "FASTQUE_IOS_BUILD": "true"
+        "FASTQUE_IOS_BUILD": "true",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "871155185690-hrobpdq9rvld8lbmclmjc4jb8smkpcql.apps.googleusercontent.com"
       },
       "ios": {
         "simulator": false
@@ -42,7 +43,8 @@
       "channel": "preview",
       "env": {
         "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "true",
-        "FASTQUE_IOS_BUILD": "true"
+        "FASTQUE_IOS_BUILD": "true",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "871155185690-hrobpdq9rvld8lbmclmjc4jb8smkpcql.apps.googleusercontent.com"
       },
       "ios": {
         "simulator": true
@@ -52,7 +54,8 @@
       "extends": "production",
       "env": {
         "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false",
-        "FASTQUE_IOS_BUILD": "true"
+        "FASTQUE_IOS_BUILD": "true",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "871155185690-hrobpdq9rvld8lbmclmjc4jb8smkpcql.apps.googleusercontent.com"
       }
     }
   },
