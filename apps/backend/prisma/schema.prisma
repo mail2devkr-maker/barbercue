@@ -755,6 +755,11 @@ model Salon {
   email            String?
   description      String?
   status           SalonStatus @default(PENDING)
+  // Owner-controlled same-day pause. Unlike SalonStatus.SUSPENDED (platform/admin moderation),
+  // this never removes an otherwise ACTIVE shop from public discovery. Customer-facing surfaces
+  // keep the shop visible with an explicit "This shop is closed for today." notice, while booking
+  // and queue entry are blocked until the owner reopens it.
+  isClosedForToday Boolean     @default(false)
   // Owner-selected service audience used to filter onboarding presets. Existing salons default to
   // UNISEX so the migration is backwards-compatible and never hides already-configured services.
   salonType        SalonType   @default(UNISEX)
