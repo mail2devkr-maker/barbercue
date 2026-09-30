@@ -166,7 +166,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
               value={qr.publicQueueUrl}
               size={200}
               level="H"
-              fgColor="#A8791F"
+              fgColor="#F20A76"
               bgColor="#ffffff"
               imageSettings={{
                 src: FASTQUE_QR_MARK_SRC,
