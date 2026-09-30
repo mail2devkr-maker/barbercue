@@ -486,7 +486,12 @@ export class SalonsService {
       citySlug,
     );
     const salon = await this.prisma.salon.findFirst({
-      where: { slug: salonSlug, cityId: city.id, status: SalonStatus.ACTIVE },
+      where: {
+        slug: salonSlug,
+        cityId: city.id,
+        status: SalonStatus.ACTIVE,
+        isClosedForToday: false,
+      },
       select: {
         chairs: {
           where: { status: ChairStatus.ACTIVE },
