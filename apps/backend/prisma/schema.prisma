@@ -718,6 +718,12 @@ model Salon {
   city             City        @relation(fields: [cityId], references: [id])
   localityId       String?
   locality         Locality?   @relation(fields: [localityId], references: [id])
+  // Owner-entered neighbourhood/area. Kept separately from localityId because the global master
+  // dataset is advisory for onboarding; a real shop must be able to enter an area that is not yet
+  // present in Locality. localityId is still populated when the text matches a known locality.
+  localityText     String?     @db.VarChar(160)
+  // Human navigation hint such as "Near Hanuman Mandir" or "Opposite City Mall".
+  landmark         String?     @db.VarChar(200)
   addressLine      String
   // IANA timezone (e.g. "Asia/Kolkata", "Europe/London"). Nullable for now: nothing can yet
   // derive a zone at registration — GPS is optional and no lookup service is wired — so
