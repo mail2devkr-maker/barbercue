@@ -234,7 +234,12 @@ export const registerSalonSchema = z
     lat: z.number().min(-90).max(90).optional(),
     lng: z.number().min(-180).max(180).optional(),
     citySlug: z.string().min(1),
+    // Free-text area/locality entered by the owner. localitySlug remains optional metadata when
+    // the text exactly matches one of the curated Locality rows; custom neighbourhood names are
+    // valid and must never be rejected just because they are absent from the master dataset.
+    localityText: z.string().trim().max(160).optional(),
     localitySlug: z.string().optional(),
+    landmark: z.string().trim().max(200).optional(),
   })
   // A half-coordinate is meaningless — it would place the shop on the equator or the prime
   // meridian. Either both arrive or neither does.
