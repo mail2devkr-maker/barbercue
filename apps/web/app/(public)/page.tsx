@@ -110,7 +110,7 @@ export default async function HomePage() {
               </p>
             )}
             <p className={styles.ownerPrompt}>
-              Run a barbershop? <Link href="/dashboard/register-shop">Register your shop</Link>
+              Run a barbershop? <Link href="/owner/register">Register your shop</Link>
             </p>
           </div>
 
@@ -278,7 +278,7 @@ export default async function HomePage() {
             <ul>
               {OWNER_POINTS.map((point) => <li key={point}>{point}</li>)}
             </ul>
-            <Link href="/dashboard/register-shop" className={styles.ownerCta}>Register your shop <span aria-hidden="true">→</span></Link>
+            <Link href="/owner/register" className={styles.ownerCta}>Register your shop <span aria-hidden="true">→</span></Link>
           </div>
         </div>
       </section>
