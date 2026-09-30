@@ -11,6 +11,7 @@ import {
   type EmployeeLoginInput,
   type MeResponse,
   type OtpVerifyInput,
+  type OwnerSignupInput,
   type StaffLoginInput,
 } from "@barbercue/shared";
 import { apiFetch, setAccessToken } from "./api";
@@ -23,6 +24,7 @@ interface AuthContextValue {
   verifyCustomerOtp: (input: OtpVerifyInput) => Promise<MeResponse>;
   googleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
+  ownerSignup: (input: OwnerSignupInput) => Promise<MeResponse>;
   employeeLogin: (input: EmployeeLoginInput) => Promise<MeResponse>;
   staffGoogleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   adminLogin: (input: AdminLoginInput) => Promise<MeResponse>;
@@ -133,6 +135,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [handleAuthResult],
   );
 
+  const ownerSignup = useCallback(
+    async (input: OwnerSignupInput) => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.ownerSignup), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return handleAuthResult(result);
+    },
+    [handleAuthResult],
+  );
+
   const employeeLogin = useCallback(
     async (input: EmployeeLoginInput) => {
       const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.employeeLogin), {
@@ -219,6 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyCustomerOtp,
       googleLogin,
       staffLogin,
+      ownerSignup,
       employeeLogin,
       staffGoogleLogin,
       adminLogin,
@@ -229,7 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshSession,
       applySession: handleAuthResult,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, employeeLogin, staffGoogleLogin, adminLogin, adminGoogleLogin, setInitialPassword, logout, refreshMe, refreshSession, handleAuthResult],
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, ownerSignup, employeeLogin, staffGoogleLogin, adminLogin, adminGoogleLogin, setInitialPassword, logout, refreshMe, refreshSession, handleAuthResult],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
