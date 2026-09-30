@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { SalonListItemDto } from "@barbercue/shared";
-import { formatDistance, formatMoney, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
+import { formatDistance, formatMoney, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION } from "@barbercue/shared";
 import { SalonImage } from "../ui/SalonImage";
 import styles from "./salon-card.module.css";
 
@@ -79,6 +79,12 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
           )}
         </div>
 
+        {salon.isClosedForToday && (
+          <p className={styles.closedToday} role="status">
+            {SHOP_CLOSED_TODAY_MESSAGE}
+          </p>
+        )}
+
         {(salon.isOpenNow !== null || salon.distanceKm !== null || salon.waitingCount > 0) && (
           <div className={styles.statusRow}>
             {salon.isOpenNow !== null && (
@@ -99,14 +105,16 @@ export function SalonCard({ salon, styleName }: { salon: SalonListItemDto; style
           </div>
         )}
 
-        <div className={styles.actions}>
-          <Link href={bookingHref} className={styles.primaryAction}>
-            Book
-          </Link>
-          <Link href={queueHref} className={styles.secondaryAction}>
-            Join queue
-          </Link>
-        </div>
+        {!salon.isClosedForToday && (
+          <div className={styles.actions}>
+            <Link href={bookingHref} className={styles.primaryAction}>
+              Book
+            </Link>
+            <Link href={queueHref} className={styles.secondaryAction}>
+              Join queue
+            </Link>
+          </div>
+        )}
       </div>
     </article>
   );
