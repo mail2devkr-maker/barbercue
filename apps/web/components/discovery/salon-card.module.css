@@ -113,6 +113,18 @@
   text-align: right;
 }
 
+.closedToday {
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  color: #7a2f12;
+  background: #fff0e7;
+  border: 1px solid rgba(242, 84, 45, 0.28);
+  border-radius: var(--bc-radius-sm);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .actions {
   display: grid;
   grid-template-columns: 0.8fr 1.2fr;
