@@ -24,7 +24,6 @@ import {
   type BookingDetailDto,
   type CustomerCreditBalanceDto,
   type Language,
-  type LiveStatsDto,
   type PaginatedResult,
   type QueueEntryDetailDto,
 } from '@barbercue/shared';
@@ -102,26 +101,6 @@ export default function HomeScreen({ navigation }: Props) {
 
   const [searchMode, setSearchMode] = useState<'barber' | 'salon'>('barber');
   const [query, setQuery] = useState('');
-
-  // Part 8/9 (Home discovery information) — a real platform-wide shop count for the trust strip,
-  // replacing static copy with an honest number once it loads. Public/unauthenticated endpoint
-  // (same one the search results page's own trust signals could use), so this runs regardless of
-  // auth status; a failed/slow fetch just leaves the existing static trustShopsLabel showing
-  // (see the trust strip render below) rather than blocking or fabricating a count.
-  const [liveStats, setLiveStats] = useState<LiveStatsDto | null>(null);
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      apiFetch<LiveStatsDto>(`${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.liveStats}`)
-        .then((result) => {
-          if (!cancelled) setLiveStats(result);
-        })
-        .catch(() => undefined);
-      return () => {
-        cancelled = true;
-      };
-    }, []),
-  );
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
@@ -497,7 +476,7 @@ export default function HomeScreen({ navigation }: Props) {
           <View style={styles.trustItem}>
             <TabIcon name="shop" color={color.gold} size={20} />
             <Text style={styles.trustLabel} numberOfLines={2}>
-              {liveStats ? `${liveStats.activeShopCount}${t.trustShopsCountSuffix}` : t.trustShopsLabel}
+              {t.trustShopsLabel}
             </Text>
           </View>
           <View style={styles.trustItem}>
