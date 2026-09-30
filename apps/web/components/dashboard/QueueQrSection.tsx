@@ -8,7 +8,7 @@ import { apiFetch, ApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
 import styles from "./dashboard.module.css";
 
-const FASTQUE_QR_MARK_SRC = "/brand/fastque-premium-3d-mark.png";
+const FASTQUE_QR_MARK_SRC = "/brand/fastque-clean-mark.png";
 const FASTQUE_LOGO_SRC = "/brand/fastque-clean-lockup-transparent.png";
 
 async function imageToDataUri(src: string): Promise<string> {
@@ -90,8 +90,8 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
       imageToDataUri(FASTQUE_LOGO_SRC),
     ]);
     const brandedQrSvg = svg.outerHTML
-      .replaceAll(FASTQUE_QR_MARK_SRC, markDataUri)
-      .replaceAll(`${window.location.origin}${FASTQUE_QR_MARK_SRC}`, markDataUri);
+      .replaceAll(`${window.location.origin}${FASTQUE_QR_MARK_SRC}`, markDataUri)
+      .replaceAll(FASTQUE_QR_MARK_SRC, markDataUri);
 
     const posterSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="280" height="360" viewBox="0 0 280 360">
@@ -99,7 +99,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
         <text x="140" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="${nameFontSize}" font-weight="700" fill="#FFF7EA">${safeName}</text>
         <text x="140" y="58" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#D6CDC2">Scan to join the queue</text>
         <g transform="translate(40 78)">${brandedQrSvg}</g>
-        <image href="${logoDataUri}" x="80" y="300" width="120" height="28" preserveAspectRatio="xMidYMid meet" />
+        <image href="${logoDataUri}" x="55" y="298" width="170" height="42" preserveAspectRatio="xMidYMid meet" />
       </svg>`;
 
     const blob = new Blob([posterSvg], { type: "image/svg+xml" });
@@ -149,8 +149,8 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
               bgColor="#ffffff"
               imageSettings={{
                 src: FASTQUE_QR_MARK_SRC,
-                width: 48,
-                height: 44,
+                width: 46,
+                height: 34,
                 excavate: true,
                 opacity: 1,
               }}
@@ -158,9 +158,9 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
             <img
               src={FASTQUE_LOGO_SRC}
               alt="FastQue"
-              width={120}
-              height={28}
-              style={{ display: "block", objectFit: "contain", marginTop: 2 }}
+              width={168}
+              height={42}
+              style={{ display: "block", objectFit: "contain", marginTop: 4 }}
             />
           </div>
 
