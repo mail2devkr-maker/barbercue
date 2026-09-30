@@ -38,11 +38,13 @@ export function proxy(request: NextRequest) {
   if (hasSession) return NextResponse.next();
 
   const { pathname } = request.nextUrl;
-  const loginPath = pathname.startsWith("/dashboard/admin")
-    ? "/admin/login"
-    : pathname.startsWith("/dashboard/salons")
-      ? "/staff/login"
-      : "/login";
+  const loginPath = pathname === "/dashboard/register-shop"
+    ? "/owner/register"
+    : pathname.startsWith("/dashboard/admin")
+      ? "/admin/login"
+      : pathname.startsWith("/dashboard/salons")
+        ? "/staff/login"
+        : "/login";
 
   const redirectUrl = new URL(loginPath, request.url);
   redirectUrl.searchParams.set("next", pathname);
