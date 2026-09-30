@@ -17,10 +17,10 @@ describe('SalonActivationService', () => {
       salon: {
         findUnique: jest
           .fn()
-          .mockResolvedValue({ id: 'salon-1', status: 'PENDING' }),
+          .mockResolvedValue({ id: 'salon-1', status: 'PENDING', isClosedForToday: false }),
         update: jest
           .fn()
-          .mockResolvedValue({ id: 'salon-1', status: 'ACTIVE' }),
+          .mockResolvedValue({ id: 'salon-1', status: 'ACTIVE', isClosedForToday: false }),
       },
       // Default to a fully set-up shop, so each readiness test states only the one thing it
       // removes rather than restating the whole fixture.
@@ -43,20 +43,34 @@ describe('SalonActivationService', () => {
     });
     expect(prisma.salon.update).toHaveBeenCalledWith({
       where: { id: 'salon-1' },
-      data: { status: 'ACTIVE' },
+      data: { status: 'ACTIVE', isClosedForToday: false },
     });
-    expect(result).toEqual({ id: 'salon-1', status: 'ACTIVE' });
+    expect(result).toEqual({ id: 'salon-1', status: 'ACTIVE', isClosedForToday: false });
   });
 
-  it('lets an owner pause their own shop (SUSPENDED)', async () => {
+  it('closes an ACTIVE owner shop for today without changing its discoverable lifecycle status', async () => {
+    prisma.salon.findUnique.mockResolvedValue({
+      id: 'salon-1',
+      status: 'ACTIVE',
+      isClosedForToday: false,
+    });
     prisma.salon.update.mockResolvedValue({
       id: 'salon-1',
-      status: 'SUSPENDED',
+      status: 'ACTIVE',
+      isClosedForToday: true,
     });
     const result = await service.updateStatus('owner-1', 'salon-1', {
       status: 'SUSPENDED' as never,
     });
-    expect(result.status).toBe('SUSPENDED');
+    expect(prisma.salon.update).toHaveBeenCalledWith({
+      where: { id: 'salon-1' },
+      data: { isClosedForToday: true },
+    });
+    expect(result).toEqual({
+      id: 'salon-1',
+      status: 'ACTIVE',
+      isClosedForToday: true,
+    });
   });
 
   it('checks salon access first', async () => {
@@ -147,7 +161,7 @@ describe('SalonActivationService', () => {
       const result = await service.updateStatus('owner-1', 'salon-1', {
         status: 'ACTIVE' as never,
       });
-      expect(result).toEqual({ id: 'salon-1', status: 'ACTIVE' });
+      expect(result).toEqual({ id: 'salon-1', status: 'ACTIVE', isClosedForToday: false });
       expect(prisma.salon.update).toHaveBeenCalled();
     });
 
@@ -202,6 +216,12 @@ describe('SalonActivationService', () => {
       prisma.salon.findUnique.mockResolvedValue({
         id: 'salon-1',
         status: 'SUSPENDED',
+        isClosedForToday: false,
+      });
+      prisma.salon.update.mockResolvedValue({
+        id: 'salon-1',
+        status: 'ACTIVE',
+        isClosedForToday: false,
       });
       prisma.service.count.mockResolvedValue(0);
       prisma.chair.count.mockResolvedValue(0);
@@ -232,22 +252,24 @@ describe('SalonActivationService', () => {
       expect(prisma.service.count).not.toHaveBeenCalled();
       expect(prisma.salon.update).toHaveBeenCalledWith({
         where: { id: 'salon-1' },
-        data: { status: 'ACTIVE' },
+        data: { status: 'ACTIVE', isClosedForToday: false },
       });
     });
 
-    it('never gates a PENDING salon being suspended', async () => {
+    it('never gates a PENDING salon daily-close request and does not turn it into an admin suspension', async () => {
       prisma.service.count.mockResolvedValue(0);
       prisma.salon.update.mockResolvedValue({
         id: 'salon-1',
-        status: 'SUSPENDED',
+        status: 'PENDING',
+        isClosedForToday: true,
       });
 
       const result = await service.updateStatus('owner-1', 'salon-1', {
         status: 'SUSPENDED' as never,
       });
 
-      expect(result.status).toBe('SUSPENDED');
+      expect(result.status).toBe('PENDING');
+      expect(result.isClosedForToday).toBe(true);
       expect(prisma.service.count).not.toHaveBeenCalled();
     });
   });
