@@ -1,3 +1,4 @@
+import { HttpStatus } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { AuthErrorCode, Language, Role, SessionAudience, UserStatus } from '@barbercue/shared';
 import { AuthService } from './auth.service';
