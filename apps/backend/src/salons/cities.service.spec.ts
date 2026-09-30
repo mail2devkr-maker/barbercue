@@ -286,6 +286,43 @@ describe('CitiesService', () => {
       expect(sqlFragment.values).toContain('india-country-id');
     });
 
+    it('keeps Ghaziabad visible for India + Uttar Pradesh onboarding search', async () => {
+      prisma.$queryRaw.mockResolvedValue([
+        {
+          id: 'ghaziabad-city',
+          name: 'Ghaziabad',
+          slug: 'ghaziabad',
+          countryCode: 'IN',
+          regionId: 'uttar-pradesh-region-id',
+          regionName: 'Uttar Pradesh',
+          regionCode: 'IN-UP',
+        },
+      ]);
+
+      const result = await service.searchCities({
+        countryId: 'india-country-id',
+        regionId: 'uttar-pradesh-region-id',
+        q: 'Ghaziabad',
+      });
+
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      expect(sqlFragment.values).toContain('india-country-id');
+      expect(sqlFragment.values).toContain('uttar-pradesh-region-id');
+      expect(result).toEqual([
+        {
+          id: 'ghaziabad-city',
+          name: 'Ghaziabad',
+          slug: 'ghaziabad',
+          countryCode: 'IN',
+          region: {
+            id: 'uttar-pradesh-region-id',
+            name: 'Uttar Pradesh',
+            code: 'IN-UP',
+          },
+        },
+      ]);
+    });
+
     it('maps a city with no region to region: null', async () => {
       prisma.$queryRaw.mockResolvedValue([
         { ...bengaluruRow, regionId: null, regionName: null, regionCode: null },
