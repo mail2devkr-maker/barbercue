@@ -87,8 +87,24 @@ describe('AvailabilityService', () => {
       });
     });
 
-    it('returns the salon when ACTIVE', async () => {
-      prisma.salon.findUnique.mockResolvedValue({ id: 's1', status: 'ACTIVE' });
+    it('rejects a discoverable shop that the owner closed for today', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        isClosedForToday: true,
+      });
+      await expect(service.getSalonOrThrow('s1')).rejects.toMatchObject({
+        code: 'SALON_NOT_FOUND',
+        message: 'This shop is closed for today.',
+      });
+    });
+
+    it('returns the salon when ACTIVE and not closed for today', async () => {
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 's1',
+        status: 'ACTIVE',
+        isClosedForToday: false,
+      });
       await expect(service.getSalonOrThrow('s1')).resolves.toMatchObject({
         id: 's1',
       });
