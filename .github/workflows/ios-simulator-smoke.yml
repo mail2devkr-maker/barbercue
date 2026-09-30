@@ -1,0 +1,191 @@
+name: FastQue iOS Simulator Smoke
+
+on:
+  push:
+    branches:
+      - chatgpt/fastque-ios-simulator-ci
+      - chatgpt/fastque-ios-physical-readiness
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-simulator:
+    name: macOS iOS simulator build + launch
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: "/Applications/Xcode_26.4.1.app/Contents/Developer"
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_API_BASE_URL: "https://barbercuebackend-production.up.railway.app/api/v1"
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: "871155185690-bcl6bu22nphvg85hklflag78sqfp7khv.apps.googleusercontent.com"
+      EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: "871155185690-0256keu32669iup0b8vbi20junds6d0f.apps.googleusercontent.com"
+
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Show toolchain
+        run: |
+          set -euxo pipefail
+          sw_vers
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          swift --version
+          node --version
+          npm --version
+          ruby --version
+          pod --version
+
+      - name: Assert simulator smoke does not fake iOS OAuth
+        run: |
+          set -euxo pipefail
+          test -z "${FASTQUE_IOS_BUILD:-}"
+          test -z "${EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID:-}"
+          echo "Google iOS OAuth is intentionally NOT exercised in this smoke build."
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Build shared package
+        run: npm run build:shared
+
+      - name: Mobile typecheck
+        run: npm run typecheck --workspace=@barbercue/mobile
+
+      - name: Mobile tests
+        run: npm run test --workspace=@barbercue/mobile -- --runInBand
+
+      - name: Generate native iOS project on macOS
+        working-directory: apps/mobile
+        run: |
+          set -euxo pipefail
+          npx expo prebuild --platform ios --clean
+
+      - name: Disable OTA updates for standalone simulator smoke
+        working-directory: apps/mobile
+        run: |
+          set -euxo pipefail
+          EXPO_PLIST="$(find ios -name Expo.plist -type f -print -quit)"
+          test -n "$EXPO_PLIST"
+          /usr/libexec/PlistBuddy -c 'Set :EXUpdatesEnabled false' "$EXPO_PLIST" \
+            || /usr/libexec/PlistBuddy -c 'Add :EXUpdatesEnabled bool false' "$EXPO_PLIST"
+          /usr/libexec/PlistBuddy -c 'Print :EXUpdatesEnabled' "$EXPO_PLIST"
+
+      - name: Inspect generated Xcode workspace
+        working-directory: apps/mobile
+        run: |
+          set -euxo pipefail
+          test -d ios/FastQue.xcworkspace
+          xcodebuild -workspace ios/FastQue.xcworkspace -list
+
+      - name: Build standalone iOS Simulator app without code signing
+        working-directory: apps/mobile
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -workspace ios/FastQue.xcworkspace \
+            -scheme FastQue \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee "$RUNNER_TEMP/xcodebuild-simulator.log"
+
+      - name: Locate built app
+        id: app
+        run: |
+          set -euxo pipefail
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release-iphonesimulator/FastQue.app"
+          test -d "$APP_PATH"
+          echo "path=$APP_PATH" >> "$GITHUB_OUTPUT"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist"
+
+      - name: Verify standalone JS bundle is embedded
+        run: |
+          set -euxo pipefail
+          APP_PATH="${{ steps.app.outputs.path }}"
+          BUNDLE_PATH="$(find "$APP_PATH" -type f \( -name 'main.jsbundle' -o -name '*.jsbundle' \) -size +0c -print -quit)"
+          test -n "$BUNDLE_PATH"
+          echo "Embedded JS bundle: ${BUNDLE_PATH#$APP_PATH/}"
+
+      - name: Boot an available iPhone Simulator
+        id: sim
+        run: |
+          set -euxo pipefail
+          DEVICE_UDID="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; rows=[x for runtime in d.values() for x in runtime if x.get("isAvailable") and x.get("name","").startswith("iPhone")]; print(rows[0]["udid"] if rows else "")')"
+          test -n "$DEVICE_UDID"
+          echo "udid=$DEVICE_UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$DEVICE_UDID" || true
+          xcrun simctl bootstatus "$DEVICE_UDID" -b
+
+      - name: Install and cold-launch FastQue in Simulator
+        run: |
+          set -euxo pipefail
+          DEVICE_UDID="${{ steps.sim.outputs.udid }}"
+          APP_PATH="${{ steps.app.outputs.path }}"
+          xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
+          xcrun simctl terminate "$DEVICE_UDID" com.dcw.fastque || true
+          LAUNCH_OUTPUT="$(xcrun simctl launch "$DEVICE_UDID" com.dcw.fastque)"
+          echo "$LAUNCH_OUTPUT"
+          sleep 12
+          xcrun simctl get_app_container "$DEVICE_UDID" com.dcw.fastque app
+          xcrun simctl io "$DEVICE_UDID" screenshot "$RUNNER_TEMP/fastque-ios-simulator.png"
+          sleep 20
+          xcrun simctl io "$DEVICE_UDID" screenshot "$RUNNER_TEMP/fastque-ios-simulator-settled.png"
+
+      - name: Capture sanitized simulator logs
+        if: always() && steps.sim.outputs.udid != ''
+        run: |
+          DEVICE_UDID="${{ steps.sim.outputs.udid }}"
+          xcrun simctl spawn "$DEVICE_UDID" log show \
+            --last 10m \
+            --style compact \
+            --predicate 'process == "FastQue"' \
+            > "$RUNNER_TEMP/fastque-simulator.log" 2>&1 || true
+          grep -E -i 'No script URL provided|Could not connect to development server|Unhandled JS Exception|RCTFatal|terminating app due to uncaught exception|EXC_CRASH|SIGABRT' \
+            "$RUNNER_TEMP/fastque-simulator.log" \
+            > "$RUNNER_TEMP/fastque-simulator-crash-scan.txt" || true
+
+      - name: Fail on runtime red-screen or fatal markers
+        if: steps.sim.outputs.udid != ''
+        run: |
+          set -euxo pipefail
+          test -f "$RUNNER_TEMP/fastque-ios-simulator.png"
+          test -f "$RUNNER_TEMP/fastque-simulator-crash-scan.txt"
+          if test -s "$RUNNER_TEMP/fastque-simulator-crash-scan.txt"; then
+            echo "FastQue simulator runtime failure markers detected:" >&2
+            cat "$RUNNER_TEMP/fastque-simulator-crash-scan.txt" >&2
+            exit 1
+          fi
+
+      - name: Package simulator app
+        if: success()
+        run: |
+          set -euxo pipefail
+          ditto -c -k --sequesterRsrc --keepParent \
+            "${{ steps.app.outputs.path }}" \
+            "$RUNNER_TEMP/FastQue-ios-simulator.zip"
+          shasum -a 256 "$RUNNER_TEMP/FastQue-ios-simulator.zip" | tee "$RUNNER_TEMP/FastQue-ios-simulator.sha256"
+
+      - name: Upload simulator evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastque-ios-simulator-evidence
+          if-no-files-found: warn
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/xcodebuild-simulator.log
+            ${{ runner.temp }}/fastque-ios-simulator.png
+            ${{ runner.temp }}/fastque-ios-simulator-settled.png
+            ${{ runner.temp }}/fastque-simulator.log
+            ${{ runner.temp }}/fastque-simulator-crash-scan.txt
+            ${{ runner.temp }}/FastQue-ios-simulator.zip
+            ${{ runner.temp }}/FastQue-ios-simulator.sha256

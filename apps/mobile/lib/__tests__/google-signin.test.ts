@@ -30,12 +30,17 @@ const t = {
   couldNotCompleteGoogleSignIn: 'Could not complete Google sign-in. Please try again.',
 } as UiStrings;
 
-function loadGoogleSignIn(webClientId?: string) {
+function loadGoogleSignIn(webClientId?: string, iosClientId?: string) {
   jest.resetModules();
   if (webClientId === undefined) {
     delete process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
   } else {
     process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = webClientId;
+  }
+  if (iosClientId === undefined) {
+    delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  } else {
+    process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = iosClientId;
   }
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('../google-signin') as typeof import('../google-signin');
@@ -43,6 +48,7 @@ function loadGoogleSignIn(webClientId?: string) {
 
 describe('native Google Sign-In service', () => {
   const originalWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const originalIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -53,6 +59,11 @@ describe('native Google Sign-In service', () => {
       delete process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     } else {
       process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = originalWebClientId;
+    }
+    if (originalIosClientId === undefined) {
+      delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+    } else {
+      process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID = originalIosClientId;
     }
   });
 
@@ -76,6 +87,20 @@ describe('native Google Sign-In service', () => {
     expect(mockConfigure).toHaveBeenCalledWith({ webClientId: 'web-client-id.apps.googleusercontent.com' });
     expect(mockCheckPlayServices).toHaveBeenCalledTimes(1);
     expect(mockSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the native iOS OAuth client ID when one is configured', async () => {
+    const { getGoogleIdToken } = loadGoogleSignIn(
+      'web-client-id.apps.googleusercontent.com',
+      'ios-client-id.apps.googleusercontent.com',
+    );
+    mockSignIn.mockResolvedValue({ kind: 'success', data: { idToken: 'id-token' } });
+
+    await expect(getGoogleIdToken(t)).resolves.toEqual({ type: 'success', idToken: 'id-token' });
+    expect(mockConfigure).toHaveBeenCalledWith({
+      webClientId: 'web-client-id.apps.googleusercontent.com',
+      iosClientId: 'ios-client-id.apps.googleusercontent.com',
+    });
   });
 
   it('uses the documented interactive fallbacks for a first-time Google user', async () => {
