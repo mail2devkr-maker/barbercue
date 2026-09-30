@@ -521,12 +521,15 @@ describe('AuthService', () => {
     it('rejects an email that already belongs to any FastQue account without changing its roles or password', async () => {
       prisma.user.findUnique.mockResolvedValue({ id: 'existing-user' });
 
-      await expect(
-        service.ownerSignup('existing@example.com', 'password123'),
-      ).rejects.toMatchObject({
-        code: 'OWNER_ACCOUNT_EMAIL_EXISTS',
-        status: HttpStatus.CONFLICT,
-      });
+      let thrown: unknown;
+      try {
+        await service.ownerSignup('existing@example.com', 'password123');
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(AppException);
+      expect((thrown as AppException).code).toBe('OWNER_ACCOUNT_EMAIL_EXISTS');
+      expect((thrown as AppException).getStatus()).toBe(HttpStatus.CONFLICT);
 
       expect(passwordService.hash).not.toHaveBeenCalled();
       expect(prisma.user.create).not.toHaveBeenCalled();
