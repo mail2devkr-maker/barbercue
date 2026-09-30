@@ -123,11 +123,9 @@ export default function RoleSelectScreen({ navigation }: Props) {
     }
   }
 
-  // Mobile Shop Owner Onboarding mission — there is no standalone "create an owner account"
-  // endpoint (POST salons grants SALON_OWNER to an already-authenticated user; see
-  // RegisterSalonResponseDto's doc comment), so this routes through the same customer sign-in
-  // every other visitor uses and replays the registration intent once it completes (see
-  // shop-registration-intent.ts / RootNavigator's ShopRegistrationHandoffBridge).
+  // Shop-owner registration has its own email/password account-creation screen. That signup
+  // creates only an authenticated onboarding account; POST /salons remains the boundary that
+  // creates the real salon-scoped SALON_OWNER role and replays into the existing onboarding flow.
   function registerShop() {
     setMenuOpen(false);
     navigation.navigate(beginShopRegistrationAuthentication());
