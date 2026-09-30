@@ -91,12 +91,13 @@ export class SalonsController {
     return this.salonsService.getOwnedSalon(user.id, salonId);
   }
 
-  // Issue #13 Mission G — single literal segment, same arity argument as `mine`/`workplaces`
-  // above. Platform-wide aggregate counts only; see LiveStatsDto's own doc comment.
+  // Public live signal intentionally excludes the platform-wide shop total. The owner has
+  // explicitly restricted total shop count to PLATFORM_ADMIN surfaces only.
   @Public()
   @Get(DISCOVERY_PATHS.liveStats)
-  getLiveStats() {
-    return this.salonsService.getLiveStats();
+  async getLiveStats() {
+    const stats = await this.salonsService.getLiveStats();
+    return { liveWaitingCount: stats.liveWaitingCount };
   }
 
   @Public()
