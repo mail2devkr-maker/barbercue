@@ -260,9 +260,48 @@ export class AuthService {
     const normalizedEmail = email.trim().toLowerCase();
     const existing = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
-      select: { id: true },
+      include: { roles: true },
     });
     if (existing) {
+      this.assertActive(existing.status);
+      const existingRoles = existing.roles.map((role) => role.role);
+      const isUnfinishedOnboardingAccount =
+        existingRoles.length > 0 &&
+        existingRoles.every((role) => role === Role.CUSTOMER) &&
+        Boolean(existing.passwordHash);
+      const passwordMatches =
+        isUnfinishedOnboardingAccount && existing.passwordHash
+          ? await this.passwordService.compare(password, existing.passwordHash)
+          : false;
+
+      // A prospective owner can safely resume after closing the browser/app before creating the
+      // salon. Do not create a duplicate account and do not grant a role here: POST /salons remains
+      // the only boundary that creates a salon-scoped SALON_OWNER role.
+      if (isUnfinishedOnboardingAccount && passwordMatches) {
+        const sessionRoles = this.tokenService.scopeRolesToAudience(
+          existingRoles,
+          SessionAudience.CUSTOMER,
+        );
+        const tokens = await this.tokenService.issueTokenPair(
+          existing.id,
+          sessionRoles,
+          SessionAudience.CUSTOMER,
+          deviceInfo,
+        );
+        return {
+          user: this.toMeResponse(
+            existing.id,
+            sessionRoles,
+            SessionAudience.CUSTOMER,
+            existing.phone,
+            existing.email,
+            existing.preferredLanguage,
+            existing.passwordHash,
+          ),
+          tokens,
+        };
+      }
+
       throw new AppException(
         'OWNER_ACCOUNT_EMAIL_EXISTS',
         'An account with this email already exists. Sign in instead.',
