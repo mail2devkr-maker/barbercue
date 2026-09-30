@@ -32,6 +32,7 @@ import {
   deleteAccountSchema,
   setLanguageSchema,
   staffLoginSchema,
+  ownerSignupSchema,
   employeeLoginSchema,
   type AdminGoogleLoginInput,
   type AdminLoginInput,
@@ -47,6 +48,7 @@ import {
   type ResetPasswordInput,
   type SetLanguageInput,
   type StaffLoginInput,
+  type OwnerSignupInput,
   type EmployeeLoginInput,
 } from '@barbercue/shared';
 import { AuthService } from './auth.service';
@@ -152,6 +154,24 @@ export class AuthController {
   ) {
     const result = await this.authService.employeeLogin(
       body.employeeCode,
+      body.password,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.ownerSignup)
+  @UsePipes(new ZodValidationPipe(ownerSignupSchema))
+  async ownerSignup(
+    @Body() body: OwnerSignupInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.ownerSignup(
+      body.email,
       body.password,
       req.headers['user-agent'],
     );
