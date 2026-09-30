@@ -566,7 +566,7 @@ export default function SearchClient() {
                 ? "Finding shops"
                 : error
                   ? "Shops unavailable"
-                  : `${results.length} ${results.length === 1 ? "shop" : "shops"} shown`}
+                  : "Available shops"}
             </h2>
           </div>
           {!loading && !error && results.length > 0 && <p>Real availability appears when you book.</p>}
