@@ -518,8 +518,43 @@ describe('AuthService', () => {
       expect(result.tokens).toBe(fakeTokens);
     });
 
-    it('rejects an email that already belongs to any FastQue account without changing its roles or password', async () => {
-      prisma.user.findUnique.mockResolvedValue({ id: 'existing-user' });
+    it('resumes an unfinished password-backed owner onboarding account with the same credentials', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'prospective-owner-1',
+        phone: null,
+        email: 'owner@example.com',
+        passwordHash: 'hashed-password',
+        preferredLanguage: Language.EN,
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+      passwordService.compare.mockResolvedValue(true);
+
+      const result = await service.ownerSignup('owner@example.com', 'password123', 'resume-device');
+
+      expect(passwordService.compare).toHaveBeenCalledWith('password123', 'hashed-password');
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'prospective-owner-1',
+        [Role.CUSTOMER],
+        SessionAudience.CUSTOMER,
+        'resume-device',
+      );
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(result.tokens).toBe(fakeTokens);
+    });
+
+    it('rejects an email that already belongs to an owner/staff account without changing its roles or password', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'existing-owner',
+        phone: null,
+        email: 'existing@example.com',
+        passwordHash: 'hashed-password',
+        preferredLanguage: Language.EN,
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.SALON_OWNER }],
+      });
 
       let thrown: unknown;
       try {
