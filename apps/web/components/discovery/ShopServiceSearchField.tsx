@@ -7,7 +7,7 @@ import type { ServiceSuggestionDto } from "@barbercue/shared";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
-const RESULT_LIMIT = 6;
+const RESULT_LIMIT = 250;
 
 type SuggestState =
   | { kind: "idle" }
