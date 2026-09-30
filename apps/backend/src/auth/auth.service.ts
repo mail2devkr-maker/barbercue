@@ -1,4 +1,5 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import {
   AuthErrorCode,
@@ -221,6 +222,84 @@ export class AuthService {
     // grants anything more).
     const sessionRoles = this.tokenService.scopeRolesToAudience(
       roles,
+      SessionAudience.CUSTOMER,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      sessionRoles,
+      SessionAudience.CUSTOMER,
+      deviceInfo,
+    );
+    return {
+      user: this.toMeResponse(
+        user.id,
+        sessionRoles,
+        SessionAudience.CUSTOMER,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
+  // ---------- Prospective shop owner: self-service email + password ----------
+
+  /**
+   * Creates the account used to begin shop onboarding. A salon-scoped SALON_OWNER role cannot
+   * exist safely before a real salon exists, so this account starts with CUSTOMER access only.
+   * POST /salons is already the authoritative promotion boundary: it creates the salon, grants
+   * SALON_OWNER for that salon and returns a new STAFF-audience session atomically.
+   */
+  async ownerSignup(
+    email: string,
+    password: string,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new AppException(
+        'OWNER_ACCOUNT_EMAIL_EXISTS',
+        'An account with this email already exists. Sign in instead.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const passwordHash = await this.passwordService.hash(password);
+    let user;
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          passwordHash,
+          status: UserStatus.ACTIVE,
+          roles: { create: { role: Role.CUSTOMER } },
+        },
+        include: { roles: true },
+      });
+    } catch (err) {
+      // Keep the duplicate-email result deterministic even if two signup requests race between
+      // the pre-check and the unique User.email insert.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        throw new AppException(
+          'OWNER_ACCOUNT_EMAIL_EXISTS',
+          'An account with this email already exists. Sign in instead.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw err;
+    }
+
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      user.roles.map((role) => role.role),
       SessionAudience.CUSTOMER,
     );
     const tokens = await this.tokenService.issueTokenPair(
