@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";\nimport { Suspense, useEffect } from "react";
+import Link from "next/link";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
 import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard";
