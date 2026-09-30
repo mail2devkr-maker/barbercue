@@ -880,6 +880,12 @@ describe('SalonsService', () => {
         ],
       });
       const query = prisma.salon.findFirst.mock.calls[0][0];
+      expect(query.where).toEqual({
+        slug: 'demo',
+        cityId: 'city-1',
+        status: 'ACTIVE',
+        isClosedForToday: false,
+      });
       expect(query.select.staff.select).not.toHaveProperty('user');
       expect(query.select.staff.select).not.toHaveProperty(
         'queueEntriesAssigned',
