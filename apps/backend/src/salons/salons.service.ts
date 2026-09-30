@@ -112,25 +112,21 @@ export class SalonsService {
     private readonly tokenService: TokenService,
   ) {}
 
-  // Issue #13 Mission G — two cheap, independent count queries, no joins. Real zeros on a genuinely
-  // empty platform, never a fabricated placeholder; the homepage hides a stat rather than render a
-  // misleading "0" (see LiveStatsDto's own doc comment).
+  // Public live stats deliberately exclude the platform-wide shop total. Shop count is an
+  // admin-only metric; public/customer surfaces only receive current queue activity.
   async getLiveStats(): Promise<LiveStatsDto> {
-    const [activeShopCount, liveWaitingCount] = await Promise.all([
-      this.prisma.salon.count({ where: { status: SalonStatus.ACTIVE } }),
-      this.prisma.queueEntry.count({
-        where: {
-          status: {
-            in: [
-              QueueEntryStatus.WAITING,
-              QueueEntryStatus.CALLED,
-              QueueEntryStatus.IN_SERVICE,
-            ],
-          },
+    const liveWaitingCount = await this.prisma.queueEntry.count({
+      where: {
+        status: {
+          in: [
+            QueueEntryStatus.WAITING,
+            QueueEntryStatus.CALLED,
+            QueueEntryStatus.IN_SERVICE,
+          ],
         },
-      }),
-    ]);
-    return { activeShopCount, liveWaitingCount };
+      },
+    });
+    return { liveWaitingCount };
   }
 
   async search(
