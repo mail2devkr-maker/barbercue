@@ -264,6 +264,11 @@ export interface LocalityDto {
   citySlug: string;
 }
 
+export interface ServiceSuggestionDto {
+  name: string;
+  category: string | null;
+}
+
 // ---------- Global location discovery (Phase 6A) ----------
 // Additive, separate from CityDto/LocalityDto above (untouched) — these back the new
 // Country -> Region -> City-search selection flow, not the existing B9 city/locality routes.
@@ -386,6 +391,9 @@ export interface AdminVerificationRequestDto extends VerificationRequestDto {
 // its fields, adding only what a card needs beyond identity/location.
 export interface SalonListItemDto extends SalonSummary {
   coverPhotoUrl: string | null;
+  // Owner's temporary same-day pause. The shop remains discoverable; clients show
+  // SHOP_CLOSED_TODAY_MESSAGE and suppress booking/queue CTAs while true.
+  isClosedForToday?: boolean;
   ratingAverage: number | null; // null when the salon has zero reviews yet
   ratingCount: number;
   priceMin: number | null; // computed from active services, null if none
@@ -483,6 +491,7 @@ export interface RegisterSalonResultDto {
   slug: string;
   name: string;
   status: SalonStatus;
+  isClosedForToday?: boolean;
 }
 
 /**
@@ -521,6 +530,7 @@ export interface SalonWorkplaceDto {
   slug: string;
   name: string;
   status: SalonStatus;
+  isClosedForToday?: boolean;
   isOwner: boolean;
 }
 
@@ -1277,6 +1287,7 @@ export interface StaffInviteResultDto {
 export interface SalonStatusResultDto {
   id: string;
   status: SalonStatus;
+  isClosedForToday?: boolean;
 }
 
 // PATCH dashboard/salons/:salonId/timezone response, and GET .../timezone's current-value shape.
