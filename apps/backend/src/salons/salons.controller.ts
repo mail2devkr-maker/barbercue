@@ -101,6 +101,19 @@ export class SalonsController {
   }
 
   @Public()
+  @Get(DISCOVERY_PATHS.serviceSuggestions)
+  getServiceSuggestions(
+    @Query('q') q = '',
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : 8;
+    return this.salonsService.searchServiceSuggestions(
+      q,
+      Number.isFinite(parsedLimit) ? parsedLimit : 8,
+    );
+  }
+
+  @Public()
   @Get(':countryCode/:citySlug/:salonSlug/status')
   getPublicStatus(
     @Param('countryCode') countryCode: string,
