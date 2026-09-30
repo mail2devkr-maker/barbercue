@@ -441,10 +441,11 @@ export default function SearchClient() {
     };
   }, [retryKey, searchParams]);
 
-  function handleSubmit(event?: React.FormEvent) {
+  function handleSubmit(event?: React.FormEvent, explicitService?: string) {
     event?.preventDefault();
     const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
+    const serviceQuery = (explicitService ?? q).trim();
+    if (serviceQuery) params.set("service", serviceQuery);
     if (selectedCity) {
       params.set("city", selectedCity.slug);
       params.set("countryCode", selectedCity.countryCode);
@@ -486,8 +487,12 @@ export default function SearchClient() {
 
         <form className={styles.searchForm} onSubmit={handleSubmit} role="search">
           <div className={styles.field}>
-            <span id="search-q-label">Shop or service</span>
-            <ShopServiceSearchField value={q} onChange={setQ} onSubmit={() => handleSubmit()} />
+            <span id="search-q-label">Service</span>
+            <ShopServiceSearchField
+              value={q}
+              onChange={setQ}
+              onSubmit={(serviceName) => handleSubmit(undefined, serviceName)}
+            />
           </div>
           <div className={styles.field}>
             <span id="search-city-label">City</span>
