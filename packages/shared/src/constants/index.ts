@@ -13,6 +13,8 @@ export const AUTH_PATHS = {
   otpVerify: 'otp/verify',
   google: 'google',
   staffLogin: 'staff/login',
+  // Self-service shop-owner account creation before salon onboarding.
+  ownerSignup: 'owner/signup',
   employeeLogin: 'employee/login',
   // Google Sign-In restricted to accounts that already hold SALON_OWNER and/or SALON_STAFF —
   // deliberately a separate endpoint from `google` above, not a shared one branching on a role
