@@ -29,7 +29,9 @@ interface FormState {
   email: string;
   addressLine: string;
   postalCode: string;
+  localityText: string;
   localitySlug: string;
+  landmark: string;
 }
 
 const EMPTY: FormState = {
@@ -39,7 +41,9 @@ const EMPTY: FormState = {
   email: '',
   addressLine: '',
   postalCode: '',
+  localityText: '',
   localitySlug: '',
+  landmark: '',
 };
 
 function round5(n: number): number {
@@ -57,8 +61,8 @@ type CitySearchState = { kind: 'idle' } | { kind: 'loading' } | { kind: 'results
 /**
  * Mobile shop registration (Mobile Shop Owner Onboarding mission) — reuses the exact same
  * registerSalonSchema and POST /salons contract as apps/web's RegisterSalonForm, not a second
- * mobile-only endpoint or rule set. Country/city/locality pickers are custom (React Native has no
- * <select>), but the data they gather and the payload they send are identical to web's.
+ * mobile-only endpoint or rule set. Country/city search and free-text locality entry are native
+ * controls, but the data they gather and the payload they send are identical to web's.
  *
  * On success, applies the freshly-minted STAFF-audience session (see RegisterSalonResponseDto's
  * doc comment on why this is a new session, never an in-place upgrade of whatever session opened
@@ -77,7 +81,6 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
   const [cityQuery, setCityQuery] = useState('');
   const [cityState, setCityState] = useState<CitySearchState>({ kind: 'idle' });
   const [localities, setLocalities] = useState<LocalityDto[]>([]);
-  const [localityPickerOpen, setLocalityPickerOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -159,7 +162,12 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
   }
 
   function selectCountry(country: CountryDto) {
-    setForm((prev) => ({ ...prev, countryCode: country.isoCode2, localitySlug: '' }));
+    setForm((prev) => ({
+      ...prev,
+      countryCode: country.isoCode2,
+      localityText: '',
+      localitySlug: '',
+    }));
     setSelectedCity(null);
     setCityQuery('');
     setLocalities([]);
@@ -170,13 +178,25 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
     setSelectedCity(city);
     setCityQuery('');
     setCityState({ kind: 'idle' });
-    setForm((prev) => ({ ...prev, localitySlug: '' }));
+    setForm((prev) => ({ ...prev, localityText: '', localitySlug: '' }));
   }
 
   function clearCity() {
     setSelectedCity(null);
     setLocalities([]);
-    setForm((prev) => ({ ...prev, localitySlug: '' }));
+    setForm((prev) => ({ ...prev, localityText: '', localitySlug: '' }));
+  }
+
+  function updateLocality(value: string) {
+    const normalized = value.trim().toLocaleLowerCase();
+    const matched = localities.find(
+      (locality) => locality.name.trim().toLocaleLowerCase() === normalized,
+    );
+    setForm((prev) => ({
+      ...prev,
+      localityText: value,
+      localitySlug: matched?.slug ?? '',
+    }));
   }
 
   async function detectLocation() {
@@ -225,7 +245,9 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
       countryCode: form.countryCode,
       postalCode: form.postalCode.trim() || undefined,
       citySlug: selectedCity.slug,
+      localityText: form.localityText.trim() || undefined,
       localitySlug: form.localitySlug || undefined,
+      landmark: form.landmark.trim() || undefined,
       ...(location.kind === 'detected' ? { lat: location.lat, lng: location.lng } : {}),
     });
     if (!parsed.success) {
@@ -251,6 +273,14 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
 
   const selectedCountry = countries.find((c) => c.isoCode2 === form.countryCode) ?? null;
   const cities = cityState.kind === 'results' ? cityState.cities : [];
+  const localityNeedle = form.localityText.trim().toLocaleLowerCase();
+  const localitySuggestions =
+    selectedCity && localityNeedle
+      ? localities
+          .filter((locality) => locality.name.toLocaleLowerCase().includes(localityNeedle))
+          .filter((locality) => locality.name.toLocaleLowerCase() !== localityNeedle)
+          .slice(0, 5)
+      : [];
 
   return (
     <Screen contentStyle={styles.screenContent}>
@@ -323,17 +353,45 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
         )}
       </View>
 
-      {selectedCity && localities.length > 0 && (
+      {selectedCity && (
         <View style={styles.field}>
           <Text style={styles.label}>{t.shopLocalityLabel}</Text>
-          <Pressable style={styles.input} onPress={() => setLocalityPickerOpen(true)}>
-            <Text style={form.localitySlug ? styles.pickerValueText : styles.pickerPlaceholderText}>
-              {form.localitySlug ? localities.find((l) => l.slug === form.localitySlug)?.name : t.noLocalityOption}
-            </Text>
-          </Pressable>
-          <Text style={styles.hint}>{t.shopLocalityOptionalHint}</Text>
+          <TextInput
+            style={styles.input}
+            value={form.localityText}
+            onChangeText={updateLocality}
+            placeholder="Type your area or locality"
+            placeholderTextColor={color.muted}
+            maxLength={160}
+          />
+          <Text style={styles.hint}>Type your locality manually; known FastQue localities appear below as suggestions.</Text>
+          {localitySuggestions.length > 0 && (
+            <View style={styles.cityResultList}>
+              {localitySuggestions.map((locality) => (
+                <Pressable
+                  key={locality.id}
+                  style={styles.cityResultRow}
+                  onPress={() => updateLocality(locality.name)}
+                >
+                  <Text style={styles.pickerValueText}>{locality.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
       )}
+
+      <View style={styles.field}>
+        <Text style={styles.label}>Landmark (optional)</Text>
+        <TextInput
+          style={styles.input}
+          value={form.landmark}
+          onChangeText={(v) => update('landmark', v)}
+          placeholder="e.g. Near Hanuman Mandir, opposite City Mall"
+          placeholderTextColor={color.muted}
+          maxLength={200}
+        />
+      </View>
 
       <View style={styles.field}>
         <Text style={styles.label}>{t.shopAddressLabel}</Text>
@@ -428,27 +486,6 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
         </Screen>
       </Modal>
 
-      <Modal visible={localityPickerOpen} animationType="slide" onRequestClose={() => setLocalityPickerOpen(false)}>
-        <Screen scroll={false} contentStyle={styles.pickerScreen}>
-          <SectionHeader eyebrow={t.registerShopTitle} title={t.shopLocalityLabel} />
-          <FlatList
-            data={[{ id: '', name: t.noLocalityOption, slug: '', citySlug: '' }, ...localities]}
-            keyExtractor={(l) => l.id || 'none'}
-            renderItem={({ item }) => (
-              <Pressable
-                style={styles.pickerRow}
-                onPress={() => {
-                  update('localitySlug', item.slug);
-                  setLocalityPickerOpen(false);
-                }}
-              >
-                <Text style={styles.pickerValueText}>{item.name}</Text>
-              </Pressable>
-            )}
-          />
-          <Button title={t.cancelAction} variant="outline" onPress={() => setLocalityPickerOpen(false)} style={styles.pickerCloseButton} />
-        </Screen>
-      </Modal>
     </Screen>
   );
 }
