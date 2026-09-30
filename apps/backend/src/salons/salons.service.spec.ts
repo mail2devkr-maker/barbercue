@@ -28,6 +28,7 @@ function makeSalon(overrides: Partial<Record<string, unknown>> = {}) {
     operatingHours: [],
     staff: [],
     verification: null,
+    isClosedForToday: false,
     ...overrides,
   };
 }
@@ -51,7 +52,7 @@ describe('SalonsService', () => {
       count: jest.Mock;
     };
     review: { aggregate: jest.Mock };
-    service: { aggregate: jest.Mock };
+    service: { aggregate: jest.Mock; findMany: jest.Mock };
     queueEntry: { count: jest.Mock };
     locality: { findUnique: jest.Mock };
     userRole: { upsert: jest.Mock; findMany: jest.Mock };
@@ -85,6 +86,7 @@ describe('SalonsService', () => {
         aggregate: jest
           .fn()
           .mockResolvedValue({ _min: { price: null }, _max: { price: null } }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       queueEntry: { count: jest.fn().mockResolvedValue(0) },
       locality: { findUnique: jest.fn() },
@@ -161,6 +163,40 @@ describe('SalonsService', () => {
     });
   });
 
+  describe('searchServiceSuggestions', () => {
+    it('returns distinct real active services from ACTIVE shops for a typed service fragment', async () => {
+      prisma.service.findMany.mockResolvedValue([
+        { name: 'Haircut', category: 'Hair' },
+        { name: 'Hair Spa', category: 'Hair' },
+      ]);
+
+      await expect(service.searchServiceSuggestions('hair', 8)).resolves.toEqual([
+        { name: 'Haircut', category: 'Hair' },
+        { name: 'Hair Spa', category: 'Hair' },
+      ]);
+
+      expect(prisma.service.findMany).toHaveBeenCalledWith({
+        where: {
+          isActive: true,
+          salon: { status: 'ACTIVE' },
+          OR: [
+            { name: { contains: 'hair', mode: 'insensitive' } },
+            { category: { contains: 'hair', mode: 'insensitive' } },
+          ],
+        },
+        select: { name: true, category: true },
+        distinct: ['name'],
+        orderBy: { name: 'asc' },
+        take: 8,
+      });
+    });
+
+    it('does not query the database until at least two service characters are typed', async () => {
+      await expect(service.searchServiceSuggestions('h')).resolves.toEqual([]);
+      expect(prisma.service.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('search', () => {
     it('always scopes to ACTIVE salons regardless of filters', async () => {
       prisma.salon.findMany.mockResolvedValue([]);
@@ -168,6 +204,20 @@ describe('SalonsService', () => {
       expect(prisma.salon.findMany.mock.calls[0][0].where.status).toBe(
         'ACTIVE',
       );
+    });
+
+    it('keeps an owner-closed-for-today ACTIVE shop in discovery and marks it closed', async () => {
+      prisma.salon.findMany.mockResolvedValue([
+        makeSalon({ isClosedForToday: true }),
+      ]);
+      const result = await service.search({});
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0]).toMatchObject({
+        id: 's1',
+        isClosedForToday: true,
+        isOpenNow: false,
+      });
+      expect(prisma.salon.findMany.mock.calls[0][0].where.status).toBe('ACTIVE');
     });
 
     it('filters by city and locality slug when provided', async () => {
