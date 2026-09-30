@@ -72,7 +72,7 @@ export class PublicQueueTokenService {
     return `${webBaseUrl}/q/${token}`;
   }
 
-  isQueueAvailable(salon: { status: SalonStatus }): boolean {
-    return salon.status === SalonStatus.ACTIVE;
+  isQueueAvailable(salon: { status: SalonStatus; isClosedForToday?: boolean }): boolean {
+    return salon.status === SalonStatus.ACTIVE && salon.isClosedForToday !== true;
   }
 }
