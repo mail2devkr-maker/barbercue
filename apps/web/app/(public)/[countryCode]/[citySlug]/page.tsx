@@ -77,10 +77,6 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
           <h1>Barbershops in {city.name}</h1>
           <p className={styles.location}>{city.state}, {city.country}</p>
         </div>
-        <div className={styles.heroAside}>
-          <strong>{salons?.items.length ?? 0}</strong>
-          <span>shops shown below</span>
-        </div>
       </header>
 
       {localities && localities.length > 0 && (
