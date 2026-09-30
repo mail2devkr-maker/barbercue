@@ -16,7 +16,7 @@ export async function generateMetadata({
 
   return {
     title: "Search barbershops",
-    description: "Search for barbershops by name, city, or service.",
+    description: "Search FastQue shops by service and location.",
     alternates: { canonical: absoluteUrl("/search") },
     robots: keys.length > 0 ? { index: false, follow: true } : { index: true, follow: true },
   };
