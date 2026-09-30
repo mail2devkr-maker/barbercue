@@ -136,7 +136,7 @@ export class SalonsService {
   ): Promise<ServiceSuggestionDto[]> {
     const q = rawQuery.trim();
     if (q.length < 2) return [];
-    const limit = Math.min(Math.max(requestedLimit, 1), 20);
+    const limit = Math.min(Math.max(requestedLimit, 1), 250);
     const rows = await this.prisma.service.findMany({
       where: {
         isActive: true,
