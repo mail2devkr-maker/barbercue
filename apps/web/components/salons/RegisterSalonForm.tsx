@@ -32,7 +32,9 @@ interface FormState {
   email: string;
   addressLine: string;
   postalCode: string;
+  localityText: string;
   localitySlug: string;
+  landmark: string;
 }
 
 const EMPTY: FormState = {
@@ -42,7 +44,9 @@ const EMPTY: FormState = {
   email: "",
   addressLine: "",
   postalCode: "",
+  localityText: "",
   localitySlug: "",
+  landmark: "",
 };
 
 // Coordinates never enter FormState — they are not something the owner edits, so they live in
@@ -193,7 +197,12 @@ export function RegisterSalonForm() {
     setRegionId("");
     setSelectedCity(null);
     setLocalities([]);
-    setForm((prev) => ({ ...prev, countryCode: country?.isoCode2 ?? "", localitySlug: "" }));
+    setForm((prev) => ({
+      ...prev,
+      countryCode: country?.isoCode2 ?? "",
+      localityText: "",
+      localitySlug: "",
+    }));
   }
 
   // Region narrows the city search, so a different region invalidates the city under it.
@@ -201,13 +210,25 @@ export function RegisterSalonForm() {
     setRegionId(nextRegionId);
     setSelectedCity(null);
     setLocalities([]);
-    setForm((prev) => ({ ...prev, localitySlug: "" }));
+    setForm((prev) => ({ ...prev, localityText: "", localitySlug: "" }));
   }
 
   function selectCity(city: CitySearchResultDto | null) {
     setSelectedCity(city);
     setLocalities([]);
-    setForm((prev) => ({ ...prev, localitySlug: "" }));
+    setForm((prev) => ({ ...prev, localityText: "", localitySlug: "" }));
+  }
+
+  function updateLocality(value: string) {
+    const normalized = value.trim().toLocaleLowerCase();
+    const matched = localityOptions.find(
+      (locality) => locality.name.trim().toLocaleLowerCase() === normalized,
+    );
+    setForm((prev) => ({
+      ...prev,
+      localityText: value,
+      localitySlug: matched?.slug ?? "",
+    }));
   }
 
   // Only ever called from the button's onClick, never on mount. Browsers raise the permission
@@ -271,11 +292,10 @@ export function RegisterSalonForm() {
       addressLine: form.addressLine.trim(),
       countryCode: form.countryCode,
       postalCode: form.postalCode.trim() || undefined,
-      // Unchanged contract: the picker above only changes how the owner arrives at this slug,
-      // never what is sent. POST salons still receives {countryCode, citySlug, localitySlug} —
-      // never a countryId/regionId/cityId.
       citySlug,
+      localityText: form.localityText.trim() || undefined,
       localitySlug: form.localitySlug || undefined,
+      landmark: form.landmark.trim() || undefined,
       ...(location.kind === "detected" ? { lat: location.lat, lng: location.lng } : {}),
     });
     if (!parsed.success) {
@@ -455,23 +475,44 @@ export function RegisterSalonForm() {
           selectedCity={selectedCity}
           onSelect={selectCity}
           labelledBy="shop-city-label"
+          textColor="var(--bc-ink)"
         />
       </div>
 
       <div style={fieldWrapStyle}>
         <label style={labelStyle} htmlFor="shop-locality">Area / locality (optional)</label>
-        <select
+        <input
           id="shop-locality"
-          style={inputStyle}
-          value={form.localitySlug}
-          onChange={(e) => update("localitySlug", e.target.value)}
+          list="shop-locality-suggestions"
+          style={{ ...inputStyle, background: "#fff", color: "var(--bc-ink)" }}
+          value={form.localityText}
+          onChange={(e) => updateLocality(e.target.value)}
           disabled={!citySlug}
-        >
-          <option value="">None</option>
-          {localityOptions.map((l) => (
-            <option key={l.slug} value={l.slug}>{l.name}</option>
+          maxLength={160}
+          autoComplete="address-level3"
+          placeholder={citySlug ? "Type your area or locality" : "Select a city first"}
+        />
+        <datalist id="shop-locality-suggestions">
+          {localityOptions.map((locality) => (
+            <option key={locality.slug} value={locality.name} />
           ))}
-        </select>
+        </datalist>
+        <p style={hintStyle}>
+          Type your locality manually. Existing FastQue localities will appear as suggestions when available.
+        </p>
+      </div>
+
+      <div style={fieldWrapStyle}>
+        <label style={labelStyle} htmlFor="shop-landmark">Landmark (optional)</label>
+        <input
+          id="shop-landmark"
+          style={{ ...inputStyle, background: "#fff", color: "var(--bc-ink)" }}
+          value={form.landmark}
+          onChange={(e) => update("landmark", e.target.value)}
+          maxLength={200}
+          autoComplete="off"
+          placeholder="e.g. Near Hanuman Mandir, opposite City Mall"
+        />
       </div>
 
       <div style={{ ...fieldWrapStyle, border: "1px solid var(--bc-border)", borderRadius: "var(--bc-radius-md)", padding: 14 }}>
