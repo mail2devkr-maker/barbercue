@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import {
   DISCOVERY_PATHS,
   PRICE_FILTER_PRESETS,
+  SHOP_CLOSED_TODAY_MESSAGE,
   SALON_DISCOVERY_CATEGORIES,
   formatDistance,
   formatMoney,
@@ -13,7 +14,7 @@ import {
   type PricePreset,
   type UiStrings,
 } from '@barbercue/shared';
-import type { PaginatedResult, SalonListItemDto } from '@barbercue/shared';
+import type { PaginatedResult, SalonListItemDto, ServiceSuggestionDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, fastQue, font, fontSize, premiumShadow, radius, space } from '../lib/theme';
 import {
@@ -259,6 +260,8 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const selectedStyleName = route.params?.selectedStyleName;
   const { initialQuery, initialLat, initialLng } = route.params ?? {};
   const [q, setQ] = useState(initialQuery ?? '');
+  const [serviceSuggestions, setServiceSuggestions] = useState<ServiceSuggestionDto[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [results, setResults] = useState<SalonListItemDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -283,14 +286,16 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       priceMax,
       service,
     },
+    queryOverride?: string,
   ) {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
     setSearched(true);
     try {
       const params = new URLSearchParams();
-      if (q.trim()) params.set('q', q.trim());
-      if (filters.service) params.set('service', filters.service);
+      const typedService = (queryOverride ?? q).trim();
+      if (typedService) params.set('service', typedService);
+      else if (filters.service) params.set('service', filters.service);
       if (coords) {
         params.set('lat', String(coords.lat));
         params.set('lng', String(coords.lng));
@@ -314,6 +319,33 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   function handleSearch(isRefresh = false) {
     return runSearch(isRefresh, nearMe);
   }
+
+  useEffect(() => {
+    const trimmed = q.trim();
+    if (trimmed.length < 2) {
+      setServiceSuggestions([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      apiFetch<ServiceSuggestionDto[]>(
+        `${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.serviceSuggestions}?${new URLSearchParams({
+          q: trimmed,
+          limit: '8',
+        }).toString()}`,
+      )
+        .then((items) => {
+          if (!cancelled) setServiceSuggestions(items);
+        })
+        .catch(() => {
+          if (!cancelled) setServiceSuggestions([]);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [q]);
 
   // Owner-reported discoverability fix: Distance is visible before "Near me" has ever been used —
   // picking an actual radius here is itself a location request, applied to the same search in one
@@ -423,8 +455,14 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           placeholder={t.searchByNamePlaceholder}
           placeholderTextColor={fastQue.textMuted}
           value={q}
-          onChangeText={setQ}
-          onSubmitEditing={() => void handleSearch()}
+          onChangeText={(value) => {
+            setQ(value);
+            setSuggestionsOpen(true);
+          }}
+          onSubmitEditing={() => {
+            setSuggestionsOpen(false);
+            void handleSearch();
+          }}
           returnKeyType="search"
         />
         <PremiumButton
@@ -434,6 +472,35 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           style={[styles.searchButton, stackSearchRow && styles.searchButtonStacked]}
         />
       </View>
+
+      {suggestionsOpen && q.trim().length >= 2 && serviceSuggestions.length > 0 && (
+        <View style={styles.suggestionsBox}>
+          {serviceSuggestions.map((suggestion) => (
+            <Pressable
+              key={`${suggestion.name}-${suggestion.category ?? ''}`}
+              style={styles.suggestionItem}
+              onPress={() => {
+                setQ(suggestion.name);
+                setService(null);
+                setSuggestionsOpen(false);
+                void runSearch(
+                  false,
+                  nearMe,
+                  { radiusKm, priceMin, priceMax, service: null },
+                  suggestion.name,
+                );
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={suggestion.name}
+            >
+              <Text style={styles.suggestionName}>{suggestion.name}</Text>
+              {suggestion.category ? (
+                <Text style={styles.suggestionCategory}>{suggestion.category}</Text>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <PremiumButton
         title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
@@ -523,6 +590,9 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                     {t.startingPricePrefix}{formatMoney(item.priceMin, item.currency, item.countryCode)}
                   </Text>
                 )}
+                {item.isClosedForToday && (
+                  <Text style={styles.closedToday}>{SHOP_CLOSED_TODAY_MESSAGE}</Text>
+                )}
                 {(item.isOpenNow !== null || item.distanceKm !== null) && (
                   <Text style={styles.cardMeta}>
                     {item.isOpenNow !== null ? (item.isOpenNow ? t.openNowLabel : t.closedNowLabel) : ''}
@@ -610,6 +680,25 @@ const styles = StyleSheet.create({
   // that inherited value so height comes from PremiumButton's own minHeight (52) instead; `width:
   // '100%'` is what makes it full-width in a column (flexBasis no longer does, on this axis).
   searchButtonStacked: { flexBasis: 'auto', flexGrow: 0, width: '100%' },
+  suggestionsBox: {
+    marginTop: -space[3],
+    marginBottom: space[3],
+    backgroundColor: fastQue.card,
+    borderWidth: 1,
+    borderColor: fastQue.border,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: space[4],
+    paddingVertical: space[2],
+    borderBottomWidth: 1,
+    borderBottomColor: fastQue.border,
+  },
+  suggestionName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
+  suggestionCategory: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: 2 },
   nearMeButton: { marginBottom: space[4] },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space[2], marginBottom: space[2] },
   filterHint: {
@@ -663,4 +752,14 @@ const styles = StyleSheet.create({
   verifiedMark: { color: color.success, fontFamily: font.bodyBold },
   cardSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: space[1] },
   cardMeta: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: fastQue.orange, marginTop: space[1] },
+  closedToday: {
+    fontFamily: font.bodyBold,
+    fontSize: fontSize.xs,
+    color: '#7a2f12',
+    backgroundColor: '#fff0e7',
+    borderRadius: radius.sm,
+    paddingHorizontal: space[2],
+    paddingVertical: space[1],
+    marginTop: space[2],
+  },
 });
