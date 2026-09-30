@@ -94,11 +94,11 @@ export class AvailabilityService {
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
     });
-    if (!salon || salon.status !== SalonStatus.ACTIVE) {
+    if (!salon || salon.status !== SalonStatus.ACTIVE || salon.isClosedForToday) {
       throw new AppException(
         BookingErrorCode.SALON_NOT_FOUND,
-        'Salon not found.',
-        HttpStatus.NOT_FOUND,
+        salon?.isClosedForToday ? 'This shop is closed for today.' : 'Salon not found.',
+        salon?.isClosedForToday ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND,
       );
     }
     return salon;
