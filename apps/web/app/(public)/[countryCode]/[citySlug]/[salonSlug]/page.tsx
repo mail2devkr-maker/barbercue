@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney } from "@barbercue/shared";
+import { DISCOVERY_PATHS, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION, formatMoney } from "@barbercue/shared";
 import type { CityDto, LocalityDto, PublicSalonStatusDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../../../../lib/seo";
@@ -135,7 +135,9 @@ export default async function SalonPage({
   const { style } = await searchParams;
   const salon = await loadSalon(countryCode, citySlug, salonSlug);
   if (!salon) notFound();
-  const publicStatus = await loadPublicStatus(countryCode, citySlug, salonSlug);
+  const publicStatus = salon.isClosedForToday
+    ? null
+    : await loadPublicStatus(countryCode, citySlug, salonSlug);
 
   const cityQuery = `city=${citySlug}&country=${salon.countryCode}`;
   const bookHref = `/book/${salon.slug}?${cityQuery}${style ? `&style=${encodeURIComponent(style)}` : ""}`;
@@ -210,19 +212,29 @@ export default async function SalonPage({
           {salon.phone && <a className={styles.phone} href={`tel:${salon.phone}`}>{salon.phone}</a>}
           {salon.description && <p className={styles.description}>{salon.description}</p>}
 
-          <div className={styles.actions}>
-            <LinkButton href={bookHref} variant="primary" className={styles.action}>
-              Book an appointment
-            </LinkButton>
-            <LinkButton
-              href={`/queue/${salon.slug}?${cityQuery}`}
-              variant="outline"
-              className={styles.action}
-            >
-              Join live queue
-            </LinkButton>
-          </div>
-          <p className={styles.assurance}>Availability and queue details are confirmed in the next step.</p>
+          {salon.isClosedForToday && (
+            <p className={styles.closedToday} role="status">
+              {SHOP_CLOSED_TODAY_MESSAGE}
+            </p>
+          )}
+
+          {!salon.isClosedForToday && (
+            <>
+              <div className={styles.actions}>
+                <LinkButton href={bookHref} variant="primary" className={styles.action}>
+                  Book an appointment
+                </LinkButton>
+                <LinkButton
+                  href={`/queue/${salon.slug}?${cityQuery}`}
+                  variant="outline"
+                  className={styles.action}
+                >
+                  Join live queue
+                </LinkButton>
+              </div>
+              <p className={styles.assurance}>Availability and queue details are confirmed in the next step.</p>
+            </>
+          )}
         </div>
       </section>
 
