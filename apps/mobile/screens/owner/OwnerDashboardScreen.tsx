@@ -4,6 +4,7 @@ import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
+  SHOP_CLOSED_TODAY_MESSAGE,
   SalonSetupErrorCode,
   SalonStatus,
   type OwnerBookingDetailDto,
@@ -79,6 +80,7 @@ export default function OwnerDashboardScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<OwnerTabParamList>>();
   const { workplaces, loading, error, selectedSalonId, selectedSalon, selectSalon, reload } = useSalon();
   const [status, setStatus] = useState<string | null>(null);
+  const [closedForToday, setClosedForToday] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<SalonSetupReadinessDto | null>(null);
@@ -136,6 +138,7 @@ export default function OwnerDashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       setStatus(selectedSalon?.status ?? null);
+      setClosedForToday(selectedSalon?.isClosedForToday ?? false);
       setReadiness(null);
       setActionError(null);
     }, [selectedSalon]),
@@ -185,6 +188,7 @@ export default function OwnerDashboardScreen() {
         { method: 'PATCH', body: JSON.stringify({ status: next }) },
       );
       setStatus(result.status);
+      setClosedForToday(result.isClosedForToday ?? false);
       reload();
     } catch (err) {
       if (err instanceof ApiError && err.code === SalonSetupErrorCode.SALON_SETUP_INCOMPLETE) {
@@ -247,7 +251,9 @@ export default function OwnerDashboardScreen() {
       {selectedSalon && (
         <PremiumCard strong style={styles.card}>
           <Text style={styles.salonName}>{selectedSalon.name}</Text>
-          <Text style={styles.salonStatus}>{t.statusPrefix}{status ?? selectedSalon.status}</Text>
+          <Text style={styles.salonStatus}>
+            {t.statusPrefix}{closedForToday ? SHOP_CLOSED_TODAY_MESSAGE : status ?? selectedSalon.status}
+          </Text>
 
           {actionError && <InlineError message={actionError} />}
           {readiness && (
@@ -258,7 +264,7 @@ export default function OwnerDashboardScreen() {
             </View>
           )}
 
-          {(status ?? selectedSalon.status) === SalonStatus.ACTIVE ? (
+          {(status ?? selectedSalon.status) === SalonStatus.ACTIVE && !closedForToday ? (
             <PremiumButton title={t.closeShop} variant="secondary" onPress={() => void toggleStatus('SUSPENDED')} loading={updating} style={styles.actionButton} />
           ) : (
             <PremiumButton title={t.openShop} onPress={() => void toggleStatus('ACTIVE')} loading={updating} style={styles.actionButton} />
