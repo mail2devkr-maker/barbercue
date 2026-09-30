@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { DASHBOARD_PATHS, DISCOVERY_PATHS, SalonSetupErrorCode, SalonStatus } from "@barbercue/shared";
+import { DASHBOARD_PATHS, DISCOVERY_PATHS, SHOP_CLOSED_TODAY_MESSAGE, SalonSetupErrorCode, SalonStatus } from "@barbercue/shared";
 import type {
   RegisterSalonResultDto,
   SalonSetupReadinessDto,
@@ -309,7 +309,15 @@ export default function DashboardSettingsPage({
         `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.status}`,
         { method: "PATCH", body: JSON.stringify({ status }) },
       );
-      setSalon((prev) => (prev ? { ...prev, status: result.status } : prev));
+      setSalon((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: result.status,
+              isClosedForToday: result.isClosedForToday ?? false,
+            }
+          : prev,
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not update your shop's status.");
       // The server refused to open the shop and said exactly what's missing. Trust that over the
@@ -360,7 +368,11 @@ export default function DashboardSettingsPage({
           <dt style={{ fontWeight: 600 }}>Shop ID</dt>
           <dd style={{ margin: "2px 0 14px", fontFamily: "monospace" }}>{salon.publicId}</dd>
           <dt style={{ fontWeight: 600 }}>Status</dt>
-          <dd style={{ margin: "2px 0 14px" }}>{STATUS_LABEL[salon.status]}</dd>
+          <dd style={{ margin: "2px 0 14px" }}>
+            {salon.status === SalonStatus.ACTIVE && salon.isClosedForToday
+              ? "Closed for today"
+              : STATUS_LABEL[salon.status]}
+          </dd>
           <dt style={{ fontWeight: 600 }}>Your page address</dt>
           <dd style={{ margin: "2px 0 14px", wordBreak: "break-all" }}>/book/{salon.slug}</dd>
         </dl>
@@ -384,7 +396,17 @@ export default function DashboardSettingsPage({
       {salon && (
         <section className={styles.dividerSection}>
           <h2 className={styles.sectionHeading}>Shop status</h2>
-          {salon.status === SalonStatus.ACTIVE ? (
+          {salon.status === SalonStatus.ACTIVE && salon.isClosedForToday ? (
+            <>
+              <p style={{ color: "var(--bc-warn)", fontSize: 14, marginBottom: 12 }}>
+                {SHOP_CLOSED_TODAY_MESSAGE} Customers can still find your shop on FastQue, but
+                booking and queue entry stay unavailable until you reopen it.
+              </p>
+              <Button type="button" variant="secondary" onClick={() => void changeStatus(SalonStatus.ACTIVE)} disabled={updatingStatus}>
+                {updatingStatus ? "Opening…" : "Open my shop"}
+              </Button>
+            </>
+          ) : salon.status === SalonStatus.ACTIVE ? (
             <>
               <p style={{ color: "var(--bc-success)", fontSize: 14, marginBottom: 12 }}>
                 Your shop is open — customers can find it and join the queue.
@@ -398,7 +420,7 @@ export default function DashboardSettingsPage({
               <p style={{ color: "var(--bc-warn)", fontSize: 14, marginBottom: 12 }}>
                 Your shop is <strong>{STATUS_LABEL[salon.status].toLowerCase()}</strong> — customers
                 can&apos;t find it in search, and its queue QR shows as unavailable, until you open
-                it. You can close it again at any time.
+                it.
               </p>
               {/* The server is what actually enforces this (SALON_SETUP_INCOMPLETE); showing it
                   here just means the owner learns what's missing before clicking, not after. */}
