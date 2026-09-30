@@ -343,6 +343,21 @@ export const staffLoginSchema = z.object({
 });
 export type StaffLoginInput = z.infer<typeof staffLoginSchema>;
 
+// Self-service shop-owner account creation. The account starts with CUSTOMER access only so it can
+// call POST /salons; that existing registration transaction grants the salon-scoped SALON_OWNER
+// role and returns a fresh STAFF-audience session once a real salon exists.
+export const ownerSignupSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().email(),
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  });
+export type OwnerSignupInput = z.infer<typeof ownerSignupSchema>;
+
 export const employeeLoginSchema = z.object({
   employeeCode: z.string().trim().min(3).max(32).transform((value) => value.toUpperCase()),
   password: passwordSchema,
