@@ -34,6 +34,8 @@ interface CitySearchFieldProps {
   onSelect: (city: CitySearchResultDto | null) => void;
   /** id of the caller's label element — the input is swapped out on select, so it can't own one. */
   labelledBy: string;
+  /** Optional explicit text colour for light host surfaces such as owner registration. */
+  textColor?: string;
 }
 
 /** "Karnataka" / "Karnataka (KA)" / null — never a fabricated placeholder for a region-less city. */
@@ -61,6 +63,7 @@ export function CitySearchField({
   selectedCity,
   onSelect,
   labelledBy,
+  textColor,
 }: CitySearchFieldProps) {
   const listboxId = useId();
   const [query, setQuery] = useState("");
@@ -82,8 +85,8 @@ export function CitySearchField({
   // palette or force the registration form to look like discovery.
   const hostInputStyle: React.CSSProperties = {
     ...inputStyle,
-    color: "inherit",
-    caretColor: "currentColor",
+    color: textColor ?? "inherit",
+    caretColor: textColor ?? "currentColor",
   };
   const hostHintStyle: React.CSSProperties = {
     ...hintStyle,
