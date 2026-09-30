@@ -1333,6 +1333,31 @@ describe('SalonsService', () => {
       });
     });
 
+    it('stores owner-entered locality text and landmark even when the locality is not in master data', async () => {
+      prisma.salon.create.mockResolvedValue({
+        id: 's1',
+        publicId: 'BC-SHOP-000001',
+        slug: 'fresh-cuts-co',
+        name: 'Fresh Cuts & Co.',
+        status: 'PENDING',
+      });
+
+      await service.registerSalon('owner-1', {
+        ...input,
+        localityText: 'Boring Road',
+        landmark: 'Near Hanuman Mandir',
+      });
+
+      expect(prisma.locality.findUnique).not.toHaveBeenCalled();
+      expect(prisma.salon.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          localityId: null,
+          localityText: 'Boring Road',
+          landmark: 'Near Hanuman Mandir',
+        }),
+      });
+    });
+
     // Auth-security-branch fix: a CUSTOMER-audience session must never be left unable to reach
     // the very shop it just registered. See registerSalon's own doc comment.
     describe('the minted STAFF-audience session', () => {
