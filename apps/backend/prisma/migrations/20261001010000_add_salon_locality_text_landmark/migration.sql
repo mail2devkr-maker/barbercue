@@ -1,0 +1,3 @@
+ALTER TABLE "salons"
+ADD COLUMN "localityText" VARCHAR(160),
+ADD COLUMN "landmark" VARCHAR(200);
