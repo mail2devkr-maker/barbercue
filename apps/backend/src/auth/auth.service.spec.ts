@@ -477,6 +477,63 @@ describe('AuthService', () => {
     });
   });
 
+  describe('ownerSignup', () => {
+    it('creates a password-backed onboarding account with CUSTOMER-only session scope', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      passwordService.hash.mockResolvedValue('hashed-password');
+      prisma.user.create.mockResolvedValue({
+        id: 'prospective-owner-1',
+        phone: null,
+        email: 'owner@example.com',
+        passwordHash: 'hashed-password',
+        preferredLanguage: Language.EN,
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+
+      const result = await service.ownerSignup('  Owner@Example.COM  ', 'password123', 'test-device');
+
+      expect(passwordService.hash).toHaveBeenCalledWith('password123');
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            email: 'owner@example.com',
+            passwordHash: 'hashed-password',
+            status: UserStatus.ACTIVE,
+            roles: { create: { role: Role.CUSTOMER } },
+          }),
+          include: { roles: true },
+        }),
+      );
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'prospective-owner-1',
+        [Role.CUSTOMER],
+        SessionAudience.CUSTOMER,
+        'test-device',
+      );
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
+      expect(result.user.passwordConfigured).toBe(true);
+      expect(result.tokens).toBe(fakeTokens);
+    });
+
+    it('rejects an email that already belongs to any FastQue account without changing its roles or password', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'existing-user' });
+
+      await expect(
+        service.ownerSignup('existing@example.com', 'password123'),
+      ).rejects.toMatchObject({
+        code: 'OWNER_ACCOUNT_EMAIL_EXISTS',
+        status: HttpStatus.CONFLICT,
+      });
+
+      expect(passwordService.hash).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+  });
+
   describe('staffGoogleLogin', () => {
     const verifiedIdentity = {
       sub: 'google-sub-999',
