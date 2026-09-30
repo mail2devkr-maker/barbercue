@@ -18,7 +18,7 @@ export default function RegisterShopPage() {
   );
 
   return (
-    <RequireRole redirectTo="/login">
+    <RequireRole redirectTo="/owner/register">
       <main className={styles.page}>
         <div className={styles.hero}>
           <p className={styles.eyebrow}>FastQue owner onboarding</p>
