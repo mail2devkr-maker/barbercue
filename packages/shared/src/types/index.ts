@@ -425,8 +425,6 @@ export interface RecentActivityItemDto {
 // GET salons/live-stats — public, privacy-safe live queue signal. Platform-wide shop totals are
 // deliberately excluded from public/customer contracts; that count is reserved for PLATFORM_ADMIN.
 export interface LiveStatsDto {
-  // Transitional optional field while the backend cleanup lands; public controllers never return it.
-  activeShopCount?: number;
   // Sum of QueueEntry rows currently WAITING/CALLED/IN_SERVICE, across every salon.
   liveWaitingCount: number;
 }
