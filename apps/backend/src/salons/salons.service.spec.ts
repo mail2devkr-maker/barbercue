@@ -143,24 +143,21 @@ describe('SalonsService', () => {
   });
 
   describe('getLiveStats', () => {
-    it('returns real platform-wide counts, scoped to ACTIVE salons and live queue statuses', async () => {
-      prisma.salon.count.mockResolvedValue(2);
+    it('returns live queue activity without querying or exposing the platform shop total', async () => {
       prisma.queueEntry.count.mockResolvedValue(5);
       const result = await service.getLiveStats();
-      expect(result).toEqual({ activeShopCount: 2, liveWaitingCount: 5 });
-      expect(prisma.salon.count).toHaveBeenCalledWith({
-        where: { status: 'ACTIVE' },
-      });
+      expect(result).toEqual({ liveWaitingCount: 5 });
+      expect(prisma.salon.count).not.toHaveBeenCalled();
       expect(prisma.queueEntry.count).toHaveBeenCalledWith({
         where: { status: { in: ['WAITING', 'CALLED', 'IN_SERVICE'] } },
       });
     });
 
-    it('returns real zeros on a genuinely empty platform, never a fabricated placeholder', async () => {
-      prisma.salon.count.mockResolvedValue(0);
+    it('returns a real zero queue count on an empty platform, never a fabricated placeholder', async () => {
       prisma.queueEntry.count.mockResolvedValue(0);
       const result = await service.getLiveStats();
-      expect(result).toEqual({ activeShopCount: 0, liveWaitingCount: 0 });
+      expect(result).toEqual({ liveWaitingCount: 0 });
+      expect(prisma.salon.count).not.toHaveBeenCalled();
     });
   });
 
