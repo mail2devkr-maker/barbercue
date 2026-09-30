@@ -577,6 +577,7 @@ export class SalonsService {
     }
 
     let localityId: string | null = null;
+    let resolvedLocalityName: string | null = null;
     if (input.localitySlug) {
       const locality = await this.prisma.locality.findUnique({
         where: { cityId_slug: { cityId: city.id, slug: input.localitySlug } },
@@ -589,6 +590,7 @@ export class SalonsService {
         );
       }
       localityId = locality.id;
+      resolvedLocalityName = locality.name;
     }
 
     // Part 4 (auto timezone selection): try to resolve a confident IANA zone from whatever the
@@ -618,6 +620,11 @@ export class SalonsService {
               slug,
               cityId: city.id,
               localityId,
+              // Always preserve what the owner typed. Older clients that still send only a
+              // curated localitySlug get the resolved locality name here, so this additive field
+              // remains backward-compatible during mobile rollout.
+              localityText: input.localityText ?? resolvedLocalityName,
+              landmark: input.landmark ?? null,
               addressLine: input.addressLine,
               postalCode: input.postalCode ?? null,
               // Derived from the country, and only where that mapping is authoritative — an
