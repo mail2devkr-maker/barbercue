@@ -104,10 +104,11 @@ describe('PublicQueueTokenService', () => {
   });
 
   describe('isQueueAvailable', () => {
-    it('is available only for an ACTIVE salon', () => {
-      expect(service.isQueueAvailable({ status: 'ACTIVE' as never })).toBe(true);
-      expect(service.isQueueAvailable({ status: 'PENDING' as never })).toBe(false);
-      expect(service.isQueueAvailable({ status: 'SUSPENDED' as never })).toBe(false);
+    it('is available only for an ACTIVE salon that is not closed for today', () => {
+      expect(service.isQueueAvailable({ status: 'ACTIVE' as never, isClosedForToday: false })).toBe(true);
+      expect(service.isQueueAvailable({ status: 'ACTIVE' as never, isClosedForToday: true })).toBe(false);
+      expect(service.isQueueAvailable({ status: 'PENDING' as never, isClosedForToday: false })).toBe(false);
+      expect(service.isQueueAvailable({ status: 'SUSPENDED' as never, isClosedForToday: false })).toBe(false);
     });
   });
 });
