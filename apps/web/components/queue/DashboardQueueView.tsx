@@ -256,14 +256,17 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
   const [chairBusyId, setChairBusyId] = useState<string | null>(null);
   const [newEntryIds, setNewEntryIds] = useState<string[]>([]);
   const [newEntryNotice, setNewEntryNotice] = useState<QueueEntryDetailDto | null>(null);
-  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundReady, setSoundReady] = useState(false);
   // Shared with every other voice consumer (see lib/voice-preference.ts) rather than a private copy.
   const voiceEnabled = useVoiceEnabled();
   const initializedRef = useRef(false);
   const knownWaitingIdsRef = useRef<Set<string>>(new Set());
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const audioContextRef = useRef<AudioContext | null>(null);
-  const soundEnabledRef = useRef(false);
+  // Q Chime is a product invariant for the live owner queue: FastQue never turns it OFF.
+  // Browser autoplay policy may delay the first audible chime until the owner interacts once,
+  // but there is no persisted/user-accessible OFF state anymore.
+  const soundEnabledRef = useRef(true);
   const voiceEnabledRef = useRef(voiceEnabled);
   useEffect(() => {
     voiceEnabledRef.current = voiceEnabled;
@@ -279,7 +282,61 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     speakOwnerVoice(text, preferredLanguageRef.current);
   }, []);
 
-  const playChime = useCallback(() => {
+  const ensureChimeReady = useCallback(async (): Promise<boolean> => {
+    try {
+      const AudioContextClass = window.AudioContext;
+      const context = audioContextRef.current ?? new AudioContextClass();
+      audioContextRef.current = context;
+      if (context.state === "suspended") await context.resume();
+      const ready = context.state === "running";
+      soundEnabledRef.current = true;
+      setSoundReady(ready);
+      return ready;
+    } catch {
+      // FastQue still treats Q Chime as ON. A browser may temporarily block audio until the next
+      // user gesture; the listeners below retry automatically instead of exposing an OFF switch.
+      soundEnabledRef.current = true;
+      setSoundReady(false);
+      return false;
+    }
+  }, []);
+
+  // Best effort immediately, then re-arm on the first owner gesture and whenever the tab becomes
+  // active again. This handles browsers that suspend AudioContext while a tab is backgrounded.
+  useEffect(() => {
+    let disposed = false;
+
+    const armFromGesture = () => {
+      void ensureChimeReady().then((ready) => {
+        if (!ready || disposed) return;
+        document.removeEventListener("pointerdown", armFromGesture);
+        document.removeEventListener("keydown", armFromGesture);
+        document.removeEventListener("touchstart", armFromGesture);
+      });
+    };
+    const resumeWhenVisible = () => {
+      if (document.visibilityState === "visible") void ensureChimeReady();
+    };
+
+    void ensureChimeReady();
+    document.addEventListener("pointerdown", armFromGesture, { passive: true });
+    document.addEventListener("keydown", armFromGesture);
+    document.addEventListener("touchstart", armFromGesture, { passive: true });
+    document.addEventListener("visibilitychange", resumeWhenVisible);
+    window.addEventListener("focus", resumeWhenVisible);
+
+    return () => {
+      disposed = true;
+      document.removeEventListener("pointerdown", armFromGesture);
+      document.removeEventListener("keydown", armFromGesture);
+      document.removeEventListener("touchstart", armFromGesture);
+      document.removeEventListener("visibilitychange", resumeWhenVisible);
+      window.removeEventListener("focus", resumeWhenVisible);
+    };
+  }, [ensureChimeReady]);
+
+  const playChime = useCallback(async () => {
+    if (!(await ensureChimeReady())) return;
     const context = audioContextRef.current;
     if (!context || context.state !== "running") return;
     const now = context.currentTime;
@@ -296,7 +353,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
       oscillator.start(now + index * 0.13);
       oscillator.stop(now + index * 0.13 + 0.14);
     });
-  }, []);
+  }, [ensureChimeReady]);
 
   const applyQueueResult = useCallback((result: DashboardQueueDto, detectNew: boolean) => {
     const waiting = result.entries.filter((entry) => entry.status === "WAITING");
@@ -310,7 +367,7 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
         setNewEntryIds((current) => Array.from(new Set([...current, ...genuinelyNew.map((entry) => entry.id)])));
         const latest = genuinelyNew[genuinelyNew.length - 1];
         setNewEntryNotice(latest);
-        if (soundEnabledRef.current) playChime();
+        if (soundEnabledRef.current) void playChime();
         if (voiceEnabledRef.current) {
           const announcements = ownerVoiceAnnouncements(preferredLanguageRef.current);
           speak(announcements.newCustomerJoined(latest.tokenNumber, latest.serviceName));
@@ -468,26 +525,6 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
     }
   }
 
-  // Real bidirectional toggles, not one-way "enable" buttons — a `disabled` button once ON made a
-  // fully-working control look stuck/broken (Issue #13 Mission C). Turning sound OFF suspends the
-  // AudioContext (not closes it), so turning back ON later in the same page load can resume it
-  // without needing a fresh user gesture from scratch.
-  async function toggleSound() {
-    if (soundEnabledRef.current) {
-      soundEnabledRef.current = false;
-      setSoundEnabled(false);
-      void audioContextRef.current?.suspend();
-      return;
-    }
-    const AudioContextClass = window.AudioContext;
-    const context = audioContextRef.current ?? new AudioContextClass();
-    audioContextRef.current = context;
-    if (context.state === "suspended") await context.resume();
-    soundEnabledRef.current = true;
-    setSoundEnabled(true);
-    playChime();
-  }
-
   function toggleVoice() {
     if (voiceEnabledRef.current) {
       voiceEnabledRef.current = false;
@@ -509,14 +546,21 @@ export function DashboardQueueView({ salonId }: { salonId: string }) {
       {error && <p className={styles.errorText}>{error}</p>}
       <div className={styles.queueTools}>
         <p>Realtime updates are on.</p>
-        <Button
-          type="button"
-          variant={soundEnabled ? "primary" : "outline"}
-          onClick={() => void toggleSound()}
-          aria-pressed={soundEnabled}
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            border: "1px solid var(--bc-gold)",
+            borderRadius: 999,
+            padding: "9px 14px",
+            fontWeight: 800,
+            color: "var(--bc-gold)",
+            background: "color-mix(in srgb, var(--bc-gold) 10%, transparent)",
+            whiteSpace: "nowrap",
+          }}
         >
-          {soundEnabled ? "Queue chime: ON" : "Queue chime: OFF"}
-        </Button>
+          🔔 Q Chime: ALWAYS ON{soundReady ? "" : " · activates on first tap"}
+        </div>
         <Button
           type="button"
           variant={voiceEnabled ? "primary" : "outline"}
