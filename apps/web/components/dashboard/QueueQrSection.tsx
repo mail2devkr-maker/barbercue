@@ -95,8 +95,16 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
 
     const posterSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="280" height="360" viewBox="0 0 280 360">
+        <defs>
+          <linearGradient id="shopNameGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#FFE3A1" />
+            <stop offset="34%" stop-color="#FFB24A" />
+            <stop offset="68%" stop-color="#F20A76" />
+            <stop offset="100%" stop-color="#FF5A2F" />
+          </linearGradient>
+        </defs>
         <rect width="280" height="360" rx="22" fill="#111017" />
-        <text x="140" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="${nameFontSize}" font-weight="700" fill="#FFF7EA">${safeName}</text>
+        <text x="140" y="36" text-anchor="middle" font-family="Arial, sans-serif" font-size="${nameFontSize}" font-weight="700" fill="url(#shopNameGradient)">${safeName}</text>
         <text x="140" y="58" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="#D6CDC2">Scan to join the queue</text>
         <g transform="translate(40 78)">${brandedQrSvg}</g>
         <image href="${logoDataUri}" x="55" y="298" width="170" height="42" preserveAspectRatio="xMidYMid meet" />
@@ -135,7 +143,20 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
             className={styles.qrBox}
             style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 8 }}
           >
-            <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#FFF7EA", textAlign: "center" }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 20,
+                fontWeight: 800,
+                textAlign: "center",
+                letterSpacing: "0.01em",
+                background: "linear-gradient(90deg, #FFE3A1 0%, #FFB24A 34%, #F20A76 68%, #FF5A2F 100%)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                color: "#FFB24A",
+              }}
+            >
               {salonName}
             </p>
             <p style={{ margin: 0, fontSize: 12, color: "#D6CDC2", textAlign: "center" }}>
