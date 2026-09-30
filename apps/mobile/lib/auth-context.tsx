@@ -5,6 +5,7 @@ import {
   type GoogleLoginInput,
   type MeResponse,
   type OtpVerifyInput,
+  type OwnerSignupInput,
   type StaffLoginInput,
 } from '@barbercue/shared';
 import {
@@ -28,6 +29,7 @@ interface AuthContextValue {
   // callers use to route to the right shell. Not customer-facing; never exposed from the
   // customer login screen.
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
+  ownerSignup: (input: OwnerSignupInput) => Promise<MeResponse>;
   // Same POST auth/staff/google contract as staffLogin above, but via Google Sign-In — verified
   // server-side, restricted to accounts that already hold SALON_OWNER/SALON_STAFF (see
   // auth.service.ts's staffGoogleLogin doc comment). Never creates a user, never elevates a
@@ -124,6 +126,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuthResult],
   );
 
+  const ownerSignup = useCallback(
+    async (input: OwnerSignupInput): Promise<MeResponse> => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(
+        authPath(AUTH_PATHS.ownerSignup),
+        { method: 'POST', body: JSON.stringify(input) },
+      );
+      return applyAuthResult(result);
+    },
+    [applyAuthResult],
+  );
+
   const staffGoogleLogin = useCallback(
     async (input: GoogleLoginInput): Promise<MeResponse> => {
       const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.staffGoogle), {
@@ -172,12 +185,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyCustomerOtp,
       googleLogin,
       staffLogin,
+      ownerSignup,
       staffGoogleLogin,
       logout,
       refreshMe,
       applySession: applyAuthResult,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, staffGoogleLogin, logout, refreshMe, applyAuthResult],
+    [user, status, verifyCustomerOtp, googleLogin, staffLogin, ownerSignup, staffGoogleLogin, logout, refreshMe, applyAuthResult],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
