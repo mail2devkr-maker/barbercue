@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { DISCOVERY_PATHS, VERIFICATION_BADGE_CAPTION, formatMoney, summarizeServiceNames } from '@barbercue/shared';
+import { DISCOVERY_PATHS, SHOP_CLOSED_TODAY_MESSAGE, VERIFICATION_BADGE_CAPTION, formatMoney, summarizeServiceNames } from '@barbercue/shared';
 import type { PublicSalonStatusDto, SalonProfileDto, ServiceDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
 import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
@@ -75,7 +75,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
       return Promise.all([profileRequest, statusRequest])
         .then(([result, status]) => {
           setSalon(result);
-          setPublicStatus(status);
+          setPublicStatus(result.isClosedForToday ? null : status);
         })
         .catch((err: unknown) => setError(err instanceof ApiError ? err.message : t.couldNotLoadSalon))
         .finally(() => {
@@ -183,14 +183,22 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
         )}
         {salon.description && <Text style={styles.description}>{salon.description}</Text>}
 
+        {salon.isClosedForToday && (
+          <View style={styles.closedTodayBanner}>
+            <Text style={styles.closedTodayText}>{SHOP_CLOSED_TODAY_MESSAGE}</Text>
+          </View>
+        )}
+
         {publicStatus && <PublicSalonStatus status={publicStatus} />}
 
-        <PremiumButton
-          title={t.joinQueueNow}
-          variant="secondary"
-          onPress={() => navigation.navigate('WalkInJoin', { salonId: salon.id, salonName: salon.name, services: salon.services })}
-          style={styles.queueButton}
-        />
+        {!salon.isClosedForToday && (
+          <PremiumButton
+            title={t.joinQueueNow}
+            variant="secondary"
+            onPress={() => navigation.navigate('WalkInJoin', { salonId: salon.id, salonName: salon.name, services: salon.services })}
+            style={styles.queueButton}
+          />
+        )}
 
         <Text style={styles.sectionTitle}>{t.servicesLabel}</Text>
         {salon.services.map((item) => {
@@ -201,6 +209,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
               style={[styles.card, isSelected && styles.cardSelected]}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: isSelected }}
+              disabled={salon.isClosedForToday === true}
               onPress={() => toggleService(item.id)}
             >
               <View style={styles.cardRow}>
@@ -236,7 +245,7 @@ export default function SalonProfileScreen({ route, navigation }: Props) {
               )}
               <PremiumButton
                 title={t.continueLabel}
-                disabled={selectedServices.length === 0}
+                disabled={salon.isClosedForToday === true || selectedServices.length === 0}
                 onPress={() =>
                   navigation.navigate('StaffSelect', {
                     salonId: salon.id,
@@ -355,6 +364,15 @@ const styles = StyleSheet.create({
   },
   verifiedBadgeText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: color.success },
   description: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: 20, color: fastQue.textSecondary, marginBottom: space[3] },
+  closedTodayBanner: {
+    backgroundColor: '#fff0e7',
+    borderWidth: 1,
+    borderColor: 'rgba(242,84,45,0.32)',
+    borderRadius: radius.sm,
+    padding: space[3],
+    marginBottom: space[4],
+  },
+  closedTodayText: { fontFamily: font.bodyBold, fontSize: fontSize.sm, color: '#7a2f12' },
   queueButton: { marginBottom: space[5] },
 
   sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, color: fastQue.text, marginTop: space[2], marginBottom: space[3] },
