@@ -331,7 +331,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       apiFetch<ServiceSuggestionDto[]>(
         `${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.serviceSuggestions}?${new URLSearchParams({
           q: trimmed,
-          limit: '8',
+          limit: '250',
         }).toString()}`,
       )
         .then((items) => {
@@ -474,7 +474,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       </View>
 
       {suggestionsOpen && q.trim().length >= 2 && serviceSuggestions.length > 0 && (
-        <View style={styles.suggestionsBox}>
+        <ScrollView
+          style={styles.suggestionsBox}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
           {serviceSuggestions.map((suggestion) => (
             <Pressable
               key={`${suggestion.name}-${suggestion.category ?? ''}`}
@@ -499,7 +503,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
               ) : null}
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       )}
 
       <PremiumButton
@@ -681,6 +685,7 @@ const styles = StyleSheet.create({
   // '100%'` is what makes it full-width in a column (flexBasis no longer does, on this axis).
   searchButtonStacked: { flexBasis: 'auto', flexGrow: 0, width: '100%' },
   suggestionsBox: {
+    maxHeight: 280,
     marginTop: -space[3],
     marginBottom: space[3],
     backgroundColor: fastQue.card,
