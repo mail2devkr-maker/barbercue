@@ -317,6 +317,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   }
 
   function handleSearch(isRefresh = false) {
+    if (!isRefresh) setSuggestionsOpen(false);
     return runSearch(isRefresh, nearMe);
   }
 
