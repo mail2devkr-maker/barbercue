@@ -422,13 +422,11 @@ export interface RecentActivityItemDto {
   occurredAt: string; // ISO 8601
 }
 
-// GET salons/live-stats — Issue #13 Mission G. Platform-wide, privacy-safe aggregate counts only
-// (no per-salon or per-customer identity), for the homepage's "this is a live product" signals.
-// Every field is a plain count; a genuinely empty platform returns real zeros, never a fabricated
-// placeholder — clients should hide a stat rather than render a misleading "0".
+// GET salons/live-stats — public, privacy-safe live queue signal. Platform-wide shop totals are
+// deliberately excluded from public/customer contracts; that count is reserved for PLATFORM_ADMIN.
 export interface LiveStatsDto {
-  // Salons with status ACTIVE, platform-wide.
-  activeShopCount: number;
+  // Transitional optional field while the backend cleanup lands; public controllers never return it.
+  activeShopCount?: number;
   // Sum of QueueEntry rows currently WAITING/CALLED/IN_SERVICE, across every salon.
   liveWaitingCount: number;
 }
