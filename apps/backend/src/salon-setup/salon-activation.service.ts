@@ -65,11 +65,27 @@ export class SalonActivationService {
       await this.assertReadyToOpen(salonId);
     }
 
+    // Owner "Close my shop" is a temporary same-day pause, not a moderation suspension.
+    // Keep the real lifecycle status ACTIVE so the shop remains discoverable; customer booking
+    // and queue entry read isClosedForToday and are blocked until the owner reopens it.
+    const closingForToday = input.status === SalonStatus.SUSPENDED;
     const updated = await this.prisma.salon.update({
       where: { id: salonId },
-      data: { status: input.status },
+      data: closingForToday
+        ? { isClosedForToday: true }
+        : {
+            status:
+              salon.status === SalonStatus.PENDING || salon.status === SalonStatus.SUSPENDED
+                ? SalonStatus.ACTIVE
+                : salon.status,
+            isClosedForToday: false,
+          },
     });
-    return { id: updated.id, status: updated.status };
+    return {
+      id: updated.id,
+      status: updated.status,
+      isClosedForToday: updated.isClosedForToday,
+    };
   }
 
   /** Platform-admin lifecycle control. The admin actor is never treated as the shop owner. */
@@ -116,7 +132,8 @@ export class SalonActivationService {
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.salon.update({
         where: { id: salonId },
-        data: { status: input.status },
+        // Admin lifecycle decisions are authoritative and separate from an owner's daily pause.
+        data: { status: input.status, isClosedForToday: false },
       });
       await tx.auditLog.create({
         data: {
