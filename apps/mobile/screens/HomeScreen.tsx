@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -26,6 +26,7 @@ import {
   type Language,
   type PaginatedResult,
   type QueueEntryDetailDto,
+  type ServiceSuggestionDto,
 } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { dateLocaleFor } from '../lib/date-locale';
@@ -101,6 +102,35 @@ export default function HomeScreen({ navigation }: Props) {
 
   const [searchMode, setSearchMode] = useState<'barber' | 'salon'>('barber');
   const [query, setQuery] = useState('');
+  const [serviceSuggestions, setServiceSuggestions] = useState<ServiceSuggestionDto[]>([]);
+  const [serviceSuggestionsOpen, setServiceSuggestionsOpen] = useState(false);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setServiceSuggestions([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      apiFetch<ServiceSuggestionDto[]>(
+        `${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.serviceSuggestions}?${new URLSearchParams({
+          q: trimmed,
+          limit: '250',
+        }).toString()}`,
+      )
+        .then((items) => {
+          if (!cancelled) setServiceSuggestions(items);
+        })
+        .catch(() => {
+          if (!cancelled) setServiceSuggestions([]);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   const load = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) setRefreshing(true);
@@ -195,6 +225,7 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   function handleFindPress() {
+    setServiceSuggestionsOpen(false);
     goSearch({ initialQuery: query.trim() || undefined });
   }
 
@@ -373,10 +404,41 @@ export default function HomeScreen({ navigation }: Props) {
             placeholder={t.shopOrServiceExample}
             placeholderTextColor={fastQue.textMuted}
             value={query}
-            onChangeText={setQuery}
+            onChangeText={(value) => {
+              setQuery(value);
+              setServiceSuggestionsOpen(true);
+            }}
+            onFocus={() => setServiceSuggestionsOpen(true)}
             onSubmitEditing={handleFindPress}
             returnKeyType="search"
           />
+
+          {serviceSuggestionsOpen && query.trim().length >= 2 && serviceSuggestions.length > 0 && (
+            <ScrollView
+              style={styles.serviceSuggestions}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            >
+              {serviceSuggestions.map((suggestion) => (
+                <Pressable
+                  key={`${suggestion.name}-${suggestion.category ?? ''}`}
+                  style={styles.serviceSuggestionItem}
+                  onPress={() => {
+                    setQuery(suggestion.name);
+                    setServiceSuggestionsOpen(false);
+                    goSearch({ initialQuery: suggestion.name });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={suggestion.name}
+                >
+                  <Text style={styles.serviceSuggestionName}>{suggestion.name}</Text>
+                  {suggestion.category ? (
+                    <Text style={styles.serviceSuggestionCategory}>{suggestion.category}</Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
 
           <Text style={styles.fieldLabel}>{t.cityLocationLabel}</Text>
           <Pressable style={styles.searchInput} onPress={handleChooseLocation} disabled={locating}>
@@ -653,6 +715,25 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     marginBottom: space[3],
   },
+  serviceSuggestions: {
+    maxHeight: 240,
+    marginTop: -space[2],
+    marginBottom: space[3],
+    backgroundColor: fastQue.card,
+    borderWidth: 1,
+    borderColor: fastQue.border,
+    borderRadius: radius.sm,
+  },
+  serviceSuggestionItem: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: space[3],
+    paddingVertical: space[2],
+    borderBottomWidth: 1,
+    borderBottomColor: fastQue.border,
+  },
+  serviceSuggestionName: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
+  serviceSuggestionCategory: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: 2 },
   cityValueText: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: fastQue.text },
   cityPlaceholderText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: fastQue.textMuted },
   ctaButton: {
