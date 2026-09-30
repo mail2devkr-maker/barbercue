@@ -80,13 +80,18 @@ export function ShopServiceSearchField({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => (i - 1 + services.length) % services.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const selected = services[activeIndex];
+      if (selected) {
+        onChange(selected.name);
+        setOpen(false);
+        onSubmit(selected.name);
+      }
     } else if (e.key === "Escape") {
       e.preventDefault();
       setOpen(false);
     }
-    // Enter is intentionally NOT swallowed here (unlike CitySearchField): this field's own
-    // "Find shops" submit is a valid, equally correct action, not a half-filled form to protect
-    // against — a suggestion is one option among several matches, not the only valid one.
   }
 
   return (
