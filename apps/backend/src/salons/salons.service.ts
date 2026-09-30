@@ -19,6 +19,7 @@ import {
   type SalonListItemDto,
   type SalonProfileDto,
   type PublicSalonStatusDto,
+  type ServiceSuggestionDto,
   type SalonSearchQueryInput,
   type SalonWorkplaceDto,
   type TeamMemberDto,
@@ -127,6 +128,30 @@ export class SalonsService {
       },
     });
     return { liveWaitingCount };
+  }
+
+  async searchServiceSuggestions(
+    rawQuery: string,
+    requestedLimit = 8,
+  ): Promise<ServiceSuggestionDto[]> {
+    const q = rawQuery.trim();
+    if (q.length < 2) return [];
+    const limit = Math.min(Math.max(requestedLimit, 1), 20);
+    const rows = await this.prisma.service.findMany({
+      where: {
+        isActive: true,
+        salon: { status: SalonStatus.ACTIVE },
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { category: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      select: { name: true, category: true },
+      distinct: ['name'],
+      orderBy: { name: 'asc' },
+      take: limit,
+    });
+    return rows;
   }
 
   async search(
@@ -380,7 +405,8 @@ export class SalonsService {
       // No lat/lng of the viewer to compare against on the profile page (unlike search results)
       // — the customer already navigated here, distance is no longer the decision being made.
       distanceKm: null,
-      isOpenNow: isOpenNow(salon.operatingHours, salon),
+      isOpenNow: salon.isClosedForToday ? false : isOpenNow(salon.operatingHours, salon),
+      isClosedForToday: salon.isClosedForToday,
       // Pre-confirmation timezone fix: the salon's resolved IANA zone, so the booking flow (date
       // picker, slot times, pre-confirm summary) can render in the SALON's local time instead of
       // the customer device's, the same way BookingDetailDto.salonTimezone already does for
@@ -682,6 +708,7 @@ export class SalonsService {
             slug: salon.slug,
             name: salon.name,
             status: salon.status,
+            isClosedForToday: salon.isClosedForToday,
           },
           user,
           tokens,
@@ -720,6 +747,7 @@ export class SalonsService {
       slug: s.slug,
       name: s.name,
       status: s.status,
+      isClosedForToday: s.isClosedForToday,
     }));
   }
 
@@ -762,6 +790,7 @@ export class SalonsService {
         slug: m.salon.slug,
         name: m.salon.name,
         status: m.salon.status,
+        isClosedForToday: m.salon.isClosedForToday,
         isOwner,
       });
     }
@@ -807,6 +836,7 @@ export class SalonsService {
       slug: salon.slug,
       name: salon.name,
       status: salon.status,
+      isClosedForToday: salon.isClosedForToday,
     };
   }
 
@@ -857,7 +887,8 @@ export class SalonsService {
       priceMin,
       priceMax,
       distanceKm,
-      isOpenNow: isOpenNow(salon.operatingHours, salon),
+      isOpenNow: salon.isClosedForToday ? false : isOpenNow(salon.operatingHours, salon),
+      isClosedForToday: salon.isClosedForToday,
       verified: salon.verification?.status === VerificationStatus.APPROVED,
       waitingCount,
       onlineBookingDiscountPercent: salon.onlineBookingDiscountPercent,
