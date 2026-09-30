@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import Link from "next/link";\nimport { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../../lib/auth-context";
 import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard";
@@ -50,6 +50,9 @@ function OwnerLoginForm() {
           router.replace(safeNextPath(searchParams.get("next")) ?? workspaceLandingPath(user));
         }}
       />
+      <p style={{ margin: "18px 0 0", textAlign: "center" }}>
+        New to FastQue? <Link href="/owner/register">Create your account &amp; register your shop</Link>
+      </p>
     </AuthCard>
   );
 }
