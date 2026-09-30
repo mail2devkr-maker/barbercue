@@ -297,7 +297,7 @@ function PriceFilterDropdown({
 export default function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [q, setQ] = useState(searchParams.get("q") ?? "");
+  const [q, setQ] = useState(searchParams.get("service") ?? "");
   // Issue #13 Mission D: real city autocomplete needs a country to scope the search to (the
   // backend's cities/search endpoint is deliberately country-scoped — see CitySearchField's own
   // doc comment on why an unscoped ~100K-row global search isn't safe to ship). This product's
