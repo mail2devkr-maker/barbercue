@@ -1102,6 +1102,22 @@
   overflow-wrap: break-word;
 }
 
+/* "Popular services" — reuses the category cards above unchanged (same 4:3 art, label, hover);
+   only the surrounding spacing and a denser desktop grid are new. Declared before the responsive
+   blocks below so their `.categoryGrid` 2-column rule still wins at tablet/mobile widths. */
+.serviceShowcase { margin-top: 72px; }
+
+.serviceShowcaseTitle {
+  margin: 8px 0 28px;
+  color: var(--landing-ink);
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.serviceGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
 .discoverySection { background: var(--landing-paper); }
 
 .discoveryHeader {

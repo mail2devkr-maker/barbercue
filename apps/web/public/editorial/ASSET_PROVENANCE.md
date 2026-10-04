@@ -54,6 +54,50 @@ hands/tools) for anatomy and safety defects, then re-encoded locally to WebP (qu
 their delivery dimensions) — no raw multi-megabyte source file or remote signed URL is referenced at
 runtime; every `src` in the manifest is a local, committed, optimized file.
 
+## Provenance table — `ai-generated` (20 assets, per-service imagery, 2026-10-04)
+
+One canonical image per service, shown on the landing page's "Popular services" grid
+(`SERVICE_SHOWCASE` in `lib/editorial/manifest.ts`). Generated in Runway (task type
+`gemini_3_1_flash_lite_image`, 1200×896 JPEG), fetched from the owner's own Runway task outputs by
+task ID, re-encoded locally to WebP (quality 82, `fit: cover` to 900×672 — an exact 4:3 downscale, no
+metadata). No signed/temporary Runway URL is referenced anywhere in the repo or at runtime. Same truth
+boundary as above: generic editorial photography, never a specific listed salon. Each image was
+reviewed at contact-sheet scale and the two flagged ones (razor, shelf text) at close-up scale.
+
+| Filename | Asset ID | Runway task ID |
+| --- | --- | --- |
+| `services/barber/classic-haircut.webp` | `service-classic-haircut` | `356dc07a-3b7f-471a-a6ff-7b4069422b09` |
+| `services/barber/taper.webp` | `service-taper` | `42883dcd-ec7f-4b9f-ab4a-5edcd73af186` |
+| `services/barber/buzz-cut.webp` | `service-buzz-cut` | `8a87f850-809a-4394-abc6-b7efe6697fcc` |
+| `services/barber/scissor-cut.webp` | `service-scissor-cut` | `5ca8c4b6-8772-4d20-837c-588e2c6d75b3` |
+| `services/barber/textured-crop.webp` | `service-textured-crop` | `1aef4de3-696c-465d-b925-026df5377636` |
+| `services/barber/pompadour.webp` | `service-pompadour` | `0c23ab9a-3a01-4357-80df-90997358d2c6` |
+| `services/barber/quiff.webp` | `service-quiff` | `4e43503d-2f1e-4cb8-8d52-764a55712cf8` |
+| `services/barber/undercut.webp` | `service-undercut` | `c8e7ab99-978e-4b09-9bb4-feeed8e57598` |
+| `services/hair/updo.webp` | `service-updo` | `eae1477d-1cbb-44fb-9084-21721502acb1` |
+| `services/hair/straight-styling.webp` | `service-straight-styling` | `36f72d64-2547-4314-a827-8183b5ecbb0e` |
+| `services/hair/curls-waves.webp` | `service-curls-waves` | `02cf35c7-1536-4805-899a-1a60544552db` |
+| `services/hair/hair-styling.webp` | `service-hair-styling` | `7be71f5d-9554-4ba1-a7d2-729e769bed4e` |
+| `services/hair/blowout.webp` | `service-blowout` | `ff64d750-67c6-426e-b345-edaa8880ef05` |
+| `services/hair/fringe-bangs.webp` | `service-fringe-bangs` | `06a40128-e57b-4d48-8225-8d71ca99c760` |
+| `services/hair/layered-haircut.webp` | `service-layered-haircut` | `9524b798-f144-4b4b-9dee-244112a8b802` |
+| `services/hair/womens-haircut.webp` | `service-womens-haircut` | `5e1ab38f-950e-4e4f-94b3-c5af9bda1404` |
+| `services/grooming/head-shave.webp` | `service-head-shave` | `6b6a1688-3b2c-4681-b6cd-1decc487d9df` |
+| `services/grooming/hot-towel-shave.webp` | `service-hot-towel-shave` | `d181db64-a812-4474-a9f9-aa5c5e643543` |
+| `services/grooming/moustache-grooming.webp` | `service-moustache-grooming` | `21fd1cde-3e52-47da-b70c-3221addc05ee` |
+| `services/grooming/senior-haircut.webp` | `service-senior-haircut` | `5c858612-310a-46a1-8091-080de0d98b26` |
+
+Review notes:
+- `undercut`: the source image showed a legible third-party brand sign on the back shelf. Only that
+  sign region (≈114×54 px at the top-right) was blurred in the local copy before encoding, so no
+  third-party brand is named on FastQue's page; no regeneration was done. Small product packaging
+  beneath it is not legible at the rendered card size.
+- `head-shave`: straight-razor technique reviewed at close-up (skin held taut, correct grip, hands
+  anatomically sound) and accepted.
+- `taper`: shows clippers resting at the cape/neckline rather than mid-cut; accepted as a generic
+  barbering visual, flagged for replacement if a better taper shot is generated later.
+- Alternate/re-generated Runway outputs of the same services were deliberately not imported.
+
 ## `abstract-placeholder` — still in active use
 
 | Filename | Asset ID | Usage surface | Note |
