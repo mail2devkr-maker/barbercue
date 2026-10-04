@@ -4,7 +4,7 @@ import { DISCOVERY_PATHS, HAIRSTYLE_CATALOG } from "@barbercue/shared";
 import type { CityDto, LiveStatsDto, PaginatedResult, SalonListItemDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../lib/discovery-api";
 import { absoluteUrl, DISCOVERY_REVALIDATE_SECONDS, SITE_URL } from "../../lib/seo";
-import { SERVICE_CATEGORIES } from "../../lib/editorial/manifest";
+import { SERVICE_CATEGORIES, SERVICE_SHOWCASE } from "../../lib/editorial/manifest";
 import { JsonLd } from "../../components/discovery/JsonLd";
 import { SalonCard } from "../../components/discovery/SalonCard";
 import { HeroVisual } from "../../components/landing/HeroVisual";
@@ -183,6 +183,25 @@ export default async function HomePage() {
                 <span className={styles.categoryLabel}>{category.label}</span>
               </Link>
             ))}
+          </div>
+
+          <div className={styles.serviceShowcase}>
+            <p className={styles.eyebrow}>Popular services</p>
+            <h3 className={styles.serviceShowcaseTitle}>Pick the exact look or service.</h3>
+            <div className={`${styles.categoryGrid} ${styles.serviceGrid}`}>
+              {SERVICE_SHOWCASE.map((service) => (
+                <Link
+                  key={service.id}
+                  href={`/search?service=${encodeURIComponent(service.query)}`}
+                  className={styles.categoryCard}
+                >
+                  <span className={styles.categoryArt}>
+                    <EditorialImage id={service.id} sizes="(max-width: 980px) 45vw, 280px" />
+                  </span>
+                  <span className={styles.categoryLabel}>{service.label}</span>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </section>
