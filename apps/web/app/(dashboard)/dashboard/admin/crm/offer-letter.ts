@@ -105,11 +105,12 @@ function concreteArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 async function decompressBytes(
   bytes: Uint8Array,
   format: "deflate" | "deflate-raw",
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const stream = new Blob([concreteArrayBuffer(bytes)])
     .stream()
     .pipeThrough(new DecompressionStream(format));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const buffer = await new Response(stream).arrayBuffer();
+  return new Uint8Array(buffer);
 }
 
 function decodeXmlEntities(value: string): string {
