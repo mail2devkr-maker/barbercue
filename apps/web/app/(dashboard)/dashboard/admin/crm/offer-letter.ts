@@ -7,11 +7,19 @@ export type ResumeHints = {
   role: string;
 };
 
+export type PdfBrandImage = {
+  hex: string;
+  width: number;
+  height: number;
+};
+
 export type OfferLetterData = {
   candidateName: string;
   email?: string;
   phone?: string;
   role?: string;
+  employeeCode?: string;
+  address?: string;
   baseSalary: number;
   salaryBasis: SalaryBasis;
   joiningDate?: string;
@@ -121,8 +129,48 @@ export async function extractResumeHints(file: File): Promise<ResumeHints> {
 export function formatInr(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount);
+    maximumFractionDigits: 0,
+  }).format(Math.round(amount));
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  let output = "";
+  for (const byte of bytes) output += byte.toString(16).padStart(2, "0").toUpperCase();
+  return output;
+}
+
+export async function loadFastQueLogoForPdf(): Promise<PdfBrandImage | null> {
+  if (typeof document === "undefined") return null;
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const width = 720;
+      const height = Math.max(1, Math.round(width * image.naturalHeight / image.naturalWidth));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(null);
+        return;
+      }
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          resolve(null);
+          return;
+        }
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        resolve({ hex: bytesToHex(bytes), width, height });
+      }, "image/jpeg", 0.94);
+    };
+    image.onerror = () => resolve(null);
+    image.src = "/brand/fastque-clean-lockup-transparent.png";
+  });
 }
 
 function ascii(value: string): string {
