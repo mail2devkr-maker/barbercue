@@ -49,6 +49,49 @@ const OWNER_POINTS = [
   "Get a permanent, shareable FastQue Shop ID",
 ];
 
+const HOME_FAQS = [
+  {
+    question: "What is FastQue?",
+    answer:
+      "FastQue helps customers discover grooming and beauty businesses, book ahead or join a live queue, while participating shops manage services, staff, appointments and queue operations.",
+  },
+  {
+    question: "What is the difference between booking and joining a live queue?",
+    answer:
+      "Booking reserves an available date and time. A live queue lets you join a shop's current line and follow your position as the queue moves.",
+  },
+  {
+    question: "Can I see my position in a live queue?",
+    answer:
+      "Yes, when a participating shop runs a FastQue live queue, the queue experience is designed to show your current position and update it as the line moves.",
+  },
+  {
+    question: "Who sets prices and service availability?",
+    answer:
+      "Each listed shop controls its own services, prices, staff availability and opening hours. FastQue displays the information configured by that business.",
+  },
+  {
+    question: "How can a shop join FastQue?",
+    answer:
+      "Use List Your Shop or Register your shop, complete the business information and follow the onboarding steps. Support is available at support@fastque.com.",
+  },
+  {
+    question: "Does FastQue guarantee customers or waiting time?",
+    answer:
+      "No. FastQue provides discovery, booking and queue tools, but customer volume, real-world waiting time and service outcomes depend on the participating business and current conditions.",
+  },
+  {
+    question: "How do I get support?",
+    answer:
+      "Email support@fastque.com for account, booking, shop onboarding or general help. Never send your password or OTP.",
+  },
+  {
+    question: "Where can candidates and employees read employment policies?",
+    answer:
+      "Current hiring information is on Careers, and the public HR Policy explains baseline employment standards, probation, conduct, performance and resignation terms.",
+  },
+];
+
 export default async function HomePage() {
   const [cities, featured, liveStats] = await Promise.all([
     fetchDiscoveryOrNull<CityDto[]>(DISCOVERY_PATHS.cities, DISCOVERY_REVALIDATE_SECONDS).catch(() => null),
@@ -298,6 +341,35 @@ export default async function HomePage() {
               {OWNER_POINTS.map((point) => <li key={point}>{point}</li>)}
             </ul>
             <Link href="/owner/register" className={styles.ownerCta}>Register your shop <span aria-hidden="true">→</span></Link>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" className={styles.faqSection}>
+        <div className={styles.inner}>
+          <div className={styles.sectionIntro}>
+            <div>
+              <p className={styles.eyebrow}>Frequently asked questions</p>
+              <h2 className={styles.sectionTitle}>Know before you book, queue or join.</h2>
+            </div>
+            <p className={styles.sectionLead}>
+              Quick answers for customers, shops, candidates and employees. The full FAQ covers
+              accounts, privacy, onboarding, careers and HR policy too.
+            </p>
+          </div>
+
+          <div className={styles.faqGrid}>
+            {HOME_FAQS.map((item) => (
+              <details className={styles.faqItem} key={item.question}>
+                <summary>{item.question}</summary>
+                <p>{item.answer}</p>
+              </details>
+            ))}
+          </div>
+
+          <div className={styles.faqActions}>
+            <Link href="/faq" className={styles.primaryLink}>View all FAQs <span aria-hidden="true">→</span></Link>
+            <Link href="/contact-us" className={styles.outlineLink}>Contact FastQue</Link>
           </div>
         </div>
       </section>
