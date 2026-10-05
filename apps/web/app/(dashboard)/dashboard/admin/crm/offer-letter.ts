@@ -802,6 +802,9 @@ export function buildOfferLetterPdf(
   }
   page1.commands += textCommand("Employee No:", 48, page1.y, 9, true);
   page1.commands += textCommand(employeeCode, 112, page1.y, 9);
+  page1.y -= 14;
+  page1.commands += textCommand("Probation:", 48, page1.y, 9, true);
+  page1.commands += textCommand("3 months (extendable based on performance)", 112, page1.y, 9, true);
   page1.y -= 23;
 
   page1.commands += centeredText("Offer Letter", page1.y, 12, true, "0.97 0.96 0.96");
@@ -822,23 +825,23 @@ export function buildOfferLetterPdf(
   );
   addWrapped(
     page1,
-    "2. You will fully perform the responsibilities assigned to your role in a professional manner and in accordance with lawful instructions, company policies, service standards and applicable customer requirements.",
+    "2. You are being appointed on a probation period of three (3) months from your joining date. The probation period may be extended by the company based on your performance and performance assessment during probation.",
   );
   addWrapped(
     page1,
-    "3. During your employment you will protect confidential information, customer information, credentials, source code, business data and intellectual property and will use them only for authorized business purposes.",
+    "3. You will fully perform the responsibilities assigned to your role in a professional manner and in accordance with lawful instructions, company policies, service standards and applicable customer requirements.",
   );
   addWrapped(
     page1,
-    "4. You will avoid conflicts of interest, unauthorized commitments, improper payments and conduct that could be detrimental to Fastque Digital Technology Private Limited, its customers, partners or employees.",
+    "4. During your employment you will protect confidential information, customer information, credentials, source code, business data and intellectual property and will use them only for authorized business purposes.",
   );
   addWrapped(
     page1,
-    "5. Your work location, field assignment, remote-work arrangement, customer location or reasonable business travel may change according to operational requirements, subject to applicable law and your final employment terms.",
+    "5. You will avoid conflicts of interest, unauthorized commitments, improper payments and conduct that could be detrimental to Fastque Digital Technology Private Limited, its customers, partners or employees.",
   );
   addWrapped(
     page1,
-    "6. You will comply with applicable attendance, working-hours, information-security, safety, acceptable-use and code-of-conduct requirements communicated by the company.",
+    "6. Your work location, field assignment, remote-work arrangement, customer location or reasonable business travel may change according to operational requirements, subject to applicable law and your final employment terms.",
     8.8, 11.7, 106, false, 0,
   );
   page1.commands += footerCommands();
@@ -847,33 +850,38 @@ export function buildOfferLetterPdf(
   const page2 = { commands: headerCommands(brandImage), y: 718 };
   addWrapped(
     page2,
-    "7. Either party may end the employment relationship in accordance with the final employment agreement and applicable law. Unless otherwise specified, the standard notice period is 30 days or salary in lieu where legally and contractually applicable.",
+    "7. You will comply with applicable attendance, working-hours, information-security, safety, acceptable-use and code-of-conduct requirements communicated by the company.",
     8.9, 12, 105, false, 6,
   );
   addWrapped(
     page2,
-    "8. Compensation will be paid through the company's authorized payroll process. Statutory contributions, taxes, deductions and benefits will apply according to eligibility, applicable law and the final payroll configuration.",
+    "8. If you wish to resign from employment, you are required to provide at least one (1) month / 30 days prior written notice to the company. Any reduction or waiver of this notice period will be subject to written company approval and applicable law.",
     8.9, 12, 105, false, 6,
   );
   addWrapped(
     page2,
-    "9. This offer and continued employment are subject to satisfactory verification of the information, identity, qualifications, experience and documents provided during recruitment and onboarding.",
+    "9. Compensation will be paid through the company's authorized payroll process. Statutory contributions, taxes, deductions and benefits will apply according to eligibility, applicable law and the final payroll configuration.",
     8.9, 12, 105, false, 6,
   );
   addWrapped(
     page2,
-    "10. The detailed salary structure is shown in the attached Salary Annexure. The annexure is an HR/payroll template and final statutory treatment will follow applicable law and approved company policy.",
+    "10. This offer and continued employment are subject to satisfactory verification of the information, identity, qualifications, experience and documents provided during recruitment and onboarding.",
     8.9, 12, 105, false, 6,
   );
   addWrapped(
     page2,
-    "11. Your employment may also be governed by additional policies, confidentiality obligations, data-protection requirements, intellectual-property provisions and workplace rules communicated in writing.",
+    "11. The detailed salary structure is shown in the attached Salary Annexure. The annexure is an HR/payroll template and final statutory treatment will follow applicable law and approved company policy.",
     8.9, 12, 105, false, 6,
   );
   addWrapped(
     page2,
-    "12. This offer is governed by applicable laws of India. Any dispute-resolution mechanism, venue or jurisdiction will be as stated in the final employment agreement and applicable law.",
-    8.9, 12, 105, false, 10,
+    "12. Your employment may also be governed by additional policies, confidentiality obligations, data-protection requirements, intellectual-property provisions and workplace rules communicated in writing.",
+    8.9, 12, 105, false, 6,
+  );
+  addWrapped(
+    page2,
+    "13. This offer is governed by applicable laws of India. Any dispute-resolution mechanism, venue or jurisdiction will be as stated in the final employment agreement and applicable law.",
+    8.9, 12, 105, false, 8,
   );
   addWrapped(
     page2,
