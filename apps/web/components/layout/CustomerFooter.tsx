@@ -17,11 +17,13 @@ export function CustomerFooter({ dark }: { dark?: boolean }) {
           <Link href="/account/profile">Account</Link>
           <Link href="/about-us">About Us</Link>
           <Link href="/contact-us">Contact Us</Link>
+          <Link href="/faq">FAQ</Link>
+          <Link href="/hr-policy">HR Policy</Link>
           <Link href="/privacy-policy">Privacy Policy</Link>
           <Link href="/account-deletion">Account Deletion</Link>
         </nav>
         <p className={styles.footerNote}>
-          <span>© {new Date().getFullYear()} FastQue.</span>
+          <span>© {new Date().getFullYear()} Fastque Digital Technology Private Limited.</span>
           <span className={styles.poweredByBadge} aria-label="Powered By DCW">
             <span className={styles.poweredByText}>Powered By</span>
             <span className={styles.poweredByDcw}>DCW</span>

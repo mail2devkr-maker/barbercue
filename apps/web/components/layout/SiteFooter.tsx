@@ -37,6 +37,8 @@ export function SiteFooter() {
             <Link href="/about-us">About Us</Link>
             <Link href="/contact-us">Contact Us</Link>
             <Link href="/careers">Careers</Link>
+            <Link href="/faq">FAQ</Link>
+            <Link href="/hr-policy">HR Policy</Link>
             <Link href="/login">Customer login</Link>
             <Link href="/privacy-policy">Privacy policy</Link>
             <Link href="/account-deletion">Account deletion</Link>
@@ -44,7 +46,7 @@ export function SiteFooter() {
         </nav>
 
         <p className={styles.footerNote}>
-          <span>© 2026 FastQue Private Limited. All Rights Reserved.</span>
+          <span>© 2026 Fastque Digital Technology Private Limited. All Rights Reserved.</span>
           <a
             className={styles.sitePoweredBy}
             href="https://dcw.co.in/what-is-dcw"
