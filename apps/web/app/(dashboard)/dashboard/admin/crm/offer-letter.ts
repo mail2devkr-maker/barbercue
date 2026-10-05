@@ -156,7 +156,7 @@ export async function loadFastQueLogoForPdf(): Promise<PdfBrandImage | null> {
         return;
       }
 
-      context.fillStyle = "#ffffff";
+      context.fillStyle = "#09090c";
       context.fillRect(0, 0, width, height);
       context.drawImage(image, 0, 0, width, height);
       canvas.toBlob(async (blob) => {
@@ -273,24 +273,26 @@ function gradientBand(x: number, y: number, width: number, height: number): stri
 
 function headerCommands(brandImage?: PdfBrandImage | null): string {
   let output = "";
+  output += fillRect(32, 742, 531, 72, rgb255(9, 9, 12));
   if (brandImage) {
-    const displayWidth = 150;
-    const displayHeight = Math.min(54, displayWidth * brandImage.height / brandImage.width);
-    output += "q " + displayWidth + " 0 0 " + displayHeight + " 48 " + (786 - displayHeight) + " cm /Im1 Do Q\n";
+    const displayWidth = 146;
+    const displayHeight = Math.min(48, displayWidth * brandImage.height / brandImage.width);
+    output += "q " + displayWidth + " 0 0 " + displayHeight + " 48 " + (790 - displayHeight) + " cm /Im1 Do Q\n";
   } else {
-    output += textCommand("FastQue", 48, 778, 23, true, rgb255(255, 62, 87));
-    output += textCommand("GOOD LOOKS | LESS WAITING", 48, 761, 7.8, true, "0.40 0.39 0.44");
+    output += textCommand("FastQue", 48, 780, 23, true, rgb255(255, 62, 87));
+    output += textCommand("GOOD LOOKS | LESS WAITING", 48, 762, 7.8, true, "0.88 0.88 0.90");
   }
-  output += gradientBand(48, 744, 499, 4);
+  output += textCommand("GOOD LOOKS. LESS WAITING.", 387, 768, 7.2, true, "0.82 0.80 0.83");
+  output += gradientBand(32, 736, 531, 6);
   return output;
 }
 
 function footerCommands(): string {
   let output = "";
-  output += strokeLine(48, 66, 547, 66, "0.88 0.88 0.90", 0.5);
-  output += centeredText("FastQue | Devdutta Cloud World (DCW)", 48, 9.2, true, "0.035 0.035 0.047");
-  output += centeredText("fastque.com | GOOD LOOKS, LESS WAITING", 33, 7.8, false, "0.40 0.39 0.44");
-  output += gradientBand(48, 17, 499, 9);
+  output += gradientBand(32, 62, 531, 6);
+  output += fillRect(32, 20, 531, 42, rgb255(13, 13, 18));
+  output += centeredText("FastQue | Devdutta Cloud World (DCW)", 45, 9.2, true, "0.97 0.96 0.96");
+  output += centeredText("fastque.com | GOOD LOOKS, LESS WAITING", 31, 7.6, false, "0.74 0.72 0.76");
   return output;
 }
 
@@ -578,7 +580,7 @@ export function buildOfferLetterPdf(
     { cells: ["Total Amount", formatInr(annualCtc)], bold: true },
     { cells: ["Amount in Words", numberToIndianWords(annualCtc)], bold: true },
   ];
-  const annualTable = drawTable(96, 664, [214, 190], annualRows);
+  const annualTable = drawTable(96, 664, [214, 190], annualRows, 14);
   page3 += annualTable.commands;
 
   const monthlyRows = [
@@ -594,7 +596,7 @@ export function buildOfferLetterPdf(
     { cells: ["Total Amount", formatInr(monthlyCtc)], bold: true },
     { cells: ["Amount in Words", numberToIndianWords(monthlyCtc)], bold: true },
   ];
-  const monthlyTable = drawTable(96, annualTable.bottomY - 12, [214, 190], monthlyRows);
+  const monthlyTable = drawTable(96, annualTable.bottomY - 10, [214, 190], monthlyRows, 14);
   page3 += monthlyTable.commands;
 
   page3 += centeredText("Net Pay Annexure", monthlyTable.bottomY - 28, 10.5, true, "0.035 0.035 0.047");
@@ -610,10 +612,10 @@ export function buildOfferLetterPdf(
     { cells: ["Total Deduction", formatInr(salary.totalDeduction)], bold: true },
     { cells: ["Net Salary", formatInr(salary.netSalary)], bold: true },
   ];
-  const netTable = drawTable(130, monthlyTable.bottomY - 42, [200, 135], netRows, 16);
+  const netTable = drawTable(130, monthlyTable.bottomY - 38, [200, 135], netRows, 13);
   page3 += netTable.commands;
 
-  let noteY = netTable.bottomY - 18;
+  let noteY = Math.max(104, netTable.bottomY - 16);
   for (const line of wrap(
     "Note: This salary annexure is an illustrative payroll template generated from the entered salary/CTC. Statutory contributions, tax deductions, insurance, bonus eligibility and final net pay are subject to applicable law and approved company payroll policy.",
     102,
