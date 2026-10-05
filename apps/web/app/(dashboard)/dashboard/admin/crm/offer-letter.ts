@@ -218,124 +218,444 @@ function textCommand(
   return `BT /${bold ? "F2" : "F1"} ${size} Tf ${rgb} rg 1 0 0 1 ${x} ${y} Tm (${pdfEscape(text)}) Tj ET\n`;
 }
 
-export function buildOfferLetterPdf(data: OfferLetterData): Uint8Array {
+function centeredText(
+  text: string,
+  y: number,
+  size = 10,
+  bold = false,
+  rgb = "0.12 0.12 0.15",
+): string {
+  const width = ascii(text).length * size * 0.51;
+  return textCommand(text, Math.max(48, (595 - width) / 2), y, size, bold, rgb);
+}
+
+function fillRect(x: number, y: number, width: number, height: number, rgb: string): string {
+  return rgb + " rg " + x + " " + y + " " + width + " " + height + " re f\n";
+}
+
+function strokeLine(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  rgb = "0.78 0.78 0.82",
+  width = 0.6,
+): string {
+  return rgb + " RG " + width + " w " + x1 + " " + y1 + " m " + x2 + " " + y2 + " l S\n";
+}
+
+function rgb255(red: number, green: number, blue: number): string {
+  return [red, green, blue].map((value) => (value / 255).toFixed(3)).join(" ");
+}
+
+function gradientBand(x: number, y: number, width: number, height: number): string {
+  const stops = [
+    [242, 10, 131],
+    [255, 62, 87],
+    [255, 122, 69],
+  ];
+  const segments = 30;
+  let output = "";
+
+  for (let index = 0; index < segments; index += 1) {
+    const progress = index / (segments - 1);
+    const left = progress <= 0.55 ? stops[0] : stops[1];
+    const right = progress <= 0.55 ? stops[1] : stops[2];
+    const local = progress <= 0.55 ? progress / 0.55 : (progress - 0.55) / 0.45;
+    const red = Math.round(left[0] + (right[0] - left[0]) * local);
+    const green = Math.round(left[1] + (right[1] - left[1]) * local);
+    const blue = Math.round(left[2] + (right[2] - left[2]) * local);
+    output += fillRect(x + index * width / segments, y, width / segments + 0.2, height, rgb255(red, green, blue));
+  }
+
+  return output;
+}
+
+function headerCommands(brandImage?: PdfBrandImage | null): string {
+  let output = "";
+  if (brandImage) {
+    const displayWidth = 150;
+    const displayHeight = Math.min(54, displayWidth * brandImage.height / brandImage.width);
+    output += "q " + displayWidth + " 0 0 " + displayHeight + " 48 " + (786 - displayHeight) + " cm /Im1 Do Q\n";
+  } else {
+    output += textCommand("FastQue", 48, 778, 23, true, rgb255(255, 62, 87));
+    output += textCommand("GOOD LOOKS | LESS WAITING", 48, 761, 7.8, true, "0.40 0.39 0.44");
+  }
+  output += gradientBand(48, 744, 499, 4);
+  return output;
+}
+
+function footerCommands(): string {
+  let output = "";
+  output += strokeLine(48, 66, 547, 66, "0.88 0.88 0.90", 0.5);
+  output += centeredText("FastQue | Devdutta Cloud World (DCW)", 48, 9.2, true, "0.035 0.035 0.047");
+  output += centeredText("fastque.com | GOOD LOOKS, LESS WAITING", 33, 7.8, false, "0.40 0.39 0.44");
+  output += gradientBand(48, 17, 499, 9);
+  return output;
+}
+
+function moneyWordsBelow1000(value: number): string {
+  const ones = [
+    "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
+    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
+    "Seventeen", "Eighteen", "Nineteen",
+  ];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  if (value === 0) return "";
+  if (value < 20) return ones[value];
+  if (value < 100) return tens[Math.floor(value / 10)] + (value % 10 ? " " + ones[value % 10] : "");
+  return ones[Math.floor(value / 100)] + " Hundred" + (value % 100 ? " " + moneyWordsBelow1000(value % 100) : "");
+}
+
+export function numberToIndianWords(amount: number): string {
+  let value = Math.max(0, Math.round(amount));
+  if (value === 0) return "Zero Rupees";
+
+  const parts: string[] = [];
+  const crore = Math.floor(value / 10000000);
+  if (crore) {
+    parts.push(moneyWordsBelow1000(crore) + " Crore");
+    value %= 10000000;
+  }
+  const lakh = Math.floor(value / 100000);
+  if (lakh) {
+    parts.push(moneyWordsBelow1000(lakh) + " Lakh");
+    value %= 100000;
+  }
+  const thousand = Math.floor(value / 1000);
+  if (thousand) {
+    parts.push(moneyWordsBelow1000(thousand) + " Thousand");
+    value %= 1000;
+  }
+  if (value) parts.push(moneyWordsBelow1000(value));
+  return parts.join(" ") + " Rupees";
+}
+
+function salaryBreakdown(monthlyCtc: number) {
+  const round = (value: number) => Math.round(value);
+  const basic = round(monthlyCtc * 0.40);
+  const hra = round(monthlyCtc * 0.16);
+  const employerPf = round(monthlyCtc * 0.04);
+  const insurance = round(monthlyCtc * 0.0056);
+  const pfService = round(monthlyCtc * 0.0033);
+  const statutoryBonus = round(monthlyCtc * 0.0333);
+  const employeeCompensation = round(monthlyCtc * 0.0014);
+  const specialAllowance = Math.max(
+    0,
+    round(monthlyCtc) - basic - hra - employerPf - insurance - pfService - statutoryBonus - employeeCompensation,
+  );
+  const grossEarnings = basic + hra + specialAllowance + statutoryBonus;
+  const employeePf = employerPf;
+  return {
+    basic,
+    hra,
+    employerPf,
+    insurance,
+    pfService,
+    statutoryBonus,
+    employeeCompensation,
+    specialAllowance,
+    grossEarnings,
+    employeePf,
+    totalDeduction: employeePf,
+    netSalary: Math.max(0, grossEarnings - employeePf),
+  };
+}
+
+function drawTable(
+  x: number,
+  yTop: number,
+  widths: number[],
+  rows: Array<{ cells: string[]; bold?: boolean; fill?: string }>,
+  rowHeight = 17,
+): { commands: string; bottomY: number } {
+  const totalWidth = widths.reduce((sum, value) => sum + value, 0);
+  let output = "";
+  let y = yTop;
+
+  for (const row of rows) {
+    const bottom = y - rowHeight;
+    if (row.fill) output += fillRect(x, bottom, totalWidth, rowHeight, row.fill);
+    output += "0.72 0.72 0.76 RG 0.55 w " + x + " " + bottom + " " + totalWidth + " " + rowHeight + " re S\n";
+
+    let cellX = x;
+    row.cells.forEach((cell, index) => {
+      if (index > 0) output += strokeLine(cellX, bottom, cellX, y, "0.72 0.72 0.76", 0.55);
+      const maxChars = Math.max(10, Math.floor(widths[index] / 4.2));
+      const visible = ascii(cell);
+      const clipped = visible.length > maxChars ? visible.slice(0, maxChars - 1) + "." : visible;
+      output += textCommand(clipped, cellX + 6, bottom + 5.1, 8, Boolean(row.bold));
+      cellX += widths[index];
+    });
+
+    y = bottom;
+  }
+
+  return { commands: output, bottomY: y };
+}
+
+export function buildOfferLetterPdf(
+  data: OfferLetterData,
+  brandImage?: PdfBrandImage | null,
+): Uint8Array {
   const candidateName = data.candidateName.trim();
   const role = (data.role || "Employee").trim() || "Employee";
+  const employeeCode = data.employeeCode?.trim() || "Pending onboarding";
   const dateLabel = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
-    month: "long",
+    month: "short",
     year: "numeric",
   }).format(new Date());
-
   const joiningLabel = data.joiningDate
     ? new Intl.DateTimeFormat("en-GB", {
         day: "2-digit",
-        month: "long",
+        month: "short",
         year: "numeric",
-      }).format(new Date(`${data.joiningDate}T00:00:00`))
+      }).format(new Date(data.joiningDate + "T00:00:00"))
     : "To be mutually agreed";
 
-  const salaryText =
-    data.salaryBasis === "monthly"
-      ? `INR ${formatInr(data.baseSalary)} per month (INR ${formatInr(data.baseSalary * 12)} annualized)`
-      : `INR ${formatInr(data.baseSalary)} per annum`;
-
+  const monthlyCtc = data.salaryBasis === "monthly" ? data.baseSalary : data.baseSalary / 12;
+  const annualCtc = monthlyCtc * 12;
+  const salary = salaryBreakdown(monthlyCtc);
   const pages: string[] = [];
-  let commands = "";
-  let y = 790;
 
-  const newPage = () => {
-    if (commands) pages.push(commands);
-    commands = "";
-    y = 790;
-  };
-
-  const ensureSpace = (height: number) => {
-    if (y - height < 58) newPage();
-  };
-
-  const addText = (
+  const addWrapped = (
+    page: { commands: string; y: number },
     text: string,
-    size = 10.5,
+    size = 8.8,
+    leading = 11.7,
+    maxChars = 106,
     bold = false,
-    gap = 16,
-    color?: string,
+    gap = 4,
   ) => {
-    ensureSpace(gap + 4);
-    commands += textCommand(text, 48, y, size, bold, color);
-    y -= gap;
-  };
-
-  const addParagraph = (text: string) => {
-    const lines = wrap(text, 89);
-    ensureSpace(lines.length * 15 + 10);
-    for (const line of lines) {
-      commands += textCommand(line, 48, y, 10.2, false);
-      y -= 15;
+    for (const line of wrap(text, maxChars)) {
+      page.commands += textCommand(line, 48, page.y, size, bold);
+      page.y -= leading;
     }
-    y -= 7;
+    page.y -= gap;
   };
 
-  commands += textCommand("FastQue", 48, y, 24, true, "0.97 0.20 0.37");
-  commands += textCommand("GOOD LOOKS | LESS WAITING", 48, y - 18, 8.5, true, "0.52 0.52 0.58");
-  commands += "0.97 0.20 0.37 RG 1.2 w 48 744 m 547 744 l S\n";
-  y = 716;
+  const page1 = { commands: headerCommands(brandImage), y: 718 };
+  page1.commands += textCommand("Date:", 48, page1.y, 9.2, true);
+  page1.commands += textCommand(dateLabel, 112, page1.y, 9.2);
+  page1.y -= 18;
+  addWrapped(page1, candidateName, 9.5, 13, 86, true, 1);
+  if (data.address?.trim()) addWrapped(page1, data.address.trim(), 8.9, 12, 82, false, 1);
+  if (data.email?.trim()) {
+    page1.commands += textCommand("Email:", 48, page1.y, 9, true);
+    page1.commands += textCommand(data.email.trim(), 112, page1.y, 9);
+    page1.y -= 14;
+  }
+  if (data.phone?.trim()) {
+    page1.commands += textCommand("Phone:", 48, page1.y, 9, true);
+    page1.commands += textCommand(data.phone.trim(), 112, page1.y, 9);
+    page1.y -= 14;
+  }
+  page1.commands += textCommand("Employee No:", 48, page1.y, 9, true);
+  page1.commands += textCommand(employeeCode, 112, page1.y, 9);
+  page1.y -= 23;
 
-  addText("OFFER LETTER", 17, true, 28, "0.08 0.08 0.10");
-  addText(`Date: ${dateLabel}`, 10, false, 17);
-  addText(`To: ${candidateName}`, 11, true, 17);
-  if (data.email) addText(`Email: ${data.email}`, 9.5, false, 15);
-  if (data.phone) addText(`Phone: ${data.phone}`, 9.5, false, 15);
-  y -= 5;
+  page1.commands += centeredText("Offer Letter", page1.y, 12, true, "0.035 0.035 0.047");
+  page1.commands += strokeLine(257, page1.y - 2, 338, page1.y - 2, "0.035 0.035 0.047", 0.7);
+  page1.y -= 25;
 
-  addText(`Subject: Offer of Employment - ${role}`, 11, true, 22);
-  addText(`Dear ${candidateName},`, 10.5, false, 20);
+  addWrapped(page1, "Dear " + candidateName + ",", 9.2, 13, 103, false, 6);
+  addWrapped(
+    page1,
+    "We are pleased to appoint you in our organization as " + role + ", subject to the following terms and conditions:",
+    9.1, 12.4, 106, false, 7,
+  );
+  addWrapped(
+    page1,
+    "1. Your employment will commence from " + joiningLabel + ". Your Annual CTC would be INR " +
+      formatInr(annualCtc) + " per annum (" + numberToIndianWords(annualCtc) +
+      " only), subject to the attached salary annexure and applicable deductions.",
+  );
+  addWrapped(
+    page1,
+    "2. You will fully perform the responsibilities assigned to your role in a professional manner and in accordance with lawful instructions, company policies, service standards and applicable customer requirements.",
+  );
+  addWrapped(
+    page1,
+    "3. During your employment you will protect confidential information, customer information, credentials, source code, business data and intellectual property and will use them only for authorized business purposes.",
+  );
+  addWrapped(
+    page1,
+    "4. You will avoid conflicts of interest, unauthorized commitments, improper payments and conduct that could be detrimental to FastQue, Devdutta Cloud World (DCW), its customers, partners or employees.",
+  );
+  addWrapped(
+    page1,
+    "5. Your work location, field assignment, remote-work arrangement, customer location or reasonable business travel may change according to operational requirements, subject to applicable law and your final employment terms.",
+  );
+  addWrapped(
+    page1,
+    "6. You will comply with applicable attendance, working-hours, information-security, safety, acceptable-use and code-of-conduct requirements communicated by the company.",
+    8.8, 11.7, 106, false, 0,
+  );
+  page1.commands += footerCommands();
+  pages.push(page1.commands);
 
-  addParagraph(
-    `We are pleased to offer you employment with FastQue, powered by Devdutta Cloud World (DCW), in the role of ${role}. We look forward to the experience, commitment, and energy you will bring to the team.`,
+  const page2 = { commands: headerCommands(brandImage), y: 718 };
+  addWrapped(
+    page2,
+    "7. Either party may end the employment relationship in accordance with the final employment agreement and applicable law. Unless otherwise specified, the standard notice period is 30 days or salary in lieu where legally and contractually applicable.",
+    8.9, 12, 105, false, 6,
+  );
+  addWrapped(
+    page2,
+    "8. Compensation will be paid through the company's authorized payroll process. Statutory contributions, taxes, deductions and benefits will apply according to eligibility, applicable law and the final payroll configuration.",
+    8.9, 12, 105, false, 6,
+  );
+  addWrapped(
+    page2,
+    "9. This offer and continued employment are subject to satisfactory verification of the information, identity, qualifications, experience and documents provided during recruitment and onboarding.",
+    8.9, 12, 105, false, 6,
+  );
+  addWrapped(
+    page2,
+    "10. The detailed salary structure is shown in the attached Salary Annexure. The annexure is an HR/payroll template and final statutory treatment will follow applicable law and approved company policy.",
+    8.9, 12, 105, false, 6,
+  );
+  addWrapped(
+    page2,
+    "11. Your employment may also be governed by additional policies, confidentiality obligations, data-protection requirements, intellectual-property provisions and workplace rules communicated in writing.",
+    8.9, 12, 105, false, 6,
+  );
+  addWrapped(
+    page2,
+    "12. This offer is governed by applicable laws of India. Any dispute-resolution mechanism, venue or jurisdiction will be as stated in the final employment agreement and applicable law.",
+    8.9, 12, 105, false, 10,
+  );
+  addWrapped(
+    page2,
+    "At FastQue we are building a culture focused on customer trust, speed, ownership, quality and respectful collaboration. We welcome you to contribute to that culture and to the continuous improvement of our products and operations.",
+    8.9, 12, 105, false, 8,
+  );
+  addWrapped(
+    page2,
+    "FastQue and DCW do not require candidates to make unauthorized cash or in-kind payments to employees or intermediaries in exchange for employment. Any such request should be reported to the company.",
+    8.9, 12, 105, false, 12,
   );
 
-  addText("Compensation", 12, true, 20, "0.12 0.12 0.15");
-  addText(`Base salary: ${salaryText}`, 10.3, true, 17);
-  addText(`Proposed joining date: ${joiningLabel}`, 10.3, false, 22);
-
-  addParagraph(
-    "The amount above records base salary only. Statutory deductions, incentives, reimbursements, benefits, probation, leave, working arrangements, notice obligations, confidentiality, intellectual-property obligations, and other employment terms are governed by the final employment agreement and applicable company policies.",
-  );
-  addParagraph(
-    "This offer is subject to satisfactory verification of the information and documents provided during recruitment and completion of the required onboarding formalities.",
-  );
-  addParagraph(
-    "Please confirm your acceptance by signing and returning this letter, or by completing the acceptance process communicated by the company.",
+  page2.commands += textCommand("ENDORSEMENT", 48, page2.y, 9.5, true, "0.035 0.035 0.047");
+  page2.commands += strokeLine(48, page2.y - 2, 112, page2.y - 2, "0.035 0.035 0.047", 0.6);
+  page2.y -= 18;
+  addWrapped(
+    page2,
+    "I hereby confirm acceptance of the above offer and the terms and conditions stated in this letter, subject to the final employment agreement and onboarding formalities.",
+    9, 12, 104, false, 18,
   );
 
-  addText("Sincerely,", 10.5, false, 18);
-  addText("HR Team", 10.5, true, 16);
-  addText("FastQue | Devdutta Cloud World (DCW)", 9.5, false, 24);
+  page2.commands += textCommand("For FastQue | Devdutta Cloud World (DCW)", 48, page2.y, 9, true);
+  page2.commands += textCommand("Accepted and Agreed", 383, page2.y, 9, true);
+  page2.y -= 46;
+  page2.commands += strokeLine(48, page2.y, 220, page2.y, "0.12 0.12 0.15", 0.6);
+  page2.commands += strokeLine(383, page2.y, 547, page2.y, "0.12 0.12 0.15", 0.6);
+  page2.y -= 14;
+  page2.commands += textCommand("(Authorized Signatory)", 48, page2.y, 8, false, "0.40 0.39 0.44");
+  page2.commands += textCommand("Signature and date", 383, page2.y, 8, false, "0.40 0.39 0.44");
+  page2.y -= 14;
+  page2.commands += textCommand("Name: " + candidateName, 383, page2.y, 8, false, "0.40 0.39 0.44");
+  page2.commands += footerCommands();
+  pages.push(page2.commands);
 
-  addText("Candidate acceptance", 11, true, 20);
-  addParagraph(
-    "I accept the offer described above, subject to the final employment terms and onboarding requirements.",
-  );
-  addText("Signature: ______________________________", 9.5, false, 17);
-  addText("Date: __________________", 9.5, false, 17);
+  let page3 = headerCommands(brandImage);
+  page3 += centeredText("Salary Annexure", 710, 11.5, true, "0.035 0.035 0.047");
+  page3 += strokeLine(247, 707, 348, 707, "0.035 0.035 0.047", 0.7);
+  page3 += textCommand("Employee No: " + employeeCode, 96, 685, 9);
+  page3 += textCommand("Name: " + candidateName, 300, 685, 9);
 
-  if (commands) pages.push(commands);
+  const annualRows = [
+    { cells: ["Particulars", "Annual Amount (INR)"], bold: true, fill: "1 0.965 0.975" },
+    { cells: ["Basic", formatInr(salary.basic * 12)] },
+    { cells: ["House Rent Allowance", formatInr(salary.hra * 12)] },
+    { cells: ["Special Allowance", formatInr(salary.specialAllowance * 12)] },
+    { cells: ["Employer PF Contribution", formatInr(salary.employerPf * 12)] },
+    { cells: ["Insurance", formatInr(salary.insurance * 12)] },
+    { cells: ["PF Service Charges", formatInr(salary.pfService * 12)] },
+    { cells: ["Statutory Bonus", formatInr(salary.statutoryBonus * 12)] },
+    { cells: ["Employee Compensation", formatInr(salary.employeeCompensation * 12)] },
+    { cells: ["Total Amount", formatInr(annualCtc)], bold: true },
+    { cells: ["Amount in Words", numberToIndianWords(annualCtc)], bold: true },
+  ];
+  const annualTable = drawTable(96, 664, [214, 190], annualRows);
+  page3 += annualTable.commands;
+
+  const monthlyRows = [
+    { cells: ["Particulars", "Monthly Amount (INR)"], bold: true, fill: "1 0.965 0.975" },
+    { cells: ["Basic", formatInr(salary.basic)] },
+    { cells: ["House Rent Allowance", formatInr(salary.hra)] },
+    { cells: ["Special Allowance", formatInr(salary.specialAllowance)] },
+    { cells: ["Employer PF Contribution", formatInr(salary.employerPf)] },
+    { cells: ["Insurance", formatInr(salary.insurance)] },
+    { cells: ["PF Service Charges", formatInr(salary.pfService)] },
+    { cells: ["Statutory Bonus", formatInr(salary.statutoryBonus)] },
+    { cells: ["Employee Compensation", formatInr(salary.employeeCompensation)] },
+    { cells: ["Total Amount", formatInr(monthlyCtc)], bold: true },
+    { cells: ["Amount in Words", numberToIndianWords(monthlyCtc)], bold: true },
+  ];
+  const monthlyTable = drawTable(96, annualTable.bottomY - 12, [214, 190], monthlyRows);
+  page3 += monthlyTable.commands;
+
+  page3 += centeredText("Net Pay Annexure", monthlyTable.bottomY - 28, 10.5, true, "0.035 0.035 0.047");
+  const netRows = [
+    { cells: ["EARNINGS", "Amount (INR)"], bold: true, fill: "1 0.965 0.975" },
+    { cells: ["Basic", formatInr(salary.basic)] },
+    { cells: ["House Rent Allowance", formatInr(salary.hra)] },
+    { cells: ["Special Allowance", formatInr(salary.specialAllowance)] },
+    { cells: ["Statutory Bonus", formatInr(salary.statutoryBonus)] },
+    { cells: ["Gross Earnings", formatInr(salary.grossEarnings)], bold: true },
+    { cells: ["DEDUCTIONS", "Amount (INR)"], bold: true, fill: "1 0.965 0.975" },
+    { cells: ["Employee PF", formatInr(salary.employeePf)] },
+    { cells: ["Total Deduction", formatInr(salary.totalDeduction)], bold: true },
+    { cells: ["Net Salary", formatInr(salary.netSalary)], bold: true },
+  ];
+  const netTable = drawTable(130, monthlyTable.bottomY - 42, [200, 135], netRows, 16);
+  page3 += netTable.commands;
+
+  let noteY = netTable.bottomY - 18;
+  for (const line of wrap(
+    "Note: This salary annexure is an illustrative payroll template generated from the entered salary/CTC. Statutory contributions, tax deductions, insurance, bonus eligibility and final net pay are subject to applicable law and approved company payroll policy.",
+    102,
+  )) {
+    page3 += textCommand(line, 62, noteY, 7.4, false, "0.40 0.39 0.44");
+    noteY -= 10;
+  }
+  page3 += footerCommands();
+  pages.push(page3);
 
   const objects: string[] = [];
   objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
-  const pageIds = pages.map((_, index) => 5 + index * 2);
-  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`;
   objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
   objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
 
-  pages.forEach((content, index) => {
-    const pageId = 5 + index * 2;
+  let firstPageObject = 5;
+  if (brandImage) {
+    const imageStream = brandImage.hex + ">\n";
+    const imageLength = new TextEncoder().encode(imageStream).length;
+    objects[5] =
+      "<< /Type /XObject /Subtype /Image /Width " + brandImage.width +
+      " /Height " + brandImage.height +
+      " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length " +
+      imageLength + " >>\nstream\n" + imageStream + "endstream";
+    firstPageObject = 6;
+  }
+
+  const pageIds = pages.map((_, index) => firstPageObject + index * 2);
+  objects[2] =
+    "<< /Type /Pages /Kids [" + pageIds.map((id) => id + " 0 R").join(" ") +
+    "] /Count " + pages.length + " >>";
+
+  pages.forEach((pageContent, index) => {
+    const pageId = pageIds[index];
     const contentId = pageId + 1;
-    const contentLength = new TextEncoder().encode(content).length;
+    const xObjects = brandImage ? " /XObject << /Im1 5 0 R >>" : "";
     objects[pageId] =
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`;
-    objects[contentId] = `<< /Length ${contentLength} >>\nstream\n${content}endstream`;
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>" +
+      xObjects + " >> /Contents " + contentId + " 0 R >>";
+    const contentLength = new TextEncoder().encode(pageContent).length;
+    objects[contentId] =
+      "<< /Length " + contentLength + " >>\nstream\n" + pageContent + "endstream";
   });
 
   const encoder = new TextEncoder();
@@ -344,16 +664,17 @@ export function buildOfferLetterPdf(data: OfferLetterData): Uint8Array {
 
   for (let id = 1; id < objects.length; id += 1) {
     offsets[id] = encoder.encode(pdf).length;
-    pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+    pdf += id + " 0 obj\n" + objects[id] + "\nendobj\n";
   }
 
   const xrefOffset = encoder.encode(pdf).length;
-  pdf += `xref\n0 ${objects.length}\n`;
+  pdf += "xref\n0 " + objects.length + "\n";
   pdf += "0000000000 65535 f \n";
   for (let id = 1; id < objects.length; id += 1) {
-    pdf += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
+    pdf += String(offsets[id]).padStart(10, "0") + " 00000 n \n";
   }
-  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  pdf += "trailer\n<< /Size " + objects.length + " /Root 1 0 R >>\nstartxref\n" +
+    xrefOffset + "\n%%EOF\n";
 
   return encoder.encode(pdf);
 }
