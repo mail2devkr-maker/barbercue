@@ -694,6 +694,8 @@ function salaryBreakdown(monthlyCtc: number) {
     round(monthlyCtc) - basic - hra - employerPf - insurance - pfService - statutoryBonus - employeeCompensation,
   );
   const grossEarnings = basic + hra + specialAllowance + statutoryBonus;
+  const expectedPerformanceIncentive = Math.max(0, 20000 - round(monthlyCtc));
+  const expectedMonthlyPackage = round(monthlyCtc) + expectedPerformanceIncentive;
   const employeePf = 0;
   return {
     basic,
@@ -705,6 +707,8 @@ function salaryBreakdown(monthlyCtc: number) {
     employeeCompensation,
     specialAllowance,
     grossEarnings,
+    expectedPerformanceIncentive,
+    expectedMonthlyPackage,
     employeePf,
     totalDeduction: employeePf,
     netSalary: Math.max(0, grossEarnings - employeePf),
@@ -954,8 +958,9 @@ export function buildOfferLetterPdf(
     { cells: ["PF Service Charges", formatInr(salary.pfService * 12)] },
     { cells: ["Statutory Bonus", formatInr(salary.statutoryBonus * 12)] },
     { cells: ["Employee Compensation", formatInr(salary.employeeCompensation * 12)] },
-    { cells: ["Total Amount", formatInr(annualCtc)], bold: true },
-    { cells: ["Amount in Words", numberToIndianWords(annualCtc)], bold: true },
+    { cells: ["Expected Performance Incentive", formatInr(salary.expectedPerformanceIncentive * 12)] },
+    { cells: ["Total Expected Package", formatInr(salary.expectedMonthlyPackage * 12)], bold: true },
+    { cells: ["Expected Package in Words", numberToIndianWords(salary.expectedMonthlyPackage * 12)], bold: true },
   ];
   const annualTable = drawTable(96, 664, [214, 190], annualRows, 14);
   page3 += annualTable.commands;
@@ -970,8 +975,9 @@ export function buildOfferLetterPdf(
     { cells: ["PF Service Charges", formatInr(salary.pfService)] },
     { cells: ["Statutory Bonus", formatInr(salary.statutoryBonus)] },
     { cells: ["Employee Compensation", formatInr(salary.employeeCompensation)] },
-    { cells: ["Total Amount", formatInr(monthlyCtc)], bold: true },
-    { cells: ["Amount in Words", numberToIndianWords(monthlyCtc)], bold: true },
+    { cells: ["Expected Performance Incentive", formatInr(salary.expectedPerformanceIncentive)] },
+    { cells: ["Total Expected Package", formatInr(salary.expectedMonthlyPackage)], bold: true },
+    { cells: ["Expected Package in Words", numberToIndianWords(salary.expectedMonthlyPackage)], bold: true },
   ];
   const monthlyTable = drawTable(96, annualTable.bottomY - 10, [214, 190], monthlyRows, 14);
   page3 += monthlyTable.commands;
@@ -994,7 +1000,7 @@ export function buildOfferLetterPdf(
 
   let noteY = Math.max(104, netTable.bottomY - 16);
   for (const line of wrap(
-    "Note: This salary annexure is an illustrative payroll template generated from the entered salary/CTC. Statutory contributions, tax deductions, insurance, bonus eligibility and final net pay are subject to applicable law and approved company payroll policy.",
+    "Note: Expected Performance Incentive is an illustrative variable amount used to show an expected package of up to approximately INR 20,000 per month. It is not guaranteed salary. Actual incentive is earned only on verified shop onboardings under the applicable performance slab (shops 86-100: INR 60 per shop; 101 onward: INR 100 per additional shop). Statutory treatment and final pay remain subject to applicable law and approved company payroll policy.",
     102,
   )) {
     page3 += textCommand(line, 62, noteY, 7.4, false, "0.72 0.70 0.75");
