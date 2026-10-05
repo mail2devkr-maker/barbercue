@@ -135,7 +135,7 @@ export default function AdminCrmPage() {
       salaryBasis: offerSalaryBasis,
       joiningDate: offerJoiningDate,
     });
-    const blob = new Blob([bytes], { type: "application/pdf" });
+    const pdfBuffer = new ArrayBuffer(bytes.byteLength);\n    new Uint8Array(pdfBuffer).set(bytes);\n    const blob = new Blob([pdfBuffer], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
