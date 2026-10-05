@@ -5,6 +5,7 @@ export type ResumeHints = {
   email: string;
   phone: string;
   role: string;
+  address: string;
 };
 
 export type PdfBrandImage = {
@@ -49,29 +50,107 @@ export function guessCandidateName(filename: string): string {
 
   if (!cleaned || /\d{4,}/.test(cleaned)) return "";
   const words = cleaned.split(" ").filter(Boolean);
-  if (words.length < 2 || words.length > 6) return "";
+  if (words.length < 1 || words.length > 6) return "";
+  if (!words.every((word) => /^[A-Za-z][A-Za-z.'-]*$/.test(word))) return "";
   return titleCase(cleaned);
 }
 
-function candidateNameFromText(text: string): string {
-  const skip = /^(resume|curriculum vitae|cv|profile|summary|objective|contact|experience|education|skills|professional summary)$/i;
-  const lines = text
+function normalizedResumeLines(text: string): string[] {
+  return text
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .slice(0, 30);
+    .filter(Boolean);
+}
+
+function looksLikePersonName(value: string): boolean {
+  const cleaned = value.trim().replace(/\s+/g, " ");
+  if (!cleaned || cleaned.length > 60 || /[@\d]/.test(cleaned)) return false;
+  const words = cleaned.split(" ").filter(Boolean);
+  if (words.length < 1 || words.length > 6) return false;
+  return words.every((word) => /^[A-Za-z][A-Za-z.'-]*$/.test(word));
+}
+
+function candidateNameFromText(text: string): string {
+  const lines = normalizedResumeLines(text).slice(0, 80);
+  const heading =
+    /^(resume|curriculum vitae|cv|profile|summary|objective|career objective|professional summary|personal profile|personal details|contact|contact details|experience|work experience|employment history|education|educational qualification|academic qualification|qualification|qualifications|skills|technical skills|key skills|projects?|certifications?|achievements?|declaration|languages?|interests?|hobbies|references?|address|present address|current address|permanent address|year of passing|year|board|university|college|school|percentage|marks|degree|course)$/i;
 
   for (const line of lines) {
-    if (skip.test(line) || line.includes("@") || /\d{6,}/.test(line) || line.length > 70) continue;
-    const words = line.split(" ");
-    if (
-      words.length >= 2 &&
-      words.length <= 6 &&
-      words.every((word) => /^[A-Za-z][A-Za-z.'-]*$/.test(word))
-    ) {
-      return line;
+    const explicit = line.match(
+      /^(?:candidate\s+name|applicant\s+name|full\s+name|name)\s*[:\-]\s*(.+)$/i,
+    );
+    if (explicit?.[1] && looksLikePersonName(explicit[1])) {
+      return explicit[1].trim();
     }
   }
+
+  for (const line of lines.slice(0, 25)) {
+    const cleaned = line.replace(/^[•\-–—]+\s*/, "").trim();
+    if (
+      heading.test(cleaned) ||
+      cleaned.includes("@") ||
+      /\b(?:phone|mobile|email|address|dob|date of birth|gender|nationality)\b/i.test(cleaned) ||
+      /\d{4,}/.test(cleaned) ||
+      cleaned.includes(":")
+    ) {
+      continue;
+    }
+    if (looksLikePersonName(cleaned)) return cleaned;
+  }
+
+  return "";
+}
+
+function addressFromText(text: string): string {
+  const lines = normalizedResumeLines(text).slice(0, 160);
+  const sectionStop =
+    /^(?:email|e-mail|phone|mobile|contact|dob|date of birth|gender|nationality|marital status|education|qualification|qualifications|experience|work experience|skills|technical skills|projects?|declaration|languages?|references?)\s*[:\-]?/i;
+  const headingOnly =
+    /^(?:education|qualification|qualifications|experience|work experience|skills|technical skills|projects?|declaration|languages?|references?|year of passing)$/i;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(
+      /^(?:(?:present|current|permanent|residential|postal|correspondence|communication)\s+)?address\s*[:\-]?\s*(.*)$/i,
+    );
+    if (!match) continue;
+
+    const parts: string[] = [];
+    if (match[1]?.trim()) parts.push(match[1].trim());
+
+    for (let next = index + 1; next < Math.min(lines.length, index + 5); next += 1) {
+      const candidate = lines[next].trim();
+      if (
+        !candidate ||
+        sectionStop.test(candidate) ||
+        headingOnly.test(candidate) ||
+        /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(candidate) ||
+        /(?<!\d)(?:\+?91[\s-]?)?[6-9](?:[\s-]?\d){9}(?!\d)/.test(candidate)
+      ) {
+        break;
+      }
+      parts.push(candidate);
+      if (/\b[1-9]\d{5}\b/.test(candidate)) break;
+    }
+
+    const joined = parts.join(", ").replace(/\s+,/g, ",").trim();
+    if (joined.length >= 5) return joined.slice(0, 240);
+  }
+
+  const pinIndex = lines.findIndex((line) => /\b[1-9]\d{5}\b/.test(line));
+  if (pinIndex >= 0) {
+    const fallback = lines
+      .slice(Math.max(0, pinIndex - 2), pinIndex + 1)
+      .filter(
+        (line) =>
+          !sectionStop.test(line) &&
+          !headingOnly.test(line) &&
+          !/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(line),
+      )
+      .join(", ")
+      .trim();
+    if (fallback.length >= 8) return fallback.slice(0, 240);
+  }
+
   return "";
 }
 
@@ -363,6 +442,7 @@ export async function extractResumeHints(file: File): Promise<ResumeHints> {
     email,
     phone,
     role: roleFromText(reliableText || searchable),
+    address: addressFromText(reliableText || searchable),
   };
 }
 
@@ -453,7 +533,7 @@ function textCommand(
   y: number,
   size = 10.5,
   bold = false,
-  rgb = "0.12 0.12 0.15",
+  rgb = "0.97 0.96 0.96",
 ): string {
   return `BT /${bold ? "F2" : "F1"} ${size} Tf ${rgb} rg 1 0 0 1 ${x} ${y} Tm (${pdfEscape(text)}) Tj ET\n`;
 }
@@ -463,7 +543,7 @@ function centeredText(
   y: number,
   size = 10,
   bold = false,
-  rgb = "0.12 0.12 0.15",
+  rgb = "0.97 0.96 0.96",
 ): string {
   const width = ascii(text).length * size * 0.51;
   return textCommand(text, Math.max(48, (595 - width) / 2), y, size, bold, rgb);
@@ -513,7 +593,8 @@ function gradientBand(x: number, y: number, width: number, height: number): stri
 
 function headerCommands(brandImage?: PdfBrandImage | null): string {
   let output = "";
-  output += fillRect(32, 742, 531, 72, rgb255(9, 9, 12));
+  output += fillRect(0, 0, 595, 842, rgb255(9, 9, 12));
+  output += fillRect(32, 742, 531, 72, rgb255(13, 13, 18));
   if (brandImage) {
     const displayWidth = 146;
     const displayHeight = Math.min(48, displayWidth * brandImage.height / brandImage.width);
@@ -531,8 +612,7 @@ function footerCommands(): string {
   let output = "";
   output += gradientBand(32, 62, 531, 6);
   output += fillRect(32, 20, 531, 42, rgb255(13, 13, 18));
-  output += centeredText("FastQue | Devdutta Cloud World (DCW)", 45, 9.2, true, "0.97 0.96 0.96");
-  output += centeredText("fastque.com | GOOD LOOKS, LESS WAITING", 31, 7.6, false, "0.74 0.72 0.76");
+  output += centeredText("support@fastque.com  |  fastque.com", 37, 8.6, true, "0.93 0.92 0.94");
   return output;
 }
 
@@ -578,10 +658,10 @@ function salaryBreakdown(monthlyCtc: number) {
   const basic = round(monthlyCtc * 0.40);
   const hra = round(monthlyCtc * 0.16);
   const employerPf = 0;
-  const insurance = round(monthlyCtc * 0.0056);
+  const insurance = 0;
   const pfService = 0;
   const statutoryBonus = round(monthlyCtc * 0.0333);
-  const employeeCompensation = round(monthlyCtc * 0.0014);
+  const employeeCompensation = 0;
   const specialAllowance = Math.max(
     0,
     round(monthlyCtc) - basic - hra - employerPf - insurance - pfService - statutoryBonus - employeeCompensation,
@@ -697,8 +777,8 @@ export function buildOfferLetterPdf(
   page1.commands += textCommand(employeeCode, 112, page1.y, 9);
   page1.y -= 23;
 
-  page1.commands += centeredText("Offer Letter", page1.y, 12, true, "0.035 0.035 0.047");
-  page1.commands += strokeLine(257, page1.y - 2, 338, page1.y - 2, "0.035 0.035 0.047", 0.7);
+  page1.commands += centeredText("Offer Letter", page1.y, 12, true, "0.97 0.96 0.96");
+  page1.commands += strokeLine(257, page1.y - 2, 338, page1.y - 2, "0.97 0.96 0.96", 0.7);
   page1.y -= 25;
 
   addWrapped(page1, "Dear " + candidateName + ",", 9.2, 13, 103, false, 6);
@@ -779,8 +859,8 @@ export function buildOfferLetterPdf(
     8.9, 12, 105, false, 12,
   );
 
-  page2.commands += textCommand("ENDORSEMENT", 48, page2.y, 9.5, true, "0.035 0.035 0.047");
-  page2.commands += strokeLine(48, page2.y - 2, 112, page2.y - 2, "0.035 0.035 0.047", 0.6);
+  page2.commands += textCommand("ENDORSEMENT", 48, page2.y, 9.5, true, "0.97 0.96 0.96");
+  page2.commands += strokeLine(48, page2.y - 2, 112, page2.y - 2, "0.97 0.96 0.96", 0.6);
   page2.y -= 18;
   addWrapped(
     page2,
@@ -794,21 +874,21 @@ export function buildOfferLetterPdf(
   page2.commands += strokeLine(48, page2.y, 220, page2.y, "0.12 0.12 0.15", 0.6);
   page2.commands += strokeLine(383, page2.y, 547, page2.y, "0.12 0.12 0.15", 0.6);
   page2.y -= 14;
-  page2.commands += textCommand("(Authorized Signatory)", 48, page2.y, 8, false, "0.40 0.39 0.44");
-  page2.commands += textCommand("Signature and date", 383, page2.y, 8, false, "0.40 0.39 0.44");
+  page2.commands += textCommand("(Authorized Signatory)", 48, page2.y, 8, false, "0.72 0.70 0.75");
+  page2.commands += textCommand("Signature and date", 383, page2.y, 8, false, "0.72 0.70 0.75");
   page2.y -= 14;
-  page2.commands += textCommand("Name: " + candidateName, 383, page2.y, 8, false, "0.40 0.39 0.44");
+  page2.commands += textCommand("Name: " + candidateName, 383, page2.y, 8, false, "0.72 0.70 0.75");
   page2.commands += footerCommands();
   pages.push(page2.commands);
 
   let page3 = headerCommands(brandImage);
-  page3 += centeredText("Salary Annexure", 710, 11.5, true, "0.035 0.035 0.047");
-  page3 += strokeLine(247, 707, 348, 707, "0.035 0.035 0.047", 0.7);
+  page3 += centeredText("Salary Annexure", 710, 11.5, true, "0.97 0.96 0.96");
+  page3 += strokeLine(247, 707, 348, 707, "0.97 0.96 0.96", 0.7);
   page3 += textCommand("Employee No: " + employeeCode, 96, 685, 9);
   page3 += textCommand("Name: " + candidateName, 300, 685, 9);
 
   const annualRows = [
-    { cells: ["Particulars", "Annual Amount (INR)"], bold: true, fill: "1 0.965 0.975" },
+    { cells: ["Particulars", "Annual Amount (INR)"], bold: true, fill: "0.09 0.075 0.08" },
     { cells: ["Basic", formatInr(salary.basic * 12)] },
     { cells: ["House Rent Allowance", formatInr(salary.hra * 12)] },
     { cells: ["Special Allowance", formatInr(salary.specialAllowance * 12)] },
@@ -824,7 +904,7 @@ export function buildOfferLetterPdf(
   page3 += annualTable.commands;
 
   const monthlyRows = [
-    { cells: ["Particulars", "Monthly Amount (INR)"], bold: true, fill: "1 0.965 0.975" },
+    { cells: ["Particulars", "Monthly Amount (INR)"], bold: true, fill: "0.09 0.075 0.08" },
     { cells: ["Basic", formatInr(salary.basic)] },
     { cells: ["House Rent Allowance", formatInr(salary.hra)] },
     { cells: ["Special Allowance", formatInr(salary.specialAllowance)] },
@@ -839,15 +919,15 @@ export function buildOfferLetterPdf(
   const monthlyTable = drawTable(96, annualTable.bottomY - 10, [214, 190], monthlyRows, 14);
   page3 += monthlyTable.commands;
 
-  page3 += centeredText("Net Pay Annexure", monthlyTable.bottomY - 28, 10.5, true, "0.035 0.035 0.047");
+  page3 += centeredText("Net Pay Annexure", monthlyTable.bottomY - 28, 10.5, true, "0.97 0.96 0.96");
   const netRows = [
-    { cells: ["EARNINGS", "Amount (INR)"], bold: true, fill: "1 0.965 0.975" },
+    { cells: ["EARNINGS", "Amount (INR)"], bold: true, fill: "0.09 0.075 0.08" },
     { cells: ["Basic", formatInr(salary.basic)] },
     { cells: ["House Rent Allowance", formatInr(salary.hra)] },
     { cells: ["Special Allowance", formatInr(salary.specialAllowance)] },
     { cells: ["Statutory Bonus", formatInr(salary.statutoryBonus)] },
     { cells: ["Gross Earnings", formatInr(salary.grossEarnings)], bold: true },
-    { cells: ["DEDUCTIONS", "Amount (INR)"], bold: true, fill: "1 0.965 0.975" },
+    { cells: ["DEDUCTIONS", "Amount (INR)"], bold: true, fill: "0.09 0.075 0.08" },
     { cells: ["Employee PF", formatInr(salary.employeePf)] },
     { cells: ["Total Deduction", formatInr(salary.totalDeduction)], bold: true },
     { cells: ["Net Salary", formatInr(salary.netSalary)], bold: true },
@@ -860,7 +940,7 @@ export function buildOfferLetterPdf(
     "Note: This salary annexure is an illustrative payroll template generated from the entered salary/CTC. Statutory contributions, tax deductions, insurance, bonus eligibility and final net pay are subject to applicable law and approved company payroll policy.",
     102,
   )) {
-    page3 += textCommand(line, 62, noteY, 7.4, false, "0.40 0.39 0.44");
+    page3 += textCommand(line, 62, noteY, 7.4, false, "0.72 0.70 0.75");
     noteY -= 10;
   }
   page3 += footerCommands();
