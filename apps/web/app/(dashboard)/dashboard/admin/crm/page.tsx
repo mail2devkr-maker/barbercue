@@ -13,7 +13,7 @@ import {
 import { ApiError, apiFetch } from "../../../../../lib/api";
 import { LinkButton } from "../../../../../components/ui/Button";
 import styles from "../admin.module.css";
-import { buildOfferLetterPdf, extractResumeHints, type SalaryBasis } from "./offer-letter";
+import { buildOfferLetterPdf, extractResumeHints, loadFastQueLogoForPdf, type SalaryBasis } from "./offer-letter";
 
 function pretty(value: string): string {
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -45,6 +45,8 @@ export default function AdminCrmPage() {
   const [offerResume, setOfferResume] = useState<File | null>(null);
   const [offerName, setOfferName] = useState("");
   const [offerRole, setOfferRole] = useState("");
+  const [offerEmployeeCode, setOfferEmployeeCode] = useState("");
+  const [offerAddress, setOfferAddress] = useState("");
   const [offerEmail, setOfferEmail] = useState("");
   const [offerPhone, setOfferPhone] = useState("");
   const [offerSalary, setOfferSalary] = useState("");
@@ -109,7 +111,7 @@ export default function AdminCrmPage() {
     }
   };
 
-  const generateOfferLetter = (event: FormEvent<HTMLFormElement>) => {
+  const generateOfferLetter = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setOfferStatus(null);
     if (!offerResume) {
@@ -126,27 +128,37 @@ export default function AdminCrmPage() {
       return;
     }
 
-    const bytes = buildOfferLetterPdf({
-      candidateName: offerName.trim(),
-      email: offerEmail.trim(),
-      phone: offerPhone.trim(),
-      role: offerRole.trim() || "Employee",
-      baseSalary: salary,
-      salaryBasis: offerSalaryBasis,
-      joiningDate: offerJoiningDate,
-    });
-    const pdfBuffer = new ArrayBuffer(bytes.byteLength);
-    new Uint8Array(pdfBuffer).set(bytes);
-    const blob = new Blob([pdfBuffer], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `FastQue-Offer-Letter-${offerName.trim().replace(/[^A-Za-z0-9]+/g, "-") || "Candidate"}.pdf`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
-    setOfferStatus("Offer letter PDF generated. Check your Downloads folder.");
+    setOfferWorking(true);
+    try {
+      const brandImage = await loadFastQueLogoForPdf();
+      const bytes = buildOfferLetterPdf({
+        candidateName: offerName.trim(),
+        email: offerEmail.trim(),
+        phone: offerPhone.trim(),
+        role: offerRole.trim() || "Employee",
+        employeeCode: offerEmployeeCode.trim(),
+        address: offerAddress.trim(),
+        baseSalary: salary,
+        salaryBasis: offerSalaryBasis,
+        joiningDate: offerJoiningDate,
+      }, brandImage);
+      const pdfBuffer = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(pdfBuffer).set(bytes);
+      const blob = new Blob([pdfBuffer], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `FastQue-Offer-Letter-${offerName.trim().replace(/[^A-Za-z0-9]+/g, "-") || "Candidate"}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setOfferStatus("Branded 3-page offer letter PDF generated. Check your Downloads folder.");
+    } catch {
+      setOfferStatus("Could not generate the offer letter PDF. Please verify the details and try again.");
+    } finally {
+      setOfferWorking(false);
+    }
   };
 
   useEffect(() => {
@@ -228,13 +240,15 @@ export default function AdminCrmPage() {
             <label><span>Salary basis</span><select value={offerSalaryBasis} onChange={(e) => setOfferSalaryBasis(e.target.value as SalaryBasis)}><option value="monthly">Per month</option><option value="annual">Per annum</option></select></label>
             <label><span>Candidate name</span><input value={offerName} onChange={(e) => setOfferName(e.target.value)} placeholder="Auto-filled when possible" required /></label>
             <label><span>Offered role</span><input value={offerRole} onChange={(e) => setOfferRole(e.target.value)} placeholder="Employee" /></label>
+            <label><span>Employee number <small>(optional)</small></span><input value={offerEmployeeCode} onChange={(e) => setOfferEmployeeCode(e.target.value)} placeholder="Generated later if blank" /></label>
+            <label><span>Address <small>(optional)</small></span><input value={offerAddress} onChange={(e) => setOfferAddress(e.target.value)} placeholder="Candidate postal address" /></label>
             <label><span>Email <small>(optional)</small></span><input type="email" value={offerEmail} onChange={(e) => setOfferEmail(e.target.value)} /></label>
             <label><span>Phone <small>(optional)</small></span><input value={offerPhone} onChange={(e) => setOfferPhone(e.target.value)} /></label>
             <label><span>Proposed joining date <small>(optional)</small></span><input type="date" value={offerJoiningDate} onChange={(e) => setOfferJoiningDate(e.target.value)} /></label>
           </div>
           <div className={styles.offerLetterActions}>
             <button className={styles.offerLetterButton} type="submit" disabled={offerWorking}>{offerWorking ? "Reading resume…" : "Generate offer letter PDF"}</button>
-            <p className={styles.offerPrivacy}>Resume processing and PDF generation happen in your browser. The resume is not uploaded or stored.</p>
+            <p className={styles.offerPrivacy}>Resume processing and PDF generation happen in your browser. The PDF uses the original FastQue logo, landing-page gradient, detailed employment terms, acceptance section and salary annexure. The resume is not uploaded or stored.</p>
           </div>
           {offerStatus && <p className={styles.offerStatus} role="status">{offerStatus}</p>}
         </form>
