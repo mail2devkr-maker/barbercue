@@ -44,7 +44,7 @@ export default function AdminCrmPage() {
   const [loading, setLoading] = useState(true);
   const [offerResume, setOfferResume] = useState<File | null>(null);
   const [offerName, setOfferName] = useState("");
-  const [offerRole, setOfferRole] = useState("");
+  const [offerRole, setOfferRole] = useState("Field Sales Executive");
   const [offerEmployeeCode, setOfferEmployeeCode] = useState("");
   const [offerAddress, setOfferAddress] = useState("");
   const [offerEmail, setOfferEmail] = useState("");
@@ -100,9 +100,9 @@ export default function AdminCrmPage() {
     try {
       const hints = await extractResumeHints(file);
       if (hints.candidateName) setOfferName(hints.candidateName);
-      if (hints.role) setOfferRole(hints.role);
       if (hints.email) setOfferEmail(hints.email);
       if (hints.phone) setOfferPhone(hints.phone);
+      if (hints.address) setOfferAddress(hints.address);
       setOfferStatus("Resume read locally. Verify the candidate details below.");
     } catch {
       setOfferStatus("Resume selected. Enter or verify the candidate details below.");
@@ -135,7 +135,7 @@ export default function AdminCrmPage() {
         candidateName: offerName.trim(),
         email: offerEmail.trim(),
         phone: offerPhone.trim(),
-        role: offerRole.trim() || "Employee",
+        role: offerRole.trim() || "Field Sales Executive",
         employeeCode: offerEmployeeCode.trim(),
         address: offerAddress.trim(),
         baseSalary: salary,
@@ -239,7 +239,7 @@ export default function AdminCrmPage() {
             <label><span>Base salary (INR)</span><input value={offerSalary} onChange={(e) => setOfferSalary(e.target.value)} inputMode="decimal" placeholder="50000" required /></label>
             <label><span>Salary basis</span><select value={offerSalaryBasis} onChange={(e) => setOfferSalaryBasis(e.target.value as SalaryBasis)}><option value="monthly">Per month</option><option value="annual">Per annum</option></select></label>
             <label><span>Candidate name</span><input value={offerName} onChange={(e) => setOfferName(e.target.value)} placeholder="Auto-filled when possible" required /></label>
-            <label><span>Offered role</span><input value={offerRole} onChange={(e) => setOfferRole(e.target.value)} placeholder="Employee" /></label>
+            <label><span>Offered role</span><input value={offerRole} onChange={(e) => setOfferRole(e.target.value)} placeholder="Field Sales Executive" /></label>
             <label><span>Employee number <small>(optional)</small></span><input value={offerEmployeeCode} onChange={(e) => setOfferEmployeeCode(e.target.value)} placeholder="Generated later if blank" /></label>
             <label><span>Address <small>(optional)</small></span><input value={offerAddress} onChange={(e) => setOfferAddress(e.target.value)} placeholder="Candidate postal address" /></label>
             <label><span>Email <small>(optional)</small></span><input type="email" value={offerEmail} onChange={(e) => setOfferEmail(e.target.value)} /></label>
