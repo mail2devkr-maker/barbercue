@@ -501,7 +501,7 @@ function companySignatureCommands(x: number, y: number, width: number): string {
   const sourceWidth = 500;
   const sourceHeight = 212;
   const scale = width / sourceWidth;
-  let output = "0.97 0.96 0.96 rg\n";
+  let output = "0.16 0.14 0.16 rg\n";
 
   for (const contour of COMPANY_SIGNATURE_CONTOURS) {
     if (contour.length < 3) continue;
@@ -560,7 +560,7 @@ function textCommand(
   y: number,
   size = 10.5,
   bold = false,
-  rgb = "0.97 0.96 0.96",
+  rgb = "0.10 0.09 0.09",
 ): string {
   return `BT /${bold ? "F2" : "F1"} ${size} Tf ${rgb} rg 1 0 0 1 ${x} ${y} Tm (${pdfEscape(text)}) Tj ET\n`;
 }
@@ -570,7 +570,7 @@ function centeredText(
   y: number,
   size = 10,
   bold = false,
-  rgb = "0.97 0.96 0.96",
+  rgb = "0.10 0.09 0.09",
 ): string {
   const width = ascii(text).length * size * 0.51;
   return textCommand(text, Math.max(48, (595 - width) / 2), y, size, bold, rgb);
@@ -620,26 +620,27 @@ function gradientBand(x: number, y: number, width: number, height: number): stri
 
 function headerCommands(brandImage?: PdfBrandImage | null): string {
   let output = "";
-  output += fillRect(0, 0, 595, 842, rgb255(9, 9, 12));
-  output += fillRect(32, 742, 531, 72, rgb255(13, 13, 18));
+  // Reference design: clean white paper with a compact black brand masthead.
+  output += fillRect(18, 742, 559, 76, rgb255(13, 13, 18));
   if (brandImage) {
-    const displayWidth = 136;
-    const displayHeight = Math.min(48, displayWidth * brandImage.height / brandImage.width);
-    output += "q " + displayWidth + " 0 0 " + displayHeight + " 48 " + (790 - displayHeight) + " cm /Im1 Do Q\n";
+    const displayWidth = 128;
+    const displayHeight = Math.min(42, displayWidth * brandImage.height / brandImage.width);
+    output += "q " + displayWidth + " 0 0 " + displayHeight + " 36 " + (793 - displayHeight) + " cm /Im1 Do Q\n";
   } else {
-    output += textCommand("FastQue", 48, 780, 23, true, rgb255(255, 62, 87));
-    output += textCommand("GOOD LOOKS | LESS WAITING", 48, 762, 7.8, true, "0.88 0.88 0.90");
+    output += textCommand("FastQue", 36, 778, 21, true, rgb255(255, 62, 87));
+    output += textCommand("GOOD LOOKS. LESS WAITING.", 36, 760, 7.2, true, "0.94 0.94 0.95");
   }
-  output += textCommand("GOOD LOOKS. LESS WAITING.", 387, 768, 7.2, true, "0.82 0.80 0.83");
-  output += gradientBand(32, 736, 531, 6);
+  output += textCommand("GOOD LOOKS. LESS WAITING.", 396, 773, 6.8, true, "0.96 0.96 0.97");
+  output += gradientBand(18, 736, 559, 6);
   return output;
 }
 
 function footerCommands(): string {
   let output = "";
-  output += gradientBand(32, 62, 531, 6);
-  output += fillRect(32, 20, 531, 42, rgb255(13, 13, 18));
-  output += centeredText("support@fastque.com  |  fastque.com", 37, 8.6, true, "0.93 0.92 0.94");
+  output += gradientBand(18, 52, 559, 5);
+  output += fillRect(18, 18, 559, 34, rgb255(13, 13, 18));
+  output += centeredText("Fastque Digital Technology Private Limited", 36, 7.9, true, "0.97 0.97 0.98");
+  output += centeredText("support@fastque.com  |  fastque.com  |  GOOD LOOKS. LESS WAITING.", 25, 6.3, false, "0.88 0.88 0.90");
   return output;
 }
 
@@ -737,7 +738,14 @@ function drawTable(
       const maxChars = Math.max(10, Math.floor(widths[index] / 4.2));
       const visible = ascii(cell);
       const clipped = visible.length > maxChars ? visible.slice(0, maxChars - 1) + "." : visible;
-      output += textCommand(clipped, cellX + 6, bottom + 5.1, 8, Boolean(row.bold));
+      output += textCommand(
+        clipped,
+        cellX + 6,
+        bottom + 5.1,
+        8,
+        Boolean(row.bold),
+        row.fill ? "0.97 0.97 0.98" : "0.10 0.09 0.09",
+      );
       cellX += widths[index];
     });
 
@@ -811,8 +819,8 @@ export function buildOfferLetterPdf(
   page1.commands += textCommand("3 months (extendable based on performance)", 112, page1.y, 9, true);
   page1.y -= 23;
 
-  page1.commands += centeredText("Offer Letter", page1.y, 12, true, "0.97 0.96 0.96");
-  page1.commands += strokeLine(257, page1.y - 2, 338, page1.y - 2, "0.97 0.96 0.96", 0.7);
+  page1.commands += centeredText("Offer Letter", page1.y, 12, true, "0.10 0.09 0.09");
+  page1.commands += strokeLine(257, page1.y - 2, 338, page1.y - 2, "0.10 0.09 0.09", 0.7);
   page1.y -= 25;
 
   addWrapped(page1, "Dear " + candidateName + ",", 9.2, 13, 103, false, 6);
@@ -853,8 +861,8 @@ export function buildOfferLetterPdf(
 
   const page2 = { commands: headerCommands(brandImage), y: 718 };
 
-  page2.commands += textCommand("PERFORMANCE & INCENTIVE", 48, page2.y, 10, true, "0.97 0.96 0.96");
-  page2.commands += strokeLine(48, page2.y - 2, 181, page2.y - 2, "0.97 0.96 0.96", 0.6);
+  page2.commands += textCommand("PERFORMANCE & INCENTIVE", 48, page2.y, 10, true, "0.10 0.09 0.09");
+  page2.commands += strokeLine(48, page2.y - 2, 181, page2.y - 2, "0.10 0.09 0.09", 0.6);
   page2.y -= 18;
   addWrapped(
     page2,
@@ -918,8 +926,8 @@ export function buildOfferLetterPdf(
     8.9, 12, 105, false, 12,
   );
 
-  page2.commands += textCommand("ENDORSEMENT", 48, page2.y, 9.5, true, "0.97 0.96 0.96");
-  page2.commands += strokeLine(48, page2.y - 2, 112, page2.y - 2, "0.97 0.96 0.96", 0.6);
+  page2.commands += textCommand("ENDORSEMENT", 48, page2.y, 9.5, true, "0.10 0.09 0.09");
+  page2.commands += strokeLine(48, page2.y - 2, 112, page2.y - 2, "0.10 0.09 0.09", 0.6);
   page2.y -= 18;
   addWrapped(
     page2,
@@ -932,19 +940,19 @@ export function buildOfferLetterPdf(
   const signatureBottom = page2.y - 72;
   page2.commands += companySignatureCommands(48, signatureBottom, 150);
   const signatureLineY = signatureBottom - 4;
-  page2.commands += strokeLine(48, signatureLineY, 220, signatureLineY, "0.72 0.70 0.75", 0.6);
-  page2.commands += strokeLine(383, signatureLineY, 547, signatureLineY, "0.72 0.70 0.75", 0.6);
+  page2.commands += strokeLine(48, signatureLineY, 220, signatureLineY, "0.34 0.32 0.34", 0.6);
+  page2.commands += strokeLine(383, signatureLineY, 547, signatureLineY, "0.34 0.32 0.34", 0.6);
   page2.y = signatureLineY - 14;
-  page2.commands += textCommand("(Authorized Signatory)", 48, page2.y, 8, false, "0.72 0.70 0.75");
-  page2.commands += textCommand("Signature and date", 383, page2.y, 8, false, "0.72 0.70 0.75");
+  page2.commands += textCommand("(Authorized Signatory)", 48, page2.y, 8, false, "0.34 0.32 0.34");
+  page2.commands += textCommand("Signature and date", 383, page2.y, 8, false, "0.34 0.32 0.34");
   page2.y -= 14;
-  page2.commands += textCommand("Name: " + candidateName, 383, page2.y, 8, false, "0.72 0.70 0.75");
+  page2.commands += textCommand("Name: " + candidateName, 383, page2.y, 8, false, "0.34 0.32 0.34");
   page2.commands += footerCommands();
   pages.push(page2.commands);
 
   let page3 = headerCommands(brandImage);
-  page3 += centeredText("Salary Annexure", 710, 11.5, true, "0.97 0.96 0.96");
-  page3 += strokeLine(247, 707, 348, 707, "0.97 0.96 0.96", 0.7);
+  page3 += centeredText("Salary Annexure", 710, 11.5, true, "0.10 0.09 0.09");
+  page3 += strokeLine(247, 707, 348, 707, "0.10 0.09 0.09", 0.7);
   page3 += textCommand("Employee No: " + employeeCode, 96, 685, 9);
   page3 += textCommand("Name: " + candidateName, 300, 685, 9);
 
@@ -982,7 +990,7 @@ export function buildOfferLetterPdf(
   const monthlyTable = drawTable(96, annualTable.bottomY - 10, [214, 190], monthlyRows, 14);
   page3 += monthlyTable.commands;
 
-  page3 += centeredText("Net Pay Annexure", monthlyTable.bottomY - 28, 10.5, true, "0.97 0.96 0.96");
+  page3 += centeredText("Net Pay Annexure", monthlyTable.bottomY - 28, 10.5, true, "0.10 0.09 0.09");
   const netRows = [
     { cells: ["EARNINGS", "Amount (INR)"], bold: true, fill: "0.09 0.075 0.08" },
     { cells: ["Basic", formatInr(salary.basic)] },
@@ -1003,7 +1011,7 @@ export function buildOfferLetterPdf(
     "Note: Expected Performance Incentive is an illustrative variable amount used to show an expected package of up to approximately INR 20,000 per month. It is not guaranteed salary. Actual incentive is earned only on verified shop onboardings under the applicable performance slab (shops 86-100: INR 60 per shop; 101 onward: INR 100 per additional shop). Statutory treatment and final pay remain subject to applicable law and approved company payroll policy.",
     102,
   )) {
-    page3 += textCommand(line, 62, noteY, 7.4, false, "0.72 0.70 0.75");
+    page3 += textCommand(line, 62, noteY, 7.4, false, "0.34 0.32 0.34");
     noteY -= 10;
   }
   page3 += footerCommands();
