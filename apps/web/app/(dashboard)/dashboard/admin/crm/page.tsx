@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ADMIN_PATHS,
   CrmFollowUpStatus,
@@ -13,6 +13,7 @@ import {
 import { ApiError, apiFetch } from "../../../../../lib/api";
 import { LinkButton } from "../../../../../components/ui/Button";
 import styles from "../admin.module.css";
+import { buildOfferLetterPdf, extractResumeHints, type SalaryBasis } from "./offer-letter";
 
 function pretty(value: string): string {
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -41,6 +42,16 @@ export default function AdminCrmPage() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [offerResume, setOfferResume] = useState<File | null>(null);
+  const [offerName, setOfferName] = useState("");
+  const [offerRole, setOfferRole] = useState("");
+  const [offerEmail, setOfferEmail] = useState("");
+  const [offerPhone, setOfferPhone] = useState("");
+  const [offerSalary, setOfferSalary] = useState("");
+  const [offerSalaryBasis, setOfferSalaryBasis] = useState<SalaryBasis>("monthly");
+  const [offerJoiningDate, setOfferJoiningDate] = useState("");
+  const [offerStatus, setOfferStatus] = useState<string | null>(null);
+  const [offerWorking, setOfferWorking] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,6 +73,79 @@ export default function AdminCrmPage() {
       setLoading(false);
     }
   }, []);
+
+  const onOfferResumeChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setOfferStatus(null);
+    setOfferResume(file);
+    if (!file) return;
+
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (!["pdf", "docx", "txt"].includes(extension)) {
+      setOfferStatus("Use a PDF, DOCX, or TXT resume.");
+      setOfferResume(null);
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setOfferStatus("Resume must be 8 MB or smaller.");
+      setOfferResume(null);
+      event.target.value = "";
+      return;
+    }
+
+    setOfferWorking(true);
+    try {
+      const hints = await extractResumeHints(file);
+      if (hints.candidateName) setOfferName(hints.candidateName);
+      if (hints.role) setOfferRole(hints.role);
+      if (hints.email) setOfferEmail(hints.email);
+      if (hints.phone) setOfferPhone(hints.phone);
+      setOfferStatus("Resume read locally. Verify the candidate details below.");
+    } catch {
+      setOfferStatus("Resume selected. Enter or verify the candidate details below.");
+    } finally {
+      setOfferWorking(false);
+    }
+  };
+
+  const generateOfferLetter = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setOfferStatus(null);
+    if (!offerResume) {
+      setOfferStatus("Upload the candidate resume first.");
+      return;
+    }
+    const salary = Number(offerSalary.replace(/,/g, ""));
+    if (!Number.isFinite(salary) || salary <= 0) {
+      setOfferStatus("Enter a valid base salary greater than zero.");
+      return;
+    }
+    if (!offerName.trim()) {
+      setOfferStatus("Candidate name is required.");
+      return;
+    }
+
+    const bytes = buildOfferLetterPdf({
+      candidateName: offerName.trim(),
+      email: offerEmail.trim(),
+      phone: offerPhone.trim(),
+      role: offerRole.trim() || "Employee",
+      baseSalary: salary,
+      salaryBasis: offerSalaryBasis,
+      joiningDate: offerJoiningDate,
+    });
+    const blob = new Blob([bytes], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `FastQue-Offer-Letter-${offerName.trim().replace(/[^A-Za-z0-9]+/g, "-") || "Candidate"}.pdf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setOfferStatus("Offer letter PDF generated. Check your Downloads folder.");
+  };
 
   useEffect(() => {
     void load();
@@ -117,10 +201,42 @@ export default function AdminCrmPage() {
           <p>Leads, visits, follow-ups, employee performance and shop onboarding attribution.</p>
         </div>
         <div className={styles.headerActions}>
+          <a className={styles.offerHeaderButton} href="#offer-letter">Offer letter</a>
           <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
           <LinkButton href="/dashboard/admin" variant="outline">Platform operations</LinkButton>
         </div>
       </header>
+
+      <section id="offer-letter" className={`${styles.section} ${styles.offerLetterPanel}`} aria-labelledby="offer-letter-title">
+        <div className={styles.sectionHeader}>
+          <div>
+            <p className={styles.eyebrow}>HR automation</p>
+            <h2 id="offer-letter-title">Offer letter generator</h2>
+          </div>
+          <span>Resume + base salary → PDF</span>
+        </div>
+        <form className={styles.offerLetterForm} onSubmit={generateOfferLetter}>
+          <label className={styles.offerUpload}>
+            <span>Employee / candidate resume</span>
+            <input type="file" accept=".pdf,.docx,.txt" onChange={onOfferResumeChange} required />
+            <small>{offerResume ? `${offerResume.name} · ${(offerResume.size / 1024).toFixed(0)} KB` : "PDF, DOCX or TXT · max 8 MB"}</small>
+          </label>
+          <div className={styles.offerLetterGrid}>
+            <label><span>Base salary (INR)</span><input value={offerSalary} onChange={(e) => setOfferSalary(e.target.value)} inputMode="decimal" placeholder="50000" required /></label>
+            <label><span>Salary basis</span><select value={offerSalaryBasis} onChange={(e) => setOfferSalaryBasis(e.target.value as SalaryBasis)}><option value="monthly">Per month</option><option value="annual">Per annum</option></select></label>
+            <label><span>Candidate name</span><input value={offerName} onChange={(e) => setOfferName(e.target.value)} placeholder="Auto-filled when possible" required /></label>
+            <label><span>Offered role</span><input value={offerRole} onChange={(e) => setOfferRole(e.target.value)} placeholder="Employee" /></label>
+            <label><span>Email <small>(optional)</small></span><input type="email" value={offerEmail} onChange={(e) => setOfferEmail(e.target.value)} /></label>
+            <label><span>Phone <small>(optional)</small></span><input value={offerPhone} onChange={(e) => setOfferPhone(e.target.value)} /></label>
+            <label><span>Proposed joining date <small>(optional)</small></span><input type="date" value={offerJoiningDate} onChange={(e) => setOfferJoiningDate(e.target.value)} /></label>
+          </div>
+          <div className={styles.offerLetterActions}>
+            <button className={styles.offerLetterButton} type="submit" disabled={offerWorking}>{offerWorking ? "Reading resume…" : "Generate offer letter PDF"}</button>
+            <p className={styles.offerPrivacy}>Resume processing and PDF generation happen in your browser. The resume is not uploaded or stored.</p>
+          </div>
+          {offerStatus && <p className={styles.offerStatus} role="status">{offerStatus}</p>}
+        </form>
+      </section>
 
       {error && <p className={styles.error} role="alert">{error}</p>}
       {loading && !overview && <p className={styles.loading}>Loading field CRM…</p>}
