@@ -69,7 +69,7 @@ function candidateNameFromText(text: string): string {
       words.length <= 6 &&
       words.every((word) => /^[A-Za-z][A-Za-z.'-]*$/.test(word))
     ) {
-      return line === line.toUpperCase() ? titleCase(line) : line;
+      return line;
     }
   }
   return "";
@@ -96,27 +96,266 @@ function roleFromText(text: string): string {
   return "";
 }
 
-export async function extractResumeHints(file: File): Promise<ResumeHints> {
-  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-  let searchable = "";
-  let reliableText = "";
+function concreteArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
 
-  if (extension === "txt" || file.type.startsWith("text/")) {
-    reliableText = await file.text();
-    searchable = reliableText;
-  } else {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    if (bytes.byteLength <= 8 * 1024 * 1024) {
-      searchable = new TextDecoder("latin1")
-        .decode(bytes)
-        .replace(/[^\x20-\x7E\r\n]+/g, " ");
+async function decompressBytes(
+  bytes: Uint8Array,
+  format: "deflate" | "deflate-raw",
+): Promise<Uint8Array> {
+  const stream = new Blob([concreteArrayBuffer(bytes)])
+    .stream()
+    .pipeThrough(new DecompressionStream(format));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+async function extractDocxText(bytes: Uint8Array): Promise<string> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const decoder = new TextDecoder("utf-8");
+  const targets = new Set([
+    "word/document.xml",
+    "word/header1.xml",
+    "word/header2.xml",
+    "word/header3.xml",
+    "word/footer1.xml",
+  ]);
+  const parts: string[] = [];
+
+  for (let offset = 0; offset + 46 <= bytes.byteLength; ) {
+    if (view.getUint32(offset, true) !== 0x02014b50) {
+      offset += 1;
+      continue;
+    }
+
+    const method = view.getUint16(offset + 10, true);
+    const compressedSize = view.getUint32(offset + 20, true);
+    const fileNameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const localHeaderOffset = view.getUint32(offset + 42, true);
+    const nameStart = offset + 46;
+    const nameEnd = nameStart + fileNameLength;
+    const filename = decoder.decode(bytes.slice(nameStart, nameEnd));
+
+    if (targets.has(filename) && localHeaderOffset + 30 <= bytes.byteLength) {
+      const localNameLength = view.getUint16(localHeaderOffset + 26, true);
+      const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
+      const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+      const dataEnd = dataStart + compressedSize;
+
+      if (dataEnd <= bytes.byteLength) {
+        let xmlBytes = bytes.slice(dataStart, dataEnd);
+        if (method === 8) {
+          xmlBytes = await decompressBytes(xmlBytes, "deflate-raw");
+        }
+        if (method === 0 || method === 8) {
+          const xml = decoder.decode(xmlBytes)
+            .replace(/<w:tab[^>]*\/>/g, "\t")
+            .replace(/<w:br[^>]*\/>/g, "\n")
+            .replace(/<\/w:p>/g, "\n")
+            .replace(/<[^>]+>/g, "");
+          parts.push(decodeXmlEntities(xml));
+        }
+      }
+    }
+
+    offset = nameEnd + extraLength + commentLength;
+  }
+
+  return parts.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+function decodePdfLiteral(value: string): string {
+  let output = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char !== "\\") {
+      output += char;
+      continue;
+    }
+
+    const next = value[index + 1];
+    if (next === undefined) break;
+    if (next === "n") {
+      output += "\n";
+      index += 1;
+    } else if (next === "r") {
+      output += "\r";
+      index += 1;
+    } else if (next === "t") {
+      output += "\t";
+      index += 1;
+    } else if (next === "b") {
+      output += "\b";
+      index += 1;
+    } else if (next === "f") {
+      output += "\f";
+      index += 1;
+    } else if (next === "\n" || next === "\r") {
+      index += 1;
+      if (next === "\r" && value[index + 1] === "\n") index += 1;
+    } else if (/[0-7]/.test(next)) {
+      let octal = next;
+      let consumed = 1;
+      while (consumed < 3 && /[0-7]/.test(value[index + 1 + consumed] ?? "")) {
+        octal += value[index + 1 + consumed];
+        consumed += 1;
+      }
+      output += String.fromCharCode(parseInt(octal, 8));
+      index += consumed;
+    } else {
+      output += next;
+      index += 1;
     }
   }
+  return output;
+}
+
+function decodePdfHex(value: string): string {
+  const cleaned = value.replace(/\s+/g, "");
+  const padded = cleaned.length % 2 === 0 ? cleaned : cleaned + "0";
+  const bytes = new Uint8Array(padded.length / 2);
+
+  for (let index = 0; index < padded.length; index += 2) {
+    bytes[index / 2] = parseInt(padded.slice(index, index + 2), 16);
+  }
+
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    let output = "";
+    for (let index = 2; index + 1 < bytes.length; index += 2) {
+      output += String.fromCharCode((bytes[index] << 8) | bytes[index + 1]);
+    }
+    return output;
+  }
+
+  return new TextDecoder("latin1").decode(bytes);
+}
+
+function extractPdfTextOperators(streamText: string): string {
+  const lines: string[] = [];
+  const tokenRegex = /(\((?:\\.|[^\\)])*\)|<([0-9A-Fa-f\s]+)>)\s*Tj|\[((?:.|\n|\r)*?)\]\s*TJ/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenRegex.exec(streamText)) !== null) {
+    if (match[1]) {
+      const token = match[1];
+      lines.push(
+        token.startsWith("(")
+          ? decodePdfLiteral(token.slice(1, -1))
+          : decodePdfHex(match[2] ?? ""),
+      );
+      continue;
+    }
+
+    const arrayBody = match[3] ?? "";
+    const fragments: string[] = [];
+    const fragmentRegex = /\((?:\\.|[^\\)])*\)|<([0-9A-Fa-f\s]+)>/g;
+    let fragment: RegExpExecArray | null;
+    while ((fragment = fragmentRegex.exec(arrayBody)) !== null) {
+      const token = fragment[0];
+      fragments.push(
+        token.startsWith("(")
+          ? decodePdfLiteral(token.slice(1, -1))
+          : decodePdfHex(fragment[1] ?? ""),
+      );
+    }
+    if (fragments.length) lines.push(fragments.join(""));
+  }
+
+  return lines.join("\n");
+}
+
+async function extractPdfText(bytes: Uint8Array): Promise<string> {
+  const raw = new TextDecoder("latin1").decode(bytes);
+  const parts: string[] = [extractPdfTextOperators(raw)];
+  let cursor = 0;
+
+  while (cursor < raw.length) {
+    const streamIndex = raw.indexOf("stream", cursor);
+    if (streamIndex < 0) break;
+    const endIndex = raw.indexOf("endstream", streamIndex + 6);
+    if (endIndex < 0) break;
+
+    let dataStart = streamIndex + 6;
+    if (raw[dataStart] === "\r" && raw[dataStart + 1] === "\n") dataStart += 2;
+    else if (raw[dataStart] === "\n" || raw[dataStart] === "\r") dataStart += 1;
+
+    let dataEnd = endIndex;
+    while (dataEnd > dataStart && (raw[dataEnd - 1] === "\n" || raw[dataEnd - 1] === "\r")) {
+      dataEnd -= 1;
+    }
+
+    const dictionaryStart = Math.max(0, raw.lastIndexOf("<<", streamIndex));
+    const dictionary = raw.slice(dictionaryStart, streamIndex);
+    const streamBytes = bytes.slice(dataStart, dataEnd);
+
+    try {
+      let decoded = streamBytes;
+      if (/\/FlateDecode\b/.test(dictionary)) {
+        decoded = await decompressBytes(streamBytes, "deflate");
+      }
+      const decodedText = new TextDecoder("latin1").decode(decoded);
+      const extracted = extractPdfTextOperators(decodedText);
+      if (extracted) parts.push(extracted);
+    } catch {
+      // Some PDF streams use filters or encodings this lightweight extractor cannot decode.
+    }
+
+    cursor = endIndex + 9;
+  }
+
+  return parts.filter(Boolean).join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+async function extractResumeText(file: File): Promise<{ reliableText: string; searchable: string }> {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+  if (extension === "txt" || file.type.startsWith("text/")) {
+    const text = await file.text();
+    return { reliableText: text, searchable: text };
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength > 8 * 1024 * 1024) {
+    return { reliableText: "", searchable: "" };
+  }
+
+  const rawSearchable = new TextDecoder("latin1")
+    .decode(bytes)
+    .replace(/[^\x20-\x7E\r\n]+/g, " ");
+
+  if (extension === "pdf") {
+    const text = await extractPdfText(bytes);
+    return { reliableText: text, searchable: text + "\n" + rawSearchable };
+  }
+
+  if (extension === "docx") {
+    const text = await extractDocxText(bytes);
+    return { reliableText: text, searchable: text + "\n" + rawSearchable };
+  }
+
+  return { reliableText: "", searchable: rawSearchable };
+}
+
+export async function extractResumeHints(file: File): Promise<ResumeHints> {
+  const { reliableText, searchable } = await extractResumeText(file);
 
   const email =
     searchable.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)?.[0] ?? "";
   const phone =
-    searchable.match(/(?<!\d)(?:\+?91[-\s]?)?[6-9]\d{9}(?!\d)/)?.[0] ?? "";
+    searchable.match(/(?<!\d)(?:\+?91[\s-]?)?[6-9](?:[\s-]?\d){9}(?!\d)/)?.[0]?.trim() ?? "";
 
   return {
     candidateName: candidateNameFromText(reliableText) || guessCandidateName(file.name),
@@ -337,9 +576,9 @@ function salaryBreakdown(monthlyCtc: number) {
   const round = (value: number) => Math.round(value);
   const basic = round(monthlyCtc * 0.40);
   const hra = round(monthlyCtc * 0.16);
-  const employerPf = round(monthlyCtc * 0.04);
+  const employerPf = 0;
   const insurance = round(monthlyCtc * 0.0056);
-  const pfService = round(monthlyCtc * 0.0033);
+  const pfService = 0;
   const statutoryBonus = round(monthlyCtc * 0.0333);
   const employeeCompensation = round(monthlyCtc * 0.0014);
   const specialAllowance = Math.max(
@@ -347,7 +586,7 @@ function salaryBreakdown(monthlyCtc: number) {
     round(monthlyCtc) - basic - hra - employerPf - insurance - pfService - statutoryBonus - employeeCompensation,
   );
   const grossEarnings = basic + hra + specialAllowance + statutoryBonus;
-  const employeePf = employerPf;
+  const employeePf = 0;
   return {
     basic,
     hra,
