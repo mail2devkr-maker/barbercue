@@ -848,6 +848,26 @@ export function buildOfferLetterPdf(
   pages.push(page1.commands);
 
   const page2 = { commands: headerCommands(brandImage), y: 718 };
+
+  page2.commands += textCommand("PERFORMANCE & INCENTIVE", 48, page2.y, 10, true, "0.97 0.96 0.96");
+  page2.commands += strokeLine(48, page2.y - 2, 181, page2.y - 2, "0.97 0.96 0.96", 0.6);
+  page2.y -= 18;
+  addWrapped(
+    page2,
+    "Committed salary eligibility requires a minimum of 85 shops to be successfully onboarded during the applicable performance period.",
+    9.1, 12, 105, true, 5,
+  );
+  addWrapped(
+    page2,
+    "Incentive slab: for shops 86 through 100, an incentive of INR 60 per shop will be paid for each shop in that slab.",
+    8.9, 12, 105, false, 4,
+  );
+  addWrapped(
+    page2,
+    "From the 101st shop onward, an incentive of INR 100 per shop will be paid for each additional shop onboarded.",
+    8.9, 12, 105, false, 8,
+  );
+
   addWrapped(
     page2,
     "7. You will comply with applicable attendance, working-hours, information-security, safety, acceptable-use and code-of-conduct requirements communicated by the company.",
