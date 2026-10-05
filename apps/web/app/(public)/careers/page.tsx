@@ -6,7 +6,7 @@ import styles from "../../../components/landing/info-page.module.css";
 
 const TITLE = "Careers — Field Sales & Shop Onboarding";
 const DESCRIPTION =
-  "FastQue is hiring Field Sales and Shop Onboarding Executives. No prior experience required. Target-linked monthly compensation ₹10,000–₹12,000 for 150 verified shop onboardings.";
+  "FastQue is hiring Field Sales and Shop Onboarding Executives. No prior experience required. Committed salary eligibility starts at 85 verified shop onboardings, with incentives above target.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -37,6 +37,7 @@ export default function CareersPage() {
           </p>
           <div className={styles.heroActions}>
             <a href={APPLY_EMAIL} className={styles.primary}>Apply by email</a>
+            <Link href="/hr-policy" className={styles.secondary}>HR Policy</Link>
             <Link href="/about-us" className={styles.secondary}>About FastQue</Link>
           </div>
         </section>
@@ -55,8 +56,9 @@ export default function CareersPage() {
             <p className={styles.eyebrow}>Monthly compensation</p>
             <h2>₹10,000–₹12,000</h2>
             <p>
-              This is target-linked monthly compensation. To qualify for this range, the monthly
-              target is at least 150 verified shop onboardings.
+              This is performance-linked compensation. Under the current offer structure, committed
+              salary eligibility requires at least 85 verified shop onboardings in the applicable
+              performance period, with incentives above that threshold.
             </p>
           </article>
 
@@ -74,7 +76,7 @@ export default function CareersPage() {
           <div className={styles.story}>
             <div>
               <p className={styles.eyebrow}>Your target</p>
-              <h2>150 verified shops in a month.</h2>
+              <h2>85 verified shops for committed salary eligibility.</h2>
             </div>
             <div>
               <p>
@@ -87,8 +89,12 @@ export default function CareersPage() {
                 capture the progress of each shop you approach.
               </p>
               <p>
-                Exact joining terms, assigned area and compensation terms will be confirmed in
-                writing before a candidate starts work.
+                Under the current offer structure, shops 86 through 100 earn INR 60 per shop in
+                that slab, and the 101st verified shop onward earns INR 100 per additional shop.
+              </p>
+              <p>
+                Exact joining terms, assigned area, performance period and compensation terms will
+                be confirmed in writing before a candidate starts work.
               </p>
             </div>
           </div>
