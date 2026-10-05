@@ -621,7 +621,7 @@ function gradientBand(x: number, y: number, width: number, height: number): stri
 function headerCommands(brandImage?: PdfBrandImage | null): string {
   let output = "";
   // Reference design: clean white paper with a compact black brand masthead.
-  output += fillRect(18, 742, 559, 76, rgb255(10, 10, 13));
+  output += fillRect(18, 742, 559, 76, rgb255(13, 13, 18));
   if (brandImage) {
     const displayWidth = 128;
     const displayHeight = Math.min(42, displayWidth * brandImage.height / brandImage.width);
@@ -638,7 +638,7 @@ function headerCommands(brandImage?: PdfBrandImage | null): string {
 function footerCommands(): string {
   let output = "";
   output += gradientBand(18, 52, 559, 5);
-  output += fillRect(18, 18, 559, 34, rgb255(10, 10, 13));
+  output += fillRect(18, 18, 559, 34, rgb255(13, 13, 18));
   output += centeredText("Fastque Digital Technology Private Limited", 36, 7.9, true, "0.97 0.97 0.98");
   output += centeredText("support@fastque.com  |  fastque.com  |  GOOD LOOKS. LESS WAITING.", 25, 6.3, false, "0.88 0.88 0.90");
   return output;
