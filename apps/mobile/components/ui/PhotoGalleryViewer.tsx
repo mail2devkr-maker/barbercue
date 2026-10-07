@@ -1,6 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Dimensions,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -9,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { color, font, fontSize, space } from '../../lib/theme';
 import { useLanguage } from '../../lib/language-context';
@@ -38,8 +38,20 @@ export function PhotoGalleryViewer({
 }) {
   const { t } = useLanguage();
   const [index, setIndex] = useState(initialIndex);
-  const screenWidth = Dimensions.get('window').width;
+  // Reactive width: tablets and unfolded foldables can rotate while the viewer is open.
+  const { width: screenWidth } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
+  const indexRef = useRef(index);
+  indexRef.current = index;
+  const lastWidthRef = useRef(screenWidth);
+
+  // Pages are resized to the new width on rotation, but the scroll offset is not — re-align it so
+  // the current photo stays in view instead of landing between two pages.
+  useEffect(() => {
+    if (lastWidthRef.current === screenWidth) return;
+    lastWidthRef.current = screenWidth;
+    scrollRef.current?.scrollTo({ x: indexRef.current * screenWidth, animated: false });
+  }, [screenWidth]);
 
   const handleShow = useCallback(() => {
     setIndex(initialIndex);

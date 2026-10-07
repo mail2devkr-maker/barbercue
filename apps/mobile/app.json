@@ -60,7 +60,8 @@
           "locationWhenInUsePermission": "FastQue uses your location to show nearby barbershops."
         }
       ],
-      "expo-video"
+      "expo-video",
+      "./plugins/withAndroidLargeScreenOrientation"
     ]
   }
 }
