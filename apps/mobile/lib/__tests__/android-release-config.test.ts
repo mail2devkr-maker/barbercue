@@ -88,4 +88,30 @@ describe('app.json Android release configuration', () => {
   it('enables R8 minification for Android release builds', () => {
     expect(buildProperties?.[1].android?.enableMinifyInReleaseBuilds).toBe(true);
   });
+
+  it('enables R8 optimization together with the SDK 57 Record keep rules', () => {
+    expect(plugins).toContain('./plugins/withAndroidR8Optimization');
+    const rules = buildProperties?.[1].android?.extraProguardRules ?? '';
+    expect(rules).toMatch(/^-keep interface expo\.modules\.kotlin\.records\.Record$/m);
+    expect(rules).toMatch(/^-keep,allowshrinking,allowobfuscation class expo\.modules\.kotlin\.records\.\*\* \{ \*; \}$/m);
+  });
+});
+
+describe('Android R8 optimization plugin', () => {
+  const optimization = require('../../plugins/withAndroidR8Optimization');
+  const TEMPLATE_RELEASE_BLOCK = `        release {
+            minifyEnabled enableMinifyInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }`;
+
+  it('switches release builds to the optimizing default ProGuard file', () => {
+    const out = optimization.useOptimizingProguardFile(TEMPLATE_RELEASE_BLOCK);
+    expect(out).toContain('getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"');
+    expect(out).not.toContain('"proguard-android.txt"');
+    expect(optimization.useOptimizingProguardFile(out)).toBe(out);
+  });
+
+  it('fails the prebuild if the template no longer has the expected line', () => {
+    expect(() => optimization.useOptimizingProguardFile('proguardFiles "proguard-rules.pro"')).toThrow(/could not find/);
+  });
 });
