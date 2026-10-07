@@ -7,6 +7,7 @@ import { SalonSetupModule } from '../salon-setup/salon-setup.module';
 import { AuthModule } from '../auth/auth.module';
 import { AdminEmployeeManagementService } from './admin-employee-management.service';
 import { AdminCrmService } from './admin-crm.service';
+import { AdminAccessManagementService } from './admin-access-management.service';
 
 @Module({
   imports: [SalonSetupModule, AuthModule],
@@ -17,6 +18,7 @@ import { AdminCrmService } from './admin-crm.service';
     AdminSalonManagementService,
     AdminEmployeeManagementService,
     AdminCrmService,
+    AdminAccessManagementService,
   ],
 })
 export class AdminModule {}
