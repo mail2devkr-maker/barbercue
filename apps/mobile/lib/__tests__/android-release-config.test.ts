@@ -80,4 +80,12 @@ describe('app.json Android release configuration', () => {
   it('registers the Android large-screen orientation plugin', () => {
     expect(plugins).toContain('./plugins/withAndroidLargeScreenOrientation');
   });
+
+  const buildProperties = plugins.find((p) => Array.isArray(p) && p[0] === 'expo-build-properties') as
+    | [string, { android?: { enableMinifyInReleaseBuilds?: boolean; extraProguardRules?: string } }]
+    | undefined;
+
+  it('enables R8 minification for Android release builds', () => {
+    expect(buildProperties?.[1].android?.enableMinifyInReleaseBuilds).toBe(true);
+  });
 });
