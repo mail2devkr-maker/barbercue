@@ -1,7 +1,12 @@
 import { Body, Controller, HttpStatus, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
-import { AuthErrorCode, AuthProvider, Role, UserStatus } from '@barbercue/shared';
+import {
+  AuthErrorCode,
+  AuthProvider,
+  Role,
+  UserStatus,
+} from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -64,8 +69,7 @@ export class AdminTotpBootstrapController {
     if (
       !user ||
       !user.roles.some(
-        ({ role, salonId }) =>
-          salonId === null && GLOBAL_ADMIN_ROLES.has(role),
+        ({ role, salonId }) => salonId === null && GLOBAL_ADMIN_ROLES.has(role),
       )
     ) {
       throw new AppException(
@@ -167,7 +171,9 @@ export class AdminTotpBootstrapController {
   @Public()
   @Throttle(AUTH_THROTTLE)
   @Post('confirm')
-  async confirm(@Body(new ZodValidationPipe(confirmSchema)) body: ConfirmInput) {
+  async confirm(
+    @Body(new ZodValidationPipe(confirmSchema)) body: ConfirmInput,
+  ) {
     const user = await this.resolveVerifiedAdmin(body.idToken);
 
     if (user.twoFactorEnabled) {

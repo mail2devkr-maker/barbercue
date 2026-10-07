@@ -34,7 +34,9 @@ export interface JwtPayload {
 // regardless of what else the User row holds. CUSTOMER sessions can never carry PLATFORM_ADMIN or
 // staff roles; STAFF sessions (owner/staff password or Google) can never carry PLATFORM_ADMIN;
 // only an ADMIN session (TOTP-verified internal-admin login) can ever carry an internal role.
-const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<Record<SessionAudience, ReadonlySet<Role>>> = {
+const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<
+  Record<SessionAudience, ReadonlySet<Role>>
+> = {
   [SessionAudience.CUSTOMER]: new Set([Role.CUSTOMER]),
   [SessionAudience.STAFF]: new Set([Role.SALON_STAFF, Role.SALON_OWNER]),
   [SessionAudience.EMPLOYEE]: new Set([Role.FIELD_EXECUTIVE]),
@@ -79,7 +81,11 @@ export class TokenService {
     return roles.filter((role) => allowed.has(role));
   }
 
-  signAccessToken(userId: string, roles: Role[], audience: SessionAudience): string {
+  signAccessToken(
+    userId: string,
+    roles: Role[],
+    audience: SessionAudience,
+  ): string {
     // Defense in depth: re-scope here too, even though every caller is expected to already pass a
     // scoped list — a token can never be signed with a role outside its own audience's allowance,
     // no matter what a future call site gets wrong.
@@ -209,9 +215,7 @@ export class TokenService {
     if (audience === SessionAudience.ADMIN) {
       // Rebuild from raw UserRole rows so a malformed salon-scoped row can never survive refresh.
       scopedRoles = claimed.user.roles
-        .filter(
-          (r) => r.salonId === null && GLOBAL_ADMIN_ROLES.has(r.role),
-        )
+        .filter((r) => r.salonId === null && GLOBAL_ADMIN_ROLES.has(r.role))
         .map((r) => r.role);
     }
     if (audience === SessionAudience.EMPLOYEE) {

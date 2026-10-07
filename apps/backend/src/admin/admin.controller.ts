@@ -65,10 +65,9 @@ export class AdminController {
     Role.PLATFORM_VIEWER,
   )
   overview(@CurrentUser() user: AuthenticatedUser) {
-    const canViewUnmaskedOverview = [
-      Role.PLATFORM_ADMIN,
-      Role.CO_FOUNDER,
-    ].some((role) => user.roles.includes(role));
+    const canViewUnmaskedOverview =
+      user.roles.includes(Role.PLATFORM_ADMIN) ||
+      user.roles.includes(Role.CO_FOUNDER);
     return this.monitoring.getOverview({ maskPii: !canViewUnmaskedOverview });
   }
 
@@ -120,7 +119,8 @@ export class AdminController {
   @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
   createEmployee(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createEmployeeSchema)) body: CreateEmployeeInput,
+    @Body(new ZodValidationPipe(createEmployeeSchema))
+    body: CreateEmployeeInput,
   ) {
     return this.employees.create(user.id, body);
   }
@@ -140,7 +140,8 @@ export class AdminController {
   updateEmployee(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(updateEmployeeSchema)) body: UpdateEmployeeInput,
+    @Body(new ZodValidationPipe(updateEmployeeSchema))
+    body: UpdateEmployeeInput,
   ) {
     return this.employees.update(user.id, id, body);
   }

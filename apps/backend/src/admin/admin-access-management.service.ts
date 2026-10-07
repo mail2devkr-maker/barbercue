@@ -15,7 +15,7 @@ const INTERNAL_ADMIN_ROLES: Role[] = [
   Role.SALES_ADMIN,
   Role.PLATFORM_VIEWER,
 ];
-const MANAGED_ADMIN_ROLES = new Set<Role>([
+const MANAGED_ADMIN_ROLES: ReadonlySet<ManagedAdminRole> = new Set([
   Role.CO_FOUNDER,
   Role.HR_ADMIN,
   Role.SALES_ADMIN,
@@ -63,7 +63,9 @@ export class AdminAccessManagementService {
     const normalizedEmail = email.trim().toLowerCase();
 
     await this.prisma.$transaction(async (tx) => {
-      let user = await tx.user.findUnique({ where: { email: normalizedEmail } });
+      let user = await tx.user.findUnique({
+        where: { email: normalizedEmail },
+      });
       if (!user) {
         user = await tx.user.create({
           data: { email: normalizedEmail },
@@ -126,7 +128,7 @@ export class AdminAccessManagementService {
   }
 
   private assertManagedRole(role: ManagedAdminRole): void {
-    if (!MANAGED_ADMIN_ROLES.has(role as Role)) {
+    if (!MANAGED_ADMIN_ROLES.has(role)) {
       throw new AppException(
         AuthErrorCode.FORBIDDEN_ROLE,
         'Only managed internal admin roles can be changed through this endpoint.',

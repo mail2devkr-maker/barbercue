@@ -705,7 +705,9 @@ export class AuthService {
     // Admin Google login issues an ADMIN-audience session — the only audience allowed to assert
     // internal-admin roles, and only after the TOTP check just above succeeded.
     const sessionRoles = this.tokenService.scopeRolesToAudience(
-      user.roles.filter((role) => role.salonId === null).map((role) => role.role),
+      user.roles
+        .filter((role) => role.salonId === null)
+        .map((role) => role.role),
       SessionAudience.ADMIN,
     );
     const tokens = await this.tokenService.issueTokenPair(
@@ -767,7 +769,9 @@ export class AuthService {
     // Admin password login issues an ADMIN-audience session — the only audience allowed to assert
     // internal-admin roles, and only after the TOTP check just above succeeded.
     const sessionRoles = this.tokenService.scopeRolesToAudience(
-      user.roles.filter((role) => role.salonId === null).map((r) => r.role),
+      user.roles
+        .filter((role) => role.salonId === null)
+        .map((role) => role.role),
       SessionAudience.ADMIN,
     );
     const tokens = await this.tokenService.issueTokenPair(
