@@ -1046,6 +1046,9 @@ export class AuthService {
         role === Role.SALON_OWNER ||
         role === Role.SALON_STAFF ||
         role === Role.PLATFORM_ADMIN ||
+        role === Role.CO_FOUNDER ||
+        role === Role.HR_ADMIN ||
+        role === Role.SALES_ADMIN ||
         role === Role.PLATFORM_VIEWER,
     );
     if (!user || !eligible) {
