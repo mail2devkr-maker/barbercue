@@ -28,10 +28,21 @@ export function getNextShopStatus(status: SalonStatus): { status: SalonStatus; l
 
 export default function AdminDashboardPage() {
   const { user, logout } = useAuth();
+  const superAdmin = !!user && user.roles.includes(Role.PLATFORM_ADMIN);
+  const coFounder = !!user && user.roles.includes(Role.CO_FOUNDER);
+  const hrAdmin = !!user && user.roles.includes(Role.HR_ADMIN);
+  const salesAdmin = !!user && user.roles.includes(Role.SALES_ADMIN);
   const readOnlyViewer =
     !!user &&
     user.roles.includes(Role.PLATFORM_VIEWER) &&
-    !user.roles.includes(Role.PLATFORM_ADMIN);
+    !superAdmin &&
+    !coFounder &&
+    !hrAdmin &&
+    !salesAdmin;
+  const canManageShops = superAdmin || coFounder;
+  const canManageEmployees = superAdmin || coFounder || hrAdmin;
+  const canOpenCrm = superAdmin || coFounder || hrAdmin || salesAdmin;
+  const canReviewVerification = superAdmin || coFounder;
   const [data, setData] = useState<PlatformAdminOverviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -139,13 +150,10 @@ export default function AdminDashboardPage() {
           <Button type="button" variant="outline" onClick={() => void loadOverview()} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
-          {!readOnlyViewer && (
-            <>
-              <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
-              <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>
-              <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>
-            </>
-          )}
+          {superAdmin && <LinkButton href="/dashboard/admin/access" variant="outline">Access</LinkButton>}
+          {canManageEmployees && <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>}
+          {canOpenCrm && <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>}
+          {canReviewVerification && <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>}
           <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
         </div>
       </header>
@@ -231,8 +239,8 @@ export default function AdminDashboardPage() {
                   <td>{shop.staffCount} staff · {shop.bookingCount} bookings · {shop.liveQueueCount} live</td>
                   <td>{shop.subscriptionStatus}</td>
                   <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {readOnlyViewer ? (
-                      <span className={styles.readOnlyBadge}>Read only</span>
+                    {!canManageShops ? (
+                      <span className={styles.readOnlyBadge}>No shop actions</span>
                     ) : (
                       <>
                         <LinkButton href={`/dashboard/salons/${shop.id}/settings`} variant="secondary">Manage</LinkButton>
