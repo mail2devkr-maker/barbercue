@@ -9,6 +9,6 @@ ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'SALES_ADMIN';
 ALTER TABLE "user_roles" DROP CONSTRAINT IF EXISTS "platform_admin_must_be_global";
 ALTER TABLE "user_roles" ADD CONSTRAINT "platform_admin_roles_must_be_global"
 CHECK (
-  "role" NOT IN ('PLATFORM_ADMIN', 'CO_FOUNDER', 'HR_ADMIN', 'SALES_ADMIN', 'PLATFORM_VIEWER')
+  "role"::text NOT IN ('PLATFORM_ADMIN', 'CO_FOUNDER', 'HR_ADMIN', 'SALES_ADMIN', 'PLATFORM_VIEWER')
   OR "salonId" IS NULL
 );
