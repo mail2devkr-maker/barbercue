@@ -31,7 +31,13 @@ const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<Record<SessionAudience, ReadonlySet<R
   [SessionAudience.CUSTOMER]: new Set([Role.CUSTOMER]),
   [SessionAudience.STAFF]: new Set([Role.SALON_STAFF, Role.SALON_OWNER]),
   [SessionAudience.EMPLOYEE]: new Set([Role.FIELD_EXECUTIVE]),
-  [SessionAudience.ADMIN]: new Set([Role.PLATFORM_ADMIN, Role.PLATFORM_VIEWER]),
+  [SessionAudience.ADMIN]: new Set([
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+    Role.HR_ADMIN,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  ]),
 };
 
 function hashToken(rawToken: string): string {
@@ -202,7 +208,13 @@ export class TokenService {
         .filter(
           (r) =>
             r.salonId === null &&
-            (r.role === Role.PLATFORM_ADMIN || r.role === Role.PLATFORM_VIEWER),
+            [
+              Role.PLATFORM_ADMIN,
+              Role.CO_FOUNDER,
+              Role.HR_ADMIN,
+              Role.SALES_ADMIN,
+              Role.PLATFORM_VIEWER,
+            ].includes(r.role),
         )
         .map((r) => r.role);
     }
