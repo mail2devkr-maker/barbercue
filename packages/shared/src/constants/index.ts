@@ -72,7 +72,10 @@ export const ADMIN_PATHS = {
   // succeed against a shop with zero bookings/staff/queue/reviews/ledger activity.
   shops: 'shops',
   status: 'status',
-  // FastQue internal field-team provisioning — PLATFORM_ADMIN only.
+  // Super-admin-only internal access management for co-founders / HR / sales.
+  access: 'access',
+  revoke: 'revoke',
+  // FastQue internal field-team provisioning.
   employees: 'employees',
   password: 'password',
   special: 'special',
