@@ -1,11 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import {
+  AuthErrorCode,
   Role,
   type AdminAccessUserDto,
   type ManagedAdminRole,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { TokenService } from '../auth/services/token.service';
+import { AppException } from '../common/exceptions/app.exception';
 
 const INTERNAL_ADMIN_ROLES: Role[] = [
   Role.PLATFORM_ADMIN,
@@ -14,13 +15,16 @@ const INTERNAL_ADMIN_ROLES: Role[] = [
   Role.SALES_ADMIN,
   Role.PLATFORM_VIEWER,
 ];
+const MANAGED_ADMIN_ROLES = new Set<Role>([
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
 
 @Injectable()
 export class AdminAccessManagementService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly tokens: TokenService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async list(): Promise<AdminAccessUserDto[]> {
     const users = await this.prisma.user.findMany({
@@ -55,9 +59,10 @@ export class AdminAccessManagementService {
     email: string,
     role: ManagedAdminRole,
   ): Promise<AdminAccessUserDto[]> {
+    this.assertManagedRole(role);
     const normalizedEmail = email.trim().toLowerCase();
 
-    const targetUserId = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       let user = await tx.user.findUnique({ where: { email: normalizedEmail } });
       if (!user) {
         user = await tx.user.create({
@@ -83,11 +88,12 @@ export class AdminAccessManagementService {
           metadata: { email: normalizedEmail, role },
         },
       });
-
-      return user.id;
+      await tx.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
 
-    await this.tokens.revokeAllForUser(targetUserId);
     return this.list();
   }
 
@@ -96,6 +102,7 @@ export class AdminAccessManagementService {
     targetUserId: string,
     role: ManagedAdminRole,
   ): Promise<AdminAccessUserDto[]> {
+    this.assertManagedRole(role);
     await this.prisma.$transaction(async (tx) => {
       await tx.userRole.deleteMany({
         where: { userId: targetUserId, role, salonId: null },
@@ -109,9 +116,22 @@ export class AdminAccessManagementService {
           metadata: { role },
         },
       });
+      await tx.refreshToken.updateMany({
+        where: { userId: targetUserId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     });
 
-    await this.tokens.revokeAllForUser(targetUserId);
     return this.list();
+  }
+
+  private assertManagedRole(role: ManagedAdminRole): void {
+    if (!MANAGED_ADMIN_ROLES.has(role as Role)) {
+      throw new AppException(
+        AuthErrorCode.FORBIDDEN_ROLE,
+        'Only managed internal admin roles can be changed through this endpoint.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   ADMIN_PATHS,
   Role,
@@ -33,18 +33,21 @@ export default function AdminAccessPage() {
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      setUsers(await apiFetch<AdminAccessUserDto[]>(`${ADMIN_PATHS.admin}/${ADMIN_PATHS.access}`));
-      setError(null);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load access list.");
-    }
-  }, []);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    void apiFetch<AdminAccessUserDto[]>(`${ADMIN_PATHS.admin}/${ADMIN_PATHS.access}`)
+      .then((nextUsers) => {
+        if (!active) return;
+        setUsers(nextUsers);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (active) setError(err instanceof ApiError ? err.message : "Could not load access list.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function grant(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

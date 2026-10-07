@@ -127,7 +127,13 @@ describe('AuthService', () => {
           [SessionAudience.CUSTOMER]: [Role.CUSTOMER],
           [SessionAudience.STAFF]: [Role.SALON_STAFF, Role.SALON_OWNER],
           [SessionAudience.EMPLOYEE]: [Role.FIELD_EXECUTIVE],
-          [SessionAudience.ADMIN]: [Role.PLATFORM_ADMIN, Role.PLATFORM_VIEWER],
+          [SessionAudience.ADMIN]: [
+            Role.PLATFORM_ADMIN,
+            Role.CO_FOUNDER,
+            Role.HR_ADMIN,
+            Role.SALES_ADMIN,
+            Role.PLATFORM_VIEWER,
+          ],
         };
         return roles.filter((role) => allowed[audience].includes(role));
       }),
@@ -909,6 +915,47 @@ describe('AuthService', () => {
       );
     });
 
+    it.each([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN, Role.PLATFORM_VIEWER])(
+      'allows global %s only after the mandatory authenticator check',
+      async (role) => {
+        prisma.user.findUnique.mockResolvedValue({
+          ...adminUser,
+          roles: [{ role, salonId: null }],
+        });
+        passwordService.compare.mockResolvedValue(true);
+        cryptoService.decrypt.mockReturnValue('plain-secret');
+        totpService.verifyToken.mockResolvedValue(true);
+
+        const result = await service.adminLogin('admin@barbercue.app', 'correct-password', '123456');
+
+        expect(result.user.roles).toEqual([role]);
+        expect(result.user.audience).toBe(SessionAudience.ADMIN);
+        expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+          'admin1', [role], SessionAudience.ADMIN, undefined,
+        );
+      },
+    );
+
+    it('does not put malformed salon-scoped admin roles into a mixed-role ADMIN token', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...adminUser,
+        roles: [
+          { role: Role.PLATFORM_ADMIN, salonId: null },
+          { role: Role.CO_FOUNDER, salonId: 'salon-1' },
+        ],
+      });
+      passwordService.compare.mockResolvedValue(true);
+      cryptoService.decrypt.mockReturnValue('plain-secret');
+      totpService.verifyToken.mockResolvedValue(true);
+
+      const result = await service.adminLogin('admin@barbercue.app', 'correct-password', '123456');
+
+      expect(result.user.roles).toEqual([Role.PLATFORM_ADMIN]);
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        'admin1', [Role.PLATFORM_ADMIN], SessionAudience.ADMIN, undefined,
+      );
+    });
+
     it('refuses to bypass 2FA even if somehow disabled on an admin account', async () => {
       prisma.user.findUnique.mockResolvedValue({
         ...adminUser,
@@ -1039,6 +1086,38 @@ describe('AuthService', () => {
         undefined,
       );
     });
+
+    it.each([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN])(
+      'signs in global %s only through the Google + TOTP ADMIN flow',
+      async (role) => {
+        prisma.authIdentity.findUnique.mockResolvedValue({
+          user: { ...admin, roles: [{ role, salonId: null }] },
+        });
+        totpService.verifyToken.mockResolvedValue(true);
+
+        const result = await service.adminGoogleLogin('id-token', '123456');
+
+        expect(result.user.roles).toEqual([role]);
+        expect(result.user.audience).toBe(SessionAudience.ADMIN);
+        expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+          'admin1', [role], SessionAudience.ADMIN, undefined,
+        );
+      },
+    );
+
+    it.each([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN, Role.PLATFORM_VIEWER])(
+      'rejects a salon-scoped %s role as Google admin-login eligibility',
+      async (role) => {
+        prisma.authIdentity.findUnique.mockResolvedValue({
+          user: { ...admin, roles: [{ role, salonId: 'salon-1' }] },
+        });
+
+        await expect(service.adminGoogleLogin('id-token', '123456')).rejects.toMatchObject({
+          code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
+        });
+        expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+      },
+    );
 
     it.each([
       ['customer', Role.CUSTOMER],

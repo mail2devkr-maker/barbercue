@@ -5,6 +5,7 @@ import {
   ADMIN_PATHS,
   CrmFollowUpStatus,
   CrmLeadStatus,
+  Role,
   type AdminCrmFollowUpDto,
   type AdminCrmLeadDto,
   type AdminCrmOverviewDto,
@@ -12,6 +13,8 @@ import {
 } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../../../../lib/api";
 import { LinkButton } from "../../../../../components/ui/Button";
+import { useAuth } from "../../../../../lib/auth-context";
+import { canGenerateOfferLetter } from "../../../../../lib/admin-route-access";
 import styles from "../admin.module.css";
 import { buildOfferLetterPdf, extractResumeHints, loadFastQueLogoForPdf, type SalaryBasis } from "./offer-letter";
 
@@ -33,6 +36,8 @@ function errorMessage(error: unknown): string {
 const crmBase = `${ADMIN_PATHS.admin}/${ADMIN_PATHS.crm}`;
 
 export default function AdminCrmPage() {
+  const { user } = useAuth();
+  const showOfferLetter = canGenerateOfferLetter(user?.roles ?? []);
   const [overview, setOverview] = useState<AdminCrmOverviewDto | null>(null);
   const [leads, setLeads] = useState<AdminCrmLeadDto[]>([]);
   const [visits, setVisits] = useState<AdminCrmVisitDto[]>([]);
@@ -54,9 +59,9 @@ export default function AdminCrmPage() {
   const [offerJoiningDate, setOfferJoiningDate] = useState("");
   const [offerStatus, setOfferStatus] = useState<string | null>(null);
   const [offerWorking, setOfferWorking] = useState(false);
+  const [evaluationTimeMs, setEvaluationTimeMs] = useState(0);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const [nextOverview, nextLeads, nextVisits, nextFollowUps] = await Promise.all([
         apiFetch<AdminCrmOverviewDto>(`${crmBase}/${ADMIN_PATHS.overview}`),
@@ -65,6 +70,7 @@ export default function AdminCrmPage() {
         apiFetch<AdminCrmFollowUpDto[]>(`${crmBase}/${ADMIN_PATHS.followUps}`),
       ]);
       setOverview(nextOverview);
+      setEvaluationTimeMs(Date.now());
       setLeads(nextLeads);
       setVisits(nextVisits);
       setFollowUps(nextFollowUps);
@@ -162,7 +168,8 @@ export default function AdminCrmPage() {
   };
 
   useEffect(() => {
-    void load();
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
   }, [load]);
 
   const q = query.trim().toLowerCase();
@@ -215,44 +222,48 @@ export default function AdminCrmPage() {
           <p>Leads, visits, follow-ups, employee performance and shop onboarding attribution.</p>
         </div>
         <div className={styles.headerActions}>
-          <a className={styles.offerHeaderButton} href="#offer-letter">Offer letter</a>
-          <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
+          {showOfferLetter && <a className={styles.offerHeaderButton} href="#offer-letter">Offer letter</a>}
+          {(user?.roles.includes(Role.PLATFORM_ADMIN) || user?.roles.includes(Role.CO_FOUNDER) || user?.roles.includes(Role.HR_ADMIN)) && (
+            <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
+          )}
           <LinkButton href="/dashboard/admin" variant="outline">Platform operations</LinkButton>
         </div>
       </header>
 
-      <section id="offer-letter" className={`${styles.section} ${styles.offerLetterPanel}`} aria-labelledby="offer-letter-title">
-        <div className={styles.sectionHeader}>
-          <div>
-            <p className={styles.eyebrow}>HR automation</p>
-            <h2 id="offer-letter-title">Offer letter generator</h2>
+      {showOfferLetter && (
+        <section id="offer-letter" className={`${styles.section} ${styles.offerLetterPanel}`} aria-labelledby="offer-letter-title">
+          <div className={styles.sectionHeader}>
+            <div>
+              <p className={styles.eyebrow}>HR automation</p>
+              <h2 id="offer-letter-title">Offer letter generator</h2>
+            </div>
+            <span>Resume + base salary → PDF</span>
           </div>
-          <span>Resume + base salary → PDF</span>
-        </div>
-        <form className={styles.offerLetterForm} onSubmit={generateOfferLetter}>
-          <label className={styles.offerUpload}>
-            <span>Employee / candidate resume</span>
-            <input type="file" accept=".pdf,.docx,.txt" onChange={onOfferResumeChange} required />
-            <small>{offerResume ? `${offerResume.name} · ${(offerResume.size / 1024).toFixed(0)} KB` : "PDF, DOCX or TXT · max 8 MB"}</small>
-          </label>
-          <div className={styles.offerLetterGrid}>
-            <label><span>Base salary (INR)</span><input value={offerSalary} onChange={(e) => setOfferSalary(e.target.value)} inputMode="decimal" placeholder="50000" required /></label>
-            <label><span>Salary basis</span><select value={offerSalaryBasis} onChange={(e) => setOfferSalaryBasis(e.target.value as SalaryBasis)}><option value="monthly">Per month</option><option value="annual">Per annum</option></select></label>
-            <label><span>Candidate name</span><input value={offerName} onChange={(e) => setOfferName(e.target.value)} placeholder="Auto-filled when possible" required /></label>
-            <label><span>Offered role</span><input value={offerRole} onChange={(e) => setOfferRole(e.target.value)} placeholder="Field Sales Executive" /></label>
-            <label><span>Employee number <small>(optional)</small></span><input value={offerEmployeeCode} onChange={(e) => setOfferEmployeeCode(e.target.value)} placeholder="Generated later if blank" /></label>
-            <label><span>Address <small>(optional)</small></span><input value={offerAddress} onChange={(e) => setOfferAddress(e.target.value)} placeholder="Candidate postal address" /></label>
-            <label><span>Email <small>(optional)</small></span><input type="email" value={offerEmail} onChange={(e) => setOfferEmail(e.target.value)} /></label>
-            <label><span>Phone <small>(optional)</small></span><input value={offerPhone} onChange={(e) => setOfferPhone(e.target.value)} /></label>
-            <label><span>Proposed joining date <small>(optional)</small></span><input type="date" value={offerJoiningDate} onChange={(e) => setOfferJoiningDate(e.target.value)} /></label>
-          </div>
-          <div className={styles.offerLetterActions}>
-            <button className={styles.offerLetterButton} type="submit" disabled={offerWorking}>{offerWorking ? "Reading resume…" : "Generate offer letter PDF"}</button>
-            <p className={styles.offerPrivacy}>Resume processing and PDF generation happen in your browser. The PDF uses the original FastQue logo, landing-page gradient, detailed employment terms, acceptance section and salary annexure. The resume is not uploaded or stored.</p>
-          </div>
-          {offerStatus && <p className={styles.offerStatus} role="status">{offerStatus}</p>}
-        </form>
-      </section>
+          <form className={styles.offerLetterForm} onSubmit={generateOfferLetter}>
+            <label className={styles.offerUpload}>
+              <span>Employee / candidate resume</span>
+              <input type="file" accept=".pdf,.docx,.txt" onChange={onOfferResumeChange} required />
+              <small>{offerResume ? `${offerResume.name} · ${(offerResume.size / 1024).toFixed(0)} KB` : "PDF, DOCX or TXT · max 8 MB"}</small>
+            </label>
+            <div className={styles.offerLetterGrid}>
+              <label><span>Base salary (INR)</span><input value={offerSalary} onChange={(e) => setOfferSalary(e.target.value)} inputMode="decimal" placeholder="50000" required /></label>
+              <label><span>Salary basis</span><select value={offerSalaryBasis} onChange={(e) => setOfferSalaryBasis(e.target.value as SalaryBasis)}><option value="monthly">Per month</option><option value="annual">Per annum</option></select></label>
+              <label><span>Candidate name</span><input value={offerName} onChange={(e) => setOfferName(e.target.value)} placeholder="Auto-filled when possible" required /></label>
+              <label><span>Offered role</span><input value={offerRole} onChange={(e) => setOfferRole(e.target.value)} placeholder="Field Sales Executive" /></label>
+              <label><span>Employee number <small>(optional)</small></span><input value={offerEmployeeCode} onChange={(e) => setOfferEmployeeCode(e.target.value)} placeholder="Generated later if blank" /></label>
+              <label><span>Address <small>(optional)</small></span><input value={offerAddress} onChange={(e) => setOfferAddress(e.target.value)} placeholder="Candidate postal address" /></label>
+              <label><span>Email <small>(optional)</small></span><input type="email" value={offerEmail} onChange={(e) => setOfferEmail(e.target.value)} /></label>
+              <label><span>Phone <small>(optional)</small></span><input value={offerPhone} onChange={(e) => setOfferPhone(e.target.value)} /></label>
+              <label><span>Proposed joining date <small>(optional)</small></span><input type="date" value={offerJoiningDate} onChange={(e) => setOfferJoiningDate(e.target.value)} /></label>
+            </div>
+            <div className={styles.offerLetterActions}>
+              <button className={styles.offerLetterButton} type="submit" disabled={offerWorking}>{offerWorking ? "Reading resume…" : "Generate offer letter PDF"}</button>
+              <p className={styles.offerPrivacy}>Resume processing and PDF generation happen in your browser. The PDF uses the original FastQue logo, landing-page gradient, detailed employment terms, acceptance section and salary annexure. The resume is not uploaded or stored.</p>
+            </div>
+            {offerStatus && <p className={styles.offerStatus} role="status">{offerStatus}</p>}
+          </form>
+        </section>
+      )}
 
       {error && <p className={styles.error} role="alert">{error}</p>}
       {loading && !overview && <p className={styles.loading}>Loading field CRM…</p>}
@@ -373,7 +384,7 @@ export default function AdminCrmPage() {
               <div className={styles.sectionHeader}><h2>Follow-ups</h2><span>{filteredFollowUps.length} shown</span></div>
               <div className={styles.activityGrid}>
                 {filteredFollowUps.slice(0, 100).map((item) => {
-                  const overdue = item.status === CrmFollowUpStatus.OPEN && new Date(item.dueAt).getTime() < Date.now();
+                  const overdue = item.status === CrmFollowUpStatus.OPEN && Date.parse(item.dueAt) < evaluationTimeMs;
                   return (
                     <article key={item.id} style={overdue ? { borderColor: "rgba(255,111,145,.48)" } : undefined}>
                       <strong>{item.leadShopName}</strong>

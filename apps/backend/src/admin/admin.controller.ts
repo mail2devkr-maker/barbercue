@@ -65,15 +65,11 @@ export class AdminController {
     Role.PLATFORM_VIEWER,
   )
   overview(@CurrentUser() user: AuthenticatedUser) {
-    const hasOperationalRole = [
+    const canViewUnmaskedOverview = [
       Role.PLATFORM_ADMIN,
       Role.CO_FOUNDER,
-      Role.HR_ADMIN,
-      Role.SALES_ADMIN,
     ].some((role) => user.roles.includes(role));
-    const readOnlyViewer =
-      user.roles.includes(Role.PLATFORM_VIEWER) && !hasOperationalRole;
-    return this.monitoring.getOverview({ maskPii: readOnlyViewer });
+    return this.monitoring.getOverview({ maskPii: !canViewUnmaskedOverview });
   }
 
   @Get(ADMIN_PATHS.verification)

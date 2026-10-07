@@ -39,6 +39,7 @@ export default function AdminDashboardPage() {
     !coFounder &&
     !hrAdmin &&
     !salesAdmin;
+  const maskedOverview = !superAdmin && !coFounder;
   const canManageShops = superAdmin || coFounder;
   const canManageEmployees = superAdmin || coFounder || hrAdmin;
   const canOpenCrm = superAdmin || coFounder || hrAdmin || salesAdmin;
@@ -112,7 +113,8 @@ export default function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
-    void loadOverview();
+    const timer = window.setTimeout(() => void loadOverview(true), 0);
+    return () => window.clearTimeout(timer);
   }, [loadOverview]);
 
   // The admin overview used to be a one-time snapshot, so a booking created after the page had
@@ -160,7 +162,12 @@ export default function AdminDashboardPage() {
 
       {readOnlyViewer && (
         <p className={styles.readOnlyNotice} role="status">
-          Read-only access · contact details are masked · create, edit, approval, password-reset and deletion actions are disabled.
+          Read-only access · create, edit, approval, password-reset and deletion actions are disabled.
+        </p>
+      )}
+      {maskedOverview && (
+        <p className={styles.readOnlyNotice} role="status">
+          Contact details are masked in the broad platform overview. Authorized CRM workflows retain their role-specific access.
         </p>
       )}
       {error && <p className={styles.error} role="alert">{error}</p>}

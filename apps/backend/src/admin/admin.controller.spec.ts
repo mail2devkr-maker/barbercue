@@ -11,12 +11,42 @@ describe('AdminController authorization', () => {
     ]);
   });
 
-  it('allows PLATFORM_VIEWER on overview while keeping controller-level writes PLATFORM_ADMIN-only', async () => {
+  it('declares the intended least-privilege route role matrices', () => {
     const reflector = new Reflector();
     expect(reflector.get(ROLES_KEY, AdminController.prototype.overview)).toEqual([
       Role.PLATFORM_ADMIN,
+      Role.CO_FOUNDER,
+      Role.HR_ADMIN,
+      Role.SALES_ADMIN,
       Role.PLATFORM_VIEWER,
     ]);
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.crmOverview)).toEqual([
+      Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN,
+    ]);
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.listEmployees)).toEqual([
+      Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN,
+    ]);
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.listVerification)).toEqual([
+      Role.PLATFORM_ADMIN, Role.CO_FOUNDER,
+    ]);
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.deleteShop)).toEqual([
+      Role.PLATFORM_ADMIN, Role.CO_FOUNDER,
+    ]);
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.listAdminAccess)).toEqual([
+      Role.PLATFORM_ADMIN,
+    ]);
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.grantAdminAccess)).toEqual([
+      Role.PLATFORM_ADMIN,
+    ]);
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.revokeAdminAccess)).toEqual([
+      Role.PLATFORM_ADMIN,
+    ]);
+    expect(reflector.get(ROLES_KEY, AdminController.prototype.updateShopStatus)).toEqual([
+      Role.PLATFORM_ADMIN, Role.CO_FOUNDER,
+    ]);
+  });
+
+  it('masks broad monitoring PII for viewer, HR, and sales while preserving it for platform operations', async () => {
     const overview = { generatedAt: '2026-08-28T00:00:00.000Z' };
     const monitoring = { getOverview: jest.fn().mockResolvedValue(overview) };
     const verification = {
@@ -34,24 +64,25 @@ describe('AdminController authorization', () => {
       activation as never,
       {} as never,
       {} as never,
+      {} as never,
     );
-    await expect(
-      controller.overview({
-        id: 'viewer-1',
-        roles: [Role.PLATFORM_VIEWER],
-        audience: 'ADMIN',
-      } as never),
-    ).resolves.toBe(overview);
-    expect(monitoring.getOverview).toHaveBeenCalledWith({ maskPii: true });
-
-    monitoring.getOverview.mockClear();
-    monitoring.getOverview.mockResolvedValue(overview);
-    await controller.overview({
-      id: 'admin-1',
-      roles: [Role.PLATFORM_ADMIN],
-      audience: 'ADMIN',
-    } as never);
-    expect(monitoring.getOverview).toHaveBeenCalledWith({ maskPii: false });
+    for (const [role, expectedMask] of [
+      [Role.PLATFORM_VIEWER, true],
+      [Role.HR_ADMIN, true],
+      [Role.SALES_ADMIN, true],
+      [Role.PLATFORM_ADMIN, false],
+      [Role.CO_FOUNDER, false],
+    ] as const) {
+      monitoring.getOverview.mockClear();
+      await expect(
+        controller.overview({
+          id: 'admin-1',
+          roles: [role],
+          audience: 'ADMIN',
+        } as never),
+      ).resolves.toBe(overview);
+      expect(monitoring.getOverview).toHaveBeenCalledWith({ maskPii: expectedMask });
+    }
   });
 
   // Phase 18 — the only mutating surface on this otherwise read-only controller: a human
@@ -71,6 +102,7 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
       {} as never,
       {} as never,
     );
@@ -110,6 +142,7 @@ describe('AdminController authorization', () => {
       activation as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await controller.deleteShop({ id: 'admin-1' } as never, 'salon-1');
@@ -126,6 +159,7 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
       {} as never,
       {} as never,
     );

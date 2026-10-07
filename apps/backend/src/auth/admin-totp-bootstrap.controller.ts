@@ -11,6 +11,13 @@ import { GoogleAuthService } from './services/google-auth.service';
 import { TotpService } from './services/totp.service';
 
 const AUTH_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+const GLOBAL_ADMIN_ROLES = new Set<Role>([
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
 const setupSchema = z.object({ idToken: z.string().min(1) });
 const confirmSchema = z.object({
   idToken: z.string().min(1),
@@ -58,14 +65,7 @@ export class AdminTotpBootstrapController {
       !user ||
       !user.roles.some(
         ({ role, salonId }) =>
-          salonId === null &&
-          [
-            Role.PLATFORM_ADMIN,
-            Role.CO_FOUNDER,
-            Role.HR_ADMIN,
-            Role.SALES_ADMIN,
-            Role.PLATFORM_VIEWER,
-          ].includes(role),
+          salonId === null && GLOBAL_ADMIN_ROLES.has(role),
       )
     ) {
       throw new AppException(

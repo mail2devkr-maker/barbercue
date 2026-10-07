@@ -28,20 +28,20 @@ import {
 } from './services/password-link';
 
 const PASSWORD_RESET_TTL_MINUTES = 15;
+const GLOBAL_ADMIN_DASHBOARD_ROLES = new Set<Role>([
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
 
 function hasGlobalAdminDashboardRole(
   roles: Array<{ role: Role; salonId: string | null }>,
 ): boolean {
   return roles.some(
     ({ role, salonId }) =>
-      salonId === null &&
-      [
-        Role.PLATFORM_ADMIN,
-        Role.CO_FOUNDER,
-        Role.HR_ADMIN,
-        Role.SALES_ADMIN,
-        Role.PLATFORM_VIEWER,
-      ].includes(role),
+      salonId === null && GLOBAL_ADMIN_DASHBOARD_ROLES.has(role),
   );
 }
 
@@ -702,10 +702,10 @@ export class AuthService {
     this.assertActive(user.status);
     await this.assertAdminTotp(user, totpCode);
 
-    // Security fix: admin Google login is an ADMIN-audience session — the only login surface
-    // allowed to ever assert PLATFORM_ADMIN, and only after the TOTP check just above succeeded.
+    // Admin Google login issues an ADMIN-audience session — the only audience allowed to assert
+    // internal-admin roles, and only after the TOTP check just above succeeded.
     const sessionRoles = this.tokenService.scopeRolesToAudience(
-      user.roles.map((role) => role.role),
+      user.roles.filter((role) => role.salonId === null).map((role) => role.role),
       SessionAudience.ADMIN,
     );
     const tokens = await this.tokenService.issueTokenPair(
@@ -764,10 +764,10 @@ export class AuthService {
 
     await this.assertAdminTotp(user, totpCode);
 
-    // Security fix: admin password login is an ADMIN-audience session — the only login surface
-    // allowed to ever assert PLATFORM_ADMIN, and only after the TOTP check just above succeeded.
+    // Admin password login issues an ADMIN-audience session — the only audience allowed to assert
+    // internal-admin roles, and only after the TOTP check just above succeeded.
     const sessionRoles = this.tokenService.scopeRolesToAudience(
-      user.roles.map((r) => r.role),
+      user.roles.filter((role) => role.salonId === null).map((r) => r.role),
       SessionAudience.ADMIN,
     );
     const tokens = await this.tokenService.issueTokenPair(
