@@ -59,7 +59,13 @@ export class AdminTotpBootstrapController {
       !user.roles.some(
         ({ role, salonId }) =>
           salonId === null &&
-          (role === Role.PLATFORM_ADMIN || role === Role.PLATFORM_VIEWER),
+          [
+            Role.PLATFORM_ADMIN,
+            Role.CO_FOUNDER,
+            Role.HR_ADMIN,
+            Role.SALES_ADMIN,
+            Role.PLATFORM_VIEWER,
+          ].includes(role),
       )
     ) {
       throw new AppException(
