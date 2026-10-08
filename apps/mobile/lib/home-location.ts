@@ -30,11 +30,23 @@ export function __resetHomeLocationCacheForTests(): void {
  * button's on-demand request in SalonSearchScreen. Denial/failure resolves to null rather than
  * throwing — the header's honest fallback is the neutral "Choose location" label, never a guess.
  */
-export async function resolveHomeLocation(promptIfNeeded: boolean): Promise<HomeLocation | null> {
-  if (cachedCityLabel && cachedCoords) {
+export async function resolveHomeLocation(
+  promptIfNeeded: boolean,
+  forceRefresh = false,
+): Promise<HomeLocation | null> {
+  // Passive Home focus reads may reuse the session cache. An explicit user tap must never be
+  // trapped behind that cache: "Choose location" / the header pill are change-location actions,
+  // so forceRefresh bypasses the cached city and resolves the device's current position again.
+  if (!forceRefresh && cachedCityLabel && cachedCoords) {
     return { label: cachedCityLabel, coords: cachedCoords };
   }
-  if (inFlight) return inFlight;
+
+  // Avoid two native location requests racing each other. If an explicit refresh arrives while a
+  // passive read is still running, let that read finish first and then continue with a fresh fix.
+  if (inFlight) {
+    const pending = await inFlight;
+    if (!forceRefresh) return pending;
+  }
 
   inFlight = (async () => {
     try {
@@ -43,13 +55,21 @@ export async function resolveHomeLocation(promptIfNeeded: boolean): Promise<Home
         : await Location.getForegroundPermissionsAsync();
       if (permission.status !== 'granted') return null;
 
-      const position =
-        (await Location.getLastKnownPositionAsync().catch(() => null)) ??
-        (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null));
+      // Explicit refreshes prefer a real current fix so moving/changing location cannot get stuck
+      // on an old last-known coordinate. Passive focus reads keep the faster last-known-first path.
+      const current = () =>
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
+      const lastKnown = () => Location.getLastKnownPositionAsync().catch(() => null);
+      const position = forceRefresh
+        ? (await current()) ?? (await lastKnown())
+        : (await lastKnown()) ?? (await current());
       if (!position) return null;
 
       const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
-      const places = await Location.reverseGeocodeAsync({ latitude: coords.lat, longitude: coords.lng }).catch(() => []);
+      const places = await Location.reverseGeocodeAsync({
+        latitude: coords.lat,
+        longitude: coords.lng,
+      }).catch(() => []);
       const label = places[0]?.city || places[0]?.subregion || places[0]?.region || null;
       if (!label) return null;
 
