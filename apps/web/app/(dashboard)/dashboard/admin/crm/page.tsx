@@ -56,6 +56,8 @@ export default function AdminCrmPage() {
   const [offerPhone, setOfferPhone] = useState("");
   const [offerSalary, setOfferSalary] = useState("");
   const [offerSalaryBasis, setOfferSalaryBasis] = useState<SalaryBasis>("monthly");
+  const [offerSalesTarget, setOfferSalesTarget] = useState("");
+  const [offerBeyondTargetIncentive, setOfferBeyondTargetIncentive] = useState("");
   const [offerJoiningDate, setOfferJoiningDate] = useState("");
   const [offerStatus, setOfferStatus] = useState<string | null>(null);
   const [offerWorking, setOfferWorking] = useState(false);
@@ -134,6 +136,25 @@ export default function AdminCrmPage() {
       return;
     }
 
+    const targetRaw = offerSalesTarget.trim();
+    const incentiveRaw = offerBeyondTargetIncentive.trim();
+    if (Boolean(targetRaw) !== Boolean(incentiveRaw)) {
+      setOfferStatus("Enter both Sales Target and Incentives Beyond Target, or leave both blank to use the existing standard policy.");
+      return;
+    }
+    const target = targetRaw ? Number(targetRaw.replace(/,/g, "")) : undefined;
+    const beyondTarget = incentiveRaw ? Number(incentiveRaw.replace(/,/g, "")) : undefined;
+    if (target !== undefined && (!Number.isSafeInteger(target) || target < 1)) {
+      setOfferStatus("Sales Target must be a positive whole number of shops.");
+      return;
+    }
+    if (beyondTarget !== undefined &&
+      (!Number.isSafeInteger(beyondTarget) || beyondTarget < 1 || beyondTarget > 1000000)
+    ) {
+      setOfferStatus("Incentives Beyond Target must be a positive whole rupee amount per additional shop.");
+      return;
+    }
+
     setOfferWorking(true);
     try {
       const brandImage = await loadFastQueLogoForPdf();
@@ -146,6 +167,8 @@ export default function AdminCrmPage() {
         address: offerAddress.trim(),
         baseSalary: salary,
         salaryBasis: offerSalaryBasis,
+        salesTarget: target,
+        incentiveBeyondTarget: beyondTarget,
         joiningDate: offerJoiningDate,
       }, brandImage);
       const pdfBuffer = new ArrayBuffer(bytes.byteLength);
@@ -248,6 +271,33 @@ export default function AdminCrmPage() {
             <div className={styles.offerLetterGrid}>
               <label><span>Base salary (INR)</span><input value={offerSalary} onChange={(e) => setOfferSalary(e.target.value)} inputMode="decimal" placeholder="50000" required /></label>
               <label><span>Salary basis</span><select value={offerSalaryBasis} onChange={(e) => setOfferSalaryBasis(e.target.value as SalaryBasis)}><option value="monthly">Per month</option><option value="annual">Per annum</option></select></label>
+              <label>
+                <span>Sales Target <small>(shops per performance period)</small></span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  inputMode="numeric"
+                  value={offerSalesTarget}
+                  onChange={(e) => setOfferSalesTarget(e.target.value)}
+                  placeholder="e.g. 85"
+                  aria-describedby="offer-target-help"
+                />
+              </label>
+              <label>
+                <span>Incentives Beyond Target <small>(INR per additional shop)</small></span>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000000"
+                  step="1"
+                  inputMode="numeric"
+                  value={offerBeyondTargetIncentive}
+                  onChange={(e) => setOfferBeyondTargetIncentive(e.target.value)}
+                  placeholder="e.g. 100"
+                  aria-describedby="offer-target-help"
+                />
+              </label>
               <label><span>Candidate name</span><input value={offerName} onChange={(e) => setOfferName(e.target.value)} placeholder="Auto-filled when possible" required /></label>
               <label><span>Offered role</span><input value={offerRole} onChange={(e) => setOfferRole(e.target.value)} placeholder="Field Sales Executive" /></label>
               <label><span>Employee number <small>(optional)</small></span><input value={offerEmployeeCode} onChange={(e) => setOfferEmployeeCode(e.target.value)} placeholder="Generated later if blank" /></label>
@@ -256,6 +306,11 @@ export default function AdminCrmPage() {
               <label><span>Phone <small>(optional)</small></span><input value={offerPhone} onChange={(e) => setOfferPhone(e.target.value)} /></label>
               <label><span>Proposed joining date <small>(optional)</small></span><input type="date" value={offerJoiningDate} onChange={(e) => setOfferJoiningDate(e.target.value)} /></label>
             </div>
+            <p id="offer-target-help" className={styles.offerPrivacy}>
+              Enter both fields to set offer-specific target and per-shop incentive terms in the PDF.
+              Leave both blank to keep the existing 85-shop target and 86–100 / 101+ incentive slabs.
+              The beyond-target incentive is variable, not guaranteed fixed salary.
+            </p>
             <div className={styles.offerLetterActions}>
               <button className={styles.offerLetterButton} type="submit" disabled={offerWorking}>{offerWorking ? "Reading resume…" : "Generate offer letter PDF"}</button>
               <p className={styles.offerPrivacy}>Resume processing and PDF generation happen in your browser. The PDF uses the original FastQue logo, landing-page gradient, detailed employment terms, acceptance section and salary annexure. The resume is not uploaded or stored.</p>
