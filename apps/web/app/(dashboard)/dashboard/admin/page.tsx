@@ -51,6 +51,7 @@ export default function AdminDashboardPage() {
   const [deletingShopId, setDeletingShopId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletionRequestSuccess, setDeletionRequestSuccess] = useState<string | null>(null);
+  const [pendingDeletionCount, setPendingDeletionCount] = useState(0);
   const [statusShopId, setStatusShopId] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
@@ -122,6 +123,24 @@ export default function AdminDashboardPage() {
     }
   }
 
+  // The approval inbox is visible to Super Admin without opening another page.
+  // The server remains authoritative: no approval is performed from this counter.
+  useEffect(() => {
+    if (!superAdmin) return;
+    let active = true;
+    async function refreshPending() {
+      try {
+        const requests = await apiFetch<Array<{ status: string }>>("admin/security/deletion-requests");
+        if (active) setPendingDeletionCount(requests.filter((item) => item.status === "PENDING").length);
+      } catch {
+        // The queue page will show its actionable error; no optimistic count here.
+      }
+    }
+    void refreshPending();
+    const timer = window.setInterval(() => void refreshPending(), 30_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [superAdmin]);
+
   const loadOverview = useCallback(async (background = false) => {
     if (!background) setRefreshing(true);
     try {
@@ -181,7 +200,7 @@ export default function AdminDashboardPage() {
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
           {superAdmin && <LinkButton href="/dashboard/admin/access" variant="outline">Access</LinkButton>}
-          {superAdmin && <LinkButton href="/dashboard/admin/security" variant="outline">Security &amp; audit</LinkButton>}
+          {superAdmin && <LinkButton href="/dashboard/admin/security" variant="outline">Security &amp; audit {pendingDeletionCount > 0 ? `(${pendingDeletionCount} pending)` : ""}</LinkButton>}
           {canManageEmployees && <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>}
           {canOpenCrm && <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>}
           {canReviewVerification && <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>}
