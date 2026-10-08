@@ -25,8 +25,17 @@ function validatedSocialUrl(raw: string | undefined, platform: "instagram" | "fa
  * public and dashboard surfaces do not drift into separate footer designs.
  */
 export function SiteFooter() {
-  const instagram = validatedSocialUrl(process.env.NEXT_PUBLIC_FASTQUE_INSTAGRAM_URL, "instagram");
-  const facebook = validatedSocialUrl(process.env.NEXT_PUBLIC_FASTQUE_FACEBOOK_URL, "facebook");
+  // Owner-provided official links (2026-10-08). Environment overrides remain optional.
+  // Instagram tracking parameters are intentionally omitted; the account path is canonical.
+  // Facebook supplied a share/profile resolver URL, so keep the exact owner-provided URL.
+  const instagram = validatedSocialUrl(
+    process.env.NEXT_PUBLIC_FASTQUE_INSTAGRAM_URL || "https://www.instagram.com/fastque_official/",
+    "instagram",
+  );
+  const facebook = validatedSocialUrl(
+    process.env.NEXT_PUBLIC_FASTQUE_FACEBOOK_URL || "https://www.facebook.com/share/1T6Dab9jNf/?mibextid=wwXIfr",
+    "facebook",
+  );
 
   return (
     <footer id="site-footer" className={styles.footer}>
