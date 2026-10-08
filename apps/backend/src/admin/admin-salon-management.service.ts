@@ -70,6 +70,8 @@ export class AdminSalonManagementService {
             queueEntries: true,
             reviews: true,
             ledgerEntries: true,
+            manualChairOccupancies: true,
+            subsidyEntries: true,
           },
         },
       },
@@ -87,7 +89,9 @@ export class AdminSalonManagementService {
       activity.bookings > 0 ||
       activity.queueEntries > 0 ||
       activity.reviews > 0 ||
-      activity.ledgerEntries > 0
+      activity.ledgerEntries > 0 ||
+      activity.manualChairOccupancies > 0 ||
+      activity.subsidyEntries > 0
     ) {
       throw new AppException(
         'SALON_HAS_ACTIVITY',

@@ -18,8 +18,6 @@ const SAFE_METADATA_FIELDS = [
   'requestId',
   'requestedByUserId',
   'reservedNumber',
-  'reason',
-  'note',
   'method',
   'status',
   'result',
@@ -50,7 +48,12 @@ function safeMetadata(
       const fields = item as Record<string, unknown>;
       result[group] = Object.fromEntries(
         ['fullName', 'territory', 'status']
-          .filter((key) => key in fields)
+          .filter(
+            (key) =>
+              typeof fields[key] === 'string' ||
+              typeof fields[key] === 'number' ||
+              typeof fields[key] === 'boolean',
+          )
           .map((key) => [key, fields[key]]),
       );
     }

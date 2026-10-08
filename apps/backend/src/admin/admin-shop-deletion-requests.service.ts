@@ -137,7 +137,6 @@ export class AdminShopDeletionRequestsService {
             requestId: created.id,
             shopPublicId: salon.publicId,
             shopName: salon.name,
-            reason: reason.trim(),
           },
         },
       });
@@ -170,8 +169,29 @@ export class AdminShopDeletionRequestsService {
     await this.assertPlatformAdminWithFreshTotp(actorUserId, totpCode);
 
     return this.prisma.$transaction(async (tx) => {
-      // Recheck the current permission INSIDE the destructive transaction;
-      // an admin role revoked between TOTP preflight and commit cannot approve.
+      // Serialize the destructive action against account suspension and global
+      // role revocation. A plain ORM read here would still permit either write
+      // to race after the authorization check but before deletion commits.
+      const lockedAdmin = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT u."id"
+        FROM "users" AS u
+        INNER JOIN "user_roles" AS r ON r."userId" = u."id"
+        WHERE u."id" = ${actorUserId}
+          AND u."status" = 'ACTIVE'
+          AND r."role" = 'PLATFORM_ADMIN'
+          AND r."salonId" IS NULL
+        FOR UPDATE OF u, r
+      `;
+      if (!lockedAdmin.length) {
+        throw new AppException(
+          'PLATFORM_ADMIN_REQUIRED',
+          'Super Admin access required.',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      // Keep the ORM read for the complete actor record after the locking
+      // predicate above has established and locked the required global grant.
       const actor = await tx.user.findUnique({
         where: { id: actorUserId },
         include: { roles: true },
@@ -246,7 +266,6 @@ export class AdminShopDeletionRequestsService {
             requestId,
             requestedByUserId: request.requestedByUserId,
             shopPublicId: request.shopPublicId,
-            note: note?.trim() || null,
           },
         },
       });
@@ -313,7 +332,6 @@ export class AdminShopDeletionRequestsService {
             requestId,
             requestedByUserId: request.requestedByUserId,
             shopPublicId: request.shopPublicId,
-            reason: note.trim(),
           },
         },
       });

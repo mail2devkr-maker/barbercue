@@ -13,6 +13,8 @@ function salonRow(counts: Record<string, number> = {}) {
       queueEntries: 0,
       reviews: 0,
       ledgerEntries: 0,
+      manualChairOccupancies: 0,
+      subsidyEntries: 0,
       ...counts,
     },
   };
@@ -73,6 +75,8 @@ describe('AdminSalonManagementService hard deletion safeguards', () => {
     ['queue entries', { queueEntries: 1 }],
     ['reviews', { reviews: 1 }],
     ['ledger entries', { ledgerEntries: 1 }],
+    ['manual chair occupancy history', { manualChairOccupancies: 1 }],
+    ['platform subsidy ledger entries', { subsidyEntries: 1 }],
   ])(
     'never deletes a shop with %s, checking inside the locked transaction',
     async (_kind, counts) => {

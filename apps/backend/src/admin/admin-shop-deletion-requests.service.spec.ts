@@ -193,6 +193,11 @@ describe('Shop deletion requests / Super Admin approval', () => {
       approver,
       salonId,
     );
+    const authorizationLock = tx.$queryRaw.mock.calls[0][0]
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    expect(authorizationLock).toContain('FOR UPDATE OF u, r');
+    expect(tx.$queryRaw.mock.calls[0][1]).toBe(approver);
     expect(tx.shopDeletionRequest.update).toHaveBeenCalledWith({
       where: { id: 'request-1' },
       data: expect.objectContaining({
@@ -212,6 +217,16 @@ describe('Shop deletion requests / Super Admin approval', () => {
       }),
     );
     expect(result.status).toBe(ShopDeletionRequestStatus.APPROVED);
+  });
+
+  it('denies approval if the global Super Admin grant is absent at transaction authorization', async () => {
+    const { service, tx, shops } = build();
+    tx.$queryRaw.mockResolvedValueOnce([]);
+    await expect(
+      service.approve(approver, 'request-1', '123456'),
+    ).rejects.toMatchObject({ code: 'PLATFORM_ADMIN_REQUIRED' });
+    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
+    expect(tx.shopDeletionRequest.update).not.toHaveBeenCalled();
   });
 
   it('rejects replay/double approval without executing deletion', async () => {
