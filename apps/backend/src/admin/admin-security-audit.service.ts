@@ -9,6 +9,7 @@ const SAFE_METADATA_FIELDS = [
   'employeeCode', 'fullName', 'territory', 'shopName', 'shopPublicId',
   'previousStatus', 'newStatus', 'role', 'email', 'requestId',
   'requestedByUserId', 'reservedNumber', 'reason', 'note',
+  'method', 'status', 'result', 'durationMs',
 ] as const;
 
 function safeMetadata(action: string, value: Prisma.JsonValue): Record<string, unknown> {
