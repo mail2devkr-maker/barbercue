@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { absoluteUrl } from "../../../lib/seo";
+import { AppAccessQr } from "../../../components/layout/AppAccessQr";
 
 export const metadata: Metadata = {
   title: "FastQue App",
-  description: "Open FastQue on the web now and use this permanent app link for future Android app access.",
+  description: "Scan the permanent FastQue app QR. The Android app is in testing; use FastQue on the web while the public release is prepared.",
   alternates: { canonical: absoluteUrl("/app") },
   robots: { index: true, follow: true },
 };
@@ -34,8 +35,32 @@ export default function FastQueAppPage() {
           Good looks.<br/>Less waiting.
         </h1>
         <p style={{fontSize: 18, lineHeight: 1.7, color: "#e6dfe4", maxWidth: 600}}>
-          This is FastQue&apos;s permanent app access link. Use FastQue on the web today. When the public Android store listing is enabled, this same link can route customers to the app without changing printed QR codes.
+          FastQue for Android is being tested and is not yet publicly available in Google Play. Use FastQue on the web today. This permanent app page and QR will stay the same when the approved Android release becomes available.
         </p>
+        <div style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 24,
+          marginTop: 28,
+          padding: 18,
+          borderRadius: 18,
+          background: "rgba(255,255,255,.07)",
+          border: "1px solid rgba(255,255,255,.13)"
+        }}>
+          <div style={{ padding: 10, borderRadius: 12, background: "#fff" }}>
+            <AppAccessQr size={146} />
+          </div>
+          <div style={{ flex: "1 1 220px" }}>
+            <h2 style={{ fontSize: 20, margin: "0 0 8px" }}>Scan to open FastQue</h2>
+            <p style={{ color: "#e6dfe4", fontSize: 15, lineHeight: 1.6, margin: 0 }}>
+              Scan this code with your phone to open our permanent app page. Android public download will be linked here only after release approval.
+            </p>
+            <p style={{ fontSize: 14, marginTop: 12, overflowWrap: "anywhere" }}>
+              <a href="https://fastque.com/app" style={{ color: "#ffbb85" }}>fastque.com/app</a>
+            </p>
+          </div>
+        </div>
         <div style={{display:"flex", gap:12, flexWrap:"wrap", marginTop:28}}>
           <Link href="/" style={{background:"linear-gradient(90deg,#ff0a78,#ff7a22)", color:"#fff", textDecoration:"none", padding:"13px 20px", borderRadius:999, fontWeight:700}}>
             Open FastQue
