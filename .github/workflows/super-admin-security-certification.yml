@@ -49,6 +49,8 @@ jobs:
       - name: Baseline disposable PostgreSQL from master schema and apply ONLY the proposed migration
         run: |
           git show origin/master:apps/backend/prisma/schema.prisma > apps/backend/prisma/schema.ci.base.prisma
+          # A legacy hand-written migration creates this sequence outside Prisma DSL.
+          printf 'CREATE SEQUENCE IF NOT EXISTS salon_public_id_seq;\n' | npx prisma db execute --stdin --schema=apps/backend/prisma/schema.ci.base.prisma
           npx prisma db push --schema=apps/backend/prisma/schema.ci.base.prisma --skip-generate
           npx prisma db execute --file=apps/backend/prisma/migrations/20261008160000_add_shop_deletion_approvals/migration.sql --schema=apps/backend/prisma/schema.prisma
           npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel apps/backend/prisma/schema.prisma --exit-code
