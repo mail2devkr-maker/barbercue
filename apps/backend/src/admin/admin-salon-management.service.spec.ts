@@ -31,7 +31,7 @@ describe('AdminSalonManagementService hard deletion safeguards', () => {
       auditLog: { create: jest.fn().mockResolvedValue({}) },
     };
     const prisma = {
-      $transaction: jest.fn(async (callback: (tx: typeof tx) => Promise<unknown>) =>
+      $transaction: jest.fn(async (callback: (client: typeof tx) => Promise<unknown>) =>
         callback(tx)),
     };
     return { tx, prisma };
