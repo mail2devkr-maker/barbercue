@@ -116,6 +116,10 @@ export class AdminSalonManagementService {
         status: SalonStatus.SUSPENDED,
       },
     });
+    // Prisma 5.22 can resolve an interactive transaction callback even when a deferred
+    // constraint rejects COMMIT. Force this guard while still inside the callback so the
+    // approval endpoint cannot report success for a quarantine that PostgreSQL rolls back.
+    await tx.$executeRaw`SET CONSTRAINTS salons_quarantine_obligations_guard IMMEDIATE`;
     await tx.auditLog.create({
       data: {
         actorUserId: adminUserId,

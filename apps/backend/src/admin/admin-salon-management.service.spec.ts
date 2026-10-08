@@ -8,6 +8,7 @@ describe('AdminSalonManagementService recoverable quarantine', () => {
   function build() {
     const tx = {
       $queryRaw: jest.fn().mockResolvedValue([{ id: salonId }]),
+      $executeRaw: jest.fn().mockResolvedValue(0),
       salon: {
         findUnique: jest.fn().mockResolvedValue({
           id: salonId,
@@ -75,6 +76,10 @@ describe('AdminSalonManagementService recoverable quarantine', () => {
         status: SalonStatus.SUSPENDED,
       },
     });
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw.mock.calls[0][0].join(' ')).toContain(
+      'SET CONSTRAINTS salons_quarantine_obligations_guard IMMEDIATE',
+    );
     expect(tx.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -87,6 +92,23 @@ describe('AdminSalonManagementService recoverable quarantine', () => {
         }),
       }),
     );
+  });
+
+  it('surfaces a deferred database obligation rejection before recording approval success', async () => {
+    const { service, tx } = build();
+    tx.$executeRaw.mockRejectedValue(new Error('SHOP_HAS_OPEN_OBLIGATIONS'));
+
+    await expect(
+      service.quarantineSalonInTransaction(
+        tx as unknown as Prisma.TransactionClient,
+        'admin-1',
+        salonId,
+        requestId,
+      ),
+    ).rejects.toThrow('SHOP_HAS_OPEN_OBLIGATIONS');
+
+    expect(tx.salon.update).toHaveBeenCalledTimes(1);
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it.each([

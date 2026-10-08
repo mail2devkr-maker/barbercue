@@ -299,6 +299,82 @@ describe('recoverable shop deletion decisions', () => {
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
+  it('permits restore one millisecond before the 30-day deadline', async () => {
+    const now = new Date('2026-10-30T23:59:59.999Z');
+    const restoreEligibleUntil = new Date('2026-10-31T00:00:00.000Z');
+    const softDeletedAt = new Date(
+      restoreEligibleUntil.getTime() - 30 * 24 * 60 * 60 * 1000,
+    );
+    const { service, tx } = build();
+    tx.salon.findUnique.mockResolvedValueOnce({
+      softDeletionRequestId: 'request-1',
+    });
+    tx.salon.findUnique.mockResolvedValueOnce({
+      id: salonId,
+      name: 'Junk Shop',
+      publicId: 'BC-SHOP-000099',
+      status: SalonStatus.SUSPENDED,
+      softDeletedAt,
+      restoreEligibleUntil,
+      softDeletedByUserId: approver,
+      softDeletionRequestId: 'request-1',
+      statusBeforeSoftDelete: SalonStatus.ACTIVE,
+      verification: { status: 'APPROVED' },
+    });
+    jest.useFakeTimers().setSystemTime(now);
+    try {
+      await expect(service.restore(approver, salonId, '123456')).resolves.toBeDefined();
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(tx.salon.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ softDeletedAt: null, restoreEligibleUntil: null }),
+      }),
+    );
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'SHOP_DELETE_RESTORED' }),
+      }),
+    );
+  });
+
+  it('keeps the shop read-only one millisecond after the 30-day deadline', async () => {
+    const restoreEligibleUntil = new Date('2026-10-31T00:00:00.000Z');
+    const { service, tx } = build();
+    tx.salon.findUnique.mockResolvedValueOnce({
+      softDeletionRequestId: 'request-1',
+    });
+    tx.salon.findUnique.mockResolvedValueOnce({
+      id: salonId,
+      name: 'Junk Shop',
+      publicId: 'BC-SHOP-000099',
+      status: SalonStatus.SUSPENDED,
+      softDeletedAt: new Date(
+        restoreEligibleUntil.getTime() - 30 * 24 * 60 * 60 * 1000,
+      ),
+      restoreEligibleUntil,
+      softDeletedByUserId: approver,
+      softDeletionRequestId: 'request-1',
+      statusBeforeSoftDelete: SalonStatus.ACTIVE,
+      verification: { status: 'APPROVED' },
+    });
+    jest.useFakeTimers().setSystemTime(restoreEligibleUntil.getTime() + 1);
+    try {
+      await expect(service.restore(approver, salonId, '123456')).rejects.toMatchObject({
+        code: 'RESTORE_WINDOW_EXPIRED',
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(tx.salon.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'SHOP_DELETE_RESTORE_EXPIRED' }),
+      }),
+    );
+  });
+
   it('audits a restore attempt for a salon that is not in recovery trash', async () => {
     const { service, tx } = build();
     await expect(

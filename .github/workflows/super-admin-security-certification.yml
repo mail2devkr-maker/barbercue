@@ -46,19 +46,26 @@ jobs:
         run: npm run prisma:generate --workspace=@barbercue/backend
       - name: Validate Prisma schema
         run: npm run prisma:validate --workspace=@barbercue/backend
-      - name: Baseline disposable PostgreSQL from master schema and apply ONLY the proposed migration
+      - name: Baseline disposable PostgreSQL from master schema and apply the proposed migrations
         run: |
           git show origin/master:apps/backend/prisma/schema.prisma > apps/backend/prisma/schema.ci.base.prisma
           # A legacy hand-written migration creates this sequence outside Prisma DSL.
           printf 'CREATE SEQUENCE IF NOT EXISTS salon_public_id_seq;\n' | npx prisma db execute --stdin --schema=apps/backend/prisma/schema.ci.base.prisma
           npx prisma db push --schema=apps/backend/prisma/schema.ci.base.prisma --skip-generate
           npx prisma db execute --file=apps/backend/prisma/migrations/20261008160000_add_shop_deletion_approvals/migration.sql --schema=apps/backend/prisma/schema.prisma
+          npx prisma db execute --file=apps/backend/prisma/migrations/20261008180000_recoverable_shop_deletion/migration.sql --schema=apps/backend/prisma/schema.prisma
+          # The disposable baseline was created with db push. Record both manually-applied
+          # proposal migrations through Prisma so _prisma_migrations captures their exact hashes.
+          npx prisma migrate resolve --applied 20261008160000_add_shop_deletion_approvals --schema=apps/backend/prisma/schema.prisma
+          npx prisma migrate resolve --applied 20261008180000_recoverable_shop_deletion --schema=apps/backend/prisma/schema.prisma
           # A pre-existing salon sequence default normalizes text differently after db push;
           # smoke-check the proposed table and unique index directly instead of treating that
           # unrelated legacy default-rendering difference as a schema-drift failure.
           node -e "const { PrismaClient } = require('@prisma/client'); const p = new PrismaClient(); p.shopDeletionRequest.findMany({ take: 1 }).then(() => console.log('Approval table query PASS')).catch(e => { console.error(e.name); process.exitCode = 1; }).finally(() => p.\$disconnect())"
           printf "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'shop_deletion_requests' AND indexname = 'shop_deletion_one_pending_per_shop') THEN RAISE EXCEPTION 'Partial unique approval index missing'; END IF; END \$\$;" | npx prisma db execute --stdin --schema=apps/backend/prisma/schema.prisma
           rm apps/backend/prisma/schema.ci.base.prisma
+      - name: Verify recovery migration checksum, constraints and enabled triggers
+        run: node apps/backend/prisma/verify-recoverable-shop-deletion-migration.cjs
       - name: Focused approval, audit and authorization tests
         run: >
           npm run test --workspace=@barbercue/backend --
@@ -66,17 +73,27 @@ jobs:
           --runTestsByPath
           src/admin/admin-shop-deletion-requests.service.spec.ts
           src/admin/admin-salon-management.service.spec.ts
+          src/admin/admin-security-audit.service.spec.ts
           src/admin/admin.controller.spec.ts
           src/admin/admin-security.controller.spec.ts
           src/common/interceptors/admin-activity-audit.interceptor.spec.ts
+          src/bookings/availability.service.spec.ts
+          src/common/salon-access/salon-access.service.spec.ts
+          src/public-queue/public-queue-token.service.spec.ts
+          src/salon-setup/salon-activation.service.spec.ts
+          src/salons/salons.service.spec.ts
       - name: Backend full test suite (track existing unrelated regressions)
         id: backend_full
         continue-on-error: true
         run: npm run test --workspace=@barbercue/backend -- --runInBand
+      - name: Web full test suite (track against the latest-master baseline)
+        id: web_full
+        continue-on-error: true
+        run: npm run test --workspace=@barbercue/web -- --runInBand
       - name: Flag existing backend suite regressions
-        if: steps.backend_full.outcome == 'failure'
+        if: steps.backend_full.outcome == 'failure' || steps.web_full.outcome == 'failure'
         run: |
-          echo '::warning::Full backend suite has unrelated reservation/analytics failures. Full regression certification remains blocked despite the green security suite.'
+          echo '::warning::A full workspace suite reported failures. Compare the failing tests against the latest-master regression crosscheck before classifying them; the security suite alone is not full regression certification.'
       - name: Shared full test suite
         run: npm run test --workspace=@barbercue/shared -- --runInBand
       - name: Typecheck every workspace
