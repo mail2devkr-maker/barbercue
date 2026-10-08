@@ -38,7 +38,9 @@ describe("FastQue CRM offer letter helpers", () => {
     const text = new TextDecoder().decode(bytes);
     expect(text).toContain("Sales Target: 120 successfully onboarded shops");
     expect(text).toContain("Incentives Beyond Target: INR 150 per additional");
-    expect(text).toContain("Sales Target of 120 shops");
+    // PDF text is wrapped into separate drawing commands across lines.
+    const drawnText = Array.from(text.matchAll(/\((.*?)\) Tj/g), (match) => match[1]).join(" ");
+    expect(drawnText).toContain("Sales Target of 120 shops");
     expect(text).not.toContain("Incentive slab: for shops 86 through 100");
     expect(text).not.toContain("From the 101st shop onward");
     expect(text).toContain("Expected Performance Incentive");
