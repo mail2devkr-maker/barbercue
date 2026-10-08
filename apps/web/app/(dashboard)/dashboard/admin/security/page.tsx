@@ -50,6 +50,8 @@ export default function AdminSecurityPage() {
   const [actorEmail, setActorEmail] = useState("");
   const [action, setAction] = useState("");
   const [workingId, setWorkingId] = useState<string | null>(null);
+  const [totpCodes, setTotpCodes] = useState<Record<string, string>>({});
+  const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -85,25 +87,27 @@ export default function AdminSecurityPage() {
   async function resolveRequest(request: DeletionRequest, approve: boolean) {
     if (!allowed || workingId) return;
     let body: { totpCode?: string; note: string };
+    const note = (decisionNotes[request.id] ?? "").trim();
     if (approve) {
-      if (!window.confirm(
-        `Approve permanent deletion of "${request.shopName}" (${request.shopPublicId})? Data cannot be restored in this portal. Do not approve if you are unsure.`,
-      )) return;
-      const code = window.prompt("Enter your current 6-digit Super Admin authenticator code:");
-      if (code === null) return;
+      const code = totpCodes[request.id] ?? "";
       if (!/^\d{6}$/.test(code)) {
-        setError("A valid current authenticator code is required.");
+        setError("Enter your current 6-digit Super Admin authenticator code.");
         return;
       }
-      body = { totpCode: code, note: "" };
+      if (note.length > 500) {
+        setError("Decision note cannot exceed 500 characters.");
+        return;
+      }
+      if (!window.confirm(
+        `Permanently delete "${request.shopName}" (${request.shopPublicId})? The shop can NOT be restored from this portal. Confirm only after reviewing the request.`,
+      )) return;
+      body = { totpCode: code, note };
     } else {
-      const note = window.prompt(`Reason for rejecting deletion of "${request.shopName}"?`);
-      if (note === null) return;
-      if (note.trim().length < 5 || note.trim().length > 500) {
-        setError("Rejection reason must be between 5 and 500 characters.");
+      if (note.length < 5 || note.length > 500) {
+        setError("Enter a rejection reason between 5 and 500 characters.");
         return;
       }
-      body = { note: note.trim() };
+      body = { note };
     }
 
     setWorkingId(request.id);
@@ -117,10 +121,14 @@ export default function AdminSecurityPage() {
       setNotice(approve
         ? `Request approved; "${request.shopName}" deleted only after fresh safety checks.`
         : `Deletion request rejected. Shop remains unchanged.`);
+      setTotpCodes((prev) => { const next = { ...prev }; delete next[request.id]; return next; });
+      setDecisionNotes((prev) => { const next = { ...prev }; delete next[request.id]; return next; });
       await load();
     } catch (error) {
       setError(errText(error));
     } finally {
+      // Do not retain one-time codes even when an approval fails.
+      setTotpCodes((prev) => { const next = { ...prev }; delete next[request.id]; return next; });
       setWorkingId(null);
     }
   }
@@ -169,10 +177,39 @@ export default function AdminSecurityPage() {
                   <td style={{ maxWidth: 310, overflowWrap: "anywhere" }}>{req.reason}</td>
                   <td>{fmt(req.requestedAt)}</td>
                   <td>
-                    <Button type="button" disabled={!!workingId} onClick={() => void resolveRequest(req, true)}>
-                      {workingId === req.id ? "Processing…" : "Approve with 2FA"}
-                    </Button>{" "}
-                    <Button variant="outline" type="button" disabled={!!workingId} onClick={() => void resolveRequest(req, false)}>Reject</Button>
+                    <div style={{ display: "grid", gap: 8, minWidth: 220 }}>
+                      <label>
+                        Decision note / rejection reason
+                        <textarea
+                          value={decisionNotes[req.id] ?? ""}
+                          maxLength={500}
+                          rows={2}
+                          onChange={(event) => setDecisionNotes((old) => ({
+                            ...old, [req.id]: event.target.value,
+                          }))}
+                          placeholder="Required for rejection"
+                        />
+                      </label>
+                      <label>
+                        Current Super Admin authenticator code
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          pattern="[0-9]{6}"
+                          maxLength={6}
+                          value={totpCodes[req.id] ?? ""}
+                          onChange={(event) => setTotpCodes((old) => ({
+                            ...old, [req.id]: event.target.value.replace(/\D/g, "").slice(0, 6),
+                          }))}
+                          placeholder="••••••"
+                        />
+                      </label>
+                      <Button type="button" disabled={!!workingId} onClick={() => void resolveRequest(req, true)}>
+                        {workingId === req.id ? "Processing…" : "Approve with 2FA"}
+                      </Button>
+                      <Button variant="outline" type="button" disabled={!!workingId} onClick={() => void resolveRequest(req, false)}>Reject</Button>
+                    </div>
                   </td>
                 </tr>
               ))}
