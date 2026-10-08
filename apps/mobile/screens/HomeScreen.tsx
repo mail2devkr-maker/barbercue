@@ -4,6 +4,7 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import {
+  Alert,
   ImageBackground,
   Pressable,
   RefreshControl,
@@ -204,11 +205,18 @@ export default function HomeScreen({ navigation }: Props) {
   async function handleChooseLocation() {
     setLocating(true);
     try {
-      const result = await resolveHomeLocation(true);
+      // Explicit taps mean "detect/change my location now", so bypass the session cache and prefer
+      // a fresh GPS fix. This prevents both Home location controls from appearing frozen on an old
+      // or unresolved value for the rest of the app session.
+      const result = await resolveHomeLocation(true, true);
       if (result) {
         setLocationLabel(result.label);
         setLocationCoords(result.coords);
+        return;
       }
+      Alert.alert(t.couldNotGetLocation);
+    } catch {
+      Alert.alert(t.couldNotGetLocation);
     } finally {
       setLocating(false);
     }
