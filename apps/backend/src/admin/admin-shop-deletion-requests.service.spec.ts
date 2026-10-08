@@ -103,18 +103,30 @@ describe('Shop deletion requests / Super Admin approval', () => {
     expect(tx.shopDeletionRequest.create).not.toHaveBeenCalled();
   });
 
-  it('denies request when the shop gains real activity', async () => {
-    const { service, tx } = build();
+  it('accepts a review request for an active shop but does not delete it', async () => {
+    const { service, tx, shops } = build();
     tx.salon.findUnique.mockResolvedValue({
-      name: 'Junk Shop', publicId: 'BC-SHOP-000099',
+      name: 'Active Shop', publicId: 'BC-SHOP-000099',
       _count: {
-        staff: 0, bookings: 1, queueEntries: 0,
-        reviews: 0, ledgerEntries: 0,
+        staff: 1, bookings: 4, queueEntries: 2,
+        reviews: 1, ledgerEntries: 1,
       },
     });
-    await expect(service.request(requester, salonId, 'Duplicate test listing')).rejects
+    await expect(service.request(requester, salonId, 'Please review this listing'))
+      .resolves.toMatchObject({ status: ShopDeletionRequestStatus.PENDING });
+    expect(tx.shopDeletionRequest.create).toHaveBeenCalledTimes(1);
+    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('approval failure on an active shop rolls back and leaves request pending', async () => {
+    const { service, tx, shops } = build();
+    shops.deleteSalonInTransaction.mockRejectedValue(
+      Object.assign(new Error('Active shop'), { code: 'SALON_HAS_ACTIVITY' }),
+    );
+    await expect(service.approve(approver, 'request-1', '123456')).rejects
       .toMatchObject({ code: 'SALON_HAS_ACTIVITY' });
-    expect(tx.shopDeletionRequest.create).not.toHaveBeenCalled();
+    expect(tx.shopDeletionRequest.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('rejects non-Co-Founder requesters, checking current DB scope', async () => {
