@@ -143,6 +143,19 @@ export class AdminShopDeletionRequestsService {
     await this.assertPlatformAdminWithFreshTotp(actorUserId, totpCode);
 
     return this.prisma.$transaction(async (tx) => {
+      // Recheck the current permission INSIDE the destructive transaction;
+      // an admin role revoked between TOTP preflight and commit cannot approve.
+      const actor = await tx.user.findUnique({
+        where: { id: actorUserId },
+        include: { roles: true },
+      });
+      if (
+        !actor || actor.status !== UserStatus.ACTIVE ||
+        !actor.roles.some((r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null)
+      ) {
+        throw new AppException('PLATFORM_ADMIN_REQUIRED', 'Super Admin access required.', HttpStatus.FORBIDDEN);
+      }
+
       // Row lock makes double-approve and approve/reject races fail closed.
       const locked = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT "id" FROM "shop_deletion_requests" WHERE "id" = ${requestId} FOR UPDATE
