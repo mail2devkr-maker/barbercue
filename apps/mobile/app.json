@@ -60,7 +60,18 @@
           "locationWhenInUsePermission": "FastQue uses your location to show nearby barbershops."
         }
       ],
-      "expo-video"
+      "expo-video",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "extraProguardRules": "# Backport of expo/expo#46852 (Expo SDK 58) for R8 optimization on SDK 57.\n# Keep the Record marker interface so expo-modules-core's own\n# '-keep class * implements expo.modules.kotlin.records.Record' rule still matches once\n# R8 optimization is allowed to remove empty marker interfaces.\n-keep interface expo.modules.kotlin.records.Record\n# SDK 57's reflection-based Record conversion is only fixed for optimized builds in SDK 58,\n# so do not optimize it here (shrinking and obfuscation still apply).\n-keep,allowshrinking,allowobfuscation class expo.modules.kotlin.records.** { *; }"
+          }
+        }
+      ],
+      "./plugins/withAndroidLargeScreenOrientation",
+      "./plugins/withAndroidR8Optimization"
     ]
   }
 }
