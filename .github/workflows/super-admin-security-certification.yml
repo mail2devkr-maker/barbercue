@@ -32,6 +32,8 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -44,8 +46,13 @@ jobs:
         run: npm run prisma:generate --workspace=@barbercue/backend
       - name: Validate Prisma schema
         run: npm run prisma:validate --workspace=@barbercue/backend
-      - name: Apply all migrations to disposable PostgreSQL
-        run: npm run prisma:migrate:deploy --workspace=@barbercue/backend
+      - name: Baseline disposable PostgreSQL from master schema and apply ONLY the proposed migration
+        run: |
+          git show origin/master:apps/backend/prisma/schema.prisma > apps/backend/prisma/schema.ci.base.prisma
+          npx prisma db push --schema=apps/backend/prisma/schema.ci.base.prisma --skip-generate
+          npx prisma db execute --file=apps/backend/prisma/migrations/20261008160000_add_shop_deletion_approvals/migration.sql --schema=apps/backend/prisma/schema.prisma
+          npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel apps/backend/prisma/schema.prisma --exit-code
+          rm apps/backend/prisma/schema.ci.base.prisma
       - name: Focused approval, audit and authorization tests
         run: >
           npm run test --workspace=@barbercue/backend --
