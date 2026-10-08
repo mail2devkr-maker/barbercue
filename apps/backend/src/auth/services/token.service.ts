@@ -13,6 +13,13 @@ import { AppException } from '../../common/exceptions/app.exception';
 
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes, per ARCHITECTURE.md §4
 const REFRESH_TOKEN_TTL_DAYS = 30;
+const GLOBAL_ADMIN_ROLES = new Set<Role>([
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
 
 export interface JwtPayload {
   sub: string;
@@ -26,12 +33,20 @@ export interface JwtPayload {
 // surface actually authenticated it — caps what that specific session is allowed to assert,
 // regardless of what else the User row holds. CUSTOMER sessions can never carry PLATFORM_ADMIN or
 // staff roles; STAFF sessions (owner/staff password or Google) can never carry PLATFORM_ADMIN;
-// only an ADMIN session (TOTP-verified admin login) can ever carry PLATFORM_ADMIN.
-const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<Record<SessionAudience, ReadonlySet<Role>>> = {
+// only an ADMIN session (TOTP-verified internal-admin login) can ever carry an internal role.
+const ROLES_ALLOWED_FOR_AUDIENCE: Readonly<
+  Record<SessionAudience, ReadonlySet<Role>>
+> = {
   [SessionAudience.CUSTOMER]: new Set([Role.CUSTOMER]),
   [SessionAudience.STAFF]: new Set([Role.SALON_STAFF, Role.SALON_OWNER]),
   [SessionAudience.EMPLOYEE]: new Set([Role.FIELD_EXECUTIVE]),
-  [SessionAudience.ADMIN]: new Set([Role.PLATFORM_ADMIN, Role.PLATFORM_VIEWER]),
+  [SessionAudience.ADMIN]: new Set([
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+    Role.HR_ADMIN,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  ]),
 };
 
 function hashToken(rawToken: string): string {
@@ -57,7 +72,7 @@ export class TokenService {
   /**
    * The single choke point every login/refresh path must go through to turn a raw DB roles list
    * into what a session of a given audience may actually assert. Filters by role TYPE only — the
-   * extra global-role invariants (PLATFORM_ADMIN and FIELD_EXECUTIVE must also have salonId: null)
+   * extra global-role invariants (internal admin and FIELD_EXECUTIVE must also have salonId: null)
    * are re-checked separately wherever the raw UserRole rows (not just role types) are available,
    * since a plain Role[] has already discarded salonId by the time it would reach this function.
    */
@@ -66,7 +81,11 @@ export class TokenService {
     return roles.filter((role) => allowed.has(role));
   }
 
-  signAccessToken(userId: string, roles: Role[], audience: SessionAudience): string {
+  signAccessToken(
+    userId: string,
+    roles: Role[],
+    audience: SessionAudience,
+  ): string {
     // Defense in depth: re-scope here too, even though every caller is expected to already pass a
     // scoped list — a token can never be signed with a role outside its own audience's allowance,
     // no matter what a future call site gets wrong.
@@ -191,19 +210,12 @@ export class TokenService {
     );
 
     // ADMIN is additionally re-verified against the raw UserRole rows (which still carry salonId,
-    // unlike the flattened Role[] above) — PLATFORM_ADMIN must still be a GLOBAL role at refresh
-    // time, not merely present. A malformed salon-scoped PLATFORM_ADMIN row must never grant admin
-    // authority here, matching the same invariant the admin login paths enforce.
+    // unlike the flattened Role[] above) — an internal admin role must still be GLOBAL at refresh
+    // time, not merely present. Malformed salon-scoped admin rows never grant admin authority.
     if (audience === SessionAudience.ADMIN) {
-      // ADMIN-audience sessions may carry either full PLATFORM_ADMIN authority or the strictly
-      // read-only PLATFORM_VIEWER role, but both are global-only. Rebuild from raw UserRole rows
-      // here so a malformed salon-scoped row can never survive refresh into a privileged token.
+      // Rebuild from raw UserRole rows so a malformed salon-scoped row can never survive refresh.
       scopedRoles = claimed.user.roles
-        .filter(
-          (r) =>
-            r.salonId === null &&
-            (r.role === Role.PLATFORM_ADMIN || r.role === Role.PLATFORM_VIEWER),
-        )
+        .filter((r) => r.salonId === null && GLOBAL_ADMIN_ROLES.has(r.role))
         .map((r) => r.role);
     }
     if (audience === SessionAudience.EMPLOYEE) {

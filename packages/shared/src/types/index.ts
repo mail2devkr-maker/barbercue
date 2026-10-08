@@ -86,6 +86,14 @@ export interface EmployeeProfileDto {
   joinedAt: string;
 }
 
+export interface AdminAccessUserDto {
+  id: string;
+  email: string | null;
+  status: UserStatus;
+  roles: Role[];
+  createdAt: string;
+}
+
 export interface AdminEmployeeDto extends EmployeeProfileDto {
   userId: string;
   status: UserStatus;

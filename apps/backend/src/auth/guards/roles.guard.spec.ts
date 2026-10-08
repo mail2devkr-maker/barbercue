@@ -150,6 +150,37 @@ describe('RolesGuard', () => {
     ).toThrow(AppException);
   });
 
+  it.each([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN])(
+    'requires ADMIN audience for %s just like the other internal roles',
+    (role) => {
+      const reflector = {
+        getAllAndOverride: () => [role],
+      } as unknown as Reflector;
+      const guard = new RolesGuard(reflector);
+
+      expect(
+        guard.canActivate(
+          makeContext({
+            id: 'internal-1',
+            roles: [role],
+            audience: SessionAudience.ADMIN,
+          }),
+        ),
+      ).toBe(true);
+      for (const audience of [
+        SessionAudience.CUSTOMER,
+        SessionAudience.STAFF,
+        SessionAudience.EMPLOYEE,
+      ]) {
+        expect(() =>
+          guard.canActivate(
+            makeContext({ id: 'internal-1', roles: [role], audience }),
+          ),
+        ).toThrow(AppException);
+      }
+    },
+  );
+
   it('does not let PLATFORM_VIEWER satisfy a PLATFORM_ADMIN-only write route', () => {
     const reflector = {
       getAllAndOverride: () => [Role.PLATFORM_ADMIN],

@@ -19,6 +19,7 @@ import {
   NotificationChannel,
   PhotoType,
   PrepaymentRequirement,
+  Role,
   SalonStatus,
   SalonType,
   StaffMemberStatus,
@@ -494,6 +495,25 @@ export const updateCrmFollowUpSchema = z
     message: 'No follow-up changes provided',
   });
 export type UpdateCrmFollowUpInput = z.infer<typeof updateCrmFollowUpSchema>;
+
+export const managedAdminRoleSchema = z.enum([
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
+export type ManagedAdminRole = z.infer<typeof managedAdminRoleSchema>;
+
+export const grantAdminAccessSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  role: managedAdminRoleSchema,
+});
+export type GrantAdminAccessInput = z.infer<typeof grantAdminAccessSchema>;
+
+export const revokeAdminAccessSchema = z.object({
+  role: managedAdminRoleSchema,
+});
+export type RevokeAdminAccessInput = z.infer<typeof revokeAdminAccessSchema>;
 
 export const adminLoginSchema = z.object({
   email: z.string().email(),

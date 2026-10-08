@@ -28,14 +28,20 @@ import {
 } from './services/password-link';
 
 const PASSWORD_RESET_TTL_MINUTES = 15;
+const GLOBAL_ADMIN_DASHBOARD_ROLES = new Set<Role>([
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
 
 function hasGlobalAdminDashboardRole(
   roles: Array<{ role: Role; salonId: string | null }>,
 ): boolean {
   return roles.some(
     ({ role, salonId }) =>
-      salonId === null &&
-      (role === Role.PLATFORM_ADMIN || role === Role.PLATFORM_VIEWER),
+      salonId === null && GLOBAL_ADMIN_DASHBOARD_ROLES.has(role),
   );
 }
 
@@ -310,7 +316,7 @@ export class AuthService {
     }
 
     const passwordHash = await this.passwordService.hash(password);
-    let user;
+    let user: Prisma.UserGetPayload<{ include: { roles: true } }>;
     try {
       user = await this.prisma.user.create({
         data: {
@@ -528,7 +534,9 @@ export class AuthService {
       // UserRole, repair only that already-proven ownership before applying the normal login gate.
       // This never infers ownership from email and never grants access to a salon the User row
       // does not already own.
-      const repairMissingOwnerRole = async <T extends { id: string; roles: Array<{ role: Role }> }>(
+      const repairMissingOwnerRole = async <
+        T extends { id: string; roles: Array<{ role: Role }> },
+      >(
         candidate: T,
       ): Promise<T> => {
         const alreadyOperator = candidate.roles.some(
@@ -667,10 +675,7 @@ export class AuthService {
       // UserRole's own doc comment); a salon-scoped PLATFORM_ADMIN row (which should never exist —
       // enforced by a DB CHECK constraint as of this fix — but must never be trusted regardless)
       // must not grant admin-login eligibility here.
-      if (
-        !candidate ||
-        !hasGlobalAdminDashboardRole(candidate.roles)
-      ) {
+      if (!candidate || !hasGlobalAdminDashboardRole(candidate.roles)) {
         return null;
       }
       await tx.authIdentity.create({
@@ -696,10 +701,12 @@ export class AuthService {
     this.assertActive(user.status);
     await this.assertAdminTotp(user, totpCode);
 
-    // Security fix: admin Google login is an ADMIN-audience session — the only login surface
-    // allowed to ever assert PLATFORM_ADMIN, and only after the TOTP check just above succeeded.
+    // Admin Google login issues an ADMIN-audience session — the only audience allowed to assert
+    // internal-admin roles, and only after the TOTP check just above succeeded.
     const sessionRoles = this.tokenService.scopeRolesToAudience(
-      user.roles.map((role) => role.role),
+      user.roles
+        .filter((role) => role.salonId === null)
+        .map((role) => role.role),
       SessionAudience.ADMIN,
     );
     const tokens = await this.tokenService.issueTokenPair(
@@ -758,10 +765,12 @@ export class AuthService {
 
     await this.assertAdminTotp(user, totpCode);
 
-    // Security fix: admin password login is an ADMIN-audience session — the only login surface
-    // allowed to ever assert PLATFORM_ADMIN, and only after the TOTP check just above succeeded.
+    // Admin password login issues an ADMIN-audience session — the only audience allowed to assert
+    // internal-admin roles, and only after the TOTP check just above succeeded.
     const sessionRoles = this.tokenService.scopeRolesToAudience(
-      user.roles.map((r) => r.role),
+      user.roles
+        .filter((role) => role.salonId === null)
+        .map((role) => role.role),
       SessionAudience.ADMIN,
     );
     const tokens = await this.tokenService.issueTokenPair(
@@ -837,8 +846,13 @@ export class AuthService {
       }
 
       const hasOnlyCustomerRoles =
-        user.roles.length > 0 && user.roles.every(({ role }) => role === Role.CUSTOMER);
-      if (!hasOnlyCustomerRoles || user.ownedSalons.length > 0 || user.staffMemberships.length > 0) {
+        user.roles.length > 0 &&
+        user.roles.every(({ role }) => role === Role.CUSTOMER);
+      if (
+        !hasOnlyCustomerRoles ||
+        user.ownedSalons.length > 0 ||
+        user.staffMemberships.length > 0
+      ) {
         throw new AppException(
           AuthErrorCode.FORBIDDEN_ROLE,
           'This account cannot be deleted through the customer account flow.',
@@ -864,7 +878,10 @@ export class AuthService {
       await tx.review.deleteMany({ where: { customerId: userId } });
       // Queue membership is not an accounting record. Clearing this optional relation prevents
       // an operational queue from carrying a deleted customer's stable account identifier.
-      await tx.queueEntry.updateMany({ where: { customerId: userId }, data: { customerId: null } });
+      await tx.queueEntry.updateMany({
+        where: { customerId: userId },
+        data: { customerId: null },
+      });
       // Audit history is retained for security, but its actor link and request metadata are
       // de-identified before the account row is stripped of direct identifiers.
       await tx.auditLog.updateMany({
@@ -1040,6 +1057,9 @@ export class AuthService {
         role === Role.SALON_OWNER ||
         role === Role.SALON_STAFF ||
         role === Role.PLATFORM_ADMIN ||
+        role === Role.CO_FOUNDER ||
+        role === Role.HR_ADMIN ||
+        role === Role.SALES_ADMIN ||
         role === Role.PLATFORM_VIEWER,
     );
     if (!user || !eligible) {

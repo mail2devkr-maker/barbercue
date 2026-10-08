@@ -105,6 +105,30 @@ describe('AdminTotpBootstrapController recovery', () => {
     });
   });
 
+  it.each([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN])(
+    'allows a global %s to bootstrap mandatory TOTP',
+    async (role) => {
+      const { controller, prisma } = build();
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        user: {
+          ...adminUser,
+          id: `${role.toLowerCase()}-1`,
+          twoFactorEnabled: false,
+          totpSecret: null,
+          roles: [{ role, salonId: null }],
+        },
+      });
+      prisma.user.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(
+        controller.setup({ idToken: 'valid-google-token' }),
+      ).resolves.toMatchObject({
+        otpAuthUri: 'otpauth://new',
+        manualKey: 'NEW-TOTP-SECRET',
+      });
+    },
+  );
+
   it('still resolves only an already-authorized global platform admin', async () => {
     const { controller, prisma, crypto } = build();
     prisma.authIdentity.findUnique.mockResolvedValue({
@@ -119,6 +143,26 @@ describe('AdminTotpBootstrapController recovery', () => {
       controller.setup({ idToken: 'valid-google-token' }),
     ).rejects.toMatchObject({ code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN });
 
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    Role.CO_FOUNDER,
+    Role.HR_ADMIN,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  ])('fails closed for malformed salon-scoped %s role rows', async (role) => {
+    const { controller, prisma, crypto } = build();
+    prisma.authIdentity.findUnique.mockResolvedValue({
+      user: { ...adminUser, roles: [{ role, salonId: 'salon-1' }] },
+    });
+    crypto.decrypt.mockReturnValue('working-secret');
+
+    await expect(
+      controller.setup({ idToken: 'valid-google-token' }),
+    ).rejects.toMatchObject({
+      code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
+    });
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 });

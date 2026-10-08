@@ -5,32 +5,35 @@ import { usePathname, useRouter } from "next/navigation";
 import { Role } from "@barbercue/shared";
 import { RequireRole } from "../../../../components/auth/RequireRole";
 import { useAuth } from "../../../../lib/auth-context";
+import { canOpenAdminPath } from "../../../../lib/admin-route-access";
 
-function ViewerRouteBoundary({ children }: { children: React.ReactNode }) {
+function AdminRouteBoundary({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  const viewerOnly =
-    !!user &&
-    user.roles.includes(Role.PLATFORM_VIEWER) &&
-    !user.roles.includes(Role.PLATFORM_ADMIN);
-  const viewerOnRestrictedSubpage = viewerOnly && pathname !== "/dashboard/admin";
+  const restricted = !!user && !canOpenAdminPath(user.roles, pathname);
 
   useEffect(() => {
-    if (viewerOnRestrictedSubpage) router.replace("/dashboard/admin");
-  }, [viewerOnRestrictedSubpage, router]);
+    if (restricted) router.replace("/dashboard/admin");
+  }, [restricted, router]);
 
-  if (viewerOnRestrictedSubpage) return null;
+  if (restricted) return null;
   return <>{children}</>;
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireRole
-      roles={[Role.PLATFORM_ADMIN, Role.PLATFORM_VIEWER]}
+      roles={[
+        Role.PLATFORM_ADMIN,
+        Role.CO_FOUNDER,
+        Role.HR_ADMIN,
+        Role.SALES_ADMIN,
+        Role.PLATFORM_VIEWER,
+      ]}
       redirectTo="/admin/login"
     >
-      <ViewerRouteBoundary>{children}</ViewerRouteBoundary>
+      <AdminRouteBoundary>{children}</AdminRouteBoundary>
     </RequireRole>
   );
 }

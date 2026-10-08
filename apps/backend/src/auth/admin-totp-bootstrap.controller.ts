@@ -1,7 +1,12 @@
 import { Body, Controller, HttpStatus, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
-import { AuthErrorCode, AuthProvider, Role, UserStatus } from '@barbercue/shared';
+import {
+  AuthErrorCode,
+  AuthProvider,
+  Role,
+  UserStatus,
+} from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -11,6 +16,13 @@ import { GoogleAuthService } from './services/google-auth.service';
 import { TotpService } from './services/totp.service';
 
 const AUTH_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+const GLOBAL_ADMIN_ROLES = new Set<Role>([
+  Role.PLATFORM_ADMIN,
+  Role.CO_FOUNDER,
+  Role.HR_ADMIN,
+  Role.SALES_ADMIN,
+  Role.PLATFORM_VIEWER,
+]);
 const setupSchema = z.object({ idToken: z.string().min(1) });
 const confirmSchema = z.object({
   idToken: z.string().min(1),
@@ -57,9 +69,7 @@ export class AdminTotpBootstrapController {
     if (
       !user ||
       !user.roles.some(
-        ({ role, salonId }) =>
-          salonId === null &&
-          (role === Role.PLATFORM_ADMIN || role === Role.PLATFORM_VIEWER),
+        ({ role, salonId }) => salonId === null && GLOBAL_ADMIN_ROLES.has(role),
       )
     ) {
       throw new AppException(
@@ -161,7 +171,9 @@ export class AdminTotpBootstrapController {
   @Public()
   @Throttle(AUTH_THROTTLE)
   @Post('confirm')
-  async confirm(@Body(new ZodValidationPipe(confirmSchema)) body: ConfirmInput) {
+  async confirm(
+    @Body(new ZodValidationPipe(confirmSchema)) body: ConfirmInput,
+  ) {
     const user = await this.resolveVerifiedAdmin(body.idToken);
 
     if (user.twoFactorEnabled) {
