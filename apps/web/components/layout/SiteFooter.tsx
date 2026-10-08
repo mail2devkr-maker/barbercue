@@ -73,6 +73,7 @@ export function SiteFooter() {
           flexWrap: "wrap",
           gap: 22,
           width: "100%",
+          gridColumn: "1 / -1",
           padding: "18px 22px",
           border: "1px solid rgba(255,255,255,.17)",
           borderRadius: 18,
