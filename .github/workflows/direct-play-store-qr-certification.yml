@@ -1,0 +1,62 @@
+name: FastQue Direct Google Play QR Certification
+
+on:
+  push:
+    branches:
+      - chatgpt/fastque-direct-google-play-qr-web-20261009
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  website-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact workspace dependencies
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared package
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Typecheck website
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Lint changed website files (no auto-fix)
+        working-directory: apps/web
+        run: >
+          npx eslint
+          'app/(public)/app/page.tsx'
+          'app/(public)/page.tsx'
+          components/layout/SiteFooter.tsx
+          components/layout/SiteHeader.tsx
+          components/layout/PlayStoreQr.tsx
+      - name: Check Play QR target and honest release-status disclosure
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const qr = fs.readFileSync('apps/web/components/layout/PlayStoreQr.tsx', 'utf8');
+          const app = fs.readFileSync('apps/web/app/(public)/app/page.tsx', 'utf8');
+          const home = fs.readFileSync('apps/web/app/(public)/page.tsx', 'utf8');
+          const footer = fs.readFileSync('apps/web/components/layout/SiteFooter.tsx', 'utf8');
+          const url = 'https://play.google.com/store/apps/details?id=com.dcw.fastque';
+          if (!qr.includes(url)) throw new Error('Incorrect Play URL in QR');
+          if (!qr.includes('level="H"')) throw new Error('QR must have high error correction');
+          if (!qr.includes('/brand/fastque-clean-lockup-transparent.png')) throw new Error('Original logo missing');
+          if (!app.includes('public release') || !home.includes('still in testing')) throw new Error('Public release status disclosure missing');
+          if (!app.includes('PlayStoreQr') || !home.includes('PlayStoreQr') || !footer.includes('PlayStoreQr')) throw new Error('QR not present on all requested surfaces');
+          console.log('Play QR data, branding, homepage, app page, footer and release honesty validated');
+          NODE
+      - name: Build production website (no deploy)
+        run: npm run build --workspace=@barbercue/web
+      - name: Check whitespace
+        run: git diff --check origin/master...HEAD
