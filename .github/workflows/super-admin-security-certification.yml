@@ -74,7 +74,8 @@ jobs:
         run: npm run test --workspace=@barbercue/backend -- --runInBand
       - name: Flag existing backend suite regressions
         if: steps.backend_full.outcome == 'failure'
-        run: echo "::warning::Full backend suite has failures outside PR #168 (reservation/analytics). Treat full-regression certification as BLOCKED, even if scoped security checks are green."
+        run: |
+          echo '::warning::Full backend suite has unrelated reservation/analytics failures. Full regression certification remains blocked despite the green security suite.'
       - name: Shared full test suite
         run: npm run test --workspace=@barbercue/shared -- --runInBand
       - name: Typecheck every workspace
