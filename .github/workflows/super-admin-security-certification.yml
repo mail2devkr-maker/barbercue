@@ -67,6 +67,7 @@ jobs:
           src/admin/admin-shop-deletion-requests.service.spec.ts
           src/admin/admin-salon-management.service.spec.ts
           src/admin/admin.controller.spec.ts
+          src/admin/admin-security.controller.spec.ts
           src/common/interceptors/admin-activity-audit.interceptor.spec.ts
       - name: Backend full test suite (track existing unrelated regressions)
         id: backend_full
