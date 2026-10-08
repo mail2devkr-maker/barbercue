@@ -1,0 +1,64 @@
+name: Master Baseline Regression Crosscheck
+
+on:
+  push:
+    branches:
+      - chatgpt/super-admin-approval-audit-control
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  master-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout master only (not the PR changes)
+        uses: actions/checkout@v4
+        with:
+          ref: master
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact master lockfile
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared dependencies
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate Prisma client without contacting a database
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/no_database_connection
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Compare the exact three reported failures on master
+        shell: bash
+        run: |
+          set +e
+          npm run test --workspace=@barbercue/backend -- --runInBand --runTestsByPath src/dashboard-analytics/dashboard-analytics.service.spec.ts src/bookings/reservation.service.spec.ts --json --outputFile="$RUNNER_TEMP/master-baseline.json" > "$RUNNER_TEMP/master-baseline.log" 2>&1
+          rc=$?
+          set -e
+          tail -n 48 "$RUNNER_TEMP/master-baseline.log"
+          echo "Test process exit code: $rc"
+          node - "$RUNNER_TEMP/master-baseline.json" <<'NODE'
+          const fs=require('node:fs');
+          const path=process.argv[2];
+          if (!fs.existsSync(path)) { console.error('Missing Jest baseline report'); process.exit(1); }
+          const result=JSON.parse(fs.readFileSync(path,'utf8'));
+          const failed=result.testResults.flatMap(s=>s.assertionResults
+            .filter(a=>a.status==='failed')
+            .map(a=>({file:s.name.split('/').slice(-1)[0],title:a.fullName})));
+          console.log('MASTER_BASELINE='+JSON.stringify({
+            failedTests:result.numFailedTests,
+            failedSuites:result.numFailedTestSuites,
+            failures:failed
+          }));
+          const analytics=failed.filter(x=>x.file==='dashboard-analytics.service.spec.ts' && x.title.includes('buckets bookings into peak/slow hours'));
+          const reservation=failed.filter(x=>x.file==='reservation.service.spec.ts' &&
+            (x.title.includes('an ACTIVE walk-in session') || x.title.includes('an ACTIVE session that does not overlap')));
+          const exact=failed.length===3 && analytics.length===1 && reservation.length===2;
+          if (!exact) { console.error('Master baseline differs; DO NOT classify the PR failures as pre-existing.'); process.exit(1); }
+          console.log('PASS: master independently reproduces the exact 3 reported backend test failures.');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            'Master baseline reproduces all three failing tests (2 reservation, 1 analytics). No production environment was used.\n');
+          NODE
