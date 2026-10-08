@@ -32,7 +32,10 @@ describe('Shop deletion requests / Super Admin approval', () => {
     };
     const tx = {
       $queryRaw: jest.fn().mockResolvedValue([{ id: salonId }]),
-      user: { findUnique: jest.fn().mockResolvedValue(coFounder) },
+      user: {
+        findUnique: jest.fn(async (args: { where: { id: string } }) =>
+          args.where.id === approver ? admin : coFounder),
+      },
       salon: {
         findUnique: jest.fn().mockResolvedValue({
           name: requested.shopName,
