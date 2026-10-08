@@ -14,6 +14,11 @@ export class AdminSalonManagementService {
 
   async deleteSalon(adminUserId: string, salonId: string): Promise<{ deleted: true }> {
     return this.prisma.$transaction(async (tx) => {
+      // Serialize with new requests: both direct deletion and the approval-request
+      // path lock the same Salon row BEFORE checking for pending approvals.
+      await tx.$queryRaw`
+        SELECT "id" FROM "salons" WHERE "id" = ${salonId} FOR UPDATE
+      `;
       // Do not bypass a pending Co-Founder request through the legacy direct
       // Super Admin route; the queued decision must be resolved explicitly.
       const pending = await tx.shopDeletionRequest.findFirst({
