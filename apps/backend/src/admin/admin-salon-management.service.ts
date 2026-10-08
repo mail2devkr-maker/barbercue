@@ -13,9 +13,22 @@ export class AdminSalonManagementService {
   constructor(private readonly prisma: PrismaService) {}
 
   async deleteSalon(adminUserId: string, salonId: string): Promise<{ deleted: true }> {
-    return this.prisma.$transaction((tx) =>
-      this.deleteSalonInTransaction(tx, adminUserId, salonId),
-    );
+    return this.prisma.$transaction(async (tx) => {
+      // Do not bypass a pending Co-Founder request through the legacy direct
+      // Super Admin route; the queued decision must be resolved explicitly.
+      const pending = await tx.shopDeletionRequest.findFirst({
+        where: { salonId, status: 'PENDING' },
+        select: { id: true },
+      });
+      if (pending) {
+        throw new AppException(
+          'SHOP_DELETE_APPROVAL_PENDING',
+          'Resolve the pending deletion request in Security & Audit before deleting this shop.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      return this.deleteSalonInTransaction(tx, adminUserId, salonId);
+    });
   }
 
   async deleteSalonInTransaction(
