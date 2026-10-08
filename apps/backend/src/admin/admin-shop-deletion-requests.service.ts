@@ -76,18 +76,9 @@ export class AdminShopDeletionRequestsService {
       if (!salon) {
         throw new AppException('SALON_NOT_FOUND', 'Shop not found.', HttpStatus.NOT_FOUND);
       }
-      const counts = salon._count;
-      if (
-        counts.staff || counts.bookings || counts.queueEntries ||
-        counts.reviews || counts.ledgerEntries
-      ) {
-        throw new AppException(
-          'SALON_HAS_ACTIVITY',
-          'Active shops cannot be hard-deleted. Suspend instead.',
-          HttpStatus.CONFLICT,
-          { ...counts },
-        );
-      }
+      // Every real shop may be *requested* for review; requesting is not
+      // deletion. Approval rechecks real activity inside a locked transaction,
+      // and refuses hard deletion of a shop with staff/bookings/ledger/etc.
       const pending = await tx.shopDeletionRequest.findFirst({
         where: { salonId, status: ShopDeletionRequestStatus.PENDING },
       });
