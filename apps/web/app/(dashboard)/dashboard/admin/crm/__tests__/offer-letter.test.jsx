@@ -67,4 +67,53 @@ describe("FastQue CRM offer letter helpers", () => {
     expect(() => buildOfferLetterPdf({ ...base, salesTarget: 100, incentiveBeyondTarget: Infinity })).toThrow("positive whole rupee");
     expect(() => buildOfferLetterPdf({ ...base, salesTarget: 100, incentiveBeyondTarget: -2 })).toThrow("positive whole rupee");
   });
+
+  test("uses INR 5,000 every month, INR 60,000 annually, for all future offers", () => {
+    // Match rendered PDF text commands, not the raw salaryBreakdown implementation.
+    for (const baseSalary of [12000, 20000, 50000]) {
+      const bytes = buildOfferLetterPdf({
+        candidateName: "Shambhoo Yogi",
+        baseSalary,
+        salaryBasis: "monthly",
+      });
+      const pdf = new TextDecoder().decode(bytes);
+      const draws = [...pdf.matchAll(/\\((.*?)\\) Tj/g)].map(m => m[1]);
+      const annualIndex = draws.indexOf("Annual Amount \\(INR\\)");
+      const monthlyIndex = draws.indexOf("Monthly Amount \\(INR\\)");
+      expect(annualIndex).toBeGreaterThan(0);
+      expect(monthlyIndex).toBeGreaterThan(annualIndex);
+      const annual = draws.slice(annualIndex, monthlyIndex);
+      const monthly = draws.slice(monthlyIndex);
+      function valueFollowing(rows, label) {
+        const i = rows.indexOf(label);
+        expect(i).toBeGreaterThanOrEqual(0);
+        return rows[i + 1];
+      }
+      expect(valueFollowing(annual, "Expected Performance Incentive")).toBe("60,000");
+      expect(valueFollowing(monthly, "Expected Performance Incentive")).toBe("5,000");
+      expect(valueFollowing(annual, "Total Expected Package")).toBe(
+        formatInr(baseSalary * 12 + 60000),
+      );
+      expect(valueFollowing(monthly, "Total Expected Package")).toBe(
+        formatInr(baseSalary + 5000),
+      );
+      expect(pdf).toContain("INR 5,000 per month");
+      expect(pdf).not.toContain("up to approximately INR 20,000 per month");
+    }
+  });
+
+  test("does not double count the 5k illustrative incentive with custom beyond-target slabs", () => {
+    const pdf = new TextDecoder().decode(buildOfferLetterPdf({
+      candidateName: "Shambhoo Yogi",
+      baseSalary: 20000,
+      salaryBasis: "monthly",
+      salesTarget: 100,
+      incentiveBeyondTarget: 150,
+    }));
+    expect(pdf).toContain("Sales Target: 100 successfully onboarded shops");
+    expect(pdf).toContain("Incentives Beyond Target: INR 150");
+    expect(pdf).toContain("INR 5,000 per month");
+    expect(pdf).toContain("not an additional guaranteed payment");
+    expect(pdf).not.toContain("up to approximately INR 20,000 per month");
+  });
 });
