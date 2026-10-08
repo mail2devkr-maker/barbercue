@@ -28,6 +28,7 @@ const PRIMARY_LINKS: ReadonlyArray<{
   { href: "/#services", label: "Services" },
   { href: "/#book-or-queue", label: "How it works" },
   { href: "/#for-shops", label: "For shops" },
+  { href: "/app", label: "Android App" },
   { href: "/about-us", label: "About Us", aboutOnly: true },
 ];
 
@@ -132,6 +133,7 @@ export function SiteHeader() {
               <Link href="/about-us">About Us</Link>
               <Link href="/contact-us">Contact Us</Link>
               <Link href="/careers">Careers</Link>
+              <Link href="/app">Android App</Link>
               <Link href="/#book-or-queue">For Customers</Link>
               <Link href="/#for-shops">For Shops</Link>
               <Link href="/dashboard/register-shop">Partner With Us</Link>
