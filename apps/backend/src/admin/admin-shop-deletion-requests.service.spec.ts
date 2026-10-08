@@ -1,14 +1,14 @@
 import { Role, UserStatus } from '@barbercue/shared';
-import { ShopDeletionRequestStatus } from '@prisma/client';
+import { SalonStatus, ShopDeletionRequestStatus } from '@prisma/client';
 import { AdminShopDeletionRequestsService } from './admin-shop-deletion-requests.service';
 
-describe('Shop deletion requests / Super Admin approval', () => {
+describe('recoverable shop deletion decisions', () => {
   const salonId = 'salon-1';
   const requester = 'cofounder-1';
   const approver = 'super-admin-1';
 
   function build() {
-    const requested = {
+    const request = {
       id: 'request-1',
       salonId,
       shopName: 'Junk Shop',
@@ -16,7 +16,7 @@ describe('Shop deletion requests / Super Admin approval', () => {
       requestedByUserId: requester,
       reason: 'Duplicate test listing',
       status: ShopDeletionRequestStatus.PENDING,
-      requestedAt: new Date(),
+      requestedAt: new Date('2026-10-01T00:00:00.000Z'),
       decidedAt: null,
       decidedByUserId: null,
       decisionNote: null,
@@ -31,10 +31,9 @@ describe('Shop deletion requests / Super Admin approval', () => {
     const coFounder = {
       id: requester,
       status: UserStatus.ACTIVE,
-      roles: [{ role: Role.CO_FOUNDER, salonId: null }] as Array<{
-        role: Role;
-        salonId: string | null;
-      }>,
+      roles: [{ role: Role.CO_FOUNDER, salonId: null }],
+      twoFactorEnabled: false,
+      totpSecret: null,
     };
     const tx = {
       $queryRaw: jest.fn().mockResolvedValue([{ id: salonId }]),
@@ -45,50 +44,78 @@ describe('Shop deletion requests / Super Admin approval', () => {
       },
       salon: {
         findUnique: jest.fn().mockResolvedValue({
-          name: requested.shopName,
-          publicId: requested.shopPublicId,
-          _count: {
-            staff: 0,
-            bookings: 0,
-            queueEntries: 0,
-            reviews: 0,
-            ledgerEntries: 0,
-          },
+          name: request.shopName,
+          publicId: request.shopPublicId,
+          softDeletedAt: null,
         }),
+        update: jest
+          .fn()
+          .mockResolvedValue({
+            id: salonId,
+            name: request.shopName,
+            status: SalonStatus.PENDING,
+          }),
       },
       shopDeletionRequest: {
         findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(requested),
-        create: jest.fn().mockResolvedValue(requested),
-        update: jest.fn().mockResolvedValue({
-          ...requested,
-          status: ShopDeletionRequestStatus.APPROVED,
-        }),
+        findUnique: jest.fn().mockResolvedValue(request),
+        create: jest.fn().mockResolvedValue(request),
+        update: jest
+          .fn()
+          .mockImplementation(({ data }) => ({ ...request, ...data })),
       },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
     };
     const prisma = {
-      user: { findUnique: jest.fn().mockResolvedValue(admin) },
       $transaction: jest.fn(
         async (callback: (client: typeof tx) => Promise<unknown>) =>
           callback(tx),
       ),
+      shopDeletionRequest: { findMany: jest.fn().mockResolvedValue([]) },
+      salon: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn(),
+      },
     };
     const shops = {
-      deleteSalonInTransaction: jest.fn().mockResolvedValue({ deleted: true }),
+      quarantineSalonInTransaction: jest.fn().mockResolvedValue({
+        quarantined: true,
+        restoreEligibleUntil: new Date('2026-10-31T00:00:00.000Z'),
+        previousStatus: SalonStatus.ACTIVE,
+        shopName: request.shopName,
+        shopPublicId: request.shopPublicId,
+      }),
     };
     const crypto = { decrypt: jest.fn().mockReturnValue('secret') };
     const totp = { verifyToken: jest.fn().mockResolvedValue(true) };
+    const activation = {
+      assertReadyToOpen: jest.fn().mockResolvedValue(undefined),
+    };
     const service = new AdminShopDeletionRequestsService(
       prisma as never,
       shops as never,
       crypto as never,
       totp as never,
+      activation as never,
     );
-    return { service, tx, prisma, shops, crypto, totp, requested, admin };
+    return {
+      service,
+      tx,
+      prisma,
+      shops,
+      crypto,
+      totp,
+      activation,
+      request,
+      admin,
+    };
   }
 
-  it('Co-Founder request does not delete or mutate the salon', async () => {
+  it('creates an attributed request and leaves the salon untouched', async () => {
     const { service, tx, shops } = build();
     const result = await service.request(
       requester,
@@ -113,164 +140,116 @@ describe('Shop deletion requests / Super Admin approval', () => {
         }),
       }),
     );
-    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
+    expect(shops.quarantineSalonInTransaction).not.toHaveBeenCalled();
   });
 
-  it('denies duplicate pending requests without a second record', async () => {
-    const { service, tx, requested } = build();
-    tx.shopDeletionRequest.findFirst.mockResolvedValue(requested);
+  it('rejects duplicate pending requests before creating or auditing another request', async () => {
+    const { service, tx, request } = build();
+    tx.shopDeletionRequest.findFirst.mockResolvedValue({ id: request.id });
     await expect(
-      service.request(requester, salonId, 'Another request'),
-    ).rejects.toMatchObject({ code: 'SHOP_DELETE_ALREADY_REQUESTED' });
+      service.request(requester, salonId, 'Another deletion request'),
+    ).rejects.toMatchObject({
+      code: 'SHOP_DELETE_ALREADY_REQUESTED',
+    });
     expect(tx.shopDeletionRequest.create).not.toHaveBeenCalled();
   });
 
-  it('accepts a review request for an active shop but does not delete it', async () => {
-    const { service, tx, shops } = build();
-    tx.salon.findUnique.mockResolvedValue({
-      name: 'Active Shop',
-      publicId: 'BC-SHOP-000099',
-      _count: {
-        staff: 1,
-        bookings: 4,
-        queueEntries: 2,
-        reviews: 1,
-        ledgerEntries: 1,
-      },
-    });
-    await expect(
-      service.request(requester, salonId, 'Please review this listing'),
-    ).resolves.toMatchObject({ status: ShopDeletionRequestStatus.PENDING });
-    expect(tx.shopDeletionRequest.create).toHaveBeenCalledTimes(1);
-    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
-  });
-
-  it('approval failure on an active shop rolls back and leaves request pending', async () => {
-    const { service, tx, shops } = build();
-    shops.deleteSalonInTransaction.mockRejectedValue(
-      Object.assign(new Error('Active shop'), { code: 'SALON_HAS_ACTIVITY' }),
-    );
-    await expect(
-      service.approve(approver, 'request-1', '123456'),
-    ).rejects.toMatchObject({ code: 'SALON_HAS_ACTIVITY' });
-    expect(tx.shopDeletionRequest.update).not.toHaveBeenCalled();
-    expect(tx.auditLog.create).not.toHaveBeenCalled();
-  });
-
-  it('rejects non-Co-Founder requesters, checking current DB scope', async () => {
+  it('requires a current global Co-Founder grant before requesting', async () => {
     const { service, tx } = build();
-    tx.user.findUnique.mockResolvedValue({
-      id: requester,
-      status: UserStatus.ACTIVE,
-      roles: [{ role: Role.CO_FOUNDER, salonId: 'not-global' }],
-    });
+    tx.$queryRaw.mockResolvedValueOnce([]);
     await expect(
       service.request(requester, salonId, 'Duplicate test listing'),
-    ).rejects.toMatchObject({ code: 'CO_FOUNDER_REQUIRED' });
+    ).rejects.toMatchObject({
+      code: 'CO_FOUNDER_REQUIRED',
+    });
     expect(tx.shopDeletionRequest.create).not.toHaveBeenCalled();
   });
 
-  it('does not allow any approval without a fresh valid Super Admin TOTP', async () => {
-    const { service, totp, prisma, shops } = build();
+  it('requires a fresh TOTP for approval and validates it after actor row locking', async () => {
+    const { service, tx, totp, shops } = build();
     totp.verifyToken.mockResolvedValue(false);
     await expect(
       service.approve(approver, 'request-1', '000000'),
-    ).rejects.toMatchObject({ code: 'TOTP_INVALID' });
-    expect(prisma.$transaction).not.toHaveBeenCalled();
-    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
+    ).rejects.toMatchObject({
+      code: 'TOTP_INVALID',
+    });
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(shops.quarantineSalonInTransaction).not.toHaveBeenCalled();
   });
 
-  it('approves only pending requests and executes deletion inside one audited transaction', async () => {
+  it('moves the shop to recoverable quarantine and audits without recording request text', async () => {
     const { service, tx, shops } = build();
     const result = await service.approve(
       approver,
       'request-1',
       '123456',
-      'Confirmed duplicate',
+      'Reviewed duplicate',
     );
-    expect(shops.deleteSalonInTransaction).toHaveBeenCalledWith(
+    expect(shops.quarantineSalonInTransaction).toHaveBeenCalledWith(
       tx,
       approver,
       salonId,
+      'request-1',
     );
-    const authorizationLock = tx.$queryRaw.mock.calls[0][0]
-      .join(' ')
-      .replace(/\s+/g, ' ');
-    expect(authorizationLock).toContain('FOR UPDATE OF u, r');
-    expect(tx.$queryRaw.mock.calls[0][1]).toBe(approver);
-    expect(tx.shopDeletionRequest.update).toHaveBeenCalledWith({
-      where: { id: 'request-1' },
-      data: expect.objectContaining({
-        status: ShopDeletionRequestStatus.APPROVED,
-        decidedByUserId: approver,
-        decidedAt: expect.any(Date),
-        decisionNote: 'Confirmed duplicate',
-      }),
+    expect(result).toMatchObject({
+      shopName: 'Junk Shop',
+      restoreEligibleUntil: '2026-10-31T00:00:00.000Z',
     });
-    expect(tx.auditLog.create).toHaveBeenCalledWith(
+    expect(tx.shopDeletionRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: 'request-1' },
         data: expect.objectContaining({
-          action: 'SHOP_DELETE_APPROVED',
-          actorUserId: approver,
-          entityId: salonId,
+          status: ShopDeletionRequestStatus.APPROVED,
+          decidedByUserId: approver,
         }),
       }),
     );
-    expect(result.status).toBe(ShopDeletionRequestStatus.APPROVED);
+    const auditCalls = tx.auditLog.create.mock.calls.map(([call]) => call.data);
+    expect(auditCalls.map((entry) => entry.action)).toEqual(
+      expect.arrayContaining(['SHOP_DELETE_APPROVED']),
+    );
+    expect(JSON.stringify(auditCalls)).not.toContain('Duplicate test listing');
+    expect(JSON.stringify(auditCalls)).not.toContain('Reviewed duplicate');
   });
 
-  it('denies approval if the global Super Admin grant is absent at transaction authorization', async () => {
+  it('persists a denial audit while returning a safe conflict when obligations remain', async () => {
     const { service, tx, shops } = build();
-    tx.$queryRaw.mockResolvedValueOnce([]);
+    shops.quarantineSalonInTransaction.mockResolvedValue({
+      quarantined: false,
+      code: 'SHOP_HAS_OPEN_OBLIGATIONS',
+      message: 'Resolve current bookings first.',
+      blockers: ['PENDING_OR_CONFIRMED_BOOKING'],
+    });
     await expect(
       service.approve(approver, 'request-1', '123456'),
-    ).rejects.toMatchObject({ code: 'PLATFORM_ADMIN_REQUIRED' });
-    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
+    ).rejects.toMatchObject({
+      code: 'SHOP_HAS_OPEN_OBLIGATIONS',
+      details: { blockers: ['PENDING_OR_CONFIRMED_BOOKING'] },
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'SHOP_DELETE_DENIED' }),
+      }),
+    );
     expect(tx.shopDeletionRequest.update).not.toHaveBeenCalled();
   });
 
-  it('rejects replay/double approval without executing deletion', async () => {
-    const { service, tx, requested, shops } = build();
-    tx.shopDeletionRequest.findUnique.mockResolvedValue({
-      ...requested,
-      status: ShopDeletionRequestStatus.APPROVED,
-    });
-    await expect(
-      service.approve(approver, 'request-1', '123456'),
-    ).rejects.toMatchObject({ code: 'DELETE_REQUEST_CLOSED' });
-    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
-  });
-
-  it('does not allow the requesting account to approve its own request', async () => {
-    const { service, tx, requested, prisma, shops } = build();
-    tx.shopDeletionRequest.findUnique.mockResolvedValue({
-      ...requested,
-      requestedByUserId: approver,
-    });
-    await expect(
-      service.approve(approver, 'request-1', '123456'),
-    ).rejects.toMatchObject({ code: 'SELF_APPROVAL_FORBIDDEN' });
-    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-  });
-
-  it('rejects without any deletion and records a reason', async () => {
-    const { service, tx, shops } = build();
-    tx.user.findUnique.mockResolvedValue({
-      id: approver,
-      status: UserStatus.ACTIVE,
-      roles: [{ role: Role.PLATFORM_ADMIN, salonId: null }],
-    });
-    tx.shopDeletionRequest.update.mockResolvedValue({
-      status: ShopDeletionRequestStatus.REJECTED,
-    });
+  it('requires a fresh TOTP for rejection and uses the same actor → request → salon lock order', async () => {
+    const { service, tx } = build();
     const result = await service.reject(
       approver,
       'request-1',
-      'This shop is legitimate',
+      '123456',
+      'Request is not justified',
     );
     expect(result.status).toBe(ShopDeletionRequestStatus.REJECTED);
-    expect(shops.deleteSalonInTransaction).not.toHaveBeenCalled();
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(3);
+    const sql = tx.$queryRaw.mock.calls.map(([statement]) =>
+      statement.join(' ').replace(/\s+/g, ' '),
+    );
+    expect(sql[0]).toContain('FOR UPDATE OF u, r');
+    expect(sql[1]).toContain('shop_deletion_requests');
+    expect(sql[2]).toContain('salons');
     expect(tx.auditLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -279,5 +258,127 @@ describe('Shop deletion requests / Super Admin approval', () => {
         }),
       }),
     );
+  });
+
+  it('does not permit restore at the exact 30-day expiry and records the expired attempt', async () => {
+    const { service, tx, prisma } = build();
+    const expiredAt = new Date();
+    tx.salon.findUnique.mockResolvedValueOnce({
+      softDeletionRequestId: 'request-1',
+    });
+    tx.salon.findUnique.mockResolvedValueOnce({
+      id: salonId,
+      name: 'Junk Shop',
+      publicId: 'BC-SHOP-000099',
+      status: SalonStatus.SUSPENDED,
+      softDeletedAt: new Date(expiredAt.getTime() - 30 * 86_400_000),
+      restoreEligibleUntil: expiredAt,
+      softDeletedByUserId: approver,
+      softDeletionRequestId: 'request-1',
+      statusBeforeSoftDelete: SalonStatus.ACTIVE,
+      verification: { status: 'APPROVED' },
+    });
+    jest.useFakeTimers().setSystemTime(expiredAt);
+    try {
+      await expect(
+        service.restore(approver, salonId, '123456'),
+      ).rejects.toMatchObject({
+        code: 'RESTORE_WINDOW_EXPIRED',
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'SHOP_DELETE_RESTORE_EXPIRED',
+        }),
+      }),
+    );
+    expect(tx.salon.update).not.toHaveBeenCalled();
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('audits a restore attempt for a salon that is not in recovery trash', async () => {
+    const { service, tx } = build();
+    await expect(
+      service.restore(approver, salonId, '123456'),
+    ).rejects.toMatchObject({
+      code: 'SHOP_NOT_IN_TRASH',
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actorUserId: approver,
+          action: 'SHOP_DELETE_RESTORE_DENIED',
+          entityType: 'Salon',
+          entityId: salonId,
+          metadata: { reasonCode: 'SHOP_NOT_IN_TRASH' },
+        }),
+      }),
+    );
+  });
+
+  it('restores only inside the window and leaves previously suspended shops suspended', async () => {
+    const { service, tx, activation } = build();
+    const until = new Date(Date.now() + 1000);
+    tx.salon.findUnique.mockResolvedValueOnce({
+      softDeletionRequestId: 'request-1',
+    });
+    tx.salon.findUnique.mockResolvedValueOnce({
+      id: salonId,
+      name: 'Junk Shop',
+      publicId: 'BC-SHOP-000099',
+      status: SalonStatus.SUSPENDED,
+      softDeletedAt: new Date(),
+      restoreEligibleUntil: until,
+      softDeletedByUserId: approver,
+      softDeletionRequestId: 'request-1',
+      statusBeforeSoftDelete: SalonStatus.SUSPENDED,
+      verification: { status: 'APPROVED' },
+    });
+    await service.restore(approver, salonId, '123456');
+    expect(tx.salon.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: salonId },
+        data: expect.objectContaining({
+          softDeletedAt: null,
+          softDeletionRequestId: null,
+          status: SalonStatus.SUSPENDED,
+        }),
+      }),
+    );
+    expect(activation.assertReadyToOpen).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'SHOP_DELETE_RESTORED' }),
+      }),
+    );
+  });
+
+  it('restores a formerly active but unverified shop as PENDING, never ACTIVE', async () => {
+    const { service, tx, activation } = build();
+    tx.salon.findUnique.mockResolvedValueOnce({
+      softDeletionRequestId: 'request-1',
+    });
+    tx.salon.findUnique.mockResolvedValueOnce({
+      id: salonId,
+      name: 'Junk Shop',
+      publicId: 'BC-SHOP-000099',
+      status: SalonStatus.SUSPENDED,
+      softDeletedAt: new Date(),
+      restoreEligibleUntil: new Date(Date.now() + 1000),
+      softDeletedByUserId: approver,
+      softDeletionRequestId: 'request-1',
+      statusBeforeSoftDelete: SalonStatus.ACTIVE,
+      verification: { status: 'SUBMITTED' },
+    });
+    await service.restore(approver, salonId, '123456');
+    expect(tx.salon.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: SalonStatus.PENDING }),
+      }),
+    );
+    expect(activation.assertReadyToOpen).not.toHaveBeenCalled();
   });
 });

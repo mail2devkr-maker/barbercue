@@ -22,6 +22,11 @@ const SAFE_METADATA_FIELDS = [
   'status',
   'result',
   'durationMs',
+  'restoreEligibleUntil',
+  'originalStatus',
+  'restoredStatus',
+  'reasonCode',
+  'blockerTypes',
 ] as const;
 
 function safeMetadata(

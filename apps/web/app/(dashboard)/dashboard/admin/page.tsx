@@ -160,40 +160,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  async function handleDeleteShop(shopId: string, shopName: string) {
-    if (
-      !window.confirm(
-        `Delete "${shopName}"? This cannot be undone. Only a shop with no staff, bookings, queue, review, or ledger activity can be deleted.`,
-      )
-    ) {
-      return;
-    }
-    setDeleteError(null);
-    setDeletingShopId(shopId);
-    try {
-      await apiFetch(`${ADMIN_PATHS.admin}/${ADMIN_PATHS.shops}/${shopId}`, {
-        method: "DELETE",
-      });
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              shops: current.shops.filter((shop) => shop.id !== shopId),
-              counts: { ...current.counts, shops: current.counts.shops - 1 },
-            }
-          : current,
-      );
-    } catch (requestError) {
-      setDeleteError(
-        requestError instanceof ApiError
-          ? requestError.message
-          : "Could not delete this shop.",
-      );
-    } finally {
-      setDeletingShopId(null);
-    }
-  }
-
   // The approval inbox is visible to Super Admin without opening another page.
   // The server remains authoritative: no approval is performed from this counter.
   useEffect(() => {
@@ -201,13 +167,10 @@ export default function AdminDashboardPage() {
     let active = true;
     async function refreshPending() {
       try {
-        const requests = await apiFetch<Array<{ status: string }>>(
-          "admin/security/deletion-requests",
+        const requests = await apiFetch<{ items: Array<{ status: string }> }>(
+          "admin/security/deletion-requests?status=PENDING",
         );
-        if (active)
-          setPendingDeletionCount(
-            requests.filter((item) => item.status === "PENDING").length,
-          );
+        if (active) setPendingDeletionCount(requests.items.length);
       } catch {
         // The queue page will show its actionable error; no optimistic count here.
       }
@@ -540,18 +503,12 @@ export default function AdminDashboardPage() {
                               </Button>
                             )}
                             {superAdmin ? (
-                              <Button
-                                type="button"
+                              <LinkButton
+                                href="/dashboard/admin/security"
                                 variant="outline"
-                                disabled={deletingShopId === shop.id}
-                                onClick={() =>
-                                  void handleDeleteShop(shop.id, shop.name)
-                                }
                               >
-                                {deletingShopId === shop.id
-                                  ? "Deleting…"
-                                  : "Delete"}
-                              </Button>
+                                Review recovery requests
+                              </LinkButton>
                             ) : (
                               <Button
                                 type="button"
@@ -563,7 +520,7 @@ export default function AdminDashboardPage() {
                               >
                                 {deletingShopId === shop.id
                                   ? "Submitting…"
-                                  : "Request deletion approval"}
+                                  : "Request deletion"}
                               </Button>
                             )}
                           </>

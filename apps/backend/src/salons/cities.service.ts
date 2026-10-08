@@ -34,7 +34,9 @@ export class CitiesService {
   // linking to a city with nothing bookable in it.
   async listCities(): Promise<CityDto[]> {
     const cities = await this.prisma.city.findMany({
-      where: { salons: { some: { status: SalonStatus.ACTIVE } } },
+      where: {
+        salons: { some: { status: SalonStatus.ACTIVE, softDeletedAt: null } },
+      },
       orderBy: { name: 'asc' },
     });
     return cities.map((c) => ({
@@ -104,7 +106,7 @@ export class CitiesService {
     const localities = await this.prisma.locality.findMany({
       where: {
         cityId: city.id,
-        salons: { some: { status: SalonStatus.ACTIVE } },
+        salons: { some: { status: SalonStatus.ACTIVE, softDeletedAt: null } },
       },
       orderBy: { name: 'asc' },
     });

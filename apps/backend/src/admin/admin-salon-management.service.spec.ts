@@ -1,151 +1,157 @@
-import { Test } from '@nestjs/testing';
+import { Prisma, SalonStatus } from '@prisma/client';
 import { AdminSalonManagementService } from './admin-salon-management.service';
-import { PrismaService } from '../prisma/prisma.service';
 
-function salonRow(counts: Record<string, number> = {}) {
-  return {
-    id: 'salon-1',
-    name: 'Empty Test Shop',
-    publicId: 'BC-SHOP-000099',
-    _count: {
-      staff: 0,
-      bookings: 0,
-      queueEntries: 0,
-      reviews: 0,
-      ledgerEntries: 0,
-      manualChairOccupancies: 0,
-      subsidyEntries: 0,
-      ...counts,
-    },
-  };
-}
+describe('AdminSalonManagementService recoverable quarantine', () => {
+  const salonId = 'salon-1';
+  const requestId = 'request-1';
 
-describe('AdminSalonManagementService hard deletion safeguards', () => {
   function build() {
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([{ id: 'salon-1' }]),
+      $queryRaw: jest.fn().mockResolvedValue([{ id: salonId }]),
       salon: {
-        findUnique: jest.fn().mockResolvedValue(salonRow()),
-        delete: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn().mockResolvedValue({
+          id: salonId,
+          name: 'Test Shop',
+          publicId: 'BC-SHOP-000099',
+          status: SalonStatus.ACTIVE,
+          softDeletedAt: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
       },
-      shopDeletionRequest: {
+      booking: { findFirst: jest.fn().mockResolvedValue(null) },
+      queueEntry: { findFirst: jest.fn().mockResolvedValue(null) },
+      serviceSession: { findFirst: jest.fn().mockResolvedValue(null) },
+      manualChairOccupancy: { findFirst: jest.fn().mockResolvedValue(null) },
+      payment: { findFirst: jest.fn().mockResolvedValue(null) },
+      refund: { findFirst: jest.fn().mockResolvedValue(null) },
+      customerLedgerEntry: { findFirst: jest.fn().mockResolvedValue(null) },
+      platformShopSubsidyEntry: {
         findFirst: jest.fn().mockResolvedValue(null),
       },
-      photo: { deleteMany: jest.fn() },
-      operatingHours: { deleteMany: jest.fn() },
-      chair: { deleteMany: jest.fn() },
-      service: { deleteMany: jest.fn() },
-      salonPaymentPolicy: { deleteMany: jest.fn() },
-      cancellationPolicy: { deleteMany: jest.fn() },
-      verificationRequest: { deleteMany: jest.fn() },
-      userRole: { deleteMany: jest.fn() },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
     };
-    const prisma = {
-      $transaction: jest.fn(
-        async (callback: (client: typeof tx) => Promise<unknown>) =>
-          callback(tx),
-      ),
+    const prisma = { $transaction: jest.fn() };
+    return {
+      service: new AdminSalonManagementService(prisma as never),
+      tx,
+      prisma,
     };
-    return { tx, prisma };
   }
 
-  it('locks the parent shop and rejects missing shops without destructive writes', async () => {
-    const { tx, prisma } = build();
-    tx.$queryRaw.mockResolvedValue([]);
-    const moduleRef = await Test.createTestingModule({
-      providers: [
-        AdminSalonManagementService,
-        { provide: PrismaService, useValue: prisma },
-      ],
-    }).compile();
-    const service = moduleRef.get(AdminSalonManagementService);
-    await expect(
-      service.deleteSalon('admin-1', 'missing'),
-    ).rejects.toMatchObject({
-      code: 'SALON_NOT_FOUND',
+  it('permanently disables the legacy direct delete route without opening a transaction', async () => {
+    const { service, prisma } = build();
+    await expect(service.deleteSalon('admin-1', salonId)).rejects.toMatchObject(
+      {
+        code: 'SHOP_DELETE_USE_RECOVERY_FLOW',
+        status: 409,
+      },
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('quarantines an eligible shop in place and preserves the prior status and request link', async () => {
+    const { service, tx } = build();
+    const now = new Date('2026-10-08T00:00:00.000Z');
+    const result = await service.quarantineSalonInTransaction(
+      tx as unknown as Prisma.TransactionClient,
+      'admin-1',
+      salonId,
+      requestId,
+      now,
+    );
+    expect(result).toMatchObject({
+      quarantined: true,
+      previousStatus: SalonStatus.ACTIVE,
+      restoreEligibleUntil: new Date('2026-11-07T00:00:00.000Z'),
     });
-    expect(tx.salon.delete).not.toHaveBeenCalled();
-    expect(tx.auditLog.create).not.toHaveBeenCalled();
+    expect(tx.salon.update).toHaveBeenCalledWith({
+      where: { id: salonId },
+      data: {
+        softDeletedAt: now,
+        restoreEligibleUntil: new Date('2026-11-07T00:00:00.000Z'),
+        softDeletedByUserId: 'admin-1',
+        softDeletionRequestId: requestId,
+        statusBeforeSoftDelete: SalonStatus.ACTIVE,
+        status: SalonStatus.SUSPENDED,
+      },
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'SHOP_SOFT_DELETED',
+          metadata: expect.objectContaining({
+            previousStatus: SalonStatus.ACTIVE,
+            newStatus: SalonStatus.SUSPENDED,
+          }),
+        }),
+      }),
+    );
   });
 
   it.each([
-    ['staff', { staff: 1 }],
-    ['bookings', { bookings: 1 }],
-    ['queue entries', { queueEntries: 1 }],
-    ['reviews', { reviews: 1 }],
-    ['ledger entries', { ledgerEntries: 1 }],
-    ['manual chair occupancy history', { manualChairOccupancies: 1 }],
-    ['platform subsidy ledger entries', { subsidyEntries: 1 }],
+    ['pending or confirmed booking', 'booking', 'PENDING_OR_CONFIRMED_BOOKING'],
+    ['active queue entry', 'queueEntry', 'ACTIVE_QUEUE_ENTRY'],
+    ['active session', 'serviceSession', 'ACTIVE_SERVICE_SESSION'],
+    [
+      'manual occupancy',
+      'manualChairOccupancy',
+      'ACTIVE_MANUAL_CHAIR_OCCUPANCY',
+    ],
+    ['pending payment', 'payment', 'PENDING_PAYMENT'],
+    ['pending refund', 'refund', 'PENDING_REFUND'],
+    [
+      'outstanding customer ledger',
+      'customerLedgerEntry',
+      'OUTSTANDING_CUSTOMER_LEDGER',
+    ],
+    [
+      'outstanding platform subsidy',
+      'platformShopSubsidyEntry',
+      'OUTSTANDING_PLATFORM_SUBSIDY',
+    ],
   ])(
-    'never deletes a shop with %s, checking inside the locked transaction',
-    async (_kind, counts) => {
-      const { tx, prisma } = build();
-      tx.salon.findUnique.mockResolvedValue(salonRow(counts));
-      const service = new AdminSalonManagementService(prisma as never);
-      await expect(
-        service.deleteSalon('admin-1', 'salon-1'),
-      ).rejects.toMatchObject({
-        code: 'SALON_HAS_ACTIVITY',
+    'does not quarantine a shop with a %s',
+    async (_label, modelName, code) => {
+      const { service, tx } = build();
+      (
+        tx[modelName as keyof typeof tx] as { findFirst: jest.Mock }
+      ).findFirst.mockResolvedValue({ id: 'open-row' });
+      const result = await service.quarantineSalonInTransaction(
+        tx as unknown as Prisma.TransactionClient,
+        'admin-1',
+        salonId,
+        requestId,
+      );
+      expect(result).toMatchObject({
+        quarantined: false,
+        code: 'SHOP_HAS_OPEN_OBLIGATIONS',
+        blockers: [code],
       });
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
-      expect(tx.salon.delete).not.toHaveBeenCalled();
+      expect(tx.salon.update).not.toHaveBeenCalled();
       expect(tx.auditLog.create).not.toHaveBeenCalled();
     },
   );
 
-  it('hard deletes only an empty shop, and audits exactly the performing actor', async () => {
-    const { tx, prisma } = build();
-    const service = new AdminSalonManagementService(prisma as never);
-    await expect(service.deleteSalon('admin-1', 'salon-1')).resolves.toEqual({
-      deleted: true,
+  it('fails closed if another request already quarantined the shop', async () => {
+    const { service, tx } = build();
+    tx.salon.findUnique.mockResolvedValue({
+      id: salonId,
+      name: 'Test Shop',
+      publicId: 'BC-SHOP-000099',
+      status: SalonStatus.SUSPENDED,
+      softDeletedAt: new Date(),
     });
-
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
-    for (const model of [
-      tx.photo,
-      tx.operatingHours,
-      tx.chair,
-      tx.service,
-      tx.salonPaymentPolicy,
-      tx.cancellationPolicy,
-      tx.verificationRequest,
-      tx.userRole,
-    ]) {
-      expect(model.deleteMany).toHaveBeenCalledWith({
-        where: { salonId: 'salon-1' },
-      });
-    }
-    expect(tx.salon.delete).toHaveBeenCalledWith({ where: { id: 'salon-1' } });
-    expect(tx.auditLog.create).toHaveBeenCalledWith({
-      data: {
-        actorUserId: 'admin-1',
-        action: 'SALON_DELETED',
-        entityType: 'Salon',
-        entityId: 'salon-1',
-        metadata: { name: 'Empty Test Shop', publicId: 'BC-SHOP-000099' },
-      },
+    const result = await service.quarantineSalonInTransaction(
+      tx as unknown as Prisma.TransactionClient,
+      'admin-1',
+      salonId,
+      requestId,
+    );
+    expect(result).toMatchObject({
+      quarantined: false,
+      code: 'SHOP_ALREADY_QUARANTINED',
     });
-  });
-
-  it('fails closed when a deletion approval is pending, without any shop writes', async () => {
-    const { tx, prisma } = build();
-    tx.shopDeletionRequest.findFirst.mockResolvedValue({ id: 'pending-1' });
-    const service = new AdminSalonManagementService(prisma as never);
-    await expect(
-      service.deleteSalon('admin-1', 'salon-1'),
-    ).rejects.toMatchObject({ code: 'SHOP_DELETE_APPROVAL_PENDING' });
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(tx.salon.delete).not.toHaveBeenCalled();
-  });
-
-  it('reuses a provided transaction and does not start another transaction', async () => {
-    const { tx, prisma } = build();
-    const service = new AdminSalonManagementService(prisma as never);
-    await expect(
-      service.deleteSalonInTransaction(tx as never, 'admin-1', 'salon-1'),
-    ).resolves.toEqual({ deleted: true });
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.salon.update).not.toHaveBeenCalled();
   });
 });

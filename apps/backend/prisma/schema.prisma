@@ -764,6 +764,12 @@ model Salon {
   email            String?
   description      String?
   status           SalonStatus @default(PENDING)
+  // Quarantine is independent from moderation status. No automatic permanent purge.
+  softDeletedAt          DateTime?
+  restoreEligibleUntil   DateTime?
+  softDeletedByUserId    String?
+  softDeletionRequestId  String?
+  statusBeforeSoftDelete SalonStatus?
   // Owner-controlled same-day pause. Unlike SalonStatus.SUSPENDED (platform/admin moderation),
   // this never removes an otherwise ACTIVE shop from public discovery. Customer-facing surfaces
   // keep the shop visible with an explicit "This shop is closed for today." notice, while booking
@@ -809,6 +815,8 @@ model Salon {
   crmLeadAttribution    EmployeeCrmLead? @relation("CrmLeadOnboardedSalon")
 
   @@unique([cityId, slug])
+  @@index([softDeletedAt, restoreEligibleUntil])
+  @@index([softDeletionRequestId])
   @@map("salons")
 }
 

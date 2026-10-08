@@ -18,6 +18,9 @@ const approveSchema = z.object({
   note: z.string().trim().max(500).optional(),
 });
 const rejectSchema = z.object({
+  totpCode: z
+    .string()
+    .regex(/^\d{6}$/, 'Current 6-digit authenticator code required'),
   note: z.string().trim().min(5).max(500),
 });
 
@@ -43,8 +46,21 @@ export class AdminSecurityController {
   }
 
   @Get('security/deletion-requests')
-  listRequests() {
-    return this.deletions.list();
+  listRequests(
+    @Query('cursor') cursor?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.deletions.list({ cursor, status });
+  }
+
+  @Get('security/deletion-requests/:id/detail')
+  getRequestDetail(@Param('id') id: string) {
+    return this.deletions.getRequestDetail(id);
+  }
+
+  @Get('security/deletion-trash')
+  listDeletionTrash(@Query('cursor') cursor?: string) {
+    return this.deletions.listTrash({ cursor });
   }
 
   @Post('security/deletion-requests/:id/approve')
@@ -66,7 +82,26 @@ export class AdminSecurityController {
     @Body(new ZodValidationPipe(rejectSchema))
     body: z.infer<typeof rejectSchema>,
   ) {
-    return this.deletions.reject(actor.id, id, body.note);
+    return this.deletions.reject(actor.id, id, body.totpCode, body.note);
+  }
+
+  @Post('security/deletion-trash/:salonId/restore')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  restore(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(
+      new ZodValidationPipe(
+        z.object({
+          totpCode: z
+            .string()
+            .regex(/^\d{6}$/, 'Current 6-digit authenticator code required'),
+        }),
+      ),
+    )
+    body: { totpCode: string },
+  ) {
+    return this.deletions.restore(actor.id, salonId, body.totpCode);
   }
 
   @Get('security/audit')
