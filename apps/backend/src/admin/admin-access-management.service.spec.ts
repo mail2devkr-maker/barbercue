@@ -1,6 +1,5 @@
 import { AuthErrorCode, Role, UserStatus } from '@barbercue/shared';
 import { AdminAccessManagementService } from './admin-access-management.service';
-import { AppException } from '../common/exceptions/app.exception';
 
 describe('AdminAccessManagementService', () => {
   const actorUserId = 'platform-admin-1';
@@ -41,7 +40,11 @@ describe('AdminAccessManagementService', () => {
         callback(tx),
       ),
     };
-    return { service: new AdminAccessManagementService(prisma as never), prisma, tx };
+    return {
+      service: new AdminAccessManagementService(prisma as never),
+      prisma,
+      tx,
+    };
   }
 
   it('grants only a managed global role, audits the real actor, and revokes the target sessions', async () => {
@@ -70,7 +73,7 @@ describe('AdminAccessManagementService', () => {
     });
     expect(tx.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { userId: targetUserId, revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
+      data: { revokedAt: expect.any(Date) as unknown },
     });
     expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
     expect(result[0].roles).toEqual([Role.HR_ADMIN]);
@@ -97,7 +100,7 @@ describe('AdminAccessManagementService', () => {
     });
     expect(tx.refreshToken.updateMany).toHaveBeenCalledWith({
       where: { userId: targetUserId, revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
+      data: { revokedAt: expect.any(Date) as unknown },
     });
   });
 
@@ -114,7 +117,7 @@ describe('AdminAccessManagementService', () => {
 
       await expect(result).rejects.toMatchObject({
         code: AuthErrorCode.FORBIDDEN_ROLE,
-      } as Partial<AppException>);
+      });
       expect(prisma.$transaction).not.toHaveBeenCalled();
     },
   );

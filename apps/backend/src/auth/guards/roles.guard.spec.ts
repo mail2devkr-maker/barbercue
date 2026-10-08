@@ -160,12 +160,22 @@ describe('RolesGuard', () => {
 
       expect(
         guard.canActivate(
-          makeContext({ id: 'internal-1', roles: [role], audience: SessionAudience.ADMIN }),
+          makeContext({
+            id: 'internal-1',
+            roles: [role],
+            audience: SessionAudience.ADMIN,
+          }),
         ),
       ).toBe(true);
-      for (const audience of [SessionAudience.CUSTOMER, SessionAudience.STAFF, SessionAudience.EMPLOYEE]) {
+      for (const audience of [
+        SessionAudience.CUSTOMER,
+        SessionAudience.STAFF,
+        SessionAudience.EMPLOYEE,
+      ]) {
         expect(() =>
-          guard.canActivate(makeContext({ id: 'internal-1', roles: [role], audience })),
+          guard.canActivate(
+            makeContext({ id: 'internal-1', roles: [role], audience }),
+          ),
         ).toThrow(AppException);
       }
     },

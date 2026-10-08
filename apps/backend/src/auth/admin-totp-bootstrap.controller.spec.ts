@@ -120,7 +120,9 @@ describe('AdminTotpBootstrapController recovery', () => {
       });
       prisma.user.updateMany.mockResolvedValue({ count: 1 });
 
-      await expect(controller.setup({ idToken: 'valid-google-token' })).resolves.toMatchObject({
+      await expect(
+        controller.setup({ idToken: 'valid-google-token' }),
+      ).resolves.toMatchObject({
         otpAuthUri: 'otpauth://new',
         manualKey: 'NEW-TOTP-SECRET',
       });
@@ -144,19 +146,23 @@ describe('AdminTotpBootstrapController recovery', () => {
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
 
-  it.each([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN, Role.PLATFORM_VIEWER])(
-    'fails closed for malformed salon-scoped %s role rows',
-    async (role) => {
-      const { controller, prisma, crypto } = build();
-      prisma.authIdentity.findUnique.mockResolvedValue({
-        user: { ...adminUser, roles: [{ role, salonId: 'salon-1' }] },
-      });
-      crypto.decrypt.mockReturnValue('working-secret');
+  it.each([
+    Role.CO_FOUNDER,
+    Role.HR_ADMIN,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  ])('fails closed for malformed salon-scoped %s role rows', async (role) => {
+    const { controller, prisma, crypto } = build();
+    prisma.authIdentity.findUnique.mockResolvedValue({
+      user: { ...adminUser, roles: [{ role, salonId: 'salon-1' }] },
+    });
+    crypto.decrypt.mockReturnValue('working-secret');
 
-      await expect(controller.setup({ idToken: 'valid-google-token' })).rejects.toMatchObject({
-        code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
-      });
-      expect(prisma.user.updateMany).not.toHaveBeenCalled();
-    },
-  );
+    await expect(
+      controller.setup({ idToken: 'valid-google-token' }),
+    ).rejects.toMatchObject({
+      code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
+    });
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
 });

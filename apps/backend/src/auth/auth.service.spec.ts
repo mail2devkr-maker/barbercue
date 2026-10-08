@@ -122,21 +122,23 @@ describe('AuthService', () => {
       // Mirrors TokenService's real ROLES_ALLOWED_FOR_AUDIENCE mapping (not just a passthrough) so
       // these tests actually exercise the audience-scoping boundary AuthService depends on, rather
       // than trivially passing because the mock echoes back whatever roles it was given.
-      scopeRolesToAudience: jest.fn((roles: Role[], audience: SessionAudience) => {
-        const allowed: Record<SessionAudience, Role[]> = {
-          [SessionAudience.CUSTOMER]: [Role.CUSTOMER],
-          [SessionAudience.STAFF]: [Role.SALON_STAFF, Role.SALON_OWNER],
-          [SessionAudience.EMPLOYEE]: [Role.FIELD_EXECUTIVE],
-          [SessionAudience.ADMIN]: [
-            Role.PLATFORM_ADMIN,
-            Role.CO_FOUNDER,
-            Role.HR_ADMIN,
-            Role.SALES_ADMIN,
-            Role.PLATFORM_VIEWER,
-          ],
-        };
-        return roles.filter((role) => allowed[audience].includes(role));
-      }),
+      scopeRolesToAudience: jest.fn(
+        (roles: Role[], audience: SessionAudience) => {
+          const allowed: Record<SessionAudience, Role[]> = {
+            [SessionAudience.CUSTOMER]: [Role.CUSTOMER],
+            [SessionAudience.STAFF]: [Role.SALON_STAFF, Role.SALON_OWNER],
+            [SessionAudience.EMPLOYEE]: [Role.FIELD_EXECUTIVE],
+            [SessionAudience.ADMIN]: [
+              Role.PLATFORM_ADMIN,
+              Role.CO_FOUNDER,
+              Role.HR_ADMIN,
+              Role.SALES_ADMIN,
+              Role.PLATFORM_VIEWER,
+            ],
+          };
+          return roles.filter((role) => allowed[audience].includes(role));
+        },
+      ),
     };
     otpService = { requestOtp: jest.fn(), verifyOtp: jest.fn() };
     totpService = { verifyToken: jest.fn() };
@@ -915,7 +917,12 @@ describe('AuthService', () => {
       );
     });
 
-    it.each([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN, Role.PLATFORM_VIEWER])(
+    it.each([
+      Role.CO_FOUNDER,
+      Role.HR_ADMIN,
+      Role.SALES_ADMIN,
+      Role.PLATFORM_VIEWER,
+    ])(
       'allows global %s only after the mandatory authenticator check',
       async (role) => {
         prisma.user.findUnique.mockResolvedValue({
@@ -926,12 +933,19 @@ describe('AuthService', () => {
         cryptoService.decrypt.mockReturnValue('plain-secret');
         totpService.verifyToken.mockResolvedValue(true);
 
-        const result = await service.adminLogin('admin@barbercue.app', 'correct-password', '123456');
+        const result = await service.adminLogin(
+          'admin@barbercue.app',
+          'correct-password',
+          '123456',
+        );
 
         expect(result.user.roles).toEqual([role]);
         expect(result.user.audience).toBe(SessionAudience.ADMIN);
         expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
-          'admin1', [role], SessionAudience.ADMIN, undefined,
+          'admin1',
+          [role],
+          SessionAudience.ADMIN,
+          undefined,
         );
       },
     );
@@ -948,11 +962,18 @@ describe('AuthService', () => {
       cryptoService.decrypt.mockReturnValue('plain-secret');
       totpService.verifyToken.mockResolvedValue(true);
 
-      const result = await service.adminLogin('admin@barbercue.app', 'correct-password', '123456');
+      const result = await service.adminLogin(
+        'admin@barbercue.app',
+        'correct-password',
+        '123456',
+      );
 
       expect(result.user.roles).toEqual([Role.PLATFORM_ADMIN]);
       expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
-        'admin1', [Role.PLATFORM_ADMIN], SessionAudience.ADMIN, undefined,
+        'admin1',
+        [Role.PLATFORM_ADMIN],
+        SessionAudience.ADMIN,
+        undefined,
       );
     });
 
@@ -1100,19 +1121,29 @@ describe('AuthService', () => {
         expect(result.user.roles).toEqual([role]);
         expect(result.user.audience).toBe(SessionAudience.ADMIN);
         expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
-          'admin1', [role], SessionAudience.ADMIN, undefined,
+          'admin1',
+          [role],
+          SessionAudience.ADMIN,
+          undefined,
         );
       },
     );
 
-    it.each([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN, Role.PLATFORM_VIEWER])(
+    it.each([
+      Role.CO_FOUNDER,
+      Role.HR_ADMIN,
+      Role.SALES_ADMIN,
+      Role.PLATFORM_VIEWER,
+    ])(
       'rejects a salon-scoped %s role as Google admin-login eligibility',
       async (role) => {
         prisma.authIdentity.findUnique.mockResolvedValue({
           user: { ...admin, roles: [{ role, salonId: 'salon-1' }] },
         });
 
-        await expect(service.adminGoogleLogin('id-token', '123456')).rejects.toMatchObject({
+        await expect(
+          service.adminGoogleLogin('id-token', '123456'),
+        ).rejects.toMatchObject({
           code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
         });
         expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
