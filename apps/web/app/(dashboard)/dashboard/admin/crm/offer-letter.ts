@@ -686,6 +686,9 @@ export function numberToIndianWords(amount: number): string {
   return parts.join(" ") + " Rupees";
 }
 
+// Fixed default for future offer-letter PDFs. Update deliberately on explicit owner request.
+const DEFAULT_EXPECTED_PERFORMANCE_INCENTIVE_MONTHLY_INR = 5000;
+
 function salaryBreakdown(monthlyCtc: number) {
   const round = (value: number) => Math.round(value);
   const basic = round(monthlyCtc * 0.40);
@@ -700,7 +703,7 @@ function salaryBreakdown(monthlyCtc: number) {
     round(monthlyCtc) - basic - hra - employerPf - insurance - pfService - statutoryBonus - employeeCompensation,
   );
   const grossEarnings = basic + hra + specialAllowance + statutoryBonus;
-  const expectedPerformanceIncentive = Math.max(0, 20000 - round(monthlyCtc));
+  const expectedPerformanceIncentive = DEFAULT_EXPECTED_PERFORMANCE_INCENTIVE_MONTHLY_INR;
   const expectedMonthlyPackage = round(monthlyCtc) + expectedPerformanceIncentive;
   const employeePf = 0;
   return {
@@ -1050,8 +1053,8 @@ export function buildOfferLetterPdf(
   let noteY = Math.max(104, netTable.bottomY - 16);
   for (const line of wrap(
     customPerformanceTerms
-      ? "Note: Expected Performance Incentive in the illustrative salary package is not guaranteed salary. The separately stated Sales Target and Incentives Beyond Target govern offer-specific eligibility, subject to verified onboarding and company approval. The beyond-target rate does not automatically increase the illustrative salary annexure figures. Statutory treatment and final pay remain subject to applicable law and approved company payroll policy."
-      : "Note: Expected Performance Incentive is an illustrative variable amount used to show an expected package of up to approximately INR 20,000 per month. It is not guaranteed salary. Actual incentive is earned only on verified shop onboardings under the applicable performance slab (shops 86-100: INR 60 per shop; 101 onward: INR 100 per additional shop). Statutory treatment and final pay remain subject to applicable law and approved company payroll policy.",
+      ? "Note: Expected Performance Incentive is a fixed illustrative planning figure of INR 5,000 per month (INR 60,000 annually), above base pay, not guaranteed salary. The offer-specific Sales Target and Incentives Beyond Target set the actual variable incentive eligibility; actual payouts depend on verified onboarding, applicable approval and payroll policy. The illustrative INR 5,000 is not an additional guaranteed payment beyond the stated per-shop incentive."
+      : "Note: Expected Performance Incentive is a fixed illustrative planning figure of INR 5,000 per month (INR 60,000 annually), above base pay, not guaranteed salary. Actual payouts depend on verified shop onboardings under the applicable performance slab (shops 86-100: INR 60 per shop; 101 onward: INR 100 per additional shop), approval and payroll policy. The illustrative INR 5,000 is not an additional guaranteed payment beyond earned per-shop incentives.",
     102,
   )) {
     page3 += textCommand(line, 62, noteY, 7.4, false, "0.34 0.32 0.34");
