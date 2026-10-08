@@ -95,7 +95,8 @@ export default function AdminSecurityPage() {
 
   useEffect(() => {
     if (!allowed) return;
-    void load();
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
   }, [allowed, load]);
 
   async function resolveRequest(request: DeletionRequest, approve: boolean) {
