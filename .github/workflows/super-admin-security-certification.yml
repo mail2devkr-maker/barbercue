@@ -64,6 +64,10 @@ jobs:
           npm run test --workspace=@barbercue/backend --
           --runInBand
           --runTestsByPath
+          src/admin/admin-shop-deletion-requests.service.spec.ts
+          src/admin/admin-salon-management.service.spec.ts
+          src/admin/admin.controller.spec.ts
+          src/common/interceptors/admin-activity-audit.interceptor.spec.ts
       - name: Backend full test suite (track existing unrelated regressions)
         id: backend_full
         continue-on-error: true
@@ -80,18 +84,14 @@ jobs:
         working-directory: apps/backend
         run: >
           npx eslint
-          src/admin/admin-salon-management.service.spec.ts
           src/admin/admin-salon-management.service.ts
           src/admin/admin-security-audit.service.ts
           src/admin/admin-security.controller.ts
-          src/admin/admin-shop-deletion-requests.service.spec.ts
           src/admin/admin-shop-deletion-requests.service.ts
           src/admin/admin.controller.ts
-          src/admin/admin.controller.spec.ts
           src/admin/admin.module.ts
           src/app.module.ts
           src/common/interceptors/admin-activity-audit.interceptor.ts
-          src/common/interceptors/admin-activity-audit.interceptor.spec.ts
       - name: Scoped web lint (no auto-fix)
         working-directory: apps/web
         run: >
