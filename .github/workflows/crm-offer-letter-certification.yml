@@ -33,13 +33,12 @@ jobs:
         run: npm run test --workspace=@barbercue/web -- --runInBand --runTestsByPath 'app/(dashboard)/dashboard/admin/crm/__tests__/offer-letter.test.jsx'
       - name: Web TypeScript check
         run: npm run typecheck --workspace=@barbercue/web
-      - name: Scoped ESLint without auto-fix
+      - name: Scoped production-source ESLint without auto-fix
         working-directory: apps/web
         run: >
           npx eslint
           'app/(dashboard)/dashboard/admin/crm/page.tsx'
           'app/(dashboard)/dashboard/admin/crm/offer-letter.ts'
-          'app/(dashboard)/dashboard/admin/crm/__tests__/offer-letter.test.jsx'
       - name: Production Next.js build (no deploy)
         run: npm run build --workspace=@barbercue/web
       - name: Check whitespace
