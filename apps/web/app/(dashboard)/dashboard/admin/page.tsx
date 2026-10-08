@@ -50,6 +50,7 @@ export default function AdminDashboardPage() {
   const [shopStatus, setShopStatus] = useState<"ALL" | SalonStatus>("ALL");
   const [deletingShopId, setDeletingShopId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletionRequestSuccess, setDeletionRequestSuccess] = useState<string | null>(null);
   const [statusShopId, setStatusShopId] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusSuccess, setStatusSuccess] = useState<string | null>(null);
@@ -75,6 +76,33 @@ export default function AdminDashboardPage() {
       setStatusError(requestError instanceof ApiError ? `${requestError.message}${details ? ` (${details})` : ""}` : "Could not update this shop status.");
     } finally {
       setStatusShopId(null);
+    }
+  }
+
+  async function handleRequestDeletion(shopId: string, shopName: string) {
+    const reason = window.prompt(
+      `Why should "\${shopName}" be deleted? Super Admin approval is required. Nothing is deleted now.`,
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 10 || reason.trim().length > 500) {
+      setDeleteError("Provide a reason between 10 and 500 characters.");
+      return;
+    }
+    setDeleteError(null);
+    setDeletionRequestSuccess(null);
+    setDeletingShopId(shopId);
+    try {
+      await apiFetch(`${ADMIN_PATHS.admin}/shops/${shopId}/deletion-requests`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      setDeletionRequestSuccess(
+        `Approval request submitted for "${shopName}". Shop remains unchanged until Super Admin approves.`,
+      );
+    } catch (requestError) {
+      setDeleteError(requestError instanceof ApiError ? requestError.message : "Unable to request deletion.");
+    } finally {
+      setDeletingShopId(null);
     }
   }
 
@@ -153,6 +181,7 @@ export default function AdminDashboardPage() {
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
           {superAdmin && <LinkButton href="/dashboard/admin/access" variant="outline">Access</LinkButton>}
+          {superAdmin && <LinkButton href="/dashboard/admin/security" variant="outline">Security &amp; audit</LinkButton>}
           {canManageEmployees && <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>}
           {canOpenCrm && <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>}
           {canReviewVerification && <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>}
@@ -235,6 +264,7 @@ export default function AdminDashboardPage() {
           <section className={styles.section}>
             <div className={styles.sectionHeader}><h2>Shops</h2><span>{shops.length} shown · latest 100</span></div>
             {deleteError && <p className={styles.error} role="alert">{deleteError}</p>}
+            {deletionRequestSuccess && <p className={styles.success} role="status">{deletionRequestSuccess}</p>}
             {statusError && <p className={styles.error} role="alert">{statusError}</p>}
             {statusSuccess && <p className={styles.success} role="status">{statusSuccess}</p>}
             <div className={styles.tableWrap}>
@@ -256,9 +286,15 @@ export default function AdminDashboardPage() {
                             {statusShopId === shop.id ? "Saving…" : getNextShopStatus(shop.status)?.label}
                           </Button>
                         )}
-                        <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleDeleteShop(shop.id, shop.name)}>
-                          {deletingShopId === shop.id ? "Deleting…" : "Delete"}
-                        </Button>
+                        {superAdmin ? (
+                          <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleDeleteShop(shop.id, shop.name)}>
+                            {deletingShopId === shop.id ? "Deleting…" : "Delete"}
+                          </Button>
+                        ) : (
+                          <Button type="button" variant="outline" disabled={deletingShopId === shop.id} onClick={() => void handleRequestDeletion(shop.id, shop.name)}>
+                            {deletingShopId === shop.id ? "Submitting…" : "Request deletion approval"}
+                          </Button>
+                        )}
                       </>
                     )}
                   </td>
