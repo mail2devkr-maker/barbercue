@@ -71,7 +71,7 @@ describe('AdminSalonManagementService hard deletion safeguards', () => {
       code: 'SALON_HAS_ACTIVITY',
     });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
     expect(tx.salon.delete).not.toHaveBeenCalled();
     expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
@@ -81,7 +81,7 @@ describe('AdminSalonManagementService hard deletion safeguards', () => {
     const service = new AdminSalonManagementService(prisma as never);
     await expect(service.deleteSalon('admin-1', 'salon-1')).resolves.toEqual({ deleted: true });
 
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
     for (const model of [
       tx.photo, tx.operatingHours, tx.chair, tx.service,
       tx.salonPaymentPolicy, tx.cancellationPolicy,
