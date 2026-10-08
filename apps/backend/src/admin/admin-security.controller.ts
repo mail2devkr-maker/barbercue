@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
 import { Role, type AuthenticatedUser } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -47,6 +48,7 @@ export class AdminSecurityController {
   }
 
   @Post('security/deletion-requests/:id/approve')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   approve(
     @CurrentUser() actor: AuthenticatedUser,
     @Param('id') id: string,
@@ -57,6 +59,7 @@ export class AdminSecurityController {
   }
 
   @Post('security/deletion-requests/:id/reject')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   reject(
     @CurrentUser() actor: AuthenticatedUser,
     @Param('id') id: string,
