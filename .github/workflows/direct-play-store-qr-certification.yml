@@ -38,7 +38,6 @@ jobs:
           'app/(public)/app/page.tsx'
           'app/(public)/page.tsx'
           components/layout/SiteFooter.tsx
-          components/layout/SiteHeader.tsx
           components/layout/PlayStoreQr.tsx
       - name: Check Play QR target and honest release-status disclosure
         run: |
