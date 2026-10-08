@@ -316,7 +316,7 @@ export class AuthService {
     }
 
     const passwordHash = await this.passwordService.hash(password);
-    let user;
+    let user: Prisma.UserGetPayload<{ include: { roles: true } }>;
     try {
       user = await this.prisma.user.create({
         data: {
@@ -534,7 +534,9 @@ export class AuthService {
       // UserRole, repair only that already-proven ownership before applying the normal login gate.
       // This never infers ownership from email and never grants access to a salon the User row
       // does not already own.
-      const repairMissingOwnerRole = async <T extends { id: string; roles: Array<{ role: Role }> }>(
+      const repairMissingOwnerRole = async <
+        T extends { id: string; roles: Array<{ role: Role }> },
+      >(
         candidate: T,
       ): Promise<T> => {
         const alreadyOperator = candidate.roles.some(
@@ -673,10 +675,7 @@ export class AuthService {
       // UserRole's own doc comment); a salon-scoped PLATFORM_ADMIN row (which should never exist —
       // enforced by a DB CHECK constraint as of this fix — but must never be trusted regardless)
       // must not grant admin-login eligibility here.
-      if (
-        !candidate ||
-        !hasGlobalAdminDashboardRole(candidate.roles)
-      ) {
+      if (!candidate || !hasGlobalAdminDashboardRole(candidate.roles)) {
         return null;
       }
       await tx.authIdentity.create({
@@ -847,8 +846,13 @@ export class AuthService {
       }
 
       const hasOnlyCustomerRoles =
-        user.roles.length > 0 && user.roles.every(({ role }) => role === Role.CUSTOMER);
-      if (!hasOnlyCustomerRoles || user.ownedSalons.length > 0 || user.staffMemberships.length > 0) {
+        user.roles.length > 0 &&
+        user.roles.every(({ role }) => role === Role.CUSTOMER);
+      if (
+        !hasOnlyCustomerRoles ||
+        user.ownedSalons.length > 0 ||
+        user.staffMemberships.length > 0
+      ) {
         throw new AppException(
           AuthErrorCode.FORBIDDEN_ROLE,
           'This account cannot be deleted through the customer account flow.',
@@ -874,7 +878,10 @@ export class AuthService {
       await tx.review.deleteMany({ where: { customerId: userId } });
       // Queue membership is not an accounting record. Clearing this optional relation prevents
       // an operational queue from carrying a deleted customer's stable account identifier.
-      await tx.queueEntry.updateMany({ where: { customerId: userId }, data: { customerId: null } });
+      await tx.queueEntry.updateMany({
+        where: { customerId: userId },
+        data: { customerId: null },
+      });
       // Audit history is retained for security, but its actor link and request metadata are
       // de-identified before the account row is stripped of direct identifiers.
       await tx.auditLog.updateMany({
