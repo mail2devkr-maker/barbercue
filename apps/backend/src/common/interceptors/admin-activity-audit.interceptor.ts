@@ -93,7 +93,7 @@ export class AdminActivityAuditInterceptor implements NestInterceptor {
             : null;
         if (isAdmin) {
           await write(
-            actor!.id,
+            actor.id,
             'ADMIN_HTTP_ACTIVITY',
             'SUCCESS',
             response.statusCode,
@@ -111,7 +111,7 @@ export class AdminActivityAuditInterceptor implements NestInterceptor {
       catchError((error: unknown) => {
         if (isAdmin) {
           void write(
-            actor!.id,
+            actor.id,
             'ADMIN_HTTP_ACTIVITY',
             'REJECTED',
             typeof (error as { status?: number })?.status === 'number'
