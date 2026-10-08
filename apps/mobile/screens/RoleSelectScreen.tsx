@@ -12,7 +12,8 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '../lib/language-context';
-import { resolveHomeLocation } from '../lib/home-location';
+import { useLocationSelection } from '../lib/location/location-context';
+import { shortLocationLabel } from '../lib/location/selection';
 import { createSignedOutHeroCommand, type HeroAction } from '../lib/hero-action-commands';
 import { stashPendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { beginShopRegistrationAuthentication } from '../lib/shop-registration-intent';
@@ -55,9 +56,9 @@ export default function RoleSelectScreen({ navigation }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchMode, setSearchMode] = useState<'barber' | 'salon'>('barber');
   const [query, setQuery] = useState('');
-  const [locationLabel, setLocationLabel] = useState<string | null>(null);
-  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(false);
+  // Same shared model as the signed-in Home: tapping a location control only opens the selector.
+  const { selection, openSelector } = useLocationSelection();
+  const locationText = shortLocationLabel(selection, t);
 
   const savedLabel = language === 'HI' ? 'सहेजे गए' : 'Saved';
   const profileLabel = language === 'HI' ? 'प्रोफ़ाइल' : 'Profile';
@@ -73,25 +74,11 @@ export default function RoleSelectScreen({ navigation }: Props) {
       : 'Haircut, fade, beard…'
     : t.shopOrServiceExample;
 
-  async function handleChooseLocation() {
-    setLocating(true);
-    try {
-      const result = await resolveHomeLocation(true);
-      if (result) {
-        setLocationLabel(result.label);
-        setLocationCoords(result.coords);
-      }
-    } finally {
-      setLocating(false);
-    }
-  }
-
   function goSearch(initialQuery?: string) {
     navigation.navigate('GuestBrowse', {
       screen: 'SalonSearch',
       params: {
         ...(initialQuery ? { initialQuery } : {}),
-        ...(locationCoords ? { initialLat: locationCoords.lat, initialLng: locationCoords.lng } : {}),
       },
     });
   }
@@ -101,7 +88,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
   }
 
   function handleHeroAction(action: HeroAction) {
-    const command = createSignedOutHeroCommand(action, locationCoords);
+    const command = createSignedOutHeroCommand(action, null);
     if (command.destination === 'guestSearch') {
       navigation.navigate('GuestBrowse', { screen: 'SalonSearch', params: command.params });
       return;
@@ -137,10 +124,10 @@ export default function RoleSelectScreen({ navigation }: Props) {
         <BrandLockup compact={compactHeader} markOnly={compactHeader} style={styles.brandLockup} />
 
         <View style={styles.headerActions}>
-          <Pressable style={[styles.locationPill, compactHeader && styles.locationPillCompact]} onPress={handleChooseLocation} disabled={locating}>
+          <Pressable style={[styles.locationPill, compactHeader && styles.locationPillCompact]} onPress={openSelector} accessibilityRole="button" accessibilityLabel={`${t.locationSelectorTitle}: ${locationText}`}>
             <View style={styles.locationPin} />
             <Text style={styles.locationText} numberOfLines={1}>
-              {locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction}
+              {locationText}
             </Text>
           </Pressable>
           <Pressable
@@ -309,12 +296,12 @@ export default function RoleSelectScreen({ navigation }: Props) {
             </View>
           </View>
 
-          <Pressable style={styles.inputRow} onPress={handleChooseLocation} disabled={locating}>
+          <Pressable style={styles.inputRow} onPress={openSelector} accessibilityRole="button" accessibilityLabel={`${t.locationSelectorTitle}: ${locationText}`}>
             <TabIcon name="shop" color={fastQue.text} size={22} />
             <View style={styles.inputCopy}>
               <Text style={styles.fieldLabel}>{t.cityLocationLabel}</Text>
-              <Text style={locationLabel ? styles.cityValueText : styles.cityPlaceholderText} numberOfLines={1}>
-                {locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction}
+              <Text style={selection ? styles.cityValueText : styles.cityPlaceholderText} numberOfLines={1}>
+                {locationText}
               </Text>
             </View>
             <Text style={styles.chevron}>⌄</Text>
