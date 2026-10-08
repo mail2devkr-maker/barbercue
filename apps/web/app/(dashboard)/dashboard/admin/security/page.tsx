@@ -1,0 +1,237 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Role } from "@barbercue/shared";
+import { useAuth } from "../../../../../lib/auth-context";
+import { apiFetch, ApiError } from "../../../../../lib/api";
+import { Button, LinkButton } from "../../../../../components/ui/Button";
+import styles from "../admin.module.css";
+
+type DeletionRequest = {
+  id: string;
+  salonId: string;
+  shopName: string;
+  shopPublicId: string;
+  requestedByUserId: string;
+  requestedByEmail?: string | null;
+  reason: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requestedAt: string;
+  decidedByUserId: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+};
+
+type AuditEvent = {
+  id: string;
+  at: string;
+  actorUserId: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  details: Record<string, unknown>;
+};
+type AuditPage = { items: AuditEvent[]; nextCursor: string | null };
+
+function fmt(iso: string) {
+  return new Date(iso).toLocaleString();
+}
+function errText(error: unknown) {
+  return error instanceof ApiError ? error.message : "The request failed. Please retry.";
+}
+
+export default function AdminSecurityPage() {
+  const { user } = useAuth();
+  const allowed = !!user?.roles.includes(Role.PLATFORM_ADMIN);
+  const [requests, setRequests] = useState<DeletionRequest[]>([]);
+  const [audit, setAudit] = useState<AuditEvent[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [actorEmail, setActorEmail] = useState("");
+  const [action, setAction] = useState("");
+  const [workingId, setWorkingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async (append = false, cursor?: string) => {
+    if (!allowed) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (actorEmail.trim()) params.set("actorEmail", actorEmail.trim());
+      if (action.trim()) params.set("action", action.trim().toUpperCase());
+      if (append && cursor) params.set("cursor", cursor);
+      const [latestRequests, page] = await Promise.all([
+        apiFetch<DeletionRequest[]>("admin/security/deletion-requests"),
+        apiFetch<AuditPage>(`admin/security/audit?${params.toString()}`),
+      ]);
+      setRequests(latestRequests);
+      setAudit((current) => append ? [...current, ...page.items] : page.items);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      setError(errText(error));
+    } finally {
+      setLoading(false);
+    }
+  }, [allowed, actorEmail, action]);
+
+  useEffect(() => {
+    if (!allowed) return;
+    void load();
+  }, [allowed, load]);
+
+  async function resolveRequest(request: DeletionRequest, approve: boolean) {
+    if (!allowed || workingId) return;
+    let body: { totpCode?: string; note: string };
+    if (approve) {
+      if (!window.confirm(
+        `Approve permanent deletion of "${request.shopName}" (${request.shopPublicId})? Data cannot be restored in this portal. Do not approve if you are unsure.`,
+      )) return;
+      const code = window.prompt("Enter your current 6-digit Super Admin authenticator code:");
+      if (code === null) return;
+      if (!/^\d{6}$/.test(code)) {
+        setError("A valid current authenticator code is required.");
+        return;
+      }
+      body = { totpCode: code, note: "" };
+    } else {
+      const note = window.prompt(`Reason for rejecting deletion of "${request.shopName}"?`);
+      if (note === null) return;
+      if (note.trim().length < 5 || note.trim().length > 500) {
+        setError("Rejection reason must be between 5 and 500 characters.");
+        return;
+      }
+      body = { note: note.trim() };
+    }
+
+    setWorkingId(request.id);
+    setNotice(null);
+    setError(null);
+    try {
+      await apiFetch(
+        `admin/security/deletion-requests/${request.id}/${approve ? "approve" : "reject"}`,
+        { method: "POST", body: JSON.stringify(body) },
+      );
+      setNotice(approve
+        ? `Request approved; "${request.shopName}" deleted only after fresh safety checks.`
+        : `Deletion request rejected. Shop remains unchanged.`);
+      await load();
+    } catch (error) {
+      setError(errText(error));
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  if (!user) return <main className={styles.page}><p>Checking your admin session…</p></main>;
+  if (!allowed) {
+    return <main className={styles.page}><h1>Super Admin only</h1><p>Access denied.</p></main>;
+  }
+  const pending = requests.filter((r) => r.status === "PENDING");
+  const history = requests.filter((r) => r.status !== "PENDING");
+
+  return (
+    <main className={styles.page}>
+      <header className={styles.header}>
+        <div>
+          <p className={styles.eyebrow}>Super Admin / Security</p>
+          <h1>Security &amp; Audit Control Center</h1>
+          <p>Human approval for deletion, user attribution, and event history. Only the Super Admin may approve.</p>
+        </div>
+        <div className={styles.headerActions}>
+          <LinkButton href="/dashboard/admin" variant="outline">Platform operations</LinkButton>
+          <LinkButton href="/dashboard/admin/access" variant="outline">Access control</LinkButton>
+          <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}>Refresh</Button>
+        </div>
+      </header>
+
+      {error && <p role="alert" className={styles.error}>{error}</p>}
+      {notice && <p role="status" className={styles.success}>{notice}</p>}
+
+      <section className={styles.section} aria-label="Pending deletion approvals">
+        <div className={styles.sectionHeader}>
+          <div>
+            <h2>Deletion approval queue</h2>
+            <p>Pending requests do not change a shop. Active shops with bookings/staff cannot be hard-deleted.</p>
+          </div>
+          <strong>{pending.length} pending</strong>
+        </div>
+        <div className={styles.tableWrap}>
+          <table>
+            <thead><tr><th>Shop</th><th>Requested by</th><th>Reason</th><th>Submitted</th><th>Decision</th></tr></thead>
+            <tbody>
+              {pending.map((req) => (
+                <tr key={req.id}>
+                  <td><strong>{req.shopName}</strong><small>{req.shopPublicId}</small></td>
+                  <td>{req.requestedByEmail ?? req.requestedByUserId}</td>
+                  <td style={{ maxWidth: 310, overflowWrap: "anywhere" }}>{req.reason}</td>
+                  <td>{fmt(req.requestedAt)}</td>
+                  <td>
+                    <Button type="button" disabled={!!workingId} onClick={() => void resolveRequest(req, true)}>
+                      {workingId === req.id ? "Processing…" : "Approve with 2FA"}
+                    </Button>{" "}
+                    <Button variant="outline" type="button" disabled={!!workingId} onClick={() => void resolveRequest(req, false)}>Reject</Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!pending.length && <p>No pending deletion requests.</p>}
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHeader}><h2>Deletion decision history</h2><span>Latest {history.length}</span></div>
+        <div className={styles.tableWrap}>
+          <table>
+            <thead><tr><th>Shop</th><th>Requested by</th><th>Decision</th><th>Decision time</th><th>Reason</th></tr></thead>
+            <tbody>{history.map((req) => (
+              <tr key={req.id}>
+                <td>{req.shopName}<small>{req.shopPublicId}</small></td>
+                <td>{req.requestedByEmail ?? req.requestedByUserId}</td>
+                <td>{req.status}</td>
+                <td>{req.decidedAt ? fmt(req.decidedAt) : "—"}</td>
+                <td>{req.decisionNote ?? "—"}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className={styles.section} aria-label="Audit event history">
+        <div className={styles.sectionHeader}>
+          <div>
+            <h2>Activity &amp; change history</h2>
+            <p>Recorded actions only. Passwords and authenticator secrets are never exposed.</p>
+          </div>
+        </div>
+        <form onSubmit={(event) => { event.preventDefault(); void load(); }} style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+          <label>Actor email <input type="email" value={actorEmail} onChange={(e) => setActorEmail(e.target.value)} placeholder="cofounder@gmail.com" /></label>
+          <label>Event action <input value={action} onChange={(e) => setAction(e.target.value)} placeholder="EMPLOYEE_UPDATED" /></label>
+          <Button type="submit" disabled={loading}>Filter</Button>
+        </form>
+        <div className={styles.tableWrap}>
+          <table>
+            <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Record</th><th>Safe change details</th></tr></thead>
+            <tbody>
+              {audit.map((event) => (
+                <tr key={event.id}>
+                  <td>{fmt(event.at)}</td>
+                  <td>{event.actorEmail ?? (event.actorUserId ? `User ${event.actorUserId}` : "System / unattributed")}</td>
+                  <td><strong>{event.action}</strong></td>
+                  <td>{event.entityType}<small>{event.entityId}</small></td>
+                  <td><pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxWidth: 370 }}>{JSON.stringify(event.details, null, 2)}</pre></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {loading && <p>Loading…</p>}
+        {!loading && !audit.length && <p>No recorded events match these filters.</p>}
+        {nextCursor && <Button type="button" variant="outline" disabled={loading} onClick={() => void load(true, nextCursor)}>Load older events</Button>}
+      </section>
+    </main>
+  );
+}
