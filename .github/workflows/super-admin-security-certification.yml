@@ -1,0 +1,89 @@
+name: Super Admin Security Certification
+
+on:
+  push:
+    branches:
+      - chatgpt/super-admin-approval-audit-control
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci_local_only
+          POSTGRES_DB: fastque_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ci -d fastque_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://ci:ci_local_only@localhost:5432/fastque_ci
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install exact lockfile
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared package
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Validate Prisma schema
+        run: npm run prisma:validate --workspace=@barbercue/backend
+      - name: Apply all migrations to disposable PostgreSQL
+        run: npm run prisma:migrate:deploy --workspace=@barbercue/backend
+      - name: Focused approval, audit and authorization tests
+        run: >
+          npm run test --workspace=@barbercue/backend --
+          --runInBand
+          --runTestsByPath
+          src/admin/admin-shop-deletion-requests.service.spec.ts
+          src/admin/admin-salon-management.service.spec.ts
+          src/admin/admin.controller.spec.ts
+          src/common/interceptors/admin-activity-audit.interceptor.spec.ts
+      - name: Backend full test suite
+        run: npm run test --workspace=@barbercue/backend -- --runInBand
+      - name: Shared full test suite
+        run: npm run test --workspace=@barbercue/shared -- --runInBand
+      - name: Typecheck every workspace
+        run: npm run typecheck --workspaces --if-present
+      - name: Scoped backend lint (no auto-fix)
+        run: >
+          npx eslint
+          apps/backend/src/admin/admin-salon-management.service.spec.ts
+          apps/backend/src/admin/admin-salon-management.service.ts
+          apps/backend/src/admin/admin-security-audit.service.ts
+          apps/backend/src/admin/admin-security.controller.ts
+          apps/backend/src/admin/admin-shop-deletion-requests.service.spec.ts
+          apps/backend/src/admin/admin-shop-deletion-requests.service.ts
+          apps/backend/src/admin/admin.controller.ts
+          apps/backend/src/admin/admin.controller.spec.ts
+          apps/backend/src/admin/admin.module.ts
+          apps/backend/src/app.module.ts
+          apps/backend/src/common/interceptors/admin-activity-audit.interceptor.ts
+          apps/backend/src/common/interceptors/admin-activity-audit.interceptor.spec.ts
+      - name: Scoped web lint (no auto-fix)
+        run: >
+          npx eslint
+          'apps/web/app/(dashboard)/dashboard/admin/page.tsx'
+          'apps/web/app/(dashboard)/dashboard/admin/security/page.tsx'
+      - name: Production builds (no deploy)
+        run: |
+          npm run build --workspace=@barbercue/backend
+          npm run build --workspace=@barbercue/web
+      - name: Whitespace check
+        run: git diff --check origin/master...HEAD
