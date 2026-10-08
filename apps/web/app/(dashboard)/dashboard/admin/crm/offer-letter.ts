@@ -47,8 +47,9 @@ function titleCase(value: string): string {
 export function guessCandidateName(filename: string): string {
   const withoutExtension = filename.replace(/\.[^.]+$/, "");
   const cleaned = withoutExtension
-    .replace(/\b(resume|cv|curriculum|vitae|profile|latest|final|updated|copy|document)\b/gi, " ")
+    // Split filename separators first so trailing "_RESUME" is recognized as a word.
     .replace(/[_.-]+/g, " ")
+    .replace(/\b(resume|cv|curriculum|vitae|profile|latest|final|updated|copy|document)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 
