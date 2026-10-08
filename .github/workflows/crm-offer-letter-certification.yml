@@ -1,0 +1,45 @@
+name: FastQue CRM Offer Letter Certification
+
+on:
+  push:
+    branches:
+      - chatgpt/crm-offer-letter-custom-target-incentives-20261009
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offer-letter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared dependencies
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Focused Offer Letter PDF tests
+        run: npm run test --workspace=@barbercue/web -- --runInBand --runTestsByPath 'app/(dashboard)/dashboard/admin/crm/__tests__/offer-letter.test.jsx'
+      - name: Web TypeScript check
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Scoped production-source ESLint without auto-fix
+        working-directory: apps/web
+        run: >
+          npx eslint
+          'app/(dashboard)/dashboard/admin/crm/page.tsx'
+          'app/(dashboard)/dashboard/admin/crm/offer-letter.ts'
+      - name: Production Next.js build (no deploy)
+        run: npm run build --workspace=@barbercue/web
+      - name: Check whitespace
+        run: git diff --check origin/master...HEAD
