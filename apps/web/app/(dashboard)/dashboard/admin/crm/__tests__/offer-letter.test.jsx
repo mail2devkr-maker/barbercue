@@ -99,8 +99,9 @@ describe("FastQue CRM offer letter helpers", () => {
       expect(valueFollowing(monthly, "Total Expected Package")).toBe(
         formatInr(baseSalary + 5000),
       );
-      expect(pdf).toContain("INR 5,000 per month");
-      expect(pdf).not.toContain("up to approximately INR 20,000 per month");
+      const visible = draws.join(" ");
+      expect(visible).toContain("INR 5,000 per month");
+      expect(visible).not.toContain("up to approximately INR 20,000 per month");
     }
   });
 
@@ -114,9 +115,9 @@ describe("FastQue CRM offer letter helpers", () => {
     }));
     expect(pdf).toContain("Sales Target: 100 successfully onboarded shops");
     expect(pdf).toContain("Incentives Beyond Target: INR 150");
-    expect(pdf).toContain("INR 5,000 per month");
     const drawnText = [...pdf.matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)]
       .map(m => m[1].replace(/\\([()\\])/g, "$1")).join(" ");
+    expect(drawnText).toContain("INR 5,000 per month");
     expect(drawnText).toContain("not an additional guaranteed payment");
     expect(pdf).not.toContain("up to approximately INR 20,000 per month");
   });
