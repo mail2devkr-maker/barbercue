@@ -29,6 +29,7 @@ import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { TokenService } from '../auth/services/token.service';
 import { CitiesService } from './cities.service';
+import { pageAfterCursor, rankByDistance } from './discovery-distance';
 import { isOpenAt, resolveSalonTimeZone } from '../common/timezone/timezone';
 import { resolveAutoTimezone } from '../common/timezone/timezone-resolution';
 
@@ -324,6 +325,25 @@ export class SalonsService {
       return { items: sorted, nextCursor: null };
     }
 
+    // Reference-origin mode (customer location selector). `originLat`/`originLng` is the point each
+    // shop's distance is measured from — a verified city centre or the customer's own GPS fix — and
+    // is NEVER a filter by itself (unlike `lat`/`lng` above). Nearest-first ordering (`sort=nearest`)
+    // and a hard `radiusKm` are opt-in; with neither, the normal name-ordered, cursor-paginated
+    // listing below runs and simply annotates each item's distanceKm.
+    const origin =
+      query.originLat !== undefined && query.originLng !== undefined
+        ? { lat: query.originLat, lng: query.originLng }
+        : undefined;
+    if (origin && (query.sort === 'nearest' || query.radiusKm !== undefined)) {
+      return this.searchRankedByDistance(
+        where,
+        origin,
+        query.radiusKm,
+        query.cursor,
+        limit,
+      );
+    }
+
     const salons = await this.prisma.salon.findMany({
       where,
       orderBy: { name: 'asc' },
@@ -334,9 +354,65 @@ export class SalonsService {
 
     const hasMore = salons.length > limit;
     const page = hasMore ? salons.slice(0, limit) : salons;
-    const items = await Promise.all(page.map((s) => this.toListItem(s)));
+    const items = await Promise.all(
+      page.map((s) => this.toListItem(s, origin)),
+    );
 
     return { items, nextCursor: hasMore ? page[page.length - 1].id : null };
+  }
+
+  /**
+   * Nearest-first and/or hard-radius listing measured from a reference origin, correctly paginated.
+   *
+   * The ordering needs every candidate's distance, which Prisma/Postgres cannot sort by without a
+   * geo extension (see the Near Me note in search()). So this reads ONLY id/lat/lng for the whole
+   * filtered set — a few small columns, bounded by one city's shops or, for a GPS search with no
+   * radius, by the platform's ACTIVE shops — ranks it with the shared Haversine, pages by cursor,
+   * and only then loads the full row for the (at most `limit`) shops on the requested page. Unlike
+   * Near Me it has no candidate cap and never drops a shop for lacking coordinates: those sort last
+   * with distanceKm null, unless a radius was requested (they cannot be shown to be inside it).
+   * With a radius, a DB-level bounding box on the coordinates narrows the read before the exact
+   * Haversine cutoff.
+   */
+  private async searchRankedByDistance(
+    where: Prisma.SalonWhereInput,
+    origin: { lat: number; lng: number },
+    radiusKm: number | undefined,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<PaginatedResult<SalonListItemDto>> {
+    const coordinateFilter: Prisma.SalonWhereInput =
+      radiusKm === undefined
+        ? {}
+        : (() => {
+            const box = boundingBoxDegrees(origin.lat, origin.lng, radiusKm);
+            return {
+              lat: { not: null, gte: box.minLat, lte: box.maxLat },
+              lng: { not: null, gte: box.minLng, lte: box.maxLng },
+            };
+          })();
+
+    const candidates = await this.prisma.salon.findMany({
+      where: { ...where, ...coordinateFilter },
+      select: { id: true, lat: true, lng: true },
+      orderBy: { id: 'asc' },
+    });
+    const ranked = rankByDistance(candidates, origin, { radiusKm });
+    const { page, nextCursor } = pageAfterCursor(ranked, cursor, limit);
+    if (page.length === 0) return { items: [], nextCursor: null };
+
+    const salons = await this.prisma.salon.findMany({
+      where: { id: { in: page.map((r) => r.id) } },
+      include: listInclude,
+    });
+    const byId = new Map(salons.map((s) => [s.id, s]));
+    const ordered = page
+      .map((r) => byId.get(r.id))
+      .filter((s): s is SalonWithListRelations => s !== undefined);
+    const items = await Promise.all(
+      ordered.map((s) => this.toListItem(s, origin)),
+    );
+    return { items, nextCursor };
   }
 
   async getProfile(
