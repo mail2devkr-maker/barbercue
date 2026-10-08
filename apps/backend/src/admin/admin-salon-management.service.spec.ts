@@ -107,7 +107,7 @@ describe('AdminSalonManagementService hard deletion safeguards', () => {
     const service = new AdminSalonManagementService(prisma as never);
     await expect(service.deleteSalon('admin-1', 'salon-1')).rejects
       .toMatchObject({ code: 'SHOP_DELETE_APPROVAL_PENDING' });
-    expect(tx.$queryRaw).not.toHaveBeenCalled();
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(tx.salon.delete).not.toHaveBeenCalled();
   });
 
