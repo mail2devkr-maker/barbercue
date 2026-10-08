@@ -296,6 +296,19 @@ export const salonSearchQuerySchema = z
     // text search matched. Both ends optional so a caller can give just a floor or just a ceiling.
     priceMin: z.coerce.number().nonnegative().optional(),
     priceMax: z.coerce.number().nonnegative().optional(),
+    // Reference point for DISTANCE ONLY (customer location selector). Deliberately separate from
+    // lat/lng above: lat/lng means "Near Me" and runs the bounded, bounding-box candidate search
+    // (capped, single page, drops shops without coordinates). originLat/originLng never filters
+    // anything by itself — it is the point each shop's distanceKm is measured from, whether that is
+    // a verified city centre or the customer's own GPS fix (the client knows which; the server
+    // does not need to). Both-or-neither, like lat/lng. Combine with `radiusKm` for a hard radius
+    // from this point, or with `sort=nearest` for nearest-first ordering that stays correctly
+    // paginated and keeps shops without coordinates (last, with distanceKm null).
+    originLat: z.coerce.number().min(-90).max(90).optional(),
+    originLng: z.coerce.number().min(-180).max(180).optional(),
+    // Only exposed ordering beyond the default name order, because it is the only one backed by
+    // real logic: nearest-first needs an origin (originLat/originLng) and is ignored without one.
+    sort: z.enum(['nearest']).optional(),
   })
   .refine((data) => data.priceMin === undefined || data.priceMax === undefined || data.priceMin <= data.priceMax, {
     message: 'priceMin must not be greater than priceMax.',
@@ -308,12 +321,26 @@ export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
 // `q` is intentionally left unbounded in length here (trimmed/short-circuited in the service, not
 // rejected here) so an empty/short query is a normal "still typing" UI state, not a validation
 // error.
-export const citySearchQuerySchema = z.object({
-  countryId: z.string().uuid(),
-  regionId: z.string().uuid().optional(),
-  q: z.string().max(200).optional(),
-  limit: z.coerce.number().int().min(1).max(50).optional(),
-});
+export const citySearchQuerySchema = z
+  .object({
+    // Required unless `hasShops` is set: the customer location selector searches only cities that
+    // already have an ACTIVE shop (a small, bounded set across all countries), which is the one
+    // other scope that never degenerates into an unscoped ~100K-row scan.
+    countryId: z.string().uuid().optional(),
+    regionId: z.string().uuid().optional(),
+    q: z.string().max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(50).optional(),
+    // 'true' | 'false' on the wire (a query string has no booleans). Stays undefined when absent so
+    // every existing caller of CitySearchQueryInput keeps compiling unchanged.
+    hasShops: z
+      .enum(['true', 'false'])
+      .optional()
+      .transform((value) => (value === undefined ? undefined : value === 'true')),
+  })
+  .refine((data) => data.hasShops || data.countryId !== undefined, {
+    message: 'countryId is required unless hasShops=true.',
+    path: ['countryId'],
+  });
 export type CitySearchQueryInput = z.infer<typeof citySearchQuerySchema>;
 
 export const otpRequestSchema = z.object({
