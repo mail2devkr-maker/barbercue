@@ -28,7 +28,7 @@ describe('Shop deletion requests / Super Admin approval', () => {
     };
     const coFounder = {
       id: requester, status: UserStatus.ACTIVE,
-      roles: [{ role: Role.CO_FOUNDER, salonId: null }],
+      roles: [{ role: Role.CO_FOUNDER, salonId: null }] as Array<{ role: Role; salonId: string | null }>,
     };
     const tx = {
       $queryRaw: jest.fn().mockResolvedValue([{ id: salonId }]),
