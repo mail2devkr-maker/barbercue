@@ -81,7 +81,7 @@ export default function AdminDashboardPage() {
 
   async function handleRequestDeletion(shopId: string, shopName: string) {
     const reason = window.prompt(
-      `Why should "\${shopName}" be deleted? Super Admin approval is required. Nothing is deleted now.`,
+      `Why should "${shopName}" be deleted? Super Admin approval is required. Nothing is deleted now.`,
     );
     if (reason === null) return;
     if (reason.trim().length < 10 || reason.trim().length > 500) {
