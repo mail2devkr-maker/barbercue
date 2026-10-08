@@ -2,154 +2,107 @@ import { Test } from '@nestjs/testing';
 import { AdminSalonManagementService } from './admin-salon-management.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-function makeSalonRow(counts: Record<string, number> = {}) {
+function salonRow(counts: Record<string, number> = {}) {
   return {
-    id: 'salon-1',
-    name: 'Junk Test Shop',
-    publicId: 'BC-SHOP-000099',
+    id: 'salon-1', name: 'Empty Test Shop', publicId: 'BC-SHOP-000099',
     _count: {
-      staff: 0,
-      bookings: 0,
-      queueEntries: 0,
-      reviews: 0,
-      ledgerEntries: 0,
-      ...counts,
+      staff: 0, bookings: 0, queueEntries: 0,
+      reviews: 0, ledgerEntries: 0, ...counts,
     },
   };
 }
 
-describe('AdminSalonManagementService', () => {
-  let service: AdminSalonManagementService;
-  let tx: {
-    photo: { deleteMany: jest.Mock };
-    operatingHours: { deleteMany: jest.Mock };
-    chair: { deleteMany: jest.Mock };
-    service: { deleteMany: jest.Mock };
-    salonPaymentPolicy: { deleteMany: jest.Mock };
-    cancellationPolicy: { deleteMany: jest.Mock };
-    verificationRequest: { deleteMany: jest.Mock };
-    userRole: { deleteMany: jest.Mock };
-    salon: { delete: jest.Mock };
-    auditLog: { create: jest.Mock };
-  };
-  let prisma: {
-    salon: { findUnique: jest.Mock; delete: jest.Mock };
-    $transaction: jest.Mock;
-  };
-
-  beforeEach(async () => {
-    tx = {
-      photo: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      operatingHours: {
-        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+describe('AdminSalonManagementService hard deletion safeguards', () => {
+  function build() {
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'salon-1' }]),
+      salon: {
+        findUnique: jest.fn().mockResolvedValue(salonRow()),
+        delete: jest.fn().mockResolvedValue({}),
       },
-      chair: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      service: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      salonPaymentPolicy: {
-        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-      },
-      cancellationPolicy: {
-        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-      },
-      verificationRequest: {
-        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-      },
-      userRole: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      salon: { delete: jest.fn().mockResolvedValue({}) },
+      photo: { deleteMany: jest.fn() },
+      operatingHours: { deleteMany: jest.fn() },
+      chair: { deleteMany: jest.fn() },
+      service: { deleteMany: jest.fn() },
+      salonPaymentPolicy: { deleteMany: jest.fn() },
+      cancellationPolicy: { deleteMany: jest.fn() },
+      verificationRequest: { deleteMany: jest.fn() },
+      userRole: { deleteMany: jest.fn() },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
     };
-    prisma = {
-      salon: {
-        findUnique: jest.fn(),
-        delete: tx.salon.delete,
-      },
-      $transaction: jest.fn(
-        (callback: (transaction: typeof tx) => unknown) => callback(tx),
-      ),
+    const prisma = {
+      $transaction: jest.fn(async (callback: (tx: typeof tx) => Promise<unknown>) =>
+        callback(tx)),
     };
+    return { tx, prisma };
+  }
 
+  it('locks the parent shop and rejects missing shops without destructive writes', async () => {
+    const { tx, prisma } = build();
+    tx.$queryRaw.mockResolvedValue([]);
     const moduleRef = await Test.createTestingModule({
       providers: [
         AdminSalonManagementService,
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
-    service = moduleRef.get(AdminSalonManagementService);
-  });
-
-  it('throws SALON_NOT_FOUND when the shop does not exist', async () => {
-    prisma.salon.findUnique.mockResolvedValue(null);
-    await expect(
-      service.deleteSalon('admin-1', 'missing'),
-    ).rejects.toMatchObject({ code: 'SALON_NOT_FOUND' });
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    const service = moduleRef.get(AdminSalonManagementService);
+    await expect(service.deleteSalon('admin-1', 'missing')).rejects.toMatchObject({
+      code: 'SALON_NOT_FOUND',
+    });
+    expect(tx.salon.delete).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
   it.each([
     ['staff', { staff: 1 }],
     ['bookings', { bookings: 1 }],
-    ['live/queue entries', { queueEntries: 1 }],
+    ['queue entries', { queueEntries: 1 }],
     ['reviews', { reviews: 1 }],
     ['ledger entries', { ledgerEntries: 1 }],
-  ])(
-    'refuses to delete and never opens a transaction when the shop has %s',
-    async (_label, counts) => {
-      prisma.salon.findUnique.mockResolvedValue(makeSalonRow(counts));
-      await expect(
-        service.deleteSalon('admin-1', 'salon-1'),
-      ).rejects.toMatchObject({ code: 'SALON_HAS_ACTIVITY' });
-      expect(prisma.$transaction).not.toHaveBeenCalled();
-      expect(tx.salon.delete).not.toHaveBeenCalled();
-    },
-  );
-
-  it('deletes a genuinely empty shop: setup-only rows, the salon itself, and its owner role grant', async () => {
-    prisma.salon.findUnique.mockResolvedValue(makeSalonRow());
-    const result = await service.deleteSalon('admin-1', 'salon-1');
-    expect(result).toEqual({ deleted: true });
-
-    for (const model of [
-      tx.photo,
-      tx.operatingHours,
-      tx.chair,
-      tx.service,
-      tx.salonPaymentPolicy,
-      tx.cancellationPolicy,
-      tx.verificationRequest,
-      tx.userRole,
-    ]) {
-      expect(model.deleteMany).toHaveBeenCalledWith({
-        where: { salonId: 'salon-1' },
-      });
-    }
-    expect(tx.salon.delete).toHaveBeenCalledWith({
-      where: { id: 'salon-1' },
+  ])('never deletes a shop with %s, checking inside the locked transaction', async (_kind, counts) => {
+    const { tx, prisma } = build();
+    tx.salon.findUnique.mockResolvedValue(salonRow(counts));
+    const service = new AdminSalonManagementService(prisma as never);
+    await expect(service.deleteSalon('admin-1', 'salon-1')).rejects.toMatchObject({
+      code: 'SALON_HAS_ACTIVITY',
     });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.salon.delete).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
   });
 
-  it('writes an AuditLog entry recording who deleted which shop', async () => {
-    prisma.salon.findUnique.mockResolvedValue(makeSalonRow());
-    await service.deleteSalon('admin-1', 'salon-1');
+  it('hard deletes only an empty shop, and audits exactly the performing actor', async () => {
+    const { tx, prisma } = build();
+    const service = new AdminSalonManagementService(prisma as never);
+    await expect(service.deleteSalon('admin-1', 'salon-1')).resolves.toEqual({ deleted: true });
+
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    for (const model of [
+      tx.photo, tx.operatingHours, tx.chair, tx.service,
+      tx.salonPaymentPolicy, tx.cancellationPolicy,
+      tx.verificationRequest, tx.userRole,
+    ]) {
+      expect(model.deleteMany).toHaveBeenCalledWith({ where: { salonId: 'salon-1' } });
+    }
+    expect(tx.salon.delete).toHaveBeenCalledWith({ where: { id: 'salon-1' } });
     expect(tx.auditLog.create).toHaveBeenCalledWith({
       data: {
         actorUserId: 'admin-1',
         action: 'SALON_DELETED',
         entityType: 'Salon',
         entityId: 'salon-1',
-        metadata: { name: 'Junk Test Shop', publicId: 'BC-SHOP-000099' },
+        metadata: { name: 'Empty Test Shop', publicId: 'BC-SHOP-000099' },
       },
     });
   });
 
-  it('never deletes anything before confirming zero activity (checked before the transaction opens)', async () => {
-    prisma.salon.findUnique.mockResolvedValue(
-      makeSalonRow({ staff: 2, bookings: 9 }),
-    );
-    await expect(
-      service.deleteSalon('admin-1', 'salon-1'),
-    ).rejects.toMatchObject({
-      code: 'SALON_HAS_ACTIVITY',
-      details: expect.objectContaining({ staff: 2, bookings: 9 }),
-    });
+  it('reuses a provided transaction and does not start another transaction', async () => {
+    const { tx, prisma } = build();
+    const service = new AdminSalonManagementService(prisma as never);
+    await expect(service.deleteSalonInTransaction(tx as never, 'admin-1', 'salon-1'))
+      .resolves.toEqual({ deleted: true });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
