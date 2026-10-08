@@ -20,6 +20,9 @@ describe('AdminSalonManagementService hard deletion safeguards', () => {
         findUnique: jest.fn().mockResolvedValue(salonRow()),
         delete: jest.fn().mockResolvedValue({}),
       },
+      shopDeletionRequest: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       photo: { deleteMany: jest.fn() },
       operatingHours: { deleteMany: jest.fn() },
       chair: { deleteMany: jest.fn() },
@@ -96,6 +99,16 @@ describe('AdminSalonManagementService hard deletion safeguards', () => {
         metadata: { name: 'Empty Test Shop', publicId: 'BC-SHOP-000099' },
       },
     });
+  });
+
+  it('fails closed when a deletion approval is pending, without any shop writes', async () => {
+    const { tx, prisma } = build();
+    tx.shopDeletionRequest.findFirst.mockResolvedValue({ id: 'pending-1' });
+    const service = new AdminSalonManagementService(prisma as never);
+    await expect(service.deleteSalon('admin-1', 'salon-1')).rejects
+      .toMatchObject({ code: 'SHOP_DELETE_APPROVAL_PENDING' });
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
+    expect(tx.salon.delete).not.toHaveBeenCalled();
   });
 
   it('reuses a provided transaction and does not start another transaction', async () => {
