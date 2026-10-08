@@ -77,9 +77,11 @@ describe("FastQue CRM offer letter helpers", () => {
         salaryBasis: "monthly",
       });
       const pdf = new TextDecoder().decode(bytes);
-      const draws = [...pdf.matchAll(/\\((.*?)\\) Tj/g)].map(m => m[1]);
-      const annualIndex = draws.indexOf("Annual Amount \\(INR\\)");
-      const monthlyIndex = draws.indexOf("Monthly Amount \\(INR\\)");
+      // Decode escaped PDF text operators (such as \(INR\)) correctly.
+      const draws = [...pdf.matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)]
+        .map(m => m[1].replace(/\\([()\\])/g, "$1"));
+      const annualIndex = draws.indexOf("Annual Amount (INR)");
+      const monthlyIndex = draws.indexOf("Monthly Amount (INR)");
       expect(annualIndex).toBeGreaterThan(0);
       expect(monthlyIndex).toBeGreaterThan(annualIndex);
       const annual = draws.slice(annualIndex, monthlyIndex);
@@ -113,7 +115,9 @@ describe("FastQue CRM offer letter helpers", () => {
     expect(pdf).toContain("Sales Target: 100 successfully onboarded shops");
     expect(pdf).toContain("Incentives Beyond Target: INR 150");
     expect(pdf).toContain("INR 5,000 per month");
-    expect(pdf).toContain("not an additional guaranteed payment");
+    const drawnText = [...pdf.matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)]
+      .map(m => m[1].replace(/\\([()\\])/g, "$1")).join(" ");
+    expect(drawnText).toContain("not an additional guaranteed payment");
     expect(pdf).not.toContain("up to approximately INR 20,000 per month");
   });
 });
