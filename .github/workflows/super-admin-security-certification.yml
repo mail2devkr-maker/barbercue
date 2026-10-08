@@ -75,25 +75,27 @@ jobs:
       - name: Typecheck every workspace
         run: npm run typecheck --workspaces --if-present
       - name: Scoped backend lint (no auto-fix)
+        working-directory: apps/backend
         run: >
           npx eslint
-          apps/backend/src/admin/admin-salon-management.service.spec.ts
-          apps/backend/src/admin/admin-salon-management.service.ts
-          apps/backend/src/admin/admin-security-audit.service.ts
-          apps/backend/src/admin/admin-security.controller.ts
-          apps/backend/src/admin/admin-shop-deletion-requests.service.spec.ts
-          apps/backend/src/admin/admin-shop-deletion-requests.service.ts
-          apps/backend/src/admin/admin.controller.ts
-          apps/backend/src/admin/admin.controller.spec.ts
-          apps/backend/src/admin/admin.module.ts
-          apps/backend/src/app.module.ts
-          apps/backend/src/common/interceptors/admin-activity-audit.interceptor.ts
-          apps/backend/src/common/interceptors/admin-activity-audit.interceptor.spec.ts
+          src/admin/admin-salon-management.service.spec.ts
+          src/admin/admin-salon-management.service.ts
+          src/admin/admin-security-audit.service.ts
+          src/admin/admin-security.controller.ts
+          src/admin/admin-shop-deletion-requests.service.spec.ts
+          src/admin/admin-shop-deletion-requests.service.ts
+          src/admin/admin.controller.ts
+          src/admin/admin.controller.spec.ts
+          src/admin/admin.module.ts
+          src/app.module.ts
+          src/common/interceptors/admin-activity-audit.interceptor.ts
+          src/common/interceptors/admin-activity-audit.interceptor.spec.ts
       - name: Scoped web lint (no auto-fix)
+        working-directory: apps/web
         run: >
           npx eslint
-          'apps/web/app/(dashboard)/dashboard/admin/page.tsx'
-          'apps/web/app/(dashboard)/dashboard/admin/security/page.tsx'
+          'app/(dashboard)/dashboard/admin/page.tsx'
+          'app/(dashboard)/dashboard/admin/security/page.tsx'
       - name: Production builds (no deploy)
         run: |
           npm run build --workspace=@barbercue/backend
