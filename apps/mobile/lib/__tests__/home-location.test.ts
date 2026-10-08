@@ -88,4 +88,43 @@ describe('resolveHomeLocation', () => {
     expect(currentPosMock).toHaveBeenCalledTimes(1);
     expect(result?.label).toBe('Patna');
   });
+
+  it('forceRefresh bypasses a cached city and resolves a fresh current position', async () => {
+    getPermMock.mockResolvedValue({ status: 'granted' });
+    requestPermMock.mockResolvedValue({ status: 'granted' });
+    lastKnownMock.mockResolvedValue(SAMPLE_POSITION);
+    reverseGeocodeMock
+      .mockResolvedValueOnce([{ city: 'Hajipur', subregion: null, region: null }])
+      .mockResolvedValueOnce([{ city: 'Patna', subregion: null, region: null }]);
+
+    const first = await resolveHomeLocation(false);
+    currentPosMock.mockResolvedValue({
+      coords: { latitude: 25.5941, longitude: 85.1376 },
+    });
+    const refreshed = await resolveHomeLocation(true, true);
+
+    expect(first?.label).toBe('Hajipur');
+    expect(requestPermMock).toHaveBeenCalledTimes(1);
+    expect(currentPosMock).toHaveBeenCalledTimes(1);
+    expect(refreshed).toEqual({
+      label: 'Patna',
+      coords: { lat: 25.5941, lng: 85.1376 },
+    });
+  });
+
+  it('forceRefresh prefers current position over a stale last-known position', async () => {
+    requestPermMock.mockResolvedValue({ status: 'granted' });
+    currentPosMock.mockResolvedValue({
+      coords: { latitude: 25.5941, longitude: 85.1376 },
+    });
+    lastKnownMock.mockResolvedValue(SAMPLE_POSITION);
+    reverseGeocodeMock.mockResolvedValue([{ city: 'Patna', subregion: null, region: null }]);
+
+    const result = await resolveHomeLocation(true, true);
+
+    expect(currentPosMock).toHaveBeenCalledTimes(1);
+    expect(lastKnownMock).not.toHaveBeenCalled();
+    expect(result?.label).toBe('Patna');
+  });
+
 });
