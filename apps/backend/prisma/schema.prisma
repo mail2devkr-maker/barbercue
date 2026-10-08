@@ -1547,6 +1547,32 @@ model Notification {
 
 // ---------- Audit ----------
 
+// Deletion requests intentionally snapshot the shop identity without an FK to Salon:
+// an approved request survives its shop's eventual hard deletion for accountability.
+enum ShopDeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ShopDeletionRequest {
+  id                String                    @id @default(uuid())
+  salonId           String
+  shopName          String
+  shopPublicId      String
+  requestedByUserId String
+  reason            String                    @db.VarChar(500)
+  status            ShopDeletionRequestStatus @default(PENDING)
+  requestedAt       DateTime                  @default(now())
+  decidedByUserId   String?
+  decidedAt         DateTime?
+  decisionNote      String?                   @db.VarChar(500)
+
+  @@index([status, requestedAt])
+  @@index([salonId, status])
+  @@map("shop_deletion_requests")
+}
+
 model AuditLog {
   id          String   @id @default(uuid())
   actorUserId String?
