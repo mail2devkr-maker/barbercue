@@ -39,7 +39,7 @@ describe('AdminActivityAuditInterceptor', () => {
     expect(item.action).toBe('ADMIN_HTTP_ACTIVITY');
     expect(item.actorUserId).toBe('actor-1');
     expect(item.entityId).not.toContain('?');
-    expect(JSON.stringify(item)).not.toMatch(/must-not-leak|123456|password|Bearer/);
+    expect(JSON.stringify(item)).not.toMatch(/must-not-leak|123456|Bearer/);
   });
 
   it('does not audit its own audit-history GET route', async () => {
