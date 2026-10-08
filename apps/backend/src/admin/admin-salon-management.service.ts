@@ -12,7 +12,10 @@ import { AppException } from '../common/exceptions/app.exception';
 export class AdminSalonManagementService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async deleteSalon(adminUserId: string, salonId: string): Promise<{ deleted: true }> {
+  async deleteSalon(
+    adminUserId: string,
+    salonId: string,
+  ): Promise<{ deleted: true }> {
     return this.prisma.$transaction(async (tx) => {
       // Serialize with new requests: both direct deletion and the approval-request
       // path lock the same Salon row BEFORE checking for pending approvals.
@@ -47,13 +50,19 @@ export class AdminSalonManagementService {
       SELECT "id" FROM "salons" WHERE "id" = ${salonId} FOR UPDATE
     `;
     if (locked.length === 0) {
-      throw new AppException('SALON_NOT_FOUND', 'Shop not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        'SALON_NOT_FOUND',
+        'Shop not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const salon = await tx.salon.findUnique({
       where: { id: salonId },
       select: {
-        id: true, name: true, publicId: true,
+        id: true,
+        name: true,
+        publicId: true,
         _count: {
           select: {
             staff: true,
@@ -66,12 +75,18 @@ export class AdminSalonManagementService {
       },
     });
     if (!salon) {
-      throw new AppException('SALON_NOT_FOUND', 'Shop not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        'SALON_NOT_FOUND',
+        'Shop not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
     const activity = salon._count;
     if (
-      activity.staff > 0 || activity.bookings > 0 ||
-      activity.queueEntries > 0 || activity.reviews > 0 ||
+      activity.staff > 0 ||
+      activity.bookings > 0 ||
+      activity.queueEntries > 0 ||
+      activity.reviews > 0 ||
       activity.ledgerEntries > 0
     ) {
       throw new AppException(

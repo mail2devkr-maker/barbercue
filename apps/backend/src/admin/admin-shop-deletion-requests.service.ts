@@ -16,28 +16,50 @@ export class AdminShopDeletionRequestsService {
     private readonly totp: TotpService,
   ) {}
 
-  private async assertPlatformAdminWithFreshTotp(actorUserId: string, code: string) {
+  private async assertPlatformAdminWithFreshTotp(
+    actorUserId: string,
+    code: string,
+  ) {
     const user = await this.prisma.user.findUnique({
       where: { id: actorUserId },
       include: { roles: true },
     });
     if (
-      !user || user.status !== UserStatus.ACTIVE ||
-      !user.roles.some((r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null)
+      !user ||
+      user.status !== UserStatus.ACTIVE ||
+      !user.roles.some(
+        (r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null,
+      )
     ) {
-      throw new AppException('PLATFORM_ADMIN_REQUIRED', 'Super Admin access required.', HttpStatus.FORBIDDEN);
+      throw new AppException(
+        'PLATFORM_ADMIN_REQUIRED',
+        'Super Admin access required.',
+        HttpStatus.FORBIDDEN,
+      );
     }
     if (!user.twoFactorEnabled || !user.totpSecret) {
-      throw new AppException('TOTP_SETUP_REQUIRED', 'Authenticator must be configured.', HttpStatus.FORBIDDEN);
+      throw new AppException(
+        'TOTP_SETUP_REQUIRED',
+        'Authenticator must be configured.',
+        HttpStatus.FORBIDDEN,
+      );
     }
     let secret: string;
     try {
       secret = this.crypto.decrypt(user.totpSecret);
     } catch {
-      throw new AppException('TOTP_SETUP_REQUIRED', 'Authenticator must be repaired.', HttpStatus.FORBIDDEN);
+      throw new AppException(
+        'TOTP_SETUP_REQUIRED',
+        'Authenticator must be repaired.',
+        HttpStatus.FORBIDDEN,
+      );
     }
     if (!(await this.totp.verifyToken(secret, code))) {
-      throw new AppException('TOTP_INVALID', 'Invalid authenticator code.', HttpStatus.UNAUTHORIZED);
+      throw new AppException(
+        'TOTP_INVALID',
+        'Invalid authenticator code.',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
   }
 
@@ -49,24 +71,39 @@ export class AdminShopDeletionRequestsService {
         include: { roles: true },
       });
       if (
-        !actor || actor.status !== UserStatus.ACTIVE ||
-        !actor.roles.some((r) => r.role === Role.CO_FOUNDER && r.salonId === null)
+        !actor ||
+        actor.status !== UserStatus.ACTIVE ||
+        !actor.roles.some(
+          (r) => r.role === Role.CO_FOUNDER && r.salonId === null,
+        )
       ) {
-        throw new AppException('CO_FOUNDER_REQUIRED', 'Co-Founder access required.', HttpStatus.FORBIDDEN);
+        throw new AppException(
+          'CO_FOUNDER_REQUIRED',
+          'Co-Founder access required.',
+          HttpStatus.FORBIDDEN,
+        );
       }
 
       const locked = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT "id" FROM "salons" WHERE "id" = ${salonId} FOR UPDATE
       `;
       if (!locked.length) {
-        throw new AppException('SALON_NOT_FOUND', 'Shop not found.', HttpStatus.NOT_FOUND);
+        throw new AppException(
+          'SALON_NOT_FOUND',
+          'Shop not found.',
+          HttpStatus.NOT_FOUND,
+        );
       }
       const salon = await tx.salon.findUnique({
         where: { id: salonId },
         select: { name: true, publicId: true },
       });
       if (!salon) {
-        throw new AppException('SALON_NOT_FOUND', 'Shop not found.', HttpStatus.NOT_FOUND);
+        throw new AppException(
+          'SALON_NOT_FOUND',
+          'Shop not found.',
+          HttpStatus.NOT_FOUND,
+        );
       }
       // Every real shop may be *requested* for review; requesting is not
       // deletion. Approval rechecks real activity inside a locked transaction,
@@ -97,8 +134,10 @@ export class AdminShopDeletionRequestsService {
           entityType: 'Salon',
           entityId: salonId,
           metadata: {
-            requestId: created.id, shopPublicId: salon.publicId,
-            shopName: salon.name, reason: reason.trim(),
+            requestId: created.id,
+            shopPublicId: salon.publicId,
+            shopName: salon.name,
+            reason: reason.trim(),
           },
         },
       });
@@ -122,7 +161,12 @@ export class AdminShopDeletionRequestsService {
     }));
   }
 
-  async approve(actorUserId: string, requestId: string, totpCode: string, note?: string) {
+  async approve(
+    actorUserId: string,
+    requestId: string,
+    totpCode: string,
+    note?: string,
+  ) {
     await this.assertPlatformAdminWithFreshTotp(actorUserId, totpCode);
 
     return this.prisma.$transaction(async (tx) => {
@@ -133,10 +177,17 @@ export class AdminShopDeletionRequestsService {
         include: { roles: true },
       });
       if (
-        !actor || actor.status !== UserStatus.ACTIVE ||
-        !actor.roles.some((r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null)
+        !actor ||
+        actor.status !== UserStatus.ACTIVE ||
+        !actor.roles.some(
+          (r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null,
+        )
       ) {
-        throw new AppException('PLATFORM_ADMIN_REQUIRED', 'Super Admin access required.', HttpStatus.FORBIDDEN);
+        throw new AppException(
+          'PLATFORM_ADMIN_REQUIRED',
+          'Super Admin access required.',
+          HttpStatus.FORBIDDEN,
+        );
       }
 
       // Row lock makes double-approve and approve/reject races fail closed.
@@ -144,11 +195,21 @@ export class AdminShopDeletionRequestsService {
         SELECT "id" FROM "shop_deletion_requests" WHERE "id" = ${requestId} FOR UPDATE
       `;
       if (!locked.length) {
-        throw new AppException('DELETE_REQUEST_NOT_FOUND', 'Request not found.', HttpStatus.NOT_FOUND);
+        throw new AppException(
+          'DELETE_REQUEST_NOT_FOUND',
+          'Request not found.',
+          HttpStatus.NOT_FOUND,
+        );
       }
-      const request = await tx.shopDeletionRequest.findUnique({ where: { id: requestId } });
+      const request = await tx.shopDeletionRequest.findUnique({
+        where: { id: requestId },
+      });
       if (!request || request.status !== ShopDeletionRequestStatus.PENDING) {
-        throw new AppException('DELETE_REQUEST_CLOSED', 'Request already resolved.', HttpStatus.CONFLICT);
+        throw new AppException(
+          'DELETE_REQUEST_CLOSED',
+          'Request already resolved.',
+          HttpStatus.CONFLICT,
+        );
       }
       if (request.requestedByUserId === actorUserId) {
         throw new AppException(
@@ -160,7 +221,11 @@ export class AdminShopDeletionRequestsService {
 
       // Always re-check activity under parent shop lock at approval time.
       // A shop that gained any bookings/staff/ledger activity cannot be deleted.
-      await this.shops.deleteSalonInTransaction(tx, actorUserId, request.salonId);
+      await this.shops.deleteSalonInTransaction(
+        tx,
+        actorUserId,
+        request.salonId,
+      );
 
       const updated = await tx.shopDeletionRequest.update({
         where: { id: requestId },
@@ -178,8 +243,10 @@ export class AdminShopDeletionRequestsService {
           entityType: 'Salon',
           entityId: request.salonId,
           metadata: {
-            requestId, requestedByUserId: request.requestedByUserId,
-            shopPublicId: request.shopPublicId, note: note?.trim() || null,
+            requestId,
+            requestedByUserId: request.requestedByUserId,
+            shopPublicId: request.shopPublicId,
+            note: note?.trim() || null,
           },
         },
       });
@@ -194,21 +261,38 @@ export class AdminShopDeletionRequestsService {
         include: { roles: true },
       });
       if (
-        !actor || actor.status !== UserStatus.ACTIVE ||
-        !actor.roles.some((r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null)
+        !actor ||
+        actor.status !== UserStatus.ACTIVE ||
+        !actor.roles.some(
+          (r) => r.role === Role.PLATFORM_ADMIN && r.salonId === null,
+        )
       ) {
-        throw new AppException('PLATFORM_ADMIN_REQUIRED', 'Super Admin access required.', HttpStatus.FORBIDDEN);
+        throw new AppException(
+          'PLATFORM_ADMIN_REQUIRED',
+          'Super Admin access required.',
+          HttpStatus.FORBIDDEN,
+        );
       }
 
       const locked = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT "id" FROM "shop_deletion_requests" WHERE "id" = ${requestId} FOR UPDATE
       `;
       if (!locked.length) {
-        throw new AppException('DELETE_REQUEST_NOT_FOUND', 'Request not found.', HttpStatus.NOT_FOUND);
+        throw new AppException(
+          'DELETE_REQUEST_NOT_FOUND',
+          'Request not found.',
+          HttpStatus.NOT_FOUND,
+        );
       }
-      const request = await tx.shopDeletionRequest.findUnique({ where: { id: requestId } });
+      const request = await tx.shopDeletionRequest.findUnique({
+        where: { id: requestId },
+      });
       if (!request || request.status !== ShopDeletionRequestStatus.PENDING) {
-        throw new AppException('DELETE_REQUEST_CLOSED', 'Request already resolved.', HttpStatus.CONFLICT);
+        throw new AppException(
+          'DELETE_REQUEST_CLOSED',
+          'Request already resolved.',
+          HttpStatus.CONFLICT,
+        );
       }
       const updated = await tx.shopDeletionRequest.update({
         where: { id: requestId },

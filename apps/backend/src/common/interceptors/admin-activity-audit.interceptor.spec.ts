@@ -43,36 +43,48 @@ describe('AdminActivityAuditInterceptor', () => {
   });
 
   it('does not audit its own audit-history GET route', async () => {
-    const { prisma, interceptor, context } = build('/api/v1/admin/security/audit?actorEmail=someone');
-    await lastValueFrom(interceptor.intercept(
-      context, { handle: () => of({ items: [] }) } as CallHandler,
-    ));
+    const { prisma, interceptor, context } = build(
+      '/api/v1/admin/security/audit?actorEmail=someone',
+    );
+    await lastValueFrom(
+      interceptor.intercept(context, {
+        handle: () => of({ items: [] }),
+      } as CallHandler),
+    );
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('does not audit customer sessions', async () => {
     const { prisma, interceptor, context } = build(
-      '/api/v1/dashboard/admin', SessionAudience.CUSTOMER,
+      '/api/v1/dashboard/admin',
+      SessionAudience.CUSTOMER,
     );
-    await lastValueFrom(interceptor.intercept(
-      context, { handle: () => of({}) } as CallHandler,
-    ));
+    await lastValueFrom(
+      interceptor.intercept(context, { handle: () => of({}) } as CallHandler),
+    );
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 
   it('fails open for metrics-only audit write failures but preserves HTTP response', async () => {
     const { prisma, interceptor, context } = build();
-    prisma.auditLog.create.mockRejectedValue(new Error('db temporarily unavailable'));
-    await expect(lastValueFrom(interceptor.intercept(
-      context, { handle: () => of({ success: true }) } as CallHandler,
-    ))).resolves.toEqual({ success: true });
+    prisma.auditLog.create.mockRejectedValue(
+      new Error('db temporarily unavailable'),
+    );
+    await expect(
+      lastValueFrom(
+        interceptor.intercept(context, {
+          handle: () => of({ success: true }),
+        } as CallHandler),
+      ),
+    ).resolves.toEqual({ success: true });
   });
 
   it('preserves original application errors when logging denied actions', async () => {
     const { interceptor, context } = build();
     const error = new Error('Action denied');
     const next = { handle: () => throwError(() => error) } as CallHandler;
-    await expect(lastValueFrom(interceptor.intercept(context, next)))
-      .rejects.toBe(error);
+    await expect(
+      lastValueFrom(interceptor.intercept(context, next)),
+    ).rejects.toBe(error);
   });
 });

@@ -50,7 +50,10 @@ export class AdminActivityAuditInterceptor implements NestInterceptor {
 
     const write = async (
       eventActorId: string | null,
-      event: 'ADMIN_HTTP_ACTIVITY' | 'ADMIN_LOGIN_SUCCEEDED' | 'ADMIN_LOGIN_REJECTED',
+      event:
+        | 'ADMIN_HTTP_ACTIVITY'
+        | 'ADMIN_LOGIN_SUCCEEDED'
+        | 'ADMIN_LOGIN_REJECTED',
       result: 'SUCCESS' | 'REJECTED',
       status: number,
     ) => {
@@ -72,32 +75,58 @@ export class AdminActivityAuditInterceptor implements NestInterceptor {
       } catch (error) {
         // Audit failures must be visible to operations without exposing
         // request credentials or metadata or masking the original exception.
-        this.logger.error('Admin activity audit write failed', error instanceof Error ? error.name : undefined);
+        this.logger.error(
+          'Admin activity audit write failed',
+          error instanceof Error ? error.name : undefined,
+        );
       }
     };
 
     return next.handle().pipe(
       mergeMap(async (value: unknown) => {
-        const v = value as { user?: { id?: string; audience?: SessionAudience } } | null;
-        const loginActorId = adminLogin && v?.user?.audience === SessionAudience.ADMIN
-          ? v.user.id ?? null
-          : null;
+        const v = value as {
+          user?: { id?: string; audience?: SessionAudience };
+        } | null;
+        const loginActorId =
+          adminLogin && v?.user?.audience === SessionAudience.ADMIN
+            ? (v.user.id ?? null)
+            : null;
         if (isAdmin) {
-          await write(actor!.id, 'ADMIN_HTTP_ACTIVITY', 'SUCCESS', response.statusCode);
+          await write(
+            actor!.id,
+            'ADMIN_HTTP_ACTIVITY',
+            'SUCCESS',
+            response.statusCode,
+          );
         } else if (adminLogin && loginActorId) {
-          await write(loginActorId, 'ADMIN_LOGIN_SUCCEEDED', 'SUCCESS', response.statusCode);
+          await write(
+            loginActorId,
+            'ADMIN_LOGIN_SUCCEEDED',
+            'SUCCESS',
+            response.statusCode,
+          );
         }
         return value;
       }),
       catchError((error: unknown) => {
         if (isAdmin) {
-          void write(actor!.id, 'ADMIN_HTTP_ACTIVITY', 'REJECTED',
+          void write(
+            actor!.id,
+            'ADMIN_HTTP_ACTIVITY',
+            'REJECTED',
             typeof (error as { status?: number })?.status === 'number'
-              ? (error as { status: number }).status : 500);
+              ? (error as { status: number }).status
+              : 500,
+          );
         } else if (adminLogin) {
-          void write(null, 'ADMIN_LOGIN_REJECTED', 'REJECTED',
+          void write(
+            null,
+            'ADMIN_LOGIN_REJECTED',
+            'REJECTED',
             typeof (error as { status?: number })?.status === 'number'
-              ? (error as { status: number }).status : 500);
+              ? (error as { status: number }).status
+              : 500,
+          );
         }
         return throwError(() => error);
       }),

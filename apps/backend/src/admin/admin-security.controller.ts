@@ -11,7 +11,9 @@ const requestSchema = z.object({
   reason: z.string().trim().min(10).max(500),
 });
 const approveSchema = z.object({
-  totpCode: z.string().regex(/^\d{6}$/, 'Current 6-digit authenticator code required'),
+  totpCode: z
+    .string()
+    .regex(/^\d{6}$/, 'Current 6-digit authenticator code required'),
   note: z.string().trim().max(500).optional(),
 });
 const rejectSchema = z.object({
@@ -48,7 +50,8 @@ export class AdminSecurityController {
   approve(
     @CurrentUser() actor: AuthenticatedUser,
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(approveSchema)) body: z.infer<typeof approveSchema>,
+    @Body(new ZodValidationPipe(approveSchema))
+    body: z.infer<typeof approveSchema>,
   ) {
     return this.deletions.approve(actor.id, id, body.totpCode, body.note);
   }
@@ -57,7 +60,8 @@ export class AdminSecurityController {
   reject(
     @CurrentUser() actor: AuthenticatedUser,
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(rejectSchema)) body: z.infer<typeof rejectSchema>,
+    @Body(new ZodValidationPipe(rejectSchema))
+    body: z.infer<typeof rejectSchema>,
   ) {
     return this.deletions.reject(actor.id, id, body.note);
   }
