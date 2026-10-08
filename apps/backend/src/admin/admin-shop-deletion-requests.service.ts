@@ -123,11 +123,20 @@ export class AdminShopDeletionRequestsService {
     });
   }
 
-  list() {
-    return this.prisma.shopDeletionRequest.findMany({
+  async list() {
+    const rows = await this.prisma.shopDeletionRequest.findMany({
       orderBy: [{ status: 'asc' }, { requestedAt: 'desc' }],
       take: 200,
     });
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: [...new Set(rows.map((r) => r.requestedByUserId))] } },
+      select: { id: true, email: true },
+    });
+    const emails = new Map(users.map((u) => [u.id, u.email]));
+    return rows.map((request) => ({
+      ...request,
+      requestedByEmail: emails.get(request.requestedByUserId) ?? null,
+    }));
   }
 
   async approve(actorUserId: string, requestId: string, totpCode: string, note?: string) {
