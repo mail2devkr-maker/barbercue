@@ -63,15 +63,7 @@ export class AdminShopDeletionRequestsService {
       }
       const salon = await tx.salon.findUnique({
         where: { id: salonId },
-        select: {
-          name: true, publicId: true,
-          _count: {
-            select: {
-              staff: true, bookings: true, queueEntries: true,
-              reviews: true, ledgerEntries: true,
-            },
-          },
-        },
+        select: { name: true, publicId: true },
       });
       if (!salon) {
         throw new AppException('SALON_NOT_FOUND', 'Shop not found.', HttpStatus.NOT_FOUND);
