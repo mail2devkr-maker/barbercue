@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BrandLockup } from "../ui/BrandLockup";
-import { AppAccessQr } from "./AppAccessQr";
+import { FASTQUE_GOOGLE_PLAY_URL, PlayStoreQr } from "./PlayStoreQr";
 import styles from "../landing/landing.module.css";
 
 // Only render live social links when the owner has provided an exact official profile URL.
@@ -89,15 +89,21 @@ export function SiteFooter() {
           background: "rgba(255,255,255,.05)"
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-            <Link href="/app" aria-label="FastQue Android app information and QR" style={{ display: "block", background: "#fff", padding: 8, borderRadius: 11 }}>
-              <AppAccessQr size={98} />
-            </Link>
+            <a
+              href={FASTQUE_GOOGLE_PLAY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="QR and link to FastQue on Google Play; install requires public release"
+              style={{ display: "block", background: "#fff", padding: 8, borderRadius: 11 }}
+            >
+              <PlayStoreQr size={116} />
+            </a>
             <div style={{ maxWidth: 360 }}>
               <strong style={{ display: "block", marginBottom: 6 }}>FastQue for Android</strong>
               <p style={{ margin: "0 0 6px", lineHeight: 1.5, fontSize: 13, opacity: .78 }}>
-                Scan for our permanent app page. Public Android release is coming after testing.
+                Scan to open FastQue on Google Play. Install becomes available after the public Android release.
               </p>
-              <Link href="/app" style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>App link &amp; QR →</Link>
+              <a href={FASTQUE_GOOGLE_PLAY_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>Open Google Play ↗</a>{" · "}<Link href="/app" style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>App details &amp; larger QR →</Link>
             </div>
           </div>
           {(instagram || facebook) && (
