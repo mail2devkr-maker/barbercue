@@ -49,6 +49,7 @@ export default function AdminSecurityPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [actorEmail, setActorEmail] = useState("");
   const [action, setAction] = useState("");
+  const [activeFilters, setActiveFilters] = useState({ actorEmail: "", action: "" });
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [totpCodes, setTotpCodes] = useState<Record<string, string>>({});
   const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
@@ -62,8 +63,8 @@ export default function AdminSecurityPage() {
     setError(null);
     try {
       const params = new URLSearchParams();
-      if (actorEmail.trim()) params.set("actorEmail", actorEmail.trim());
-      if (action.trim()) params.set("action", action.trim().toUpperCase());
+      if (activeFilters.actorEmail) params.set("actorEmail", activeFilters.actorEmail);
+      if (activeFilters.action) params.set("action", activeFilters.action);
       if (append && cursor) params.set("cursor", cursor);
       const [latestRequests, page] = await Promise.all([
         apiFetch<DeletionRequest[]>("admin/security/deletion-requests"),
@@ -77,7 +78,7 @@ export default function AdminSecurityPage() {
     } finally {
       setLoading(false);
     }
-  }, [allowed, actorEmail, action]);
+  }, [allowed, activeFilters]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -244,7 +245,7 @@ export default function AdminSecurityPage() {
             <p>Recorded actions only. Passwords and authenticator secrets are never exposed.</p>
           </div>
         </div>
-        <form onSubmit={(event) => { event.preventDefault(); void load(); }} style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+        <form onSubmit={(event) => { event.preventDefault(); setActiveFilters({ actorEmail: actorEmail.trim(), action: action.trim().toUpperCase() }); }} style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
           <label>Actor email <input type="email" value={actorEmail} onChange={(e) => setActorEmail(e.target.value)} placeholder="cofounder@gmail.com" /></label>
           <label>Event action <input value={action} onChange={(e) => setAction(e.target.value)} placeholder="EMPLOYEE_UPDATED" /></label>
           <Button type="submit" disabled={loading}>Filter</Button>
