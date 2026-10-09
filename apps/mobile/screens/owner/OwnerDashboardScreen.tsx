@@ -316,7 +316,16 @@ export default function OwnerDashboardScreen() {
         <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerQueueTab')}>
           <Text style={styles.quickLinkText}>{t.liveQueue}</Text>
         </Pressable>
-        <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab')}>
+        <Pressable testID="dashboard-link-analytics" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerAnalytics' })}>
+          <Text style={styles.quickLinkText}>{t.ownerSectionAnalytics}</Text>
+        </Pressable>
+        <Pressable testID="dashboard-link-settings" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerSettings' })}>
+          <Text style={styles.quickLinkText}>{t.ownerSectionSettings}</Text>
+        </Pressable>
+        <Pressable testID="dashboard-link-reviews" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerReviews' })}>
+          <Text style={styles.quickLinkText}>{t.ownerSectionReviews}</Text>
+        </Pressable>
+        <Pressable testID="dashboard-link-manage" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerShop' })}>
           <Text style={styles.quickLinkText}>{t.manageShop}</Text>
         </Pressable>
       </View>

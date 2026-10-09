@@ -76,6 +76,14 @@ describe('Signed-out Home (RoleSelectScreen)', () => {
     expect(anyGpsCall()).toBe(false);
   });
 
+  it('"View all" opens the dedicated All Services catalogue (not the generic shop search)', async () => {
+    const r = await mount();
+    await flush(4);
+    await press(r, 'signedout-all-services');
+    expect(navigation.navigate).toHaveBeenCalledWith('AllServices');
+    expect(navigation.navigate).not.toHaveBeenCalledWith('GuestBrowse', expect.anything());
+  });
+
   it('prompts to choose a location, then shows the restored city after restart — with no GPS', async () => {
     const first = await mount();
     await flush(4);

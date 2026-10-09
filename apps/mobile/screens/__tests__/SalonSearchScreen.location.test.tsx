@@ -64,15 +64,14 @@ function Probe() {
 const navigation = { navigate: jest.fn() };
 const route = { key: 'k', name: 'SalonSearch', params: undefined };
 
-const mount = () =>
-  render(
-    createElement(
-      LocationProvider,
-      null,
-      createElement(Probe),
-      createElement(SalonSearchScreen as never, { navigation, route } as never),
-    ),
+const tree = (params?: Record<string, unknown>) =>
+  createElement(
+    LocationProvider,
+    null,
+    createElement(Probe),
+    createElement(SalonSearchScreen as never, { navigation, route: { ...route, params } } as never),
   );
+const mount = (params?: Record<string, unknown>) => render(tree(params));
 
 function seed(selection: SelectedLocation | null) {
   if (selection) mockStore.set(LOCATION_SELECTION_STORAGE_KEY, serializeSelection(selection));
@@ -392,8 +391,68 @@ describe('Search screen: pagination, errors and older backends', () => {
     apiMock.mockImplementation(async (path: string) => (String(path).includes('service-suggestions') ? [] : page([])));
     const r = await mount();
     await flush(6);
-    expect(allText(r)).toContain(t.noSalonsFoundTitle);
+    expect(allText(r)).toContain(t.searchNoShopsInCityTitle.replace('{city}', 'Hajipur'));
     expect(has(r, 'search-location-bar')).toBe(true);
+  });
+
+  it('a chosen city with no active shops says so by name (CITY_FOUND_NO_ACTIVE_SHOPS), not "no salons found"', async () => {
+    seed(cityChoice(PATNA));
+    apiMock.mockImplementation(async (path: string) => (String(path).includes('service-suggestions') ? [] : page([])));
+    const r = await mount();
+    await flush(6);
+    expect(allText(r)).toContain(t.searchNoShopsInCityTitle.replace('{city}', 'Patna'));
+    expect(allText(r)).not.toContain(t.noSalonsFoundTitle);
+    // The customer can pick another place straight from the empty state.
+    expect(allText(r)).toContain(t.searchChangeLocationAction);
+  });
+
+  it('an empty result with a price filter applied is the generic empty state, not a claim about the city', async () => {
+    seed(cityChoice(PATNA));
+    apiMock.mockImplementation(async (path: string) => (String(path).includes('service-suggestions') ? [] : page([])));
+    const r = await mount();
+    await flush(6);
+    expect(allText(r)).toContain(t.searchNoShopsInCityTitle.replace('{city}', 'Patna'));
+    const priceFilter = r.root.findAll((n: { type: unknown; props: Record<string, unknown> }) => typeof n.props.onApply === 'function')[0];
+    await act(async () => (priceFilter.props.onApply as (min: number | null, max: number | null) => void)(100, 500));
+    await flush(4);
+    expect(allText(r)).toContain(t.noSalonsFoundTitle);
+    expect(allText(r)).not.toContain(t.searchNoShopsInCityTitle.replace('{city}', 'Patna'));
+  });
+
+  it('opening Search from a service (initialQuery) searches that service in the chosen city', async () => {
+    seed(cityChoice());
+    const r = await mount({ initialQuery: 'Classic Haircut', searchNonce: 1 });
+    await flush(6);
+    expect(lastSalonParams()).toMatchObject({ service: 'Classic Haircut', city: 'hajipur', countryCode: 'IN' });
+    expect(allText(r)).toContain('Near Salon');
+  });
+
+  it('tapping another service while Search is already open re-runs the search for it, once per navigation', async () => {
+    seed(cityChoice());
+    const r = await mount();
+    await flush(6);
+    const callsBefore = salonCalls().length;
+    await act(async () => r.update(tree({ initialQuery: 'Fruit Facial', searchNonce: 11 })));
+    await flush(6);
+    expect(lastSalonParams()).toMatchObject({ service: 'Fruit Facial', city: 'hajipur' });
+    expect(salonCalls().length).toBe(callsBefore + 1);
+    // The same navigation (same nonce) re-rendering does not search again.
+    await act(async () => r.update(tree({ initialQuery: 'Fruit Facial', searchNonce: 11 })));
+    await flush(4);
+    expect(salonCalls().length).toBe(callsBefore + 1);
+    // A deliberate second tap on the same service (new nonce) does.
+    await act(async () => r.update(tree({ initialQuery: 'Fruit Facial', searchNonce: 12 })));
+    await flush(6);
+    expect(salonCalls().length).toBe(callsBefore + 2);
+  });
+
+  it('a service nobody offers in the chosen city says so honestly, naming the service', async () => {
+    seed(cityChoice(PATNA));
+    apiMock.mockImplementation(async (path: string) => (String(path).includes('service-suggestions') ? [] : page([])));
+    const r = await mount({ initialQuery: 'Bridal Makeup', searchNonce: 1 });
+    await flush(6);
+    expect(allText(r)).toContain(t.searchNoShopsForServiceTitle.replace('{service}', 'Bridal Makeup'));
+    expect(allText(r)).not.toContain(t.noSalonsFoundTitle);
   });
 
   it('a failed search shows an error and never leaves the screen loading', async () => {

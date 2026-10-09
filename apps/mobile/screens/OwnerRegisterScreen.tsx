@@ -5,6 +5,7 @@ import { ownerSignupSchema } from '@barbercue/shared';
 import { ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { stashPendingShopRegistrationIntent } from '../lib/shop-registration-intent';
+import { markShopRegistrationPending } from '../lib/shop-registration-resume';
 import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import type { AuthStackParamList } from '../navigation/AuthStack';
@@ -35,6 +36,8 @@ export default function OwnerRegisterScreen({ navigation }: Props) {
       // the existing RegisterShop -> owner-onboarding flow.
       stashPendingShopRegistrationIntent();
       await ownerSignup(parsed.data);
+      // Survives an app restart before the shop exists (cleared by RegisterShopScreen on success).
+      await markShopRegistrationPending();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create your account. Please try again.');
     } finally {
@@ -112,6 +115,7 @@ export default function OwnerRegisterScreen({ navigation }: Props) {
       />
 
       <Pressable
+        testID="owner-signin-link"
         style={styles.signInLink}
         onPress={() => navigation.replace('OwnerStaffLogin', { role: 'OWNER' })}
       >

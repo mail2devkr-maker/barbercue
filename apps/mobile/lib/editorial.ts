@@ -28,3 +28,12 @@ export const EDITORIAL_ASSET_URL = {
   /** A massage therapist giving a client a back massage (manifest id: spa-massage-flagship). */
   categorySpa: `${EDITORIAL_BASE_URL}/services/spa-massage/spa-flagship.webp`,
 } as const;
+
+/**
+ * URL of a photograph in FastQue's editorial library, given its path under the library root
+ * (e.g. "services/barber/taper.webp"). Used by the All Services catalogue, whose photo paths come
+ * from the shared catalogue so web and mobile can never point at different files.
+ */
+export function editorialPhotoUrl(photoPath: string): string {
+  return `${EDITORIAL_BASE_URL}/${photoPath.replace(/^\/+/, '')}`;
+}

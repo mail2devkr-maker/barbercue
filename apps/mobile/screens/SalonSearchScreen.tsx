@@ -266,7 +266,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const stackSearchRow = windowWidth < NARROW_SEARCH_ROW_WIDTH;
   const selectedStyleName = route.params?.selectedStyleName;
-  const { initialQuery } = route.params ?? {};
+  const { initialQuery, searchNonce } = route.params ?? {};
   // The one shared location model. This screen never starts GPS itself any more: the customer picks
   // a city or taps "Use my current location" in the selector, and this screen simply reads the result.
   const { hydrated, selection, openSelector } = useLocationSelection();
@@ -405,6 +405,18 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, selectionKey]);
 
+  // Arriving here again with a service (e.g. a card in All Services) while this screen is already
+  // mounted: put that service in the box and search it, once per deliberate navigation.
+  const handledNonce = useRef(searchNonce);
+  useEffect(() => {
+    if (!hydrated || searchNonce === undefined || searchNonce === handledNonce.current) return;
+    handledNonce.current = searchNonce;
+    setQ(initialQuery ?? '');
+    setService(null);
+    void runSearch(false, { queryText: initialQuery ?? '', service: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, searchNonce]);
+
   // Distance is relative to a reference point (a city centre or the customer's GPS fix), so with none
   // the customer is sent to choose one instead of a silent permission request.
   function selectRadius(value: number | null) {
@@ -460,6 +472,8 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     sort,
     radiusKm,
   });
+  // True when nothing but the chosen city narrows the list, so an empty result means "no shops there".
+  const noFiltersApplied = q.trim() === '' && service === null && priceMin === null && priceMax === null && radiusKm === null;
   const locationBarLabel = selection ? fullLocationLabel(selection, t) : t.searchChooseLocationAction;
 
   return (
@@ -614,7 +628,25 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           onAction={openSelector}
         />
       ) : searched && !error && displayedResults.length === 0 ? (
-        <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
+        q.trim() !== '' && service === null && priceMin === null && priceMax === null && radiusKm === null ? (
+          // A service was searched and nothing offers it here: say so, honestly, instead of implying a typo.
+          <EmptyState
+            title={t.searchNoShopsForServiceTitle.replace('{service}', q.trim())}
+            message={t.searchNoShopsForServiceHint}
+            actionLabel={t.searchChangeLocationAction}
+            onAction={openSelector}
+          />
+        ) : noFiltersApplied && selection?.mode === 'city' ? (
+          // The city exists but has no active shop yet — say that, rather than implying a typo.
+          <EmptyState
+            title={t.searchNoShopsInCityTitle.replace('{city}', selection.city.name)}
+            message={t.searchNoShopsInCityHint}
+            actionLabel={t.searchChangeLocationAction}
+            onAction={openSelector}
+          />
+        ) : (
+          <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
+        )
       ) : (
         <FlatList
           data={displayedResults}
