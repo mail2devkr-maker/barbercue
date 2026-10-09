@@ -95,15 +95,21 @@ async function clickWithDialog(
 ): Promise<{ dialog: Dialog; clickPromise: Promise<void> }> {
   const dialogPromise = page.waitForEvent("dialog", { timeout: 5_000 });
   const clickPromise = locator.click();
-  const dialog = await Promise.race([
-    dialogPromise,
-    clickPromise.then(() => {
-      throw new Error(
-        "The clicked control completed without opening a dialog.",
-      );
-    }),
-  ]);
-  return { dialog, clickPromise };
+  try {
+    const first = await Promise.race([
+      dialogPromise.then((dialog) => ({ dialog })),
+      clickPromise.then(() => ({ clickCompleted: true as const })),
+    ]);
+    if ("dialog" in first) return { dialog: first.dialog, clickPromise };
+
+    // A click can resolve just before Chromium dispatches the native dialog event. Keep waiting
+    // for the armed event instead of treating promise ordering as proof that no dialog opened.
+    const dialog = await dialogPromise;
+    return { dialog, clickPromise };
+  } catch (error) {
+    await dialogPromise.catch(() => undefined);
+    throw error;
+  }
 }
 
 async function visible(locator: Locator, message: string) {
