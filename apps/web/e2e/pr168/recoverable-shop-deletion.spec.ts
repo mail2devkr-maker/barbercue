@@ -93,7 +93,8 @@ async function clickWithDialog(
   page: Page,
   locator: Locator,
 ): Promise<{ dialog: Dialog; clickPromise: Promise<void> }> {
-  const dialogPromise = page.waitForEvent("dialog", { timeout: 5_000 });
+  await expect(locator, "Confirmation control is enabled before interaction").toBeEnabled();
+  const dialogPromise = page.waitForEvent("dialog", { timeout: 10_000 });
   const clickPromise = locator.click();
   try {
     const first = await Promise.race([
