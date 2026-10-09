@@ -425,7 +425,9 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       const cityPage = await publicContext.newPage();
       await cityPage.goto(cityDiscoveryPath);
       await visible(
-        cityPage.getByText(fixtures.shop.name),
+        cityPage.getByRole("link", {
+          name: `View ${fixtures.shop.name}`,
+        }),
         "Active shop is present in the public city discovery page",
       );
     } finally {
