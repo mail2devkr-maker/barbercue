@@ -13,8 +13,14 @@ const require = createRequire(import.meta.url);
 const brand = path.resolve("apps/web/public/brand/fastque-clean-lockup-transparent.png");
 const source = path.resolve("apps/web/app/(dashboard)/dashboard/admin/crm/employee-id-card.ts");
 assert.ok(existsSync(source), "Employee ID Card source must exist");
+const signatureSource = path.resolve("apps/web/app/(dashboard)/dashboard/admin/crm/id-card-authorized-signature.ts");
+assert.ok(existsSync(signatureSource), "Owner-approved signature artwork module must exist");
 assert.ok(existsSync(brand), "Real brand logo must exist at the application's expected path");
 const compiled = ts.transpileModule(readFileSync(source, "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+
+const signatureCompiled = ts.transpileModule(readFileSync(signatureSource, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
@@ -40,10 +46,16 @@ try {
     width: 256, margin: 2, errorCorrectionLevel: "H",
     color: { dark: "#17131b", light: "#ffffff" },
   });
-  const result = await page.evaluate(async ({ compiled, qr }) => {
+  const result = await page.evaluate(async ({ compiled, signatureCompiled, qr }) => {
     const module = { exports: {} };
     // Trusted checked-out project source, transpiled from TypeScript, executed only in local synthetic QA.
-    new Function("module", "exports", compiled)(module, module.exports);
+    const signatureModule = { exports: {} };
+    new Function("module", "exports", signatureCompiled)(signatureModule, signatureModule.exports);
+    const localRequire = (name) => {
+      if (name === "./id-card-authorized-signature") return signatureModule.exports;
+      throw new Error("Unexpected import in browser PDF QA");
+    };
+    new Function("module", "exports", "require", compiled)(module, module.exports, localRequire);
     const loadImage = (src) => new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
@@ -76,13 +88,14 @@ try {
     for (let i = 0; i < pdf.length; i += 8192)
       binary += String.fromCharCode(...pdf.subarray(i, i + 8192));
     return { base64: btoa(binary), pdfLength: pdf.length };
-  }, { compiled, qr });
+  }, { compiled, signatureCompiled, qr });
   assert.ok(result.pdfLength > 40000, "Generated PDF was implausibly small");
   const pdf = Buffer.from(result.base64, "base64").toString("latin1");
   assert.ok(pdf.startsWith("%PDF-1.4"), "PDF magic missing");
   assert.ok(pdf.includes("/MediaBox [0 0 595 842]"), "A4 media box missing");
   assert.ok(pdf.includes("242.646") && pdf.includes("153.071"), "ISO ID-1 print size missing");
   assert.ok(pdf.includes("QR opens fastque.com only; it does not verify employee identity."), "QR disclaimer missing");
+  assert.ok(!pdf.includes("HR Draft") && !pdf.includes("DRAFT:"), "Downloaded card must use the approved title");
   const images = [...pdf.matchAll(/\/Filter \[\/ASCIIHexDecode \/DCTDecode\] \/Length \d+ >>\nstream\n([0-9A-F]+)>\nendstream/g)];
   assert.equal(images.length, 2, "Front and back raster images must be embedded in PDF");
   await page.addScriptTag({ path: require.resolve("jsqr") });
@@ -105,7 +118,7 @@ try {
   assert.equal(decoded.decodedUrl, "https://fastque.com", "QR must decode from the actual generated card back");
   assert.equal(decoded.width, 1028, "Back raster width mismatch");
   assert.equal(decoded.height, 648, "Back raster height mismatch");
-  console.log("BROWSER PDF QA PASS: generated real front/back PDF with uploaded synthetic photo and brand image; A4/ISO size PASS; embedded back-card QR decodes to https://fastque.com; this is NOT an employee verification service or a physical print test.");
+  console.log("BROWSER PDF QA PASS: approved premium front/back with authorized back-only signature; generated real PDF with uploaded synthetic photo and brand image; A4/ISO size PASS; embedded back-card QR decodes to https://fastque.com; this is NOT an employee verification service or a physical print test.");
 } finally {
   if (browser) await browser.close();
   await new Promise((resolve) => server.close(resolve));

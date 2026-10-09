@@ -1,4 +1,4 @@
-import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, drawHrSignaturePlaceholder, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
+import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, drawApprovedHrSignature, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
 
 describe("CRM employee ID card HR draft PDF", () => {
   test("A4 contains two physical ISO ID-1 faces without claiming ID verification", () => {
@@ -14,7 +14,7 @@ describe("CRM employee ID card HR draft PDF", () => {
     expect(body).toContain("242.646"); // 85.6 mm at 72 PDF points/inch
     expect(body).toContain("153.071"); // 54 mm at 72 PDF points/inch
     expect(body).toContain("QR opens fastque.com only; it does not verify employee identity.");
-    expect(body).toContain("HR Draft");
+    expect(body).toContain("FastQue Employee ID Card");
     expect(body).toContain("startxref");
     expect(body).toContain("%%EOF");
 
@@ -49,20 +49,12 @@ describe("CRM employee ID card HR draft PDF", () => {
       .rejects.toThrow("Choose a PNG, JPG or WebP photo up to 5 MB.");
   });
 
-  test("corrected card keeps exactly one unsigned HR-signature position at the bottom of the back", () => {
-    // Never copy the original staff autograph or draw extra signature marks across the card.
-    const ctx = {
-      fillRect: jest.fn(), measureText: jest.fn((value) => ({ width: value.length * 7 })),
-      fillText: jest.fn(), beginPath: jest.fn(), moveTo: jest.fn(), lineTo: jest.fn(), stroke: jest.fn(),
-    };
-    drawHrSignaturePlaceholder(ctx);
-    expect(ctx.fillRect).toHaveBeenCalledWith(52, 555, 510, 1);
-    expect(ctx.fillText).toHaveBeenCalledTimes(1);
-    expect(ctx.fillText).toHaveBeenCalledWith("Authorised HR signature:", 52, 582);
-    expect(ctx.moveTo).toHaveBeenCalledTimes(1);
-    expect(ctx.moveTo).toHaveBeenCalledWith(284, 583);
-    expect(ctx.lineTo).toHaveBeenCalledWith(558, 583);
-    expect(ctx.stroke).toHaveBeenCalledTimes(1);
+  test("approved HR signature drawing uses one back-card position", () => {
+    const ctx = { drawImage: jest.fn() };
+    const signature = {};
+    drawApprovedHrSignature(ctx, signature);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+    expect(ctx.drawImage).toHaveBeenCalledWith(signature, 332, 515, 221, 84);
   });
 
   test("site QR remains explicitly non-verifying until a real employee verification service exists", () => {

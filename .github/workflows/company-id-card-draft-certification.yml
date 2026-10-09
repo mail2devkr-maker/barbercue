@@ -7,6 +7,7 @@ on:
     paths:
       - 'apps/web/app/(dashboard)/dashboard/admin/crm/**'
       - 'apps/web/lib/__tests__/employee-id-card-pdf.test.jsx'
+      - 'scripts/certify-employee-id-card-browser.mjs'
       - '.github/workflows/company-id-card-draft-certification.yml'
 permissions:
   contents: read
