@@ -6,6 +6,7 @@ import OwnerStaffLoginScreen from '../screens/OwnerStaffLoginScreen';
 import OwnerRegisterScreen from '../screens/OwnerRegisterScreen';
 import OwnerStaffPasswordRecoveryScreen from '../screens/OwnerStaffPasswordRecoveryScreen';
 import GuestSearchStack from './GuestSearchStack';
+import GuestAllServicesScreen from '../screens/GuestAllServicesScreen';
 import { lightStackOptions } from './screenOptions';
 import { useLanguage } from '../lib/language-context';
 import type { SearchStackParamList } from './types';
@@ -15,6 +16,7 @@ export type AuthStackParamList = {
   CustomerLogin: undefined;
   OwnerStaffLogin: { role: 'OWNER' | 'STAFF' };
   OwnerRegister: undefined;
+  AllServices: undefined;
   PasswordRecovery: { audience: 'owner' | 'staff' };
   // Issue 2 (mobile launch mission) — browse-first, auth-last. See GuestSearchStack's own comment.
   GuestBrowse: NavigatorScreenParams<SearchStackParamList> | undefined;
@@ -34,6 +36,7 @@ export default function AuthStack() {
       <Stack.Screen name="CustomerLogin" component={PhoneOtpLoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="OwnerStaffLogin" component={OwnerStaffLoginScreen} options={{ title: t.signInTitle }} />
       <Stack.Screen name="OwnerRegister" component={OwnerRegisterScreen} options={{ title: "Create your account" }} />
+      <Stack.Screen name="AllServices" component={GuestAllServicesScreen} options={{ title: t.allServicesTitle }} />
       <Stack.Screen name="PasswordRecovery" component={OwnerStaffPasswordRecoveryScreen} options={{ title: t.passwordRecoveryTitle }} />
       <Stack.Screen name="GuestBrowse" component={GuestSearchStack} options={{ headerShown: false }} />
     </Stack.Navigator>

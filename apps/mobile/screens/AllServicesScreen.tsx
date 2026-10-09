@@ -47,7 +47,7 @@ export function buildRows(categories: readonly CustomerServiceCategory[]): Row[]
  * honest "no shops offer this here yet" — lives. No prices are shown: the catalogue has no reliable
  * customer-facing price.
  */
-export default function AllServicesScreen({ navigation }: Props) {
+export function AllServicesContent({ onOpenService }: { onOpenService: (entry: CustomerServiceEntry) => void }) {
   const { t } = useLanguage();
   const { width } = useWindowDimensions();
   const [filter, setFilter] = useState('');
@@ -60,12 +60,6 @@ export default function AllServicesScreen({ navigation }: Props) {
     return filterCustomerServices(base, filter);
   }, [categoryId, filter]);
   const rows = useMemo(() => buildRows(visibleCategories), [visibleCategories]);
-
-  function openService(entry: CustomerServiceEntry) {
-    // The chosen city / current location lives in the shared location context, so Search simply
-    // picks it up; only the service keyword travels with the navigation.
-    navigation.navigate('SearchTab', { screen: 'SalonSearch', params: { initialQuery: entry.query, searchNonce: Date.now() } });
-  }
 
   const header = (
     <View>
@@ -119,7 +113,7 @@ export default function AllServicesScreen({ navigation }: Props) {
                 <Pressable
                   key={entry.id}
                   testID={`service-card-${entry.id}`}
-                  onPress={() => openService(entry)}
+                  onPress={() => onOpenService(entry)}
                   accessibilityRole="button"
                   accessibilityLabel={t.allServicesFindShopsFor.replace('{service}', entry.name)}
                   style={({ pressed }) => [styles.card, { width: cardWidth }, pressed && styles.cardPressed]}
@@ -135,6 +129,19 @@ export default function AllServicesScreen({ navigation }: Props) {
         }
       />
     </View>
+  );
+}
+
+/** Signed-in customers: opens the Search tab for the chosen service. */
+export default function AllServicesScreen({ navigation }: Props) {
+  // The chosen city / current location lives in the shared location context, so Search simply
+  // picks it up; only the service keyword travels with the navigation.
+  return (
+    <AllServicesContent
+      onOpenService={(entry) =>
+        navigation.navigate('SearchTab', { screen: 'SalonSearch', params: { initialQuery: entry.query, searchNonce: Date.now() } })
+      }
+    />
   );
 }
 

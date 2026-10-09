@@ -15,6 +15,7 @@ import {
   OwnerStaffScreen,
 } from '../screens/owner/OwnerShopSectionScreens';
 import { useLanguage } from '../lib/language-context';
+import { lightStackOptions } from './screenOptions';
 
 export type OwnerShopStackParamList = {
   // The Shop tab's root is the management hub (every section the website offers).
@@ -39,7 +40,8 @@ const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
 // per website management section. Live queue and Bookings are existing tabs, reached from the hub.
 export default function OwnerShopStack() {
   const { t } = useLanguage();
-  const titled = (title: string) => ({ headerShown: true, title });
+  // The app's premium (dark) header preset, so owner screens match the rest of the app.
+  const titled = (title: string) => ({ ...lightStackOptions, headerShown: true, title });
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="OwnerShop" component={OwnerManageScreen} />

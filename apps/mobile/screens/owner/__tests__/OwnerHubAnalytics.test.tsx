@@ -224,6 +224,16 @@ describe('Owner Analytics', () => {
     expect(allText(r)).toContain(t().analyticsValueTrendSub); // "not audited payment revenue"
   });
 
+  it('a trend where every day is zero says so in words instead of drawing an empty chart', async () => {
+    route({ analytics: () => analytics({ dailyServiceValue: [{ date: '2026-10-09', completedCount: 0, estimatedServiceValue: 0 }] }) });
+    const r = await mountAnalytics();
+    await flush(6);
+    await press(r, 'analytics-view-value');
+    expect(has(r, 'column-chart-empty')).toBe(true);
+    expect(has(r, 'column-chart')).toBe(false);
+    expect(allText(r)).toContain(t().analyticsNoServiceValue);
+  });
+
   it('Operations view shows 24 hourly cells, lost-opportunity tiles and busiest/slowest hours', async () => {
     route({});
     const r = await mountAnalytics();

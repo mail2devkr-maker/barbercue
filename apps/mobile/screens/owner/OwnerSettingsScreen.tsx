@@ -115,8 +115,9 @@ export default function OwnerSettingsScreen() {
             onContinueSetup={() => navigation.navigate('OwnerServices')}
           />
           <TimezoneSection salonId={selectedSalonId} />
-          <OwnerVoiceSettingsCard />
           <QueueQrSection salonId={selectedSalonId} salonName={salon.name} />
+          {/* Last on purpose: it lists every text-to-speech voice installed on the phone, which is long. */}
+          <OwnerVoiceSettingsCard />
         </>
       ) : null}
     </PremiumScreen>

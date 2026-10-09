@@ -318,7 +318,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>{t.popularServicesTitle}</Text>
-          <Pressable onPress={() => goSearch()}>
+          <Pressable testID="signedout-all-services" onPress={() => navigation.navigate('AllServices')} accessibilityRole="button">
             <Text style={styles.viewAllText}>{t.viewAllAction} →</Text>
           </Pressable>
         </View>

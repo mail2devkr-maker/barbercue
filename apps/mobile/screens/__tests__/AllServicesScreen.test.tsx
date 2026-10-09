@@ -16,6 +16,10 @@ jest.mock('../../lib/language-context', () => {
 jest.mock('../../lib/api', () => ({ apiFetch: jest.fn(), ApiError: class extends Error {} }));
 
 import AllServicesScreen, { buildRows } from '../AllServicesScreen';
+import GuestAllServicesScreen from '../GuestAllServicesScreen';
+
+const mockGuestNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockGuestNavigate }) }));
 
 const t = uiStringsFor('EN');
 const navigation = { navigate: jest.fn() };
@@ -113,6 +117,20 @@ describe('All Services screen', () => {
       expect(hi[key]).toBeTruthy();
       expect(hi[key]).not.toBe(t[key]);
     }
+  });
+});
+
+describe('All Services for signed-out visitors', () => {
+  it('a service opens the GUEST shop search (browse first, sign in last), carrying the keyword', async () => {
+    mockGuestNavigate.mockClear();
+    const r = await render(createElement(GuestAllServicesScreen as never));
+    await flush();
+    await press(r, 'category-chip-barber');
+    await press(r, 'service-card-classic-haircut');
+    expect(mockGuestNavigate).toHaveBeenCalledTimes(1);
+    const [route, params] = mockGuestNavigate.mock.calls[0];
+    expect(route).toBe('GuestBrowse');
+    expect(params).toMatchObject({ screen: 'SalonSearch', params: { initialQuery: 'Classic Haircut' } });
   });
 });
 

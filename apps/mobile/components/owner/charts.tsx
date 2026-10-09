@@ -21,7 +21,8 @@ export function ColumnChart({
   emptyText: string;
   accessibilityLabel: string;
 }) {
-  if (rows.length === 0) return <Text style={styles.empty}>{emptyText}</Text>;
+  // Nothing to draw — no days, or every day at zero — is said in words, not shown as an empty frame.
+  if (rows.length === 0 || rows.every((row) => row.estimatedServiceValue <= 0)) return <Text testID="column-chart-empty" style={styles.empty}>{emptyText}</Text>;
   const bars = columnChart(rows);
   return (
     <View accessible accessibilityRole="image" accessibilityLabel={accessibilityLabel} testID="column-chart">
