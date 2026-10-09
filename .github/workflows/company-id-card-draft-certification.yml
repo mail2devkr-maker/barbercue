@@ -1,0 +1,36 @@
+name: Company ID Card Draft Certification
+on:
+  push:
+    branches:
+      - chatgpt/fastque-crm-employee-id-card-generator-20261009
+  pull_request:
+    paths:
+      - 'apps/web/app/(dashboard)/dashboard/admin/crm/**'
+      - 'apps/web/lib/__tests__/employee-id-card-pdf.test.jsx'
+      - '.github/workflows/company-id-card-draft-certification.yml'
+permissions:
+  contents: read
+jobs:
+  targeted-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared package for web tests
+        run: npm run build:shared
+      - name: Run Employee ID Card unit and security validation tests
+        run: npm run test --workspace=@barbercue/web -- --runInBand --runTestsByPath lib/__tests__/employee-id-card-pdf.test.jsx
+      - name: Web TypeScript typecheck
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Full web production build (non-deploying)
+        run: npm run build --workspace=@barbercue/web
+      - name: Install browser driver (test-runner only)
+        run: npm install --no-save --no-package-lock --ignore-scripts --legacy-peer-deps playwright-core@1.56.1
+      - name: Generate synthetic ID PDF and decode the real card QR in Chrome
+        run: node scripts/certify-employee-id-card-browser.mjs
