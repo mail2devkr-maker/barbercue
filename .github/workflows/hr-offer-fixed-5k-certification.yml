@@ -1,0 +1,44 @@
+name: FastQue Fixed 5K Offer Incentive Certification
+
+on:
+  push:
+    branches:
+      - chatgpt/hr-offer-fixed-5k-variable-incentive-20261009
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offer-letter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate Prisma client (no database access)
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/no_database_connection
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Focused PDF offer letter tests
+        run: npm run test --workspace=@barbercue/web -- --runInBand --runTestsByPath 'app/(dashboard)/dashboard/admin/crm/__tests__/offer-letter.test.jsx'
+      - name: TypeScript
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Scoped ESLint production code
+        working-directory: apps/web
+        run: npx eslint 'app/(dashboard)/dashboard/admin/crm/offer-letter.ts'
+      - name: Production website build (no deploy)
+        run: npm run build --workspace=@barbercue/web
+      - name: Diff check
+        run: git diff --check origin/master...HEAD

@@ -24,6 +24,10 @@ export type OfferLetterData = {
   baseSalary: number;
   salaryBasis: SalaryBasis;
   joiningDate?: string;
+  /** Optional custom offer terms; both must be set together. Number of verified shops. */
+  salesTarget?: number;
+  /** INR paid per additional verified shop beyond the specified target. */
+  incentiveBeyondTarget?: number;
 };
 
 const ROLE_TERMS = [
@@ -43,8 +47,9 @@ function titleCase(value: string): string {
 export function guessCandidateName(filename: string): string {
   const withoutExtension = filename.replace(/\.[^.]+$/, "");
   const cleaned = withoutExtension
-    .replace(/\b(resume|cv|curriculum|vitae|profile|latest|final|updated|copy|document)\b/gi, " ")
+    // Split filename separators first so trailing "_RESUME" is recognized as a word.
     .replace(/[_.-]+/g, " ")
+    .replace(/\b(resume|cv|curriculum|vitae|profile|latest|final|updated|copy|document)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -681,6 +686,9 @@ export function numberToIndianWords(amount: number): string {
   return parts.join(" ") + " Rupees";
 }
 
+// Fixed default for future offer-letter PDFs. Update deliberately on explicit owner request.
+const DEFAULT_EXPECTED_PERFORMANCE_INCENTIVE_MONTHLY_INR = 5000;
+
 function salaryBreakdown(monthlyCtc: number) {
   const round = (value: number) => Math.round(value);
   const basic = round(monthlyCtc * 0.40);
@@ -695,7 +703,7 @@ function salaryBreakdown(monthlyCtc: number) {
     round(monthlyCtc) - basic - hra - employerPf - insurance - pfService - statutoryBonus - employeeCompensation,
   );
   const grossEarnings = basic + hra + specialAllowance + statutoryBonus;
-  const expectedPerformanceIncentive = Math.max(0, 20000 - round(monthlyCtc));
+  const expectedPerformanceIncentive = DEFAULT_EXPECTED_PERFORMANCE_INCENTIVE_MONTHLY_INR;
   const expectedMonthlyPackage = round(monthlyCtc) + expectedPerformanceIncentive;
   const employeePf = 0;
   return {
@@ -774,6 +782,22 @@ export function buildOfferLetterPdf(
         year: "numeric",
       }).format(new Date(data.joiningDate + "T00:00:00"))
     : "To be mutually agreed";
+
+  const hasSalesTarget = data.salesTarget !== undefined;
+  const hasBeyondTargetIncentive = data.incentiveBeyondTarget !== undefined;
+  if (hasSalesTarget !== hasBeyondTargetIncentive) {
+    throw new Error("Provide both sales target and incentive beyond target together.");
+  }
+  if (hasSalesTarget && (!Number.isSafeInteger(data.salesTarget) || data.salesTarget! < 1)) {
+    throw new Error("Sales target must be a positive whole number of shops.");
+  }
+  if (hasBeyondTargetIncentive &&
+    (!Number.isSafeInteger(data.incentiveBeyondTarget) || data.incentiveBeyondTarget! < 1 ||
+      data.incentiveBeyondTarget! > 1000000)
+  ) {
+    throw new Error("Incentive beyond target must be a positive whole rupee amount.");
+  }
+  const customPerformanceTerms = hasSalesTarget && hasBeyondTargetIncentive;
 
   const monthlyCtc = data.salaryBasis === "monthly" ? data.baseSalary : data.baseSalary / 12;
   const annualCtc = monthlyCtc * 12;
@@ -864,21 +888,41 @@ export function buildOfferLetterPdf(
   page2.commands += textCommand("PERFORMANCE & INCENTIVE", 48, page2.y, 10, true, "0.10 0.09 0.09");
   page2.commands += strokeLine(48, page2.y - 2, 181, page2.y - 2, "0.10 0.09 0.09", 0.6);
   page2.y -= 18;
-  addWrapped(
-    page2,
-    "Committed salary eligibility requires a minimum of 85 shops to be successfully onboarded during the applicable performance period.",
-    9.1, 12, 105, true, 5,
-  );
-  addWrapped(
-    page2,
-    "Incentive slab: for shops 86 through 100, an incentive of INR 60 per shop will be paid for each shop in that slab.",
-    8.9, 12, 105, false, 4,
-  );
-  addWrapped(
-    page2,
-    "From the 101st shop onward, an incentive of INR 100 per shop will be paid for each additional shop onboarded.",
-    8.9, 12, 105, false, 8,
-  );
+  if (customPerformanceTerms) {
+    // Custom offer-specific terms supersede the reference 85/60/100 shop slabs.
+    // Never print conflicting default thresholds/rates in the same signed PDF.
+    addWrapped(
+      page2,
+      "Sales Target: " + formatInr(data.salesTarget!) +
+        " successfully onboarded shops during the applicable performance period. " +
+        "Committed salary eligibility is subject to completion of this stated target.",
+      9.1, 12, 105, true, 5,
+    );
+    addWrapped(
+      page2,
+      "Incentives Beyond Target: INR " + formatInr(data.incentiveBeyondTarget!) +
+        " per additional successfully onboarded shop above the Sales Target of " +
+        formatInr(data.salesTarget!) + " shops. Incentives apply only to verified additional " +
+        "onboardings and are subject to company approval and applicable payroll policy.",
+      8.9, 12, 105, false, 8,
+    );
+  } else {
+    addWrapped(
+      page2,
+      "Committed salary eligibility requires a minimum of 85 shops to be successfully onboarded during the applicable performance period.",
+      9.1, 12, 105, true, 5,
+    );
+    addWrapped(
+      page2,
+      "Incentive slab: for shops 86 through 100, an incentive of INR 60 per shop will be paid for each shop in that slab.",
+      8.9, 12, 105, false, 4,
+    );
+    addWrapped(
+      page2,
+      "From the 101st shop onward, an incentive of INR 100 per shop will be paid for each additional shop onboarded.",
+      8.9, 12, 105, false, 8,
+    );
+  }
 
   addWrapped(
     page2,
@@ -1008,7 +1052,9 @@ export function buildOfferLetterPdf(
 
   let noteY = Math.max(104, netTable.bottomY - 16);
   for (const line of wrap(
-    "Note: Expected Performance Incentive is an illustrative variable amount used to show an expected package of up to approximately INR 20,000 per month. It is not guaranteed salary. Actual incentive is earned only on verified shop onboardings under the applicable performance slab (shops 86-100: INR 60 per shop; 101 onward: INR 100 per additional shop). Statutory treatment and final pay remain subject to applicable law and approved company payroll policy.",
+    customPerformanceTerms
+      ? "Note: Expected Performance Incentive is a fixed illustrative planning figure of INR 5,000 per month (INR 60,000 annually), above base pay, not guaranteed salary. The offer-specific Sales Target and Incentives Beyond Target set the actual variable incentive eligibility; actual payouts depend on verified onboarding, applicable approval and payroll policy. The illustrative INR 5,000 is not an additional guaranteed payment beyond the stated per-shop incentive."
+      : "Note: Expected Performance Incentive is a fixed illustrative planning figure of INR 5,000 per month (INR 60,000 annually), above base pay, not guaranteed salary. Actual payouts depend on verified shop onboardings under the applicable performance slab (shops 86-100: INR 60 per shop; 101 onward: INR 100 per additional shop), approval and payroll policy. The illustrative INR 5,000 is not an additional guaranteed payment beyond earned per-shop incentives.",
     102,
   )) {
     page3 += textCommand(line, 62, noteY, 7.4, false, "0.34 0.32 0.34");

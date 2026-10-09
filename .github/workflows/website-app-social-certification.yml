@@ -1,0 +1,55 @@
+name: Website App and Social Links Certification
+
+on:
+  push:
+    branches:
+      - chatgpt/fastque-web-app-social-qr-20261008
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  website-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact lockfile
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared package
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Typecheck website
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Lint only changed website source
+        working-directory: apps/web
+        run: >
+          npx eslint
+          'app/(public)/app/page.tsx'
+          components/layout/AppAccessQr.tsx
+          components/layout/SiteFooter.tsx
+      - name: Build production website (no deploy)
+        run: npm run build --workspace=@barbercue/web
+      - name: Validate owner social URLs and permanent QR target
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const footer = fs.readFileSync('apps/web/components/layout/SiteFooter.tsx', 'utf8');
+          const qr = fs.readFileSync('apps/web/components/layout/AppAccessQr.tsx', 'utf8');
+          if (!footer.includes('https://www.instagram.com/fastque_official/')) throw new Error('Instagram missing');
+          if (!footer.includes('https://www.facebook.com/share/1T6Dab9jNf/?mibextid=wwXIfr')) throw new Error('Facebook missing');
+          if (!qr.includes('https://fastque.com/app')) throw new Error('Permanent QR target missing');
+          console.log('Official links and permanent QR target present');
+          NODE
+      - name: Whitespace check
+        run: git diff --check origin/master...HEAD

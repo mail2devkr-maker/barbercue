@@ -11,6 +11,7 @@ import { HeroVisual } from "../../components/landing/HeroVisual";
 import { HeroBookingCard } from "../../components/landing/HeroBookingCard";
 import { HeroFeatureRow } from "../../components/landing/HeroFeatureRow";
 import { HeroSearchField } from "../../components/landing/HeroSearchField";
+import { PlayStoreQr } from "../../components/layout/PlayStoreQr";
 import { SearchIcon, PlayIcon } from "../../components/landing/icons";
 import { EditorialImage } from "../../components/editorial/EditorialImage";
 import styles from "../../components/landing/landing.module.css";
@@ -158,6 +159,47 @@ export default async function HomePage() {
           </div>
 
           <HeroBookingCard />
+        </div>
+      </section>
+
+      <section
+        aria-label="FastQue Android app on Google Play"
+        style={{
+          background: "#130b12",
+          color: "#fff",
+          padding: "30px 24px",
+          borderTop: "1px solid rgba(255,105,104,.24)",
+          borderBottom: "1px solid rgba(255,105,104,.24)",
+        }}
+      >
+        <div style={{ maxWidth: 1150, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+            <div style={{ padding: 8, borderRadius: 13, background: "#fff", boxShadow: "0 0 0 2px #f20a83, 0 0 0 4px rgba(255,122,34,.42)" }}>
+              <PlayStoreQr size={148} />
+            </div>
+            <div style={{ maxWidth: 560 }}>
+              <p style={{ color: "#ffb073", letterSpacing: ".1em", fontWeight: 700, fontSize: 12, margin: "0 0 8px" }}>FASTQUE FOR ANDROID</p>
+              <h2 style={{ fontSize: "clamp(24px, 4vw, 34px)", margin: "0 0 9px", lineHeight: 1.18 }}>Scan to find FastQue on Google Play.</h2>
+              <p style={{ color: "#e6dae2", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+                This QR opens our direct Google Play link. The Install option will be available after
+                the Android app is published publicly; it is still in testing.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/app"
+            style={{
+              display: "inline-flex",
+              padding: "13px 20px",
+              color: "#fff",
+              fontWeight: 700,
+              textDecoration: "none",
+              background: "linear-gradient(100deg,#f20a83,#ff7a22)",
+              borderRadius: 999,
+            }}
+          >
+            Android app &amp; QR →
+          </Link>
         </div>
       </section>
 
