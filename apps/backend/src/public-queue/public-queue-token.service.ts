@@ -25,7 +25,9 @@ export class PublicQueueTokenService {
    */
   async resolveToken(token: string) {
     if (!token) return null;
-    return this.prisma.salon.findUnique({ where: { publicQueueToken: token } });
+    return this.prisma.salon.findFirst({
+      where: { publicQueueToken: token, softDeletedAt: null },
+    });
   }
 
   /**
@@ -38,7 +40,7 @@ export class PublicQueueTokenService {
   async getOrCreateToken(salonId: string): Promise<string> {
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { publicQueueToken: true },
+      select: { publicQueueToken: true, softDeletedAt: true },
     });
     if (!salon) {
       throw new AppException(
@@ -47,11 +49,18 @@ export class PublicQueueTokenService {
         HttpStatus.NOT_FOUND,
       );
     }
+    if (salon.softDeletedAt) {
+      throw new AppException(
+        'SHOP_QUARANTINED',
+        'This shop is in recovery Trash. Its queue is unavailable.',
+        HttpStatus.CONFLICT,
+      );
+    }
     if (salon.publicQueueToken) return salon.publicQueueToken;
 
     const candidate = randomBytes(24).toString('hex');
     const claim = await this.prisma.salon.updateMany({
-      where: { id: salonId, publicQueueToken: null },
+      where: { id: salonId, publicQueueToken: null, softDeletedAt: null },
       data: { publicQueueToken: candidate },
     });
     if (claim.count === 1) return candidate;
@@ -60,8 +69,15 @@ export class PublicQueueTokenService {
     // up creating (and discarding) a second unused token.
     const current = await this.prisma.salon.findUniqueOrThrow({
       where: { id: salonId },
-      select: { publicQueueToken: true },
+      select: { publicQueueToken: true, softDeletedAt: true },
     });
+    if (current.softDeletedAt) {
+      throw new AppException(
+        'SHOP_QUARANTINED',
+        'This shop is in recovery Trash. Its queue is unavailable.',
+        HttpStatus.CONFLICT,
+      );
+    }
     // Not reachable in practice (the row now has SOME token after the race), but satisfies the
     // return type without a non-null assertion.
     return current.publicQueueToken ?? candidate;
@@ -72,7 +88,15 @@ export class PublicQueueTokenService {
     return `${webBaseUrl}/q/${token}`;
   }
 
-  isQueueAvailable(salon: { status: SalonStatus; isClosedForToday?: boolean }): boolean {
-    return salon.status === SalonStatus.ACTIVE && salon.isClosedForToday !== true;
+  isQueueAvailable(salon: {
+    status: SalonStatus;
+    isClosedForToday?: boolean;
+    softDeletedAt?: Date | null;
+  }): boolean {
+    return (
+      salon.status === SalonStatus.ACTIVE &&
+      salon.isClosedForToday !== true &&
+      !salon.softDeletedAt
+    );
   }
 }

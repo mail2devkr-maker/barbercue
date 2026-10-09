@@ -6,6 +6,7 @@
     "dev": "next dev -p 3001",
     "build": "npm run build --workspace=@barbercue/shared && next build",
     "start": "next start -p 3001",
+    "test:e2e:pr168": "playwright test --config=playwright.pr168.config.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "jest"
@@ -19,6 +20,8 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "otplib": "^13.4.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -1,5 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { BookingErrorCode, QueueErrorCode, Role, SalonStatus } from '@barbercue/shared';
+import {
+  BookingErrorCode,
+  QueueErrorCode,
+  Role,
+  SalonStatus,
+} from '@barbercue/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../exceptions/app.exception';
 
@@ -55,7 +60,10 @@ export class SalonAccessService {
     const ownerMembership = await this.prisma.userRole.findFirst({
       where: { userId, salonId, role: Role.SALON_OWNER },
     });
-    if (ownerMembership) return 'OWNER';
+    if (ownerMembership) {
+      await this.assertNotQuarantined(salonId);
+      return 'OWNER';
+    }
     return this.assertGlobalAdminAccess(userId, salonId);
   }
 
@@ -72,9 +80,16 @@ export class SalonAccessService {
     salonId: string,
   ): Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'> {
     const membership = await this.prisma.userRole.findFirst({
-      where: { userId, salonId, role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] } },
+      where: {
+        userId,
+        salonId,
+        role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] },
+      },
     });
-    if (membership) return 'STAFF_OR_OWNER';
+    if (membership) {
+      await this.assertNotQuarantined(salonId);
+      return 'STAFF_OR_OWNER';
+    }
     return this.assertGlobalAdminOperationalAccess(userId, salonId);
   }
 
@@ -104,7 +119,7 @@ export class SalonAccessService {
     if (adminMembership) {
       const salon = await this.prisma.salon.findUnique({
         where: { id: salonId },
-        select: { status: true },
+        select: { status: true, softDeletedAt: true },
       });
       if (!salon) {
         throw new AppException(
@@ -113,6 +128,7 @@ export class SalonAccessService {
           HttpStatus.NOT_FOUND,
         );
       }
+      if (salon.softDeletedAt) this.throwQuarantined();
       return 'PLATFORM_ADMIN';
     }
 
@@ -145,7 +161,7 @@ export class SalonAccessService {
 
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { status: true },
+      select: { status: true, softDeletedAt: true },
     });
     if (!salon) {
       throw new AppException(
@@ -154,6 +170,7 @@ export class SalonAccessService {
         HttpStatus.NOT_FOUND,
       );
     }
+    if (salon.softDeletedAt) this.throwQuarantined();
     if (salon.status !== SalonStatus.ACTIVE) {
       throw new AppException(
         QueueErrorCode.SALON_ACCESS_DENIED,
@@ -183,5 +200,29 @@ export class SalonAccessService {
         HttpStatus.FORBIDDEN,
       );
     }
+    await this.assertNotQuarantined(salonId);
+  }
+
+  private async assertNotQuarantined(salonId: string): Promise<void> {
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { id: true, softDeletedAt: true },
+    });
+    if (!salon) {
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Shop not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (salon.softDeletedAt) this.throwQuarantined();
+  }
+
+  private throwQuarantined(): never {
+    throw new AppException(
+      'SHOP_QUARANTINED',
+      'This shop is in recovery Trash. Only a Super Admin can restore it.',
+      HttpStatus.CONFLICT,
+    );
   }
 }

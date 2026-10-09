@@ -2,6 +2,7 @@ import { PublicQueueTokenService } from './public-queue-token.service';
 
 interface PrismaMock {
   salon: {
+    findFirst: jest.Mock;
     findUnique: jest.Mock;
     updateMany: jest.Mock;
     findUniqueOrThrow: jest.Mock;
@@ -15,6 +16,7 @@ describe('PublicQueueTokenService', () => {
   beforeEach(() => {
     prisma = {
       salon: {
+        findFirst: jest.fn(),
         findUnique: jest.fn(),
         updateMany: jest.fn(),
         findUniqueOrThrow: jest.fn(),
@@ -25,32 +27,44 @@ describe('PublicQueueTokenService', () => {
 
   describe('resolveToken', () => {
     it('returns the salon for a known token', async () => {
-      const salon = { id: 's1', name: 'Fresh Cuts', publicQueueToken: 'abc123' };
-      prisma.salon.findUnique.mockResolvedValue(salon);
+      const salon = {
+        id: 's1',
+        name: 'Fresh Cuts',
+        publicQueueToken: 'abc123',
+      };
+      prisma.salon.findFirst.mockResolvedValue(salon);
       await expect(service.resolveToken('abc123')).resolves.toBe(salon);
-      expect(prisma.salon.findUnique).toHaveBeenCalledWith({ where: { publicQueueToken: 'abc123' } });
+      expect(prisma.salon.findFirst).toHaveBeenCalledWith({
+        where: { publicQueueToken: 'abc123', softDeletedAt: null },
+      });
     });
 
     it('returns null for an unknown token, without throwing', async () => {
-      prisma.salon.findUnique.mockResolvedValue(null);
+      prisma.salon.findFirst.mockResolvedValue(null);
       await expect(service.resolveToken('does-not-exist')).resolves.toBeNull();
     });
 
     it('returns null for an empty token without querying the database', async () => {
       await expect(service.resolveToken('')).resolves.toBeNull();
-      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+      expect(prisma.salon.findFirst).not.toHaveBeenCalled();
     });
   });
 
   describe('getOrCreateToken', () => {
     it('throws SALON_NOT_FOUND for an unknown salon', async () => {
       prisma.salon.findUnique.mockResolvedValue(null);
-      await expect(service.getOrCreateToken('missing')).rejects.toMatchObject({ code: 'SALON_NOT_FOUND' });
+      await expect(service.getOrCreateToken('missing')).rejects.toMatchObject({
+        code: 'SALON_NOT_FOUND',
+      });
     });
 
     it('returns the existing token without generating a new one', async () => {
-      prisma.salon.findUnique.mockResolvedValue({ publicQueueToken: 'existing-token' });
-      await expect(service.getOrCreateToken('s1')).resolves.toBe('existing-token');
+      prisma.salon.findUnique.mockResolvedValue({
+        publicQueueToken: 'existing-token',
+      });
+      await expect(service.getOrCreateToken('s1')).resolves.toBe(
+        'existing-token',
+      );
       expect(prisma.salon.updateMany).not.toHaveBeenCalled();
     });
 
@@ -62,7 +76,7 @@ describe('PublicQueueTokenService', () => {
 
       expect(token).toMatch(/^[0-9a-f]{48}$/); // randomBytes(24).toString('hex')
       expect(prisma.salon.updateMany).toHaveBeenCalledWith({
-        where: { id: 's1', publicQueueToken: null },
+        where: { id: 's1', publicQueueToken: null, softDeletedAt: null },
         data: { publicQueueToken: token },
       });
     });
@@ -77,12 +91,16 @@ describe('PublicQueueTokenService', () => {
       expect(a).not.toBe(b);
     });
 
-    it('re-reads and returns the winner\'s token when it loses the race to a concurrent generator', async () => {
+    it("re-reads and returns the winner's token when it loses the race to a concurrent generator", async () => {
       prisma.salon.findUnique.mockResolvedValue({ publicQueueToken: null });
       prisma.salon.updateMany.mockResolvedValue({ count: 0 }); // someone else already claimed it
-      prisma.salon.findUniqueOrThrow.mockResolvedValue({ publicQueueToken: 'the-winners-token' });
+      prisma.salon.findUniqueOrThrow.mockResolvedValue({
+        publicQueueToken: 'the-winners-token',
+      });
 
-      await expect(service.getOrCreateToken('s1')).resolves.toBe('the-winners-token');
+      await expect(service.getOrCreateToken('s1')).resolves.toBe(
+        'the-winners-token',
+      );
     });
   });
 
@@ -94,21 +112,51 @@ describe('PublicQueueTokenService', () => {
 
     it('uses WEB_BASE_URL when set — never a hard-coded domain', () => {
       process.env.WEB_BASE_URL = 'https://barbercue.example.com';
-      expect(service.buildPublicQueueUrl('tok123')).toBe('https://barbercue.example.com/q/tok123');
+      expect(service.buildPublicQueueUrl('tok123')).toBe(
+        'https://barbercue.example.com/q/tok123',
+      );
     });
 
     it('falls back to localhost only when WEB_BASE_URL is unset (dev default)', () => {
       delete process.env.WEB_BASE_URL;
-      expect(service.buildPublicQueueUrl('tok123')).toBe('http://localhost:3001/q/tok123');
+      expect(service.buildPublicQueueUrl('tok123')).toBe(
+        'http://localhost:3001/q/tok123',
+      );
     });
   });
 
   describe('isQueueAvailable', () => {
     it('is available only for an ACTIVE salon that is not closed for today', () => {
-      expect(service.isQueueAvailable({ status: 'ACTIVE' as never, isClosedForToday: false })).toBe(true);
-      expect(service.isQueueAvailable({ status: 'ACTIVE' as never, isClosedForToday: true })).toBe(false);
-      expect(service.isQueueAvailable({ status: 'PENDING' as never, isClosedForToday: false })).toBe(false);
-      expect(service.isQueueAvailable({ status: 'SUSPENDED' as never, isClosedForToday: false })).toBe(false);
+      expect(
+        service.isQueueAvailable({
+          status: 'ACTIVE' as never,
+          isClosedForToday: false,
+        }),
+      ).toBe(true);
+      expect(
+        service.isQueueAvailable({
+          status: 'ACTIVE' as never,
+          isClosedForToday: true,
+        }),
+      ).toBe(false);
+      expect(
+        service.isQueueAvailable({
+          status: 'PENDING' as never,
+          isClosedForToday: false,
+        }),
+      ).toBe(false);
+      expect(
+        service.isQueueAvailable({
+          status: 'SUSPENDED' as never,
+          isClosedForToday: false,
+        }),
+      ).toBe(false);
+      expect(
+        service.isQueueAvailable({
+          status: 'ACTIVE' as never,
+          softDeletedAt: new Date(),
+        }),
+      ).toBe(false);
     });
   });
 });
