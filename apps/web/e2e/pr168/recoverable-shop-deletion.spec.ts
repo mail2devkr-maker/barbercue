@@ -1249,7 +1249,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     await ownerPage.goto("/dashboard/admin/security");
     await exactURL(
       ownerPage,
-      /\/admin\/login$/,
+      /\/admin\/login\?next=%2Fdashboard%2Fadmin%2Fsecurity$/,
       "Shop-owner session cannot enter the internal-admin route boundary",
     );
     await absent(
@@ -1276,7 +1276,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     );
     await exactURL(
       anonymousPage,
-      /\/admin\/login$/,
+      /\/admin\/login\?next=%2Fdashboard%2Fadmin%2Fsecurity$/,
       "Unauthenticated direct security URL returns to admin sign-in",
     );
     await absent(
@@ -1291,7 +1291,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     await coPage.reload();
     await exactURL(
       coPage,
-      /\/admin\/login$/,
+      /\/admin\/login\?next=%2Fdashboard%2Fadmin$/,
       "Logout ends the admin workspace browser session after refresh",
     );
     const postLogoutCookies = await coContext.cookies(baseURL);
