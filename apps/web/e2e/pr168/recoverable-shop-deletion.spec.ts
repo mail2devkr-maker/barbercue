@@ -2,6 +2,7 @@ import {
   expect,
   test,
   type BrowserContext,
+  type Dialog,
   type Locator,
   type Page,
   type Route,
@@ -87,6 +88,15 @@ function record(condition: unknown, message: string) {
 }
 
 let assertionCount = 0;
+
+async function clickWithDialog(
+  page: Page,
+  locator: Locator,
+): Promise<{ dialog: Dialog; clickPromise: Promise<void> }> {
+  const dialogPromise = page.waitForEvent("dialog");
+  const clickPromise = locator.click();
+  return { dialog: await dialogPromise, clickPromise };
+}
 
 async function visible(locator: Locator, message: string) {
   assertionCount += 1;
@@ -422,24 +432,31 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       await publicContext.close();
     }
 
-    const firstPrompt = coPage.waitForEvent("dialog");
-    await shopRow.getByRole("button", { name: "Request deletion" }).click();
-    const emptyPrompt = await firstPrompt;
+    const { dialog: emptyPrompt, clickPromise: emptyPromptClick } =
+      await clickWithDialog(
+        coPage,
+        shopRow.getByRole("button", { name: "Request deletion" }),
+      );
     record(
       emptyPrompt.type() === "prompt" &&
         emptyPrompt.message().includes("Nothing is deleted now"),
       "Request prompt clearly explains that no deletion happens immediately",
     );
     await emptyPrompt.accept("");
+    await emptyPromptClick;
     await contains(
       visibleAlert(coPage),
       "Provide a reason between 10 and 500 characters.",
       "Empty reason is rejected in the UI",
     );
 
-    const cancelPrompt = coPage.waitForEvent("dialog");
-    await shopRow.getByRole("button", { name: "Request deletion" }).click();
-    await (await cancelPrompt).dismiss();
+    const { dialog: cancelPrompt, clickPromise: cancelPromptClick } =
+      await clickWithDialog(
+        coPage,
+        shopRow.getByRole("button", { name: "Request deletion" }),
+      );
+    await cancelPrompt.dismiss();
+    await cancelPromptClick;
     await absent(
       coPage.getByRole("status"),
       "Canceling the request prompt does not display a false-success status",
@@ -453,14 +470,17 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
             `/api/v1/admin/shops/${fixtures.shop.id}/deletion-requests`,
           ) && response.request().method() === "POST",
     );
-    const validPrompt = coPage.waitForEvent("dialog");
-    await shopRow.getByRole("button", { name: "Request deletion" }).click();
-    const requestDialog = await validPrompt;
+    const { dialog: requestDialog, clickPromise: requestClick } =
+      await clickWithDialog(
+        coPage,
+        shopRow.getByRole("button", { name: "Request deletion" }),
+      );
     record(
       requestDialog.type() === "prompt",
       "Valid deletion request uses the real browser prompt",
     );
     await requestDialog.accept(reason);
+    await requestClick;
     const requestResponse = await requestPromise;
     record(
       requestResponse.status() === 201,
@@ -486,9 +506,13 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
             `/api/v1/admin/shops/${fixtures.shop.id}/deletion-requests`,
           ) && response.request().method() === "POST",
     );
-    const duplicatePrompt = coPage.waitForEvent("dialog");
-    await shopRow.getByRole("button", { name: "Request deletion" }).click();
-    await (await duplicatePrompt).accept(reason);
+    const { dialog: duplicatePrompt, clickPromise: duplicateClick } =
+      await clickWithDialog(
+        coPage,
+        shopRow.getByRole("button", { name: "Request deletion" }),
+      );
+    await duplicatePrompt.accept(reason);
+    await duplicateClick;
     const duplicateResponse = await duplicatePromise;
     record(
       duplicateResponse.status() === 409,
@@ -623,9 +647,10 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
             `/api/v1/admin/security/deletion-requests/${requestId}/approve`,
           ) && response.request().method() === "POST",
     );
-    const badConfirm = adminPage.waitForEvent("dialog");
-    await approveButton.click();
-    await (await badConfirm).accept();
+    const { dialog: badConfirm, clickPromise: badApprovalClick } =
+      await clickWithDialog(adminPage, approveButton);
+    await badConfirm.accept();
+    await badApprovalClick;
     const badApproval = await badApprovalPromise;
     record(
       badApproval.status() === 401 || badApproval.status() === 403,
@@ -645,9 +670,10 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     await pendingRow
       .getByLabel("Current Super Admin authenticator code")
       .fill(await totpAt(fixtures.accounts.superAdmin.secret, cancelEpoch));
-    const cancelConfirm = adminPage.waitForEvent("dialog");
-    await approveButton.click();
-    await (await cancelConfirm).dismiss();
+    const { dialog: cancelConfirm, clickPromise: cancelApprovalClick } =
+      await clickWithDialog(adminPage, approveButton);
+    await cancelConfirm.dismiss();
+    await cancelApprovalClick;
     await visible(
       pendingRow,
       "Canceling approval confirmation leaves the request pending",
@@ -673,10 +699,9 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       adminPage,
       approvalPath,
     );
-    const confirmApproval = adminPage.waitForEvent("dialog");
     try {
-      await approveButton.click();
-      const approvalDialog = await confirmApproval;
+      const { dialog: approvalDialog, clickPromise: approvalClick } =
+        await clickWithDialog(adminPage, approveButton);
       record(
         approvalDialog.type() === "confirm" &&
           /30 full days/.test(approvalDialog.message()) &&
@@ -686,6 +711,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
         "Approval confirmation accurately states recoverability and no permanent deletion",
       );
       await approvalDialog.accept();
+      await approvalClick;
       const committedStatus = await approvalGate.committedStatus;
       record(
         committedStatus === 201,
@@ -841,9 +867,10 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
             `/api/v1/admin/security/deletion-trash/${fixtures.shop.id}/restore`,
           ) && response.request().method() === "POST",
     );
-    const badRestoreConfirm = adminPage.waitForEvent("dialog");
-    await restoreButton.click();
-    await (await badRestoreConfirm).accept();
+    const { dialog: badRestoreConfirm, clickPromise: badRestoreClick } =
+      await clickWithDialog(adminPage, restoreButton);
+    await badRestoreConfirm.accept();
+    await badRestoreClick;
     const badRestore = await badRestorePromise;
     record(
       badRestore.status() === 401 || badRestore.status() === 403,
@@ -862,15 +889,15 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     await restoreCode.fill(
       await totpAt(fixtures.accounts.superAdmin.secret, cancelRestoreEpoch),
     );
-    const cancelRestoreDialog = adminPage.waitForEvent("dialog");
-    await restoreButton.click();
-    const restoreCancel = await cancelRestoreDialog;
+    const { dialog: restoreCancel, clickPromise: cancelRestoreClick } =
+      await clickWithDialog(adminPage, restoreButton);
     record(
       restoreCancel.type() === "confirm" &&
         /readiness and verification are checked/.test(restoreCancel.message()),
       "Restore confirmation explains prior-status/readiness rules",
     );
     await restoreCancel.dismiss();
+    await cancelRestoreClick;
     await visible(trashRow, "Canceling restoration leaves shop in Trash");
     await absent(
       adminPage.getByRole("status").filter({ hasText: /restored with status/ }),
@@ -891,11 +918,11 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       adminPage,
       restorePath,
     );
-    const confirmRestore = adminPage.waitForEvent("dialog");
     try {
-      await restoreButton.click();
-      const restoreDialog = await confirmRestore;
+      const { dialog: restoreDialog, clickPromise: restoreClick } =
+        await clickWithDialog(adminPage, restoreButton);
       await restoreDialog.accept();
+      await restoreClick;
       const committedStatus = await restoreGate.committedStatus;
       record(
         committedStatus === 201,
