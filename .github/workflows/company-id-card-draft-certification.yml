@@ -28,3 +28,5 @@ jobs:
         run: npm run test --workspace=@barbercue/web -- --runInBand --runTestsByPath lib/__tests__/employee-id-card-pdf.test.jsx
       - name: Web TypeScript typecheck
         run: npm run typecheck --workspace=@barbercue/web
+      - name: Full web production build (non-deploying)
+        run: npm run build --workspace=@barbercue/web
