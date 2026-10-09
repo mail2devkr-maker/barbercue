@@ -159,9 +159,13 @@ async function wrongTotp(secret: string) {
 
 async function pauseBrowserResponseUntilReleased(page: Page, path: string) {
   let release!: () => void;
+  let resolveIntercepted!: () => void;
   let resolveCommittedStatus!: (status: number) => void;
   const releasePromise = new Promise<void>((resolve) => {
     release = resolve;
+  });
+  const intercepted = new Promise<void>((resolve) => {
+    resolveIntercepted = resolve;
   });
   const committedStatus = new Promise<number>((resolve) => {
     resolveCommittedStatus = resolve;
@@ -170,13 +174,15 @@ async function pauseBrowserResponseUntilReleased(page: Page, path: string) {
   const urlPattern = `**${path}`;
   const handler = async (route: Route) => {
     requestCount += 1;
+    resolveIntercepted();
+    await releasePromise;
     const response = await route.fetch();
     resolveCommittedStatus(response.status());
-    await releasePromise;
     await route.fulfill({ response });
   };
   await page.route(urlPattern, handler);
   return {
+    intercepted,
     committedStatus,
     release,
     requestCount: () => requestCount,
@@ -714,14 +720,10 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       );
       await approvalDialog.accept();
       await approvalClick;
-      const committedStatus = await approvalGate.committedStatus;
-      record(
-        committedStatus === 201,
-        "Disposable backend committed approval while browser response is held",
-      );
+      await approvalGate.intercepted;
       await disabled(
         approveButton,
-        "Approval control is disabled while its authoritative response is pending",
+        "Approval control is disabled while its authoritative request is pending",
       );
       await approveButton.evaluate((button: HTMLButtonElement) =>
         button.click(),
@@ -729,6 +731,12 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       record(
         approvalGate.requestCount() === 1,
         "A repeated click cannot send a duplicate approval mutation",
+      );
+      approvalGate.release();
+      const committedStatus = await approvalGate.committedStatus;
+      record(
+        committedStatus === 201,
+        "Disposable backend commits the approval after the browser control locks",
       );
     } finally {
       approvalGate.release();
@@ -925,14 +933,10 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
         await clickWithDialog(adminPage, restoreButton);
       await restoreDialog.accept();
       await restoreClick;
-      const committedStatus = await restoreGate.committedStatus;
-      record(
-        committedStatus === 201,
-        "Disposable backend committed restoration while browser response is held",
-      );
+      await restoreGate.intercepted;
       await disabled(
         restoreButton,
-        "Restore control is disabled while its authoritative response is pending",
+        "Restore control is disabled while its authoritative request is pending",
       );
       await restoreButton.evaluate((button: HTMLButtonElement) =>
         button.click(),
@@ -940,6 +944,12 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       record(
         restoreGate.requestCount() === 1,
         "A repeated click cannot send a duplicate restoration mutation",
+      );
+      restoreGate.release();
+      const committedStatus = await restoreGate.committedStatus;
+      record(
+        committedStatus === 201,
+        "Disposable backend commits restoration after the browser control locks",
       );
     } finally {
       restoreGate.release();
