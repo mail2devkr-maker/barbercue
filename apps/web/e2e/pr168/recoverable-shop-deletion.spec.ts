@@ -705,26 +705,61 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       "Invalid TOTP never displays a false quarantine success",
     );
 
-    const cancelEpoch = advanceClock();
-    await pendingRow
-      .getByLabel("Current Super Admin authenticator code")
-      .fill(await totpAt(fixtures.accounts.superAdmin.secret, cancelEpoch));
-    await expect(
-      approveButton,
-      "Approval control is enabled after a valid six-digit TOTP is entered",
-    ).toBeEnabled();
-    const { dialog: cancelConfirm, clickPromise: cancelApprovalClick } =
-      await clickWithDialog(adminPage, approveButton);
-    await cancelConfirm.dismiss();
-    await cancelApprovalClick;
-    await visible(
-      pendingRow,
-      "Canceling approval confirmation leaves the request pending",
-    );
-    await absent(
-      adminPage.getByRole("status").filter({ hasText: /moved to Trash/ }),
-      "Canceling approval never announces a mutation",
-    );
+    // Use a fresh authenticated tab for the cancel case. Chromium may suppress repeated native
+    // dialogs in one tab during a long test; the same HttpOnly session is restored in this tab.
+    const cancelApprovalPage = await adminContext.newPage();
+    try {
+      await cancelApprovalPage.goto("/dashboard/admin/security");
+      await visible(
+        cancelApprovalPage.getByRole("heading", {
+          name: "Security & Audit Control Center",
+        }),
+        "Super Admin session restores in a separate tab for confirmation-cancel testing",
+      );
+      const cancelPendingSection = cancelApprovalPage.getByRole("region", {
+        name: "Pending deletion approvals",
+      });
+      const cancelPendingRow = cancelPendingSection
+        .getByRole("row")
+        .filter({ hasText: fixtures.shop.name });
+      await visible(cancelPendingRow, "Pending request remains after invalid TOTP");
+      await cancelPendingRow
+        .getByRole("button", { name: "Review request details" })
+        .click();
+      await visible(
+        cancelApprovalPage.getByRole("heading", {
+          name: `Request details — ${fixtures.shop.name}`,
+        }),
+        "Cancellation tab opens the real request details",
+      );
+      const cancelApproveButton = cancelPendingRow.getByRole("button", {
+        name: "Move to Trash — recoverable for 30 days",
+      });
+      const cancelEpoch = advanceClock();
+      await cancelPendingRow
+        .getByLabel("Current Super Admin authenticator code")
+        .fill(await totpAt(fixtures.accounts.superAdmin.secret, cancelEpoch));
+      await expect(
+        cancelApproveButton,
+        "Approval control is enabled after a valid six-digit TOTP is entered",
+      ).toBeEnabled();
+      const { dialog: cancelConfirm, clickPromise: cancelApprovalClick } =
+        await clickWithDialog(cancelApprovalPage, cancelApproveButton);
+      await cancelConfirm.dismiss();
+      await cancelApprovalClick;
+      await visible(
+        cancelPendingRow,
+        "Canceling approval confirmation leaves the request pending",
+      );
+      await absent(
+        cancelApprovalPage
+          .getByRole("status")
+          .filter({ hasText: /moved to Trash/ }),
+        "Canceling approval never announces a mutation",
+      );
+    } finally {
+      await cancelApprovalPage.close();
+    }
 
     const validApprovalEpoch = advanceClock();
     await pendingRow
@@ -955,24 +990,51 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       "Invalid restoration never displays false success",
     );
 
-    const cancelRestoreEpoch = advanceClock();
-    await restoreCode.fill(
-      await totpAt(fixtures.accounts.superAdmin.secret, cancelRestoreEpoch),
-    );
-    const { dialog: restoreCancel, clickPromise: cancelRestoreClick } =
-      await clickWithDialog(adminPage, restoreButton);
-    record(
-      restoreCancel.type() === "confirm" &&
-        /readiness and verification are checked/.test(restoreCancel.message()),
-      "Restore confirmation explains prior-status/readiness rules",
-    );
-    await restoreCancel.dismiss();
-    await cancelRestoreClick;
-    await visible(trashRow, "Canceling restoration leaves shop in Trash");
-    await absent(
-      adminPage.getByRole("status").filter({ hasText: /restored with status/ }),
-      "Canceling restoration never announces success",
-    );
+    const cancelRestorePage = await adminContext.newPage();
+    try {
+      await cancelRestorePage.goto("/dashboard/admin/security");
+      await visible(
+        cancelRestorePage.getByRole("heading", {
+          name: "Security & Audit Control Center",
+        }),
+        "Super Admin session restores in a separate tab for restoration-cancel testing",
+      );
+      const cancelTrashSection = cancelRestorePage.getByRole("region", {
+        name: "Recoverable shop trash",
+      });
+      const cancelTrashRow = cancelTrashSection
+        .getByRole("row")
+        .filter({ hasText: fixtures.shop.name });
+      await visible(cancelTrashRow, "Quarantined shop remains restorable");
+      const cancelRestoreCode = cancelTrashRow.getByLabel(
+        "Current Super Admin authenticator code",
+      );
+      const cancelRestoreButton = cancelTrashRow.getByRole("button", {
+        name: "Restore shop",
+      });
+      const cancelRestoreEpoch = advanceClock();
+      await cancelRestoreCode.fill(
+        await totpAt(fixtures.accounts.superAdmin.secret, cancelRestoreEpoch),
+      );
+      const { dialog: restoreCancel, clickPromise: cancelRestoreClick } =
+        await clickWithDialog(cancelRestorePage, cancelRestoreButton);
+      record(
+        restoreCancel.type() === "confirm" &&
+          /readiness and verification are checked/.test(restoreCancel.message()),
+        "Restore confirmation explains prior-status/readiness rules",
+      );
+      await restoreCancel.dismiss();
+      await cancelRestoreClick;
+      await visible(cancelTrashRow, "Canceling restoration leaves shop in Trash");
+      await absent(
+        cancelRestorePage
+          .getByRole("status")
+          .filter({ hasText: /restored with status/ }),
+        "Canceling restoration never announces success",
+      );
+    } finally {
+      await cancelRestorePage.close();
+    }
 
     const validRestoreEpoch = advanceClock();
     await restoreCode.fill(
