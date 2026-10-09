@@ -450,6 +450,193 @@ export interface UiStrings {
   allServicesFindShopsFor: string;
   searchNoShopsForServiceTitle: string;
   searchNoShopsForServiceHint: string;
+  ownerManageTitle: string;
+  ownerManageSubtitle: string;
+  ownerManageShopLabel: string;
+  ownerSectionQueue: string;
+  ownerSectionQueueHint: string;
+  ownerSectionSettings: string;
+  ownerSectionSettingsHint: string;
+  ownerSectionBookings: string;
+  ownerSectionBookingsHint: string;
+  ownerSectionSchedule: string;
+  ownerSectionScheduleHint: string;
+  ownerSectionCustomers: string;
+  ownerSectionCustomersHint: string;
+  ownerSectionAnalytics: string;
+  ownerSectionAnalyticsHint: string;
+  ownerSectionReviews: string;
+  ownerSectionReviewsHint: string;
+  ownerSectionVerification: string;
+  ownerSectionVerificationHint: string;
+  ownerSectionServices: string;
+  ownerSectionServicesHint: string;
+  ownerSectionHours: string;
+  ownerSectionHoursHint: string;
+  ownerSectionPhotos: string;
+  ownerSectionPhotosHint: string;
+  ownerSectionChairs: string;
+  ownerSectionChairsHint: string;
+  ownerSectionStaff: string;
+  ownerSectionStaffHint: string;
+  ownerOpenSection: string;
+  ownerManageShop: string;
+  analyticsTitle: string;
+  analyticsSubtitle: string;
+  analyticsRangeToday: string;
+  analyticsRange7d: string;
+  analyticsRange30d: string;
+  analyticsViewOverview: string;
+  analyticsViewValue: string;
+  analyticsViewOperations: string;
+  analyticsLoadFailed: string;
+  analyticsRetry: string;
+  analyticsTimesIn: string;
+  analyticsAppointments: string;
+  analyticsCompleted: string;
+  analyticsConfirmed: string;
+  analyticsPendingPayment: string;
+  analyticsCancelled: string;
+  analyticsNoShow: string;
+  analyticsExpired: string;
+  analyticsWalkIns: string;
+  analyticsNewCustomers: string;
+  analyticsReturningCustomers: string;
+  analyticsAvgWait: string;
+  analyticsAvgService: string;
+  analyticsServiceValue: string;
+  analyticsServiceValueHint: string;
+  analyticsServicePopularity: string;
+  analyticsBarberActivity: string;
+  analyticsChairActivity: string;
+  analyticsNoCompletedServices: string;
+  analyticsNoCompletedSessions: string;
+  analyticsNoServiceValue: string;
+  analyticsNotEnoughBookings: string;
+  analyticsSessionsLine: string;
+  analyticsCompletedCount: string;
+  analyticsValueTrend: string;
+  analyticsValueTrendSub: string;
+  analyticsValueByService: string;
+  analyticsValueByServiceSub: string;
+  analyticsValueByBarber: string;
+  analyticsValueByBarberSub: string;
+  analyticsBookingsVsWalkIns: string;
+  analyticsBookingsVsWalkInsSub: string;
+  analyticsBookings: string;
+  analyticsWalkInsLabel: string;
+  analyticsNewVsRepeat: string;
+  analyticsNewVsRepeatSub: string;
+  analyticsNew: string;
+  analyticsRepeat: string;
+  analyticsPeakValueHours: string;
+  analyticsPeakValueHoursSub: string;
+  analyticsHourDone: string;
+  analyticsLostOpportunity: string;
+  analyticsLostOpportunitySub: string;
+  analyticsCancelledValue: string;
+  analyticsNoShowValue: string;
+  analyticsCancelledNoShowValue: string;
+  analyticsCancelledNoShowHint: string;
+  analyticsIdleChairTime: string;
+  analyticsIdleNeedsHours: string;
+  analyticsIdlePercentOfCapacity: string;
+  analyticsBookingDemandHours: string;
+  analyticsBusiest: string;
+  analyticsSlowest: string;
+  ownerReviewsTitle: string;
+  reviewsSubtitle: string;
+  reviewsNone: string;
+  reviewsLoadFailed: string;
+  reviewResponsePlaceholder: string;
+  reviewPostResponse: string;
+  reviewYourResponse: string;
+  reviewEditResponse: string;
+  reviewNoContact: string;
+  reviewResponseFailed: string;
+  verificationTitle: string;
+  verificationLoadFailed: string;
+  verificationStatusSubmitted: string;
+  verificationStatusUnderReview: string;
+  verificationStatusApproved: string;
+  verificationStatusRejected: string;
+  verificationAdminNotes: string;
+  verificationEvidenceNotes: string;
+  verificationEvidenceNotesPlaceholder: string;
+  verificationEvidenceLinks: string;
+  verificationEvidenceLinksHint: string;
+  verificationSubmit: string;
+  verificationResubmit: string;
+  verificationSubmitFailed: string;
+  verificationNeedEvidence: string;
+  scheduleTitle: string;
+  scheduleSubtitle: string;
+  schedulePrevDay: string;
+  scheduleNextDay: string;
+  scheduleToday: string;
+  scheduleTimesIn: string;
+  scheduleNoTimezone: string;
+  scheduleNoBookings: string;
+  scheduleNoPreference: string;
+  schedulePreferred: string;
+  scheduleLoadFailed: string;
+  settingsTitle: string;
+  settingsShopId: string;
+  settingsStatus: string;
+  settingsPageAddress: string;
+  settingsLoadFailed: string;
+  shopStatusNotOpen: string;
+  shopStatusOpen: string;
+  shopStatusPaused: string;
+  shopStatusClosedToday: string;
+  profileTitle: string;
+  profileHint: string;
+  profileName: string;
+  profilePhone: string;
+  profileEmail: string;
+  profileAddress: string;
+  profilePostalCode: string;
+  profileDescription: string;
+  profileSave: string;
+  profileSaved: string;
+  profileLoadFailed: string;
+  profileSaveFailed: string;
+  shopStatusTitle: string;
+  shopStatusOpenNote: string;
+  shopStatusClosedTodayNote: string;
+  shopStatusNotOpenNote: string;
+  shopStatusOpenAction: string;
+  shopStatusCloseAction: string;
+  shopStatusUpdating: string;
+  shopStatusUpdateFailed: string;
+  readinessCantOpen: string;
+  readinessAddService: string;
+  readinessServiceDone: string;
+  readinessAddChair: string;
+  readinessChairDone: string;
+  readinessAddBarber: string;
+  readinessBarberDone: string;
+  readinessContinueSetup: string;
+  timezoneTitle: string;
+  timezoneHint: string;
+  timezoneCurrent: string;
+  timezoneNotSet: string;
+  timezoneDetected: string;
+  timezoneSourceCoordinates: string;
+  timezoneSourceCity: string;
+  timezoneSourceCountry: string;
+  timezoneUse: string;
+  timezoneCouldntDetect: string;
+  timezoneSearchPlaceholder: string;
+  timezoneSave: string;
+  timezoneSaved: string;
+  timezoneLoadFailed: string;
+  timezoneSaveFailed: string;
+  queueQrTitle: string;
+  queueQrHint: string;
+  queueQrShare: string;
+  queueQrLoadFailed: string;
+  queueQrShareMessage: string;
   categoryHaircut: string;
   categoryBeardTrim: string;
   categoryFade: string;
@@ -1262,6 +1449,193 @@ const enUi: UiStrings = {
   allServicesFindShopsFor: 'Find shops offering {service}',
   searchNoShopsForServiceTitle: 'No shops offer "{service}" here yet',
   searchNoShopsForServiceHint: 'Try another service, a nearby city, or clear the search to see every shop.',
+  ownerManageTitle: 'Manage your shop',
+  ownerManageSubtitle: 'Everything you can do on the FastQue website, in one place.',
+  ownerManageShopLabel: 'Shop',
+  ownerSectionQueue: 'Live queue',
+  ownerSectionQueueHint: 'Call, serve and manage walk-ins right now',
+  ownerSectionSettings: 'Settings',
+  ownerSectionSettingsHint: 'Profile, status, time zone and QR codes',
+  ownerSectionBookings: 'Bookings',
+  ownerSectionBookingsHint: 'Today, upcoming and past appointments',
+  ownerSectionSchedule: 'Schedule',
+  ownerSectionScheduleHint: 'Your day by time and barber',
+  ownerSectionCustomers: 'Customers',
+  ownerSectionCustomersHint: 'Customer history and notes',
+  ownerSectionAnalytics: 'Analytics',
+  ownerSectionAnalyticsHint: 'Bookings, queue and service value',
+  ownerSectionReviews: 'Reviews',
+  ownerSectionReviewsHint: 'Read and respond to customer reviews',
+  ownerSectionVerification: 'Verification',
+  ownerSectionVerificationHint: 'Get the Verified badge for your shop',
+  ownerSectionServices: 'Services',
+  ownerSectionServicesHint: 'Your menu, prices and durations',
+  ownerSectionHours: 'Hours',
+  ownerSectionHoursHint: 'Weekly opening hours',
+  ownerSectionPhotos: 'Photos',
+  ownerSectionPhotosHint: 'Shop photos customers see',
+  ownerSectionChairs: 'Chairs',
+  ownerSectionChairsHint: 'Chairs and capacity',
+  ownerSectionStaff: 'Barbers',
+  ownerSectionStaffHint: 'Your team and their access',
+  ownerOpenSection: 'Open',
+  ownerManageShop: 'Manage your shop',
+  analyticsTitle: 'Analytics',
+  analyticsSubtitle: 'Real activity from your bookings and queue. Service-value charts use listed prices for completed work, because FastQue does not see every cash or card payment at the shop.',
+  analyticsRangeToday: 'Today',
+  analyticsRange7d: '7 days',
+  analyticsRange30d: '30 days',
+  analyticsViewOverview: 'Overview',
+  analyticsViewValue: 'Sales & value',
+  analyticsViewOperations: 'Operations',
+  analyticsLoadFailed: 'Could not load analytics.',
+  analyticsRetry: 'Try again',
+  analyticsTimesIn: "Dates and hours are in your shop's time zone: {zone}",
+  analyticsAppointments: 'Appointments scheduled',
+  analyticsCompleted: 'Completed',
+  analyticsConfirmed: 'Confirmed',
+  analyticsPendingPayment: 'Pending payment',
+  analyticsCancelled: 'Cancelled',
+  analyticsNoShow: 'No-show',
+  analyticsExpired: 'Expired',
+  analyticsWalkIns: 'Walk-ins joined',
+  analyticsNewCustomers: 'New customers acquired',
+  analyticsReturningCustomers: 'Returning customers served',
+  analyticsAvgWait: 'Avg queue wait',
+  analyticsAvgService: 'Avg service time',
+  analyticsServiceValue: 'Estimated service value',
+  analyticsServiceValueHint: 'Completed appointments + completed walk-ins',
+  analyticsServicePopularity: 'Service popularity',
+  analyticsBarberActivity: 'Barber activity',
+  analyticsChairActivity: 'Chair activity',
+  analyticsNoCompletedServices: 'No completed services yet.',
+  analyticsNoCompletedSessions: 'No completed sessions yet.',
+  analyticsNoServiceValue: 'No completed service value yet.',
+  analyticsNotEnoughBookings: 'Not enough bookings yet.',
+  analyticsSessionsLine: '{count} sessions · {minutes}',
+  analyticsCompletedCount: '{count} completed',
+  analyticsValueTrend: 'Service value trend',
+  analyticsValueTrendSub: 'Daily listed-price value of completed appointments and walk-ins. This is not audited payment revenue.',
+  analyticsValueByService: 'Value by service',
+  analyticsValueByServiceSub: 'Which services add the most completed service value.',
+  analyticsValueByBarber: 'Value by barber',
+  analyticsValueByBarberSub: 'Listed-price value of completed sessions handled by each barber.',
+  analyticsBookingsVsWalkIns: 'Bookings vs walk-ins',
+  analyticsBookingsVsWalkInsSub: 'Completed customer source mix.',
+  analyticsBookings: 'Bookings',
+  analyticsWalkInsLabel: 'Walk-ins',
+  analyticsNewVsRepeat: 'New vs repeat value',
+  analyticsNewVsRepeatSub: 'Booked-appointment value by visit history: the first completed visit is new; later ones are repeat.',
+  analyticsNew: 'New',
+  analyticsRepeat: 'Repeat',
+  analyticsPeakValueHours: 'Peak value hours',
+  analyticsPeakValueHoursSub: "Hourly view of completed service value in your shop's local time.",
+  analyticsHourDone: '{count} done',
+  analyticsLostOpportunity: 'Lost opportunity signals',
+  analyticsLostOpportunitySub: 'Cancellation and no-show values are listed-price estimates. Idle chairs are capacity time, not assumed lost revenue.',
+  analyticsCancelledValue: 'Cancelled value',
+  analyticsNoShowValue: 'No-show value',
+  analyticsCancelledNoShowValue: 'Cancelled + no-show value',
+  analyticsCancelledNoShowHint: 'Booked listed value; not guaranteed lost revenue',
+  analyticsIdleChairTime: 'Idle chair time',
+  analyticsIdleNeedsHours: 'Set shop opening hours to calculate',
+  analyticsIdlePercentOfCapacity: '{percent}% of configured chair capacity',
+  analyticsBookingDemandHours: 'Booking demand hours',
+  analyticsBusiest: 'Busiest: {hours}',
+  analyticsSlowest: 'Slowest: {hours}',
+  ownerReviewsTitle: 'Reviews',
+  reviewsSubtitle: "What customers are saying about your shop. Your public reply shows next to the review on your shop's profile.",
+  reviewsNone: 'No reviews yet.',
+  reviewsLoadFailed: 'Could not load reviews.',
+  reviewResponsePlaceholder: 'Write a public response…',
+  reviewPostResponse: 'Post response',
+  reviewYourResponse: 'Your response:',
+  reviewEditResponse: 'Edit',
+  reviewNoContact: 'No contact on file',
+  reviewResponseFailed: 'Could not save your response.',
+  verificationTitle: 'Shop verification',
+  verificationLoadFailed: 'Could not load verification status.',
+  verificationStatusSubmitted: 'Submitted — waiting for a FastQue admin to review it.',
+  verificationStatusUnderReview: 'Currently under review by a FastQue admin.',
+  verificationStatusApproved: "Approved. The Verified badge now shows on your shop's public profile.",
+  verificationStatusRejected: 'Not approved. Review the notes below, then resubmit with clearer evidence.',
+  verificationAdminNotes: 'Admin notes:',
+  verificationEvidenceNotes: 'Evidence notes',
+  verificationEvidenceNotesPlaceholder: 'Describe what shows this is a real, operating shop — business registration, GST, shop-front photos, a utility bill, etc.',
+  verificationEvidenceLinks: 'Evidence links (one per line, https only)',
+  verificationEvidenceLinksHint: 'Link already-hosted photos or documents — Google Business, Instagram or any https image works.',
+  verificationSubmit: 'Submit for review',
+  verificationResubmit: 'Resubmit for review',
+  verificationSubmitFailed: 'Could not submit for verification.',
+  verificationNeedEvidence: 'Add a note or at least one evidence link.',
+  scheduleTitle: 'Schedule',
+  scheduleSubtitle: "Your shop's day by time and barber. A barber shown as preferred is the customer's preference until check-in assigns one.",
+  schedulePrevDay: 'Previous day',
+  scheduleNextDay: 'Next day',
+  scheduleToday: 'Today',
+  scheduleTimesIn: 'Times shown in {zone}',
+  scheduleNoTimezone: "Set your shop's time zone in Settings to see the schedule.",
+  scheduleNoBookings: 'No bookings on this day.',
+  scheduleNoPreference: 'No preference',
+  schedulePreferred: 'preferred',
+  scheduleLoadFailed: 'Could not load the schedule.',
+  settingsTitle: 'Shop settings',
+  settingsShopId: 'Shop ID',
+  settingsStatus: 'Status',
+  settingsPageAddress: 'Your page address',
+  settingsLoadFailed: 'Could not load this shop.',
+  shopStatusNotOpen: 'Not open yet',
+  shopStatusOpen: 'Open',
+  shopStatusPaused: 'Paused',
+  shopStatusClosedToday: 'Closed for today',
+  profileTitle: 'Shop profile',
+  profileHint: 'Contact and address details customers see.',
+  profileName: 'Shop name',
+  profilePhone: 'Phone',
+  profileEmail: 'Email',
+  profileAddress: 'Address',
+  profilePostalCode: 'Postal code',
+  profileDescription: 'Description',
+  profileSave: 'Save profile',
+  profileSaved: 'Saved.',
+  profileLoadFailed: 'Could not load the shop profile.',
+  profileSaveFailed: 'Could not save the shop profile.',
+  shopStatusTitle: 'Shop status',
+  shopStatusOpenNote: 'Your shop is open — customers can find it and join the queue.',
+  shopStatusClosedTodayNote: 'Customers can still find your shop, but booking and queue entry stay unavailable until you reopen it.',
+  shopStatusNotOpenNote: "Your shop is {status} — customers can't find it in search, and its queue QR shows as unavailable, until you open it.",
+  shopStatusOpenAction: 'Open my shop',
+  shopStatusCloseAction: 'Close my shop',
+  shopStatusUpdating: 'Updating…',
+  shopStatusUpdateFailed: "Could not update your shop's status.",
+  readinessCantOpen: "Your shop can't open yet — finish these first:",
+  readinessAddService: 'Add at least one service',
+  readinessServiceDone: 'Service added',
+  readinessAddChair: 'Add at least one chair',
+  readinessChairDone: 'Chair added',
+  readinessAddBarber: 'Add at least one barber',
+  readinessBarberDone: 'Barber added',
+  readinessContinueSetup: 'Continue setup',
+  timezoneTitle: 'Time zone',
+  timezoneHint: "Used for your opening hours, booking availability and analytics day boundaries. An India shop works without one (Asia/Kolkata is assumed); a shop anywhere else can't take bookings until it is set.",
+  timezoneCurrent: 'Current: {zone}',
+  timezoneNotSet: 'Not set',
+  timezoneDetected: 'Detected from {source}: {zone}. Confirm it or choose another below.',
+  timezoneSourceCoordinates: "your shop's exact location",
+  timezoneSourceCity: "your shop's city",
+  timezoneSourceCountry: "your shop's country",
+  timezoneUse: 'Use {zone}',
+  timezoneCouldntDetect: "We couldn't detect your time zone automatically. Please choose it below.",
+  timezoneSearchPlaceholder: 'Search time zones…',
+  timezoneSave: 'Save time zone',
+  timezoneSaved: 'Time zone saved.',
+  timezoneLoadFailed: 'Could not load your time zone.',
+  timezoneSaveFailed: 'Could not save your time zone.',
+  queueQrTitle: 'Queue QR',
+  queueQrHint: 'Customers scan this to join your live queue. Print it or share the link.',
+  queueQrShare: 'Share queue link',
+  queueQrLoadFailed: 'Could not load your queue QR.',
+  queueQrShareMessage: 'Join the live queue at {shop}: {url}',
   categoryHaircut: 'Haircut',
   categoryBeardTrim: 'Beard Trim',
   categoryFade: 'Fade',
@@ -2005,6 +2379,193 @@ const hiUi: UiStrings = {
   allServicesFindShopsFor: '{service} देने वाली दुकानें खोजें',
   searchNoShopsForServiceTitle: 'यहाँ अभी कोई दुकान "{service}" नहीं देती',
   searchNoShopsForServiceHint: 'कोई दूसरी सेवा या पास का शहर आज़माएँ, या खोज साफ़ करके सभी दुकानें देखें।',
+  ownerManageTitle: 'अपनी दुकान संभालें',
+  ownerManageSubtitle: 'FastQue वेबसाइट पर जो कुछ भी कर सकते हैं, एक ही जगह।',
+  ownerManageShopLabel: 'दुकान',
+  ownerSectionQueue: 'लाइव कतार',
+  ownerSectionQueueHint: 'अभी वॉक-इन बुलाएँ, सेवा दें और संभालें',
+  ownerSectionSettings: 'सेटिंग्स',
+  ownerSectionSettingsHint: 'प्रोफ़ाइल, स्थिति, समय क्षेत्र और QR कोड',
+  ownerSectionBookings: 'बुकिंग',
+  ownerSectionBookingsHint: 'आज, आगामी और पिछली अपॉइंटमेंट',
+  ownerSectionSchedule: 'शेड्यूल',
+  ownerSectionScheduleHint: 'समय और नाई के हिसाब से आपका दिन',
+  ownerSectionCustomers: 'ग्राहक',
+  ownerSectionCustomersHint: 'ग्राहकों का इतिहास और नोट्स',
+  ownerSectionAnalytics: 'एनालिटिक्स',
+  ownerSectionAnalyticsHint: 'बुकिंग, कतार और सेवा मूल्य',
+  ownerSectionReviews: 'समीक्षाएँ',
+  ownerSectionReviewsHint: 'ग्राहक समीक्षाएँ पढ़ें और जवाब दें',
+  ownerSectionVerification: 'सत्यापन',
+  ownerSectionVerificationHint: 'अपनी दुकान के लिए सत्यापित बैज पाएँ',
+  ownerSectionServices: 'सेवाएँ',
+  ownerSectionServicesHint: 'आपका मेन्यू, कीमतें और अवधि',
+  ownerSectionHours: 'समय',
+  ownerSectionHoursHint: 'साप्ताहिक खुलने का समय',
+  ownerSectionPhotos: 'फ़ोटो',
+  ownerSectionPhotosHint: 'ग्राहकों को दिखने वाली दुकान की फ़ोटो',
+  ownerSectionChairs: 'कुर्सियाँ',
+  ownerSectionChairsHint: 'कुर्सियाँ और क्षमता',
+  ownerSectionStaff: 'नाई',
+  ownerSectionStaffHint: 'आपकी टीम और उनकी पहुँच',
+  ownerOpenSection: 'खोलें',
+  ownerManageShop: 'अपनी दुकान संभालें',
+  analyticsTitle: 'एनालिटिक्स',
+  analyticsSubtitle: 'आपकी बुकिंग और कतार की असली गतिविधि। सेवा-मूल्य के चार्ट पूरे हुए काम की सूचीबद्ध कीमतों पर आधारित हैं, क्योंकि FastQue को दुकान पर हर नकद या कार्ड भुगतान नहीं दिखता।',
+  analyticsRangeToday: 'आज',
+  analyticsRange7d: '7 दिन',
+  analyticsRange30d: '30 दिन',
+  analyticsViewOverview: 'सारांश',
+  analyticsViewValue: 'बिक्री और मूल्य',
+  analyticsViewOperations: 'संचालन',
+  analyticsLoadFailed: 'एनालिटिक्स लोड नहीं हो सका।',
+  analyticsRetry: 'फिर कोशिश करें',
+  analyticsTimesIn: 'तारीखें और घंटे आपकी दुकान के समय क्षेत्र में हैं: {zone}',
+  analyticsAppointments: 'निर्धारित अपॉइंटमेंट',
+  analyticsCompleted: 'पूरे हुए',
+  analyticsConfirmed: 'पुष्टि हुई',
+  analyticsPendingPayment: 'भुगतान लंबित',
+  analyticsCancelled: 'रद्द',
+  analyticsNoShow: 'नहीं आए',
+  analyticsExpired: 'समाप्त',
+  analyticsWalkIns: 'वॉक-इन जुड़े',
+  analyticsNewCustomers: 'नए ग्राहक मिले',
+  analyticsReturningCustomers: 'लौटे ग्राहकों को सेवा',
+  analyticsAvgWait: 'औसत कतार प्रतीक्षा',
+  analyticsAvgService: 'औसत सेवा समय',
+  analyticsServiceValue: 'अनुमानित सेवा मूल्य',
+  analyticsServiceValueHint: 'पूरी हुई अपॉइंटमेंट + पूरे हुए वॉक-इन',
+  analyticsServicePopularity: 'सेवा लोकप्रियता',
+  analyticsBarberActivity: 'नाई की गतिविधि',
+  analyticsChairActivity: 'कुर्सी की गतिविधि',
+  analyticsNoCompletedServices: 'अभी कोई सेवा पूरी नहीं हुई।',
+  analyticsNoCompletedSessions: 'अभी कोई सत्र पूरा नहीं हुआ।',
+  analyticsNoServiceValue: 'अभी कोई पूरा सेवा मूल्य नहीं।',
+  analyticsNotEnoughBookings: 'अभी पर्याप्त बुकिंग नहीं।',
+  analyticsSessionsLine: '{count} सत्र · {minutes}',
+  analyticsCompletedCount: '{count} पूरे',
+  analyticsValueTrend: 'सेवा मूल्य का रुझान',
+  analyticsValueTrendSub: 'पूरी हुई अपॉइंटमेंट और वॉक-इन का दैनिक सूचीबद्ध-कीमत मूल्य। यह जाँचा हुआ भुगतान राजस्व नहीं है।',
+  analyticsValueByService: 'सेवा के अनुसार मूल्य',
+  analyticsValueByServiceSub: 'कौन-सी सेवाएँ सबसे ज़्यादा पूरा सेवा मूल्य जोड़ती हैं।',
+  analyticsValueByBarber: 'नाई के अनुसार मूल्य',
+  analyticsValueByBarberSub: 'हर नाई द्वारा संभाले पूरे सत्रों का सूचीबद्ध-कीमत मूल्य।',
+  analyticsBookingsVsWalkIns: 'बुकिंग बनाम वॉक-इन',
+  analyticsBookingsVsWalkInsSub: 'पूरे हुए ग्राहकों का स्रोत।',
+  analyticsBookings: 'बुकिंग',
+  analyticsWalkInsLabel: 'वॉक-इन',
+  analyticsNewVsRepeat: 'नए बनाम दोबारा आए ग्राहकों का मूल्य',
+  analyticsNewVsRepeatSub: 'विज़िट इतिहास के अनुसार बुक की गई अपॉइंटमेंट का मूल्य: पहली पूरी विज़िट नई, बाद की दोबारा।',
+  analyticsNew: 'नए',
+  analyticsRepeat: 'दोबारा',
+  analyticsPeakValueHours: 'सबसे ज़्यादा मूल्य के घंटे',
+  analyticsPeakValueHoursSub: 'आपकी दुकान के स्थानीय समय में पूरे सेवा मूल्य का घंटेवार दृश्य।',
+  analyticsHourDone: '{count} पूरे',
+  analyticsLostOpportunity: 'छूटे अवसर के संकेत',
+  analyticsLostOpportunitySub: 'रद्दीकरण और नहीं-आए का मूल्य सूचीबद्ध-कीमत का अनुमान है। खाली कुर्सियाँ क्षमता का समय हैं, मान लिया गया खोया राजस्व नहीं।',
+  analyticsCancelledValue: 'रद्द का मूल्य',
+  analyticsNoShowValue: 'नहीं-आए का मूल्य',
+  analyticsCancelledNoShowValue: 'रद्द + नहीं-आए का मूल्य',
+  analyticsCancelledNoShowHint: 'बुक किया सूचीबद्ध मूल्य; पक्का खोया राजस्व नहीं',
+  analyticsIdleChairTime: 'कुर्सी का खाली समय',
+  analyticsIdleNeedsHours: 'गणना के लिए दुकान का खुलने का समय सेट करें',
+  analyticsIdlePercentOfCapacity: 'तय कुर्सी क्षमता का {percent}%',
+  analyticsBookingDemandHours: 'बुकिंग माँग के घंटे',
+  analyticsBusiest: 'सबसे व्यस्त: {hours}',
+  analyticsSlowest: 'सबसे धीमे: {hours}',
+  ownerReviewsTitle: 'समीक्षाएँ',
+  reviewsSubtitle: 'ग्राहक आपकी दुकान के बारे में क्या कह रहे हैं। आपका सार्वजनिक जवाब आपकी दुकान की प्रोफ़ाइल पर समीक्षा के साथ दिखता है।',
+  reviewsNone: 'अभी कोई समीक्षा नहीं।',
+  reviewsLoadFailed: 'समीक्षाएँ लोड नहीं हो सकीं।',
+  reviewResponsePlaceholder: 'सार्वजनिक जवाब लिखें…',
+  reviewPostResponse: 'जवाब पोस्ट करें',
+  reviewYourResponse: 'आपका जवाब:',
+  reviewEditResponse: 'बदलें',
+  reviewNoContact: 'कोई संपर्क दर्ज नहीं',
+  reviewResponseFailed: 'आपका जवाब सहेजा नहीं जा सका।',
+  verificationTitle: 'दुकान सत्यापन',
+  verificationLoadFailed: 'सत्यापन की स्थिति लोड नहीं हो सकी।',
+  verificationStatusSubmitted: 'जमा किया — FastQue एडमिन की समीक्षा का इंतज़ार है।',
+  verificationStatusUnderReview: 'अभी FastQue एडमिन द्वारा समीक्षा में है।',
+  verificationStatusApproved: 'स्वीकृत। सत्यापित बैज अब आपकी दुकान की सार्वजनिक प्रोफ़ाइल पर दिखता है।',
+  verificationStatusRejected: 'स्वीकृत नहीं। नीचे दिए नोट्स देखें, फिर साफ़ प्रमाण के साथ दोबारा जमा करें।',
+  verificationAdminNotes: 'एडमिन के नोट्स:',
+  verificationEvidenceNotes: 'प्रमाण के नोट्स',
+  verificationEvidenceNotesPlaceholder: 'बताएँ कि यह असली, चालू दुकान कैसे है — व्यापार पंजीकरण, GST, दुकान के सामने की फ़ोटो, बिजली का बिल आदि।',
+  verificationEvidenceLinks: 'प्रमाण के लिंक (हर पंक्ति में एक, सिर्फ़ https)',
+  verificationEvidenceLinksHint: 'पहले से अपलोड फ़ोटो या दस्तावेज़ का लिंक दें — Google Business, Instagram या कोई भी https इमेज चलेगी।',
+  verificationSubmit: 'समीक्षा के लिए जमा करें',
+  verificationResubmit: 'समीक्षा के लिए दोबारा जमा करें',
+  verificationSubmitFailed: 'सत्यापन के लिए जमा नहीं हो सका।',
+  verificationNeedEvidence: 'एक नोट या कम से कम एक प्रमाण लिंक जोड़ें।',
+  scheduleTitle: 'शेड्यूल',
+  scheduleSubtitle: 'समय और नाई के हिसाब से आपका दिन। "पसंदीदा" नाई ग्राहक की पसंद है, चेक-इन पर असली नाई तय होता है।',
+  schedulePrevDay: 'पिछला दिन',
+  scheduleNextDay: 'अगला दिन',
+  scheduleToday: 'आज',
+  scheduleTimesIn: 'समय {zone} में दिखाए गए हैं',
+  scheduleNoTimezone: 'शेड्यूल देखने के लिए सेटिंग्स में अपनी दुकान का समय क्षेत्र सेट करें।',
+  scheduleNoBookings: 'इस दिन कोई बुकिंग नहीं।',
+  scheduleNoPreference: 'कोई पसंद नहीं',
+  schedulePreferred: 'पसंदीदा',
+  scheduleLoadFailed: 'शेड्यूल लोड नहीं हो सका।',
+  settingsTitle: 'दुकान की सेटिंग्स',
+  settingsShopId: 'दुकान आईडी',
+  settingsStatus: 'स्थिति',
+  settingsPageAddress: 'आपके पेज का पता',
+  settingsLoadFailed: 'यह दुकान लोड नहीं हो सकी।',
+  shopStatusNotOpen: 'अभी खुली नहीं',
+  shopStatusOpen: 'खुली',
+  shopStatusPaused: 'रुकी हुई',
+  shopStatusClosedToday: 'आज के लिए बंद',
+  profileTitle: 'दुकान की प्रोफ़ाइल',
+  profileHint: 'संपर्क और पते की जानकारी जो ग्राहक देखते हैं।',
+  profileName: 'दुकान का नाम',
+  profilePhone: 'फ़ोन',
+  profileEmail: 'ईमेल',
+  profileAddress: 'पता',
+  profilePostalCode: 'पिन कोड',
+  profileDescription: 'विवरण',
+  profileSave: 'प्रोफ़ाइल सहेजें',
+  profileSaved: 'सहेज लिया।',
+  profileLoadFailed: 'दुकान की प्रोफ़ाइल लोड नहीं हो सकी।',
+  profileSaveFailed: 'दुकान की प्रोफ़ाइल सहेजी नहीं जा सकी।',
+  shopStatusTitle: 'दुकान की स्थिति',
+  shopStatusOpenNote: 'आपकी दुकान खुली है — ग्राहक उसे ढूँढकर कतार में जुड़ सकते हैं।',
+  shopStatusClosedTodayNote: 'ग्राहक अब भी आपकी दुकान ढूँढ सकते हैं, पर बुकिंग और कतार तब तक बंद रहेगी जब तक आप फिर न खोलें।',
+  shopStatusNotOpenNote: 'आपकी दुकान {status} है — जब तक आप उसे नहीं खोलते, ग्राहक उसे खोज में नहीं पाएँगे और उसका कतार QR अनुपलब्ध दिखेगा।',
+  shopStatusOpenAction: 'मेरी दुकान खोलें',
+  shopStatusCloseAction: 'मेरी दुकान बंद करें',
+  shopStatusUpdating: 'अपडेट हो रहा है…',
+  shopStatusUpdateFailed: 'आपकी दुकान की स्थिति अपडेट नहीं हो सकी।',
+  readinessCantOpen: 'आपकी दुकान अभी नहीं खुल सकती — पहले ये पूरा करें:',
+  readinessAddService: 'कम से कम एक सेवा जोड़ें',
+  readinessServiceDone: 'सेवा जुड़ गई',
+  readinessAddChair: 'कम से कम एक कुर्सी जोड़ें',
+  readinessChairDone: 'कुर्सी जुड़ गई',
+  readinessAddBarber: 'कम से कम एक नाई जोड़ें',
+  readinessBarberDone: 'नाई जुड़ गया',
+  readinessContinueSetup: 'सेटअप जारी रखें',
+  timezoneTitle: 'समय क्षेत्र',
+  timezoneHint: 'खुलने के समय, बुकिंग उपलब्धता और एनालिटिक्स के दिन की सीमा के लिए। भारत की दुकान इसके बिना भी चलती है (Asia/Kolkata माना जाता है); कहीं और की दुकान जब तक यह सेट न हो बुकिंग नहीं ले सकती।',
+  timezoneCurrent: 'वर्तमान: {zone}',
+  timezoneNotSet: 'सेट नहीं',
+  timezoneDetected: '{source} से पहचाना गया: {zone}। इसे पक्का करें या नीचे से दूसरा चुनें।',
+  timezoneSourceCoordinates: 'आपकी दुकान की सटीक लोकेशन',
+  timezoneSourceCity: 'आपकी दुकान का शहर',
+  timezoneSourceCountry: 'आपकी दुकान का देश',
+  timezoneUse: '{zone} इस्तेमाल करें',
+  timezoneCouldntDetect: 'हम आपका समय क्षेत्र अपने-आप नहीं पहचान सके। कृपया नीचे से चुनें।',
+  timezoneSearchPlaceholder: 'समय क्षेत्र खोजें…',
+  timezoneSave: 'समय क्षेत्र सहेजें',
+  timezoneSaved: 'समय क्षेत्र सहेज लिया।',
+  timezoneLoadFailed: 'आपका समय क्षेत्र लोड नहीं हो सका।',
+  timezoneSaveFailed: 'आपका समय क्षेत्र सहेजा नहीं जा सका।',
+  queueQrTitle: 'कतार QR',
+  queueQrHint: 'ग्राहक आपकी लाइव कतार में जुड़ने के लिए इसे स्कैन करते हैं। इसे प्रिंट करें या लिंक साझा करें।',
+  queueQrShare: 'कतार का लिंक साझा करें',
+  queueQrLoadFailed: 'आपका कतार QR लोड नहीं हो सका।',
+  queueQrShareMessage: '{shop} की लाइव कतार में जुड़ें: {url}',
   categoryHaircut: 'हेयरकट',
   categoryBeardTrim: 'बियर्ड ट्रिम',
   categoryFade: 'फेड',
