@@ -516,6 +516,7 @@ export interface UiStrings {
   registerShopCta: string;
   listYourShopCta: string;
   newToFastQueRegisterShop: string;
+  ownerCreateAccountHint: string;
   noShopYetRouteToRegistration: string;
 
   // RegisterShopScreen.
@@ -1309,6 +1310,7 @@ const enUi: UiStrings = {
   registerShopCta: 'Register your shop',
   listYourShopCta: 'List your shop on FastQue',
   newToFastQueRegisterShop: 'New to FastQue? Register your shop',
+  ownerCreateAccountHint: 'No Google account needed — create your owner account with just an email and a password.',
   noShopYetRouteToRegistration: "You don't have a shop yet. Register one to get started.",
 
   registerShopTitle: 'Register your shop',
@@ -2043,6 +2045,7 @@ const hiUi: UiStrings = {
   registerShopCta: 'अपनी दुकान रजिस्टर करें',
   listYourShopCta: 'FastQue पर अपनी दुकान सूचीबद्ध करें',
   newToFastQueRegisterShop: 'FastQue पर नए हैं? अपनी दुकान रजिस्टर करें',
+  ownerCreateAccountHint: 'Google खाते की ज़रूरत नहीं — सिर्फ़ ईमेल और पासवर्ड से अपना मालिक खाता बनाएँ।',
   noShopYetRouteToRegistration: 'अभी आपकी कोई दुकान नहीं है। शुरू करने के लिए एक रजिस्टर करें।',
 
   registerShopTitle: 'अपनी दुकान रजिस्टर करें',
