@@ -858,8 +858,12 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
 
       const bookResponse = await publicAfterApproval.goto(bookPath);
       record(
-        bookResponse?.status() === 404,
-        "Direct customer booking route is unavailable for a quarantined shop",
+        bookResponse !== null,
+        "Direct customer booking route completes navigation after quarantine",
+      );
+      await visible(
+        publicAfterApproval.getByRole("heading", { name: "This chair is empty." }),
+        "Direct customer booking route renders the not-found state after quarantine",
       );
       await absent(
         publicAfterApproval.getByRole("heading", {
