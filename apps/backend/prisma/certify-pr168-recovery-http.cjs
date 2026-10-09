@@ -441,6 +441,12 @@ async function startServer() {
   await waitForServer();
 }
 
+async function restartServer() {
+  await stopServer();
+  serverLogs.length = 0;
+  await startServer();
+}
+
 async function authenticatedRuntime() {
   await setTime(baseTime);
   const superAdmin = await createAdminUser(['PLATFORM_ADMIN'], 'super-admin');
@@ -657,9 +663,7 @@ async function authenticatedRuntime() {
   // throttle. Its in-memory expiry timer uses real elapsed time, so restart only the isolated
   // loopback backend (not its disposable database) before the race. Keep the synthetic signing
   // key stable so these already-issued test sessions remain valid; production throttling stays on.
-  await stopServer();
-  serverLogs.length = 0;
-  await startServer();
+  await restartServer();
   const concurrentApprovalTime = baseTime + 80_000;
   await setTime(concurrentApprovalTime);
   const adminCode = await totpAt(superAdmin.secret, concurrentApprovalTime);
@@ -923,6 +927,11 @@ async function authenticatedRuntime() {
       suspendedAfter.softDeletedAt === null,
     'Previously suspended shop did not remain suspended after restore.',
   );
+
+  // The deadline matrix makes three more authenticated approvals, admin logins, and restore
+  // attempts immediately. Keep their real endpoint rate limits enabled, but begin from a clean
+  // process-local limiter so the matrix tests expiry semantics rather than harness request count.
+  await restartServer();
 
   const boundaryShops = [boundaryBefore, boundaryEqual, boundaryAfter];
   const boundaryNames = [
