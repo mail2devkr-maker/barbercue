@@ -1150,7 +1150,9 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     const viewerPage = await viewerContext.newPage();
     const viewerToken = await loginAdmin(viewerPage, fixtures.accounts.viewer);
     await contains(
-      viewerPage.getByRole("status"),
+      viewerPage
+        .getByRole("status")
+        .filter({ hasText: /read-only access/i }),
       /read-only access/i,
       "Platform Viewer sees the read-only warning",
     );
