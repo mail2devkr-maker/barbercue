@@ -258,9 +258,11 @@ async function loginAdmin(page: Page, account: Account & { secret: string }) {
   );
   await page.getByRole("button", { name: "Sign in securely" }).click();
   const login = await loginPromise;
+  const retryAfter = login.headers()["retry-after"];
+  const loginFailureContext = `HTTP ${login.status()}${retryAfter ? `, retry after ${retryAfter}s` : ""}`;
   record(
     login.status() === 201,
-    "Fresh password + TOTP login succeeds through the real web form",
+    `Fresh password + TOTP login succeeds through the real web form (${loginFailureContext})`,
   );
   const result = (await login.json()) as { tokens?: { accessToken?: string } };
   const token = result.tokens?.accessToken;
