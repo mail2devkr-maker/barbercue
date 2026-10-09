@@ -10,6 +10,7 @@ const { CryptoService } = require('../dist/auth/services/crypto.service');
 const root = path.resolve(__dirname, '../../..');
 const clockFile = process.env.PR168_TEST_CLOCK_FILE;
 const manifestFile = process.env.PR168_FIXTURE_MANIFEST;
+const browserFixtureFile = process.env.PR168_BROWSER_FIXTURE_FILE;
 const port = Number(process.env.PR168_HTTP_PORT || 39168);
 const baseUrl = `http://127.0.0.1:${port}/api/v1`;
 const baseTime = Date.UTC(2026, 9, 9, 12, 0, 0);
@@ -139,13 +140,12 @@ async function createShop(
 ) {
   const id = randomId();
   const slug = `pr168-${label}-${id}`;
+  const ownerEmail = `pr168-owner-${id}@example.invalid`;
+  const ownerPassword = `owner-${randomBytes(18).toString('hex')}`;
   const owner = await prisma.user.create({
     data: {
-      email: `pr168-owner-${id}@example.invalid`,
-      passwordHash: await bcrypt.hash(
-        `owner-${randomBytes(18).toString('hex')}`,
-        12,
-      ),
+      email: ownerEmail,
+      passwordHash: await bcrypt.hash(ownerPassword, 12),
     },
     select: { id: true },
   });
@@ -226,11 +226,14 @@ async function createShop(
     publicId: salon.publicId,
     name: salon.name,
     slug: salon.slug,
+    countryCode: 'ZZ',
     citySlug: city.slug,
     token: salon.publicQueueToken,
     serviceId: service.id,
     chairId: chair.id,
     ownerId: owner.id,
+    ownerEmail,
+    ownerPassword,
   };
   fixtureIds.salons.push(salon.id);
 
@@ -451,6 +454,7 @@ async function authenticatedRuntime() {
   await setTime(baseTime);
   const superAdmin = await createAdminUser(['PLATFORM_ADMIN'], 'super-admin');
   const coFounder = await createAdminUser(['CO_FOUNDER'], 'cofounder');
+  const salesAdmin = await createAdminUser(['SALES_ADMIN'], 'sales-admin');
   const viewer = await createAdminUser(['PLATFORM_VIEWER'], 'viewer');
   const selfAdmin = await createAdminUser(
     ['PLATFORM_ADMIN', 'CO_FOUNDER'],
@@ -1096,6 +1100,46 @@ async function authenticatedRuntime() {
     ),
     { encoding: 'utf8', mode: 0o600 },
   );
+  if (browserFixtureFile) {
+    writeFileSync(
+      browserFixtureFile,
+      JSON.stringify(
+        {
+          version: 1,
+          now: afterTime,
+          accounts: {
+            superAdmin,
+            coFounder,
+            salesAdmin,
+            viewer,
+            shopOwner: {
+              id: standard.ownerId,
+              email: standard.ownerEmail,
+              password: standard.ownerPassword,
+            },
+          },
+          shop: {
+            id: standard.id,
+            publicId: standard.publicId,
+            name: standard.name,
+            slug: standard.slug,
+            countryCode: standard.countryCode,
+            citySlug: standard.citySlug,
+            queueToken: standard.token,
+          },
+          expiredShop: {
+            id: boundaryAfter.id,
+            name: boundaryAfter.name,
+            publicId: boundaryAfter.publicId,
+          },
+          history: standard.history,
+        },
+        null,
+        2,
+      ),
+      { encoding: 'utf8', mode: 0o600 },
+    );
+  }
 }
 
 async function readHistory(ids) {
@@ -1166,7 +1210,7 @@ async function main() {
       'Authenticated HTTP certification requires the isolated loopback fastque_ci database.',
     );
   }
-  process.env.TOTP_ENCRYPTION_KEY = randomBytes(64).toString('hex');
+  process.env.TOTP_ENCRYPTION_KEY ||= randomBytes(64).toString('hex');
   await startServer();
   await authenticatedRuntime();
   console.log(
