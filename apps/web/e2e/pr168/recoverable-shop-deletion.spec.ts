@@ -95,6 +95,7 @@ async function clickWithDialog(
 ): Promise<{ dialog: Dialog; clickPromise: Promise<void> }> {
   await expect(locator, "Confirmation control is enabled before interaction").toBeEnabled();
   await page.bringToFront();
+  await page.evaluate(() => window.focus());
   const dialogPromise = page.waitForEvent("dialog", { timeout: 10_000 });
   const clickPromise = locator.click();
   try {
@@ -110,7 +111,21 @@ async function clickWithDialog(
     return { dialog, clickPromise };
   } catch (error) {
     await dialogPromise.catch(() => undefined);
-    throw error;
+    const [documentState, controlState] = await Promise.all([
+      page
+        .evaluate(() => ({ focused: document.hasFocus(), visibility: document.visibilityState }))
+        .catch(() => ({ focused: false, visibility: "unavailable" })),
+      locator
+        .evaluate((element) => ({
+          disabled: (element as HTMLButtonElement).disabled,
+          label: element.textContent?.trim() ?? "",
+        }))
+        .catch(() => ({ disabled: true, label: "unavailable" })),
+    ]);
+    throw new Error(
+      `Confirmation dialog did not open (${error instanceof Error ? error.message : "unknown error"}); document=${JSON.stringify(documentState)}; control=${JSON.stringify(controlState)}`,
+      { cause: error },
+    );
   }
 }
 
