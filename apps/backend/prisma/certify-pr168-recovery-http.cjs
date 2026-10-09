@@ -652,7 +652,11 @@ async function authenticatedRuntime() {
     'Denied financial-obligation approval changed the shop, request or pending payment.',
   );
 
-  const concurrentApprovalTime = baseTime + 80_000;
+  // Earlier negative/security cases deliberately exercise this endpoint's five-per-minute
+  // throttle. Move the disposable server clock beyond that window before racing the two valid
+  // approvals, so the second request reaches the transaction instead of being rejected at HTTP
+  // throttling. The production limiter remains enabled throughout certification.
+  const concurrentApprovalTime = baseTime + 125_000;
   await setTime(concurrentApprovalTime);
   const adminCode = await totpAt(superAdmin.secret, concurrentApprovalTime);
   const race = await Promise.all([
@@ -684,7 +688,7 @@ async function authenticatedRuntime() {
     deferredRaceRequestId,
     superToken,
     superAdmin.secret,
-    baseTime + 100_000,
+    baseTime + 130_000,
   );
   assert(
     deferredRaceApproval.status >= 400,
@@ -835,7 +839,7 @@ async function authenticatedRuntime() {
     standard,
     superToken,
     superAdmin.secret,
-    baseTime + 120_000,
+    baseTime + 150_000,
   );
   assertStatus(
     regularRestore,
