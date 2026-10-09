@@ -30,3 +30,7 @@ jobs:
         run: npm run typecheck --workspace=@barbercue/web
       - name: Full web production build (non-deploying)
         run: npm run build --workspace=@barbercue/web
+      - name: Install browser driver (test-runner only)
+        run: npm install --no-save --no-package-lock --ignore-scripts --legacy-peer-deps playwright-core@1.56.1
+      - name: Generate synthetic ID PDF and decode the real card QR in Chrome
+        run: node scripts/certify-employee-id-card-browser.mjs
