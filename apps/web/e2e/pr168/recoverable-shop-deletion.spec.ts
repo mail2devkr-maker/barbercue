@@ -81,6 +81,16 @@ const qrQueuePath = `/q/${encodeURIComponent(fixtures.shop.queueToken)}`;
 const reason =
   "Synthetic browser certification request; no shop data is deleted.";
 let simulatedNow = fixtures.now;
+const ADMIN_LOGIN_THROTTLE_WINDOW_MS = 60_000;
+
+async function waitForAdminLoginThrottleWindow() {
+  // The backend's controlled Date drives TOTP/recovery time, but Nest's in-memory
+  // throttler releases hits with real setTimeout callbacks. Wait for that actual
+  // production window rather than bypassing or weakening the login throttle.
+  await new Promise((resolve) =>
+    setTimeout(resolve, ADMIN_LOGIN_THROTTLE_WINDOW_MS + 1_000),
+  );
+}
 
 function record(condition: unknown, message: string) {
   assertionCount += 1;
@@ -399,6 +409,7 @@ async function routeWithAuth(context: BrowserContext, path: string) {
 test("real Chromium certifies PR #168 request, approval, quarantine, restoration and role boundaries", async ({
   browser,
 }) => {
+  test.setTimeout(240_000);
   test.skip(
     !fixturePath || !clockPath || !existsSync(fixturePath),
     "requires private disposable PostgreSQL fixtures from the certification workflow",
@@ -1135,6 +1146,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     }
 
     advanceClock(60_001);
+    await waitForAdminLoginThrottleWindow();
     const viewerPage = await viewerContext.newPage();
     const viewerToken = await loginAdmin(viewerPage, fixtures.accounts.viewer);
     await contains(
@@ -1186,6 +1198,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     );
 
     advanceClock(60_001);
+    await waitForAdminLoginThrottleWindow();
     const salesPage = await salesContext.newPage();
     const salesToken = await loginAdmin(
       salesPage,
