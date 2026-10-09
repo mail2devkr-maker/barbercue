@@ -197,10 +197,24 @@ function drawBack(
   text(ctx, "OFFICIAL WEBSITE", 730, 469, 220, 18, 700);
   text(ctx, "NOT AN ID VERIFICATION", 711, 493, 254, 15, 700, "#ffa6b8");
 
+  drawHrSignaturePlaceholder(ctx);
+  return canvas;
+}
+
+/**
+ * Corrected Shambhoo Yogi reference: one HR signature position, on the BACK only.
+ * No signature image is embedded in automated drafts; signing requires HR approval.
+ */
+export function drawHrSignaturePlaceholder(ctx: CanvasRenderingContext2D): void {
   ctx.fillStyle = "rgba(248,248,248,.6)";
   ctx.fillRect(52, 555, 510, 1);
-  text(ctx, "Authorised HR signature required before issuing", 52, 581, 590, 17, 500);
-  return canvas;
+  text(ctx, "Authorised HR signature:", 52, 582, 228, 17, 500);
+  ctx.strokeStyle = "rgba(248,248,248,.7)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(284, 583);
+  ctx.lineTo(558, 583);
+  ctx.stroke();
 }
 
 function jpegBytes(canvas: HTMLCanvasElement): Uint8Array {
