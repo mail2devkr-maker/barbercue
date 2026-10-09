@@ -460,6 +460,8 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     sort,
     radiusKm,
   });
+  // True when nothing but the chosen city narrows the list, so an empty result means "no shops there".
+  const noFiltersApplied = q.trim() === '' && service === null && priceMin === null && priceMax === null && radiusKm === null;
   const locationBarLabel = selection ? fullLocationLabel(selection, t) : t.searchChooseLocationAction;
 
   return (
@@ -614,7 +616,17 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           onAction={openSelector}
         />
       ) : searched && !error && displayedResults.length === 0 ? (
-        <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
+        noFiltersApplied && selection?.mode === 'city' ? (
+          // The city exists but has no active shop yet — say that, rather than implying a typo.
+          <EmptyState
+            title={t.searchNoShopsInCityTitle.replace('{city}', selection.city.name)}
+            message={t.searchNoShopsInCityHint}
+            actionLabel={t.searchChangeLocationAction}
+            onAction={openSelector}
+          />
+        ) : (
+          <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
+        )
       ) : (
         <FlatList
           data={displayedResults}

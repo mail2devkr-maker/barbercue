@@ -392,8 +392,32 @@ describe('Search screen: pagination, errors and older backends', () => {
     apiMock.mockImplementation(async (path: string) => (String(path).includes('service-suggestions') ? [] : page([])));
     const r = await mount();
     await flush(6);
-    expect(allText(r)).toContain(t.noSalonsFoundTitle);
+    expect(allText(r)).toContain(t.searchNoShopsInCityTitle.replace('{city}', 'Hajipur'));
     expect(has(r, 'search-location-bar')).toBe(true);
+  });
+
+  it('a chosen city with no active shops says so by name (CITY_FOUND_NO_ACTIVE_SHOPS), not "no salons found"', async () => {
+    seed(cityChoice(PATNA));
+    apiMock.mockImplementation(async (path: string) => (String(path).includes('service-suggestions') ? [] : page([])));
+    const r = await mount();
+    await flush(6);
+    expect(allText(r)).toContain(t.searchNoShopsInCityTitle.replace('{city}', 'Patna'));
+    expect(allText(r)).not.toContain(t.noSalonsFoundTitle);
+    // The customer can pick another place straight from the empty state.
+    expect(allText(r)).toContain(t.searchChangeLocationAction);
+  });
+
+  it('an empty result with a price filter applied is the generic empty state, not a claim about the city', async () => {
+    seed(cityChoice(PATNA));
+    apiMock.mockImplementation(async (path: string) => (String(path).includes('service-suggestions') ? [] : page([])));
+    const r = await mount();
+    await flush(6);
+    expect(allText(r)).toContain(t.searchNoShopsInCityTitle.replace('{city}', 'Patna'));
+    const priceFilter = r.root.findAll((n: { type: unknown; props: Record<string, unknown> }) => typeof n.props.onApply === 'function')[0];
+    await act(async () => (priceFilter.props.onApply as (min: number | null, max: number | null) => void)(100, 500));
+    await flush(4);
+    expect(allText(r)).toContain(t.noSalonsFoundTitle);
+    expect(allText(r)).not.toContain(t.searchNoShopsInCityTitle.replace('{city}', 'Patna'));
   });
 
   it('a failed search shows an error and never leaves the screen loading', async () => {

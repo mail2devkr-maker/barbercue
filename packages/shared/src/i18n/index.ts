@@ -1081,6 +1081,11 @@ export interface UiStrings {
   locationNoCitiesFound: string;
   locationNoCitiesFoundHint: string;
   locationSearchFailed: string;
+  locationSearchNetworkError: string;
+  locationSearchUnsupported: string;
+  locationCityNoShops: string;
+  searchNoShopsInCityTitle: string;
+  searchNoShopsInCityHint: string;
   locationLoadingCities: string;
   locationCouldNotLoadCities: string;
   locationRetry: string;
@@ -1810,6 +1815,11 @@ const enUi: UiStrings = {
   locationNoCitiesFound: 'No cities found',
   locationNoCitiesFoundHint: 'Try a different spelling, or pick from the available cities.',
   locationSearchFailed: "Couldn't search cities right now. Showing available cities instead.",
+  locationSearchNetworkError: "Can't reach FastQue right now. Check your connection and try again. Showing available cities meanwhile.",
+  locationSearchUnsupported: "City search isn't available on this server version yet. Showing the cities that have shops.",
+  locationCityNoShops: 'No shops here yet',
+  searchNoShopsInCityTitle: 'No shops in {city} yet',
+  searchNoShopsInCityHint: 'FastQue has no active shop in this city yet. Try another city or use your current location.',
   locationLoadingCities: 'Loading cities…',
   locationCouldNotLoadCities: "Couldn't load cities. Check your connection and try again.",
   locationRetry: 'Try again',
@@ -2539,6 +2549,11 @@ const hiUi: UiStrings = {
   locationNoCitiesFound: 'कोई शहर नहीं मिला',
   locationNoCitiesFoundHint: 'अलग वर्तनी आज़माएँ, या उपलब्ध शहरों में से चुनें।',
   locationSearchFailed: 'अभी शहर खोजे नहीं जा सके। इसके बजाय उपलब्ध शहर दिखाए जा रहे हैं।',
+  locationSearchNetworkError: 'अभी FastQue तक नहीं पहुँच पा रहे। अपना कनेक्शन जाँचें और दोबारा कोशिश करें। तब तक उपलब्ध शहर दिखाए जा रहे हैं।',
+  locationSearchUnsupported: 'इस सर्वर संस्करण पर शहर खोज अभी उपलब्ध नहीं है। जिन शहरों में दुकानें हैं वे दिखाए जा रहे हैं।',
+  locationCityNoShops: 'यहाँ अभी कोई दुकान नहीं',
+  searchNoShopsInCityTitle: '{city} में अभी कोई दुकान नहीं',
+  searchNoShopsInCityHint: 'इस शहर में FastQue की कोई सक्रिय दुकान अभी नहीं है। दूसरा शहर चुनें या अपना वर्तमान स्थान इस्तेमाल करें।',
   locationLoadingCities: 'शहर लोड हो रहे हैं…',
   locationCouldNotLoadCities: 'शहर लोड नहीं हो सके। अपना कनेक्शन जाँचें और फिर प्रयास करें।',
   locationRetry: 'फिर प्रयास करें',

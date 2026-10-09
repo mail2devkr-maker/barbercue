@@ -8,9 +8,11 @@ import { openLocationSettings, type DeviceLocationFailure } from '../../lib/loca
 import { useLocationSelection } from '../../lib/location/location-context';
 import {
   CITY_SEARCH_MIN_LENGTH,
+  CitySearchError,
   cachedAvailableCities,
   fetchAvailableCities,
   searchCities,
+  type CitySearchFailureKind,
 } from '../../lib/location/city-api';
 import {
   cityKey,
@@ -38,7 +40,16 @@ export function LocationSelectorHost() {
 }
 
 type AvailableState = { status: 'loading' | 'ready' | 'error'; cities: SelectableCity[] };
-type SearchState = { status: 'idle' | 'loading' | 'ready' | 'failed'; forQuery: string; cities: SelectableCity[] };
+type SearchState = {
+  status: 'idle' | 'loading' | 'ready' | 'failed';
+  forQuery: string;
+  cities: SelectableCity[];
+  /** Why a failed search failed — kept apart from "found nothing", which is a successful search. */
+  failure: CitySearchFailureKind | null;
+  /** Legacy backends only: cities that have an active shop; any other result has none yet. */
+  activeShopKeys: ReadonlySet<string> | null;
+};
+const IDLE_SEARCH: SearchState = { status: 'idle', forQuery: '', cities: [], failure: null, activeShopKeys: null };
 
 function gpsMessage(reason: DeviceLocationFailure, t: UiStrings): string {
   switch (reason) {
@@ -66,7 +77,8 @@ function SelectorBody() {
     const cached = cachedAvailableCities();
     return cached ? { status: 'ready', cities: cached } : { status: 'loading', cities: [] };
   });
-  const [search, setSearch] = useState<SearchState>({ status: 'idle', forQuery: '', cities: [] });
+  const [search, setSearch] = useState<SearchState>(IDLE_SEARCH);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const searchSequence = useRef(0);
   const trimmed = query.trim();
   const searching = trimmed.length >= CITY_SEARCH_MIN_LENGTH;
@@ -87,21 +99,26 @@ function SelectorBody() {
   useEffect(() => {
     const sequence = ++searchSequence.current;
     if (!searching) {
-      setSearch({ status: 'idle', forQuery: '', cities: [] });
+      setSearch(IDLE_SEARCH);
       return undefined;
     }
-    setSearch((current) => ({ ...current, status: 'loading' }));
+    setSearch((current) => ({ ...current, status: 'loading', failure: null }));
     const timer = setTimeout(() => {
       searchCities(trimmed)
-        .then((cities) => {
-          if (sequence === searchSequence.current) setSearch({ status: 'ready', forQuery: trimmed, cities });
+        .then((outcome) => {
+          if (sequence === searchSequence.current) {
+            setSearch({ status: 'ready', forQuery: trimmed, cities: outcome.cities, failure: null, activeShopKeys: outcome.activeShopKeys });
+          }
         })
-        .catch(() => {
-          if (sequence === searchSequence.current) setSearch({ status: 'failed', forQuery: trimmed, cities: [] });
+        .catch((err: unknown) => {
+          if (sequence === searchSequence.current) {
+            const failure: CitySearchFailureKind = err instanceof CitySearchError ? err.kind : 'NETWORK_ERROR';
+            setSearch({ status: 'failed', forQuery: trimmed, cities: [], failure, activeShopKeys: null });
+          }
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [trimmed, searching]);
+  }, [trimmed, searching, searchAttempt]);
 
   const selectedKey = selection?.mode === 'city' ? cityKey(selection.city) : null;
   const backendReady = search.status === 'ready' && search.forQuery === trimmed;
@@ -114,6 +131,8 @@ function SelectorBody() {
     const key = cityKey(city);
     const isSelected = key === selectedKey;
     const subtitle = citySubtitle(city);
+    // A real city the backend found that has no active shop yet (only knowable against a legacy backend).
+    const hasNoShops = scope === 'result' && backendReady && search.activeShopKeys !== null && !search.activeShopKeys.has(key);
     return (
       <Pressable
         key={`${scope}:${key}`}
@@ -132,6 +151,11 @@ function SelectorBody() {
           {subtitle ? (
             <Text style={styles.rowSubtitle} numberOfLines={1}>
               {subtitle}
+            </Text>
+          ) : null}
+          {hasNoShops ? (
+            <Text testID={`no-shops-${key}`} style={styles.rowNoShops} numberOfLines={1}>
+              {t.locationCityNoShops}
             </Text>
           ) : null}
         </View>
@@ -260,14 +284,25 @@ function SelectorBody() {
         {searching ? (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{t.locationSearchResults}</Text>
-            {search.status === 'failed' && !backendReady ? <Text style={styles.note}>{t.locationSearchFailed}</Text> : null}
+            {search.status === 'failed' && search.forQuery === trimmed ? (
+              <View testID={`search-failed-${search.failure ?? 'NETWORK_ERROR'}`}>
+                <Text style={styles.note}>
+                  {search.failure === 'BACKEND_UNSUPPORTED' ? t.locationSearchUnsupported : t.locationSearchNetworkError}
+                </Text>
+                {search.failure !== 'BACKEND_UNSUPPORTED' ? (
+                  <Pressable testID="search-retry" onPress={() => setSearchAttempt((n) => n + 1)} accessibilityRole="button" style={styles.errorButton}>
+                    <Text style={styles.errorButtonText}>{t.locationRetry}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             {search.status === 'loading' && !backendReady && shown.length === 0 ? (
               <View testID="search-loading" style={styles.loadingRow}>
                 <ActivityIndicator color={fastQue.pink} />
               </View>
             ) : null}
             {shown.map((city) => renderCity(city, 'result'))}
-            {shown.length === 0 && search.status !== 'loading' ? (
+            {shown.length === 0 && search.status !== 'loading' && search.status !== 'failed' ? (
               <View testID="no-cities" style={styles.empty}>
                 <Text style={styles.emptyTitle}>{t.locationNoCitiesFound}</Text>
                 <Text style={styles.note}>{t.locationNoCitiesFoundHint}</Text>
@@ -368,6 +403,7 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, minWidth: 0 },
   rowTitle: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: fastQue.text },
   rowSubtitle: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginTop: 2 },
+  rowNoShops: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.orange, marginTop: 2 },
   rowCheck: { color: fastQue.pink, fontFamily: font.bodyBold, fontSize: fontSize.lg },
   currentCard: { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], borderRadius: radius.md, borderWidth: 1, borderColor: fastQue.border, backgroundColor: fastQue.card },
   currentText: { flex: 1, fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: fastQue.text },

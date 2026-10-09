@@ -37,6 +37,13 @@ jest.mock('../../../lib/location/device-location', () => ({
 
 jest.mock('../../../lib/location/city-api', () => ({
   CITY_SEARCH_MIN_LENGTH: 2,
+  CitySearchError: class CitySearchError extends Error {
+    readonly kind: string;
+    constructor(kind: string) {
+      super(kind);
+      this.kind = kind;
+    }
+  },
   cachedAvailableCities: jest.fn(() => null),
   fetchAvailableCities: jest.fn(),
   searchCities: jest.fn(),
@@ -45,7 +52,10 @@ jest.mock('../../../lib/location/city-api', () => ({
 import { LocationSelectorHost } from '../LocationSelectorModal';
 import { LocationProvider, useLocationSelection, type LocationContextValue } from '../../../lib/location/location-context';
 import { detectDeviceLocation, openLocationSettings } from '../../../lib/location/device-location';
-import { fetchAvailableCities, searchCities } from '../../../lib/location/city-api';
+import { CitySearchError, fetchAvailableCities, searchCities } from '../../../lib/location/city-api';
+
+// The search API now answers with an outcome, never a bare list.
+const found = (cities: unknown[], activeShopKeys: Set<string> | null = null) => ({ cities, mode: activeShopKeys ? 'legacy' : 'server', activeShopKeys });
 
 const detectMock = detectDeviceLocation as jest.Mock;
 const settingsMock = openLocationSettings as jest.Mock;
@@ -78,7 +88,7 @@ beforeEach(() => {
   mockLanguage = 'EN';
   jest.clearAllMocks();
   availableMock.mockResolvedValue([DELHI, HAJIPUR, PATNA]);
-  searchMock.mockResolvedValue([]);
+  searchMock.mockResolvedValue(found([]));
 });
 afterEach(() => {
   jest.useRealTimers();
@@ -156,7 +166,7 @@ describe('searching cities', () => {
   it('debounces: nothing is requested while typing, one request after the pause', async () => {
     const r = await mount();
     await open();
-    searchMock.mockResolvedValue([HAJIPUR]);
+    searchMock.mockResolvedValue(found([HAJIPUR]));
     await typeText(r, 'location-search-input', 'h');
     await typeText(r, 'location-search-input', 'ha');
     await typeText(r, 'location-search-input', 'haj');
@@ -177,7 +187,7 @@ describe('searching cities', () => {
   });
 
   it('shows backend results with region and country, case-insensitively', async () => {
-    searchMock.mockResolvedValue([HAJIPUR]);
+    searchMock.mockResolvedValue(found([HAJIPUR]));
     const r = await mount();
     await open();
     await typeText(r, 'location-search-input', 'HAJIPUR');
@@ -189,7 +199,7 @@ describe('searching cities', () => {
   });
 
   it('distinguishes duplicate city names across countries and selects the right one', async () => {
-    searchMock.mockResolvedValue([LONDON_GB, LONDON_CA]);
+    searchMock.mockResolvedValue(found([LONDON_GB, LONDON_CA]));
     const r = await mount();
     await open();
     await typeText(r, 'location-search-input', 'london');
@@ -205,8 +215,8 @@ describe('searching cities', () => {
   });
 
   it('a slow response for an old query can never replace the newer results (stale protection)', async () => {
-    const slow = deferred<unknown[]>();
-    searchMock.mockImplementation((q: string) => (q === 'haj' ? slow.promise : Promise.resolve([PATNA])));
+    const slow = deferred<unknown>();
+    searchMock.mockImplementation((q: string) => (q === 'haj' ? slow.promise : Promise.resolve(found([PATNA]))));
     const r = await mount();
     await open();
     await typeText(r, 'location-search-input', 'haj');
@@ -216,7 +226,7 @@ describe('searching cities', () => {
     await flush();
     expect(has(r, 'city-row-IN:patna')).toBe(true);
     await act(async () => {
-      slow.resolve([HAJIPUR]);
+      slow.resolve(found([HAJIPUR]));
     });
     await flush();
     expect(has(r, 'city-row-IN:hajipur')).toBe(false);
@@ -224,7 +234,7 @@ describe('searching cities', () => {
   });
 
   it('shows a friendly empty state when nothing matches', async () => {
-    searchMock.mockResolvedValue([]);
+    searchMock.mockResolvedValue(found([]));
     const r = await mount();
     await open();
     await typeText(r, 'location-search-input', 'zzzzz');
@@ -235,19 +245,55 @@ describe('searching cities', () => {
     expect(has(r, 'use-current-location')).toBe(true);
   });
 
-  it('if the search request fails, local matches from the available cities are still offered, with a note', async () => {
-    searchMock.mockRejectedValue(new Error('network'));
+  it('a network failure says so (not "no cities found"), keeps local matches and offers Retry that works', async () => {
+    searchMock.mockRejectedValueOnce(new CitySearchError('NETWORK_ERROR'));
     const r = await mount();
     await open();
     await typeText(r, 'location-search-input', 'pat');
     await advance(350);
     await flush();
     expect(has(r, 'city-row-IN:patna')).toBe(true);
-    expect(allText(r)).toContain(uiStringsFor('EN').locationSearchFailed);
+    expect(has(r, 'search-failed-NETWORK_ERROR')).toBe(true);
+    expect(allText(r)).toContain(uiStringsFor('EN').locationSearchNetworkError);
+    expect(has(r, 'no-cities')).toBe(false);
+    searchMock.mockResolvedValue(found([PATNA]));
+    await press(r, 'search-retry');
+    await advance(350);
+    await flush();
+    expect(searchMock).toHaveBeenCalledTimes(2);
+    expect(has(r, 'search-failed-NETWORK_ERROR')).toBe(false);
+  });
+
+  it('an unsupported backend is reported as such (no Retry), with local matches and never "no cities found"', async () => {
+    searchMock.mockRejectedValue(new CitySearchError('BACKEND_UNSUPPORTED'));
+    const r = await mount();
+    await open();
+    await typeText(r, 'location-search-input', 'pat');
+    await advance(350);
+    await flush();
+    expect(has(r, 'search-failed-BACKEND_UNSUPPORTED')).toBe(true);
+    expect(allText(r)).toContain(uiStringsFor('EN').locationSearchUnsupported);
+    expect(has(r, 'search-retry')).toBe(false);
+    expect(has(r, 'no-cities')).toBe(false);
+    expect(has(r, 'city-row-IN:patna')).toBe(true);
+  });
+
+  it('against an older backend a real city with no active shop is shown and tagged, and can still be chosen', async () => {
+    searchMock.mockResolvedValue(found([HAJIPUR, PATNA], new Set(['IN:hajipur'])));
+    const r = await mount();
+    await open();
+    await typeText(r, 'location-search-input', 'pa');
+    await advance(350);
+    await flush();
+    expect(has(r, 'no-shops-IN:patna')).toBe(true);
+    expect(has(r, 'no-shops-IN:hajipur')).toBe(false);
+    expect(allText(r)).toContain(uiStringsFor('EN').locationCityNoShops);
+    await press(r, 'city-row-IN:patna');
+    expect(ctx.selection).toMatchObject({ mode: 'city', city: { slug: 'patna' } });
   });
 
   it('clearing the box returns to the full list', async () => {
-    searchMock.mockResolvedValue([HAJIPUR]);
+    searchMock.mockResolvedValue(found([HAJIPUR]));
     const r = await mount();
     await open();
     await typeText(r, 'location-search-input', 'haj');
@@ -298,7 +344,7 @@ describe('Use My Current Location', () => {
     expect(allText(r)).toContain(uiStringsFor('EN').gpsPermissionDenied);
     expect(has(r, 'gps-retry')).toBe(true);
     expect(ctx.selection).toMatchObject({ mode: 'city', city: { slug: 'hajipur' } });
-    searchMock.mockResolvedValue([PATNA]);
+    searchMock.mockResolvedValue(found([PATNA]));
     await typeText(r, 'location-search-input', 'patna');
     await advance(350);
     await flush();
