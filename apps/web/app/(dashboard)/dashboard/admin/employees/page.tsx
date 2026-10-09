@@ -46,7 +46,12 @@ export default function AdminEmployeesPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    // Defer the initial request so the effect does not synchronously trigger React state changes.
+    void Promise.resolve().then(() => {
+      if (!cancelled) void load();
+    });
+    return () => { cancelled = true; };
   }, [load]);
 
   async function createEmployee(event: React.FormEvent<HTMLFormElement>) {
