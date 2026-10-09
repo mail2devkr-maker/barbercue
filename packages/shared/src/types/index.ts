@@ -263,6 +263,11 @@ export interface CityDto {
   regionCode: string | null;
   state: string;
   country: string;
+  // City-centre reference point, straight from the City row. Null (and, for servers that predate
+  // this field, absent) whenever the city has no verified coordinates: callers must never invent a
+  // centre, and must show "Distance unavailable" rather than a guessed distance.
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface LocalityDto {
@@ -307,6 +312,15 @@ export interface CitySearchResultDto {
   slug: string;
   countryCode: string;
   region: { id: string; name: string; code: string | null } | null;
+  // Additive fields (customer location selector). Optional so an older server's response, and every
+  // existing caller of this DTO, stays valid. `countryName` lets a client tell "Hajipur, Bihar,
+  // India" from a same-named city in another country without a second lookup. Coordinates are the
+  // City row's own, null when it has none (never fabricated).
+  countryName?: string | null;
+  // Free-text state/region display fallback for legacy City rows with no normalised Region link.
+  state?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface OperatingHoursDto {

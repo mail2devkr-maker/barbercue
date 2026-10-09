@@ -15,6 +15,8 @@ import {
 import { Role } from '@barbercue/shared';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import { LanguageProvider } from './lib/language-context';
+import { LocationProvider } from './lib/location/location-context';
+import { LocationSelectorHost } from './components/location/LocationSelectorModal';
 import { hasIntroPlayed, markIntroPlayed } from './lib/startup-intro';
 import { color } from './lib/theme';
 import { OfflineBanner } from './components/OfflineBanner';
@@ -139,26 +141,29 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <LanguageProvider>
-          {!introDone ? (
-            // AuthProvider above already started session restoration on mount — it continues
-            // running behind the intro, not blocked by it (see the mission's own requirement).
-            <>
-              <StartupIntroErrorBoundary onError={finishIntro}>
-                <StartupIntro onFinish={finishIntro} />
-              </StartupIntroErrorBoundary>
-              <StatusBar style="light" />
-            </>
-          ) : !fontsLoaded ? (
-            <View style={styles.loading}>
-              <ActivityIndicator color={color.accent} size="large" />
-            </View>
-          ) : (
-            <>
-              <PushNotificationCoordinator />
-              <Root />
-              <StatusBar style="light" />
-            </>
-          )}
+          <LocationProvider>
+            {!introDone ? (
+              // AuthProvider above already started session restoration on mount — it continues
+              // running behind the intro, not blocked by it (see the mission's own requirement).
+              <>
+                <StartupIntroErrorBoundary onError={finishIntro}>
+                  <StartupIntro onFinish={finishIntro} />
+                </StartupIntroErrorBoundary>
+                <StatusBar style="light" />
+              </>
+            ) : !fontsLoaded ? (
+              <View style={styles.loading}>
+                <ActivityIndicator color={color.accent} size="large" />
+              </View>
+            ) : (
+              <>
+                <PushNotificationCoordinator />
+                <Root />
+                <LocationSelectorHost />
+                <StatusBar style="light" />
+              </>
+            )}
+          </LocationProvider>
         </LanguageProvider>
       </AuthProvider>
     </SafeAreaProvider>

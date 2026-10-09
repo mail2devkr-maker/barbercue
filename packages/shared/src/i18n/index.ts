@@ -1067,6 +1067,47 @@ export interface UiStrings {
   paymentQrConfiguredLabel: string;
   couldNotSavePaymentQr: string;
   couldNotRemovePaymentQr: string;
+  locationSelectorTitle: string;
+  locationSearchPlaceholder: string;
+  locationSearchClear: string;
+  locationCloseSelector: string;
+  useMyCurrentLocation: string;
+  useMyCurrentLocationHint: string;
+  locationDetectingGps: string;
+  locationCurrentlySelected: string;
+  locationRecentlySelected: string;
+  locationAvailableCities: string;
+  locationSearchResults: string;
+  locationNoCitiesFound: string;
+  locationNoCitiesFoundHint: string;
+  locationSearchFailed: string;
+  locationLoadingCities: string;
+  locationCouldNotLoadCities: string;
+  locationRetry: string;
+  myCurrentLocationLabel: string;
+  gpsServicesOff: string;
+  gpsPermissionDenied: string;
+  gpsPermissionBlocked: string;
+  gpsTimedOut: string;
+  gpsUnavailable: string;
+  openSettingsAction: string;
+  distanceFromYou: string;
+  distanceFromCityCentre: string;
+  distanceUnavailable: string;
+  distanceFromCityCentreNote: string;
+  searchOrderLoadedOnlyNote: string;
+  distanceFilterNeedsCityCentre: string;
+  sortLabel: string;
+  sortNearestFirst: string;
+  sortNameAZ: string;
+  searchChooseLocationTitle: string;
+  searchChooseLocationHint: string;
+  searchChooseLocationAction: string;
+  searchChangeLocationAction: string;
+  searchLoadingMore: string;
+  searchLoadMoreFailed: string;
+  distanceFilterNeedsLocation: string;
+  shopsNearYouTitle: string;
 }
 
 const enUi: UiStrings = {
@@ -1755,6 +1796,47 @@ const enUi: UiStrings = {
   paymentQrConfiguredLabel: 'Payment QR configured',
   couldNotSavePaymentQr: 'Could not save the payment QR.',
   couldNotRemovePaymentQr: 'Could not remove the payment QR.',
+  locationSelectorTitle: 'Select your location',
+  locationSearchPlaceholder: 'Search city…',
+  locationSearchClear: 'Clear search',
+  locationCloseSelector: 'Close location selector',
+  useMyCurrentLocation: 'Use my current location',
+  useMyCurrentLocationHint: 'Uses GPS to find shops near you',
+  locationDetectingGps: 'Detecting your location…',
+  locationCurrentlySelected: 'Currently selected',
+  locationRecentlySelected: 'Recently selected',
+  locationAvailableCities: 'Available cities',
+  locationSearchResults: 'Search results',
+  locationNoCitiesFound: 'No cities found',
+  locationNoCitiesFoundHint: 'Try a different spelling, or pick from the available cities.',
+  locationSearchFailed: "Couldn't search cities right now. Showing available cities instead.",
+  locationLoadingCities: 'Loading cities…',
+  locationCouldNotLoadCities: "Couldn't load cities. Check your connection and try again.",
+  locationRetry: 'Try again',
+  myCurrentLocationLabel: 'My current location',
+  gpsServicesOff: 'Location services are turned off. Turn on GPS, or search for a city instead.',
+  gpsPermissionDenied: 'Location permission was denied. You can still search for a city.',
+  gpsPermissionBlocked: 'Location permission is blocked for FastQue. Open Settings to allow it, or search for a city.',
+  gpsTimedOut: "Couldn't get a GPS fix. Move to an open area, or search for a city instead.",
+  gpsUnavailable: "Couldn't get your location. Search for a city instead.",
+  openSettingsAction: 'Open Settings',
+  distanceFromYou: '{distance} from you',
+  distanceFromCityCentre: '{distance} from {city} centre',
+  distanceUnavailable: 'Distance unavailable',
+  distanceFromCityCentreNote: 'Distances are measured from the city centre, not from your location.',
+  searchOrderLoadedOnlyNote: 'Sorted by distance among the shops loaded so far only. Scroll to load more; full nearest-first ordering needs a server update.',
+  distanceFilterNeedsCityCentre: "Distances aren't available for this city yet. Choose Use my current location to filter by distance.",
+  sortLabel: 'Sort',
+  sortNearestFirst: 'Nearest first',
+  sortNameAZ: 'Name (A–Z)',
+  searchChooseLocationTitle: 'Choose where to look',
+  searchChooseLocationHint: 'Pick a city or use your current location to see shops and their distances.',
+  searchChooseLocationAction: 'Choose location',
+  searchChangeLocationAction: 'Change',
+  searchLoadingMore: 'Loading more shops…',
+  searchLoadMoreFailed: "Couldn't load more shops. Tap to try again.",
+  distanceFilterNeedsLocation: 'Choose a city or your current location to filter by distance.',
+  shopsNearYouTitle: 'Shops near you',
 };
 
 const hiUi: UiStrings = {
@@ -2443,6 +2525,47 @@ const hiUi: UiStrings = {
   paymentQrConfiguredLabel: 'भुगतान QR सेट हो गया',
   couldNotSavePaymentQr: 'भुगतान QR सेव नहीं हो सका।',
   couldNotRemovePaymentQr: 'भुगतान QR हटाया नहीं जा सका।',
+  locationSelectorTitle: 'अपना स्थान चुनें',
+  locationSearchPlaceholder: 'शहर खोजें…',
+  locationSearchClear: 'खोज साफ़ करें',
+  locationCloseSelector: 'स्थान चयन बंद करें',
+  useMyCurrentLocation: 'मेरा वर्तमान स्थान उपयोग करें',
+  useMyCurrentLocationHint: 'आपके पास की दुकानें खोजने के लिए GPS का उपयोग करता है',
+  locationDetectingGps: 'आपका स्थान पता लगाया जा रहा है…',
+  locationCurrentlySelected: 'वर्तमान चयन',
+  locationRecentlySelected: 'हाल ही में चुने गए',
+  locationAvailableCities: 'उपलब्ध शहर',
+  locationSearchResults: 'खोज परिणाम',
+  locationNoCitiesFound: 'कोई शहर नहीं मिला',
+  locationNoCitiesFoundHint: 'अलग वर्तनी आज़माएँ, या उपलब्ध शहरों में से चुनें।',
+  locationSearchFailed: 'अभी शहर खोजे नहीं जा सके। इसके बजाय उपलब्ध शहर दिखाए जा रहे हैं।',
+  locationLoadingCities: 'शहर लोड हो रहे हैं…',
+  locationCouldNotLoadCities: 'शहर लोड नहीं हो सके। अपना कनेक्शन जाँचें और फिर प्रयास करें।',
+  locationRetry: 'फिर प्रयास करें',
+  myCurrentLocationLabel: 'मेरा वर्तमान स्थान',
+  gpsServicesOff: 'लोकेशन सेवाएँ बंद हैं। GPS चालू करें, या इसके बजाय कोई शहर खोजें।',
+  gpsPermissionDenied: 'लोकेशन की अनुमति नहीं दी गई। आप फिर भी शहर खोज सकते हैं।',
+  gpsPermissionBlocked: 'FastQue के लिए लोकेशन की अनुमति अवरुद्ध है। अनुमति देने के लिए सेटिंग्स खोलें, या शहर खोजें।',
+  gpsTimedOut: 'GPS लोकेशन नहीं मिल सकी। खुली जगह पर जाएँ, या इसके बजाय कोई शहर खोजें।',
+  gpsUnavailable: 'आपका स्थान नहीं मिल सका। इसके बजाय कोई शहर खोजें।',
+  openSettingsAction: 'सेटिंग्स खोलें',
+  distanceFromYou: 'आपसे {distance}',
+  distanceFromCityCentre: '{city} केंद्र से {distance}',
+  distanceUnavailable: 'दूरी उपलब्ध नहीं',
+  distanceFromCityCentreNote: 'दूरी शहर के केंद्र से मापी गई है, आपके स्थान से नहीं।',
+  searchOrderLoadedOnlyNote: 'दूरी के अनुसार क्रम केवल अब तक लोड हुई दुकानों में है। और देखने के लिए स्क्रॉल करें; पूरा सबसे-पास-पहले क्रम सर्वर अपडेट के बाद मिलेगा।',
+  distanceFilterNeedsCityCentre: 'इस शहर के लिए अभी दूरी उपलब्ध नहीं है। दूरी से फ़िल्टर करने के लिए मेरा वर्तमान स्थान चुनें।',
+  sortLabel: 'क्रम',
+  sortNearestFirst: 'सबसे पास पहले',
+  sortNameAZ: 'नाम (A–Z)',
+  searchChooseLocationTitle: 'चुनें कि कहाँ देखना है',
+  searchChooseLocationHint: 'दुकानें और उनकी दूरी देखने के लिए शहर चुनें या अपना वर्तमान स्थान उपयोग करें।',
+  searchChooseLocationAction: 'स्थान चुनें',
+  searchChangeLocationAction: 'बदलें',
+  searchLoadingMore: 'और दुकानें लोड हो रही हैं…',
+  searchLoadMoreFailed: 'और दुकानें लोड नहीं हो सकीं। फिर प्रयास करने के लिए टैप करें।',
+  distanceFilterNeedsLocation: 'दूरी से फ़िल्टर करने के लिए शहर या अपना वर्तमान स्थान चुनें।',
+  shopsNearYouTitle: 'आपके पास की दुकानें',
 };
 
 export const UI_STRINGS: Readonly<Record<Language, UiStrings>> = {

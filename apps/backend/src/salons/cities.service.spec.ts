@@ -348,4 +348,100 @@ describe('CitiesService', () => {
       expect(sqlFragment.values).toContain(20);
     });
   });
+
+  // Customer location selector: search restricted to cities that already have an ACTIVE shop. A small,
+  // bounded scope that may span countries, so it never becomes the unscoped ~100K-row scan.
+  describe('searchCities — hasShops scope (customer location selector)', () => {
+    const hajipurRow = {
+      id: 'c-hajipur',
+      name: 'Hajipur',
+      slug: 'hajipur',
+      countryCode: 'IN',
+      regionId: 'r-bihar',
+      regionName: 'Bihar',
+      regionCode: 'IN-BR',
+      state: 'Bihar',
+      countryName: 'India',
+      latitude: 25.6863,
+      longitude: 85.2095,
+    };
+
+    it('searches only cities with an ACTIVE salon, with no country required', async () => {
+      prisma.$queryRaw.mockResolvedValue([hajipurRow]);
+
+      const result = await service.searchCities({ q: 'haj', hasShops: true });
+
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      const sqlText = sqlFragment.strings.join(' ');
+      expect(sqlText).toContain('FROM salons s');
+      expect(sqlText).toContain("s.status = 'ACTIVE'");
+      expect(sqlText).not.toContain('SELECT country."isoCode2"'); // no country scope was supplied
+      expect(result).toEqual([
+        {
+          id: 'c-hajipur',
+          name: 'Hajipur',
+          slug: 'hajipur',
+          countryCode: 'IN',
+          region: { id: 'r-bihar', name: 'Bihar', code: 'IN-BR' },
+          countryName: 'India',
+          state: 'Bihar',
+          latitude: 25.6863,
+          longitude: 85.2095,
+        },
+      ]);
+    });
+
+    it('can still be narrowed to one country as well', async () => {
+      prisma.$queryRaw.mockResolvedValue([]);
+      await service.searchCities({ q: 'haj', hasShops: true, countryId: 'india-id' });
+      const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
+      expect(sqlFragment.strings.join(' ')).toContain('FROM salons s');
+      expect(sqlFragment.values).toContain('india-id');
+    });
+
+    it('never runs without ANY scope, even for a long query (defence in depth behind the zod schema)', async () => {
+      const result = await service.searchCities({ q: 'hajipur' });
+      expect(result).toEqual([]);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('still skips the database for a short or empty query', async () => {
+      expect(await service.searchCities({ q: 'h', hasShops: true })).toEqual([]);
+      expect(await service.searchCities({ q: '', hasShops: true })).toEqual([]);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
+
+    it('returns same-named cities from different countries as distinct, labelled results', async () => {
+      prisma.$queryRaw.mockResolvedValue([
+        { ...hajipurRow, id: 'b-gb', name: 'Birmingham', slug: 'birmingham', countryCode: 'GB', regionId: null, regionName: null, regionCode: null, state: 'England', countryName: 'United Kingdom' },
+        { ...hajipurRow, id: 'b-us', name: 'Birmingham', slug: 'birmingham', countryCode: 'US', regionId: null, regionName: null, regionCode: null, state: 'Alabama', countryName: 'United States' },
+      ]);
+
+      const result = await service.searchCities({ q: 'birmingham', hasShops: true });
+
+      expect(result.map((r) => [r.id, r.countryCode, r.countryName, r.state])).toEqual([
+        ['b-gb', 'GB', 'United Kingdom', 'England'],
+        ['b-us', 'US', 'United States', 'Alabama'],
+      ]);
+    });
+
+    it('passes missing coordinates through as null — never 0, never a guessed centre', async () => {
+      prisma.$queryRaw.mockResolvedValue([{ ...hajipurRow, latitude: null, longitude: null }]);
+      const [city] = await service.searchCities({ q: 'haj', hasShops: true });
+      expect(city.latitude).toBeNull();
+      expect(city.longitude).toBeNull();
+    });
+  });
+
+  describe('city coordinates on the public city DTOs', () => {
+    it('listCities returns each city centre, null when the city has none', async () => {
+      prisma.city.findMany.mockResolvedValue([
+        { ...bengaluru, latitude: 12.9716, longitude: 77.5946 },
+        { ...bengaluru, id: 'c2', slug: 'tiny', latitude: null, longitude: null },
+      ]);
+      const cities = await service.listCities();
+      expect(cities[0]).toMatchObject({ latitude: 12.9716, longitude: 77.5946 });
+      expect(cities[1]).toMatchObject({ latitude: null, longitude: null });
+    });
+  });
 });
