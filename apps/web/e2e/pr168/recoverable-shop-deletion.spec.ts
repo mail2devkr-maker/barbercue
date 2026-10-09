@@ -815,7 +815,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       const profileResponse = await publicAfterApproval.goto(profilePath);
       record(
         profileResponse?.status() === 404,
-        "Direct public shop profile returns 404 after quarantine",
+        `Direct public shop profile returns 404 after quarantine (received ${profileResponse?.status() ?? "no response"})`,
       );
       await absent(
         publicAfterApproval.getByRole("heading", { name: fixtures.shop.name }),
