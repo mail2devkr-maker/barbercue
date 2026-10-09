@@ -1,0 +1,56 @@
+name: FastQue HR Signature and ID Card Certification
+
+on:
+  push:
+    branches:
+      - chatgpt/authorized-dk-pandey-watermark
+  pull_request:
+    paths:
+      - 'apps/web/app/(dashboard)/dashboard/admin/crm/**'
+      - 'apps/web/app/(dashboard)/dashboard/admin/employees/**'
+      - 'apps/web/lib/approved-signature-watermark.ts'
+      - 'apps/web/lib/employee-id-card.ts'
+      - 'apps/web/lib/__tests__/employee-id-card.test.jsx'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hr-documents:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate Prisma client (no database access)
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/no_database_connection
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Offer letter + ID card tests
+        run: npm run test --workspace=@barbercue/web -- --runInBand --runTestsByPath 'app/(dashboard)/dashboard/admin/crm/__tests__/offer-letter.test.jsx' 'lib/__tests__/employee-id-card.test.jsx'
+      - name: TypeScript
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Focused ESLint
+        working-directory: apps/web
+        run: >
+          npx eslint
+          'app/(dashboard)/dashboard/admin/crm/offer-letter.ts'
+          'app/(dashboard)/dashboard/admin/employees/page.tsx'
+          'lib/approved-signature-watermark.ts'
+          'lib/employee-id-card.ts'
+      - name: Production website build (no deploy)
+        run: npm run build --workspace=@barbercue/web
+      - name: Check whitespace
+        run: git diff --check origin/master...HEAD
