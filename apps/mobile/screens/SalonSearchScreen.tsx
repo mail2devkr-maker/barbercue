@@ -35,8 +35,7 @@ import {
   buildSalonSearchParams,
   locationKey,
   mergePage,
-  serverSuppliedDistances,
-  sortLoadedByDistance,
+  applyLoadedDistanceFallback,
   type SearchFilters,
   type SortChoice,
 } from '../lib/location/search-params';
@@ -284,6 +283,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+
   // Part 8/9 (distance + price + service filters) and the ordering.
   const [radiusKm, setRadiusKm] = useState<number | null>(null);
   const [priceMin, setPriceMin] = useState<number | null>(null);
@@ -327,7 +327,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       const params = buildSalonSearchParams(request);
       const result = await apiFetch<PaginatedResult<SalonListItemDto>>(`${DISCOVERY_PATHS.salons}?${params.toString()}`);
       if (sequence !== requestSequence.current) return;
-      setResults(orderForDisplay(result.items, request));
+      setResults(result.items);
       setNextCursor(result.nextCursor);
     } catch (err) {
       if (sequence !== requestSequence.current) return;
@@ -340,17 +340,6 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     }
   }
 
-  // A server that predates the origin parameters ignores them and answers name-ordered with no
-  // distances; fall back to ordering the loaded shops by the shared Haversine rather than showing
-  // an unordered list under a "Nearest first" control.
-  function orderForDisplay(items: SalonListItemDto[], request: { selection: SelectedLocation | null; filters: SearchFilters }) {
-    const requestOrigin = distanceOrigin(request.selection);
-    if (requestOrigin && request.filters.sort === 'nearest' && !serverSuppliedDistances(items)) {
-      return sortLoadedByDistance(items, requestOrigin);
-    }
-    return items;
-  }
-
   async function loadMore() {
     const request = activeRequest.current;
     if (!request || !nextCursor || loading || refreshing || loadingMore) return;
@@ -361,7 +350,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
       const params = buildSalonSearchParams({ ...request, cursor: nextCursor });
       const result = await apiFetch<PaginatedResult<SalonListItemDto>>(`${DISCOVERY_PATHS.salons}?${params.toString()}`);
       if (sequence !== requestSequence.current) return;
-      setResults((existing) => orderForDisplay(mergePage(existing, result.items), request));
+      setResults((existing) => mergePage(existing, result.items));
       setNextCursor(result.nextCursor);
     } catch {
       if (sequence === requestSequence.current) setLoadMoreFailed(true);
@@ -463,6 +452,13 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const serviceValueLabel = activeServiceCategory
     ? t[SERVICE_CATEGORY_LABEL_KEYS[activeServiceCategory.id]] ?? activeServiceCategory.label
     : t.serviceFilterAll;
+  // An older backend ignores the origin and the radius. Then (and only then) the shops downloaded so
+  // far are ordered/filtered here, which is NOT a global nearest-first list — `approximateOrder` makes
+  // the screen say so instead of implying otherwise.
+  const { items: displayedResults, approximate: approximateOrder } = applyLoadedDistanceFallback(results, origin, {
+    sort,
+    radiusKm,
+  });
   const locationBarLabel = selection ? fullLocationLabel(selection, t) : t.searchChooseLocationAction;
 
   return (
@@ -591,6 +587,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         </View>
       )}
       {origin?.kind === 'city' && <Text style={styles.cityNote}>{t.distanceFromCityCentreNote}</Text>}
+      {approximateOrder && (
+        <Text testID="approximate-order-note" style={styles.cityNote}>
+          {t.searchOrderLoadedOnlyNote}
+        </Text>
+      )}
 
       {error && <InlineError message={error} />}
 
@@ -607,11 +608,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           actionLabel={t.searchChooseLocationAction}
           onAction={openSelector}
         />
-      ) : searched && !error && results.length === 0 ? (
+      ) : searched && !error && displayedResults.length === 0 ? (
         <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
       ) : (
         <FlatList
-          data={results}
+          data={displayedResults}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleSearch(true)} tintColor={color.accent} />}

@@ -84,6 +84,34 @@ export function serverSuppliedDistances(items: readonly SalonListItemDto[]): boo
 }
 
 /**
+ * What to show when the server may not have measured distances itself.
+ *
+ * A server that predates originLat/originLng ignores them AND ignores `radiusKm` (it only honours a
+ * radius together with legacy lat/lng), so every shop that has coordinates comes back with
+ * `distanceKm: null`. In that case the app can only order — and apply the customer's explicit radius
+ * to — the shops it has actually downloaded. That is NOT a globally correct nearest-first list, so
+ * the result is flagged `approximate` and the screen says so instead of implying otherwise.
+ * With a server that did measure distances, the server's order and filtering are used untouched.
+ */
+export function applyLoadedDistanceFallback(
+  items: readonly SalonListItemDto[],
+  origin: DistanceOrigin | null,
+  filters: Pick<SearchFilters, 'sort' | 'radiusKm'>,
+): { items: SalonListItemDto[]; approximate: boolean } {
+  if (!origin || serverSuppliedDistances(items)) return { items: [...items], approximate: false };
+  let shown = [...items];
+  if (filters.radiusKm !== null) {
+    const limit = filters.radiusKm;
+    shown = shown.filter((item) => {
+      const km = resolveShopDistanceKm(item, origin);
+      return km !== null && km <= limit;
+    });
+  }
+  if (filters.sort === 'nearest') shown = sortLoadedByDistance(shown, origin);
+  return { items: shown, approximate: true };
+}
+
+/**
  * Best-effort nearest-first for the shops already loaded, used ONLY when the server did not do it.
  * Shops without a distance stay (last); nothing is dropped and nothing is invented.
  */

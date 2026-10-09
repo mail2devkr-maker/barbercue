@@ -331,6 +331,44 @@ describe('Search screen: pagination, errors and older backends', () => {
     expect(text).toContain(t.distanceUnavailable);
   });
 
+  it('says plainly that the order covers only the loaded shops when the server did not measure distances', async () => {
+    seed(cityChoice());
+    apiMock.mockImplementation(async (path: string) => {
+      if (String(path).includes('service-suggestions')) return [];
+      return page([shop({ id: 'far', name: 'Far Salon', lat: 25.5941, lng: 85.1376 })]);
+    });
+    const r = await mount();
+    await flush(6);
+    expect(has(r, 'approximate-order-note')).toBe(true);
+    expect(allText(r)).toContain(t.searchOrderLoadedOnlyNote);
+  });
+
+  it('does not show that caveat when the server measured the distances itself', async () => {
+    seed(cityChoice());
+    const r = await mount();
+    await flush(6);
+    expect(has(r, 'approximate-order-note')).toBe(false);
+  });
+
+  it('an explicit radius is still respected on an older backend that ignored it', async () => {
+    seed(cityChoice());
+    apiMock.mockImplementation(async (path: string) => {
+      if (String(path).includes('service-suggestions')) return [];
+      return page([
+        shop({ id: 'close', name: 'Close Salon', lat: 25.686, lng: 85.21 }),
+        shop({ id: 'far', name: 'Far Patna Salon', lat: 25.5941, lng: 85.1376 }),
+      ]);
+    });
+    const r = await mount();
+    await flush(6);
+    expect(allText(r)).toContain('Far Patna Salon');
+    const dropdown = r.root.findAll((n: { type: unknown; props: Record<string, unknown> }) => n.type === FilterDropdown && n.props.label === t.distanceFilterLabel)[0];
+    await act(async () => dropdown.props.onSelect('5'));
+    await flush(4);
+    expect(allText(r)).toContain('Close Salon');
+    expect(allText(r)).not.toContain('Far Patna Salon');
+  });
+
   it('shows an empty state (and keeps the location bar) when the city has no shops', async () => {
     seed(cityChoice());
     apiMock.mockImplementation(async (path: string) => (String(path).includes('service-suggestions') ? [] : page([])));

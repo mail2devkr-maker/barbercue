@@ -8,7 +8,7 @@ jest.mock('expo-location', () => ({
   Accuracy: { Balanced: 3 },
 }));
 
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { LOCATION_FIX_TIMEOUT_MS, LOCATION_LAST_KNOWN_TIMEOUT_MS } from '../../home-location';
 import { detectDeviceLocation, openLocationSettings, readLastKnownDeviceCoords } from '../device-location';
@@ -146,6 +146,21 @@ describe('openLocationSettings', () => {
   it('opens the app settings for permission problems', async () => {
     const open = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
     await openLocationSettings('blocked');
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('GPS switched off: opens the Android location-source settings screen', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    const intent = jest.spyOn(Linking, 'sendIntent').mockResolvedValue(undefined);
+    await openLocationSettings('services_off');
+    expect(intent).toHaveBeenCalledWith('android.settings.LOCATION_SOURCE_SETTINGS');
+  });
+
+  it('GPS switched off: falls back to app settings if that intent cannot be opened', async () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    jest.spyOn(Linking, 'sendIntent').mockRejectedValue(new Error('no activity'));
+    const open = jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
+    await openLocationSettings('services_off');
     expect(open).toHaveBeenCalledTimes(1);
   });
 

@@ -124,7 +124,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
         <BrandLockup compact={compactHeader} markOnly={compactHeader} style={styles.brandLockup} />
 
         <View style={styles.headerActions}>
-          <Pressable style={[styles.locationPill, compactHeader && styles.locationPillCompact]} onPress={openSelector} accessibilityRole="button" accessibilityLabel={`${t.locationSelectorTitle}: ${locationText}`}>
+          <Pressable testID="signedout-location-pill" style={[styles.locationPill, compactHeader && styles.locationPillCompact]} onPress={openSelector} accessibilityRole="button" accessibilityLabel={`${t.locationSelectorTitle}: ${locationText}`}>
             <View style={styles.locationPin} />
             <Text style={styles.locationText} numberOfLines={1}>
               {locationText}
@@ -296,7 +296,7 @@ export default function RoleSelectScreen({ navigation }: Props) {
             </View>
           </View>
 
-          <Pressable style={styles.inputRow} onPress={openSelector} accessibilityRole="button" accessibilityLabel={`${t.locationSelectorTitle}: ${locationText}`}>
+          <Pressable testID="signedout-city-field" style={styles.inputRow} onPress={openSelector} accessibilityRole="button" accessibilityLabel={`${t.locationSelectorTitle}: ${locationText}`}>
             <TabIcon name="shop" color={fastQue.text} size={22} />
             <View style={styles.inputCopy}>
               <Text style={styles.fieldLabel}>{t.cityLocationLabel}</Text>

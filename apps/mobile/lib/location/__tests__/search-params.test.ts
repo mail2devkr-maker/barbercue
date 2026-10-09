@@ -1,4 +1,4 @@
-import { buildSalonSearchParams, DEFAULT_SEARCH_FILTERS, locationKey, mergePage, serverSuppliedDistances, sortLoadedByDistance } from '../search-params';
+import { applyLoadedDistanceFallback, buildSalonSearchParams, DEFAULT_SEARCH_FILTERS, locationKey, mergePage, serverSuppliedDistances, sortLoadedByDistance } from '../search-params';
 import { distanceOrigin, type DeviceLocationSelection, type ManualCitySelection } from '../selection';
 import { HAJIPUR, NO_CENTRE_CITY, PATNA, shop } from '../__fixtures__/cities';
 
@@ -105,5 +105,39 @@ describe('mergePage', () => {
     const b = shop({ id: 'b', name: 'B' });
     const c = shop({ id: 'c', name: 'C' });
     expect(mergePage([a, b], [b, c]).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('applyLoadedDistanceFallback (older backend)', () => {
+  const origin = distanceOrigin(manual())!;
+  const near = shop({ id: 'near', name: 'Near', lat: 25.69, lng: 85.21 });
+  const far = shop({ id: 'far', name: 'Far', lat: 25.5941, lng: 85.1376 });
+  const noCoords = shop({ id: 'none', name: 'None' });
+
+  it('leaves a server-measured list exactly as the server returned it (no re-sorting, no flag)', () => {
+    const served = [{ ...far, distanceKm: 1 }, { ...near, distanceKm: 2 }];
+    expect(applyLoadedDistanceFallback(served, origin, { sort: 'nearest', radiusKm: 1 })).toEqual({ items: served, approximate: false });
+  });
+
+  it('with no origin there is nothing to measure and nothing is changed or flagged', () => {
+    expect(applyLoadedDistanceFallback([far, near], null, { sort: 'nearest', radiusKm: null })).toEqual({ items: [far, near], approximate: false });
+  });
+
+  it('flags the order as approximate and sorts only what was loaded', () => {
+    const result = applyLoadedDistanceFallback([noCoords, far, near], origin, { sort: 'nearest', radiusKm: null });
+    expect(result.approximate).toBe(true);
+    expect(result.items.map((s) => s.id)).toEqual(['near', 'far', 'none']);
+  });
+
+  it('name sort keeps the server order but is still flagged (distances are computed locally)', () => {
+    const result = applyLoadedDistanceFallback([noCoords, far, near], origin, { sort: 'name', radiusKm: null });
+    expect(result.items.map((s) => s.id)).toEqual(['none', 'far', 'near']);
+    expect(result.approximate).toBe(true);
+  });
+
+  it('applies an explicit radius itself, because the older server ignored it', () => {
+    const result = applyLoadedDistanceFallback([noCoords, far, near], origin, { sort: 'nearest', radiusKm: 5 });
+    expect(result.items.map((s) => s.id)).toEqual(['near']);
+    expect(result.approximate).toBe(true);
   });
 });
