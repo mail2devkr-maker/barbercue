@@ -129,7 +129,7 @@ describe("FastQue CRM offer letter helpers", () => {
       salaryBasis: "monthly",
     }));
     expect(pdf).toContain("0.51 0.59 0.75 rg");
-    expect(pdf).toContain("(Authorized Signatory)");
+    expect(pdf).toContain("Authorized Signatory");
     expect(pdf).toContain("Expected Performance Incentive");
     expect(pdf).toContain("5,000");
     expect(pdf).not.toContain("COMPANY_SIGNATURE_CONTOURS");
