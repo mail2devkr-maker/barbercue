@@ -29,7 +29,7 @@ jobs:
         run: npm run build --workspace=@barbercue/shared
       - name: Generate Prisma client without contacting a database
         env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/no_database_connection
+          DATABASE_URL: postgresql://ci@localhost:5432/no_database_connection
         run: npm run prisma:generate --workspace=@barbercue/backend
       - name: Compare the exact three reported failures on master
         shell: bash

@@ -13,24 +13,8 @@ jobs:
   security-certification:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    services:
-      postgres:
-        image: postgres:17.11-bookworm
-        env:
-          POSTGRES_USER: ci
-          POSTGRES_PASSWORD: ci_local_only
-          POSTGRES_DB: fastque_ci
-        # Runner-local only, non-default host port; the job's disposable container is never
-        # published to a public interface and is destroyed with the hosted runner.
-        ports:
-          - 127.0.0.1:55432:5432
-        options: >-
-          --health-cmd="pg_isready -U ci -d fastque_ci"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
     env:
-      DATABASE_URL: postgresql://ci:ci_local_only@127.0.0.1:55432/fastque_ci
+      DATABASE_URL: postgresql://ci@127.0.0.1:55432/fastque_ci
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -54,10 +38,32 @@ jobs:
         run: npm run prisma:generate --workspace=@barbercue/backend
       - name: Validate Prisma schema
         run: npm run prisma:validate --workspace=@barbercue/backend
-      - name: Verify isolated PostgreSQL 17.11 service
-        env:
-          PGPASSWORD: ci_local_only
+      - name: Start and verify isolated PostgreSQL 17.11 container
         run: |
+          db_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$db_password"
+          container_name="pr168-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          container_id="$(docker run --detach --rm --name "$container_name" \
+            --publish 127.0.0.1:55432:5432 \
+            --env POSTGRES_USER=ci \
+            --env POSTGRES_PASSWORD="$db_password" \
+            --env POSTGRES_DB=fastque_ci \
+            postgres:17.11-bookworm)"
+          {
+            echo "POSTGRES_CONTAINER_ID=$container_id"
+            echo "PGPASSWORD=$db_password"
+            echo "DATABASE_URL=postgresql://ci:${db_password}@127.0.0.1:55432/fastque_ci"
+          } >> "$GITHUB_ENV"
+          export PGPASSWORD="$db_password"
+          ready=false
+          for attempt in {1..60}; do
+            if pg_isready --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
           pg_isready --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci
           test "$(psql --no-psqlrc --tuples-only --no-align --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci --command='SELECT current_database()')" = fastque_ci
           psql --no-psqlrc --tuples-only --no-align --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci --command="SELECT CASE WHEN current_setting('server_version') LIKE '17.11%' THEN 'PASS PostgreSQL 17.11' ELSE 'Unexpected PostgreSQL version: ' || current_setting('server_version') END" | tee "$RUNNER_TEMP/pr168-postgres-version.txt"
@@ -97,17 +103,15 @@ jobs:
           echo 'PR168_HTTP_PORT=39168' >> "$GITHUB_ENV"
           node apps/backend/prisma/certify-pr168-recovery-http.cjs
       - name: Disposable PostgreSQL backup and restore drill
-        env:
-          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
         run: |
-          test -n "$POSTGRES_SERVICE_ID"
+          test -n "$POSTGRES_CONTAINER_ID"
           # Use the exact PostgreSQL 17.11 service image's client tools; host-installed tools
           # can lag the server major version. The dump streams only to the disposable runner.
-          docker exec -e PGPASSWORD=ci_local_only "$POSTGRES_SERVICE_ID" pg_dump --format=custom --no-owner --username=ci --dbname=fastque_ci > "$RUNNER_TEMP/pr168-cert/fastque_ci.dump"
-          docker exec -e PGPASSWORD=ci_local_only "$POSTGRES_SERVICE_ID" createdb --username=ci fastque_ci_restore
-          docker exec -i -e PGPASSWORD=ci_local_only "$POSTGRES_SERVICE_ID" pg_restore --exit-on-error --no-owner --username=ci --dbname=fastque_ci_restore < "$RUNNER_TEMP/pr168-cert/fastque_ci.dump"
-          DATABASE_URL=postgresql://ci:ci_local_only@127.0.0.1:55432/fastque_ci_restore node apps/backend/prisma/verify-pr168-restored-backup.cjs
-          DATABASE_URL=postgresql://ci:ci_local_only@127.0.0.1:55432/fastque_ci_restore node apps/backend/prisma/verify-recoverable-shop-deletion-migration.cjs
+          docker exec -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER_ID" pg_dump --format=custom --no-owner --username=ci --dbname=fastque_ci > "$RUNNER_TEMP/pr168-cert/fastque_ci.dump"
+          docker exec -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER_ID" createdb --username=ci fastque_ci_restore
+          docker exec -i -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER_ID" pg_restore --exit-on-error --no-owner --username=ci --dbname=fastque_ci_restore < "$RUNNER_TEMP/pr168-cert/fastque_ci.dump"
+          DATABASE_URL="postgresql://ci:${PGPASSWORD}@127.0.0.1:55432/fastque_ci_restore" node apps/backend/prisma/verify-pr168-restored-backup.cjs
+          DATABASE_URL="postgresql://ci:${PGPASSWORD}@127.0.0.1:55432/fastque_ci_restore" node apps/backend/prisma/verify-recoverable-shop-deletion-migration.cjs
       - name: Shared full test suite
         run: npm run test --workspace=@barbercue/shared -- --runInBand
       - name: Typecheck every workspace
@@ -135,6 +139,12 @@ jobs:
         run: npm run build --workspace=@barbercue/web
       - name: Whitespace check
         run: git diff --check origin/master...HEAD
+      - name: Stop disposable PostgreSQL container
+        if: always()
+        run: |
+          if [ -n "${POSTGRES_CONTAINER_ID:-}" ]; then
+            docker stop "$POSTGRES_CONTAINER_ID"
+          fi
 
   pr-full-regression:
     runs-on: ubuntu-latest
@@ -142,22 +152,8 @@ jobs:
     outputs:
       backend_failures: ${{ steps.regression_signatures.outputs.backend_failures }}
       web_failures: ${{ steps.regression_signatures.outputs.web_failures }}
-    services:
-      postgres:
-        image: postgres:17.11-bookworm
-        env:
-          POSTGRES_USER: ci
-          POSTGRES_PASSWORD: ci_local_only
-          POSTGRES_DB: fastque_ci
-        ports:
-          - 127.0.0.1:55432:5432
-        options: >-
-          --health-cmd="pg_isready -U ci -d fastque_ci"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
     env:
-      DATABASE_URL: postgresql://ci:ci_local_only@127.0.0.1:55432/fastque_ci
+      DATABASE_URL: postgresql://ci@127.0.0.1:55432/fastque_ci
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
@@ -175,6 +171,32 @@ jobs:
         run: |
           npm run prisma:generate --workspace=@barbercue/backend
           npm run prisma:validate --workspace=@barbercue/backend
+      - name: Start isolated PostgreSQL 17.11 container
+        run: |
+          db_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$db_password"
+          container_name="pr168-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          container_id="$(docker run --detach --rm --name "$container_name" \
+            --publish 127.0.0.1:55432:5432 \
+            --env POSTGRES_USER=ci \
+            --env POSTGRES_PASSWORD="$db_password" \
+            --env POSTGRES_DB=fastque_ci \
+            postgres:17.11-bookworm)"
+          {
+            echo "POSTGRES_CONTAINER_ID=$container_id"
+            echo "PGPASSWORD=$db_password"
+            echo "DATABASE_URL=postgresql://ci:${db_password}@127.0.0.1:55432/fastque_ci"
+          } >> "$GITHUB_ENV"
+          export PGPASSWORD="$db_password"
+          ready=false
+          for attempt in {1..60}; do
+            if pg_isready --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
       - name: Apply full PR migration chain to fresh PostgreSQL
         run: node apps/backend/prisma/certify-pr168-migration-chain.cjs
       - name: Backend full test suite
@@ -213,6 +235,12 @@ jobs:
           console.log(`PR_BACKEND=${JSON.stringify({ passed: backend.passed, failed: backend.failed, suites: backend.suites, failures: backend.failures })}`);
           console.log(`PR_WEB=${JSON.stringify({ passed: web.passed, failed: web.failed, suites: web.suites, failures: web.failures })}`);
           NODE
+      - name: Stop disposable PostgreSQL container
+        if: always()
+        run: |
+          if [ -n "${POSTGRES_CONTAINER_ID:-}" ]; then
+            docker stop "$POSTGRES_CONTAINER_ID"
+          fi
 
   current-master-regression:
     runs-on: ubuntu-latest
@@ -220,22 +248,8 @@ jobs:
     outputs:
       backend_failures: ${{ steps.regression_signatures.outputs.backend_failures }}
       web_failures: ${{ steps.regression_signatures.outputs.web_failures }}
-    services:
-      postgres:
-        image: postgres:17.11-bookworm
-        env:
-          POSTGRES_USER: ci
-          POSTGRES_PASSWORD: ci_local_only
-          POSTGRES_DB: fastque_ci
-        ports:
-          - 127.0.0.1:55432:5432
-        options: >-
-          --health-cmd="pg_isready -U ci -d fastque_ci"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
     env:
-      DATABASE_URL: postgresql://ci:ci_local_only@127.0.0.1:55432/fastque_ci
+      DATABASE_URL: postgresql://ci@127.0.0.1:55432/fastque_ci
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - name: Checkout current master baseline
@@ -255,9 +269,33 @@ jobs:
         run: |
           npm run prisma:generate --workspace=@barbercue/backend
           npm run prisma:validate --workspace=@barbercue/backend
+      - name: Start isolated PostgreSQL 17.11 container
+        run: |
+          db_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$db_password"
+          container_name="pr168-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          container_id="$(docker run --detach --rm --name "$container_name" \
+            --publish 127.0.0.1:55432:5432 \
+            --env POSTGRES_USER=ci \
+            --env POSTGRES_PASSWORD="$db_password" \
+            --env POSTGRES_DB=fastque_ci \
+            postgres:17.11-bookworm)"
+          {
+            echo "POSTGRES_CONTAINER_ID=$container_id"
+            echo "PGPASSWORD=$db_password"
+            echo "DATABASE_URL=postgresql://ci:${db_password}@127.0.0.1:55432/fastque_ci"
+          } >> "$GITHUB_ENV"
+          export PGPASSWORD="$db_password"
+          ready=false
+          for attempt in {1..60}; do
+            if pg_isready --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
       - name: Apply full current-master migrations to fresh PostgreSQL
-        env:
-          PGPASSWORD: ci_local_only
         run: |
           set +e
           npx prisma migrate deploy --schema=apps/backend/prisma/schema.prisma > "$RUNNER_TEMP/master-migrate.log" 2>&1
@@ -339,6 +377,12 @@ jobs:
           console.log(`MASTER_BACKEND=${JSON.stringify({ passed: backend.passed, failed: backend.failed, suites: backend.suites, failures: backend.failures })}`);
           console.log(`MASTER_WEB=${JSON.stringify({ passed: web.passed, failed: web.failed, suites: web.suites, failures: web.failures })}`);
           NODE
+      - name: Stop disposable PostgreSQL container
+        if: always()
+        run: |
+          if [ -n "${POSTGRES_CONTAINER_ID:-}" ]; then
+            docker stop "$POSTGRES_CONTAINER_ID"
+          fi
 
   compare-full-regressions:
     runs-on: ubuntu-latest
