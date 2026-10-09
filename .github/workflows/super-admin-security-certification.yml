@@ -280,8 +280,23 @@ jobs:
           INSERT INTO "users" ("id", "email", "status", "updatedAt")
           VALUES ('pr168-master-bootstrap', 'mail2dev.kr@gmail.com', 'ACTIVE', CURRENT_TIMESTAMP);
           SQL
+            location_row_count="$(psql --no-psqlrc --tuples-only --no-align --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci <<'SQL'
+          SELECT
+            (SELECT count(*) FROM "Country" WHERE "isoCode2" = 'IN') +
+            (SELECT count(*) FROM "Region" WHERE "code" IN ('IN-OR', 'IN-UP'));
+          SQL
+          )"
+            test "$location_row_count" = 0
+            psql --no-psqlrc --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci <<'SQL'
+          INSERT INTO "Country" ("id", "isoCode2", "isoCode3", "name", "slug")
+          VALUES ('00000000-0000-4000-8000-000000168000', 'IN', 'IND', 'India', 'india');
+          INSERT INTO "Region" ("id", "countryId", "code", "name", "slug")
+          VALUES
+            ('00000000-0000-4000-8000-000000168001', '00000000-0000-4000-8000-000000168000', 'IN-OR', 'Odisha', 'odisha'),
+            ('00000000-0000-4000-8000-000000168002', '00000000-0000-4000-8000-000000168000', 'IN-UP', 'Uttar Pradesh', 'uttar-pradesh');
+          SQL
             npx prisma migrate deploy --schema=apps/backend/prisma/schema.prisma
-            echo 'PASS: current-master migration chain completed after its documented no-credential synthetic bootstrap.'
+            echo 'PASS: current-master migration chain completed after the no-credential admin and minimal location master rows were seeded only in this disposable database.'
           else
             echo 'PASS: current-master migration chain completed without bootstrap.'
           fi

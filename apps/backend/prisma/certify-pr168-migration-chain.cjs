@@ -99,6 +99,34 @@ async function main() {
         INSERT INTO "users" ("id", "email", "status", "updatedAt")
         VALUES (${`pr168-ci-bootstrap-${randomUUID()}`}, 'mail2dev.kr@gmail.com', 'ACTIVE', CURRENT_TIMESTAMP)
       `;
+
+      const india = await insertPrisma.$queryRaw`
+        SELECT "id" FROM "Country" WHERE "isoCode2" = 'IN'
+      `;
+      const seededRegions = await insertPrisma.$queryRaw`
+        SELECT "id" FROM "Region"
+        WHERE "code" IN ('IN-OR', 'IN-UP')
+      `;
+      assert(
+        india.length === 0 && seededRegions.length === 0,
+        'Fresh CI database unexpectedly contains location master data before synthetic bootstrap.',
+      );
+      const countryId = randomUUID();
+      const odishaId = randomUUID();
+      const uttarPradeshId = randomUUID();
+      // The checked-in Jharsuguda/Ghaziabad migrations require India, Odisha and Uttar Pradesh
+      // master rows that are intentionally absent from the repository's fresh schema. Seed only
+      // these factual identifiers in this disposable database, without source IDs/coordinates.
+      await insertPrisma.$executeRaw`
+        INSERT INTO "Country" ("id", "isoCode2", "isoCode3", "name", "slug")
+        VALUES (${countryId}, 'IN', 'IND', 'India', 'india')
+      `;
+      await insertPrisma.$executeRaw`
+        INSERT INTO "Region" ("id", "countryId", "code", "name", "slug")
+        VALUES
+          (${odishaId}, ${countryId}, 'IN-OR', 'Odisha', 'odisha'),
+          (${uttarPradeshId}, ${countryId}, 'IN-UP', 'Uttar Pradesh', 'uttar-pradesh')
+      `;
     } finally {
       await insertPrisma.$disconnect();
     }
@@ -114,7 +142,7 @@ async function main() {
     );
     bootstrapRetried = true;
     console.log(
-      'PASS: documented missing-primary-admin prerequisite satisfied with a no-credential synthetic CI identity; migration was marked rolled-back, then actually rerun.',
+      'PASS: documented no-credential admin and minimal location-master prerequisites were synthetic-only; the failed migration was marked rolled-back, then the real full chain was rerun.',
     );
   } else {
     console.log(
