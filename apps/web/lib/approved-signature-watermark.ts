@@ -25,13 +25,13 @@ export function approvedSignatureSvg(opacity = 0.3): string {
 export function approvedSignaturePdfCommands(x: number, y: number, width: number): string {
   if (![x, y, width].every(Number.isFinite) || width <= 0) throw new Error("Invalid signature dimensions.");
   const scale = width / SIGNATURE_WIDTH;
-  let output = "q\\n0.51 0.59 0.75 rg\\n";
+  let output = "q\n0.51 0.59 0.75 rg\n";
   for (const contour of SIGNATURE_CONTOURS) {
     contour.forEach(([cx, cy], i) => {
       output += (x + cx * scale).toFixed(2) + " " +
-        (y + (SIGNATURE_HEIGHT - cy) * scale).toFixed(2) + (i === 0 ? " m\\n" : " l\\n");
+        (y + (SIGNATURE_HEIGHT - cy) * scale).toFixed(2) + (i === 0 ? " m\n" : " l\n");
     });
-    output += "h\\n";
+    output += "h\n";
   }
-  return output + "f*\\nQ\\n";
+  return output + "f*\nQ\n";
 }
