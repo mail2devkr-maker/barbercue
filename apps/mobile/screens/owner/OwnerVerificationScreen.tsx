@@ -72,6 +72,10 @@ export default function OwnerVerificationScreen() {
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
+    if (!notes.trim() && evidenceUrls.length === 0) {
+      setError(t.verificationNeedEvidence);
+      return;
+    }
     const parsed = submitVerificationSchema.safeParse({
       evidenceNotes: notes.trim() || undefined,
       evidenceUrls: evidenceUrls.length > 0 ? evidenceUrls : undefined,
