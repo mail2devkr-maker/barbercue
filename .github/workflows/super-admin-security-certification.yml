@@ -173,7 +173,24 @@ jobs:
             fi
             sleep 1
           done
-          test "$backend_ready" = true
+          if [ "$backend_ready" != true ]; then
+            if kill -0 "$backend_pid" 2>/dev/null; then
+              echo 'Backend process remained alive but its loopback health endpoint never became ready.'
+            else
+              echo 'Backend process exited before its loopback health endpoint became ready.'
+            fi
+            if [ -s "$RUNNER_TEMP/pr168-cert/browser-backend.log" ]; then
+              sed -E \
+                -e 's/(OTP[^:]*: )[0-9]{6}/\1[REDACTED]/gI' \
+                -e 's/(Bearer )[A-Za-z0-9._-]+/\1[REDACTED]/gI' \
+                -e 's#(postgres(ql)?://)[^:/@]+:[^@]+@#\1[REDACTED]@#gI' \
+                -e 's/((password|secret|token|credential|authorization|DATABASE_URL|JWT_[A-Z_]+)[=: ]+)[^ ,;]+/\1[REDACTED]/gI' \
+                "$RUNNER_TEMP/pr168-cert/browser-backend.log" | tail -n 80
+            else
+              echo 'Backend startup log was empty.'
+            fi
+            exit 1
+          fi
           (
             cd apps/web
             BACKEND_INTERNAL_URL=http://127.0.0.1:39168 \
