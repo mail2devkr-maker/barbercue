@@ -442,6 +442,14 @@ export interface UiStrings {
   findShopsAction: string;
   popularServicesTitle: string;
   viewAllAction: string;
+  allServicesTitle: string;
+  allServicesNote: string;
+  allServicesSearchPlaceholder: string;
+  allServicesAllCategories: string;
+  allServicesNoMatch: string;
+  allServicesFindShopsFor: string;
+  searchNoShopsForServiceTitle: string;
+  searchNoShopsForServiceHint: string;
   categoryHaircut: string;
   categoryBeardTrim: string;
   categoryFade: string;
@@ -1246,6 +1254,14 @@ const enUi: UiStrings = {
   findShopsAction: 'Find shops',
   popularServicesTitle: 'Popular Services',
   viewAllAction: 'View all',
+  allServicesTitle: 'All Services',
+  allServicesNote: 'Browse everything FastQue supports. Not every shop offers every service — tap one to see the shops that do.',
+  allServicesSearchPlaceholder: 'Filter services…',
+  allServicesAllCategories: 'All',
+  allServicesNoMatch: 'No service matches that name.',
+  allServicesFindShopsFor: 'Find shops offering {service}',
+  searchNoShopsForServiceTitle: 'No shops offer "{service}" here yet',
+  searchNoShopsForServiceHint: 'Try another service, a nearby city, or clear the search to see every shop.',
   categoryHaircut: 'Haircut',
   categoryBeardTrim: 'Beard Trim',
   categoryFade: 'Fade',
@@ -1981,6 +1997,14 @@ const hiUi: UiStrings = {
   findShopsAction: 'दुकानें खोजें',
   popularServicesTitle: 'लोकप्रिय सेवाएं',
   viewAllAction: 'सभी देखें',
+  allServicesTitle: 'सभी सेवाएँ',
+  allServicesNote: 'FastQue पर उपलब्ध सब कुछ देखें। हर दुकान हर सेवा नहीं देती — किसी सेवा पर टैप करके देखें कि कौन-सी दुकानें देती हैं।',
+  allServicesSearchPlaceholder: 'सेवाएँ छाँटें…',
+  allServicesAllCategories: 'सभी',
+  allServicesNoMatch: 'इस नाम की कोई सेवा नहीं मिली।',
+  allServicesFindShopsFor: '{service} देने वाली दुकानें खोजें',
+  searchNoShopsForServiceTitle: 'यहाँ अभी कोई दुकान "{service}" नहीं देती',
+  searchNoShopsForServiceHint: 'कोई दूसरी सेवा या पास का शहर आज़माएँ, या खोज साफ़ करके सभी दुकानें देखें।',
   categoryHaircut: 'हेयरकट',
   categoryBeardTrim: 'बियर्ड ट्रिम',
   categoryFade: 'फेड',

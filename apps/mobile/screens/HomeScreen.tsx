@@ -482,7 +482,7 @@ export default function HomeScreen({ navigation }: Props) {
         <View style={styles.section}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>{t.popularServicesTitle}</Text>
-            <Pressable onPress={() => goSearch()}>
+            <Pressable testID="home-all-services" onPress={() => navigation.navigate('AllServices')} accessibilityRole="button">
               <Text style={styles.viewAllText}>{t.viewAllAction} →</Text>
             </Pressable>
           </View>

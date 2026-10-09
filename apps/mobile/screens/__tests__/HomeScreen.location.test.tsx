@@ -100,6 +100,15 @@ describe('Home location pill (the bug in the physical-device video)', () => {
     expect(anyGpsCall()).toBe(false);
   });
 
+  it('"View all" opens the dedicated All Services catalogue, not the generic shop search', async () => {
+    const r = await mount();
+    await flush(4);
+    await press(r, 'home-all-services');
+    expect(navigation.navigate).toHaveBeenCalledWith('AllServices');
+    expect(navigation.navigate).not.toHaveBeenCalledWith('SearchTab', expect.anything());
+    expect(anyGpsCall()).toBe(false);
+  });
+
   it('mounting Home never touches GPS or permissions on its own', async () => {
     await mount();
     await flush(6);

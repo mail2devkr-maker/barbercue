@@ -21,7 +21,17 @@ export type SearchStackParamList = {
   // a query (and, when the customer's location is already known, coordinates) into this screen's
   // own search state without duplicating the search engine itself — SalonSearchScreen still owns
   // `q`/`nearMe` and the one real request to DISCOVERY_PATHS.salons.
-  SalonSearch: { selectedStyleName?: string; initialQuery?: string; initialLat?: number; initialLng?: number } | undefined;
+  SalonSearch:
+    | {
+        selectedStyleName?: string;
+        initialQuery?: string;
+        // Changes on every deliberate "search for this service" navigation, so tapping the same
+        // service twice (after editing the text box) still re-runs the search.
+        searchNonce?: number;
+        initialLat?: number;
+        initialLng?: number;
+      }
+    | undefined;
   SalonProfile: {
     countryCode: string;
     citySlug: string;
@@ -77,6 +87,7 @@ export type SearchStackParamList = {
 export type HomeStackParamList = {
   Home: undefined;
   StyleAdvisor: undefined;
+  AllServices: undefined;
 };
 
 export type BookingsStackParamList = {

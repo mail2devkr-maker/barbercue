@@ -13,6 +13,7 @@ export interface ReactTestInstance {
 export interface ReactTestRenderer {
   root: ReactTestInstance;
   unmount(): void;
+  update(element: ReactElement): void;
 }
 
 /**
