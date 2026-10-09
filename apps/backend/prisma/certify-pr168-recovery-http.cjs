@@ -784,6 +784,7 @@ async function authenticatedRuntime() {
   );
   const queueJoin = await http('POST', `/public-queue/${standard.token}/join`, {
     token: customerToken,
+    headers: { 'Idempotency-Key': `pr168-queue-${randomId()}` },
     body: {
       serviceId: standard.serviceId,
       contactName: 'Disposable Customer',
