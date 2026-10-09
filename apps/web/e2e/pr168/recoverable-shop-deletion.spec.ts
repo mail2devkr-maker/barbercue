@@ -733,11 +733,18 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       await approvalDialog.accept();
       await approvalClick;
       await approvalGate.intercepted;
+      const approvalInFlight = pendingRow.getByRole("button", {
+        name: "Processing…",
+      });
+      await visible(
+        approvalInFlight,
+        "Approval action switches to its in-flight label",
+      );
       await disabled(
-        approveButton,
+        approvalInFlight,
         "Approval control is disabled while its authoritative request is pending",
       );
-      await approveButton.evaluate((button: HTMLButtonElement) =>
+      await approvalInFlight.evaluate((button: HTMLButtonElement) =>
         button.click(),
       );
       record(
@@ -946,11 +953,18 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       await restoreDialog.accept();
       await restoreClick;
       await restoreGate.intercepted;
+      const restorationInFlight = trashRow.getByRole("button", {
+        name: "Restoring…",
+      });
+      await visible(
+        restorationInFlight,
+        "Restore action switches to its in-flight label",
+      );
       await disabled(
-        restoreButton,
+        restorationInFlight,
         "Restore control is disabled while its authoritative request is pending",
       );
-      await restoreButton.evaluate((button: HTMLButtonElement) =>
+      await restorationInFlight.evaluate((button: HTMLButtonElement) =>
         button.click(),
       );
       record(
