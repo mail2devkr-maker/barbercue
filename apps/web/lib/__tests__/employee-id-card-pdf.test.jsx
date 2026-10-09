@@ -1,4 +1,4 @@
-import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
+import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, drawHrSignaturePlaceholder, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
 
 describe("CRM employee ID card HR draft PDF", () => {
   test("A4 contains two physical ISO ID-1 faces without claiming ID verification", () => {
@@ -47,6 +47,22 @@ describe("CRM employee ID card HR draft PDF", () => {
   ])("rejects invalid photo input before rendering: %p", async (photo) => {
     await expect(buildEmployeeIdCardDraftPdf(input("FQ-FE-12345", photo)))
       .rejects.toThrow("Choose a PNG, JPG or WebP photo up to 5 MB.");
+  });
+
+  test("corrected card keeps exactly one unsigned HR-signature position at the bottom of the back", () => {
+    // Never copy the original staff autograph or draw extra signature marks across the card.
+    const ctx = {
+      fillRect: jest.fn(), measureText: jest.fn((value) => ({ width: value.length * 7 })),
+      fillText: jest.fn(), beginPath: jest.fn(), moveTo: jest.fn(), lineTo: jest.fn(), stroke: jest.fn(),
+    };
+    drawHrSignaturePlaceholder(ctx);
+    expect(ctx.fillRect).toHaveBeenCalledWith(52, 555, 510, 1);
+    expect(ctx.fillText).toHaveBeenCalledTimes(1);
+    expect(ctx.fillText).toHaveBeenCalledWith("Authorised HR signature:", 52, 582);
+    expect(ctx.moveTo).toHaveBeenCalledTimes(1);
+    expect(ctx.moveTo).toHaveBeenCalledWith(284, 583);
+    expect(ctx.lineTo).toHaveBeenCalledWith(558, 583);
+    expect(ctx.stroke).toHaveBeenCalledTimes(1);
   });
 
   test("site QR remains explicitly non-verifying until a real employee verification service exists", () => {
