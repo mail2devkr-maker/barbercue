@@ -32,10 +32,10 @@ export function buildEmployeeIdCardPreview(
   options: CardPreviewOptions,
 ): string {
   if (!/^FQ-FE-\d{5}$/.test(employee.employeeCode)) throw new Error("Unexpected employee code.");
-  if (!options.qrSvg.startsWith("<svg") || !options.qrSvg.includes("</svg>")) {
+  if (!/^<svg\b[^>]*>[\s\S]*<\/svg>$/.test(options.qrSvg.trim()) || /<(script|foreignObject)\b|\son\w+\s*=|javascript:/i.test(options.qrSvg)) {
     throw new Error("A real website QR SVG is required.");
   }
-  if (!/^https:\/\/[^\s\"'<>]+$/.test(options.logoUrl)) {
+  if (!options.logoUrl.endsWith("/brand/fastque-clean-lockup-transparent.png") || !(/^https:\/\//.test(options.logoUrl) || /^http:\/\/localhost(?::\d+)?\//.test(options.logoUrl))) {
     throw new Error("Use an HTTPS URL for the original FastQue logo.");
   }
   const hasPhoto = Boolean(options.photoDataUrl);
@@ -49,13 +49,13 @@ export function buildEmployeeIdCardPreview(
   const photo = hasPhoto
     ? '<img alt="Employee portrait" class="photo" src="' + options.photoDataUrl + '">'
     : '<div class="photo missing">PHOTO<br>REQUIRED</div>';
-  const qr = options.qrSvg.replace(/<svg\b/, '<svg width="94" height="94"');
+  const qr = options.qrSvg;
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>FastQue Employee ID Preview - ' +
     escapeHtml(employee.employeeCode) +
     '</title><style>' +
     '@page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#16172d;background:#f4f5f9;margin:0;padding:12mm}' +
     '.intro{font-size:11px;max-width:170mm;margin:0 auto 5mm;color:#31354d}.intro b{color:#c92e58}' +
-    '.sheet{max-width:170mm;margin:auto;display:flex;gap:8mm;flex-wrap:wrap;align-items:flex-start}.slot{width:85.6mm}' +
+    '.sheet{max-width:185mm;margin:auto;display:flex;gap:8mm;flex-wrap:wrap;align-items:flex-start}.slot{width:85.6mm}' +
     '.caption{font-size:10px;font-weight:700;margin-bottom:2mm;color:#575e70}.card{position:relative;width:85.6mm;height:54mm;overflow:hidden;border:1px solid #c6cad7;border-radius:3mm;background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}' +
     '.bar{height:12mm;background:#101321;position:relative;padding:2mm 3.5mm}.bar img{max-width:35mm;max-height:8mm;object-fit:contain}' +
     '.brandtext{position:absolute;top:7mm;right:3mm;color:#fff;font-size:6px;letter-spacing:1px}.accent{height:1.3mm;background:linear-gradient(90deg,#ed3a68,#8147cc,#337ad8)}' +
