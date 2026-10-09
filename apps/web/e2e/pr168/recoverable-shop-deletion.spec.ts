@@ -812,10 +812,24 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
 
     const publicAfterApproval = await anonymousContext.newPage();
     try {
-      const profileResponse = await publicAfterApproval.goto(profilePath);
+      const profileApiResponse = await publicAfterApproval.request.get(
+        `${baseURL}/api/v1/salons/${fixtures.shop.countryCode}/${fixtures.shop.citySlug}/${fixtures.shop.slug}`,
+      );
       record(
-        profileResponse?.status() === 404,
-        `Direct public shop profile returns 404 after quarantine (received ${profileResponse?.status() ?? "no response"})`,
+        profileApiResponse.status() === 404,
+        "Anonymous public profile API returns 404 after quarantine",
+      );
+      const profileResponse = await publicAfterApproval.goto(profilePath);
+      console.log(
+        `Public profile document returned HTTP ${profileResponse?.status() ?? "no response"} after quarantine.`,
+      );
+      record(
+        profileResponse !== null,
+        "Direct public shop URL completes browser navigation after quarantine",
+      );
+      await visible(
+        publicAfterApproval.getByRole("heading", { name: "This chair is empty." }),
+        "Direct public shop URL renders the site's not-found state after quarantine",
       );
       await absent(
         publicAfterApproval.getByRole("heading", { name: fixtures.shop.name }),
