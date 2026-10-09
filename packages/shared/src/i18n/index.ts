@@ -1096,6 +1096,7 @@ export interface UiStrings {
   distanceUnavailable: string;
   distanceFromCityCentreNote: string;
   searchOrderLoadedOnlyNote: string;
+  distanceFilterNeedsCityCentre: string;
   sortLabel: string;
   sortNearestFirst: string;
   sortNameAZ: string;
@@ -1824,6 +1825,7 @@ const enUi: UiStrings = {
   distanceUnavailable: 'Distance unavailable',
   distanceFromCityCentreNote: 'Distances are measured from the city centre, not from your location.',
   searchOrderLoadedOnlyNote: 'Sorted by distance among the shops loaded so far only. Scroll to load more; full nearest-first ordering needs a server update.',
+  distanceFilterNeedsCityCentre: "Distances aren't available for this city yet. Choose Use my current location to filter by distance.",
   sortLabel: 'Sort',
   sortNearestFirst: 'Nearest first',
   sortNameAZ: 'Name (A–Z)',
@@ -2552,6 +2554,7 @@ const hiUi: UiStrings = {
   distanceUnavailable: 'दूरी उपलब्ध नहीं',
   distanceFromCityCentreNote: 'दूरी शहर के केंद्र से मापी गई है, आपके स्थान से नहीं।',
   searchOrderLoadedOnlyNote: 'दूरी के अनुसार क्रम केवल अब तक लोड हुई दुकानों में है। और देखने के लिए स्क्रॉल करें; पूरा सबसे-पास-पहले क्रम सर्वर अपडेट के बाद मिलेगा।',
+  distanceFilterNeedsCityCentre: 'इस शहर के लिए अभी दूरी उपलब्ध नहीं है। दूरी से फ़िल्टर करने के लिए मेरा वर्तमान स्थान चुनें।',
   sortLabel: 'क्रम',
   sortNearestFirst: 'सबसे पास पहले',
   sortNameAZ: 'नाम (A–Z)',

@@ -1,4 +1,8 @@
 /// <reference types="jest" />
+
+// The first test in a file pays for loading React Native and the screen cold; under a loaded CI/parallel
+// run that can exceed jest's 5s default, so give these render tests a realistic ceiling.
+jest.setTimeout(30_000);
 import { act, createElement } from 'react';
 import { uiStringsFor } from '@barbercue/shared';
 import { DELHI, HAJIPUR, LONDON_CA, LONDON_GB, PATNA } from '../../../lib/location/__fixtures__/cities';

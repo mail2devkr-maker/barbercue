@@ -409,8 +409,9 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   // the customer is sent to choose one instead of a silent permission request.
   function selectRadius(value: number | null) {
     if (value !== null && !origin) {
-      setError(t.distanceFilterNeedsLocation);
-      if (!selection) openSelector();
+      // A chosen city may simply have no stored centre: say that, instead of asking for a city again.
+      setError(selection ? t.distanceFilterNeedsCityCentre : t.distanceFilterNeedsLocation);
+      openSelector();
       return;
     }
     setError(null);
@@ -565,7 +566,11 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           closeLabel={t.closeFilterMenu}
         />
       </View>
-      {!origin && <Text style={styles.filterHint}>{t.distanceFilterNeedsLocation}</Text>}
+      {!origin && (
+        <Text testID="distance-hint" style={styles.filterHint}>
+          {selection ? t.distanceFilterNeedsCityCentre : t.distanceFilterNeedsLocation}
+        </Text>
+      )}
 
       {origin && (
         <View style={styles.sortRow}>

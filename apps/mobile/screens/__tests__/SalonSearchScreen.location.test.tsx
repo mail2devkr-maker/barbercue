@@ -1,4 +1,8 @@
 /// <reference types="jest" />
+
+// The first test in a file pays for loading React Native and the screen cold; under a loaded CI/parallel
+// run that can exceed jest's 5s default, so give these render tests a realistic ceiling.
+jest.setTimeout(30_000);
 import { act, createElement } from 'react';
 import { FlatList } from 'react-native';
 import { uiStringsFor } from '@barbercue/shared';
@@ -162,6 +166,20 @@ describe('Search screen: manual city mode (no GPS)', () => {
     expect(allText(r)).toContain('Near Salon');
     expect(allText(r)).not.toContain('from Smallville centre');
     expect(allText(r)).not.toContain(t.distanceFromCityCentreNote);
+  });
+
+  it('a chosen city without a stored centre explains that instead of asking for a city again', async () => {
+    seed(cityChoice(NO_CENTRE_CITY));
+    const r = await mount();
+    await flush(6);
+    const hint = byTestId(r, 'distance-hint')[0];
+    expect(hint).toBeDefined();
+    expect(allText(r)).toContain(t.distanceFilterNeedsCityCentre);
+    expect(allText(r)).not.toContain(t.distanceFilterNeedsLocation);
+    const dropdown = r.root.findAll((n: { type: unknown; props: Record<string, unknown> }) => n.type === FilterDropdown && n.props.label === t.distanceFilterLabel)[0];
+    await act(async () => dropdown.props.onSelect('2'));
+    expect(ctx.selectorOpen).toBe(true);
+    expect(allText(r)).toContain(t.distanceFilterNeedsCityCentre);
   });
 
   it('an explicit radius is sent only after the customer picks one', async () => {
