@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   ADMIN_PATHS,
   UserStatus,
@@ -8,9 +9,13 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../lib/api";
 import { Button, LinkButton } from "../../../../../components/ui/Button";
+import { useAuth } from "../../../../../lib/auth-context";
+import { buildEmployeeIdCardPreview, mayPreviewCompanyIdCard } from "../../../../../lib/employee-id-card";
 import styles from "../admin.module.css";
 
 export default function AdminEmployeesPage() {
+  const { user } = useAuth();
+  const [cardPhotos, setCardPhotos] = useState<Record<string, string>>({});
   const [employees, setEmployees] = useState<AdminEmployeeDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -120,6 +125,55 @@ export default function AdminEmployeesPage() {
       setError(requestError instanceof ApiError ? requestError.message : "Could not create the reserved employee ID.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function onCardPortrait(employee: AdminEmployeeDto, file: File | undefined) {
+    setError(null);
+    if (!file) {
+      setCardPhotos(current => {
+        const next = { ...current };
+        delete next[employee.id];
+        return next;
+      });
+      return;
+    }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setError("ID portrait must be a PNG, JPEG, or WebP under 2 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setCardPhotos(current => ({ ...current, [employee.id]: reader.result as string }));
+      }
+    };
+    reader.onerror = () => setError("Could not read the employee portrait.");
+    reader.readAsDataURL(file);
+  }
+
+  function previewCompanyIdCard(employee: AdminEmployeeDto) {
+    if (!mayPreviewCompanyIdCard(user?.roles ?? [], employee.employeeCode)) {
+      setError("You are not authorized to preview this company ID card.");
+      return;
+    }
+    try {
+      const svg = document.getElementById("fastque-company-id-qr-" + employee.id)?.outerHTML;
+      if (!svg) throw new Error("Website QR is not ready; reload the page.");
+      const html = buildEmployeeIdCardPreview(employee, {
+        qrSvg: svg,
+        photoDataUrl: cardPhotos[employee.id],
+        logoUrl: window.location.origin + "/brand/fastque-clean-lockup-transparent.png",
+      });
+      const popup = window.open("", "_blank");
+      if (!popup) throw new Error("Allow popups to preview the employee ID card.");
+      popup.opener = null;
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
+      setSuccess("Draft company ID preview opened. Check portrait, QR and print at 100% size. This is not an issued ID.");
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : "Could not create the ID preview.");
     }
   }
 
@@ -267,7 +321,7 @@ export default function AdminEmployeesPage() {
           <div className={styles.tableWrap}>
             <table>
               <thead>
-                <tr><th>Employee</th><th>Territory</th><th>Status</th><th>Joined</th><th>Password reset</th><th>Access</th></tr>
+                <tr><th>Employee</th><th>Territory</th><th>Status</th><th>Joined</th><th>Password reset</th><th>Access</th><th>ID card</th></tr>
               </thead>
               <tbody>
                 {employees.map((employee) => (
@@ -296,6 +350,21 @@ export default function AdminEmployeesPage() {
                       <Button type="button" variant="outline" disabled={busyId === employee.id} onClick={() => void toggleStatus(employee)}>
                         {employee.status === UserStatus.ACTIVE ? "Deactivate" : "Reactivate"}
                       </Button>
+                    </td>
+                    <td>
+                      {mayPreviewCompanyIdCard(user?.roles ?? [], employee.employeeCode) ? (
+                        <div style={{ display: "grid", gap: 6, minWidth: 140 }}>
+                          <label style={{ fontSize: 11 }}>Portrait (optional for draft)
+                            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => void onCardPortrait(employee, event.target.files?.[0])} />
+                          </label>
+                          <span aria-hidden="true" style={{ position: "absolute", left: "-9999px" }}>
+                            <QRCodeSVG id={"fastque-company-id-qr-" + employee.id} value="https://fastque.com" size={128} level="H" />
+                          </span>
+                          <Button type="button" variant="outline" onClick={() => previewCompanyIdCard(employee)}>
+                            Preview ID card (DRAFT)
+                          </Button>
+                        </div>
+                      ) : <span>Restricted</span>}
                     </td>
                   </tr>
                 ))}
