@@ -266,8 +266,24 @@ export function cardImagesToA4Pdf(front: Uint8Array, back: Uint8Array): Uint8Arr
   const x = ((595 - CARD_PDF_WIDTH) / 2).toFixed(3);
   const w = CARD_PDF_WIDTH.toFixed(3);
   const h = CARD_PDF_HEIGHT.toFixed(3);
+  // Print-safe cut marks match the corrected original Shambhoo Yogi A4 sheet.
+  const cutMarks = [600, 360].flatMap((bottom) => {
+    const left = Number(x);
+    const right = left + Number(w);
+    const top = bottom + Number(h);
+    return [bottom, top].flatMap((y) => [
+      (left - 12).toFixed(3) + " " + y.toFixed(3) + " m " + (left - 3).toFixed(3) + " " + y.toFixed(3) + " l S",
+      (right + 3).toFixed(3) + " " + y.toFixed(3) + " m " + (right + 12).toFixed(3) + " " + y.toFixed(3) + " l S",
+    ]).concat([
+      left.toFixed(3) + " " + (bottom - 12).toFixed(3) + " m " + left.toFixed(3) + " " + (bottom - 3).toFixed(3) + " l S",
+      right.toFixed(3) + " " + (bottom - 12).toFixed(3) + " m " + right.toFixed(3) + " " + (bottom - 3).toFixed(3) + " l S",
+      left.toFixed(3) + " " + (top + 3).toFixed(3) + " m " + left.toFixed(3) + " " + (top + 12).toFixed(3) + " l S",
+      right.toFixed(3) + " " + (top + 3).toFixed(3) + " m " + right.toFixed(3) + " " + (top + 12).toFixed(3) + " l S",
+    ]);
+  }).join("\n");
   const commands = [
-    "BT /F1 15 Tf 60 792 Td (FastQue Employee ID Card) Tj ET",
+    "q 0.4 w 0.6 G\n" + cutMarks + "\nQ",
+    "BT /F1 16 Tf 176 792 Td (FastQue Employee ID Card) Tj ET",
     "BT /F1 9 Tf 60 771 Td (Print at 100 percent / Actual Size. Do not fit to page.) Tj ET",
     "BT /F1 12 Tf 60 770 Td (FRONT) Tj ET",
     "q " + w + " 0 0 " + h + " " + x + " 600 cm /Front Do Q",
