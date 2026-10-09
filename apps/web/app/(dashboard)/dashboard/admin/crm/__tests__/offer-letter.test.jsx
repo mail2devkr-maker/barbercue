@@ -121,4 +121,18 @@ describe("FastQue CRM offer letter helpers", () => {
     expect(drawnText).toContain("not an additional guaranteed payment");
     expect(pdf).not.toContain("up to approximately INR 20,000 per month");
   });
+  test("stamps the approved D K Pandey watermark on future offers without disturbing pay policy", () => {
+    const pdf = new TextDecoder().decode(buildOfferLetterPdf({
+      candidateName: "Shambhoo Yogi",
+      role: "Field Executive",
+      baseSalary: 20000,
+      salaryBasis: "monthly",
+    }));
+    expect(pdf).toContain("0.51 0.59 0.75 rg");
+    expect(pdf).toContain("Authorized Signatory");
+    expect(pdf).toContain("Expected Performance Incentive");
+    expect(pdf).toContain("5,000");
+    expect(pdf).not.toContain("COMPANY_SIGNATURE_CONTOURS");
+  });
+
 });
