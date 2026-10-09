@@ -218,8 +218,13 @@ function drawBack(
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(56, 565); ctx.lineTo(641, 565); ctx.stroke();
   text(ctx, "Authorized HR signature:", 56, 586, 290, 18, 500, "#e9dce5");
-  ctx.drawImage(signature, 332, 515, 221, 84);
+  drawApprovedHrSignature(ctx, signature);
   return canvas;
+}
+
+/** One deliberate approved signature print position, on the back only. */
+export function drawApprovedHrSignature(ctx: CanvasRenderingContext2D, signature: HTMLImageElement): void {
+  ctx.drawImage(signature, 332, 515, 221, 84);
 }
 
 /** Loads the owner-approved D K Pandey artwork, tint-matched to the corrected premium master. */
@@ -264,7 +269,7 @@ export function cardImagesToA4Pdf(front: Uint8Array, back: Uint8Array): Uint8Arr
   const commands = [
     "BT /F1 15 Tf 60 792 Td (FastQue Employee ID Card) Tj ET",
     "BT /F1 9 Tf 60 771 Td (Print at 100 percent / Actual Size. Do not fit to page.) Tj ET",
-    "BT /F1 12 Tf 60 758 Td (FRONT) Tj ET",
+    "BT /F1 12 Tf 60 770 Td (FRONT) Tj ET",
     "q " + w + " 0 0 " + h + " " + x + " 600 cm /Front Do Q",
     "BT /F1 12 Tf 60 533 Td (BACK) Tj ET",
     "q " + w + " 0 0 " + h + " " + x + " 360 cm /Back Do Q",
