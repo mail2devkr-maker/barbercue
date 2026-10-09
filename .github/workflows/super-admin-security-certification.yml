@@ -160,14 +160,14 @@ jobs:
             JWT_ACCESS_SECRET="$jwt_access_secret" \
             TOTP_ENCRYPTION_KEY="$TOTP_ENCRYPTION_KEY" \
             FASTQUE_TEST_CLOCK_FILE="$PR168_TEST_CLOCK_FILE" \
-            nohup node -r apps/backend/prisma/pr168-controlled-clock.cjs apps/backend/dist/main.js \
+            nohup node -r ./apps/backend/prisma/pr168-controlled-clock.cjs apps/backend/dist/main.js \
             > "$RUNNER_TEMP/pr168-cert/browser-backend.log" 2>&1 &
           backend_pid=$!
           printf '%s' "$backend_pid" > "$RUNNER_TEMP/pr168-cert/backend.pid"
           chmod 600 "$RUNNER_TEMP/pr168-cert/backend.pid"
           backend_ready=false
           for attempt in {1..60}; do
-            if curl --silent --show-error --fail http://127.0.0.1:39168/api/v1/health >/dev/null; then
+            if curl --silent --fail http://127.0.0.1:39168/api/v1/health >/dev/null; then
               backend_ready=true
               break
             fi
@@ -203,7 +203,7 @@ jobs:
           )
           web_ready=false
           for attempt in {1..60}; do
-            if curl --silent --show-error --fail http://127.0.0.1:30168/admin/login >/dev/null; then
+            if curl --silent --fail http://127.0.0.1:30168/admin/login >/dev/null; then
               web_ready=true
               break
             fi
@@ -211,7 +211,7 @@ jobs:
           done
           test "$web_ready" = true
           # Prove the built web service reaches the same disposable backend via its /api/v1 proxy.
-          curl --silent --show-error --fail http://127.0.0.1:30168/api/v1/health >/dev/null
+          curl --silent --fail http://127.0.0.1:30168/api/v1/health >/dev/null
           echo 'PASS: loopback backend and production Next.js server are healthy; same-origin /api/v1 proxy reaches the isolated backend.'
       - name: Run real Chromium recovery and RBAC browser certification
         run: npm run test:e2e:pr168 --workspace=@barbercue/web
