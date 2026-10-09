@@ -7,7 +7,7 @@ import { approvedSignatureSvg } from "./approved-signature-watermark";
  * Special IDs 00000-00100 are never previewable from this UI except by PLATFORM_ADMIN.
  */
 export function mayPreviewCompanyIdCard(roles: Role[], employeeCode: string): boolean {
-  const match = /^FQ-FE-(\\d{5})$/.exec(employeeCode);
+  const match = /^FQ-FE-(\d{5})$/.exec(employeeCode);
   if (!match) return false;
   const number = Number(match[1]);
   const authorized = roles.some(role =>
@@ -31,15 +31,15 @@ export function buildEmployeeIdCardPreview(
   employee: Pick<AdminEmployeeDto, "fullName" | "employeeCode" | "territory" | "joinedAt">,
   options: CardPreviewOptions,
 ): string {
-  if (!/^FQ-FE-\\d{5}$/.test(employee.employeeCode)) throw new Error("Unexpected employee code.");
+  if (!/^FQ-FE-\d{5}$/.test(employee.employeeCode)) throw new Error("Unexpected employee code.");
   if (!options.qrSvg.startsWith("<svg") || !options.qrSvg.includes("</svg>")) {
     throw new Error("A real website QR SVG is required.");
   }
-  if (!/^https:\\/\\/[^\s\"'<>]+$/.test(options.logoUrl)) {
+  if (!/^https:\/\/[^\s\"'<>]+$/.test(options.logoUrl)) {
     throw new Error("Use an HTTPS URL for the original FastQue logo.");
   }
   const hasPhoto = Boolean(options.photoDataUrl);
-  if (hasPhoto && !/^data:image\\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(options.photoDataUrl!)) {
+  if (hasPhoto && !/^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(options.photoDataUrl!)) {
     throw new Error("Only embedded PNG, JPEG, or WebP employee portraits are accepted.");
   }
   const joinedAt = new Date(employee.joinedAt);
@@ -49,7 +49,7 @@ export function buildEmployeeIdCardPreview(
   const photo = hasPhoto
     ? '<img alt="Employee portrait" class="photo" src="' + options.photoDataUrl + '">'
     : '<div class="photo missing">PHOTO<br>REQUIRED</div>';
-  const qr = options.qrSvg.replace(/<svg\\b/, '<svg width="94" height="94"');
+  const qr = options.qrSvg.replace(/<svg\b/, '<svg width="94" height="94"');
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>FastQue Employee ID Preview - ' +
     escapeHtml(employee.employeeCode) +
     '</title><style>' +
