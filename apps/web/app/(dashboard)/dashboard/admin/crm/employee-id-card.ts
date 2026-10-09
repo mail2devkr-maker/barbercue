@@ -271,7 +271,7 @@ export function cardImagesToA4Pdf(front: Uint8Array, back: Uint8Array): Uint8Arr
 }
 
 export async function buildEmployeeIdCardDraftPdf(input: EmployeeCardDraftInput): Promise<Uint8Array> {
-  if (!/^FQ-FE-\d{5,}$/.test(input.employeeCode) || input.fullName.trim().length < 2) {
+  if (!/^FQ-FE-\d{5,}$/.test(input.employeeCode) || /\s/.test(input.employeeCode) || input.fullName.trim().length < 2) {
     throw new Error("Select a valid registered employee.");
   }
   if (!["image/png", "image/jpeg", "image/webp"].includes(input.photo.type) ||
