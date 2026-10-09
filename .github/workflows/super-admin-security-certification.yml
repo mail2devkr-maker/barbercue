@@ -89,6 +89,9 @@ jobs:
           mkdir -m 700 -p "$RUNNER_TEMP/pr168-cert"
           printf '%s' '1791547200000' > "$RUNNER_TEMP/pr168-cert/clock"
           chmod 600 "$RUNNER_TEMP/pr168-cert/clock"
+          export PR168_TEST_CLOCK_FILE="$RUNNER_TEMP/pr168-cert/clock"
+          export PR168_FIXTURE_MANIFEST="$RUNNER_TEMP/pr168-cert/fixtures.json"
+          export PR168_HTTP_PORT=39168
           echo "PR168_TEST_CLOCK_FILE=$RUNNER_TEMP/pr168-cert/clock" >> "$GITHUB_ENV"
           echo "PR168_FIXTURE_MANIFEST=$RUNNER_TEMP/pr168-cert/fixtures.json" >> "$GITHUB_ENV"
           echo 'PR168_HTTP_PORT=39168' >> "$GITHUB_ENV"
