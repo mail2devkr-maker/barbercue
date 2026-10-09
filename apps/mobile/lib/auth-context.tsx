@@ -66,7 +66,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // fetchMe never touches state itself — callers apply the result, mirroring apps/web/lib/auth-context.tsx.
   const fetchMe = useCallback(async (): Promise<MeResponse | null> => {
-    const persisted = await getPersistedRefreshToken();
+    // A Keychain/SecureStore read can fail on a simulator, after an OS security-state change,
+    // or when the native credential service is temporarily unavailable. Session restoration must
+    // fail closed to signed-out instead of leaving the whole app stuck forever in the loading gate.
+    const persisted = await getPersistedRefreshToken().catch(() => null);
     if (!persisted) return null; // skip a doomed network round-trip when there's nothing to restore
     return apiFetch<MeResponse>(authPath(AUTH_PATHS.me)).catch(() => null);
   }, []);

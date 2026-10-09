@@ -23,17 +23,18 @@ export class GoogleAuthService {
   private readonly client = new OAuth2Client();
 
   async verifyIdToken(idToken: string): Promise<VerifiedGoogleIdentity> {
-    // Both the web and Android OAuth clients are first-party BarberCue clients sharing this one
-    // backend — Google's own guidance for a multi-platform app is to accept either as a valid
-    // audience, not to run two separate verifiers.
+    // Web, Android, and iOS OAuth clients are first-party FastQue clients sharing this one
+    // backend. Accept every configured first-party audience so native iOS tokens are never
+    // rejected solely because they were minted for the iOS OAuth client.
     const audiences = [
       process.env.GOOGLE_WEB_CLIENT_ID,
       process.env.GOOGLE_ANDROID_CLIENT_ID,
+      process.env.GOOGLE_IOS_CLIENT_ID,
     ].filter((v): v is string => Boolean(v));
 
     if (audiences.length === 0) {
       this.logger.error(
-        'Neither GOOGLE_WEB_CLIENT_ID nor GOOGLE_ANDROID_CLIENT_ID is configured; cannot verify Google sign-in.',
+        'No Google OAuth client ID is configured; cannot verify Google sign-in.',
       );
       throw this.invalidToken();
     }
