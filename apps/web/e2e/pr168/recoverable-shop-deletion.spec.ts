@@ -1019,9 +1019,13 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       trashSection.getByRole("row").filter({ hasText: fixtures.shop.name }),
       "Restored shop leaves recovery Trash",
     );
+    const restoredAuditRow = adminPage
+      .getByRole("row")
+      .filter({ hasText: fixtures.shop.id })
+      .filter({ has: adminPage.getByText("SHOP_DELETE_RESTORED") });
     await visible(
-      adminPage.getByText("SHOP_DELETE_RESTORED"),
-      "Audit history records restoration in the browser view",
+      restoredAuditRow.first().getByText("SHOP_DELETE_RESTORED"),
+      "Audit history records restoration for this shop in the browser view",
     );
 
     const restoredPublicContext = await browser.newContext({ baseURL });
