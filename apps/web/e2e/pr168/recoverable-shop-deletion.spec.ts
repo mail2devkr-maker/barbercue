@@ -93,9 +93,17 @@ async function clickWithDialog(
   page: Page,
   locator: Locator,
 ): Promise<{ dialog: Dialog; clickPromise: Promise<void> }> {
-  const dialogPromise = page.waitForEvent("dialog");
+  const dialogPromise = page.waitForEvent("dialog", { timeout: 5_000 });
   const clickPromise = locator.click();
-  return { dialog: await dialogPromise, clickPromise };
+  const dialog = await Promise.race([
+    dialogPromise,
+    clickPromise.then(() => {
+      throw new Error(
+        "The clicked control completed without opening a dialog.",
+      );
+    }),
+  ]);
+  return { dialog, clickPromise };
 }
 
 async function visible(locator: Locator, message: string) {
@@ -678,6 +686,10 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     await pendingRow
       .getByLabel("Current Super Admin authenticator code")
       .fill(await totpAt(fixtures.accounts.superAdmin.secret, cancelEpoch));
+    await expect(
+      approveButton,
+      "Approval control is enabled after a valid six-digit TOTP is entered",
+    ).toBeEnabled();
     const { dialog: cancelConfirm, clickPromise: cancelApprovalClick } =
       await clickWithDialog(adminPage, approveButton);
     await cancelConfirm.dismiss();
