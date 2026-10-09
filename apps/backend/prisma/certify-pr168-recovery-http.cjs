@@ -671,7 +671,7 @@ async function authenticatedRuntime() {
   const conflictedRace = race.filter((response) => response.status === 409);
   assert(
     successfulRace.length === 1 && conflictedRace.length === 1,
-    'Concurrent approval did not produce exactly one success and one HTTP 409 conflict.',
+    `Concurrent approval did not produce exactly one success and one HTTP 409 conflict (received statuses ${race.map((response) => response.status).join(', ')}).`,
   );
 
   const deferredRaceRequestId = await requestDeletion(
