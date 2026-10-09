@@ -13,6 +13,7 @@ const manifestFile = process.env.PR168_FIXTURE_MANIFEST;
 const port = Number(process.env.PR168_HTTP_PORT || 39168);
 const baseUrl = `http://127.0.0.1:${port}/api/v1`;
 const baseTime = Date.UTC(2026, 9, 9, 12, 0, 0);
+const jwtAccessSecret = randomBytes(64).toString('hex');
 const randomId = () => randomUUID();
 const prisma = new PrismaClient();
 const cryptoService = new CryptoService();
@@ -424,7 +425,7 @@ async function startServer() {
     NODE_ENV: 'test',
     FASTQUE_LISTEN_HOST: '127.0.0.1',
     PORT: String(port),
-    JWT_ACCESS_SECRET: randomBytes(64).toString('hex'),
+    JWT_ACCESS_SECRET: jwtAccessSecret,
     TOTP_ENCRYPTION_KEY: process.env.TOTP_ENCRYPTION_KEY,
     FASTQUE_TEST_CLOCK_FILE: clockFile,
   };
@@ -653,10 +654,13 @@ async function authenticatedRuntime() {
   );
 
   // Earlier negative/security cases deliberately exercise this endpoint's five-per-minute
-  // throttle. Move the disposable server clock beyond that window before racing the two valid
-  // approvals, so the second request reaches the transaction instead of being rejected at HTTP
-  // throttling. The production limiter remains enabled throughout certification.
-  const concurrentApprovalTime = baseTime + 125_000;
+  // throttle. Its in-memory expiry timer uses real elapsed time, so restart only the isolated
+  // loopback backend (not its disposable database) before the race. Keep the synthetic signing
+  // key stable so these already-issued test sessions remain valid; production throttling stays on.
+  await stopServer();
+  serverLogs.length = 0;
+  await startServer();
+  const concurrentApprovalTime = baseTime + 80_000;
   await setTime(concurrentApprovalTime);
   const adminCode = await totpAt(superAdmin.secret, concurrentApprovalTime);
   const race = await Promise.all([
@@ -688,7 +692,7 @@ async function authenticatedRuntime() {
     deferredRaceRequestId,
     superToken,
     superAdmin.secret,
-    baseTime + 130_000,
+    baseTime + 100_000,
   );
   assert(
     deferredRaceApproval.status >= 400,
@@ -839,7 +843,7 @@ async function authenticatedRuntime() {
     standard,
     superToken,
     superAdmin.secret,
-    baseTime + 150_000,
+    baseTime + 120_000,
   );
   assertStatus(
     regularRestore,
