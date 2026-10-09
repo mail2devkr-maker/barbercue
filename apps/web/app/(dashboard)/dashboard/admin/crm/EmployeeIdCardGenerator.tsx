@@ -7,11 +7,7 @@ import { ApiError, apiFetch } from "../../../../../lib/api";
 import styles from "../admin.module.css";
 import { buildEmployeeIdCardDraftPdf, OFFICIAL_SITE_QR_URL } from "./employee-id-card";
 
-/**
- * HR-only UI: caller's parent CRM page gates this component with canGenerateOfferLetter().
- * The backend still enforces the authoritative HR/Co-Founder/Platform Admin roles.
- * Generates non-issued drafts locally, never stores photos or creates special IDs.
- */
+/** HR/Co-Founder/Platform Admin-only official ID-card generator for registered active employees. */
 export default function EmployeeIdCardGenerator() {
   const [employees, setEmployees] = useState<AdminEmployeeDto[]>([]);
   const [employeeId, setEmployeeId] = useState("");
@@ -74,10 +70,17 @@ export default function EmployeeIdCardGenerator() {
     }
     setBusy(true);
     try {
+      // Avoid issuing with a stale inactive/renamed employee selection.
+      const liveRows = await apiFetch<AdminEmployeeDto[]>(ADMIN_PATHS.admin + "/" + ADMIN_PATHS.employees);
+      const latest = liveRows.find((row) => row.id === selected.id);
+      if (!latest || latest.status !== UserStatus.ACTIVE || latest.employeeCode !== selected.employeeCode ||
+          latest.fullName !== selected.fullName || latest.joinedAt !== selected.joinedAt) {
+        throw new Error("Employee record changed or is no longer active. Refresh and select again.");
+      }
       const bytes = await buildEmployeeIdCardDraftPdf({
-        employeeCode: selected.employeeCode,
-        fullName: selected.fullName,
-        joinedAt: selected.joinedAt,
+        employeeCode: latest.employeeCode,
+        fullName: latest.fullName,
+        joinedAt: latest.joinedAt,
         territory: territory.trim().slice(0, 160),
         designation: designation.trim().slice(0, 100) || "Field Executive",
         photo,
@@ -88,12 +91,12 @@ export default function EmployeeIdCardGenerator() {
       const url = URL.createObjectURL(new Blob([buffer], { type: "application/pdf" }));
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "FastQue-Employee-ID-DRAFT-" + selected.employeeCode + ".pdf";
+      anchor.download = "FastQue-Employee-ID-" + selected.employeeCode + ".pdf";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 5_000);
-      setStatus("A4 front/back HR draft downloaded. Print at 100% actual size; this is not an issued/verified card.");
+      setStatus("Official FastQue company ID card downloaded. Print at 100% actual size. QR opens only fastque.com.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not generate ID card draft.");
     } finally {
@@ -108,7 +111,7 @@ export default function EmployeeIdCardGenerator() {
           <p className={styles.eyebrow}>HR automation</p>
           <h2 id="company-id-card-title">Company ID card generator</h2>
         </div>
-        <span>Employee + photo → A4 PDF draft</span>
+        <span>Employee + photo → official A4 ID card</span>
       </div>
       <form className={styles.offerLetterForm} onSubmit={(event) => void generate(event)}>
         <div className={styles.offerLetterGrid}>
@@ -151,7 +154,7 @@ export default function EmployeeIdCardGenerator() {
         </label>
         <div className={styles.offerLetterActions}>
           <button className={styles.offerLetterButton} type="submit" disabled={busy || loading || !selected}>
-            {busy ? "Generating A4 PDF..." : "Generate company ID card PDF draft"}
+            {busy ? "Generating A4 PDF..." : "Generate official company ID card PDF"}
           </button>
           <p className={styles.offerPrivacy}>
             Uses the existing FastQue front/back card style at standard 85.6 × 54 mm per side.
@@ -159,9 +162,9 @@ export default function EmployeeIdCardGenerator() {
           </p>
         </div>
         <p className={styles.offerPrivacy}>
-          Security: Downloaded cards are marked <strong>HR DRAFT</strong> pending authorised HR review/signature.
-          The QR opens the official website only, <strong>not employee identity verification</strong>.
-          No card issuance or permanent photo storage occurs here.
+          An approved HR signature is printed once, at the bottom of the back.
+          The QR opens <strong>fastque.com</strong> only and does not verify employee status.
+          Generate cards only for authorized, active personnel. Photos are processed in this browser and not permanently stored.
         </p>
         {status && <p className={styles.offerStatus} role="status">{status}</p>}
       </form>
