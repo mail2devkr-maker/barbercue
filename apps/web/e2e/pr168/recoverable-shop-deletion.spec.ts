@@ -1211,9 +1211,16 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       "Sales Admin has no Super Admin security navigation",
     );
     await salesPage.goto("/dashboard/admin/security");
-    await visible(
-      salesPage.getByRole("heading", { name: "Super Admin only" }),
-      "Sales Admin direct navigation is denied by the protected security page",
+    await exactURL(
+      salesPage,
+      /\/dashboard\/admin$/,
+      "Sales Admin direct security navigation is redirected by the admin route boundary",
+    );
+    await absent(
+      salesPage.getByRole("heading", {
+        name: "Security & Audit Control Center",
+      }),
+      "Sales Admin cannot render Super Admin security data",
     );
     const salesQueueStatus = await protectedRequestStatus(
       salesPage,
