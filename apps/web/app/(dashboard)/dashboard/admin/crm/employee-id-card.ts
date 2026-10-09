@@ -1,7 +1,6 @@
-/**
- * Browser-only, printable ID-card DRAFT. No issuance, personnel database mutation,
- * or claim of online identity verification is made by this renderer.
- */
+import { approvedSignatureSvg } from "./id-card-authorized-signature";
+
+/** Authorized HR-only browser PDF generation from existing active employee records. */
 export type EmployeeCardDraftInput = {
   employeeCode: string;
   fullName: string;
@@ -56,32 +55,52 @@ function roundedRect(
   ctx.roundRect(x, y, width, height, radius);
 }
 
-function cardBase(ctx: CanvasRenderingContext2D): void {
-  const background = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
-  background.addColorStop(0, "#130b1d");
-  background.addColorStop(0.56, "#241020");
-  background.addColorStop(1, "#100c18");
-  ctx.fillStyle = background;
+function cardBase(ctx: CanvasRenderingContext2D, back = false): void {
+  const bg = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
+  bg.addColorStop(0, "#190917");
+  bg.addColorStop(0.58, "#0e0814");
+  bg.addColorStop(1, "#07070e");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
 
-  ctx.strokeStyle = "rgba(245,92,133,.17)";
+  // Corrected Shambhoo Yogi master: one sweeping bronze arc, not concentric circles.
+  ctx.strokeStyle = "rgba(162,80,29,.58)";
   ctx.lineWidth = 3;
-  for (let index = 0; index < 7; index += 1) {
-    ctx.beginPath();
-    ctx.ellipse(835, 310, 190 + index * 37, 250 + index * 35, -.4, 0, Math.PI * 2);
-    ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(back ? 395 : 490, -18);
+  ctx.bezierCurveTo(back ? 385 : 440, 236, 602, 485, 1082, 457);
+  ctx.stroke();
+  if (back) {
+    ctx.strokeStyle = "rgba(216,30,121,.43)";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-20, 522);
+    ctx.bezierCurveTo(158, 576, 318, 526, 503, 465); ctx.stroke();
+  } else {
+    ctx.strokeStyle = "#eb4b83";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i += 1) {
+      ctx.beginPath();
+      ctx.moveTo(655 + i * 10, 529 - i * 19);
+      ctx.bezierCurveTo(705 + i * 8, 358 - i * 5, 842, 320, 1043, 375 + i * 5);
+      ctx.stroke();
+    }
   }
+
   const stripe = ctx.createLinearGradient(0, 0, CARD_WIDTH, 0);
-  stripe.addColorStop(0, "#f52d80");
-  stripe.addColorStop(.54, "#fc5871");
-  stripe.addColorStop(1, "#ff9939");
+  stripe.addColorStop(0, "#f02582");
+  stripe.addColorStop(.55, "#ff5a67");
+  stripe.addColorStop(1, "#ff973b");
   ctx.fillStyle = stripe;
-  ctx.fillRect(0, 0, CARD_WIDTH, 10);
-  ctx.fillRect(0, CARD_HEIGHT - 12, CARD_WIDTH, 5);
-  ctx.fillStyle = "#f5ecf2";
-  ctx.fillRect(40, 155, CARD_WIDTH - 80, 1);
-  text(ctx, "FASTQUE DIGITAL TECHNOLOGY PRIVATE LIMITED", 40, CARD_HEIGHT - 29, 770, 17, 600, "#e7dde7");
-  text(ctx, "fastque.com", 862, CARD_HEIGHT - 29, 130, 18, 500, "#ff9b5d");
+  ctx.fillRect(0, 0, CARD_WIDTH, 9);
+  ctx.fillRect(0, 595, CARD_WIDTH, 5);
+
+  ctx.fillStyle = "#f3dce9";
+  ctx.fillRect(52, 177, CARD_WIDTH - 104, 2);
+  ctx.fillStyle = "#080912";
+  ctx.fillRect(0, 600, CARD_WIDTH, 48);
+  text(ctx, "FASTQUE DIGITAL TECHNOLOGY PRIVATE LIMITED",
+    52, 630, 760, 20, 700, "#f5edf7");
+  text(ctx, "fastque.com", 865, 630, 132, 22, 600, "#ffb17d");
 }
 
 async function loadBrand(): Promise<HTMLImageElement | null> {
@@ -93,16 +112,18 @@ async function loadBrand(): Promise<HTMLImageElement | null> {
   });
 }
 
-function drawBrand(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null): void {
-  if (logo) {
-    const width = 370;
+function drawBrand(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, front: boolean): void {
+  if (logo && logo.naturalWidth > 0) {
+    const width = 540;
     const height = width * logo.naturalHeight / logo.naturalWidth;
-    ctx.drawImage(logo, 40, 26, width, Math.min(height, 116));
+    ctx.drawImage(logo, 52, 27, width, Math.min(height, 139));
   } else {
-    text(ctx, "FastQue", 44, 112, 395, 78, 700, "#ff749d");
+    text(ctx, "FastQue", 52, 128, 540, 95, 750, "#ff739b");
   }
-  text(ctx, "TEAM ID", 857, 78, 126, 24, 700);
-  text(ctx, "FASTQUE", 851, 105, 130, 17, 600, "#f0c6d4");
+  if (front) {
+    text(ctx, "TEAM ID", 841, 89, 161, 27, 700, "#efd4df");
+    text(ctx, "FASTQUE", 858, 119, 130, 18, 600, "#f8e4ec");
+  }
 }
 
 function cropImage(
@@ -120,101 +141,96 @@ function drawFront(
 ): HTMLCanvasElement {
   const canvas = makeCanvas();
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Unable to create card preview.");
+  if (!ctx) throw new Error("Unable to create card.");
   cardBase(ctx);
-  drawBrand(ctx, logo);
+  drawBrand(ctx, logo, true);
 
-  text(ctx, "EMPLOYEE", 47, 213, 370, 21, 600, "#ff9db6");
+  text(ctx, "EMPLOYEE", 54, 239, 420, 24, 650, "#ff81a7");
   const name = input.fullName.trim().replace(/\s+/g, " ");
   const words = name.split(" ");
-  if (name.length > 20 && words.length > 1) {
-    const pivot = Math.ceil(words.length / 2);
-    text(ctx, words.slice(0, pivot).join(" "), 47, 268, 597, 47, 700);
-    text(ctx, words.slice(pivot).join(" "), 47, 320, 597, 47, 700);
+  if (words.length > 1 && (name.length > 10 || ctx.measureText(name).width > 490)) {
+    const half = Math.max(1, Math.ceil(words.length / 2));
+    text(ctx, words.slice(0, half).join(" "), 53, 309, 575, 58, 750);
+    text(ctx, words.slice(half).join(" "), 53, 377, 575, 58, 750);
   } else {
-    text(ctx, name, 47, 287, 595, 50, 700);
+    text(ctx, name, 53, 359, 575, 59, 750);
   }
 
-  ctx.strokeStyle = "rgba(255,106,154,.8)";
-  ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(45, 342); ctx.lineTo(625, 342); ctx.stroke();
+  ctx.strokeStyle = "#ff6e72";
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(55, 393); ctx.lineTo(606, 393); ctx.stroke();
 
-  text(ctx, "EMPLOYEE ID", 47, 392, 280, 17, 600, "#e7bfcf");
-  text(ctx, "JOINING DATE", 373, 392, 290, 17, 600, "#e7bfcf");
-  text(ctx, input.employeeCode, 47, 427, 293, 31, 700);
+  text(ctx, "EMPLOYEE ID", 54, 430, 246, 21, 650, "#e7c8d3");
+  text(ctx, "JOINING DATE", 345, 430, 290, 21, 650, "#e7c8d3");
+  text(ctx, input.employeeCode, 54, 470, 270, 32, 700);
   const joined = new Date(input.joinedAt);
   const dateLabel = Number.isNaN(joined.getTime())
     ? "Not recorded"
-    : joined.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  text(ctx, dateLabel, 373, 427, 264, 28, 700);
+    : joined.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).replace(/ /g, "-");
+  text(ctx, dateLabel, 345, 470, 274, 29, 650);
 
-  text(ctx, "DESIGNATION", 47, 478, 595, 17, 600, "#e7bfcf");
-  text(ctx, input.designation || "Field Executive", 47, 508, 590, 27);
-  text(ctx, "LOCATION / TERRITORY", 47, 552, 595, 17, 600, "#e7bfcf");
-  text(ctx, input.territory || "Not assigned", 47, 581, 590, 25);
+  text(ctx, "DESIGNATION", 54, 523, 230, 19, 650, "#e7c8d3");
+  text(ctx, "TERRITORY", 345, 523, 270, 19, 650, "#e7c8d3");
+  text(ctx, input.designation || "Field Executive", 54, 568, 272, 29, 600);
+  text(ctx, input.territory || "Not assigned", 345, 568, 275, 28, 600);
 
-  roundedRect(ctx, 682, 176, 303, 403, 18);
-  ctx.fillStyle = "#251421"; ctx.fill();
+  roundedRect(ctx, 682, 190, 303, 365, 21);
+  ctx.fillStyle = "#201522"; ctx.fill();
+  ctx.strokeStyle = "#ff6a9e"; ctx.lineWidth = 4; ctx.stroke();
   ctx.save();
-  roundedRect(ctx, 696, 190, 275, 375, 13);
+  roundedRect(ctx, 700, 208, 266, 330, 13);
   ctx.clip();
-  cropImage(ctx, photo, 696, 190, 275, 375);
+  cropImage(ctx, photo, 700, 208, 266, 330);
   ctx.restore();
-  ctx.strokeStyle = "#ff6e9b"; ctx.lineWidth = 3;
-  roundedRect(ctx, 682, 176, 303, 403, 18); ctx.stroke();
-
-  // Always mark a browser-rendered card as a non-issued HR draft.
-  ctx.save();
-  ctx.translate(325, 355);
-  ctx.rotate(-Math.PI / 8);
-  ctx.globalAlpha = .20;
-  text(ctx, "HR DRAFT", -180, 0, 490, 90, 700, "#ffffff");
-  ctx.restore();
+  ctx.strokeStyle = "#f5e3ee"; ctx.lineWidth = 2;
+  roundedRect(ctx, 697, 204, 271, 337, 13); ctx.stroke();
   return canvas;
 }
 
 function drawBack(
-  input: EmployeeCardDraftInput, qr: HTMLCanvasElement, logo: HTMLImageElement | null,
+  input: EmployeeCardDraftInput, qr: HTMLCanvasElement,
+  logo: HTMLImageElement | null, signature: HTMLImageElement,
 ): HTMLCanvasElement {
   const canvas = makeCanvas();
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Unable to create card preview.");
-  cardBase(ctx);
-  drawBrand(ctx, logo);
+  if (!ctx) throw new Error("Unable to create card.");
+  cardBase(ctx, true);
+  drawBrand(ctx, logo, false);
 
-  text(ctx, "EMPLOYEE IDENTIFICATION", 52, 214, 610, 19, 700, "#ff9bb9");
-  text(ctx, input.fullName, 52, 282, 600, 42, 700);
-  text(ctx, input.employeeCode, 52, 320, 600, 25, 600, "#fce0e9");
-  ctx.fillStyle = "rgba(255,255,255,.35)";
-  ctx.fillRect(52, 340, 573, 1);
-  text(ctx, "For authorised company use only.", 52, 384, 600, 20, 500);
-  text(ctx, "If found, please contact:", 52, 425, 600, 20, 500, "#dccbd6");
-  text(ctx, "support@fastque.com", 52, 457, 590, 22, 700, "#ffb593");
-  text(ctx, "Company property \u2014 return on request.", 52, 490, 600, 20, 500);
+  text(ctx, "EMPLOYEE IDENTIFICATION", 56, 254, 620, 24, 700, "#ff8ab1");
+  text(ctx, input.fullName, 56, 332, 610, 47, 750);
+  text(ctx, input.employeeCode, 56, 371, 620, 29, 700, "#f6bbd0");
+  ctx.fillStyle = "rgba(255,255,255,.55)";
+  ctx.fillRect(56, 387, 580, 2);
+  text(ctx, "Issued for FastQue company use.", 56, 431, 610, 23, 600);
+  text(ctx, "If found, contact:", 56, 471, 610, 21, 450, "#dccbd6");
+  text(ctx, "support@fastque.com", 56, 505, 530, 25, 700, "#ffb17d");
+  text(ctx, "Company property / Return on request", 56, 545, 602, 19, 450, "#dccbd6");
+
   ctx.fillStyle = "#ffffff";
-  roundedRect(ctx, 708, 182, 257, 257, 8); ctx.fill();
-  ctx.drawImage(qr, 724, 198, 225, 225);
-  text(ctx, "OFFICIAL WEBSITE", 730, 469, 220, 18, 700);
-  text(ctx, "NOT AN ID VERIFICATION", 711, 493, 254, 15, 700, "#ffa6b8");
+  ctx.fillRect(728, 202, 234, 234);
+  ctx.drawImage(qr, 740, 214, 210, 210);
+  text(ctx, "OFFICIAL WEBSITE", 746, 469, 210, 21, 700);
 
-  drawHrSignaturePlaceholder(ctx);
+  // Exactly one owner-approved authorized HR signature, in the back-bottom field.
+  // No signature on the front, no decorative signature in the center.
+  ctx.strokeStyle = "rgba(246,237,248,.45)";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(56, 565); ctx.lineTo(641, 565); ctx.stroke();
+  text(ctx, "Authorized HR signature:", 56, 586, 290, 18, 500, "#e9dce5");
+  ctx.drawImage(signature, 332, 515, 221, 84);
   return canvas;
 }
 
-/**
- * Corrected Shambhoo Yogi reference: one HR signature position, on the BACK only.
- * No signature image is embedded in automated drafts; signing requires HR approval.
- */
-export function drawHrSignaturePlaceholder(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = "rgba(248,248,248,.6)";
-  ctx.fillRect(52, 555, 510, 1);
-  text(ctx, "Authorised HR signature:", 52, 582, 228, 17, 500);
-  ctx.strokeStyle = "rgba(248,248,248,.7)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(284, 583);
-  ctx.lineTo(558, 583);
-  ctx.stroke();
+/** Loads the owner-approved D K Pandey artwork, tint-matched to the corrected premium master. */
+async function loadAuthorizedSignature(): Promise<HTMLImageElement> {
+  const svg = approvedSignatureSvg(1).replace('fill="#23437f"', 'fill="#f4dce9"');
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Approved HR signature could not be loaded. No card was issued."));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
 }
 
 function jpegBytes(canvas: HTMLCanvasElement): Uint8Array {
@@ -246,13 +262,13 @@ export function cardImagesToA4Pdf(front: Uint8Array, back: Uint8Array): Uint8Arr
   const w = CARD_PDF_WIDTH.toFixed(3);
   const h = CARD_PDF_HEIGHT.toFixed(3);
   const commands = [
-    "BT /F1 15 Tf 60 792 Td (FastQue Employee ID Card - HR Draft) Tj ET",
+    "BT /F1 15 Tf 60 792 Td (FastQue Employee ID Card) Tj ET",
     "BT /F1 9 Tf 60 771 Td (Print at 100 percent / Actual Size. Do not fit to page.) Tj ET",
-    "BT /F1 12 Tf 60 739 Td (FRONT) Tj ET",
-    "q " + w + " 0 0 " + h + " " + x + " 558 cm /Front Do Q",
-    "BT /F1 12 Tf 60 526 Td (BACK) Tj ET",
-    "q " + w + " 0 0 " + h + " " + x + " 345 cm /Back Do Q",
-    "BT /F1 9 Tf 60 315 Td (DRAFT: Employee photo and authorised HR signature must be reviewed before issue.) Tj ET",
+    "BT /F1 12 Tf 60 758 Td (FRONT) Tj ET",
+    "q " + w + " 0 0 " + h + " " + x + " 600 cm /Front Do Q",
+    "BT /F1 12 Tf 60 533 Td (BACK) Tj ET",
+    "q " + w + " 0 0 " + h + " " + x + " 360 cm /Back Do Q",
+    "BT /F1 9 Tf 60 315 Td (Authorized HR signature appears on back only; QR links to the official website.) Tj ET",
     "BT /F1 9 Tf 60 296 Td (QR opens fastque.com only; it does not verify employee identity.) Tj ET",
   ].join("\n") + "\n";
 
@@ -294,10 +310,10 @@ export async function buildEmployeeIdCardDraftPdf(input: EmployeeCardDraftInput)
   }
   const bitmap = await createImageBitmap(input.photo);
   try {
-    const logo = await loadBrand();
+    const [logo, signature] = await Promise.all([loadBrand(), loadAuthorizedSignature()]);
     return cardImagesToA4Pdf(
       jpegBytes(drawFront(input, bitmap, logo)),
-      jpegBytes(drawBack(input, input.siteQrCanvas, logo)),
+      jpegBytes(drawBack(input, input.siteQrCanvas, logo, signature)),
     );
   } finally {
     bitmap.close();
