@@ -117,6 +117,11 @@ async function disabled(locator: Locator, message: string) {
   await expect(locator, message).toBeDisabled();
 }
 
+function visibleAlert(page: Page) {
+  // Next.js contributes an empty route-announcer with role=alert; target only application text.
+  return page.locator('[role="alert"]').filter({ hasText: /\S/ }).first();
+}
+
 function advanceClock(milliseconds = 31_000) {
   // Advance by more than one TOTP interval while leaving all newly-created recovery windows open.
   simulatedNow += milliseconds;
@@ -190,7 +195,7 @@ async function loginAdmin(page: Page, account: Account & { secret: string }) {
     "Password-only admin login receives a TOTP challenge",
   );
   await contains(
-    page.getByRole("alert"),
+    visibleAlert(page),
     /6-digit code/i,
     "Admin UI explains the required authenticator step",
   );
@@ -427,7 +432,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     );
     await emptyPrompt.accept("");
     await contains(
-      coPage.getByRole("alert"),
+      visibleAlert(coPage),
       "Provide a reason between 10 and 500 characters.",
       "Empty reason is rejected in the UI",
     );
@@ -490,7 +495,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       "Duplicate pending request is rejected by the server",
     );
     await contains(
-      coPage.getByRole("alert"),
+      visibleAlert(coPage),
       /already awaiting Super Admin approval/i,
       "Duplicate request error is visible to the requester",
     );
@@ -602,7 +607,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
 
     await approveButton.click();
     await contains(
-      adminPage.getByRole("alert"),
+      visibleAlert(adminPage),
       /6-digit Super Admin authenticator code/i,
       "Approval without TOTP is rejected before a request is sent",
     );
@@ -627,7 +632,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       "Invalid fresh TOTP is rejected server-side",
     );
     await visible(
-      adminPage.getByRole("alert"),
+      visibleAlert(adminPage),
       "Invalid TOTP error is announced in the browser UI",
     );
     await visible(pendingRow, "Invalid TOTP leaves the request pending");
@@ -819,7 +824,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
     await restoreCode.fill("");
     await restoreButton.click();
     await contains(
-      adminPage.getByRole("alert"),
+      visibleAlert(adminPage),
       /6-digit Super Admin authenticator code/i,
       "Restore without TOTP is rejected in the UI",
     );
@@ -845,7 +850,7 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
       "Invalid restoration TOTP is rejected server-side",
     );
     await visible(
-      adminPage.getByRole("alert"),
+      visibleAlert(adminPage),
       "Invalid restoration TOTP is shown without success",
     );
     await absent(
