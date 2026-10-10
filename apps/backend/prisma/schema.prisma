@@ -764,6 +764,12 @@ model Salon {
   email            String?
   description      String?
   status           SalonStatus @default(PENDING)
+  // Quarantine is independent from moderation status. No automatic permanent purge.
+  softDeletedAt          DateTime?
+  restoreEligibleUntil   DateTime?
+  softDeletedByUserId    String?
+  softDeletionRequestId  String?
+  statusBeforeSoftDelete SalonStatus?
   // Owner-controlled same-day pause. Unlike SalonStatus.SUSPENDED (platform/admin moderation),
   // this never removes an otherwise ACTIVE shop from public discovery. Customer-facing surfaces
   // keep the shop visible with an explicit "This shop is closed for today." notice, while booking
@@ -809,6 +815,8 @@ model Salon {
   crmLeadAttribution    EmployeeCrmLead? @relation("CrmLeadOnboardedSalon")
 
   @@unique([cityId, slug])
+  @@index([softDeletedAt, restoreEligibleUntil])
+  @@index([softDeletionRequestId])
   @@map("salons")
 }
 
@@ -1546,6 +1554,32 @@ model Notification {
 }
 
 // ---------- Audit ----------
+
+// Deletion requests intentionally snapshot the shop identity without an FK to Salon:
+// an approved request survives its shop's eventual hard deletion for accountability.
+enum ShopDeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ShopDeletionRequest {
+  id                String                    @id @default(uuid())
+  salonId           String
+  shopName          String
+  shopPublicId      String
+  requestedByUserId String
+  reason            String                    @db.VarChar(500)
+  status            ShopDeletionRequestStatus @default(PENDING)
+  requestedAt       DateTime                  @default(now())
+  decidedByUserId   String?
+  decidedAt         DateTime?
+  decisionNote      String?                   @db.VarChar(500)
+
+  @@index([status, requestedAt])
+  @@index([salonId, status])
+  @@map("shop_deletion_requests")
+}
 
 model AuditLog {
   id          String   @id @default(uuid())

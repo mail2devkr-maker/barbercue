@@ -214,8 +214,10 @@ export class AdminController {
     return this.access.revoke(user.id, userId, body.role);
   }
 
+  // Only the Super Admin may execute deletion. Co-Founders must use the
+  // separate approval-request route; this remains enforced server-side.
   @Delete(`${ADMIN_PATHS.shops}/:id`)
-  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER)
+  @Roles(Role.PLATFORM_ADMIN)
   deleteShop(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.salonManagement.deleteSalon(user.id, id);
   }

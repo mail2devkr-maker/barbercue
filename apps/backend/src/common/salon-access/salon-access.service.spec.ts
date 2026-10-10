@@ -13,7 +13,11 @@ describe('SalonAccessService', () => {
   beforeEach(async () => {
     prisma = {
       userRole: { findFirst: jest.fn() },
-      salon: { findUnique: jest.fn() },
+      salon: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'salon-1', softDeletedAt: null }),
+      },
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -82,6 +86,19 @@ describe('SalonAccessService', () => {
     });
   });
 
+  it('blocks owner management when the owned shop is quarantined', async () => {
+    prisma.userRole.findFirst.mockResolvedValue({ role: Role.SALON_OWNER });
+    prisma.salon.findUnique.mockResolvedValue({
+      id: 'salon-a',
+      softDeletedAt: new Date(),
+    });
+    await expect(
+      service.assertOwnerAccess('owner-1', 'salon-a'),
+    ).rejects.toMatchObject({
+      code: 'SHOP_QUARANTINED',
+    });
+  });
+
   it('denies an unrelated salon C for both owner-only and staff-capable actions', async () => {
     prisma.userRole.findFirst.mockResolvedValue(null);
 
@@ -96,12 +113,17 @@ describe('SalonAccessService', () => {
   // Part 2 — PLATFORM_ADMIN delegated shop management.
   describe('assertOwnerOrAdminAccess', () => {
     it('grants access to the real owner without ever checking for a global admin role', async () => {
-      prisma.userRole.findFirst.mockResolvedValueOnce({ role: Role.SALON_OWNER });
+      prisma.userRole.findFirst.mockResolvedValueOnce({
+        role: Role.SALON_OWNER,
+      });
       await expect(
         service.assertOwnerOrAdminAccess('owner-1', 'salon-1'),
       ).resolves.toBe('OWNER');
       expect(prisma.userRole.findFirst).toHaveBeenCalledTimes(1);
-      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+      expect(prisma.salon.findUnique).toHaveBeenCalledWith({
+        where: { id: 'salon-1' },
+        select: { id: true, softDeletedAt: true },
+      });
     });
 
     it('grants a PLATFORM_ADMIN access to an ACTIVE salon', async () => {
@@ -118,16 +140,39 @@ describe('SalonAccessService', () => {
       prisma.userRole.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
-      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.PENDING });
-      await expect(service.assertOwnerOrAdminAccess('admin-1', 'salon-1')).resolves.toBe('PLATFORM_ADMIN');
+      prisma.salon.findUnique.mockResolvedValue({
+        status: SalonStatus.PENDING,
+      });
+      await expect(
+        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
+      ).resolves.toBe('PLATFORM_ADMIN');
     });
 
     it('grants a PLATFORM_ADMIN delegated access to a SUSPENDED salon', async () => {
       prisma.userRole.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
-      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.SUSPENDED });
-      await expect(service.assertOwnerOrAdminAccess('admin-1', 'salon-1')).resolves.toBe('PLATFORM_ADMIN');
+      prisma.salon.findUnique.mockResolvedValue({
+        status: SalonStatus.SUSPENDED,
+      });
+      await expect(
+        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
+      ).resolves.toBe('PLATFORM_ADMIN');
+    });
+
+    it('blocks delegated setup access while the shop is in recovery Trash', async () => {
+      prisma.userRole.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
+      prisma.salon.findUnique.mockResolvedValue({
+        status: SalonStatus.SUSPENDED,
+        softDeletedAt: new Date(),
+      });
+      await expect(
+        service.assertOwnerOrAdminAccess('admin-1', 'salon-1'),
+      ).rejects.toMatchObject({
+        code: 'SHOP_QUARANTINED',
+      });
     });
 
     it('throws SALON_NOT_FOUND for a real admin acting on a salonId that does not exist', async () => {
@@ -170,7 +215,11 @@ describe('SalonAccessService', () => {
         service.assertOwnerOrAdminAccess('malformed-admin-1', 'salon-1'),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(prisma.userRole.findFirst).toHaveBeenNthCalledWith(2, {
-        where: { userId: 'malformed-admin-1', role: Role.PLATFORM_ADMIN, salonId: null },
+        where: {
+          userId: 'malformed-admin-1',
+          role: Role.PLATFORM_ADMIN,
+          salonId: null,
+        },
       });
       expect(prisma.salon.findUnique).not.toHaveBeenCalled();
     });
@@ -191,20 +240,45 @@ describe('SalonAccessService', () => {
   // path, matching assertAccess's own broader staff-capable rule.
   describe('assertAccessOrAdminAccess', () => {
     it('grants access to a real SALON_STAFF member without checking for a global admin role', async () => {
-      prisma.userRole.findFirst.mockResolvedValueOnce({ role: Role.SALON_STAFF });
+      prisma.userRole.findFirst.mockResolvedValueOnce({
+        role: Role.SALON_STAFF,
+      });
       await expect(
         service.assertAccessOrAdminAccess('staff-1', 'salon-1'),
       ).resolves.toBe('STAFF_OR_OWNER');
       expect(prisma.userRole.findFirst).toHaveBeenCalledTimes(1);
-      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+      expect(prisma.salon.findUnique).toHaveBeenCalledWith({
+        where: { id: 'salon-1' },
+        select: { id: true, softDeletedAt: true },
+      });
+    });
+
+    it('blocks staff queue operations while the shop is quarantined', async () => {
+      prisma.userRole.findFirst.mockResolvedValueOnce({
+        role: Role.SALON_STAFF,
+      });
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 'salon-1',
+        softDeletedAt: new Date(),
+      });
+      await expect(
+        service.assertAccess('staff-1', 'salon-1'),
+      ).rejects.toMatchObject({
+        code: 'SHOP_QUARANTINED',
+      });
     });
 
     it('grants access to the real owner too, without checking for a global admin role', async () => {
-      prisma.userRole.findFirst.mockResolvedValueOnce({ role: Role.SALON_OWNER });
+      prisma.userRole.findFirst.mockResolvedValueOnce({
+        role: Role.SALON_OWNER,
+      });
       await expect(
         service.assertAccessOrAdminAccess('owner-1', 'salon-1'),
       ).resolves.toBe('STAFF_OR_OWNER');
-      expect(prisma.salon.findUnique).not.toHaveBeenCalled();
+      expect(prisma.salon.findUnique).toHaveBeenCalledWith({
+        where: { id: 'salon-1' },
+        select: { id: true, softDeletedAt: true },
+      });
     });
 
     it('grants a PLATFORM_ADMIN access to an ACTIVE salon when neither staff nor owner', async () => {
@@ -231,8 +305,12 @@ describe('SalonAccessService', () => {
       prisma.userRole.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
-      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.PENDING });
-      await expect(service.assertAccessOrAdminAccess('admin-1', 'salon-1')).rejects.toMatchObject({
+      prisma.salon.findUnique.mockResolvedValue({
+        status: SalonStatus.PENDING,
+      });
+      await expect(
+        service.assertAccessOrAdminAccess('admin-1', 'salon-1'),
+      ).rejects.toMatchObject({
         code: 'SALON_ACCESS_DENIED',
       });
     });
@@ -241,8 +319,12 @@ describe('SalonAccessService', () => {
       prisma.userRole.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ role: Role.PLATFORM_ADMIN });
-      prisma.salon.findUnique.mockResolvedValue({ status: SalonStatus.SUSPENDED });
-      await expect(service.assertAccessOrAdminAccess('admin-1', 'salon-1')).rejects.toMatchObject({
+      prisma.salon.findUnique.mockResolvedValue({
+        status: SalonStatus.SUSPENDED,
+      });
+      await expect(
+        service.assertAccessOrAdminAccess('admin-1', 'salon-1'),
+      ).rejects.toMatchObject({
         code: 'SALON_ACCESS_DENIED',
       });
     });
@@ -253,7 +335,11 @@ describe('SalonAccessService', () => {
         service.assertAccessOrAdminAccess('malformed-admin-1', 'salon-1'),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
       expect(prisma.userRole.findFirst).toHaveBeenNthCalledWith(2, {
-        where: { userId: 'malformed-admin-1', role: Role.PLATFORM_ADMIN, salonId: null },
+        where: {
+          userId: 'malformed-admin-1',
+          role: Role.PLATFORM_ADMIN,
+          salonId: null,
+        },
       });
       expect(prisma.salon.findUnique).not.toHaveBeenCalled();
     });
