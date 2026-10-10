@@ -18,6 +18,18 @@ const CARD_PDF_HEIGHT = 54 * 72 / 25.4;
 
 export const OFFICIAL_SITE_QR_URL = "https://fastque.com";
 
+/** Joining is a company calendar date, not the UTC calendar day of the timestamp.
+ * Back-end serializes a DateTime as ISO UTC; an India-midnight joining instant
+ * is on the prior UTC day (e.g. 09-Oct 00:00 IST = 08-Oct 18:30Z).
+ */
+export function formatEmployeeJoiningDate(joinedAt: string): string {
+  const joined = new Date(joinedAt);
+  if (Number.isNaN(joined.getTime())) return "Not recorded";
+  return joined.toLocaleDateString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata",
+  }).replace(/ /g, "-");
+}
+
 function makeCanvas(): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = CARD_WIDTH;
@@ -112,13 +124,57 @@ async function loadBrand(): Promise<HTMLImageElement | null> {
   });
 }
 
+/** Corrected Shambhoo premium reference: large, left-aligned, top-aligned brand art.
+ * The source PNG has transparent padding; remove that during drawing, not from the asset.
+ */
+export const ID_CARD_LOGO_FRAME = { x: 55, y: 40, width: 570, height: 108 } as const;
+export const ID_CARD_HR_SIGNATURE_FRAME = { x: 260, y: 507, width: 198, height: 74 } as const;
+
+function visibleLogoCrop(logo: HTMLImageElement): { x: number; y: number; w: number; h: number } {
+  const naturalW = logo.naturalWidth;
+  const naturalH = logo.naturalHeight;
+  const sampleW = Math.min(naturalW, 600);
+  const sampleH = Math.max(1, Math.round(naturalH * sampleW / naturalW));
+  const canvas = document.createElement("canvas");
+  canvas.width = sampleW;
+  canvas.height = sampleH;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return { x: 0, y: 0, w: naturalW, h: naturalH };
+  context.drawImage(logo, 0, 0, sampleW, sampleH);
+  const pixels = context.getImageData(0, 0, sampleW, sampleH).data;
+  let minX = sampleW, minY = sampleH, maxX = -1, maxY = -1;
+  for (let y = 0; y < sampleH; y++) {
+    for (let x = 0; x < sampleW; x++) {
+      if (pixels[(y * sampleW + x) * 4 + 3] < 24) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  if (maxX < 0 || maxY < 0) return { x: 0, y: 0, w: naturalW, h: naturalH };
+  // Keep small trademark and anti-aliased edges, while trimming transparent margins.
+  const pad = 2;
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(sampleW - 1, maxX + pad);
+  maxY = Math.min(sampleH - 1, maxY + pad);
+  return {
+    x: minX * naturalW / sampleW,
+    y: minY * naturalH / sampleH,
+    w: (maxX - minX + 1) * naturalW / sampleW,
+    h: (maxY - minY + 1) * naturalH / sampleH,
+  };
+}
+
 function drawBrand(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, front: boolean): void {
-  if (logo && logo.naturalWidth > 0) {
-    const width = 540;
-    const height = width * logo.naturalHeight / logo.naturalWidth;
-    ctx.drawImage(logo, 52, 27, width, Math.min(height, 139));
+  if (logo && logo.naturalWidth > 0 && logo.naturalHeight > 0) {
+    const crop = visibleLogoCrop(logo);
+    const box = ID_CARD_LOGO_FRAME;
+    const scale = Math.min(box.width / crop.w, box.height / crop.h);
+    ctx.drawImage(logo, crop.x, crop.y, crop.w, crop.h, box.x, box.y, crop.w * scale, crop.h * scale);
   } else {
-    text(ctx, "FastQue", 52, 128, 540, 95, 750, "#ff739b");
+    text(ctx, "FastQue", 55, 125, 575, 92, 750, "#ff739b");
   }
   if (front) {
     text(ctx, "TEAM ID", 841, 89, 161, 27, 700, "#efd4df");
@@ -163,10 +219,7 @@ function drawFront(
   text(ctx, "EMPLOYEE ID", 54, 430, 246, 21, 650, "#e7c8d3");
   text(ctx, "JOINING DATE", 345, 430, 290, 21, 650, "#e7c8d3");
   text(ctx, input.employeeCode, 54, 470, 270, 32, 700);
-  const joined = new Date(input.joinedAt);
-  const dateLabel = Number.isNaN(joined.getTime())
-    ? "Not recorded"
-    : joined.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).replace(/ /g, "-");
+  const dateLabel = formatEmployeeJoiningDate(input.joinedAt);
   text(ctx, dateLabel, 345, 470, 274, 29, 650);
 
   text(ctx, "DESIGNATION", 54, 523, 230, 19, 650, "#e7c8d3");
@@ -203,9 +256,9 @@ function drawBack(
   ctx.fillStyle = "rgba(255,255,255,.55)";
   ctx.fillRect(56, 387, 580, 2);
   text(ctx, "Issued for FastQue company use.", 56, 431, 610, 23, 600);
-  text(ctx, "If found, contact:", 56, 471, 610, 21, 450, "#dccbd6");
-  text(ctx, "support@fastque.com", 56, 505, 530, 25, 700, "#ffb17d");
-  text(ctx, "Company property / Return on request", 56, 545, 602, 19, 450, "#dccbd6");
+  text(ctx, "If found, contact:", 56, 455, 610, 21, 450, "#dccbd6");
+  text(ctx, "support@fastque.com", 56, 487, 530, 25, 700, "#ffb17d");
+  text(ctx, "Company property / Return on request", 56, 519, 602, 19, 450, "#dccbd6");
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(728, 202, 234, 234);
@@ -216,15 +269,16 @@ function drawBack(
   // No signature on the front, no decorative signature in the center.
   ctx.strokeStyle = "rgba(246,237,248,.45)";
   ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(56, 565); ctx.lineTo(641, 565); ctx.stroke();
-  text(ctx, "Authorized HR signature:", 56, 586, 290, 18, 500, "#e9dce5");
+  ctx.beginPath(); ctx.moveTo(56, 539); ctx.lineTo(641, 539); ctx.stroke();
+  text(ctx, "Authorized HR signature:", 56, 573, 290, 18, 500, "#e9dce5");
   drawApprovedHrSignature(ctx, signature);
   return canvas;
 }
 
 /** One deliberate approved signature print position, on the back only. */
 export function drawApprovedHrSignature(ctx: CanvasRenderingContext2D, signature: HTMLImageElement): void {
-  ctx.drawImage(signature, 332, 515, 221, 84);
+  const frame = ID_CARD_HR_SIGNATURE_FRAME;
+  ctx.drawImage(signature, frame.x, frame.y, frame.width, frame.height);
 }
 
 /** Loads the owner-approved D K Pandey artwork, tint-matched to the corrected premium master. */
@@ -283,9 +337,9 @@ export function cardImagesToA4Pdf(front: Uint8Array, back: Uint8Array): Uint8Arr
   }).join("\n");
   const commands = [
     "q 0.4 w 0.6 G\n" + cutMarks + "\nQ",
-    "BT /F1 16 Tf 176 792 Td (FastQue Employee ID Card) Tj ET",
-    "BT /F1 9 Tf 60 771 Td (Print at 100 percent / Actual Size. Do not fit to page.) Tj ET",
-    "BT /F1 12 Tf 60 770 Td (FRONT) Tj ET",
+    "BT /F1 16 Tf 176 810 Td (FastQue Employee ID Card) Tj ET",
+    "BT /F1 12 Tf 176 781 Td (FRONT) Tj ET",
+    "BT /F1 9 Tf 244 782 Td (85.6 x 54 mm | Print at 100 percent / Actual Size) Tj ET",
     "q " + w + " 0 0 " + h + " " + x + " 600 cm /Front Do Q",
     "BT /F1 12 Tf 60 533 Td (BACK) Tj ET",
     "q " + w + " 0 0 " + h + " " + x + " 360 cm /Back Do Q",

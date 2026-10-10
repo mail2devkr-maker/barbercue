@@ -78,7 +78,7 @@ try {
     const pdf = await module.exports.buildEmployeeIdCardDraftPdf({
       employeeCode: "FQ-FE-98765",
       fullName: "Synthetic QA Employee",
-      joinedAt: "2026-10-09T00:00:00.000Z",
+      joinedAt: "2026-10-08T18:30:00.000Z", // 09-Oct midnight in India
       designation: "Field Executive",
       territory: "Test Territory",
       photo,
@@ -87,9 +87,10 @@ try {
     let binary = "";
     for (let i = 0; i < pdf.length; i += 8192)
       binary += String.fromCharCode(...pdf.subarray(i, i + 8192));
-    return { base64: btoa(binary), pdfLength: pdf.length };
+    return { base64: btoa(binary), pdfLength: pdf.length, joining: module.exports.formatEmployeeJoiningDate("2026-10-08T18:30:00.000Z") };
   }, { compiled, signatureCompiled, qr });
   assert.ok(result.pdfLength > 40000, "Generated PDF was implausibly small");
+  assert.equal(result.joining, "09-Oct-2026", "India midnight must not become 08-Oct in the PDF");
   const pdf = Buffer.from(result.base64, "base64").toString("latin1");
   assert.ok(pdf.startsWith("%PDF-1.4"), "PDF magic missing");
   assert.ok(pdf.includes("/MediaBox [0 0 595 842]"), "A4 media box missing");
@@ -98,6 +99,35 @@ try {
   assert.ok(!pdf.includes("HR Draft") && !pdf.includes("DRAFT:"), "Downloaded card must use the approved title");
   const images = [...pdf.matchAll(/\/Filter \[\/ASCIIHexDecode \/DCTDecode\] \/Length \d+ >>\nstream\n([0-9A-F]+)>\nendstream/g)];
   assert.equal(images.length, 2, "Front and back raster images must be embedded in PDF");
+  // Decode the actual rendered FRONT image to verify the visible logo occupies
+  // the corrected large upper-left header rather than the prior tiny, padded art.
+  const logoVisible = await page.evaluate(async (jpegBase64) => {
+    const raw = atob(jpegBase64);
+    const bytes = Uint8Array.from(raw, (char) => char.charCodeAt(0));
+    const img = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width; canvas.height = img.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(img, 0, 0);
+    img.close();
+    const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+    let minX = 9999; let maxX = -1; let count = 0;
+    for (let y = 40; y < 152; y++) {
+      for (let x = 50; x < 645; x++) {
+        const p = (y * canvas.width + x) * 4;
+        const lum = (data[p] + data[p + 1] + data[p + 2]) / 3;
+        if (lum < 138) continue; // logo's cream/pink/orange, not dark card background
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        count++;
+      }
+    }
+    return { count, minX, maxX };
+  }, Buffer.from(images[0][1], "hex").toString("base64"));
+  assert.ok(logoVisible.count > 1200, "FastQue logo has too few visible premium pixels");
+  assert.ok(logoVisible.minX <= 100, "Logo visible content must be left aligned");
+  assert.ok(logoVisible.maxX >= 430, "Logo must visually fill the premium header width");
+
   await page.addScriptTag({ path: require.resolve("jsqr") });
   const decoded = await page.evaluate(async (backBase64) => {
     const raw = atob(backBase64);
