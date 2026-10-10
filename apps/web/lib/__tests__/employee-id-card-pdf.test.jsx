@@ -1,4 +1,4 @@
-import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, drawApprovedHrSignature, formatEmployeeJoiningDate, ID_CARD_LOGO_FRAME, ID_CARD_HR_SIGNATURE_FRAME, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
+import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, drawApprovedHrSignature, formatEmployeeJoiningDate, ID_CARD_LOGO_FRAME, ID_CARD_HR_SIGNATURE_FRAME, ID_CARD_BACK_SIGNATURE_LAYOUT, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
 
 describe("CRM employee ID card HR draft PDF", () => {
   test("A4 contains two physical ISO ID-1 faces without claiming ID verification", () => {
@@ -54,7 +54,7 @@ describe("CRM employee ID card HR draft PDF", () => {
     const signature = {};
     drawApprovedHrSignature(ctx, signature);
     expect(ctx.drawImage).toHaveBeenCalledTimes(1);
-    expect(ctx.drawImage).toHaveBeenCalledWith(signature, 260, 507, 198, 74);
+    expect(ctx.drawImage).toHaveBeenCalledWith(signature, 292, 531, 145, 54);
   });
 
   test("corrected premium logo sits in the upper-left safe zone", () => {
@@ -63,8 +63,20 @@ describe("CRM employee ID card HR draft PDF", () => {
   });
 
   test("HR signature stays in one back-only bottom area away from the footer", () => {
-    expect(ID_CARD_HR_SIGNATURE_FRAME).toEqual({ x: 260, y: 507, width: 198, height: 74 });
+    expect(ID_CARD_HR_SIGNATURE_FRAME).toEqual({ x: 292, y: 531, width: 145, height: 54 });
     expect(ID_CARD_HR_SIGNATURE_FRAME.y + ID_CARD_HR_SIGNATURE_FRAME.height).toBeLessThan(595);
+    expect(ID_CARD_BACK_SIGNATURE_LAYOUT).toEqual({
+      issuedBaselineY: 416, foundBaselineY: 448, emailBaselineY: 478,
+      propertyBaselineY: 507, separatorY: 527,
+      signatureLabelBaselineY: 573, footerStripeY: 595,
+    });
+    expect(ID_CARD_HR_SIGNATURE_FRAME.y).toBeGreaterThan(ID_CARD_BACK_SIGNATURE_LAYOUT.separatorY);
+    expect(ID_CARD_HR_SIGNATURE_FRAME.y + ID_CARD_HR_SIGNATURE_FRAME.height)
+      .toBeLessThan(ID_CARD_BACK_SIGNATURE_LAYOUT.footerStripeY - 5);
+    expect(ID_CARD_HR_SIGNATURE_FRAME.x).toBeGreaterThan(275);
+    expect(ID_CARD_HR_SIGNATURE_FRAME.width).toBeLessThan(160);
+    expect(ID_CARD_BACK_SIGNATURE_LAYOUT.propertyBaselineY + 15)
+      .toBeLessThan(ID_CARD_BACK_SIGNATURE_LAYOUT.separatorY);
   });
 
   test.each([

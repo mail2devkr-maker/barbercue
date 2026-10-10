@@ -128,7 +128,19 @@ async function loadBrand(): Promise<HTMLImageElement | null> {
  * The source PNG has transparent padding; remove that during drawing, not from the asset.
  */
 export const ID_CARD_LOGO_FRAME = { x: 55, y: 40, width: 570, height: 108 } as const;
-export const ID_CARD_HR_SIGNATURE_FRAME = { x: 260, y: 507, width: 198, height: 74 } as const;
+// Matched against the corrected Shambhoo Yogi master: one restrained signature
+// immediately to the right of its HR caption, wholly below the separator and above
+// the footer stripe. This is the only place approved artwork may be drawn.
+export const ID_CARD_HR_SIGNATURE_FRAME = { x: 292, y: 531, width: 145, height: 54 } as const;
+export const ID_CARD_BACK_SIGNATURE_LAYOUT = {
+  issuedBaselineY: 416,
+  foundBaselineY: 448,
+  emailBaselineY: 478,
+  propertyBaselineY: 507,
+  separatorY: 527,
+  signatureLabelBaselineY: 573,
+  footerStripeY: 595,
+} as const;
 
 function visibleLogoCrop(logo: HTMLImageElement): { x: number; y: number; w: number; h: number } {
   const naturalW = logo.naturalWidth;
@@ -255,10 +267,10 @@ function drawBack(
   text(ctx, input.employeeCode, 56, 371, 620, 29, 700, "#f6bbd0");
   ctx.fillStyle = "rgba(255,255,255,.55)";
   ctx.fillRect(56, 387, 580, 2);
-  text(ctx, "Issued for FastQue company use.", 56, 431, 610, 23, 600);
-  text(ctx, "If found, contact:", 56, 455, 610, 21, 450, "#dccbd6");
-  text(ctx, "support@fastque.com", 56, 487, 530, 25, 700, "#ffb17d");
-  text(ctx, "Company property / Return on request", 56, 519, 602, 19, 450, "#dccbd6");
+  text(ctx, "Issued for FastQue company use.", 56, ID_CARD_BACK_SIGNATURE_LAYOUT.issuedBaselineY, 610, 23, 600);
+  text(ctx, "If found, contact:", 56, ID_CARD_BACK_SIGNATURE_LAYOUT.foundBaselineY, 610, 21, 450, "#dccbd6");
+  text(ctx, "support@fastque.com", 56, ID_CARD_BACK_SIGNATURE_LAYOUT.emailBaselineY, 530, 25, 700, "#ffb17d");
+  text(ctx, "Company property / Return on request", 56, ID_CARD_BACK_SIGNATURE_LAYOUT.propertyBaselineY, 602, 19, 450, "#dccbd6");
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(728, 202, 234, 234);
@@ -269,8 +281,8 @@ function drawBack(
   // No signature on the front, no decorative signature in the center.
   ctx.strokeStyle = "rgba(246,237,248,.45)";
   ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(56, 539); ctx.lineTo(641, 539); ctx.stroke();
-  text(ctx, "Authorized HR signature:", 56, 573, 290, 18, 500, "#e9dce5");
+  ctx.beginPath(); ctx.moveTo(56, ID_CARD_BACK_SIGNATURE_LAYOUT.separatorY); ctx.lineTo(641, ID_CARD_BACK_SIGNATURE_LAYOUT.separatorY); ctx.stroke();
+  text(ctx, "Authorized HR signature:", 56, ID_CARD_BACK_SIGNATURE_LAYOUT.signatureLabelBaselineY, 290, 18, 500, "#e9dce5");
   drawApprovedHrSignature(ctx, signature);
   return canvas;
 }
