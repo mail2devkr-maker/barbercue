@@ -1329,8 +1329,8 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
         `Logout repetition ${attempt} reports server-confirmed success`,
       );
 
-      const clearCookieHeader = logoutResponse
-        .headersArray()
+      const responseHeaders = await logoutResponse.headersArray();
+      const clearCookieHeader = responseHeaders
         .find(
           (header) =>
             header.name.toLowerCase() === "set-cookie" &&
