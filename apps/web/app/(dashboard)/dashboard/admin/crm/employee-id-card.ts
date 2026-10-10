@@ -337,9 +337,9 @@ export function cardImagesToA4Pdf(front: Uint8Array, back: Uint8Array): Uint8Arr
   }).join("\n");
   const commands = [
     "q 0.4 w 0.6 G\n" + cutMarks + "\nQ",
-    "BT /F1 16 Tf 176 792 Td (FastQue Employee ID Card) Tj ET",
-    "BT /F1 9 Tf 60 771 Td (Print at 100 percent / Actual Size. Do not fit to page.) Tj ET",
-    "BT /F1 12 Tf 60 770 Td (FRONT) Tj ET",
+    "BT /F1 16 Tf 176 810 Td (FastQue Employee ID Card) Tj ET",
+    "BT /F1 12 Tf 176 781 Td (FRONT) Tj ET",
+    "BT /F1 9 Tf 244 782 Td (85.6 x 54 mm | Print at 100 percent / Actual Size) Tj ET",
     "q " + w + " 0 0 " + h + " " + x + " 600 cm /Front Do Q",
     "BT /F1 12 Tf 60 533 Td (BACK) Tj ET",
     "q " + w + " 0 0 " + h + " " + x + " 360 cm /Back Do Q",
