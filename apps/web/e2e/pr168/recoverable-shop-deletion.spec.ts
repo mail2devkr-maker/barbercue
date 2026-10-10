@@ -9,6 +9,7 @@ import {
 } from "@playwright/test";
 import { generate } from "otplib";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { REFRESH_TOKEN_COOKIE_NAME } from "@barbercue/shared";
 
 type Account = { id: string; email: string; password: string; secret?: string };
 type BrowserFixtures = {
@@ -1297,7 +1298,10 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
 
       const sessionCookies = await coContext.cookies(baseURL);
       const refreshCookie = sessionCookies.find(
-        (cookie) => cookie.httpOnly && cookie.path === "/",
+        (cookie) =>
+          cookie.name === REFRESH_TOKEN_COOKIE_NAME &&
+          cookie.httpOnly &&
+          cookie.path === "/",
       );
       record(
         Boolean(refreshCookie),
@@ -1325,14 +1329,62 @@ test("real Chromium certifies PR #168 request, approval, quarantine, restoration
         `Logout repetition ${attempt} reports server-confirmed success`,
       );
 
-      const clearCookieHeader = logoutResponse.headers()["set-cookie"] ?? "";
+      const clearCookieHeader = logoutResponse
+        .headersArray()
+        .find(
+          (header) =>
+            header.name.toLowerCase() === "set-cookie" &&
+            header.value
+              .split(";", 1)[0]
+              ?.trim()
+              .toLowerCase()
+              .startsWith(`${REFRESH_TOKEN_COOKIE_NAME.toLowerCase()}=`),
+        )?.value;
       record(
-        clearCookieHeader
-          .toLowerCase()
-          .includes(`${refreshCookie.name.toLowerCase()}=`) &&
-          /httponly/i.test(clearCookieHeader) &&
-          /(?:max-age=0|expires=thu, 01 jan 1970)/i.test(clearCookieHeader),
-        `Logout repetition ${attempt} returns an HttpOnly cookie-clearing header`,
+        Boolean(clearCookieHeader),
+        `Logout repetition ${attempt} returns a clearing header for the refresh cookie`,
+      );
+      if (!clearCookieHeader)
+        throw new Error(
+          `Logout repetition ${attempt} omitted the refresh-cookie clearing header.`,
+        );
+
+      const [cookiePair, ...cookieAttributes] = clearCookieHeader
+        .split(";")
+        .map((attribute) => attribute.trim());
+      const clearCookieValue = cookiePair
+        ?.slice(REFRESH_TOKEN_COOKIE_NAME.length + 1)
+        .trim();
+      const normalizedAttributes = cookieAttributes.map((attribute) =>
+        attribute.toLowerCase(),
+      );
+      const expiresAttribute = cookieAttributes.find((attribute) =>
+        attribute.toLowerCase().startsWith("expires="),
+      );
+      const maxAgeAttribute = cookieAttributes.find((attribute) =>
+        attribute.toLowerCase().startsWith("max-age="),
+      );
+      const expiredByDate = expiresAttribute
+        ? Date.parse(expiresAttribute.slice("expires=".length)) <= 0
+        : false;
+      const expiredByAge = maxAgeAttribute
+        ? Number(maxAgeAttribute.slice("max-age=".length)) <= 0
+        : false;
+      record(
+        clearCookieValue === "",
+        `Logout repetition ${attempt} clears the refresh-cookie value`,
+      );
+      record(
+        normalizedAttributes.includes("httponly"),
+        `Logout repetition ${attempt} preserves HttpOnly on the clearing cookie`,
+      );
+      record(
+        normalizedAttributes.includes("path=/"),
+        `Logout repetition ${attempt} clears the refresh cookie at its root path`,
+      );
+      record(
+        expiredByDate || expiredByAge,
+        `Logout repetition ${attempt} sends a deletion expiry for the refresh cookie`,
       );
 
       assertionCount += 1;
