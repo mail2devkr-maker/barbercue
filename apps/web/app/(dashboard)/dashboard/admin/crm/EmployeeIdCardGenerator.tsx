@@ -5,7 +5,7 @@ import { ADMIN_PATHS, UserStatus, type AdminEmployeeDto } from "@barbercue/share
 import { QRCodeCanvas } from "qrcode.react";
 import { ApiError, apiFetch } from "../../../../../lib/api";
 import styles from "../admin.module.css";
-import { buildEmployeeIdCardDraftPdf, OFFICIAL_SITE_QR_URL } from "./employee-id-card";
+import { buildEmployeeIdCardDraftPdf, formatEmployeeJoiningDate, OFFICIAL_SITE_QR_URL } from "./employee-id-card";
 
 /** HR/Co-Founder/Platform Admin-only official ID-card generator for registered active employees. */
 export default function EmployeeIdCardGenerator() {
@@ -144,7 +144,7 @@ export default function EmployeeIdCardGenerator() {
           </label>
           <label>
             <span>Joining date (from employee record)</span>
-            <input readOnly value={selected ? new Date(selected.joinedAt).toLocaleDateString("en-IN") : ""} />
+            <input readOnly value={selected ? formatEmployeeJoiningDate(selected.joinedAt) : ""} />
           </label>
         </div>
         <label className={styles.offerUpload}>
