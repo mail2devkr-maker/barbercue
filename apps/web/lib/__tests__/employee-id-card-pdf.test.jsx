@@ -1,4 +1,4 @@
-import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, drawApprovedHrSignature, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
+import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, drawApprovedHrSignature, formatEmployeeJoiningDate, ID_CARD_LOGO_FRAME, ID_CARD_HR_SIGNATURE_FRAME, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
 
 describe("CRM employee ID card HR draft PDF", () => {
   test("A4 contains two physical ISO ID-1 faces without claiming ID verification", () => {
@@ -54,7 +54,27 @@ describe("CRM employee ID card HR draft PDF", () => {
     const signature = {};
     drawApprovedHrSignature(ctx, signature);
     expect(ctx.drawImage).toHaveBeenCalledTimes(1);
-    expect(ctx.drawImage).toHaveBeenCalledWith(signature, 332, 515, 221, 84);
+    expect(ctx.drawImage).toHaveBeenCalledWith(signature, 260, 507, 198, 74);
+  });
+
+  test("corrected premium logo sits in the upper-left safe zone", () => {
+    expect(ID_CARD_LOGO_FRAME).toEqual({ x: 55, y: 40, width: 570, height: 108 });
+    expect(ID_CARD_LOGO_FRAME.x + ID_CARD_LOGO_FRAME.width).toBeLessThan(700);
+  });
+
+  test("HR signature stays in one back-only bottom area away from the footer", () => {
+    expect(ID_CARD_HR_SIGNATURE_FRAME).toEqual({ x: 260, y: 507, width: 198, height: 74 });
+    expect(ID_CARD_HR_SIGNATURE_FRAME.y + ID_CARD_HR_SIGNATURE_FRAME.height).toBeLessThan(595);
+  });
+
+  test.each([
+    ["2026-10-08T18:30:00.000Z", "09-Oct-2026"],
+    ["2026-10-09T00:00:00.000Z", "09-Oct-2026"],
+    ["2026-10-09", "09-Oct-2026"],
+    ["2026-10-09T23:59:59.000+05:30", "09-Oct-2026"],
+    ["2026-10-10T00:00:00.000+05:30", "10-Oct-2026"],
+  ])("India-local joining calendar preserves %s as %s", (iso, expected) => {
+    expect(formatEmployeeJoiningDate(iso)).toBe(expected);
   });
 
   test("site QR remains explicitly non-verifying until a real employee verification service exists", () => {
