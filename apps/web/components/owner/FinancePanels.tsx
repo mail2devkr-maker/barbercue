@@ -103,6 +103,7 @@ export function PaymentsPanel({ salonId }: { salonId: string }) {
     [base, from, to],
   );
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- show the loading state while the new range is fetched
     setData(null);
     void load();
   }, [load]);

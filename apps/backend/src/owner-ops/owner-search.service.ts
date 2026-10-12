@@ -25,7 +25,11 @@ export class OwnerSearchService {
     private readonly salonAccess: SalonAccessService,
   ) {}
 
-  async search(userId: string, salonId: string, rawQuery: string): Promise<OwnerSearchResultDto> {
+  async search(
+    userId: string,
+    salonId: string,
+    rawQuery: string,
+  ): Promise<OwnerSearchResultDto> {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     const kind = await this.salonAccess.getActorKind(userId, salonId);
     const q = rawQuery.trim().slice(0, 60);
@@ -36,19 +40,35 @@ export class OwnerSearchService {
     const digits = q.replace(/\D/g, '');
 
     const services = await this.prisma.service.findMany({
-      where: { salonId, isActive: true, name: { contains: q, mode: 'insensitive' } },
+      where: {
+        salonId,
+        isActive: true,
+        name: { contains: q, mode: 'insensitive' },
+      },
       select: { id: true, name: true, durationMinutes: true },
       take: PER_GROUP,
       orderBy: { name: 'asc' },
     });
     for (const s of services) {
-      hits.push({ type: 'service', id: s.id, title: s.name, subtitle: `${s.durationMinutes} min`, href: `${base}/services` });
+      hits.push({
+        type: 'service',
+        id: s.id,
+        title: s.name,
+        subtitle: `${s.durationMinutes} min`,
+        href: `${base}/services`,
+      });
     }
 
     const queueRows = await this.prisma.queueEntry.findMany({
       where: {
         salonId,
-        status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED, QueueEntryStatus.IN_SERVICE] },
+        status: {
+          in: [
+            QueueEntryStatus.WAITING,
+            QueueEntryStatus.CALLED,
+            QueueEntryStatus.IN_SERVICE,
+          ],
+        },
         OR: [
           { contactName: { contains: q, mode: 'insensitive' } },
           ...(/^\d{1,4}$/.test(q) ? [{ tokenNumber: Number(q) }] : []),
@@ -76,11 +96,20 @@ export class OwnerSearchService {
           { guestName: { contains: q, mode: 'insensitive' } },
           ...(q.length >= 6 ? [{ id: { startsWith: q.toLowerCase() } }] : []),
           ...(digits.length >= 4
-            ? [{ guestPhone: { contains: digits } }, { customer: { phone: { contains: digits } } }]
+            ? [
+                { guestPhone: { contains: digits } },
+                { customer: { phone: { contains: digits } } },
+              ]
             : []),
         ],
       },
-      select: { id: true, slotStart: true, status: true, guestName: true, source: true },
+      select: {
+        id: true,
+        slotStart: true,
+        status: true,
+        guestName: true,
+        source: true,
+      },
       orderBy: { slotStart: 'desc' },
       take: PER_GROUP,
     });
@@ -118,7 +147,10 @@ export class OwnerSearchService {
     const invoices = await this.prisma.invoice.findMany({
       where: {
         salonId,
-        OR: [{ number: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }],
+        OR: [
+          { number: { contains: q, mode: 'insensitive' } },
+          { customerName: { contains: q, mode: 'insensitive' } },
+        ],
       },
       select: { id: true, number: true, customerName: true, status: true },
       orderBy: { issuedAt: 'desc' },

@@ -26,7 +26,10 @@ import { PushDispatchService } from '../push-notifications/push-dispatch.service
 
 /** "15 Oct, 4:30 pm" in the SHOP's own timezone (never the server's or the viewer's), or null when
  * the shop has no trustworthy timezone - the copy then simply omits the time instead of guessing. */
-export function formatShopLocalDateTime(date: Date, timeZone: string | null): string | null {
+export function formatShopLocalDateTime(
+  date: Date,
+  timeZone: string | null,
+): string | null {
   if (!timeZone) return null;
   try {
     return new Intl.DateTimeFormat('en-IN', {
@@ -87,15 +90,23 @@ export class ShopBookingActionsService {
       salonId,
       bookingId,
       salonName: booking.salon.name,
-      shopPhone: booking.salon.showPhoneToCustomers === false ? null : (booking.salon.phone ?? null),
-      timeZone: resolveSalonTimeZone({ timezone: booking.salon.timezone, countryCode: booking.salon.city.countryCode }),
+      shopPhone:
+        booking.salon.showPhoneToCustomers === false
+          ? null
+          : (booking.salon.phone ?? null),
+      timeZone: resolveSalonTimeZone({
+        timezone: booking.salon.timezone,
+        countryCode: booking.salon.city.countryCode,
+      }),
       slotStart: booking.slotStart,
-      serviceName: summarizeServiceNames(resolveEffectiveBookingServices(booking).map((s) => s.serviceName)),
+      serviceName: summarizeServiceNames(
+        resolveEffectiveBookingServices(booking).map((s) => s.serviceName),
+      ),
       reason: input.reason ?? null,
     });
     return {
       bookingId,
-      status: booking.status as ShopCancelBookingResultDto['status'],
+      status: booking.status,
       cancelledByActor: actor,
       cancelledAt: (booking.cancelledAt ?? new Date()).toISOString(),
       notification,
@@ -146,7 +157,10 @@ export class ShopBookingActionsService {
     return this.getInShop(salonId, bookingId);
   }
 
-  async getInShop(salonId: string, bookingId: string): Promise<InShopBookingDto> {
+  async getInShop(
+    salonId: string,
+    bookingId: string,
+  ): Promise<InShopBookingDto> {
     const booking = await this.prisma.booking.findFirstOrThrow({
       where: { id: bookingId, salonId },
       include: {
@@ -160,10 +174,12 @@ export class ShopBookingActionsService {
       salonId: booking.salonId,
       slotStart: booking.slotStart.toISOString(),
       slotEnd: booking.slotEnd.toISOString(),
-      status: booking.status as InShopBookingDto['status'],
+      status: booking.status,
       guestName: booking.guestName ?? '',
       guestPhone: booking.guestPhone,
-      serviceNames: resolveEffectiveBookingServices(booking).map((s) => s.serviceName),
+      serviceNames: resolveEffectiveBookingServices(booking).map(
+        (s) => s.serviceName,
+      ),
       staffName: booking.preferredStaff?.displayName ?? null,
       note: booking.internalNote,
       createdAt: booking.createdAt.toISOString(),
@@ -172,13 +188,20 @@ export class ShopBookingActionsService {
 
   // ---------- internals ----------
 
-  private async authorize(userId: string, salonId: string, bookingId: string): Promise<CancellationActor> {
+  private async authorize(
+    userId: string,
+    salonId: string,
+    bookingId: string,
+  ): Promise<CancellationActor> {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     const kind = await this.salonAccess.getActorKind(userId, salonId);
     if (kind === 'OWNER') return CancellationActor.OWNER;
     if (kind === 'PLATFORM_ADMIN') return CancellationActor.ADMIN;
     if (kind === 'STAFF') {
-      const me = await this.prisma.salonStaff.findFirst({ where: { userId, salonId }, select: { id: true } });
+      const me = await this.prisma.salonStaff.findFirst({
+        where: { userId, salonId },
+        select: { id: true },
+      });
       const booking = await this.prisma.booking.findFirst({
         where: { id: bookingId, salonId },
         select: {
@@ -191,7 +214,8 @@ export class ShopBookingActionsService {
       const mine =
         !!me &&
         !!booking &&
-        (booking.preferredStaffId === me.id || booking.queueEntries.some((q) => q.assignedStaffId === me.id));
+        (booking.preferredStaffId === me.id ||
+          booking.queueEntries.some((q) => q.assignedStaffId === me.id));
       if (!mine) {
         throw new AppException(
           OwnerOpsErrorCode.BOOKING_NOT_YOURS,
@@ -201,7 +225,11 @@ export class ShopBookingActionsService {
       }
       return CancellationActor.STAFF;
     }
-    throw new AppException(BookingErrorCode.BOOKING_NOT_FOUND, 'Booking not found.', HttpStatus.NOT_FOUND);
+    throw new AppException(
+      BookingErrorCode.BOOKING_NOT_FOUND,
+      'Booking not found.',
+      HttpStatus.NOT_FOUND,
+    );
   }
 
   private async notifyCustomer(input: {
@@ -218,12 +246,17 @@ export class ShopBookingActionsService {
   }): Promise<ShopCancelBookingResultDto['notification']> {
     // An in-shop guest has no FastQue account: there is nobody to notify and nothing is claimed.
     if (!input.customerId) return { inApp: 'NO_ACCOUNT', push: 'NO_ACCOUNT' };
-    const type = input.kind === 'cancelled' ? 'booking.cancelled_by_shop' : 'booking.rescheduled_by_shop';
+    const type =
+      input.kind === 'cancelled'
+        ? 'booking.cancelled_by_shop'
+        : 'booking.rescheduled_by_shop';
     const whenText = formatShopLocalDateTime(input.slotStart, input.timeZone);
     try {
       const copy = await this.push.renderShopBookingPush(
         input.customerId,
-        input.kind === 'cancelled' ? 'shopCancelledBooking' : 'shopRescheduledBooking',
+        input.kind === 'cancelled'
+          ? 'shopCancelledBooking'
+          : 'shopRescheduledBooking',
         { shopName: input.salonName, serviceName: input.serviceName, whenText },
       );
       const dedupeKey =
@@ -261,11 +294,21 @@ export class ShopBookingActionsService {
       this.logger.warn(
         `Could not deliver shop ${input.kind} notice for booking ${input.bookingId}: ${err instanceof Error ? err.message : 'unknown error'}`,
       );
-      return { inApp: NotificationDeliveryStatus.FAILED, push: NotificationDeliveryStatus.FAILED };
+      return {
+        inApp: NotificationDeliveryStatus.FAILED,
+        push: NotificationDeliveryStatus.FAILED,
+      };
     }
   }
 }
 
 // Re-exported for tests that need the statuses a linked entry must NOT be in.
-export const SEATED_QUEUE_STATUSES = [QueueEntryStatus.IN_SERVICE, QueueEntryStatus.COMPLETED] as const;
-export const SHOP_BOOKING_SOURCES = [BookingSource.APP, BookingSource.WEB, BookingSource.IN_SHOP] as const;
+export const SEATED_QUEUE_STATUSES = [
+  QueueEntryStatus.IN_SERVICE,
+  QueueEntryStatus.COMPLETED,
+] as const;
+export const SHOP_BOOKING_SOURCES = [
+  BookingSource.APP,
+  BookingSource.WEB,
+  BookingSource.IN_SHOP,
+] as const;

@@ -46,6 +46,7 @@ export function SlotPicker({
 
   useEffect(() => {
     if (!key) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear stale times while the new date or barber is fetched
       setSlots(null);
       return;
     }

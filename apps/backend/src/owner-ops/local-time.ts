@@ -6,14 +6,25 @@ import {
 } from '../common/timezone/timezone';
 
 /** Half-open [start, end) UTC instants of one salon-local calendar day. Null when unresolvable. */
-export function localDayWindow(dateStr: string, timeZone: string): { start: Date; end: Date } | null {
+export function localDayWindow(
+  dateStr: string,
+  timeZone: string,
+): { start: Date; end: Date } | null {
   const start = zonedWallTimeToUtc(dateStr, '00:00', timeZone);
-  const end = zonedWallTimeToUtc(addZonedCalendarDays(dateStr, 1), '00:00', timeZone);
+  const end = zonedWallTimeToUtc(
+    addZonedCalendarDays(dateStr, 1),
+    '00:00',
+    timeZone,
+  );
   return start && end ? { start, end } : null;
 }
 
 /** [fromDate, toDateExclusive) as UTC instants, both given as salon-local YYYY-MM-DD strings. */
-export function localRange(fromDate: string, toDateExclusive: string, timeZone: string): { start: Date; end: Date } | null {
+export function localRange(
+  fromDate: string,
+  toDateExclusive: string,
+  timeZone: string,
+): { start: Date; end: Date } | null {
   const start = zonedWallTimeToUtc(fromDate, '00:00', timeZone);
   const end = zonedWallTimeToUtc(toDateExclusive, '00:00', timeZone);
   return start && end ? { start, end } : null;
@@ -45,10 +56,15 @@ export function addMonths(dateStr: string, months: number): string {
 export function daysBetween(a: string, b: string): number {
   const [ay, am, ad] = a.split('-').map(Number);
   const [by, bm, bd] = b.split('-').map(Number);
-  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
+  return Math.round(
+    (Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000,
+  );
 }
 
-export function percentChange(current: number, previous: number): number | null {
+export function percentChange(
+  current: number,
+  previous: number,
+): number | null {
   if (previous <= 0) return null; // nothing to compare against: never a fabricated "+100%"
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }

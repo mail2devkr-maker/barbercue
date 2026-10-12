@@ -28,12 +28,16 @@ const RED: Rgb = [0.69, 0.25, 0.24];
 
 let cachedFont: TtfFont | null = null;
 function font(): TtfFont {
-  if (!cachedFont) cachedFont = new TtfFont(Buffer.from(GEIST_REGULAR_TTF_BASE64, 'base64'));
+  if (!cachedFont)
+    cachedFont = new TtfFont(Buffer.from(GEIST_REGULAR_TTF_BASE64, 'base64'));
   return cachedFont;
 }
 
 export function formatInvoiceMoney(amount: number, currency: string): string {
-  const grouped = amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const grouped = amount.toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   return currency === 'INR' ? `₹${grouped}` : `${currency} ${grouped}`;
 }
 
@@ -48,12 +52,16 @@ class PageBuilder {
   }
 
   fillRect(x: number, top: number, w: number, h: number, c: Rgb): void {
-    this.ops.push(`q ${this.color(c)} ${x.toFixed(2)} ${(PAGE_H - top - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f Q`);
+    this.ops.push(
+      `q ${this.color(c)} ${x.toFixed(2)} ${(PAGE_H - top - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f Q`,
+    );
   }
 
   hLine(x1: number, x2: number, top: number, c: Rgb, width = 0.6): void {
     const y = (PAGE_H - top).toFixed(2);
-    this.ops.push(`q ${this.color(c, true)} ${width} w ${x1.toFixed(2)} ${y} m ${x2.toFixed(2)} ${y} l S Q`);
+    this.ops.push(
+      `q ${this.color(c, true)} ${width} w ${x1.toFixed(2)} ${y} m ${x2.toFixed(2)} ${y} l S Q`,
+    );
   }
 
   text(
@@ -61,11 +69,20 @@ class PageBuilder {
     x: number,
     top: number,
     size: number,
-    opts: { color?: Rgb; bold?: boolean; align?: 'left' | 'right' | 'center' } = {},
+    opts: {
+      color?: Rgb;
+      bold?: boolean;
+      align?: 'left' | 'right' | 'center';
+    } = {},
   ): void {
     if (!str) return;
     const width = this.f.measure(str, size);
-    const startX = opts.align === 'right' ? x - width : opts.align === 'center' ? x - width / 2 : x;
+    const startX =
+      opts.align === 'right'
+        ? x - width
+        : opts.align === 'center'
+          ? x - width / 2
+          : x;
     let hex = '';
     for (const ch of str) {
       const cp = ch.codePointAt(0)!;
@@ -77,8 +94,12 @@ class PageBuilder {
     const baseline = (PAGE_H - top - size * 0.8).toFixed(2);
     // Geist ships a single (regular) weight; "bold" is the PDF fill+stroke render mode, which
     // thickens every glyph outline slightly - no second font file needed.
-    const bold = opts.bold ? `2 Tr ${this.color(color, true)} ${(size * 0.028).toFixed(3)} w ` : '';
-    this.ops.push(`q BT ${this.color(color)} ${bold}/F1 ${size} Tf ${startX.toFixed(2)} ${baseline} Td <${hex}> Tj ET Q`);
+    const bold = opts.bold
+      ? `2 Tr ${this.color(color, true)} ${(size * 0.028).toFixed(3)} w `
+      : '';
+    this.ops.push(
+      `q BT ${this.color(color)} ${bold}/F1 ${size} Tf ${startX.toFixed(2)} ${baseline} Td <${hex}> Tj ET Q`,
+    );
   }
 
   wrap(str: string, maxWidth: number, size: number): string[] {
@@ -87,7 +108,8 @@ class PageBuilder {
       let current = '';
       for (const word of paragraph.split(/\s+/).filter(Boolean)) {
         const attempt = current ? `${current} ${word}` : word;
-        if (this.f.measure(attempt, size) <= maxWidth || !current) current = attempt;
+        if (this.f.measure(attempt, size) <= maxWidth || !current)
+          current = attempt;
         else {
           lines.push(current);
           current = word;
@@ -135,9 +157,17 @@ function statusLabel(inv: InvoiceDetailDto): { text: string; color: Rgb } {
   }
 }
 
-const METHOD_LABEL: Record<string, string> = { CASH: 'Cash', UPI: 'UPI', CARD: 'Card', OTHER: 'Other' };
+const METHOD_LABEL: Record<string, string> = {
+  CASH: 'Cash',
+  UPI: 'UPI',
+  CARD: 'Card',
+  OTHER: 'Other',
+};
 
-export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: string | null } = {}): Buffer {
+export function renderInvoicePdf(
+  inv: InvoiceDetailDto,
+  options: { timeZone?: string | null } = {},
+): Buffer {
   const f = font();
   const page = new PageBuilder(f);
   const tz = options.timeZone ?? null;
@@ -148,7 +178,8 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
   // ---- Brand header
   page.fillRect(0, 0, PAGE_W, 6, BRAND);
   page.text('FastQue', MARGIN, y + 4, 22, { color: BRAND, bold: true });
-  const title = inv.seller.gstin && inv.taxTotal > 0 ? 'TAX INVOICE' : 'INVOICE';
+  const title =
+    inv.seller.gstin && inv.taxTotal > 0 ? 'TAX INVOICE' : 'INVOICE';
   page.text(title, right, y + 6, 18, { align: 'right', bold: true });
   y += 40;
 
@@ -168,7 +199,9 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
     leftY += 13;
   }
   if (inv.salonName && inv.salonName !== inv.seller.legalName) {
-    page.text(`Trading as ${inv.salonName}`, MARGIN, leftY, 9, { color: MUTED });
+    page.text(`Trading as ${inv.salonName}`, MARGIN, leftY, 9, {
+      color: MUTED,
+    });
     leftY += 13;
   }
 
@@ -178,7 +211,10 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
     ['Invoice no.', inv.number],
     ['Invoice date', fmtDate(inv.issuedAt, tz)],
     ['Service date', fmtDate(inv.serviceDate, tz)],
-    [inv.sourceType === 'BOOKING' ? 'Booking ref.' : 'Live Queue visit', (inv.bookingId ?? inv.queueEntryId ?? '').slice(0, 8).toUpperCase()],
+    [
+      inv.sourceType === 'BOOKING' ? 'Booking ref.' : 'Live Queue visit',
+      (inv.bookingId ?? inv.queueEntryId ?? '').slice(0, 8).toUpperCase(),
+    ],
   ];
   for (const [label, value] of meta) {
     page.text(label, metaX, rightY, 9, { color: MUTED });
@@ -188,7 +224,11 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
   const status = statusLabel(inv);
   const badgeW = f.measure(status.text, 9) + 18;
   page.fillRect(right - badgeW, rightY + 2, badgeW, 18, PAPER_TINT);
-  page.text(status.text, right - badgeW / 2, rightY + 6, 9, { align: 'center', bold: true, color: status.color });
+  page.text(status.text, right - badgeW / 2, rightY + 6, 9, {
+    align: 'center',
+    bold: true,
+    color: status.color,
+  });
   rightY += 28;
 
   y = Math.max(leftY, rightY) + 8;
@@ -211,7 +251,13 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
   y += 10;
 
   // ---- Lines table
-  const cols = { desc: MARGIN + 8, qty: 330, unit: 410, disc: 478, amt: right - 8 };
+  const cols = {
+    desc: MARGIN + 8,
+    qty: 330,
+    unit: 410,
+    disc: 478,
+    amt: right - 8,
+  };
   page.fillRect(MARGIN, y, right - MARGIN, 22, PAPER_TINT);
   page.text('Description', cols.desc, y + 6, 9, { bold: true });
   page.text('Qty', cols.qty, y + 6, 9, { bold: true, align: 'right' });
@@ -224,8 +270,17 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
     page.text(wrapped[0] ?? '', cols.desc, y, 10);
     page.text(String(line.quantity), cols.qty, y, 10, { align: 'right' });
     page.text(money(line.unitPrice), cols.unit, y, 10, { align: 'right' });
-    page.text(line.discount > 0 ? `-${money(line.discount)}` : '—', cols.disc, y, 10, { align: 'right', color: line.discount > 0 ? INK : MUTED });
-    page.text(money(line.lineTotal), cols.amt, y, 10, { align: 'right', bold: true });
+    page.text(
+      line.discount > 0 ? `-${money(line.discount)}` : '—',
+      cols.disc,
+      y,
+      10,
+      { align: 'right', color: line.discount > 0 ? INK : MUTED },
+    );
+    page.text(money(line.lineTotal), cols.amt, y, 10, {
+      align: 'right',
+      bold: true,
+    });
     let lh = 15;
     for (const extra of wrapped.slice(1)) {
       page.text(extra, cols.desc, y + lh - 1, 10);
@@ -238,24 +293,44 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
 
   // ---- Totals
   const totalsX = 360;
-  const totalRow = (label: string, value: string, opts: { bold?: boolean; size?: number; color?: Rgb } = {}) => {
+  const totalRow = (
+    label: string,
+    value: string,
+    opts: { bold?: boolean; size?: number; color?: Rgb } = {},
+  ) => {
     const size = opts.size ?? 10;
-    page.text(label, totalsX, y, size, { color: opts.color ?? MUTED, bold: opts.bold });
-    page.text(value, right - 8, y, size, { align: 'right', bold: opts.bold, color: opts.color });
+    page.text(label, totalsX, y, size, {
+      color: opts.color ?? MUTED,
+      bold: opts.bold,
+    });
+    page.text(value, right - 8, y, size, {
+      align: 'right',
+      bold: opts.bold,
+      color: opts.color,
+    });
     y += size + 8;
   };
   totalRow('Subtotal', money(inv.subtotal));
-  if (inv.discountTotal > 0) totalRow('Discount', `-${money(inv.discountTotal)}`);
+  if (inv.discountTotal > 0)
+    totalRow('Discount', `-${money(inv.discountTotal)}`);
   if (inv.taxLabel && inv.taxTotal > 0) {
     const rate = inv.taxRatePercent !== null ? ` ${inv.taxRatePercent}%` : '';
-    totalRow(`${inv.taxLabel}${rate}${inv.taxMode === 'INCLUSIVE' ? ' (included)' : ''}`, money(inv.taxTotal));
+    totalRow(
+      `${inv.taxLabel}${rate}${inv.taxMode === 'INCLUSIVE' ? ' (included)' : ''}`,
+      money(inv.taxTotal),
+    );
   }
   page.hLine(totalsX, right, y - 2, INK, 0.8);
   y += 4;
   totalRow('Total', money(inv.total), { bold: true, size: 13, color: INK });
   if (inv.amountPaid > 0) totalRow('Amount received', money(inv.amountPaid));
-  if (inv.amountRefunded > 0) totalRow('Refunded', `-${money(inv.amountRefunded)}`);
-  totalRow('Balance due', money(inv.balanceDue), { bold: true, size: 11, color: inv.balanceDue > 0 ? AMBER : GREEN });
+  if (inv.amountRefunded > 0)
+    totalRow('Refunded', `-${money(inv.amountRefunded)}`);
+  totalRow('Balance due', money(inv.balanceDue), {
+    bold: true,
+    size: 11,
+    color: inv.balanceDue > 0 ? AMBER : GREEN,
+  });
   y += 6;
 
   // ---- Payments
@@ -265,7 +340,13 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
     for (const p of inv.payments) {
       const label = `${p.kind === 'REFUND' ? 'Refund' : 'Payment'} · ${METHOD_LABEL[p.method] ?? p.method}${p.reference ? ` · ref ${p.reference}` : ''}`;
       page.text(`${fmtDate(p.recordedAt, tz)}   ${label}`, MARGIN, y, 9);
-      page.text(`${p.kind === 'REFUND' ? '-' : ''}${money(p.amount)}`, 300, y, 9, { align: 'right' });
+      page.text(
+        `${p.kind === 'REFUND' ? '-' : ''}${money(p.amount)}`,
+        300,
+        y,
+        9,
+        { align: 'right' },
+      );
       y += 13;
     }
     y += 6;
@@ -278,8 +359,20 @@ export function renderInvoicePdf(inv: InvoiceDetailDto, options: { timeZone?: st
   // ---- Footer
   const footerTop = PAGE_H - 62;
   page.hLine(MARGIN, right, footerTop, RULE);
-  page.text('Payment status reflects payments recorded by the shop. This invoice was generated with FastQue.', MARGIN, footerTop + 10, 8, { color: MUTED });
-  page.text(`${inv.number} · ${inv.seller.legalName}`, right, footerTop + 24, 8, { align: 'right', color: MUTED });
+  page.text(
+    'Payment status reflects payments recorded by the shop. This invoice was generated with FastQue.',
+    MARGIN,
+    footerTop + 10,
+    8,
+    { color: MUTED },
+  );
+  page.text(
+    `${inv.number} · ${inv.seller.legalName}`,
+    right,
+    footerTop + 24,
+    8,
+    { align: 'right', color: MUTED },
+  );
 
   return assemblePdf(f, page);
 }
@@ -291,20 +384,37 @@ function assemblePdf(f: TtfFont, page: PageBuilder): Buffer {
     return objects.length; // 1-based object number
   };
   const stream = (dict: string, data: Buffer): Buffer =>
-    Buffer.concat([Buffer.from(`<< ${dict} /Length ${data.length} >>\nstream\n`, 'latin1'), data, Buffer.from('\nendstream', 'latin1')]);
+    Buffer.concat([
+      Buffer.from(`<< ${dict} /Length ${data.length} >>\nstream\n`, 'latin1'),
+      data,
+      Buffer.from('\nendstream', 'latin1'),
+    ]);
 
   // Reserve numbers in a fixed order so references can be written before the targets exist.
-  const CATALOG = 1, PAGES = 2, PAGE = 3, CONTENT = 4, FONT = 5, CID = 6, DESC = 7, FILE = 8, TOUNI = 9;
+  const CATALOG = 1,
+    PAGES = 2,
+    PAGE = 3,
+    CONTENT = 4,
+    FONT = 5,
+    CID = 6,
+    DESC = 7,
+    FILE = 8,
+    TOUNI = 9;
   const used = [...page.usedGlyphs.entries()].sort((a, b) => a[0] - b[0]);
 
   const scale = (units: number) => Math.round((units * 1000) / f.unitsPerEm);
-  const widths = used.map(([gid]) => `${gid} [${scale(f.advance(gid))}]`).join(' ');
+  const widths = used
+    .map(([gid]) => `${gid} [${scale(f.advance(gid))}]`)
+    .join(' ');
 
   let bf = '';
   for (let i = 0; i < used.length; i += 100) {
     const chunk = used.slice(i, i + 100);
     bf += `${chunk.length} beginbfchar\n${chunk
-      .map(([gid, cp]) => `<${gid.toString(16).padStart(4, '0')}> <${cpToUtf16Hex(cp)}>`)
+      .map(
+        ([gid, cp]) =>
+          `<${gid.toString(16).padStart(4, '0')}> <${cpToUtf16Hex(cp)}>`,
+      )
       .join('\n')}\nendbfchar\n`;
   }
   const toUnicode =
@@ -318,15 +428,27 @@ function assemblePdf(f: TtfFont, page: PageBuilder): Buffer {
   add(
     `<< /Type /Page /Parent ${PAGES} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${FONT} 0 R >> >> /Contents ${CONTENT} 0 R >>`,
   ); // 3
-  add(stream('/Filter /FlateDecode', deflateSync(Buffer.from(page.content(), 'latin1')))); // 4
-  add(`<< /Type /Font /Subtype /Type0 /BaseFont /GeistRegular /Encoding /Identity-H /DescendantFonts [${CID} 0 R] /ToUnicode ${TOUNI} 0 R >>`); // 5
+  add(
+    stream(
+      '/Filter /FlateDecode',
+      deflateSync(Buffer.from(page.content(), 'latin1')),
+    ),
+  ); // 4
+  add(
+    `<< /Type /Font /Subtype /Type0 /BaseFont /GeistRegular /Encoding /Identity-H /DescendantFonts [${CID} 0 R] /ToUnicode ${TOUNI} 0 R >>`,
+  ); // 5
   add(
     `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /GeistRegular /CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> /FontDescriptor ${DESC} 0 R /DW 600 /W [${widths}] /CIDToGIDMap /Identity >>`,
   ); // 6
   add(
     `<< /Type /FontDescriptor /FontName /GeistRegular /Flags 32 /FontBBox [${scale(-200)} ${scale(f.descent)} ${scale(f.unitsPerEm + 200)} ${scale(f.ascent)}] /ItalicAngle 0 /Ascent ${scale(f.ascent)} /Descent ${scale(f.descent)} /CapHeight ${scale(f.ascent * 0.8)} /StemV 80 /FontFile2 ${FILE} 0 R >>`,
   ); // 7
-  add(stream(`/Filter /FlateDecode /Length1 ${f.data.length}`, deflateSync(f.data))); // 8
+  add(
+    stream(
+      `/Filter /FlateDecode /Length1 ${f.data.length}`,
+      deflateSync(f.data),
+    ),
+  ); // 8
   add(stream('', Buffer.from(toUnicode, 'latin1'))); // 9
 
   const chunks: Buffer[] = [Buffer.from('%PDF-1.4\n%âãÏÓ\n', 'latin1')];
@@ -342,7 +464,8 @@ function assemblePdf(f: TtfFont, page: PageBuilder): Buffer {
   });
   const xrefStart = position;
   let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (const off of offsets) xref += `${String(off).padStart(10, '0')} 00000 n \n`;
+  for (const off of offsets)
+    xref += `${String(off).padStart(10, '0')} 00000 n \n`;
   xref += `trailer\n<< /Size ${objects.length + 1} /Root ${CATALOG} 0 R /Info << /Producer ${pdfString('FastQue')} /Title ${pdfString('Invoice')} >> >>\nstartxref\n${xrefStart}\n%%EOF\n`;
   chunks.push(Buffer.from(xref, 'latin1'));
   return Buffer.concat(chunks);

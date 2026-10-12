@@ -90,13 +90,19 @@ export class OwnerOpsController {
 
   @Get(`${SALON}/overview`)
   @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
-  getOverview(@CurrentUser() user: AuthenticatedUser, @Param('salonId', ParseUUIDPipe) salonId: string) {
+  getOverview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+  ) {
     return this.overview.getOverview(user.id, salonId);
   }
 
   @Get(`${SALON}/revenue`)
   @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
-  getRevenue(@CurrentUser() user: AuthenticatedUser, @Param('salonId', ParseUUIDPipe) salonId: string) {
+  getRevenue(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+  ) {
     return this.overview.getRevenue(user.id, salonId);
   }
 
@@ -114,7 +120,8 @@ export class OwnerOpsController {
   getCancellationAnalytics(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
-    @Query(new ZodValidationPipe(cancellationAnalyticsQuerySchema)) query: CancellationAnalyticsQuery,
+    @Query(new ZodValidationPipe(cancellationAnalyticsQuerySchema))
+    query: CancellationAnalyticsQuery,
   ) {
     return this.cancellations.getAnalytics(user.id, salonId, query);
   }
@@ -126,10 +133,16 @@ export class OwnerOpsController {
   createInShopBooking(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
-    @Body(new ZodValidationPipe(createInShopBookingSchema)) body: CreateInShopBookingInput,
+    @Body(new ZodValidationPipe(createInShopBookingSchema))
+    body: CreateInShopBookingInput,
     @Req() req: Request,
   ) {
-    return this.bookingActions.createInShop(user, salonId, body, req.header('Idempotency-Key') ?? randomUUID());
+    return this.bookingActions.createInShop(
+      user,
+      salonId,
+      body,
+      req.header('Idempotency-Key') ?? randomUUID(),
+    );
   }
 
   @Post(`${SALON}/bookings/:bookingId/cancel`)
@@ -138,7 +151,8 @@ export class OwnerOpsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
-    @Body(new ZodValidationPipe(shopCancelBookingSchema)) body: ShopCancelBookingInput,
+    @Body(new ZodValidationPipe(shopCancelBookingSchema))
+    body: ShopCancelBookingInput,
   ) {
     return this.bookingActions.cancel(user, salonId, bookingId, body);
   }
@@ -149,7 +163,8 @@ export class OwnerOpsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
-    @Body(new ZodValidationPipe(shopRescheduleBookingSchema)) body: ShopRescheduleBookingInput,
+    @Body(new ZodValidationPipe(shopRescheduleBookingSchema))
+    body: ShopRescheduleBookingInput,
   ) {
     return this.bookingActions.reschedule(user, salonId, bookingId, body);
   }
@@ -161,18 +176,25 @@ export class OwnerOpsController {
   addQueueCustomer(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
-    @Body(new ZodValidationPipe(createQueueCustomerSchema)) body: CreateQueueCustomerInput,
+    @Body(new ZodValidationPipe(createQueueCustomerSchema))
+    body: CreateQueueCustomerInput,
   ) {
     return this.queue.createOperatorEntry(user.id, salonId, body);
   }
 
   @Post(`${SALON}/queue/auto-assign`)
-  autoAssignAll(@CurrentUser() user: AuthenticatedUser, @Param('salonId', ParseUUIDPipe) salonId: string) {
+  autoAssignAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+  ) {
     return this.autoAssign.assignAllWaiting(user.id, salonId);
   }
 
   @Post(`${SALON}/queue/take-next`)
-  takeNext(@CurrentUser() user: AuthenticatedUser, @Param('salonId', ParseUUIDPipe) salonId: string) {
+  takeNext(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+  ) {
     return this.autoAssign.takeNext(user.id, salonId);
   }
 
@@ -183,18 +205,28 @@ export class OwnerOpsController {
     @Param('salonId', ParseUUIDPipe) salonId: string,
     @Body(new ZodValidationPipe(queueSettingsSchema)) body: QueueSettingsInput,
   ) {
-    return this.autoAssign.setAutomaticAssignment(user.id, salonId, body.autoAssignEnabled);
+    return this.autoAssign.setAutomaticAssignment(
+      user.id,
+      salonId,
+      body.autoAssignEnabled,
+    );
   }
 
   @Post('dashboard/queue-entries/:entryId/auto-assign')
-  autoAssignEntry(@CurrentUser() user: AuthenticatedUser, @Param('entryId', ParseUUIDPipe) entryId: string) {
+  autoAssignEntry(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('entryId', ParseUUIDPipe) entryId: string,
+  ) {
     return this.autoAssign.assignOne(user.id, entryId);
   }
 
   // ---------- Staff ----------
 
   @Get(`${SALON}/staff/me/work`)
-  getMyWork(@CurrentUser() user: AuthenticatedUser, @Param('salonId', ParseUUIDPipe) salonId: string) {
+  getMyWork(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+  ) {
     return this.staffWork.getMyWork(user.id, salonId);
   }
 
@@ -204,7 +236,8 @@ export class OwnerOpsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
     @Param('staffId', ParseUUIDPipe) staffId: string,
-    @Body(new ZodValidationPipe(staffAccessChangeSchema)) body: StaffAccessChangeInput,
+    @Body(new ZodValidationPipe(staffAccessChangeSchema))
+    body: StaffAccessChangeInput,
   ) {
     return this.staffAccess.revoke(user.id, salonId, staffId, body);
   }
@@ -215,7 +248,8 @@ export class OwnerOpsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
     @Param('staffId', ParseUUIDPipe) staffId: string,
-    @Body(new ZodValidationPipe(staffAccessChangeSchema)) body: StaffAccessChangeInput,
+    @Body(new ZodValidationPipe(staffAccessChangeSchema))
+    body: StaffAccessChangeInput,
   ) {
     return this.staffAccess.restore(user.id, salonId, staffId, body);
   }
@@ -227,11 +261,18 @@ export class OwnerOpsController {
   async setContactVisibility(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
-    @Body(new ZodValidationPipe(contactVisibilitySchema)) body: ContactVisibilityInput,
+    @Body(new ZodValidationPipe(contactVisibilitySchema))
+    body: ContactVisibilityInput,
   ) {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(user.id, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      user.id,
+      salonId,
+    );
     await this.prisma.$transaction([
-      this.prisma.salon.update({ where: { id: salonId }, data: { showPhoneToCustomers: body.showPhoneToCustomers } }),
+      this.prisma.salon.update({
+        where: { id: salonId },
+        data: { showPhoneToCustomers: body.showPhoneToCustomers },
+      }),
       this.prisma.auditLog.create({
         data: {
           actorUserId: user.id,
@@ -250,7 +291,10 @@ export class OwnerOpsController {
 
   @Get(`${SALON}/billing-profile`)
   @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
-  getBillingProfile(@CurrentUser() user: AuthenticatedUser, @Param('salonId', ParseUUIDPipe) salonId: string) {
+  getBillingProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+  ) {
     return this.invoices.getBillingProfile(user.id, salonId);
   }
 
@@ -259,7 +303,8 @@ export class OwnerOpsController {
   saveBillingProfile(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
-    @Body(new ZodValidationPipe(billingProfileSchema)) body: BillingProfileInput,
+    @Body(new ZodValidationPipe(billingProfileSchema))
+    body: BillingProfileInput,
   ) {
     return this.invoices.saveBillingProfile(user.id, salonId, body);
   }
@@ -273,7 +318,12 @@ export class OwnerOpsController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { invoice, created } = await this.invoices.issue(user.id, salonId, body, req.header('Idempotency-Key') ?? undefined);
+    const { invoice, created } = await this.invoices.issue(
+      user.id,
+      salonId,
+      body,
+      req.header('Idempotency-Key') ?? undefined,
+    );
     res.status(created ? 201 : 200);
     return invoice;
   }
@@ -288,9 +338,19 @@ export class OwnerOpsController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
-    const allowed = ['ALL', 'UNPAID', 'PARTIALLY_PAID', 'PAID', 'REFUNDED', 'VOID'];
+    const allowed = [
+      'ALL',
+      'UNPAID',
+      'PARTIALLY_PAID',
+      'PAID',
+      'REFUNDED',
+      'VOID',
+    ];
     return this.invoices.list(user.id, salonId, {
-      payment: payment && allowed.includes(payment) ? (payment as InvoicePaymentStatus | 'ALL') : 'ALL',
+      payment:
+        payment && allowed.includes(payment)
+          ? (payment as InvoicePaymentStatus | 'ALL')
+          : 'ALL',
       q,
       cursor,
       limit: limit ? Number(limit) : undefined,
@@ -307,7 +367,12 @@ export class OwnerOpsController {
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.invoices.listPayments(user.id, salonId, { from, to, cursor, limit: limit ? Number(limit) : undefined });
+    return this.invoices.listPayments(user.id, salonId, {
+      from,
+      to,
+      cursor,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Get(`${SALON}/invoices/by-source`)
@@ -339,7 +404,11 @@ export class OwnerOpsController {
     @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { buffer, filename } = await this.invoices.pdf(user.id, salonId, invoiceId);
+    const { buffer, filename } = await this.invoices.pdf(
+      user.id,
+      salonId,
+      invoiceId,
+    );
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return new StreamableFile(buffer);
   }
@@ -350,10 +419,17 @@ export class OwnerOpsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId', ParseUUIDPipe) salonId: string,
     @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
-    @Body(new ZodValidationPipe(recordInvoicePaymentSchema)) body: RecordInvoicePaymentInput,
+    @Body(new ZodValidationPipe(recordInvoicePaymentSchema))
+    body: RecordInvoicePaymentInput,
     @Req() req: Request,
   ) {
-    return this.invoices.recordPayment(user.id, salonId, invoiceId, body, req.header('Idempotency-Key') ?? undefined);
+    return this.invoices.recordPayment(
+      user.id,
+      salonId,
+      invoiceId,
+      body,
+      req.header('Idempotency-Key') ?? undefined,
+    );
   }
 
   @Post(`${SALON}/invoices/:invoiceId/void`)
@@ -375,12 +451,23 @@ export class CustomerInvoicesController {
   constructor(private readonly invoices: InvoicesService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthenticatedUser, @Query('cursor') cursor?: string, @Query('limit') limit?: string) {
-    return this.invoices.listMine(user.id, cursor, limit ? Number(limit) : undefined);
+  list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.invoices.listMine(
+      user.id,
+      cursor,
+      limit ? Number(limit) : undefined,
+    );
   }
 
   @Get(':invoiceId')
-  get(@CurrentUser() user: AuthenticatedUser, @Param('invoiceId', ParseUUIDPipe) invoiceId: string) {
+  get(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+  ) {
     return this.invoices.getMine(user.id, invoiceId);
   }
 
@@ -392,7 +479,10 @@ export class CustomerInvoicesController {
     @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { buffer, filename } = await this.invoices.pdfMine(user.id, invoiceId);
+    const { buffer, filename } = await this.invoices.pdfMine(
+      user.id,
+      invoiceId,
+    );
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return new StreamableFile(buffer);
   }

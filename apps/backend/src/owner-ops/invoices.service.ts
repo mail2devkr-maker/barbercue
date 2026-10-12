@@ -28,7 +28,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
-import { addZonedCalendarDays, resolveSalonTimeZone, zonedWallTimeToUtc } from '../common/timezone/timezone';
+import {
+  addZonedCalendarDays,
+  resolveSalonTimeZone,
+  zonedWallTimeToUtc,
+} from '../common/timezone/timezone';
 import { todayLocal } from './local-time';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 import { renderInvoicePdf } from './invoice-pdf';
@@ -38,10 +42,18 @@ const TX = { timeout: 15_000 };
 const invoiceInclude = {
   lines: { orderBy: { sortOrder: 'asc' as const } },
   payments: { orderBy: { recordedAt: 'asc' as const } },
-  salon: { select: { name: true, timezone: true, city: { select: { countryCode: true } } } },
+  salon: {
+    select: {
+      name: true,
+      timezone: true,
+      city: { select: { countryCode: true } },
+    },
+  },
 } satisfies Prisma.InvoiceInclude;
 
-type InvoiceWithAll = Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>;
+type InvoiceWithAll = Prisma.InvoiceGetPayload<{
+  include: typeof invoiceInclude;
+}>;
 
 /**
  * Invoices and shop-recorded payments.
@@ -70,14 +82,26 @@ export class InvoicesService {
 
   // ---------- Billing profile ----------
 
-  async getBillingProfile(userId: string, salonId: string): Promise<BillingProfileDto> {
+  async getBillingProfile(
+    userId: string,
+    salonId: string,
+  ): Promise<BillingProfileDto> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    const profile = await this.prisma.salonBillingProfile.findUnique({ where: { salonId } });
+    const profile = await this.prisma.salonBillingProfile.findUnique({
+      where: { salonId },
+    });
     return this.toProfileDto(salonId, profile);
   }
 
-  async saveBillingProfile(userId: string, salonId: string, input: BillingProfileInput): Promise<BillingProfileDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+  async saveBillingProfile(
+    userId: string,
+    salonId: string,
+    input: BillingProfileInput,
+  ): Promise<BillingProfileDto> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     const data = {
       legalName: input.legalName,
       billingAddress: input.billingAddress ?? null,
@@ -86,7 +110,10 @@ export class InvoicesService {
       gstin: input.gstin ?? null,
       taxEnabled: input.taxEnabled,
       taxLabel: input.taxLabel,
-      taxRateBps: input.taxRatePercent === undefined ? null : Math.round(input.taxRatePercent * 100),
+      taxRateBps:
+        input.taxRatePercent === undefined
+          ? null
+          : Math.round(input.taxRatePercent * 100),
       taxMode: input.taxMode,
       invoicePrefix: input.invoicePrefix,
     };
@@ -102,7 +129,13 @@ export class InvoicesService {
           action: 'BILLING_PROFILE_SAVED',
           entityType: 'Salon',
           entityId: salonId,
-          metadata: { actor, taxEnabled: data.taxEnabled, taxRateBps: data.taxRateBps, taxMode: data.taxMode, hasGstin: Boolean(data.gstin) },
+          metadata: {
+            actor,
+            taxEnabled: data.taxEnabled,
+            taxRateBps: data.taxRateBps,
+            taxMode: data.taxMode,
+            hasGstin: Boolean(data.gstin),
+          },
         },
       });
       return profile;
@@ -125,12 +158,21 @@ export class InvoicesService {
 
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { name: true, currency: true, city: { select: { countryCode: true } } },
+      select: {
+        name: true,
+        currency: true,
+        city: { select: { countryCode: true } },
+      },
     });
     if (!salon) {
-      throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Shop not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        OwnerOpsErrorCode.INVOICE_NOT_FOUND,
+        'Shop not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
-    const currency = salon.currency ?? (salon.city.countryCode === 'IN' ? 'INR' : null);
+    const currency =
+      salon.currency ?? (salon.city.countryCode === 'IN' ? 'INR' : null);
     if (!currency) {
       throw new AppException(
         OwnerOpsErrorCode.BILLING_PROFILE_REQUIRED,
@@ -138,7 +180,9 @@ export class InvoicesService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
-    const profile = await this.prisma.salonBillingProfile.findUnique({ where: { salonId } });
+    const profile = await this.prisma.salonBillingProfile.findUnique({
+      where: { salonId },
+    });
     if (!profile?.legalName) {
       throw new AppException(
         OwnerOpsErrorCode.BILLING_PROFILE_REQUIRED,
@@ -161,7 +205,7 @@ export class InvoicesService {
     const totals = computeInvoiceTotals(source.lines, {
       enabled: profile.taxEnabled,
       rateBps: profile.taxRateBps,
-      mode: profile.taxMode as InvoiceTaxMode,
+      mode: profile.taxMode,
     });
 
     try {
@@ -233,9 +277,15 @@ export class InvoicesService {
         });
         return created.id;
       }, TX);
-      return { invoice: await this.getDetailInternal(salonId, invoiceId), created: true };
+      return {
+        invoice: await this.getDetailInternal(salonId, invoiceId),
+        created: true,
+      };
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         // A concurrent identical request (a double-click, a retry with a fresh key) won the race:
         // report the invoice it created instead of failing or duplicating.
         const winner = await this.findIssuedForSource(salonId, input);
@@ -265,12 +315,23 @@ export class InvoicesService {
       await this.prisma.$transaction(async (tx) => {
         // Serialize concurrent payments on one invoice so the overpayment guard cannot be raced.
         await tx.$queryRaw`SELECT "id" FROM "invoices" WHERE "id" = ${invoiceId} AND "salonId" = ${salonId} FOR UPDATE`;
-        const invoice = await tx.invoice.findFirst({ where: { id: invoiceId, salonId }, include: { payments: true } });
+        const invoice = await tx.invoice.findFirst({
+          where: { id: invoiceId, salonId },
+          include: { payments: true },
+        });
         if (!invoice) {
-          throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Invoice not found.', HttpStatus.NOT_FOUND);
+          throw new AppException(
+            OwnerOpsErrorCode.INVOICE_NOT_FOUND,
+            'Invoice not found.',
+            HttpStatus.NOT_FOUND,
+          );
         }
         if (invoice.status === InvoiceStatus.VOID) {
-          throw new AppException(OwnerOpsErrorCode.INVOICE_VOID, 'This invoice has been voided.', HttpStatus.CONFLICT);
+          throw new AppException(
+            OwnerOpsErrorCode.INVOICE_VOID,
+            'This invoice has been voided.',
+            HttpStatus.CONFLICT,
+          );
         }
         const { paidPaise, refundedPaise } = sumPayments(invoice.payments);
         const totalPaise = decimalStringToPaise(invoice.total.toString());
@@ -305,31 +366,62 @@ export class InvoicesService {
         await tx.auditLog.create({
           data: {
             actorUserId: userId,
-            action: input.kind === InvoicePaymentKind.REFUND ? 'INVOICE_REFUND_RECORDED' : 'INVOICE_PAYMENT_RECORDED',
+            action:
+              input.kind === InvoicePaymentKind.REFUND
+                ? 'INVOICE_REFUND_RECORDED'
+                : 'INVOICE_PAYMENT_RECORDED',
             entityType: 'Invoice',
             entityId: invoiceId,
-            metadata: { salonId, paymentId: payment.id, method: input.method, amountPaise, actor },
+            metadata: {
+              salonId,
+              paymentId: payment.id,
+              method: input.method,
+              amountPaise,
+              actor,
+            },
           },
         });
       }, TX);
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002' && idempotencyKey) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        idempotencyKey
+      ) {
         // The same request key was already applied: this is a replay - return the current state.
-        const prior = await this.prisma.invoicePayment.findUnique({ where: { idempotencyKey } });
-        if (prior && prior.invoiceId === invoiceId) return this.getDetailInternal(salonId, invoiceId);
+        const prior = await this.prisma.invoicePayment.findUnique({
+          where: { idempotencyKey },
+        });
+        if (prior && prior.invoiceId === invoiceId)
+          return this.getDetailInternal(salonId, invoiceId);
       }
       throw err;
     }
     return this.getDetailInternal(salonId, invoiceId);
   }
 
-  async voidInvoice(userId: string, salonId: string, invoiceId: string, input: VoidInvoiceInput): Promise<InvoiceDetailDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+  async voidInvoice(
+    userId: string,
+    salonId: string,
+    invoiceId: string,
+    input: VoidInvoiceInput,
+  ): Promise<InvoiceDetailDto> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "invoices" WHERE "id" = ${invoiceId} AND "salonId" = ${salonId} FOR UPDATE`;
-      const invoice = await tx.invoice.findFirst({ where: { id: invoiceId, salonId }, include: { payments: true } });
+      const invoice = await tx.invoice.findFirst({
+        where: { id: invoiceId, salonId },
+        include: { payments: true },
+      });
       if (!invoice) {
-        throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Invoice not found.', HttpStatus.NOT_FOUND);
+        throw new AppException(
+          OwnerOpsErrorCode.INVOICE_NOT_FOUND,
+          'Invoice not found.',
+          HttpStatus.NOT_FOUND,
+        );
       }
       if (invoice.status === InvoiceStatus.VOID) return; // idempotent
       const { paidPaise, refundedPaise } = sumPayments(invoice.payments);
@@ -342,7 +434,12 @@ export class InvoicesService {
       }
       await tx.invoice.update({
         where: { id: invoiceId },
-        data: { status: InvoiceStatus.VOID, voidedAt: new Date(), voidedByUserId: userId, voidReason: input.reason },
+        data: {
+          status: InvoiceStatus.VOID,
+          voidedAt: new Date(),
+          voidedByUserId: userId,
+          voidReason: input.reason,
+        },
       });
       await tx.auditLog.create({
         data: {
@@ -350,7 +447,12 @@ export class InvoicesService {
           action: 'INVOICE_VOIDED',
           entityType: 'Invoice',
           entityId: invoiceId,
-          metadata: { salonId, number: invoice.number, reason: input.reason, actor },
+          metadata: {
+            salonId,
+            number: invoice.number,
+            reason: input.reason,
+            actor,
+          },
         },
       });
     }, TX);
@@ -359,12 +461,20 @@ export class InvoicesService {
 
   // ---------- Reads (shop side) ----------
 
-  async get(userId: string, salonId: string, invoiceId: string): Promise<InvoiceDetailDto> {
+  async get(
+    userId: string,
+    salonId: string,
+    invoiceId: string,
+  ): Promise<InvoiceDetailDto> {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     return this.getDetailInternal(salonId, invoiceId);
   }
 
-  async getForSource(userId: string, salonId: string, input: CreateInvoiceInput): Promise<InvoiceDetailDto | null> {
+  async getForSource(
+    userId: string,
+    salonId: string,
+    input: CreateInvoiceInput,
+  ): Promise<InvoiceDetailDto | null> {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     const invoice = await this.findIssuedForSource(salonId, input);
     return invoice ? this.toDetail(invoice) : null;
@@ -373,24 +483,39 @@ export class InvoicesService {
   async list(
     userId: string,
     salonId: string,
-    query: { payment?: InvoicePaymentStatus | 'ALL'; q?: string; cursor?: string; limit?: number },
+    query: {
+      payment?: InvoicePaymentStatus | 'ALL';
+      q?: string;
+      cursor?: string;
+      limit?: number;
+    },
   ): Promise<InvoiceListDto> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const limit = Math.min(Math.max(query.limit ?? 20, 1), 50);
-    const payment = query.payment && query.payment !== 'ALL' ? query.payment : null;
+    const payment =
+      query.payment && query.payment !== 'ALL' ? query.payment : null;
     const q = query.q?.trim();
     const items: InvoiceSummaryDto[] = [];
     let cursor = query.cursor;
     let exhausted = false;
     // The payment status is derived from the ledger, so it is filtered after loading; scan bounded
     // keyset pages until a full page of matches is collected (never silently truncating history).
-    for (let scan = 0; scan < 10 && items.length < limit + 1 && !exhausted; scan++) {
+    for (
+      let scan = 0;
+      scan < 10 && items.length < limit + 1 && !exhausted;
+      scan++
+    ) {
       const rows = await this.prisma.invoice.findMany({
         where: {
           salonId,
           ...(payment === 'VOID' ? { status: InvoiceStatus.VOID } : {}),
           ...(q
-            ? { OR: [{ number: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }] }
+            ? {
+                OR: [
+                  { number: { contains: q, mode: 'insensitive' } },
+                  { customerName: { contains: q, mode: 'insensitive' } },
+                ],
+              }
             : {}),
         },
         include: invoiceInclude,
@@ -409,7 +534,10 @@ export class InvoicesService {
     }
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
-    return { items: page, nextCursor: hasMore ? page[page.length - 1].id : null };
+    return {
+      items: page,
+      nextCursor: hasMore ? page[page.length - 1].id : null,
+    };
   }
 
   /**
@@ -425,18 +553,36 @@ export class InvoicesService {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { currency: true, timezone: true, city: { select: { countryCode: true } } },
+      select: {
+        currency: true,
+        timezone: true,
+        city: { select: { countryCode: true } },
+      },
     });
     if (!salon) {
-      throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Shop not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        OwnerOpsErrorCode.INVOICE_NOT_FOUND,
+        'Shop not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
-    const timeZone = resolveSalonTimeZone({ timezone: salon.timezone, countryCode: salon.city.countryCode }) ?? 'UTC';
+    const timeZone =
+      resolveSalonTimeZone({
+        timezone: salon.timezone,
+        countryCode: salon.city.countryCode,
+      }) ?? 'UTC';
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
     const today = todayLocal(timeZone);
     const toDate = query.to && datePattern.test(query.to) ? query.to : today;
-    const fromDate = query.from && datePattern.test(query.from) ? query.from : addZonedCalendarDays(toDate, -29);
-    const start = zonedWallTimeToUtc(fromDate, '00:00', timeZone) ?? new Date(0);
-    const end = zonedWallTimeToUtc(addZonedCalendarDays(toDate, 1), '00:00', timeZone) ?? new Date();
+    const fromDate =
+      query.from && datePattern.test(query.from)
+        ? query.from
+        : addZonedCalendarDays(toDate, -29);
+    const start =
+      zonedWallTimeToUtc(fromDate, '00:00', timeZone) ?? new Date(0);
+    const end =
+      zonedWallTimeToUtc(addZonedCalendarDays(toDate, 1), '00:00', timeZone) ??
+      new Date();
     const limit = Math.min(Math.max(query.limit ?? 25, 1), 100);
     const where = { salonId, recordedAt: { gte: start, lt: end } };
 
@@ -448,13 +594,20 @@ export class InvoicesService {
         take: limit + 1,
         ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
       }),
-      this.prisma.invoicePayment.groupBy({ by: ['kind', 'method'], where, _sum: { amount: true } }),
+      this.prisma.invoicePayment.groupBy({
+        by: ['kind', 'method'],
+        where,
+        _sum: { amount: true },
+      }),
     ]);
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
 
     const recorders = await this.prisma.salonStaff.findMany({
-      where: { salonId, userId: { in: [...new Set(page.map((p) => p.recordedByUserId))] } },
+      where: {
+        salonId,
+        userId: { in: [...new Set(page.map((p) => p.recordedByUserId))] },
+      },
       select: { userId: true, displayName: true },
     });
     const nameByUser = new Map(recorders.map((r) => [r.userId, r.displayName]));
@@ -466,13 +619,18 @@ export class InvoicesService {
       const paise = decimalStringToPaise((g._sum.amount ?? 0).toString());
       if (g.kind === InvoicePaymentKind.REFUND) refunded += paise;
       else received += paise;
-      methodNet.set(g.method, (methodNet.get(g.method) ?? 0) + (g.kind === InvoicePaymentKind.REFUND ? -paise : paise));
+      methodNet.set(
+        g.method,
+        (methodNet.get(g.method) ?? 0) +
+          (g.kind === InvoicePaymentKind.REFUND ? -paise : paise),
+      );
     }
     const count = await this.prisma.invoicePayment.count({ where });
     return {
       from: fromDate,
       to: toDate,
-      currency: salon.currency ?? (salon.city.countryCode === 'IN' ? 'INR' : null),
+      currency:
+        salon.currency ?? (salon.city.countryCode === 'IN' ? 'INR' : null),
       items: page.map((p) => ({
         id: p.id,
         invoiceId: p.invoiceId,
@@ -493,18 +651,29 @@ export class InvoicesService {
         net: paiseToRupees(received - refunded),
         count,
       },
-      byMethod: [...methodNet.entries()].map(([method, net]) => ({ method: method as RecordedPaymentListDto['byMethod'][number]['method'], net: paiseToRupees(net) })),
+      byMethod: [...methodNet.entries()].map(([method, net]) => ({
+        method: method as RecordedPaymentListDto['byMethod'][number]['method'],
+        net: paiseToRupees(net),
+      })),
     };
   }
 
-  async pdf(userId: string, salonId: string, invoiceId: string): Promise<{ buffer: Buffer; filename: string }> {
+  async pdf(
+    userId: string,
+    salonId: string,
+    invoiceId: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     return this.renderPdf(await this.loadWithSalon(salonId, invoiceId));
   }
 
   // ---------- Reads (customer side) ----------
 
-  async listMine(userId: string, cursor: string | undefined, limit = 20): Promise<InvoiceListDto> {
+  async listMine(
+    userId: string,
+    cursor: string | undefined,
+    limit = 20,
+  ): Promise<InvoiceListDto> {
     const take = Math.min(Math.max(limit, 1), 50);
     const rows = await this.prisma.invoice.findMany({
       where: { customerId: userId, status: InvoiceStatus.ISSUED },
@@ -515,56 +684,100 @@ export class InvoicesService {
     });
     const hasMore = rows.length > take;
     const page = hasMore ? rows.slice(0, take) : rows;
-    return { items: page.map((r) => this.toSummary(r)), nextCursor: hasMore ? page[page.length - 1].id : null };
+    return {
+      items: page.map((r) => this.toSummary(r)),
+      nextCursor: hasMore ? page[page.length - 1].id : null,
+    };
   }
 
   async getMine(userId: string, invoiceId: string): Promise<InvoiceDetailDto> {
     return this.toDetail(await this.loadMine(userId, invoiceId));
   }
 
-  async pdfMine(userId: string, invoiceId: string): Promise<{ buffer: Buffer; filename: string }> {
+  async pdfMine(
+    userId: string,
+    invoiceId: string,
+  ): Promise<{ buffer: Buffer; filename: string }> {
     return this.renderPdf(await this.loadMine(userId, invoiceId));
   }
 
   // ---------- internals ----------
 
-  private async loadMine(userId: string, invoiceId: string): Promise<InvoiceWithAll> {
+  private async loadMine(
+    userId: string,
+    invoiceId: string,
+  ): Promise<InvoiceWithAll> {
     // Ownership is part of the WHERE: another customer's invoice is indistinguishable from a
     // missing one, so ids can never be probed.
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId, customerId: userId, status: InvoiceStatus.ISSUED },
+      where: {
+        id: invoiceId,
+        customerId: userId,
+        status: InvoiceStatus.ISSUED,
+      },
       include: invoiceInclude,
     });
     if (!invoice) {
-      throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Invoice not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        OwnerOpsErrorCode.INVOICE_NOT_FOUND,
+        'Invoice not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return invoice;
   }
 
-  private async loadWithSalon(salonId: string, invoiceId: string): Promise<InvoiceWithAll> {
-    const invoice = await this.prisma.invoice.findFirst({ where: { id: invoiceId, salonId }, include: invoiceInclude });
+  private async loadWithSalon(
+    salonId: string,
+    invoiceId: string,
+  ): Promise<InvoiceWithAll> {
+    const invoice = await this.prisma.invoice.findFirst({
+      where: { id: invoiceId, salonId },
+      include: invoiceInclude,
+    });
     if (!invoice) {
-      throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Invoice not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        OwnerOpsErrorCode.INVOICE_NOT_FOUND,
+        'Invoice not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return invoice;
   }
 
-  private async getDetailInternal(salonId: string, invoiceId: string): Promise<InvoiceDetailDto> {
+  private async getDetailInternal(
+    salonId: string,
+    invoiceId: string,
+  ): Promise<InvoiceDetailDto> {
     return this.toDetail(await this.loadWithSalon(salonId, invoiceId));
   }
 
-  private renderPdf(invoice: InvoiceWithAll): { buffer: Buffer; filename: string } {
+  private renderPdf(invoice: InvoiceWithAll): {
+    buffer: Buffer;
+    filename: string;
+  } {
     const detail = this.toDetail(invoice);
-    const timeZone = resolveSalonTimeZone({ timezone: invoice.salon.timezone, countryCode: invoice.salon.city.countryCode });
-    return { buffer: renderInvoicePdf(detail, { timeZone }), filename: `${invoice.number}.pdf` };
+    const timeZone = resolveSalonTimeZone({
+      timezone: invoice.salon.timezone,
+      countryCode: invoice.salon.city.countryCode,
+    });
+    return {
+      buffer: renderInvoicePdf(detail, { timeZone }),
+      filename: `${invoice.number}.pdf`,
+    };
   }
 
-  private findIssuedForSource(salonId: string, input: CreateInvoiceInput): Promise<InvoiceWithAll | null> {
+  private findIssuedForSource(
+    salonId: string,
+    input: CreateInvoiceInput,
+  ): Promise<InvoiceWithAll | null> {
     return this.prisma.invoice.findFirst({
       where: {
         salonId,
         status: InvoiceStatus.ISSUED,
-        ...(input.bookingId ? { bookingId: input.bookingId } : { queueEntryId: input.queueEntryId }),
+        ...(input.bookingId
+          ? { bookingId: input.bookingId }
+          : { queueEntryId: input.queueEntryId }),
       },
       include: invoiceInclude,
     });
@@ -593,7 +806,11 @@ export class InvoicesService {
       },
     });
     if (!booking) {
-      throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Booking not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        OwnerOpsErrorCode.INVOICE_NOT_FOUND,
+        'Booking not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
     if (booking.status !== BookingStatus.COMPLETED) {
       throw new AppException(
@@ -609,7 +826,9 @@ export class InvoicesService {
     const reductionPaise = Math.min(
       gross,
       decimalStringToPaise(booking.onlineBookingDiscountAmount.toString()) +
-        (booking.creditsRedeemedAmount ? decimalStringToPaise(booking.creditsRedeemedAmount.toString()) : 0),
+        (booking.creditsRedeemedAmount
+          ? decimalStringToPaise(booking.creditsRedeemedAmount.toString())
+          : 0),
     );
     const discounts = allocateProportionally(unit, reductionPaise);
     const lines: InvoiceLineInput[] = services.map((s, i) => ({
@@ -618,7 +837,8 @@ export class InvoicesService {
       quantity: 1,
       discountPaise: discounts[i],
     }));
-    const performer = booking.queueEntries[0]?.serviceSessions[0]?.staff.displayName;
+    const performer =
+      booking.queueEntries[0]?.serviceSessions[0]?.staff.displayName;
     return {
       sourceType: 'BOOKING' as const,
       bookingId: booking.id,
@@ -626,7 +846,11 @@ export class InvoicesService {
       customerId: booking.customerId,
       customerName: booking.guestName,
       customerPhone: booking.guestPhone ?? booking.customer?.phone ?? null,
-      staffName: performer ?? booking.queueEntries[0]?.assignedStaff?.displayName ?? booking.preferredStaff?.displayName ?? null,
+      staffName:
+        performer ??
+        booking.queueEntries[0]?.assignedStaff?.displayName ??
+        booking.preferredStaff?.displayName ??
+        null,
       serviceDate: booking.slotStart,
       lines,
       serviceIds: services.map((s) => s.serviceId),
@@ -642,12 +866,19 @@ export class InvoicesService {
           where: { status: ServiceSessionStatus.COMPLETED },
           orderBy: { endedAt: 'desc' },
           take: 1,
-          include: { service: { select: { id: true, name: true, price: true } }, staff: { select: { displayName: true } } },
+          include: {
+            service: { select: { id: true, name: true, price: true } },
+            staff: { select: { displayName: true } },
+          },
         },
       },
     });
     if (!entry) {
-      throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Live Queue visit not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        OwnerOpsErrorCode.INVOICE_NOT_FOUND,
+        'Live Queue visit not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
     if (entry.bookingId) {
       throw new AppException(
@@ -687,7 +918,10 @@ export class InvoicesService {
     };
   }
 
-  private toProfileDto(salonId: string, profile: Prisma.SalonBillingProfileGetPayload<object> | null): BillingProfileDto {
+  private toProfileDto(
+    salonId: string,
+    profile: Prisma.SalonBillingProfileGetPayload<object> | null,
+  ): BillingProfileDto {
     return {
       salonId,
       legalName: profile?.legalName ?? null,
@@ -697,8 +931,9 @@ export class InvoicesService {
       gstin: profile?.gstin ?? null,
       taxEnabled: profile?.taxEnabled ?? false,
       taxLabel: profile?.taxLabel ?? 'GST',
-      taxRatePercent: profile?.taxRateBps != null ? profile.taxRateBps / 100 : null,
-      taxMode: (profile?.taxMode as InvoiceTaxMode | undefined) ?? InvoiceTaxMode.EXCLUSIVE,
+      taxRatePercent:
+        profile?.taxRateBps != null ? profile.taxRateBps / 100 : null,
+      taxMode: profile?.taxMode ?? InvoiceTaxMode.EXCLUSIVE,
       invoicePrefix: profile?.invoicePrefix ?? 'INV',
       complete: Boolean(profile?.legalName),
     };
@@ -720,8 +955,15 @@ export class InvoicesService {
       total: paiseToRupees(totalPaise),
       amountPaid: paiseToRupees(paidPaise),
       amountRefunded: paiseToRupees(refundedPaise),
-      balanceDue: voided ? 0 : paiseToRupees(Math.max(0, totalPaise - (paidPaise - refundedPaise))),
-      paymentStatus: deriveInvoicePaymentStatus({ voided, totalPaise, paidPaise, refundedPaise }),
+      balanceDue: voided
+        ? 0
+        : paiseToRupees(Math.max(0, totalPaise - (paidPaise - refundedPaise))),
+      paymentStatus: deriveInvoicePaymentStatus({
+        voided,
+        totalPaise,
+        paidPaise,
+        refundedPaise,
+      }),
       status: row.status,
       issuedAt: row.issuedAt.toISOString(),
       serviceDate: row.serviceDate.toISOString(),
@@ -777,7 +1019,10 @@ function paiseToDecimal(paise: number): string {
   return `${whole}.${frac}`;
 }
 
-function sumPayments(payments: { kind: string; amount: Prisma.Decimal }[]): { paidPaise: number; refundedPaise: number } {
+function sumPayments(payments: { kind: string; amount: Prisma.Decimal }[]): {
+  paidPaise: number;
+  refundedPaise: number;
+} {
   let paidPaise = 0;
   let refundedPaise = 0;
   for (const p of payments) {
@@ -790,7 +1035,10 @@ function sumPayments(payments: { kind: string; amount: Prisma.Decimal }[]): { pa
 
 /** Splits `total` across `weights` proportionally in whole paise; the remainder goes to the earliest
  * lines so the parts always sum EXACTLY to `total` and no part exceeds its own weight. */
-export function allocateProportionally(weights: number[], total: number): number[] {
+export function allocateProportionally(
+  weights: number[],
+  total: number,
+): number[] {
   const sum = weights.reduce((a, b) => a + b, 0);
   if (sum === 0 || total <= 0) return weights.map(() => 0);
   const parts = weights.map((w) => Math.floor((w * total) / sum));

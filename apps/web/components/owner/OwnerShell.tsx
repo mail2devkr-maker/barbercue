@@ -126,6 +126,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
 
   // Close transient UI on navigation.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset transient UI when the route or search text changes
     setDrawerOpen(false);
     setMenuOpen(false);
   }, [pathname, search]);
@@ -404,6 +405,7 @@ function GlobalSearch({ salonId, kind }: { salonId: string; kind: ShopKind }) {
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset transient UI when the route or search text changes
       setServerHits([]);
       setLoading(false);
       return;
@@ -431,6 +433,7 @@ function GlobalSearch({ salonId, kind }: { salonId: string; kind: ShopKind }) {
   }, [query, salonId]);
 
   const hits = useMemo(() => [...navHits, ...serverHits], [navHits, serverHits]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reset transient UI when the route or search text changes
   useEffect(() => setActive(0), [query]);
 
   useEffect(() => {

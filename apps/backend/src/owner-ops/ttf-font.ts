@@ -18,7 +18,10 @@ export class TtfFont {
     const numTables = data.readUInt16BE(4);
     for (let i = 0; i < numTables; i++) {
       const o = 12 + i * 16;
-      tables.set(data.toString('latin1', o, o + 4), { offset: data.readUInt32BE(o + 8), length: data.readUInt32BE(o + 12) });
+      tables.set(data.toString('latin1', o, o + 4), {
+        offset: data.readUInt32BE(o + 8),
+        length: data.readUInt32BE(o + 12),
+      });
     }
     const need = (tag: string) => {
       const t = tables.get(tag);
@@ -42,16 +45,23 @@ export class TtfFont {
       const encoding = data.readUInt16BE(rec + 2);
       const offset = cmap.offset + data.readUInt32BE(rec + 4);
       const format = data.readUInt16BE(offset);
-      const unicode = platform === 0 || (platform === 3 && (encoding === 1 || encoding === 10));
-      if (unicode && (format === 4 || format === 12)) this.cmapSubtables.push({ format, offset });
+      const unicode =
+        platform === 0 ||
+        (platform === 3 && (encoding === 1 || encoding === 10));
+      if (unicode && (format === 4 || format === 12))
+        this.cmapSubtables.push({ format, offset });
     }
-    if (this.cmapSubtables.length === 0) throw new Error('TrueType font has no Unicode cmap');
+    if (this.cmapSubtables.length === 0)
+      throw new Error('TrueType font has no Unicode cmap');
   }
 
   /** Glyph id for a code point, or 0 (.notdef) when the font has none. */
   glyphFor(codePoint: number): number {
     for (const sub of this.cmapSubtables) {
-      const gid = sub.format === 4 ? this.lookup4(sub.offset, codePoint) : this.lookup12(sub.offset, codePoint);
+      const gid =
+        sub.format === 4
+          ? this.lookup4(sub.offset, codePoint)
+          : this.lookup12(sub.offset, codePoint);
       if (gid) return gid;
     }
     return 0;
@@ -66,7 +76,8 @@ export class TtfFont {
   /** Text width in PDF points for a given font size. */
   measure(text: string, size: number): number {
     let units = 0;
-    for (const ch of text) units += this.advance(this.glyphFor(ch.codePointAt(0)!));
+    for (const ch of text)
+      units += this.advance(this.glyphFor(ch.codePointAt(0)!));
     return (units * size) / this.unitsPerEm;
   }
 

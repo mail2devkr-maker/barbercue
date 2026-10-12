@@ -90,9 +90,12 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
   const audio = useRef<AudioContext | null>(null);
   const refetchTimer = useRef<number | null>(null);
   const language = useRef(user?.preferredLanguage);
-  language.current = user?.preferredLanguage;
   const voiceRef = useRef(voiceEnabled);
-  voiceRef.current = voiceEnabled;
+  // Event handlers read the latest values without re-subscribing the socket listeners.
+  useEffect(() => {
+    language.current = user?.preferredLanguage;
+    voiceRef.current = voiceEnabled;
+  }, [user?.preferredLanguage, voiceEnabled]);
 
   const chime = useCallback(async () => {
     try {
@@ -166,6 +169,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
   useEffect(() => {
     const socket = getRealtimeSocket();
     joinSalonRoom(salonId);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reflect the socket's current connection state on (re)subscribe
     setLive(socket.connected);
     const onEvent = (payload: { salonId?: string; revision?: number }) => {
       if (payload?.salonId && payload.salonId !== salonId) return;
@@ -337,7 +341,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                       Cancel
                     </Btn>
                   </div>
-                  {assignFor === entry.id && <AssignForm entry={entry} data={data} onDone={() => { setAssignFor(null); void refetch(false); }} base={base} />}
+                  {assignFor === entry.id && <AssignForm entry={entry} data={data} onDone={() => { setAssignFor(null); void refetch(false); }} />}
                 </EntryCard>
               ))}
               {waiting.map((entry) => (
@@ -362,7 +366,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                       Cancel
                     </Btn>
                   </div>
-                  {assignFor === entry.id && <AssignForm entry={entry} data={data} onDone={() => { setAssignFor(null); void refetch(false); }} base={base} />}
+                  {assignFor === entry.id && <AssignForm entry={entry} data={data} onDone={() => { setAssignFor(null); void refetch(false); }} />}
                 </EntryCard>
               ))}
             </div>
@@ -388,7 +392,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                       Cancel visit
                     </Btn>
                   </div>
-                  {assignFor === entry.id && <ReassignForm entry={entry} data={data} base={base} onDone={() => { setAssignFor(null); void refetch(false); }} />}
+                  {assignFor === entry.id && <ReassignForm entry={entry} data={data} onDone={() => { setAssignFor(null); void refetch(false); }} />}
                 </EntryCard>
               ))}
             </div>
@@ -587,7 +591,7 @@ function EntryCard({
   );
 }
 
-function AssignForm({ entry, data, base, onDone }: { entry: QueueEntryDetailDto; data: DashboardQueueDto; base: string; onDone: () => void }) {
+function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data: DashboardQueueDto; onDone: () => void }) {
   const needsService = !entry.serviceId;
   const [staffId, setStaffId] = useState(entry.preferredStaffId ?? "");
   const [chairId, setChairId] = useState("");
@@ -664,7 +668,7 @@ function AssignForm({ entry, data, base, onDone }: { entry: QueueEntryDetailDto;
   );
 }
 
-function ReassignForm({ entry, data, base, onDone }: { entry: QueueEntryDetailDto; data: DashboardQueueDto; base: string; onDone: () => void }) {
+function ReassignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data: DashboardQueueDto; onDone: () => void }) {
   const [staffId, setStaffId] = useState(entry.assignedStaffId ?? "");
   const [chairId, setChairId] = useState(entry.assignedChairId ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -672,7 +676,6 @@ function ReassignForm({ entry, data, base, onDone }: { entry: QueueEntryDetailDt
   const staff = data.staffRoster.filter((s) => s.status === StaffMemberStatus.ACTIVE);
   const chairs = data.chairs.filter((c) => c.id === entry.assignedChairId || (c.occupancy ?? "FREE") === "FREE");
   const changed = staffId !== entry.assignedStaffId || chairId !== entry.assignedChairId;
-  void base;
 
   async function submit() {
     setBusy(true);

@@ -36,8 +36,16 @@ export class StaffAccessService {
     private readonly realtime: RealtimeGateway,
   ) {}
 
-  async revoke(userId: string, salonId: string, staffId: string, input: StaffAccessChangeInput): Promise<StaffAccessResult> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+  async revoke(
+    userId: string,
+    salonId: string,
+    staffId: string,
+    input: StaffAccessChangeInput,
+  ): Promise<StaffAccessResult> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     const staff = await this.findStaff(salonId, staffId);
     if (staff.userId === userId) {
       throw new AppException(
@@ -68,15 +76,28 @@ export class StaffAccessService {
     await this.prisma.$transaction(async (tx) => {
       await tx.salonStaff.update({
         where: { id: staffId },
-        data: { status: StaffMemberStatus.INACTIVE, accessRevokedAt: new Date(), accessRevokedById: userId },
+        data: {
+          status: StaffMemberStatus.INACTIVE,
+          accessRevokedAt: new Date(),
+          accessRevokedById: userId,
+        },
       });
-      await tx.userRole.deleteMany({ where: { userId: staff.userId, salonId, role: Role.SALON_STAFF } });
+      await tx.userRole.deleteMany({
+        where: { userId: staff.userId, salonId, role: Role.SALON_STAFF },
+      });
       const stillOperator = await tx.userRole.count({
-        where: { userId: staff.userId, role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] } },
+        where: {
+          userId: staff.userId,
+          role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] },
+        },
       });
       if (stillOperator === 0) {
         await tx.refreshToken.updateMany({
-          where: { userId: staff.userId, audience: SessionAudience.STAFF, revokedAt: null },
+          where: {
+            userId: staff.userId,
+            audience: SessionAudience.STAFF,
+            revokedAt: null,
+          },
           data: { revokedAt: new Date() },
         });
       }
@@ -86,7 +107,12 @@ export class StaffAccessService {
           action: 'STAFF_ACCESS_REVOKED',
           entityType: 'SalonStaff',
           entityId: staffId,
-          metadata: { salonId, actor, reason: input.reason ?? null, targetUserId: staff.userId },
+          metadata: {
+            salonId,
+            actor,
+            reason: input.reason ?? null,
+            targetUserId: staff.userId,
+          },
         },
       });
     });
@@ -95,8 +121,16 @@ export class StaffAccessService {
     return { staffId, accessRevoked: true, status: StaffMemberStatus.INACTIVE };
   }
 
-  async restore(userId: string, salonId: string, staffId: string, input: StaffAccessChangeInput): Promise<StaffAccessResult> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+  async restore(
+    userId: string,
+    salonId: string,
+    staffId: string,
+    input: StaffAccessChangeInput,
+  ): Promise<StaffAccessResult> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     const staff = await this.findStaff(salonId, staffId);
     if (!staff.accessRevokedAt) {
       throw new AppException(
@@ -111,7 +145,13 @@ export class StaffAccessService {
         data: { accessRevokedAt: null, accessRevokedById: null },
       });
       await tx.userRole.upsert({
-        where: { userId_role_salonId: { userId: staff.userId, role: Role.SALON_STAFF, salonId } },
+        where: {
+          userId_role_salonId: {
+            userId: staff.userId,
+            role: Role.SALON_STAFF,
+            salonId,
+          },
+        },
         update: {},
         create: { userId: staff.userId, role: Role.SALON_STAFF, salonId },
       });
@@ -121,19 +161,34 @@ export class StaffAccessService {
           action: 'STAFF_ACCESS_RESTORED',
           entityType: 'SalonStaff',
           entityId: staffId,
-          metadata: { salonId, actor, reason: input.reason ?? null, targetUserId: staff.userId },
+          metadata: {
+            salonId,
+            actor,
+            reason: input.reason ?? null,
+            targetUserId: staff.userId,
+          },
         },
       });
     });
     this.realtime.emitStaffStatusChanged(salonId, staffId);
     // Back on the roster but still off duty until they clock in themselves.
-    return { staffId, accessRevoked: false, status: StaffMemberStatus.INACTIVE };
+    return {
+      staffId,
+      accessRevoked: false,
+      status: StaffMemberStatus.INACTIVE,
+    };
   }
 
   private async findStaff(salonId: string, staffId: string) {
-    const staff = await this.prisma.salonStaff.findFirst({ where: { id: staffId, salonId } });
+    const staff = await this.prisma.salonStaff.findFirst({
+      where: { id: staffId, salonId },
+    });
     if (!staff) {
-      throw new AppException(BookingErrorCode.STAFF_NOT_FOUND, 'Staff member not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        BookingErrorCode.STAFF_NOT_FOUND,
+        'Staff member not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return staff;
   }

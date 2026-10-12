@@ -7,7 +7,10 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { CancellationAnalyticsService } from './cancellation-analytics.service';
 import { InvoicesService } from './invoices.service';
 import { OwnerOverviewService } from './owner-overview.service';
-import { CustomerInvoicesController, OwnerOpsController } from './owner-ops.controller';
+import {
+  CustomerInvoicesController,
+  OwnerOpsController,
+} from './owner-ops.controller';
 import { OwnerSearchService } from './owner-search.service';
 import { QueueAutoAssignService } from './queue-auto-assign.service';
 import { ShopBookingActionsService } from './shop-booking-actions.service';
@@ -25,7 +28,13 @@ import { StaffWorkService } from './staff-work.service';
  * sibling.
  */
 @Module({
-  imports: [BookingsModule, QueueModule, RealtimeModule, NotificationDeliveryModule, PushNotificationsModule],
+  imports: [
+    BookingsModule,
+    QueueModule,
+    RealtimeModule,
+    NotificationDeliveryModule,
+    PushNotificationsModule,
+  ],
   controllers: [OwnerOpsController, CustomerInvoicesController],
   providers: [
     CancellationAnalyticsService,

@@ -44,7 +44,10 @@ export class StaffWorkService {
     const revision = Date.now();
     const me = await this.prisma.salonStaff.findFirst({
       where: { userId, salonId },
-      include: { salon: { select: { name: true } }, services: { select: { serviceId: true } } },
+      include: {
+        salon: { select: { name: true } },
+        services: { select: { serviceId: true } },
+      },
     });
     if (!me) {
       throw new AppException(
@@ -58,30 +61,61 @@ export class StaffWorkService {
     const dayBounds = timeZone ? zonedDayBounds(new Date(), timeZone) : null;
     const dayStart = dayBounds?.start ?? new Date(Date.now() - 24 * 3_600_000);
     const dayEnd = dayBounds?.end ?? new Date(Date.now() + 24 * 3_600_000);
-    const onDuty = me.status === StaffMemberStatus.ACTIVE && !me.accessRevokedAt;
+    const onDuty =
+      me.status === StaffMemberStatus.ACTIVE && !me.accessRevokedAt;
     const qualified = new Set(me.services.map((s) => s.serviceId));
 
-    const [availability, currentSession, waitingRows, bookingRows, completedToday] = await Promise.all([
-      this.reservations.getStaffAvailabilityState(this.prisma, salonId, me.id, onDuty),
+    const [
+      availability,
+      currentSession,
+      waitingRows,
+      bookingRows,
+      completedToday,
+    ] = await Promise.all([
+      this.reservations.getStaffAvailabilityState(
+        this.prisma,
+        salonId,
+        me.id,
+        onDuty,
+      ),
       this.prisma.serviceSession.findFirst({
         where: { staffId: me.id, status: ServiceSessionStatus.ACTIVE },
         include: {
           chair: { select: { label: true } },
           service: { select: { name: true } },
-          queueEntry: { select: { id: true, tokenNumber: true, status: true, contactName: true, contactPhone: true, customer: { select: { phone: true } } } },
+          queueEntry: {
+            select: {
+              id: true,
+              tokenNumber: true,
+              status: true,
+              contactName: true,
+              contactPhone: true,
+              customer: { select: { phone: true } },
+            },
+          },
         },
       }),
       this.prisma.queueEntry.findMany({
-        where: { salonId, status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] } },
+        where: {
+          salonId,
+          status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+        },
         include: {
           service: { select: { name: true } },
           booking: {
             select: {
               preferredStaffId: true,
               serviceId: true,
-              service: { select: { name: true, durationMinutes: true, price: true } },
+              service: {
+                select: { name: true, durationMinutes: true, price: true },
+              },
               services: {
-                select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+                select: {
+                  serviceId: true,
+                  serviceName: true,
+                  durationMinutes: true,
+                  price: true,
+                },
                 orderBy: { sortOrder: 'asc' },
               },
             },
@@ -93,18 +127,33 @@ export class StaffWorkService {
         where: {
           salonId,
           slotStart: { gte: dayStart, lt: dayEnd },
-          status: { in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT, BookingStatus.COMPLETED] },
-          OR: [{ preferredStaffId: me.id }, { queueEntries: { some: { assignedStaffId: me.id } } }],
+          status: {
+            in: [
+              BookingStatus.CONFIRMED,
+              BookingStatus.PENDING_PAYMENT,
+              BookingStatus.COMPLETED,
+            ],
+          },
+          OR: [
+            { preferredStaffId: me.id },
+            { queueEntries: { some: { assignedStaffId: me.id } } },
+          ],
         },
         include: {
           customer: { select: { phone: true } },
-          service: { select: { name: true, durationMinutes: true, price: true } },
+          service: {
+            select: { name: true, durationMinutes: true, price: true },
+          },
           services: { orderBy: { sortOrder: 'asc' } },
         },
         orderBy: { slotStart: 'asc' },
       }),
       this.prisma.serviceSession.count({
-        where: { staffId: me.id, status: ServiceSessionStatus.COMPLETED, endedAt: { gte: dayStart } },
+        where: {
+          staffId: me.id,
+          status: ServiceSessionStatus.COMPLETED,
+          endedAt: { gte: dayStart },
+        },
       }),
     ]);
 
@@ -114,10 +163,13 @@ export class StaffWorkService {
           serviceSessionId: currentSession.id,
           tokenNumber: currentSession.queueEntry.tokenNumber,
           customerLabel: currentSession.queueEntry.contactName ?? GUEST_LABEL,
-          customerPhone: currentSession.queueEntry.contactPhone ?? currentSession.queueEntry.customer?.phone ?? null,
+          customerPhone:
+            currentSession.queueEntry.contactPhone ??
+            currentSession.queueEntry.customer?.phone ??
+            null,
           serviceName: currentSession.service.name,
           startedAt: currentSession.startedAt.toISOString(),
-          status: currentSession.queueEntry.status as QueueEntryStatus,
+          status: currentSession.queueEntry.status,
           chairLabel: currentSession.chair.label,
         }
       : null;
@@ -131,7 +183,9 @@ export class StaffWorkService {
           ? [entry.serviceId]
           : [];
       const preferred =
-        entry.source === QueueEntrySource.APPOINTMENT ? (entry.booking?.preferredStaffId ?? null) : (entry.preferredStaffId ?? null);
+        entry.source === QueueEntrySource.APPOINTMENT
+          ? (entry.booking?.preferredStaffId ?? null)
+          : (entry.preferredStaffId ?? null);
       const eligible =
         onDuty &&
         serviceIds.length > 0 &&
@@ -139,7 +193,9 @@ export class StaffWorkService {
         (preferred === null || preferred === me.id) &&
         entry.arrivedAt !== null;
       const serviceName = entry.booking
-        ? resolveEffectiveBookingServices(entry.booking).map((s) => s.serviceName).join(' + ')
+        ? resolveEffectiveBookingServices(entry.booking)
+            .map((s) => s.serviceName)
+            .join(' + ')
         : (entry.service?.name ?? null);
       return {
         queueEntryId: entry.id,
@@ -150,7 +206,7 @@ export class StaffWorkService {
         customerPhone: null,
         serviceName,
         startedAt: null,
-        status: entry.status as QueueEntryStatus,
+        status: entry.status,
         chairLabel: null,
         eligible,
         position: entry.status === QueueEntryStatus.WAITING ? position : 0,
@@ -161,8 +217,10 @@ export class StaffWorkService {
       bookingId: b.id,
       slotStart: b.slotStart.toISOString(),
       slotEnd: b.slotEnd.toISOString(),
-      status: b.status as BookingStatus,
-      serviceNames: resolveEffectiveBookingServices(b).map((s) => s.serviceName),
+      status: b.status,
+      serviceNames: resolveEffectiveBookingServices(b).map(
+        (s) => s.serviceName,
+      ),
       customerLabel: b.guestName ?? GUEST_LABEL,
       customerPhone: b.guestPhone ?? b.customer?.phone ?? null,
       source: b.source === 'IN_SHOP' ? 'IN_SHOP' : 'ONLINE',
@@ -173,7 +231,7 @@ export class StaffWorkService {
       salonName: me.salon.name,
       staffId: me.id,
       displayName: me.displayName,
-      status: me.status as StaffMemberStatus,
+      status: me.status,
       availabilityState: availability.availabilityState,
       current,
       waiting,

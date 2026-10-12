@@ -75,7 +75,10 @@ export class NotificationDeliveryService implements OnModuleInit {
       nextDueAt: () => this.findNextDueAt(),
       runDue: async () => {
         const handled = await this.sweepRetries();
-        if (handled > 0) this.logger.log(`Retried ${handled} push notification delivery attempt(s).`);
+        if (handled > 0)
+          this.logger.log(
+            `Retried ${handled} push notification delivery attempt(s).`,
+          );
       },
     });
   }
@@ -88,10 +91,14 @@ export class NotificationDeliveryService implements OnModuleInit {
 
   // ---------- IN_APP ----------
 
-  private async deliverInApp(input: DeliverToUserInput): Promise<NotificationDeliveryStatus> {
+  private async deliverInApp(
+    input: DeliverToUserInput,
+  ): Promise<NotificationDeliveryStatus> {
     const dedupeKey = `${input.dedupeKey}:IN_APP`;
-    const existing = await this.prisma.notificationDelivery.findUnique({ where: { dedupeKey } });
-    if (existing) return existing.status as NotificationDeliveryStatus;
+    const existing = await this.prisma.notificationDelivery.findUnique({
+      where: { dedupeKey },
+    });
+    if (existing) return existing.status;
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -114,7 +121,9 @@ export class NotificationDeliveryService implements OnModuleInit {
           input.inAppPayload,
           input.deepLink,
         );
-        const status = created ? NotificationDeliveryStatus.SENT : NotificationDeliveryStatus.SKIPPED;
+        const status = created
+          ? NotificationDeliveryStatus.SENT
+          : NotificationDeliveryStatus.SKIPPED;
         await tx.notificationDelivery.update({
           where: { dedupeKey },
           data: {
@@ -128,22 +137,35 @@ export class NotificationDeliveryService implements OnModuleInit {
     } catch (err) {
       if (isUniqueViolation(err)) {
         // Lost a race with a concurrent identical request: report the winner's outcome.
-        const winner = await this.prisma.notificationDelivery.findUnique({ where: { dedupeKey } });
-        return (winner?.status as NotificationDeliveryStatus | undefined) ?? NotificationDeliveryStatus.SENT;
+        const winner = await this.prisma.notificationDelivery.findUnique({
+          where: { dedupeKey },
+        });
+        return winner?.status ?? NotificationDeliveryStatus.SENT;
       }
-      this.logger.warn(`In-app delivery failed for ${dedupeKey}: ${errorMessage(err)}`);
+      this.logger.warn(
+        `In-app delivery failed for ${dedupeKey}: ${errorMessage(err)}`,
+      );
       return NotificationDeliveryStatus.FAILED;
     }
   }
 
   // ---------- PUSH ----------
 
-  private async deliverPush(input: DeliverToUserInput): Promise<NotificationDeliveryStatus | 'NO_DEVICE'> {
+  private async deliverPush(
+    input: DeliverToUserInput,
+  ): Promise<NotificationDeliveryStatus | 'NO_DEVICE'> {
     const dedupeKey = `${input.dedupeKey}:PUSH`;
-    const existing = await this.prisma.notificationDelivery.findUnique({ where: { dedupeKey } });
-    if (existing) return this.toPushOutcome(existing.status as NotificationDeliveryStatus, existing.lastError);
+    const existing = await this.prisma.notificationDelivery.findUnique({
+      where: { dedupeKey },
+    });
+    if (existing)
+      return this.toPushOutcome(existing.status, existing.lastError);
 
-    const stored: StoredPushPayload = { title: input.push.title, body: input.push.body, data: input.push.data };
+    const stored: StoredPushPayload = {
+      title: input.push.title,
+      body: input.push.body,
+      data: input.push.data,
+    };
     try {
       await this.prisma.notificationDelivery.create({
         data: {
@@ -161,17 +183,26 @@ export class NotificationDeliveryService implements OnModuleInit {
       });
     } catch (err) {
       if (isUniqueViolation(err)) {
-        const winner = await this.prisma.notificationDelivery.findUnique({ where: { dedupeKey } });
+        const winner = await this.prisma.notificationDelivery.findUnique({
+          where: { dedupeKey },
+        });
         return winner
-          ? this.toPushOutcome(winner.status as NotificationDeliveryStatus, winner.lastError)
+          ? this.toPushOutcome(winner.status, winner.lastError)
           : NotificationDeliveryStatus.PENDING;
       }
-      this.logger.warn(`Could not record push delivery ${dedupeKey}: ${errorMessage(err)}`);
+      this.logger.warn(
+        `Could not record push delivery ${dedupeKey}: ${errorMessage(err)}`,
+      );
       return NotificationDeliveryStatus.FAILED;
     }
 
     if (!(await this.push.isPushAllowed(input.userId, input.push.category))) {
-      await this.finish(dedupeKey, NotificationDeliveryStatus.SKIPPED, 'PUSH_DISABLED_BY_RECIPIENT', 0);
+      await this.finish(
+        dedupeKey,
+        NotificationDeliveryStatus.SKIPPED,
+        'PUSH_DISABLED_BY_RECIPIENT',
+        0,
+      );
       return NotificationDeliveryStatus.SKIPPED;
     }
     return this.attemptPush(dedupeKey, input.userId, stored, 0);
@@ -194,21 +225,41 @@ export class NotificationDeliveryService implements OnModuleInit {
     });
 
     if (result.noDevices) {
-      await this.finish(dedupeKey, NotificationDeliveryStatus.SKIPPED, 'NO_DEVICE', attempts);
+      await this.finish(
+        dedupeKey,
+        NotificationDeliveryStatus.SKIPPED,
+        'NO_DEVICE',
+        attempts,
+      );
       return 'NO_DEVICE';
     }
     if (result.delivered > 0) {
-      await this.finish(dedupeKey, NotificationDeliveryStatus.SENT, null, attempts);
+      await this.finish(
+        dedupeKey,
+        NotificationDeliveryStatus.SENT,
+        null,
+        attempts,
+      );
       return NotificationDeliveryStatus.SENT;
     }
     if (!result.transientFailure) {
       // The provider answered and rejected every ticket (e.g. unregistered devices): retrying the
       // same payload cannot succeed.
-      await this.finish(dedupeKey, NotificationDeliveryStatus.GAVE_UP, result.error ?? 'REJECTED', attempts);
+      await this.finish(
+        dedupeKey,
+        NotificationDeliveryStatus.GAVE_UP,
+        result.error ?? 'REJECTED',
+        attempts,
+      );
       return NotificationDeliveryStatus.GAVE_UP;
     }
     if (attempts >= PUSH_MAX_ATTEMPTS) {
-      await this.finish(dedupeKey, NotificationDeliveryStatus.GAVE_UP, result.error ?? 'TRANSIENT_FAILURE', attempts);
+      await this.finish(
+        dedupeKey,
+        NotificationDeliveryStatus.GAVE_UP,
+        result.error ?? 'TRANSIENT_FAILURE',
+        attempts,
+      );
       return NotificationDeliveryStatus.GAVE_UP;
     }
     const delaySeconds = PUSH_RETRY_BACKOFF_SECONDS[attempts - 1];
@@ -246,7 +297,10 @@ export class NotificationDeliveryService implements OnModuleInit {
     status: NotificationDeliveryStatus,
     lastError: string | null,
   ): NotificationDeliveryStatus | 'NO_DEVICE' {
-    return status === NotificationDeliveryStatus.SKIPPED && lastError === 'NO_DEVICE' ? 'NO_DEVICE' : status;
+    return status === NotificationDeliveryStatus.SKIPPED &&
+      lastError === 'NO_DEVICE'
+      ? 'NO_DEVICE'
+      : status;
   }
 
   // ---------- Retry sweep ----------
@@ -255,7 +309,12 @@ export class NotificationDeliveryService implements OnModuleInit {
     const next = await this.prisma.notificationDelivery.findFirst({
       where: {
         channel: NotificationChannel.PUSH,
-        status: { in: [NotificationDeliveryStatus.PENDING, NotificationDeliveryStatus.FAILED] },
+        status: {
+          in: [
+            NotificationDeliveryStatus.PENDING,
+            NotificationDeliveryStatus.FAILED,
+          ],
+        },
         attempts: { lt: PUSH_MAX_ATTEMPTS },
         nextAttemptAt: { not: null },
       },
@@ -270,7 +329,12 @@ export class NotificationDeliveryService implements OnModuleInit {
     const due = await this.prisma.notificationDelivery.findMany({
       where: {
         channel: NotificationChannel.PUSH,
-        status: { in: [NotificationDeliveryStatus.PENDING, NotificationDeliveryStatus.FAILED] },
+        status: {
+          in: [
+            NotificationDeliveryStatus.PENDING,
+            NotificationDeliveryStatus.FAILED,
+          ],
+        },
         attempts: { lt: PUSH_MAX_ATTEMPTS },
         nextAttemptAt: { lte: now },
       },
@@ -285,16 +349,28 @@ export class NotificationDeliveryService implements OnModuleInit {
       const claim = await this.prisma.notificationDelivery.updateMany({
         where: {
           id: row.id,
-          status: { in: [NotificationDeliveryStatus.PENDING, NotificationDeliveryStatus.FAILED] },
+          status: {
+            in: [
+              NotificationDeliveryStatus.PENDING,
+              NotificationDeliveryStatus.FAILED,
+            ],
+          },
           nextAttemptAt: row.nextAttemptAt,
         },
-        data: { nextAttemptAt: new Date(now.getTime() + ATTEMPT_LEASE_SECONDS * 1000) },
+        data: {
+          nextAttemptAt: new Date(now.getTime() + ATTEMPT_LEASE_SECONDS * 1000),
+        },
       });
       if (claim.count === 0) continue;
 
       const payload = row.payload as unknown as StoredPushPayload | null;
       if (!payload) {
-        await this.finish(row.dedupeKey, NotificationDeliveryStatus.GAVE_UP, 'MISSING_PAYLOAD', row.attempts);
+        await this.finish(
+          row.dedupeKey,
+          NotificationDeliveryStatus.GAVE_UP,
+          'MISSING_PAYLOAD',
+          row.attempts,
+        );
         continue;
       }
       await this.attemptPush(row.dedupeKey, row.userId, payload, row.attempts);
@@ -305,7 +381,9 @@ export class NotificationDeliveryService implements OnModuleInit {
 }
 
 function isUniqueViolation(err: unknown): boolean {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+  );
 }
 
 function errorMessage(err: unknown): string {

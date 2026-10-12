@@ -92,22 +92,36 @@ export async function planAllocation(input: {
 
   for (const entry of input.entries) {
     if (freeChairs.length === 0) {
-      skipped.push({ entryId: entry.id, reason: 'All chairs are occupied right now.' });
+      skipped.push({
+        entryId: entry.id,
+        reason: 'All chairs are occupied right now.',
+      });
       continue;
     }
     if (entry.serviceIds.length === 0) {
-      skipped.push({ entryId: entry.id, reason: 'Choose a service for this customer before they can be assigned.' });
+      skipped.push({
+        entryId: entry.id,
+        reason:
+          'Choose a service for this customer before they can be assigned.',
+      });
       continue;
     }
 
-    const preferred = entry.preferredStaffId ? staffById.get(entry.preferredStaffId) : undefined;
+    const preferred = entry.preferredStaffId
+      ? staffById.get(entry.preferredStaffId)
+      : undefined;
     if (entry.preferredStaffId && !preferred) {
-      skipped.push({ entryId: entry.id, reason: 'Their requested barber is not on duty.' });
+      skipped.push({
+        entryId: entry.id,
+        reason: 'Their requested barber is not on duty.',
+      });
       continue;
     }
     const pool = preferred ? [preferred] : input.staff;
     const qualified = pool.filter(
-      (s) => !usedStaff.has(s.id) && entry.serviceIds.every((id) => s.qualifiedServiceIds.has(id)),
+      (s) =>
+        !usedStaff.has(s.id) &&
+        entry.serviceIds.every((id) => s.qualifiedServiceIds.has(id)),
     );
     if (qualified.length === 0) {
       skipped.push({
@@ -144,12 +158,19 @@ export async function planAllocation(input: {
     }
     const chair = freeChairs.shift()!;
     usedStaff.add(chosen.id);
-    assignments.push({ entryId: entry.id, staffId: chosen.id, chairId: chair.id });
+    assignments.push({
+      entryId: entry.id,
+      staffId: chosen.id,
+      chairId: chair.id,
+    });
   }
   return { assignments, skipped };
 }
 
-type Seater = (entryId: string, input: { staffId: string; chairId: string }) => Promise<QueueEntryDetailDto>;
+type Seater = (
+  entryId: string,
+  input: { staffId: string; chairId: string },
+) => Promise<QueueEntryDetailDto>;
 
 /**
  * Automatic and one-click barber/chair allocation.
@@ -178,19 +199,34 @@ export class QueueAutoAssignService implements OnModuleInit {
 
   onModuleInit(): void {
     this.trigger.register(async (salonId) => {
-      await this.runForSalon(salonId, { requireEnabled: true, seat: (id, i) => this.queue.assignAsSystem(id, i) });
+      await this.runForSalon(salonId, {
+        requireEnabled: true,
+        seat: (id, i) => this.queue.assignAsSystem(id, i),
+      });
     });
   }
 
   // ---------- Owner setting ----------
 
-  async setAutomaticAssignment(userId: string, salonId: string, enabled: boolean): Promise<{ autoAssignEnabled: boolean }> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    await this.prisma.salon.update({ where: { id: salonId }, data: { queueAutoAssignEnabled: enabled } });
+  async setAutomaticAssignment(
+    userId: string,
+    salonId: string,
+    enabled: boolean,
+  ): Promise<{ autoAssignEnabled: boolean }> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
+    await this.prisma.salon.update({
+      where: { id: salonId },
+      data: { queueAutoAssignEnabled: enabled },
+    });
     await this.prisma.auditLog.create({
       data: {
         actorUserId: userId,
-        action: enabled ? 'QUEUE_AUTO_ASSIGN_ENABLED' : 'QUEUE_AUTO_ASSIGN_DISABLED',
+        action: enabled
+          ? 'QUEUE_AUTO_ASSIGN_ENABLED'
+          : 'QUEUE_AUTO_ASSIGN_DISABLED',
         entityType: 'Salon',
         entityId: salonId,
         metadata: { actor },
@@ -204,7 +240,10 @@ export class QueueAutoAssignService implements OnModuleInit {
   // ---------- Manual, authorized entry points ----------
 
   /** "Assign automatically": one pass over everyone waiting, regardless of the opt-in. */
-  async assignAllWaiting(userId: string, salonId: string): Promise<AutoAssignResultDto> {
+  async assignAllWaiting(
+    userId: string,
+    salonId: string,
+  ): Promise<AutoAssignResultDto> {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     return this.runForSalon(salonId, {
       requireEnabled: false,
@@ -214,10 +253,20 @@ export class QueueAutoAssignService implements OnModuleInit {
   }
 
   /** "Assign automatically" on ONE customer: picks the best free barber + chair and seats them. */
-  async assignOne(userId: string, entryId: string): Promise<QueueEntryDetailDto> {
-    const entry = await this.prisma.queueEntry.findUnique({ where: { id: entryId }, select: { salonId: true, status: true } });
+  async assignOne(
+    userId: string,
+    entryId: string,
+  ): Promise<QueueEntryDetailDto> {
+    const entry = await this.prisma.queueEntry.findUnique({
+      where: { id: entryId },
+      select: { salonId: true, status: true },
+    });
     if (!entry) {
-      throw new AppException(QueueErrorCode.QUEUE_ENTRY_NOT_FOUND, 'Queue entry not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        QueueErrorCode.QUEUE_ENTRY_NOT_FOUND,
+        'Queue entry not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
     await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
     const result = await this.runForSalon(entry.salonId, {
@@ -227,9 +276,13 @@ export class QueueAutoAssignService implements OnModuleInit {
       seat: (id, i) => this.queue.assign(userId, id, i),
     });
     if (result.assigned.length === 1) return this.detail(entryId);
-    const reason = result.skipped.find((s) => s.entryId === entryId)?.reason ?? 'This customer cannot be assigned right now.';
+    const reason =
+      result.skipped.find((s) => s.entryId === entryId)?.reason ??
+      'This customer cannot be assigned right now.';
     throw new AppException(
-      reason.includes('chair') ? OwnerOpsErrorCode.NO_FREE_CHAIR : OwnerOpsErrorCode.NO_ELIGIBLE_BARBER,
+      reason.includes('chair')
+        ? OwnerOpsErrorCode.NO_FREE_CHAIR
+        : OwnerOpsErrorCode.NO_ELIGIBLE_BARBER,
       reason,
       HttpStatus.CONFLICT,
     );
@@ -240,10 +293,18 @@ export class QueueAutoAssignService implements OnModuleInit {
    * qualified for their services, not reserved for another barber, and physically present - is
    * seated with THIS barber on a free chair. The barber, not the system, decides to start.
    */
-  async takeNext(userId: string, salonId: string): Promise<QueueEntryDetailDto> {
+  async takeNext(
+    userId: string,
+    salonId: string,
+  ): Promise<QueueEntryDetailDto> {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     const me = await this.prisma.salonStaff.findFirst({
-      where: { userId, salonId, status: StaffMemberStatus.ACTIVE, accessRevokedAt: null },
+      where: {
+        userId,
+        salonId,
+        status: StaffMemberStatus.ACTIVE,
+        accessRevokedAt: null,
+      },
       select: { id: true },
     });
     if (!me) {
@@ -263,7 +324,8 @@ export class QueueAutoAssignService implements OnModuleInit {
     if (first) return this.detail(first.queueEntryId);
     throw new AppException(
       OwnerOpsErrorCode.NO_ELIGIBLE_BARBER,
-      result.skipped[0]?.reason ?? 'No waiting customer who has arrived can be served by you right now.',
+      result.skipped[0]?.reason ??
+        'No waiting customer who has arrived can be served by you right now.',
       HttpStatus.CONFLICT,
     );
   }
@@ -284,9 +346,14 @@ export class QueueAutoAssignService implements OnModuleInit {
     const empty: AutoAssignResultDto = { assigned: [], skipped: [] };
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { queueAutoAssignEnabled: true, status: true, isClosedForToday: true },
+      select: {
+        queueAutoAssignEnabled: true,
+        status: true,
+        isClosedForToday: true,
+      },
     });
-    if (!salon || (options.requireEnabled && !salon.queueAutoAssignEnabled)) return empty;
+    if (!salon || (options.requireEnabled && !salon.queueAutoAssignEnabled))
+      return empty;
 
     const waiting = await this.prisma.queueEntry.findMany({
       where: {
@@ -301,9 +368,16 @@ export class QueueAutoAssignService implements OnModuleInit {
           select: {
             preferredStaffId: true,
             serviceId: true,
-            service: { select: { name: true, durationMinutes: true, price: true } },
+            service: {
+              select: { name: true, durationMinutes: true, price: true },
+            },
             services: {
-              select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+              select: {
+                serviceId: true,
+                serviceName: true,
+                durationMinutes: true,
+                price: true,
+              },
               orderBy: { sortOrder: 'asc' },
             },
           },
@@ -314,9 +388,17 @@ export class QueueAutoAssignService implements OnModuleInit {
     if (waiting.length === 0) return empty;
 
     const timeZone = await this.availability.getSalonTimeZone(salonId);
-    const dayStart = (timeZone ? zonedDayBounds(new Date(), timeZone)?.start : null) ?? new Date(Date.now() - 24 * 3_600_000);
+    const dayStart =
+      (timeZone ? zonedDayBounds(new Date(), timeZone)?.start : null) ??
+      new Date(Date.now() - 24 * 3_600_000);
 
-    const [staffRows, chairRows, activeSessions, manualOccupancies, todaySessions] = await Promise.all([
+    const [
+      staffRows,
+      chairRows,
+      activeSessions,
+      manualOccupancies,
+      todaySessions,
+    ] = await Promise.all([
       this.prisma.salonStaff.findMany({
         where: {
           salonId,
@@ -324,27 +406,46 @@ export class QueueAutoAssignService implements OnModuleInit {
           accessRevokedAt: null,
           ...(options.onlyStaffId ? { id: options.onlyStaffId } : {}),
         },
-        select: { id: true, displayName: true, services: { select: { serviceId: true } } },
+        select: {
+          id: true,
+          displayName: true,
+          services: { select: { serviceId: true } },
+        },
       }),
-      this.prisma.chair.findMany({ where: { salonId, status: ChairStatus.ACTIVE }, orderBy: { label: 'asc' }, select: { id: true, label: true } }),
+      this.prisma.chair.findMany({
+        where: { salonId, status: ChairStatus.ACTIVE },
+        orderBy: { label: 'asc' },
+        select: { id: true, label: true },
+      }),
       this.prisma.serviceSession.findMany({
         where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
         select: { staffId: true, chairId: true },
       }),
-      this.prisma.manualChairOccupancy.findMany({ where: { salonId, endedAt: null }, select: { chairId: true } }),
+      this.prisma.manualChairOccupancy.findMany({
+        where: { salonId, endedAt: null },
+        select: { chairId: true },
+      }),
       this.prisma.serviceSession.findMany({
-        where: { status: ServiceSessionStatus.COMPLETED, endedAt: { gte: dayStart }, chair: { salonId } },
+        where: {
+          status: ServiceSessionStatus.COMPLETED,
+          endedAt: { gte: dayStart },
+          chair: { salonId },
+        },
         select: { staffId: true, endedAt: true },
       }),
     ]);
 
     const busyStaff = new Set(activeSessions.map((s) => s.staffId));
-    const busyChairs = new Set([...activeSessions.map((s) => s.chairId), ...manualOccupancies.map((m) => m.chairId)]);
+    const busyChairs = new Set([
+      ...activeSessions.map((s) => s.chairId),
+      ...manualOccupancies.map((m) => m.chairId),
+    ]);
     const doneByStaff = new Map<string, { count: number; last: Date | null }>();
     for (const row of todaySessions) {
       const cur = doneByStaff.get(row.staffId) ?? { count: 0, last: null };
       cur.count += 1;
-      if (row.endedAt && (!cur.last || row.endedAt > cur.last)) cur.last = row.endedAt;
+      if (row.endedAt && (!cur.last || row.endedAt > cur.last))
+        cur.last = row.endedAt;
       doneByStaff.set(row.staffId, cur);
     }
 
@@ -360,7 +461,9 @@ export class QueueAutoAssignService implements OnModuleInit {
     const chairs = chairRows.filter((c) => !busyChairs.has(c.id));
 
     const entries: PlannerEntry[] = waiting.map((e) => {
-      const bookingServices = e.booking ? resolveEffectiveBookingServices(e.booking) : [];
+      const bookingServices = e.booking
+        ? resolveEffectiveBookingServices(e.booking)
+        : [];
       const serviceIds = e.booking
         ? bookingServices.map((s) => s.serviceId)
         : e.serviceId
@@ -374,7 +477,9 @@ export class QueueAutoAssignService implements OnModuleInit {
         serviceIds,
         durationMinutes: Math.max(1, durationMinutes),
         preferredStaffId:
-          e.source === QueueEntrySource.APPOINTMENT ? (e.booking?.preferredStaffId ?? null) : (e.preferredStaffId ?? null),
+          e.source === QueueEntrySource.APPOINTMENT
+            ? (e.booking?.preferredStaffId ?? null)
+            : (e.preferredStaffId ?? null),
         bookingId: e.bookingId,
       };
     });
@@ -386,13 +491,25 @@ export class QueueAutoAssignService implements OnModuleInit {
       chairs,
       isStaffFree: async (staffId, entry) => {
         const end = new Date(now.getTime() + entry.durationMinutes * 60_000);
-        const check = await this.reservations.isStaffFreeForInterval(this.prisma, salonId, staffId, now, end, {
-          excludeBookingId: entry.bookingId ?? undefined,
-          excludeQueueEntryId: entry.id,
-        });
+        const check = await this.reservations.isStaffFreeForInterval(
+          this.prisma,
+          salonId,
+          staffId,
+          now,
+          end,
+          {
+            excludeBookingId: entry.bookingId ?? undefined,
+            excludeQueueEntryId: entry.id,
+          },
+        );
         if (!check.free) return false;
         try {
-          await this.availability.assertStaffWithinWorkingHours(salonId, staffId, now, end);
+          await this.availability.assertStaffWithinWorkingHours(
+            salonId,
+            staffId,
+            now,
+            end,
+          );
         } catch {
           return false;
         }
@@ -403,14 +520,27 @@ export class QueueAutoAssignService implements OnModuleInit {
     const result: AutoAssignResultDto = { assigned: [], skipped: plan.skipped };
     for (const planned of plan.assignments) {
       try {
-        await options.seat(planned.entryId, { staffId: planned.staffId, chairId: planned.chairId });
-        result.assigned.push({ queueEntryId: planned.entryId, staffId: planned.staffId, chairId: planned.chairId });
+        await options.seat(planned.entryId, {
+          staffId: planned.staffId,
+          chairId: planned.chairId,
+        });
+        result.assigned.push({
+          queueEntryId: planned.entryId,
+          staffId: planned.staffId,
+          chairId: planned.chairId,
+        });
         if (options.stopAfterFirst) break;
       } catch (err) {
-        if (err instanceof AppException && CONFLICT_CODES.has(String(err.code))) {
+        if (
+          err instanceof AppException &&
+          CONFLICT_CODES.has(String(err.code))
+        ) {
           // The world moved between planning and seating (a concurrent assign, a new booking...).
           // The transactional claim refused it; the customer simply stays waiting.
-          result.skipped.push({ entryId: planned.entryId, reason: err.message });
+          result.skipped.push({
+            entryId: planned.entryId,
+            reason: err.message,
+          });
           continue;
         }
         throw err;
@@ -427,13 +557,24 @@ export class QueueAutoAssignService implements OnModuleInit {
         customer: { select: { phone: true } },
         assignedStaff: { select: { displayName: true } },
         assignedChair: { select: { label: true } },
-        serviceSessions: { where: { status: ServiceSessionStatus.ACTIVE }, select: { id: true }, take: 1 },
+        serviceSessions: {
+          where: { status: ServiceSessionStatus.ACTIVE },
+          select: { id: true },
+          take: 1,
+        },
         booking: {
           select: {
             serviceId: true,
-            service: { select: { name: true, durationMinutes: true, price: true } },
+            service: {
+              select: { name: true, durationMinutes: true, price: true },
+            },
             services: {
-              select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+              select: {
+                serviceId: true,
+                serviceName: true,
+                durationMinutes: true,
+                price: true,
+              },
               orderBy: { sortOrder: 'asc' },
             },
             preferredStaffId: true,

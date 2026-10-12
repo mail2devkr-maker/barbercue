@@ -92,6 +92,7 @@ function InvoiceList({ salonId, openId, onOpen }: { salonId: string; openId: str
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- show the loading state while the new filter is fetched
     setItems(null);
     void load();
   }, [load]);

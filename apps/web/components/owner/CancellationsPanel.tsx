@@ -33,6 +33,7 @@ export function CancellationsPanel({ salonId }: { salonId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- show the loading state while the new period is fetched
     setData(null);
     const params = new URLSearchParams({ range, ...(actor !== "ALL" ? { actor } : {}) });
     apiFetch<CancellationAnalyticsDto>(`${base}/analytics/cancellations?${params.toString()}`)

@@ -69,6 +69,7 @@ export function InShopAppointmentForm({ salonId }: { salonId: string }) {
   const serviceKey = selected.join(",");
   useEffect(() => {
     if (!serviceKey) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear the barber list when no service is chosen
       setBarbers([]);
       return;
     }
