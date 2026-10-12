@@ -1,3 +1,37 @@
+
+// Synthetic, stored (uncompressed) OOXML ZIP with two worksheets. No external workbook/PII.
+function miniXlsx(entries: Record<string, string>): Buffer {
+  const locals: Buffer[] = [], central: Buffer[] = [];
+  let offset = 0;
+  for (const [filename, text] of Object.entries(entries)) {
+    const name = Buffer.from(filename), body = Buffer.from(text);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(body.length, 18);
+    local.writeUInt32LE(body.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    locals.push(local, name, body);
+    const entry = Buffer.alloc(46);
+    entry.writeUInt32LE(0x02014b50, 0);
+    entry.writeUInt16LE(20, 4);
+    entry.writeUInt16LE(20, 6);
+    entry.writeUInt32LE(body.length, 20);
+    entry.writeUInt32LE(body.length, 24);
+    entry.writeUInt16LE(name.length, 28);
+    entry.writeUInt32LE(offset, 42);
+    central.push(entry, name);
+    offset += local.length + name.length + body.length;
+  }
+  const dir = Buffer.concat(central), end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(Object.keys(entries).length, 8);
+  end.writeUInt16LE(Object.keys(entries).length, 10);
+  end.writeUInt32LE(dir.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, dir, end]);
+}
+
 import { ServiceCatalogImportService, parseXlsxTables } from './service-catalog-import.service';
 
 describe('ServiceCatalogImportService', () => {
@@ -68,6 +102,24 @@ describe('ServiceCatalogImportService', () => {
     expect(service.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       salonId: 'salon', name: 'Facial', durationMinutes: 45, price: '500',
     }) });
+  });
+
+
+  it('reads services from every worksheet including shared-string cells', async () => {
+    const header = '<row r="1"><c r="A1" t="inlineStr"><is><t>Service</t></is></c><c r="B1" t="inlineStr"><is><t>Price</t></is></c><c r="C1" t="inlineStr"><is><t>Duration</t></is></c></row>';
+    const first = '<row r="2"><c r="A2" t="inlineStr"><is><t>Hair Spa</t></is></c><c r="B2"><v>450</v></c><c r="C2"><v>45</v></c></row>';
+    const second = '<row r="2"><c r="A2" t="s"><v>0</v></c><c r="B2"><v>700</v></c><c r="C2"><v>60</v></c></row>';
+    const book = miniXlsx({
+      'xl/sharedStrings.xml': '<sst><si><t>Facial</t></si></sst>',
+      'xl/worksheets/sheet1.xml': '<worksheet><sheetData>' + header + first + '</sheetData></worksheet>',
+      'xl/worksheets/sheet2.xml': '<worksheet><sheetData>' + header + second + '</sheetData></worksheet>',
+    });
+    const preview = await subject.preview('actor', 'salon', file('salon.xlsx', book), false);
+    expect(preview.services).toEqual([
+      { name: 'Hair Spa', price: 450, durationMinutes: 45, category: '', description: '', source: 'salon.xlsx / sheet1.xml' },
+      { name: 'Facial', price: 700, durationMinutes: 60, category: '', description: '', source: 'salon.xlsx / sheet2.xml' },
+    ]);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('rejects malformed XLSX safely', () => {
