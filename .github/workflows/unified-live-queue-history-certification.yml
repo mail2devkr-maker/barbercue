@@ -76,8 +76,46 @@ jobs:
           INSERT INTO "users" ("id", "email", "updatedAt")
           VALUES ('ci-primary-admin', 'mail2dev.kr@gmail.com', CURRENT_TIMESTAMP);
           SQL
-      - name: Apply complete migration chain
-        run: npm run prisma:migrate:deploy --workspace=@barbercue/backend
+      - name: Seed synthetic location prerequisites and apply complete migration chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_root="$(mktemp -d "$RUNNER_TEMP/fastque-prisma-stage.XXXXXX")"
+          trap 'rm -rf "$staging_root"' EXIT
+          mkdir -p "$staging_root/prisma/migrations"
+          cp apps/backend/prisma/schema.prisma "$staging_root/prisma/schema.prisma"
+          cp apps/backend/prisma/migration_lock.toml "$staging_root/prisma/migration_lock.toml"
+
+          # The historical city-repair migrations require the reference rows that production
+          # receives from its location import. Apply the exact committed chain only through the
+          # additive schema migration that creates Country/Region, then seed minimal CI-only
+          # prerequisites before applying the remaining committed migrations in the real tree.
+          bootstrap_migration='20260826151700_add_global_location_master_data'
+          found_bootstrap=false
+          while IFS= read -r migration_dir; do
+            migration_name="$(basename "$migration_dir")"
+            cp -a "$migration_dir" "$staging_root/prisma/migrations/"
+            if [[ "$migration_name" == "$bootstrap_migration" ]]; then
+              found_bootstrap=true
+              break
+            fi
+          done < <(find apps/backend/prisma/migrations -mindepth 1 -maxdepth 1 -type d | sort)
+          if [[ "$found_bootstrap" != true ]]; then
+            echo "Required location schema migration not found: $bootstrap_migration" >&2
+            exit 1
+          fi
+
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend -- --schema "$staging_root/prisma/schema.prisma"
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "Country" ("id", "isoCode2", "isoCode3", "name", "slug")
+          VALUES ('ci-country-india', 'IN', 'IND', 'India', 'india-ci');
+          INSERT INTO "Region" ("id", "countryId", "code", "name", "slug")
+          VALUES
+            ('ci-region-uttar-pradesh', 'ci-country-india', 'IN-UP', 'Uttar Pradesh', 'uttar-pradesh-ci'),
+            ('ci-region-odisha', 'ci-country-india', 'IN-OR', 'Odisha', 'odisha-ci');
+          SQL
+
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend
       - name: Assert migration history and recovery schema
         run: |
           migration_file='apps/backend/prisma/migrations/20261012120000_reviews_for_live_queue_visits/migration.sql'
