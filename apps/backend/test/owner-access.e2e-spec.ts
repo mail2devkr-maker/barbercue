@@ -67,7 +67,7 @@ databaseDescribe(
     let inviteUrl: string | null = null;
     let deliveryFails = false;
     const seed = `owner-access-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const secret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'; // Synthetic 160-bit test secret; never a production credential.
+    const secret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'; // Synthetic 160-bit test secret; never a production credential.
     const api = () => request(app.getHttpServer());
     const auth = (id: string, roles: Role[], audience: SessionAudience) =>
       `Bearer ${tokens.signAccessToken(id, roles, audience)}`;
@@ -391,6 +391,68 @@ databaseDescribe(
         })
         .expect(201);
       expect(repeated.body.outcome).toBe('ALREADY_MAPPED');
+    });
+
+    it('requires explicit confirmation to remove an extra owner role without changing the canonical owner', async () => {
+      await prisma.userRole.create({
+        data: { userId: formerId, role: Role.SALON_OWNER, salonId: primaryId },
+      });
+      const input = await mutation(
+        targetId,
+        `target-${seed}@test.invalid`,
+        false,
+      );
+      await api()
+        .post(`/api/v1/${PREFIX}/${primaryId}/assign`)
+        .set('Authorization', adminAuth())
+        .send(input)
+        .expect(409);
+      expect(
+        await prisma.userRole.count({
+          where: {
+            userId: formerId,
+            salonId: primaryId,
+            role: Role.SALON_OWNER,
+          },
+        }),
+      ).toBe(1);
+      const result = await api()
+        .post(`/api/v1/${PREFIX}/${primaryId}/assign`)
+        .set('Authorization', adminAuth())
+        .send({ ...input, transferConfirmed: true })
+        .expect(201);
+      expect(result.body.outcome).toBe('MAPPED');
+      expect(
+        (await prisma.salon.findUniqueOrThrow({ where: { id: primaryId } }))
+          .ownerUserId,
+      ).toBe(targetId);
+      expect(
+        await prisma.userRole.count({
+          where: {
+            userId: formerId,
+            salonId: primaryId,
+            role: Role.SALON_OWNER,
+          },
+        }),
+      ).toBe(0);
+      expect(
+        await prisma.userRole.count({
+          where: {
+            userId: formerId,
+            salonId: secondId,
+            role: Role.SALON_OWNER,
+          },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.auditLog.count({
+          where: {
+            entityType: 'Salon',
+            entityId: primaryId,
+            action: 'SALON_OWNER_ROLE_REPAIRED',
+          },
+        }),
+      ).toBe(1);
     });
 
     it('sends a hashed single-use invitation and grants no access before acceptance', async () => {

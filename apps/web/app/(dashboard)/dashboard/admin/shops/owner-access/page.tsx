@@ -96,8 +96,11 @@ export default function OwnerAccessPage() {
   async function changeOwner() {
     if (!selected || !preview || preview.action === "UNAVAILABLE") return;
     const replacement = selected.owner.id !== preview.account?.id;
-    if (replacement && !confirmed) {
-      setError("Confirm the current owner will lose access to this shop.");
+    const removesExtraRoles = selected.extraOwnerRoleCount > 0;
+    if ((replacement || removesExtraRoles) && !confirmed) {
+      setError(
+        "Confirm the owner change and removal of any extra shop-owner roles.",
+      );
       return;
     }
     if (reason.trim().length < 10) {
@@ -110,7 +113,7 @@ export default function OwnerAccessPage() {
         : "send a single-use email invitation";
     if (
       !window.confirm(
-        `For ${selected.name} (${selected.publicId}), ${verb}? ${replacement ? "The current owner will lose this shop's owner access only after the assignment is completed." : "This will repair or confirm the existing owner's access."}`,
+        `For ${selected.name} (${selected.publicId}), ${verb}? ${replacement ? "The current owner will lose this shop's owner access only after the assignment is completed." : removesExtraRoles ? "Extra owner roles for this shop will be removed; other shops remain unaffected." : "This will repair or confirm the existing owner's access."}`,
       )
     )
       return;
@@ -204,13 +207,14 @@ export default function OwnerAccessPage() {
 
   const replacing =
     !!selected && !!preview && selected.owner.id !== preview.account?.id;
+  const requiresConfirmation = replacing || !!selected?.extraOwnerRoleCount;
   const canSubmit =
     !!selected &&
     !!preview &&
     preview.action !== "UNAVAILABLE" &&
     reason.trim().length >= 10 &&
     /^\d{6}$/.test(totpCode) &&
-    (!replacing || confirmed);
+    (!requiresConfirmation || confirmed);
 
   return (
     <main className={styles.page}>
@@ -401,6 +405,12 @@ export default function OwnerAccessPage() {
                   The prior owner loses access to this shop after completion;
                   other shops remain theirs.
                 </p>
+              ) : selected.extraOwnerRoleCount > 0 ? (
+                <p className={styles.warning}>
+                  The canonical owner is unchanged, but{" "}
+                  {selected.extraOwnerRoleCount} extra shop-owner role(s) will
+                  be removed from this shop. Other shops remain unaffected.
+                </p>
               ) : (
                 <p className={styles.notice}>
                   Current canonical owner selected. Any missing scoped role will
@@ -434,7 +444,7 @@ export default function OwnerAccessPage() {
                   }
                 />
               </label>
-              {replacing && (
+              {requiresConfirmation && (
                 <label className={styles.confirm}>
                   <input
                     type="checkbox"
@@ -442,7 +452,7 @@ export default function OwnerAccessPage() {
                     onChange={(event) => setConfirmed(event.target.checked)}
                   />{" "}
                   I reviewed the current and proposed owners and confirm this
-                  transfer.
+                  access change, including removal of extra roles for this shop.
                 </label>
               )}
               <Button
