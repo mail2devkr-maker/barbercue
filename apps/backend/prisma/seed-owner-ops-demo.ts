@@ -7,10 +7,11 @@
  *   DATABASE_URL=postgresql://...@127.0.0.1:.../db npx ts-node --compiler-options '{"module":"CommonJS"}' \
  *     prisma/seed-owner-ops-demo.ts <output-credentials-file>
  *
- * Every demo account uses the fixed local-only password DEMO_PASSWORD below; the e-mails are written
- * to the given file.
+ * Every demo account shares ONE random password generated on each run (or taken from DEMO_PASSWORD in the
+ * environment). It is written, with the e-mails, only to the given output file - never printed and never
+ * stored in the repository.
  */
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { writeFileSync } from 'fs';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -22,7 +23,6 @@ if (!/@(127\.0\.0\.1|localhost)[:/]/.test(url)) {
 const out = process.argv[2];
 if (!out) throw new Error('Pass an output file for the generated credentials.');
 
-const DEMO_PASSWORD = 'FastQue-Local-Demo-1';
 const prisma = new PrismaClient();
 const TZ = 'Asia/Kolkata';
 const minutes = (n: number) => new Date(Date.now() + n * 60_000);
@@ -34,9 +34,9 @@ const daysAgo = (d: number, hour: number, min = 0) => {
 
 async function main() {
   const tag = randomUUID().slice(0, 6);
-  // A fixed, documented password: these are throwaway accounts on a local-only database (the script
-  // refuses to run anywhere else), and a known value lets a developer sign in without a secrets file.
-  const password = DEMO_PASSWORD;
+  // Throwaway accounts on a local-only database (the script refuses to run anywhere else). The shared
+  // password is random per run and handed over through the output file only.
+  const password = process.env.DEMO_PASSWORD ?? randomBytes(15).toString('base64url');
   const hash = await bcrypt.hash(password, 10);
   const phone = (n: number) => `+9199${String(parseInt(tag, 16) % 1_000_000).padStart(6, '0')}${String(n).padStart(2, '0')}`;
   const city = await prisma.city.findFirstOrThrow({ where: { slug: 'jharsuguda' } });
@@ -215,7 +215,7 @@ async function main() {
 
   writeFileSync(
     out,
-    JSON.stringify({ salonId: salon.id, ownerEmail: owner.email, barberEmail: barbers.arjun.email }, null, 2),
+    JSON.stringify({ salonId: salon.id, ownerEmail: owner.email, barberEmail: barbers.arjun.email, password }, null, 2),
   );
   console.log(`seeded demo shop ${salon.id} (credentials written to the output file)`);
 }
