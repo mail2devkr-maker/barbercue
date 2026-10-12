@@ -144,3 +144,28 @@ bookings/queue entries, apply the two owner-ops migrations with `psql -v ON_ERRO
 2. Deploy the backend first (all new API fields are optional for older clients), then the web app.
 3. Leave `queueAutoAssignEnabled` off; owners switch it on per shop.
 4. Android: build a new binary / OTA only after the owner authorises it; physical-device verification is still required.
+
+## 11. Evidence (real renders, local disposable stack)
+
+Real headless-Chrome captures of the website (1440, 820 and 390 px) and real captures from the Android
+emulator running a local test build of the Android branch, signed in as the demo owner / barber of a
+disposable database. Nothing is mocked: every figure comes from the running backend.
+
+| File | What it shows |
+| --- | --- |
+| `screenshots/web-owner-overview-1440.jpg` | Overview, desktop |
+| `screenshots/web-owner-live-queue-1440.jpg` | Live Queue with the four separate places |
+| `screenshots/web-owner-invoices-1440.jpg`, `web-owner-cancellations-1440.jpg` | Billing and cancellation analytics |
+| `screenshots/web-owner-overview-tablet-820.jpg`, `web-owner-overview-mobile-390.jpg` | Responsive layouts |
+| `screenshots/web-barber-my-day-1440.jpg` | A barber's own "My day" |
+| `screenshots/android-owner-dashboard*.jpg` | Android overview |
+| `screenshots/android-new-live-queue-customer.jpg` | New Live Queue customer (database-verified: a WALK_IN-source entry created by the operator) |
+| `screenshots/android-in-shop-appointment-created.jpg` | In-shop appointment (database-verified: `IN_SHOP`, no account) |
+| `screenshots/android-cancellation-outcome.jpg` | Shop cancellation with what the customer was actually told |
+| `screenshots/android-invoice-detail.jpg` | Invoice; recording a UPI payment was database-verified |
+| `screenshots/android-cancellations.jpg`, `android-barber-my-day.jpg`, `android-barber-access.jpg` | Analytics, barber Complete service (verified), remove/restore access (verified) |
+
+The emulator run also found, and this branch fixes: automatic-assignment refusals were shown as a generic
+error instead of the server's reason; the cancellation outcome vanished when the list reloaded (website
+and Android); screens opened from another tab hid the Shop hub; invoice dates showed as raw timestamps.
+Not verified: a physical phone, the Play-installed build, and push delivery to a real device.

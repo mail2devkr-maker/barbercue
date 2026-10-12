@@ -26,7 +26,7 @@ const ACTOR_TEXT: Record<string, string> = {
  * service is done - invoice it. Each action is also enforced on the server; this only decides what
  * to offer.
  */
-export function ShopBookingActions({ booking }: { booking: OwnerBookingDetailDto }) {
+export function ShopBookingActions({ booking, onOutcome }: { booking: OwnerBookingDetailDto; onOutcome?: (message: string) => void }) {
   const salonId = booking.salonId;
   const [cancelOpen, setCancelOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -77,8 +77,10 @@ export function ShopBookingActions({ booking }: { booking: OwnerBookingDetailDto
           onClose={() => setCancelOpen(false)}
           onDone={(message) => {
             setNotice(message);
-            // The list refreshes itself on the realtime booking.cancelled event; reload as a backstop.
-            window.setTimeout(() => window.location.reload(), 1600);
+            // The list reloads (and remounts this card), so the outcome is also handed to the page,
+            // which keeps it on screen. Without a page to hand it to, reload as a backstop.
+            if (onOutcome) onOutcome(message);
+            else window.setTimeout(() => window.location.reload(), 1600);
           }}
         />
       )}
@@ -88,7 +90,8 @@ export function ShopBookingActions({ booking }: { booking: OwnerBookingDetailDto
           onClose={() => setMoveOpen(false)}
           onDone={(message) => {
             setNotice(message);
-            window.setTimeout(() => window.location.reload(), 1600);
+            if (onOutcome) onOutcome(message);
+            else window.setTimeout(() => window.location.reload(), 1600);
           }}
         />
       )}

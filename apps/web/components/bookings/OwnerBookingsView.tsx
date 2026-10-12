@@ -75,7 +75,7 @@ function formatSlot(iso: string): string {
 }
 
 
-function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
+function BookingCard({ booking, isNew, onOutcome }: { booking: OwnerBookingDetailDto; isNew: boolean; onOutcome: (message: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={`${styles.card} ${isNew ? styles.cardNew : ""}`}>
@@ -164,7 +164,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           )}
         </dl>
       )}
-      {open && <ShopBookingActions booking={booking} />}
+      {open && <ShopBookingActions booking={booking} onOutcome={onOutcome} />}
     </div>
   );
 }
@@ -189,6 +189,8 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(null);
   const [cancelNotice, setCancelNotice] = useState<string | null>(null);
+  // What the shop's own cancel / reschedule told the customer; kept here because the list reload remounts the cards.
+  const [shopOutcome, setShopOutcome] = useState<string | null>(null);
   // Shared with every other voice consumer (see lib/voice-preference.ts) rather than a private copy.
   const alertsEnabled = useVoiceEnabled();
 
@@ -407,6 +409,16 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
             </Button>
           </div>
         )}
+        {shopOutcome && (
+          <div className={styles.newBookingBanner} role="status">
+            <div>
+              <strong>{shopOutcome}</strong>
+            </div>
+            <Button type="button" variant="outline" onClick={() => setShopOutcome(null)}>
+              Dismiss
+            </Button>
+          </div>
+        )}
         {cancelNotice && (
           <div className={`${styles.newBookingBanner} ${styles.cancelBanner}`}>
             <div>
@@ -441,7 +453,15 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
       ) : (
         <div className={styles.list}>
           {items.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} isNew={newIds.includes(booking.id)} />
+            <BookingCard
+              key={booking.id}
+              booking={booking}
+              isNew={newIds.includes(booking.id)}
+              onOutcome={(message) => {
+                setShopOutcome(message);
+                void loadPage(filter, undefined, false);
+              }}
+            />
           ))}
         </div>
       )}
