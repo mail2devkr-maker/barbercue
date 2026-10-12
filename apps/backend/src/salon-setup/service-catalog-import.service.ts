@@ -233,7 +233,7 @@ export class ServiceCatalogImportService {
       ids.add(identity);
     }
     return this.prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', salonId);
+      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', salonId);
       const existing = await tx.service.findMany({ where: { salonId }, select: { name: true, category: true } });
       const known = new Set(existing.map((s) => normalizeServiceIdentity(s.name, s.category)));
       const added: string[] = [], skipped: string[] = [];
