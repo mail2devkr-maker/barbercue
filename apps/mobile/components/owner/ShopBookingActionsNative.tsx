@@ -18,9 +18,12 @@ export function ShopBookingActionsNative({
   onChanged,
   onReschedule,
   onOpenInvoice,
+  onNotice,
 }: {
   booking: OwnerBookingDetailDto;
   onChanged: () => void;
+  /** The list reloads after a change and remounts its cards, so the outcome is also handed upward. */
+  onNotice?: (message: string) => void;
   onReschedule: (booking: OwnerBookingDetailDto) => void;
   onOpenInvoice?: (invoiceId: string) => void;
 }) {
@@ -53,7 +56,9 @@ export function ShopBookingActionsNative({
       });
       setCancelling(false);
       setReason('');
-      setNotice(describeCancellationNotice(result));
+      const message = describeCancellationNotice(result);
+      setNotice(message);
+      onNotice?.(message);
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not cancel this appointment. Nothing was changed.');

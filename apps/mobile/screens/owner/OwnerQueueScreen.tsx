@@ -37,8 +37,8 @@ export default function OwnerQueueScreen() {
         salonId={selectedSalonId}
         role="owner"
         autoOpenNewCustomer={route.params?.newCustomer === true}
-        onNewAppointment={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerInShopAppointment' })}
-        onOpenInvoice={(invoiceId) => navigation.navigate('OwnerShopTab', { screen: 'OwnerInvoiceDetail', params: { invoiceId } })}
+        onNewAppointment={() => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerInShopAppointment' })}
+        onOpenInvoice={(invoiceId) => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerInvoiceDetail', params: { invoiceId } })}
       />
     </Screen>
   );

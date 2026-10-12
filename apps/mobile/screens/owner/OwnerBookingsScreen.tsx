@@ -72,12 +72,14 @@ function BookingRow({
   booking,
   isNew,
   onChanged,
+  onNotice,
   onReschedule,
   onOpenInvoice,
 }: {
   booking: OwnerBookingDetailDto;
   isNew: boolean;
   onChanged: () => void;
+  onNotice: (message: string) => void;
   onReschedule: (booking: OwnerBookingDetailDto) => void;
   onOpenInvoice: (invoiceId: string) => void;
 }) {
@@ -106,7 +108,7 @@ function BookingRow({
       <Text style={styles.priceText}>
         {booking.currency ?? ''} {booking.servicePrice} · {t.bookingRefPrefix}{booking.id.slice(0, 8)}
       </Text>
-      <ShopBookingActionsNative booking={booking} onChanged={onChanged} onReschedule={onReschedule} onOpenInvoice={onOpenInvoice} />
+      <ShopBookingActionsNative booking={booking} onChanged={onChanged} onNotice={onNotice} onReschedule={onReschedule} onOpenInvoice={onOpenInvoice} />
     </Card>
   );
 }
@@ -132,6 +134,8 @@ export default function OwnerBookingsScreen({ route }: Props) {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(null);
   const [cancelNotice, setCancelNotice] = useState(false);
+  // What the shop's own cancel told the customer (kept here: the list reload remounts the cards).
+  const [shopNotice, setShopNotice] = useState<string | null>(null);
   // Build 10 physical-device retest (Hindi TTS blocker) — set (throttled, see voice-announce.ts)
   // when Hindi is the active language but this device has no installed Hindi voice, so
   // speakBooking skipped speaking rather than risking an English/default-voice fallback.
@@ -362,6 +366,11 @@ export default function OwnerBookingsScreen({ route }: Props) {
           </Text>
         </Pressable>
       )}
+      {shopNotice && (
+        <Pressable testID="shop-cancel-notice" style={styles.noticeBanner} onPress={() => setShopNotice(null)}>
+          <Text style={styles.noticeTitle}>{shopNotice}</Text>
+        </Pressable>
+      )}
       {cancelNotice && (
         <Pressable style={[styles.noticeBanner, styles.cancelBanner]} onPress={() => setCancelNotice(false)}>
           <Text style={styles.noticeTitle}>{t.bookingCancelledBanner}</Text>
@@ -426,8 +435,9 @@ export default function OwnerBookingsScreen({ route }: Props) {
                 booking={booking}
                 isNew={newIds.includes(booking.id)}
                 onChanged={() => void loadPage(filter, undefined, false)}
+                onNotice={setShopNotice}
                 onReschedule={(b) =>
-                  navigation.navigate('OwnerShopTab', {
+                  navigation.navigate('OwnerShopTab', { initial: false,
                     screen: 'OwnerRescheduleBooking',
                     params: {
                       salonId: b.salonId,
@@ -438,7 +448,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
                     },
                   })
                 }
-                onOpenInvoice={(invoiceId) => navigation.navigate('OwnerShopTab', { screen: 'OwnerInvoiceDetail', params: { invoiceId } })}
+                onOpenInvoice={(invoiceId) => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerInvoiceDetail', params: { invoiceId } })}
               />
             ))
           )}

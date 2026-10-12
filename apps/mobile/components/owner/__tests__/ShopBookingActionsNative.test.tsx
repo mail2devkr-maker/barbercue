@@ -86,7 +86,8 @@ afterEach(async () => {
 
 describe('shop booking actions', () => {
   it('cancels with a reason, as the shop, and says truthfully what the customer was told', async () => {
-    const { onChanged } = await render();
+    const onNotice = jest.fn();
+    const { onChanged } = await render(booking(), { onNotice });
     await press('Cancel appointment');
     await act(async () => byTestId('cancel-reason').props.onChangeText('Barber unwell'));
     await press('Cancel appointment and notify');
@@ -99,6 +100,8 @@ describe('shop booking actions', () => {
     expect(text()).toContain('no device registered for push');
     expect(text()).not.toMatch(/sms/i);
     expect(onChanged).toHaveBeenCalled();
+    // handed upward too, because the list reload remounts the card and would lose it
+    expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('no device registered for push'));
   });
 
   it('can keep the appointment instead, sending nothing', async () => {

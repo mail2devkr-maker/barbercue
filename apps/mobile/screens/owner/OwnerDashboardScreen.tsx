@@ -105,13 +105,13 @@ export default function OwnerDashboardScreen() {
 
   const actions: OwnerOverviewActions = {
     onNewQueueCustomer: () => navigation.navigate('OwnerQueueTab', { newCustomer: true }),
-    onNewAppointment: () => navigation.navigate('OwnerShopTab', { screen: 'OwnerInShopAppointment' }),
+    onNewAppointment: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerInShopAppointment' }),
     onOpenQueue: () => navigation.navigate('OwnerQueueTab'),
     onOpenBookings: () => navigation.navigate('OwnerBookingsTab', undefined),
-    onOpenInvoices: () => navigation.navigate('OwnerShopTab', { screen: 'OwnerInvoices' }),
-    onOpenCancellations: () => navigation.navigate('OwnerShopTab', { screen: 'OwnerCancellations' }),
-    onOpenStaff: () => navigation.navigate('OwnerShopTab', { screen: 'OwnerStaff' }),
-    onOpenAnalytics: () => navigation.navigate('OwnerShopTab', { screen: 'OwnerAnalytics' }),
+    onOpenInvoices: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerInvoices' }),
+    onOpenCancellations: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerCancellations' }),
+    onOpenStaff: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerStaff' }),
+    onOpenAnalytics: () => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerAnalytics' }),
   };
 
   return (
@@ -176,13 +176,13 @@ export default function OwnerDashboardScreen() {
         <Pressable testID="dashboard-link-analytics" style={styles.quickLink} onPress={actions.onOpenAnalytics}>
           <Text style={styles.quickLinkText}>{t.ownerSectionAnalytics}</Text>
         </Pressable>
-        <Pressable testID="dashboard-link-settings" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerSettings' })}>
+        <Pressable testID="dashboard-link-settings" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerSettings' })}>
           <Text style={styles.quickLinkText}>{t.ownerSectionSettings}</Text>
         </Pressable>
-        <Pressable testID="dashboard-link-reviews" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerReviews' })}>
+        <Pressable testID="dashboard-link-reviews" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerReviews' })}>
           <Text style={styles.quickLinkText}>{t.ownerSectionReviews}</Text>
         </Pressable>
-        <Pressable testID="dashboard-link-manage" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerShop' })}>
+        <Pressable testID="dashboard-link-manage" style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerShop' })}>
           <Text style={styles.quickLinkText}>{t.manageShop}</Text>
         </Pressable>
       </View>
