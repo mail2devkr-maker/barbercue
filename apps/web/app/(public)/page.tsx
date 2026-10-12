@@ -115,7 +115,7 @@ export default async function HomePage() {
         <HeroVisual />
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
-            <p className={styles.heroEyebrow}>Book ahead · Walk in smarter</p>
+            <p className={styles.heroEyebrow}>Book ahead · Live Queue made clearer</p>
             <h1 className={styles.heroHeadline}>
               Your barber.
               <br />
@@ -351,7 +351,7 @@ export default async function HomePage() {
             </div>
             <div className={styles.advisorCopy}>
               <p className={styles.eyebrow}>Know the look before the cut</p>
-              <h2 className={styles.sectionTitle}>Walk in with a clearer idea.</h2>
+              <h2 className={styles.sectionTitle}>Plan your style before you join the Live Queue.</h2>
               <p className={styles.sectionLead}>
                 Preview supported hairstyles on your own photo, compare looks, and carry your
                 choice into booking. Style matches are guidance—not a guarantee.
@@ -420,7 +420,7 @@ export default async function HomePage() {
         <div className={styles.finalCtaInner}>
           <p className={styles.eyebrow}>Your next chair is closer than you think</p>
           <h2>Book the time. Or join the line.</h2>
-          <p>Find a barbershop and choose the way you want to walk in.</p>
+          <p>Find a barbershop, book ahead, or join its Live Queue.</p>
           <div className={styles.finalActions}>
             <Link href="/search" className={styles.finalPrimary}>Find a barber</Link>
             <Link href="/login" className={styles.finalSecondary}>Sign in</Link>

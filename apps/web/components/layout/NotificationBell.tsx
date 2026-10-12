@@ -20,7 +20,7 @@ const TYPE_LABEL: Record<string, string> = {
   "owner.booking.cancelled": "Booking cancelled",
   "owner.booking.no_show": "Customer no-show",
   "owner.booking.expired": "Unpaid booking expired",
-  "owner.walk_in.joined": "New walk-in",
+  "owner.walk_in.joined": "New Live Queue visit",
   "staff.assigned": "You were assigned a customer",
   "owner.booking.arrival_check": "Appointment arrival check",
 };

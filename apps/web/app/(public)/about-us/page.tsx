@@ -32,7 +32,7 @@ const CUSTOMER_FEATURES = [
   },
   {
     title: "Use the live queue",
-    body: "Join supported walk-in queues, follow queue progress and use check-in guidance instead of waiting at the shop without visibility.",
+    body: "Join a supported Live Queue, follow queue progress and use check-in guidance instead of waiting at the shop without visibility.",
   },
   {
     title: "Manage your booking",
@@ -62,8 +62,8 @@ const OWNER_FEATURES = [
     body: "Manage services, prices, durations, operating hours, staff working hours and the resources that determine real booking capacity.",
   },
   {
-    title: "Bookings + walk-ins in one operation",
-    body: "Run scheduled appointments and the live walk-in queue together instead of maintaining separate systems for two kinds of demand.",
+    title: "Bookings + Live Queue in one operation",
+    body: "Run scheduled appointments and Live Queue visits together instead of maintaining separate systems for two kinds of demand.",
   },
   {
     title: "Staff & chair operations",
@@ -75,7 +75,7 @@ const OWNER_FEATURES = [
   },
   {
     title: "Direct payment setup",
-    body: "Configure the shop payment QR used for eligible online booking payment flows while walk-ins can continue paying the business directly.",
+    body: "Configure the shop payment QR used for eligible online booking payment flows while Live Queue customers can continue paying the business directly.",
   },
   {
     title: "Reviews & reputation",
@@ -104,12 +104,12 @@ const PILLARS = [
   {
     number: "02",
     title: "One operating view for shops",
-    body: "Bookings, walk-ins, services, staff, chairs, customers and reviews stay connected to the same operating system.",
+    body: "Bookings, Live Queue visits, services, staff, chairs, customers and reviews stay connected to the same operating system.",
   },
   {
     number: "03",
     title: "Designed for real salon workflows",
-    body: "FastQue supports scheduled appointments and real-time walk-in demand because beauty and grooming businesses regularly need both.",
+    body: "FastQue supports scheduled appointments and real-time Live Queue demand because beauty and grooming businesses regularly need both.",
   },
 ];
 
@@ -165,7 +165,7 @@ export default function AboutUsPage() {
             <h2>Make every step around the chair easier.</h2>
             <p>
               Customers need clarity about where to go, what to book and when they will be served.
-              Owners need the same clarity across appointments, walk-ins, people and capacity.
+              Owners need the same clarity across appointments, Live Queue visits, people and capacity.
             </p>
           </div>
           <div className={styles.grid}>

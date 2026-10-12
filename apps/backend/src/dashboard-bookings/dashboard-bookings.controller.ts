@@ -7,6 +7,7 @@ import {
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { DashboardBookingsService } from './dashboard-bookings.service';
+import { VisitHistoryService } from '../visit-history/visit-history.service';
 
 // Owner-only for ordinary staff — deliberately narrower than DashboardQueueController's
 // @Roles(SALON_STAFF, SALON_OWNER): booking history exposes customer contact details, so ordinary
@@ -18,7 +19,10 @@ import { DashboardBookingsService } from './dashboard-bookings.service';
 @Controller(DASHBOARD_PATHS.dashboard)
 @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class DashboardBookingsController {
-  constructor(private readonly bookingsService: DashboardBookingsService) {}
+  constructor(
+    private readonly bookingsService: DashboardBookingsService,
+    private readonly visitHistory: VisitHistoryService,
+  ) {}
 
   @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.bookings}`)
   list(
@@ -40,6 +44,31 @@ export class DashboardBookingsController {
       from,
       to,
       date,
+    );
+  }
+
+  // Static history route must precede `:id` below so Express never interprets "history" as a
+  // booking identifier. It is an owner-only, salon-scoped union over the source tables.
+  @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.bookings}/history`)
+  listVisitHistory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Query('filter') filter?: string,
+    @Query('source') source?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.visitHistory.listOwner(
+      user.id,
+      salonId,
+      filter,
+      source,
+      cursor,
+      limit,
+      from,
+      to,
     );
   }
 

@@ -43,7 +43,13 @@ function makeBookingRow(overrides: Record<string, unknown> = {}) {
     // BookingService row (backfilled for pre-existing bookings); mirrors the `service` fixture
     // above by default so untouched tests keep exercising the same single-service values.
     services: [
-      { serviceId: 'sv1', sortOrder: 0, serviceName: 'Haircut', durationMinutes: 30, price: decimal('300') },
+      {
+        serviceId: 'sv1',
+        sortOrder: 0,
+        serviceName: 'Haircut',
+        durationMinutes: 30,
+        price: decimal('300'),
+      },
     ],
     preferredStaff: null,
     customer: { phone: '+919876543210', email: null },
@@ -65,7 +71,10 @@ describe('DashboardBookingsService', () => {
   let service: DashboardBookingsService;
   let prisma: PrismaMock;
   let salonAccess: {
-    assertOwnerOrAdminAccess: jest.Mock<Promise<'OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
+    assertOwnerOrAdminAccess: jest.Mock<
+      Promise<'OWNER' | 'PLATFORM_ADMIN'>,
+      [string, string]
+    >;
   };
 
   beforeEach(async () => {
@@ -165,12 +174,25 @@ describe('DashboardBookingsService', () => {
     // Part 2 — delegated shop management. Read-only endpoint: no AuditLog row for a successful
     // delegated read, unlike salon-setup's admin-mutation paths.
     it('a delegated PLATFORM_ADMIN on an ACTIVE salon can list bookings too', async () => {
-      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce(
+        'PLATFORM_ADMIN',
+      );
       prisma.booking.findMany.mockResolvedValueOnce([]);
       await expect(
-        service.list('admin-1', 's1', undefined, undefined, undefined, undefined, undefined),
+        service.list(
+          'admin-1',
+          's1',
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ),
       ).resolves.toBeDefined();
-      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('admin-1', 's1');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
+        'admin-1',
+        's1',
+      );
     });
 
     it('scopes getOne to the given salonId, not just the booking id', async () => {
@@ -180,6 +202,44 @@ describe('DashboardBookingsService', () => {
       });
       expect(prisma.booking.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'b1', salonId: 's1' } }),
+      );
+    });
+  });
+
+  describe('visit outcome filters', () => {
+    it('exposes active and expired appointments as explicit booking filters', async () => {
+      prisma.booking.findMany.mockResolvedValue([]);
+      await service.list(
+        'owner1',
+        's1',
+        'active',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
+      expect(prisma.booking.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            salonId: 's1',
+            status: { in: ['CONFIRMED', 'PENDING_PAYMENT'] },
+          }),
+        }),
+      );
+
+      await service.list(
+        'owner1',
+        's1',
+        'expired',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
+      expect(prisma.booking.findMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { salonId: 's1', status: 'EXPIRED' },
+        }),
       );
     });
   });
@@ -287,7 +347,7 @@ describe('DashboardBookingsService', () => {
   });
 
   describe('day scheduler (date param)', () => {
-    it('scopes slotStart to the requested calendar day in the salon\'s own timezone', async () => {
+    it("scopes slotStart to the requested calendar day in the salon's own timezone", async () => {
       prisma.booking.findMany.mockResolvedValue([]);
       await service.list(
         'owner1',
@@ -305,8 +365,12 @@ describe('DashboardBookingsService', () => {
       };
       // Asia/Kolkata (this file's default fixture timezone) is UTC+5:30, so June 15th's local
       // midnight-to-midnight is 2026-06-14T18:30:00Z through 2026-06-15T18:30:00Z in UTC.
-      expect(call.where.slotStart.gte.toISOString()).toBe('2026-06-14T18:30:00.000Z');
-      expect(call.where.slotStart.lt.toISOString()).toBe('2026-06-15T18:30:00.000Z');
+      expect(call.where.slotStart.gte.toISOString()).toBe(
+        '2026-06-14T18:30:00.000Z',
+      );
+      expect(call.where.slotStart.lt.toISOString()).toBe(
+        '2026-06-15T18:30:00.000Z',
+      );
       // A schedule reads in chronological order regardless of the (omitted, here) filter.
       expect(call.orderBy).toEqual({ slotStart: 'asc' });
     });
@@ -342,7 +406,9 @@ describe('DashboardBookingsService', () => {
       const call = prisma.booking.findMany.mock.calls[0][0] as {
         where: { slotStart: { gte: Date } };
       };
-      expect(call.where.slotStart.gte.toISOString()).toBe('2026-06-14T18:30:00.000Z');
+      expect(call.where.slotStart.gte.toISOString()).toBe(
+        '2026-06-14T18:30:00.000Z',
+      );
     });
 
     it('throws SALON_TIMEZONE_REQUIRED for a date request when the salon has no resolvable zone', async () => {
@@ -516,7 +582,9 @@ describe('DashboardBookingsService', () => {
       it.each(['CANCELLED', 'COMPLETED', 'NO_SHOW'])(
         'shows no arrival guidance for a resolved %s booking',
         async (status) => {
-          prisma.booking.findFirst.mockResolvedValueOnce(makeBookingRow({ status }));
+          prisma.booking.findFirst.mockResolvedValueOnce(
+            makeBookingRow({ status }),
+          );
           const dto = await service.getOne('owner1', 's1', 'b1');
           expect(dto.checkInOpensAt).toBeNull();
           expect(dto.checkInDueBy).toBeNull();
@@ -536,7 +604,10 @@ describe('DashboardBookingsService', () => {
 
       it('shows no fabricated arrival guidance for a booking with no recorded snapshot (pre-feature history)', async () => {
         prisma.booking.findFirst.mockResolvedValueOnce(
-          makeBookingRow({ checkInOpensMinutesBefore: null, checkInDueGraceMinutes: null }),
+          makeBookingRow({
+            checkInOpensMinutesBefore: null,
+            checkInDueGraceMinutes: null,
+          }),
         );
         const dto = await service.getOne('owner1', 's1', 'b1');
         expect(dto.checkInOpensAt).toBeNull();
@@ -552,7 +623,9 @@ describe('DashboardBookingsService', () => {
   // owner dashboard view must never show 0 duration, 0 price, or an empty service list for it.
   describe('production-safety hardening — zero BookingService rows (rolling deploy)', () => {
     it('remains fully readable via getOne, with duration/price/services[] synthesized from the live Service join', async () => {
-      prisma.booking.findFirst.mockResolvedValueOnce(makeBookingRow({ services: [] }));
+      prisma.booking.findFirst.mockResolvedValueOnce(
+        makeBookingRow({ services: [] }),
+      );
       const dto = await service.getOne('owner1', 's1', 'b1');
       expect(dto.serviceId).toBe('sv1');
       expect(dto.serviceName).toBe('Haircut');

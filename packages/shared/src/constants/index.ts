@@ -91,8 +91,7 @@ export const ADMIN_PATHS = {
 // (evidence reviewed, not identity verified, not a quality guarantee) can never drift between web,
 // mobile, and any future surface. Never replace with "Identity Verified" without an actual
 // identity-verification/KYC process behind it.
-export const VERIFICATION_BADGE_CAPTION =
-  'Business/profile evidence reviewed by FastQue. Verification is not a guarantee of service quality.';
+export const VERIFICATION_BADGE_CAPTION = 'Business/profile evidence reviewed by FastQue. Verification is not a guarantee of service quality.';
 
 // Exact customer-facing copy for an owner-paused shop. Shared so web/mobile cannot drift.
 export const SHOP_CLOSED_TODAY_MESSAGE = 'This shop is closed for today.';
@@ -162,9 +161,16 @@ export const SALON_BOOKING_INFO_PATHS = {
 export const BOOKING_PATHS = {
   bookings: 'bookings',
   mine: 'mine',
+  mineHistory: 'history/mine',
   cancel: 'cancel',
   checkIn: 'check-in',
   reschedule: 'reschedule',
+} as const;
+
+/** Stable user-facing labels for the two visit-history sources. Never display persisted enum IDs. */
+export const VISIT_HISTORY_SOURCE_LABELS = {
+  ONLINE_BOOKING: 'Online Booking',
+  LIVE_QUEUE: 'Live Queue',
 } as const;
 
 // Sub-paths under `salons/:salonId/queue` (SalonQueueController) — a 3-segment shape deliberately,
@@ -185,6 +191,7 @@ export const QUEUE_ENTRIES_PATH = 'queue-entries';
 export const REVIEW_PATHS = {
   reviews: 'reviews',
   booking: 'booking',
+  queueEntry: 'queue-entry',
 } as const;
 
 // StyleAdvisorController's `@Controller('style-advisor')` prefix.

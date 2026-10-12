@@ -348,7 +348,9 @@ export interface ReviewSummaryDto {
 // salon-profile-page shape and deliberately omits it, matching the DB model's own doc comment).
 export interface ReviewDetailDto {
   id: string;
-  bookingId: string;
+  /** Exactly one target is present: an online booking or a standalone Live Queue visit. */
+  bookingId: string | null;
+  queueEntryId: string | null;
   salonId: string;
   rating: number;
   comment: string | null;
@@ -365,6 +367,7 @@ export interface OwnerReviewDto extends ReviewDetailDto {
   customerPhone: string | null;
   customerEmail: string | null;
   serviceName: string;
+  source: VisitHistorySource;
 }
 
 // ---------- Verification (Phase 18) ----------
@@ -702,14 +705,7 @@ export interface CancelBookingResponseDto {
 // `today`/`upcoming` are date-window views over active bookings; `completed`/`cancelled`/
 // `no_show` are outcome views regardless of date; `all` is the unfiltered history feed. Kept as a
 // flat union (not derived from BookingStatus) since `today`/`upcoming`/`all` aren't statuses.
-export const OWNER_BOOKING_FILTERS = [
-  'today',
-  'upcoming',
-  'completed',
-  'cancelled',
-  'no_show',
-  'all',
-] as const;
+export const OWNER_BOOKING_FILTERS = ['active', 'today', 'upcoming', 'completed', 'cancelled', 'expired', 'no_show', 'all'] as const;
 export type OwnerBookingFilter = (typeof OWNER_BOOKING_FILTERS)[number];
 
 // Adds owner-operational fields (customer contact, assigned barber, timestamps) on top of
@@ -736,6 +732,66 @@ export interface OwnerBookingDetailDto extends BookingDetailDto {
   arrivalAlertDue: boolean;
   noShowEligible: boolean;
 }
+
+// Unified read-only visit history. A row projects an existing Booking or QueueEntry; it never
+// creates a duplicate booking record. Queue records linked to a booking are omitted from the
+// standalone Live Queue stream and are represented by their booking exactly once.
+export type VisitHistorySource = 'ONLINE_BOOKING' | 'LIVE_QUEUE';
+export type VisitHistoryStatus = BookingStatus | QueueEntryStatus;
+
+export interface VisitHistoryServiceDto {
+  serviceId: string | null;
+  name: string;
+  assignedStaffName: string | null;
+  price: number | null;
+}
+
+export interface VisitReviewSummaryDto {
+  id: string;
+  rating: number;
+  createdAt: string;
+}
+
+export interface VisitHistoryItemDto {
+  id: string;
+  source: VisitHistorySource;
+  bookingId: string | null;
+  queueEntryId: string | null;
+  salonId: string;
+  salonName: string;
+  salonTimezone: string | null;
+  currency: string | null;
+  status: VisitHistoryStatus;
+  /** Online appointment start or the original Live Queue join instant (ISO 8601). */
+  serviceDate: string;
+  joinedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  services: VisitHistoryServiceDto[];
+  serviceName: string;
+  assignedStaffName: string | null;
+  /** Null when this source has no immutable price snapshot (notably standalone queue visits). */
+  price: number | null;
+  review: VisitReviewSummaryDto | null;
+  reviewEligible: boolean;
+}
+
+/** Customer-only extension; all review content here belongs to the authenticated customer. */
+export interface CustomerVisitHistoryItemDto extends VisitHistoryItemDto {
+  myReview: ReviewDetailDto | null;
+}
+
+/** Owner-only extension. Contact snapshots are never returned from customer history routes. */
+export interface OwnerVisitHistoryItemDto extends VisitHistoryItemDto {
+  customerId: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerEmail: string | null;
+  createdAt: string;
+}
+
+export const VISIT_HISTORY_FILTERS = ['all', 'active', 'today', 'upcoming', 'completed', 'cancelled', 'expired', 'no_show'] as const;
+export type VisitHistoryFilter = (typeof VISIT_HISTORY_FILTERS)[number];
 
 // P0 arrival-alert mission — the full-screen owner overlay's "what needs my attention right now"
 // read model. Deliberately id/summary-only (never phone/email — see the mission's privacy

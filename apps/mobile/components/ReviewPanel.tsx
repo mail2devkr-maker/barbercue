@@ -1,18 +1,31 @@
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { REVIEW_PATHS } from '@barbercue/shared';
-import type { BookingDetailDto, ReviewDetailDto } from '@barbercue/shared';
-import { apiFetch, ApiError } from '../lib/api';
-import { useLanguage } from '../lib/language-context';
-import { color, font, fontSize, radius, space } from '../lib/theme';
-import { Button, Card, InlineError } from './ui';
+import { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { REVIEW_PATHS } from "@barbercue/shared";
+import type { BookingDetailDto, ReviewDetailDto } from "@barbercue/shared";
+import { apiFetch, ApiError } from "../lib/api";
+import { useLanguage } from "../lib/language-context";
+import { color, font, fontSize, radius, space } from "../lib/theme";
+import { Button, Card, InlineError } from "./ui";
 
-function StarPicker({ value, onChange }: { value: number; onChange: (rating: number) => void }) {
+function StarPicker({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (rating: number) => void;
+}) {
   return (
     <View style={styles.starRow}>
       {[1, 2, 3, 4, 5].map((star) => (
         <Pressable key={star} onPress={() => onChange(star)} hitSlop={6}>
-          <Text style={[styles.star, star <= value ? styles.starFilled : styles.starEmpty]}>★</Text>
+          <Text
+            style={[
+              styles.star,
+              star <= value ? styles.starFilled : styles.starEmpty,
+            ]}
+          >
+            ★
+          </Text>
         </Pressable>
       ))}
     </View>
@@ -22,8 +35,8 @@ function StarPicker({ value, onChange }: { value: number; onChange: (rating: num
 function StarDisplay({ rating }: { rating: number }) {
   return (
     <Text style={styles.starDisplay}>
-      <Text style={styles.starFilled}>{'★'.repeat(rating)}</Text>
-      <Text style={styles.starEmpty}>{'★'.repeat(5 - rating)}</Text>
+      <Text style={styles.starFilled}>{"★".repeat(rating)}</Text>
+      <Text style={styles.starEmpty}>{"★".repeat(5 - rating)}</Text>
     </Text>
   );
 }
@@ -35,30 +48,53 @@ function StarDisplay({ rating }: { rating: number }) {
  */
 export function ReviewPanel({
   booking,
+  queueEntryId,
+  status,
+  hasReview: hasQueueReview,
+  initialReview,
+  title,
   onReviewed,
 }: {
-  booking: BookingDetailDto;
-  onReviewed: (bookingId: string) => void;
+  booking?: BookingDetailDto;
+  queueEntryId?: string;
+  status?: string;
+  hasReview?: boolean;
+  initialReview?: ReviewDetailDto | null;
+  title?: string;
+  onReviewed: (visitId: string) => void;
 }) {
   const { t } = useLanguage();
-  const [review, setReview] = useState<ReviewDetailDto | null>(null);
-  const [loaded, setLoaded] = useState(!booking.hasReview);
+  const visitId = booking?.id ?? queueEntryId;
+  const isQueueVisit = Boolean(queueEntryId);
+  const completed = booking?.status === "COMPLETED" || status === "COMPLETED";
+  const hasReview = booking?.hasReview ?? hasQueueReview ?? false;
+  const [review, setReview] = useState<ReviewDetailDto | null>(
+    initialReview ?? null,
+  );
+  const [loaded, setLoaded] = useState(
+    !hasReview || initialReview !== undefined,
+  );
   const [editing, setEditing] = useState(false);
   const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!booking.hasReview) return;
+    if (!visitId || !hasReview || initialReview !== undefined) return;
     let cancelled = false;
-    apiFetch<ReviewDetailDto | null>(`${REVIEW_PATHS.reviews}/${REVIEW_PATHS.booking}/${booking.id}`)
+    const reviewPath = isQueueVisit
+      ? REVIEW_PATHS.queueEntry
+      : REVIEW_PATHS.booking;
+    apiFetch<ReviewDetailDto | null>(
+      `${REVIEW_PATHS.reviews}/${reviewPath}/${visitId}`,
+    )
       .then((result) => {
         if (cancelled) return;
         setReview(result);
         if (result) {
           setRating(result.rating);
-          setComment(result.comment ?? '');
+          setComment(result.comment ?? "");
         }
       })
       .catch(() => {
@@ -70,24 +106,41 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [booking.id, booking.hasReview]);
+  }, [visitId, hasReview, isQueueVisit, initialReview]);
+
+  useEffect(() => {
+    if (initialReview !== undefined) {
+      setReview(initialReview);
+      if (initialReview) {
+        setRating(initialReview.rating);
+        setComment(initialReview.comment ?? "");
+      }
+    }
+  }, [initialReview]);
 
   async function submit() {
     setSubmitting(true);
     setError(null);
     try {
       const result = review
-        ? await apiFetch<ReviewDetailDto>(`${REVIEW_PATHS.reviews}/${review.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ rating, comment: comment.trim() || undefined }),
-          })
+        ? await apiFetch<ReviewDetailDto>(
+            `${REVIEW_PATHS.reviews}/${review.id}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({ rating, comment: comment.trim() }),
+            },
+          )
         : await apiFetch<ReviewDetailDto>(REVIEW_PATHS.reviews, {
-            method: 'POST',
-            body: JSON.stringify({ bookingId: booking.id, rating, comment: comment.trim() || undefined }),
+            method: "POST",
+            body: JSON.stringify({
+              ...(isQueueVisit ? { queueEntryId } : { bookingId: visitId }),
+              rating,
+              comment: comment.trim() || undefined,
+            }),
           });
       setReview(result);
       setEditing(false);
-      onReviewed(booking.id);
+      if (visitId) onReviewed(visitId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.couldNotSaveReview);
     } finally {
@@ -95,28 +148,37 @@ export function ReviewPanel({
     }
   }
 
-  if (booking.status !== 'COMPLETED' || !loaded) return null;
+  if (!completed || !loaded || !visitId) return null;
 
   if (review && !editing) {
     return (
       <Card style={styles.card}>
         <Text style={styles.title}>{t.yourReviewTitle}</Text>
         <StarDisplay rating={review.rating} />
-        {review.comment ? <Text style={styles.comment}>{review.comment}</Text> : null}
+        {review.comment ? (
+          <Text style={styles.comment}>{review.comment}</Text>
+        ) : null}
         {review.ownerResponse ? (
           <Text style={styles.response}>
             <Text style={styles.responseLabel}>{t.shopsResponseLabel}</Text>
             {review.ownerResponse}
           </Text>
         ) : null}
-        <Button title={t.editReviewAction} variant="outline" onPress={() => setEditing(true)} style={styles.editButton} />
+        <Button
+          title={t.editReviewAction}
+          variant="outline"
+          onPress={() => setEditing(true)}
+          style={styles.editButton}
+        />
       </Card>
     );
   }
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>{review ? t.editYourReviewTitle : t.leaveAReviewTitle}</Text>
+      <Text style={styles.title}>
+        {review ? t.editYourReviewTitle : (title ?? t.leaveAReviewTitle)}
+      </Text>
       <StarPicker value={rating} onChange={setRating} />
       <TextInput
         value={comment}
@@ -129,7 +191,13 @@ export function ReviewPanel({
       {error && <InlineError message={error} />}
       <View style={styles.actionsRow}>
         <Button
-          title={submitting ? t.savingEllipsis : review ? t.saveReviewAction : t.submitReviewAction}
+          title={
+            submitting
+              ? t.savingEllipsis
+              : review
+                ? t.saveReviewAction
+                : t.submitReviewAction
+          }
           onPress={() => void submit()}
           loading={submitting}
           style={styles.actionButton}
@@ -150,14 +218,29 @@ export function ReviewPanel({
 
 const styles = StyleSheet.create({
   card: { marginBottom: space[4] },
-  title: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink, marginBottom: space[2] },
-  starRow: { flexDirection: 'row', gap: space[1] },
+  title: {
+    fontFamily: font.displaySemiBold,
+    fontSize: fontSize.base,
+    color: color.ink,
+    marginBottom: space[2],
+  },
+  starRow: { flexDirection: "row", gap: space[1] },
   star: { fontSize: 26, lineHeight: 30 },
   starDisplay: { fontSize: 18 },
   starFilled: { color: color.gold },
   starEmpty: { color: color.border },
-  comment: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.ink, marginTop: space[2] },
-  response: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginTop: space[2] },
+  comment: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.sm,
+    color: color.ink,
+    marginTop: space[2],
+  },
+  response: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.sm,
+    color: color.muted,
+    marginTop: space[2],
+  },
   responseLabel: { fontFamily: font.bodySemiBold, color: color.ink },
   editButton: { marginTop: space[3] },
   input: {
@@ -170,8 +253,8 @@ const styles = StyleSheet.create({
     fontFamily: font.bodyRegular,
     fontSize: fontSize.sm,
     color: color.ink,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
-  actionsRow: { flexDirection: 'row', gap: space[2], marginTop: space[3] },
+  actionsRow: { flexDirection: "row", gap: space[2], marginTop: space[3] },
   actionButton: { flex: 1 },
 });

@@ -50,13 +50,27 @@ function StarDisplay({ rating }: { rating: number }) {
  */
 export function ReviewPanel({
   booking,
+  queueEntryId,
+  status,
+  hasReview: hasQueueReview,
+  initialReview,
+  title,
   onReviewed,
 }: {
-  booking: BookingDetailDto;
-  onReviewed: (bookingId: string) => void;
+  booking?: BookingDetailDto;
+  queueEntryId?: string;
+  status?: string;
+  hasReview?: boolean;
+  initialReview?: ReviewDetailDto | null;
+  title?: string;
+  onReviewed: (visitId: string) => void;
 }) {
-  const [review, setReview] = useState<ReviewDetailDto | null>(null);
-  const [loaded, setLoaded] = useState(!booking.hasReview);
+  const visitId = booking?.id ?? queueEntryId;
+  const isQueueVisit = Boolean(queueEntryId);
+  const completed = booking?.status === "COMPLETED" || status === "COMPLETED";
+  const hasReview = booking?.hasReview ?? hasQueueReview ?? false;
+  const [review, setReview] = useState<ReviewDetailDto | null>(initialReview ?? null);
+  const [loaded, setLoaded] = useState(!hasReview || initialReview !== undefined);
   const [editing, setEditing] = useState(false);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -64,9 +78,10 @@ export function ReviewPanel({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!booking.hasReview) return;
+    if (!visitId || !hasReview || initialReview !== undefined) return;
     let cancelled = false;
-    apiFetch<ReviewDetailDto | null>(`${REVIEW_PATHS.reviews}/${REVIEW_PATHS.booking}/${booking.id}`)
+    const reviewPath = isQueueVisit ? REVIEW_PATHS.queueEntry : REVIEW_PATHS.booking;
+    apiFetch<ReviewDetailDto | null>(`${REVIEW_PATHS.reviews}/${reviewPath}/${visitId}`)
       .then((result) => {
         if (cancelled) return;
         setReview(result);
@@ -84,7 +99,7 @@ export function ReviewPanel({
     return () => {
       cancelled = true;
     };
-  }, [booking.id, booking.hasReview]);
+  }, [visitId, hasReview, isQueueVisit, initialReview]);
 
   async function submit() {
     setSubmitting(true);
@@ -93,15 +108,19 @@ export function ReviewPanel({
       const result = review
         ? await apiFetch<ReviewDetailDto>(`${REVIEW_PATHS.reviews}/${review.id}`, {
             method: "PATCH",
-            body: JSON.stringify({ rating, comment: comment.trim() || undefined }),
+            body: JSON.stringify({ rating, comment: comment.trim() }),
           })
         : await apiFetch<ReviewDetailDto>(REVIEW_PATHS.reviews, {
             method: "POST",
-            body: JSON.stringify({ bookingId: booking.id, rating, comment: comment.trim() || undefined }),
+            body: JSON.stringify({
+              ...(isQueueVisit ? { queueEntryId } : { bookingId: visitId }),
+              rating,
+              comment: comment.trim() || undefined,
+            }),
           });
       setReview(result);
       setEditing(false);
-      onReviewed(booking.id);
+      if (visitId) onReviewed(visitId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save your review.");
     } finally {
@@ -109,7 +128,7 @@ export function ReviewPanel({
     }
   }
 
-  if (booking.status !== "COMPLETED" || !loaded) return null;
+  if (!completed || !loaded || !visitId) return null;
 
   if (review && !editing) {
     return (
@@ -130,6 +149,7 @@ export function ReviewPanel({
 
   return (
     <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--bc-border)" }}>
+      {(title || isQueueVisit) && <strong>{title ?? "Rate your service"}</strong>}
       <StarPicker value={rating} onChange={setRating} />
       <textarea
         value={comment}

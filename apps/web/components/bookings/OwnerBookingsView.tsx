@@ -5,6 +5,8 @@ import {
   DASHBOARD_PATHS,
   OWNER_BOOKING_FILTERS,
   formatVoiceDateTime,
+  formatZonedDateTime,
+  VISIT_HISTORY_SOURCE_LABELS,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
   type PaginatedResult,
@@ -21,14 +23,17 @@ import {
 } from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
 import styles from "./bookings.module.css";
+import { LiveQueueHistoryPanel } from "./LiveQueueHistoryPanel";
 
 const PAGE_SIZE = 20;
 
 const FILTER_LABEL: Record<OwnerBookingFilter, string> = {
+  active: "Active",
   today: "Today",
   upcoming: "Upcoming",
   completed: "Completed",
   cancelled: "Cancelled",
+  expired: "Expired",
   no_show: "No-show",
   all: "All / History",
 };
@@ -54,8 +59,8 @@ function bookingsPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
 }
 
-function formatSlot(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+function formatSlot(iso: string, timezone: string | null): string {
+  return formatZonedDateTime(iso, timezone, undefined, {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -79,7 +84,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           <span className={styles.cardTitle}>{booking.serviceName}</span>
           {isNew && <span className={styles.newBadge}>NEW</span>}
           <p className={styles.cardMeta}>
-            {formatSlot(booking.slotStart)}
+            {formatSlot(booking.slotStart, booking.salonTimezone)}
             {booking.customerPhone ? ` · ${booking.customerPhone}` : ""}
             {booking.assignedStaffName
               ? ` · ${booking.assignedStaffName}`
@@ -92,6 +97,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           {STATUS_LABEL[booking.status] ?? booking.status}
         </span>
       </button>
+      <p className={styles.cardMeta}>Source: {VISIT_HISTORY_SOURCE_LABELS.ONLINE_BOOKING}</p>
 
       {open && (
         <dl className={styles.detail}>
@@ -125,7 +131,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           )}
           <div className={styles.detailItem}>
             <dt>Source</dt>
-            <dd>{booking.source}</dd>
+            <dd>{VISIT_HISTORY_SOURCE_LABELS.ONLINE_BOOKING}</dd>
           </div>
           {booking.customerEmail && (
             <div className={styles.detailItem}>
@@ -135,12 +141,12 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           )}
           <div className={styles.detailItem}>
             <dt>Booked on</dt>
-            <dd>{formatSlot(booking.createdAt)}</dd>
+            <dd>{formatSlot(booking.createdAt, booking.salonTimezone)}</dd>
           </div>
           {booking.cancelledAt && (
             <div className={styles.detailItem}>
               <dt>Cancelled</dt>
-              <dd>{formatSlot(booking.cancelledAt)}</dd>
+              <dd>{formatSlot(booking.cancelledAt, booking.salonTimezone)}</dd>
             </div>
           )}
           {booking.cancellationChargeAmount !== null && (
@@ -386,7 +392,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
             <div>
               <strong>New booking received</strong>
               <span>
-                {newNotice.serviceName} · {formatSlot(newNotice.slotStart)}
+                {newNotice.serviceName} · {formatSlot(newNotice.slotStart, newNotice.salonTimezone)}
                 {newNotice.customerPhone ? ` · ${newNotice.customerPhone}` : ""}
               </span>
             </div>
@@ -407,6 +413,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
         )}
       </div>
 
+      <h2>Online Bookings</h2>
       <div className={styles.filterRow}>
         {OWNER_BOOKING_FILTERS.map((f) => (
           <button
@@ -445,6 +452,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
           </Button>
         </div>
       )}
+      <LiveQueueHistoryPanel salonId={salonId} />
     </div>
   );
 }

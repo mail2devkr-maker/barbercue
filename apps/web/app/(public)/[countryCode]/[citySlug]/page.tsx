@@ -100,7 +100,7 @@ export default async function CityPage({ params }: { params: Promise<CityPagePar
 
       <section className={styles.shops}>
         <div className={styles.sectionHeading}>
-          <p className={styles.eyebrow}>Book or walk in</p>
+          <p className={styles.eyebrow}>Book or join the Live Queue</p>
           <h2>Shops in {city.name}</h2>
         </div>
         {salons && salons.items.length > 0 ? (

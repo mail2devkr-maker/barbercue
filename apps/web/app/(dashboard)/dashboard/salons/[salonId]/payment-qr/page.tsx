@@ -32,7 +32,7 @@ export default function DashboardPaymentQrPage({
       <h1 className={styles.pageTitle}>Payment QR</h1>
       <p className={styles.pageSubtitle}>
         Required for online bookings — a customer paying through the app or website scans this to
-        pay you directly. Walk-ins never need it, and you can always add or change it later from
+        pay you directly. Live Queue customers never need it, and you can always add or change it later from
         Settings.
       </p>
       <SetupNavigation salonId={salonId} currentStep="payment-qr" section="steps" />
