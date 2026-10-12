@@ -510,6 +510,8 @@ export interface OwnerStaffPerformanceDto {
   estimatedValueLast30Days: number;
   /** FastQue reviews attach to a booking, not a barber, so a per-barber rating does not exist. */
   rating: null;
+  /** The barber's own profile photo when they have set one (never a stock image). */
+  photoUrl?: string | null;
 }
 
 export interface OwnerScheduleItemDto {
@@ -522,6 +524,8 @@ export interface OwnerScheduleItemDto {
   serviceNames: string[];
   customerLabel: string;
   staffName: string | null;
+  /** The first service's category (e.g. Haircut, Colour) - drives the colour of the schedule block. */
+  category?: string | null;
 }
 
 export interface OwnerQueueSummaryDto {

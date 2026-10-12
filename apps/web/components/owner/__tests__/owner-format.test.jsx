@@ -1,4 +1,4 @@
-import { formatMoney, formatPercentChange, greetingFor, initialsOf } from "../format";
+import { formatMoney, formatPercentChange, greetingFor, initialsOf, shortName } from "../format";
 
 describe("owner dashboard formatting", () => {
   it("shows rupees with the sign and Indian digit grouping", () => {
@@ -21,5 +21,11 @@ describe("owner dashboard formatting", () => {
     expect(greetingFor(20)).toBe("Good evening");
     expect(initialsOf("owner.19dfc0@fastque-demo.test")).toBe("OW");
     expect(initialsOf("")).toBe("?");
+  });
+  it("labels the account chip without ever showing a full e-mail address", () => {
+    expect(shortName("owner.19dfc0@fastque-demo.test")).toBe("owner.19dfc0");
+    expect(shortName("Arjun Mehta Singh")).toBe("Arjun Mehta");
+    expect(shortName("a-very-long-account-name-indeed@example.com")).toHaveLength(18);
+    expect(shortName(null)).toBe("Account");
   });
 });

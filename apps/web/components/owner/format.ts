@@ -78,6 +78,14 @@ export function initialsOf(value: string | null | undefined): string {
   return (words.length > 1 ? words[0][0] + words[1][0] : text.slice(0, 2)).toUpperCase() || "?";
 }
 
+/** A short, friendly label for the account chip: the part of an e-mail before the @, or a name's first two words. */
+export function shortName(value: string | null | undefined): string {
+  const text = (value ?? "").trim();
+  if (!text) return "Account";
+  const base = text.includes("@") ? text.split("@")[0] : text.split(/\s+/).slice(0, 2).join(" ");
+  return base.length > 18 ? `${base.slice(0, 17)}…` : base;
+}
+
 export function triggerBlobDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

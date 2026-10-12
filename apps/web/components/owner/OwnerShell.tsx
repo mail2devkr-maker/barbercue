@@ -21,7 +21,7 @@ import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtim
 import { AdminManagingBanner } from "../dashboard/AdminManagingBanner";
 import { Icon } from "./icons";
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, hrefFor, navItemsFor, type NavItem } from "./owner-nav";
-import { initialsOf } from "./format";
+import { initialsOf, shortName } from "./format";
 import ui from "./owner.module.css";
 
 export type ShopKind = "owner" | "staff";
@@ -315,13 +315,14 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
                 <div className={ui.menuWrap} ref={menuRef}>
                   <button
                     type="button"
-                    className={ui.avatar}
+                    className={ui.avatarBtn}
                     aria-label="Account menu"
                     aria-haspopup="menu"
                     aria-expanded={menuOpen}
                     onClick={() => setMenuOpen((open) => !open)}
                   >
-                    {initialsOf(displayName)}
+                    <span className={ui.avatar}>{initialsOf(displayName)}</span>
+                    <span className={ui.avatarName}>{shortName(displayName)}</span>
                   </button>
                   {menuOpen && (
                     <div className={ui.menuPanel} role="menu">
@@ -392,6 +393,12 @@ function GlobalSearch({ salonId, kind }: { salonId: string; kind: ShopKind }) {
   const [serverHits, setServerHits] = useState<Hit[]>([]);
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
+  const [shortcutLabel, setShortcutLabel] = useState("Ctrl K");
+  useEffect(() => {
+    // The platform is only known in the browser, so the hint is corrected after the first paint.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- platform is not available during server render
+    if (/Mac|iPhone|iPad/i.test(navigator.platform)) setShortcutLabel("⌘ K");
+  }, []);
 
   const navHits = useMemo<Hit[]>(() => {
     const q = query.trim().toLowerCase();
@@ -500,6 +507,11 @@ function GlobalSearch({ salonId, kind }: { salonId: string; kind: ShopKind }) {
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
       />
+      {query === "" && (
+        <span className={ui.searchHint} aria-hidden="true">
+          {shortcutLabel}
+        </span>
+      )}
       {showPanel && (
         <div className={ui.searchPanel} id="owner-search-results" role="listbox" aria-label="Search results">
           {hits.length === 0 && (
