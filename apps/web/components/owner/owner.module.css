@@ -475,12 +475,18 @@
     top: 0;
     z-index: 60;
     width: 280px;
-    transform: translateX(-120%);
-    transition: transform 0.2s ease;
-    box-shadow: var(--os-shadow);
+    /* Fully off-canvas while closed (the drawer sits to the right of the 84px rail, so it must also
+       clear the rail's width) and out of the tab order. */
+    transform: translateX(calc(-100% - 96px));
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0s linear 0.2s;
+    box-shadow: none;
   }
   .sidebarOpen {
     transform: translateX(0);
+    visibility: visible;
+    transition: transform 0.2s ease, visibility 0s;
+    box-shadow: var(--os-shadow);
   }
   .menuBtn {
     display: inline-grid;
@@ -1042,6 +1048,14 @@
 .textarea {
   min-height: 84px;
   resize: vertical;
+}
+/* Text-like fields show the ring whenever any part of them has focus - a date field's focus lives in
+   its inner month/day/year segments, where :focus-visible on the host is not reliable. */
+.input:focus-within,
+.select:focus-within,
+.textarea:focus-within {
+  border-color: var(--os-brand);
+  box-shadow: var(--os-focus);
 }
 .input::placeholder,
 .textarea::placeholder {
