@@ -1,5 +1,5 @@
 import type { InvoiceDetailDto, InvoiceSummaryDto } from '@barbercue/shared';
-import { formatMoney } from './ops';
+import { formatMoney, formatShopDate } from './ops';
 
 export type InvoiceTone = 'ok' | 'warn' | 'info' | 'neutral' | 'danger';
 
@@ -36,7 +36,7 @@ export function invoiceShareText(invoice: InvoiceDetailDto): string {
   const lines = invoice.lines.map((l) => `${l.description} x${l.quantity}  ${money(l.lineTotal)}`);
   return [
     `${invoice.seller.legalName} - Invoice ${invoice.number}`,
-    `Date: ${invoice.serviceDate}`,
+    `Date: ${formatShopDate(invoice.serviceDate, null)}`,
     invoice.customerName ? `Customer: ${invoice.customerName}` : null,
     ...lines,
     invoice.taxLabel && invoice.taxTotal > 0 ? `${invoice.taxLabel}: ${money(invoice.taxTotal)}` : null,

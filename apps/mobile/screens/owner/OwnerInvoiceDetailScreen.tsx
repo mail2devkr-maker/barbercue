@@ -75,7 +75,7 @@ export default function OwnerInvoiceDetailScreen() {
       <PremiumCard strong style={styles.card}>
         <View style={styles.rowBetween}>
           <StatusPill label={view.label} tone={view.tone} />
-          <Text style={styles.sub}>{invoice.serviceDate}</Text>
+          <Text style={styles.sub}>{formatShopDate(invoice.serviceDate, null)}</Text>
         </View>
         <Text style={styles.big}>{money(invoice.total)}</Text>
         <Text style={styles.sub}>
