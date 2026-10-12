@@ -100,6 +100,9 @@ interface PrismaMock {
   auditLog: {
     create: jest.Mock<Promise<unknown>, [unknown]>;
   };
+  salon: {
+    findUnique: jest.Mock<Promise<unknown>, [unknown]>;
+  };
   user: {
     findUnique: jest.Mock<Promise<unknown>, [unknown]>;
   };
@@ -121,6 +124,7 @@ describe('QueueService', () => {
   };
   let salonAccess: {
     assertAccessOrAdminAccess: jest.Mock<Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
+    getActorKind: jest.Mock<Promise<'OWNER' | 'STAFF' | 'PLATFORM_ADMIN' | null>, [string, string]>;
   };
   let realtime: {
     emitQueueUpdated: jest.Mock;
@@ -200,6 +204,12 @@ describe('QueueService', () => {
       auditLog: {
         create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
       },
+      // getDashboardQueue reads the shop's opt-in flag for the additive `autoAssignEnabled` field.
+      salon: {
+        findUnique: jest
+          .fn<Promise<unknown>, [unknown]>()
+          .mockResolvedValue({ queueAutoAssignEnabled: false }),
+      },
       // The customer's own account - has a phone by default so pre-existing join tests keep
       // exercising the unchanged happy path.
       user: {
@@ -247,6 +257,10 @@ describe('QueueService', () => {
       assertAccessOrAdminAccess: jest
         .fn<Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'>, [string, string]>()
         .mockResolvedValue('STAFF_OR_OWNER'),
+      // Owner by default: the pre-existing completeSession tests complete as the shop owner.
+      getActorKind: jest
+        .fn<Promise<'OWNER' | 'STAFF' | 'PLATFORM_ADMIN' | null>, [string, string]>()
+        .mockResolvedValue('OWNER'),
     };
     realtime = {
       emitQueueUpdated: jest.fn(),
@@ -898,6 +912,49 @@ describe('QueueService', () => {
         service.reassign('owner1', 'q1', { staffId: 'st2' }),
       ).rejects.toMatchObject({ code: 'STAFF_ALREADY_OCCUPIED' });
       expect(realtime.emitQueueEntryReassigned).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('completeSession - a barber may only complete their own service (owner-operations mission)', () => {
+    const session = () => ({
+      id: 'sess1',
+      queueEntryId: 'q1',
+      staffId: 'staff-row-1',
+      queueEntry: makeRawEntry({ bookingId: null }),
+    });
+
+    it('lets the barber who is performing the service complete it', async () => {
+      salonAccess.getActorKind.mockResolvedValueOnce('STAFF');
+      prisma.salonStaff.findUnique.mockResolvedValueOnce({ userId: 'barber-user' });
+      prisma.serviceSession.findUnique.mockResolvedValueOnce(session());
+      await service.completeSession('barber-user', 'sess1');
+      expect(prisma.serviceSession.updateMany).toHaveBeenCalled();
+    });
+
+    it("rejects a colleague completing someone else's service with NOT_YOUR_SERVICE_SESSION and changes nothing", async () => {
+      salonAccess.getActorKind.mockResolvedValueOnce('STAFF');
+      prisma.salonStaff.findUnique.mockResolvedValueOnce({ userId: 'someone-else' });
+      prisma.serviceSession.findUnique.mockResolvedValueOnce(session());
+      await expect(service.completeSession('barber-user', 'sess1')).rejects.toMatchObject({
+        code: 'NOT_YOUR_SERVICE_SESSION',
+      });
+      expect(prisma.serviceSession.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('lets the owner complete any service without a roster lookup', async () => {
+      salonAccess.getActorKind.mockResolvedValueOnce('OWNER');
+      prisma.serviceSession.findUnique.mockResolvedValueOnce(session());
+      await service.completeSession('owner-user', 'sess1');
+      expect(prisma.salonStaff.findUnique).not.toHaveBeenCalled();
+      expect(prisma.serviceSession.updateMany).toHaveBeenCalled();
+    });
+
+    it('lets a delegated platform admin complete any service', async () => {
+      salonAccess.assertAccessOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      prisma.serviceSession.findUnique.mockResolvedValueOnce(session());
+      await service.completeSession('admin-user', 'sess1');
+      expect(salonAccess.getActorKind).not.toHaveBeenCalled();
+      expect(prisma.serviceSession.updateMany).toHaveBeenCalled();
     });
   });
 

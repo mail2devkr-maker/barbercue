@@ -683,5 +683,225 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     });
   });
 
-  // @@BILLING@@
+  // ------------------------------------------------------------------------------------------
+  describe('Invoices, payments and revenue', () => {
+    const SALON = () => `dashboard/salons/${ids.salon}`;
+
+    /** A booking that went through the real flow: booked -> arrived -> seated -> completed. */
+    async function completedBooking(customerLabel = 'cust1'): Promise<string> {
+      const start = new Date(Date.now() + 2 * 60_000); // inside the 15-minute check-in window
+      const booking = await createBookingAs(customerLabel, start.toISOString());
+      return finishBooking(booking.id);
+    }
+    async function finishBooking(bookingId: string): Promise<string> {
+      const arrived = await api('post', `dashboard/bookings/${bookingId}/arrive`, tok.owner).expect(201);
+      await api('post', `dashboard/queue-entries/${arrived.body.id}/assign`, tok.owner)
+        .send({ staffId: ids.raviStaff, chairId: ids['Chair 3'] })
+        .expect(201);
+      const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: arrived.body.id, status: 'ACTIVE' } });
+      await api('post', `dashboard/service-sessions/${session.id}/complete`, tok.ravi).expect(201);
+      expect((await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } })).status).toBe('COMPLETED');
+      return bookingId;
+    }
+    async function completedWalkIn(name: string): Promise<string> {
+      const entry = (await api('post', `${SALON()}/queue/customers`, tok.owner).send({ name, serviceId: ids.haircut }).expect(201)).body as { id: string };
+      await api('post', `dashboard/queue-entries/${entry.id}/assign`, tok.owner).send({ staffId: ids.raviStaff, chairId: ids['Chair 3'] }).expect(201);
+      const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: entry.id, status: 'ACTIVE' } });
+      await api('post', `dashboard/service-sessions/${session.id}/complete`, tok.ravi).expect(201);
+      return entry.id;
+    }
+    const issue = (body: Record<string, string>, token = tok.owner) => api('post', `${SALON()}/invoices`, token).send(body);
+
+    let invoiceA: { id: string; number: string };
+    let bookingA: string;
+    let bookingB: string;
+
+    it('needs the business profile first: nothing is invented, neither a legal name nor a GSTIN', async () => {
+      bookingA = await completedBooking('cust1');
+      const res = await issue({ bookingId: bookingA }).expect(422);
+      expect(res.body.code ?? res.body.error?.code ?? JSON.stringify(res.body)).toContain('BILLING_PROFILE_REQUIRED');
+      expect(await prisma.invoice.count({ where: { salonId: ids.salon } })).toBe(0);
+      // tax can only be turned on with a rate
+      await api('put', `${SALON()}/billing-profile`, tok.owner).send({ legalName: 'Owner Ops Salon Pvt Ltd', taxEnabled: true }).expect(400);
+      // a barber cannot read or change billing configuration
+      await api('put', `${SALON()}/billing-profile`, tok.ravi).send({ legalName: 'Hacked', taxEnabled: false }).expect(403);
+      const saved = await api('put', `${SALON()}/billing-profile`, tok.owner)
+        .send({ legalName: 'Owner Ops Salon Pvt Ltd', gstin: '22AAAAA0000A1Z5', taxEnabled: true, taxRatePercent: 18, taxMode: 'EXCLUSIVE', invoicePrefix: 'FQ' })
+        .expect(200);
+      expect(saved.body).toMatchObject({ complete: true, taxRatePercent: 18, invoicePrefix: 'FQ' });
+    });
+
+    it('issues from the real service price with exclusive tax, frozen seller details and the right customer/barber', async () => {
+      const res = await issue({ bookingId: bookingA }).expect(201);
+      invoiceA = res.body;
+      expect(res.body).toMatchObject({
+        number: 'FQ-000001',
+        currency: 'INR',
+        subtotal: 250,
+        discountTotal: 0,
+        taxTotal: 45,
+        total: 295,
+        balanceDue: 295,
+        paymentStatus: 'UNPAID',
+        status: 'ISSUED',
+        staffName: 'Ravi',
+        customerPhone: phone(1),
+        taxLabel: 'GST',
+        taxRatePercent: 18,
+        taxMode: 'EXCLUSIVE',
+      });
+      expect(res.body.seller).toMatchObject({ legalName: 'Owner Ops Salon Pvt Ltd', gstin: '22AAAAA0000A1Z5' });
+      expect(res.body.lines).toEqual([expect.objectContaining({ description: 'Haircut', unitPrice: 250, lineTotal: 250 })]);
+      // changing the profile later does not rewrite an invoice that was already issued
+      await api('put', `${SALON()}/billing-profile`, tok.owner).send({ legalName: 'Renamed Pvt Ltd', taxEnabled: false, invoicePrefix: 'FQ' }).expect(200);
+      const reread = await api('get', `${SALON()}/invoices/${invoiceA.id}`, tok.owner).expect(200);
+      expect(reread.body.seller.legalName).toBe('Owner Ops Salon Pvt Ltd');
+      expect(reread.body.taxTotal).toBe(45);
+      await api('put', `${SALON()}/billing-profile`, tok.owner)
+        .send({ legalName: 'Owner Ops Salon Pvt Ltd', gstin: '22AAAAA0000A1Z5', taxEnabled: true, taxRatePercent: 18, taxMode: 'EXCLUSIVE', invoicePrefix: 'FQ' })
+        .expect(200);
+    });
+
+    it('is idempotent: repeating the request returns the same invoice, and concurrent clicks create one with no numbering gap', async () => {
+      const again = await issue({ bookingId: bookingA }).expect(200);
+      expect(again.body.id).toBe(invoiceA.id);
+      bookingB = await completedBooking('cust2');
+      const results = await Promise.all(Array.from({ length: 6 }, () => issue({ bookingId: bookingB })));
+      expect(results.every((r) => r.status === 200 || r.status === 201)).toBe(true);
+      expect(new Set(results.map((r) => r.body.id)).size).toBe(1);
+      expect(results.filter((r) => r.status === 201)).toHaveLength(1);
+      expect(await prisma.invoice.count({ where: { bookingId: bookingB } })).toBe(1);
+      expect(results[0].body.number).toBe('FQ-000002'); // the sequence was not burned by the duplicates
+    });
+
+    it('only a completed service can be invoiced, and a booking-linked visit is invoiced through its booking', async () => {
+      const pending = await createBookingAs('cust1', slot('09:00', 4));
+      await issue({ bookingId: pending.id }).expect(409);
+      const queueEntryOfBooking = await prisma.queueEntry.findFirstOrThrow({ where: { bookingId: bookingA } });
+      await issue({ queueEntryId: queueEntryOfBooking.id }).expect(409);
+      await issue({}).expect(400);
+      await issue({ bookingId: pending.id, queueEntryId: queueEntryOfBooking.id }).expect(400);
+    });
+
+    it('records only what the shop says it received, never overpaying, with refunds restricted to the owner', async () => {
+      const pay = (token: string, body: Record<string, unknown>, key?: string) => {
+        const req = api('post', `${SALON()}/invoices/${invoiceA.id}/payments`, token);
+        if (key) req.set('Idempotency-Key', key);
+        return req.send(body);
+      };
+      const partial = await pay(tok.ravi, { method: 'CASH', amount: 100 }).expect(201);
+      expect(partial.body).toMatchObject({ amountPaid: 100, balanceDue: 195, paymentStatus: 'PARTIALLY_PAID' });
+      await pay(tok.ravi, { kind: 'REFUND', method: 'CASH', amount: 10 }).expect(403);
+      await pay(tok.owner, { method: 'UPI', amount: 200 }).expect(409); // more than the 195 due
+      const key = randomUUID();
+      const paid = await pay(tok.owner, { method: 'UPI', amount: 195, reference: 'UPI-TXN-1' }, key).expect(201);
+      expect(paid.body).toMatchObject({ amountPaid: 295, balanceDue: 0, paymentStatus: 'PAID' });
+      await pay(tok.owner, { method: 'UPI', amount: 195, reference: 'UPI-TXN-1' }, key); // a replayed request
+      expect(await prisma.invoicePayment.count({ where: { invoiceId: invoiceA.id } })).toBe(2);
+      await pay(tok.owner, { method: 'CASH', amount: 1 }).expect(409); // already fully paid
+
+      const refunded = await pay(tok.owner, { kind: 'REFUND', method: 'CASH', amount: 50, note: 'Goodwill' }).expect(201);
+      expect(refunded.body).toMatchObject({ amountRefunded: 50, balanceDue: 50, paymentStatus: 'PARTIALLY_PAID' });
+      await pay(tok.owner, { kind: 'REFUND', method: 'CASH', amount: 300 }).expect(409); // more than was received
+      await api('post', `${SALON()}/invoices/${invoiceA.id}/void`, tok.owner).send({ reason: 'Entered by mistake' }).expect(409); // refund first
+    });
+
+    it('keeps the ledger append-only and the issued amounts frozen at the database level', async () => {
+      await expect(prisma.$executeRaw`UPDATE "invoices" SET "total" = 1 WHERE "id" = ${invoiceA.id}`).rejects.toThrow(/immutable/);
+      await expect(prisma.$executeRaw`UPDATE "invoice_payments" SET "amount" = 1 WHERE "invoiceId" = ${invoiceA.id}`).rejects.toThrow(/append-only/);
+      await expect(prisma.$executeRaw`DELETE FROM "invoice_payments" WHERE "invoiceId" = ${invoiceA.id}`).rejects.toThrow(/append-only/);
+      await expect(
+        prisma.$executeRaw`INSERT INTO "invoice_payments" ("id","invoiceId","salonId","kind","method","amount","recordedByUserId") VALUES (${randomUUID()}, ${invoiceA.id}, ${ids.salon}, 'PAYMENT', 'CASH', 0, ${ids.owner})`,
+      ).rejects.toThrow();
+    });
+
+    it('shows a customer only their own invoices and PDFs; a stranger or a guest gets nothing', async () => {
+      const mine = await api('get', 'invoices/mine', tok.cust1).expect(200);
+      expect((mine.body.items as Array<{ id: string }>).map((i) => i.id)).toContain(invoiceA.id);
+      expect((mine.body.items as Array<{ id: string }>).map((i) => i.id)).not.toContain(results0(bookingB));
+      await api('get', `invoices/mine/${invoiceA.id}`, tok.cust2).expect(404);
+      await api('get', `invoices/mine/${invoiceA.id}/pdf`, tok.cust2).expect(404);
+      await api('get', `invoices/mine/${invoiceA.id}`, tok.outsider).expect(404);
+      const pdf = await api('get', `invoices/mine/${invoiceA.id}/pdf`, tok.cust1).buffer(true).parse(binaryParser).expect(200);
+      expect(String(pdf.headers['content-type'])).toContain('application/pdf');
+      expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+      await request(app.getHttpServer()).get(`/api/v1/invoices/mine/${invoiceA.id}`).expect(401);
+    });
+
+    function results0(_bookingId: string) {
+      return 'not-an-invoice-id';
+    }
+    function binaryParser(res: request.Response, cb: (err: Error | null, body: Buffer) => void) {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => cb(null, Buffer.concat(chunks)));
+    }
+
+    it('lets the shop download the PDF; a barber may open an invoice but not list them or void one', async () => {
+      const pdf = await api('get', `${SALON()}/invoices/${invoiceA.id}/pdf`, tok.owner).buffer(true).parse(binaryParser).expect(200);
+      expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+      await api('get', `${SALON()}/invoices/${invoiceA.id}`, tok.ravi).expect(200);
+      await api('get', `${SALON()}/invoices`, tok.ravi).expect(403);
+      await api('post', `${SALON()}/invoices/${invoiceA.id}/void`, tok.ravi).send({ reason: 'nope nope' }).expect(403);
+      await api('get', `${SALON()}/invoices/${invoiceA.id}`, tok.outsider).expect(403);
+      const list = await api('get', `${SALON()}/invoices?payment=PARTIALLY_PAID`, tok.owner).expect(200);
+      expect((list.body.items as Array<{ id: string }>).map((i) => i.id)).toEqual([invoiceA.id]);
+    });
+
+    it('voids an unpaid invoice (keeping its number) and allows exactly one replacement', async () => {
+      const second = await api('get', `${SALON()}/invoices/by-source?bookingId=${bookingB}`, tok.owner).expect(200);
+      await api('post', `${SALON()}/invoices/${second.body.id}/void`, tok.owner).send({ reason: 'Wrong customer details' }).expect(201);
+      const voided = await api('get', `${SALON()}/invoices/${second.body.id}`, tok.owner).expect(200);
+      expect(voided.body).toMatchObject({ status: 'VOID', paymentStatus: 'VOID', balanceDue: 0 });
+      await api('post', `${SALON()}/invoices/${second.body.id}/payments`, tok.owner).send({ method: 'CASH', amount: 10 }).expect(409);
+      const replacement = await issue({ bookingId: bookingB }).expect(201);
+      expect(replacement.body.number).toBe('FQ-000003'); // a void keeps its number; the next is never a reuse
+      const mine = await api('get', 'invoices/mine', tok.cust2).expect(200);
+      expect((mine.body.items as Array<{ id: string }>).map((i) => i.id)).toEqual([replacement.body.id]); // the void one is hidden
+    });
+
+    it('invoices a Live Queue visit and an in-shop guest, with inclusive tax extracted not added', async () => {
+      await api('put', `${SALON()}/billing-profile`, tok.owner)
+        .send({ legalName: 'Owner Ops Salon Pvt Ltd', taxEnabled: true, taxRatePercent: 18, taxMode: 'INCLUSIVE', invoicePrefix: 'FQ' })
+        .expect(200);
+      const entryId = await completedWalkIn('Queue Quentin');
+      const walkIn = await issue({ queueEntryId: entryId }).expect(201);
+      expect(walkIn.body).toMatchObject({ sourceType: 'QUEUE_ENTRY', customerName: 'Queue Quentin', subtotal: 250, taxTotal: 38.14, total: 250, taxMode: 'INCLUSIVE', staffName: 'Ravi' });
+
+      // Completed visits keep their capacity reserved until their slot ends (a real booking rule), so a
+      // third barber is needed for a third appointment in the same half hour.
+      await makeStaff('tara', 'Tara', ids.salon, [ids.haircut]);
+      const guest = (
+        await api('post', `${SALON()}/bookings/in-shop`, tok.owner)
+          .send({ guestName: 'Guest Gita', guestPhone: '9876522222', contactConsent: true, serviceIds: [ids.haircut], slotStart: new Date(Date.now() + 90_000).toISOString() })
+          .expect(201)
+      ).body as { id: string };
+      await finishBooking(guest.id);
+      const guestInvoice = await issue({ bookingId: guest.id }).expect(201);
+      expect(guestInvoice.body).toMatchObject({ customerName: 'Guest Gita', customerPhone: '+919876522222' });
+      // a guest has no account, so no customer can ever open it
+      expect(await prisma.invoice.findUniqueOrThrow({ where: { id: guestInvoice.body.id } })).toMatchObject({ customerId: null });
+    });
+
+    it('reports revenue as money the shop recorded - not completed services, and not unpaid invoices', async () => {
+      const overview = (await api('get', `${SALON()}/overview`, tok.owner).expect(200)).body;
+      // +100 cash, +195 UPI, -50 refund recorded on invoice A today
+      expect(overview.kpis.recordedRevenueToday).toBe(245);
+      expect(overview.kpis.recordedPaymentsToday).toBe(2);
+      expect(overview.revenue.hasRecordedPayments).toBe(true);
+      expect(overview.revenue.today.current).toBe(245);
+      expect(overview.revenue.daily[overview.revenue.daily.length - 1]).toEqual({ date: overview.localDate, amount: 245 });
+      expect(overview.revenue.thisMonth.current).toBe(245);
+      expect(overview.revenue.today.changePercent).toBeNull(); // nothing yesterday to compare with
+      // Several services were completed today but are not revenue until payments are recorded.
+      expect(overview.kpis.completedServicesToday).toBeGreaterThanOrEqual(4);
+      expect(overview.revenue.estimatedServiceValueToday).toBeGreaterThan(overview.kpis.recordedRevenueToday);
+      expect(overview.revenue.unpaidInvoiceCount).toBeGreaterThanOrEqual(3);
+      expect(overview.revenue.unpaidInvoiceTotal).toBeGreaterThan(0);
+      expect(overview.topServices[0]).toMatchObject({ name: 'Haircut' });
+      expect(overview.topServices[0].averageChargedAmount).not.toBeNull();
+      expect(overview.settings.hasBillingProfile).toBe(true);
+      expect(overview.settings.hasPaymentQr).toBe(false);
+    });
+  });
 });
