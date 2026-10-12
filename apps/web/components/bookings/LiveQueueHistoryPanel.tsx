@@ -47,7 +47,7 @@ function formatVisitTime(iso: string, timezone: string | null): string {
   });
 }
 
-/** Owner-only portion of Bookings: source records from queue_entries, never copied into bookings. */
+/** One chronologically merged history of source Booking and standalone QueueEntry rows. */
 export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
   const [filter, setFilter] = useState<VisitHistoryFilter>("all");
   const [items, setItems] = useState<OwnerVisitHistoryItemDto[]>([]);
@@ -62,7 +62,7 @@ export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
       else setLoading(true);
       setError(null);
       const params = new URLSearchParams({
-        source: "LIVE_QUEUE",
+        source: "all",
         filter,
         limit: "20",
       });
@@ -81,7 +81,7 @@ export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
         setError(
           err instanceof ApiError
             ? err.message
-            : "Could not load Live Queue history.",
+            : "Could not load visit history.",
         );
       } finally {
         setLoading(false);
@@ -94,7 +94,7 @@ export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
   useEffect(() => {
     let cancelled = false;
     const params = new URLSearchParams({
-      source: "LIVE_QUEUE",
+      source: "all",
       filter,
       limit: "20",
     });
@@ -111,7 +111,7 @@ export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
         setError(
           err instanceof ApiError
             ? err.message
-            : "Could not load Live Queue history.",
+            : "Could not load visit history.",
         );
       })
       .finally(() => {
@@ -124,18 +124,18 @@ export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
 
   return (
     <section
-      aria-labelledby="live-queue-history-title"
+      aria-labelledby="visit-history-title"
       style={{ marginTop: 28 }}
     >
-      <h2 id="live-queue-history-title">Live Queue Visits</h2>
+      <h2 id="visit-history-title">All visit history</h2>
       <p className={styles.emptyState}>
-        Queue visit history appears here alongside the online bookings above.
+        Online Bookings and Live Queue visits appear together in service-time order.
         Historical statuses are preserved.
       </p>
       <div
         className={styles.filterRow}
         role="group"
-        aria-label="Filter Live Queue visits"
+        aria-label="Filter all visits"
       >
         {VISIT_HISTORY_FILTERS.map((value) => (
           <button
@@ -159,9 +159,9 @@ export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
         </p>
       )}
       {loading ? (
-        <p role="status">Loading Live Queue history…</p>
+        <p role="status">Loading visit history…</p>
       ) : items.length === 0 ? (
-        <p className={styles.emptyState}>No Live Queue visits in this view.</p>
+        <p className={styles.emptyState}>No visits in this view.</p>
       ) : (
         <div className={styles.list}>
           {items.map((visit) => (
@@ -229,7 +229,7 @@ export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
                 </div>
               </dl>
               <p className={styles.cardMeta}>
-                Reference: {visit.queueEntryId?.slice(0, 8)}
+                Reference: {(visit.bookingId ?? visit.queueEntryId)?.slice(0, 8)}
               </p>
             </article>
           ))}
@@ -244,7 +244,7 @@ export function LiveQueueHistoryPanel({ salonId }: { salonId: string }) {
             disabled={loadingMore}
             onClick={() => void load(nextCursor, true)}
           >
-            {loadingMore ? "Loading…" : "Load more Live Queue visits"}
+            {loadingMore ? "Loading…" : "Load more visits"}
           </Button>
         </div>
       )}

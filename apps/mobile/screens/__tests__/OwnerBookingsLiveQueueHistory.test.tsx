@@ -87,6 +87,16 @@ const expiredVisit = {
   reviewEligible: false,
 };
 
+const onlineVisit = {
+  ...completedVisit,
+  id: "ONLINE_BOOKING:booking-completed",
+  source: "ONLINE_BOOKING",
+  bookingId: "booking-completed",
+  queueEntryId: null,
+  serviceName: "Beard trim",
+  price: 100,
+};
+
 let tree: ReturnType<typeof TestRenderer.create> | undefined;
 
 function collectRenderedText(node: unknown): string {
@@ -103,7 +113,7 @@ beforeEach(() => {
   (apiFetch as jest.Mock).mockImplementation(async (path: string) => {
     if (path.includes("/timezone")) return { timezone: "Asia/Kolkata" };
     if (path.includes("/history?")) {
-      return { items: [completedVisit, expiredVisit], nextCursor: null };
+      return { items: [onlineVisit, completedVisit, expiredVisit], nextCursor: null };
     }
     if (path.includes("/bookings?")) return { items: [], nextCursor: null };
     throw new Error("Unexpected API request in owner history rendering test");
@@ -124,13 +134,15 @@ it("renders historical Live Queue visits with their actual completed and expired
   });
 
   const renderedText = collectRenderedText(tree!.root);
-  expect(renderedText).toContain(t.liveQueueHistory);
+  expect(renderedText).toContain(t.allVisitHistory);
   expect(renderedText).toContain("Haircut");
   expect(renderedText).toContain(t.statusCompleted);
   expect(renderedText).toContain(t.statusExpired);
   expect(renderedText).toContain(t.sourceLiveQueue);
+  expect(renderedText).toContain(t.sourceOnlineBooking);
+  expect(renderedText).toContain("Beard trim");
   expect(renderedText).toContain(t.notRecordedLabel);
   expect(apiFetch).toHaveBeenCalledWith(
-    expect.stringContaining("bookings/history?source=LIVE_QUEUE"),
+    expect.stringContaining("bookings/history?source=all"),
   );
 });

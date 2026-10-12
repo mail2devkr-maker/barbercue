@@ -413,7 +413,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
         )}
       </div>
 
-      <h2>Online Bookings</h2>
+      <h2>Online booking management</h2>
       <div className={styles.filterRow}>
         {OWNER_BOOKING_FILTERS.map((f) => (
           <button

@@ -278,7 +278,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
       append ? setQueueLoadingMore(true) : setQueueLoading(true);
       setQueueError(null);
       const params = new URLSearchParams({
-        source: "LIVE_QUEUE",
+        source: "all",
         filter: queueFilter,
         limit: String(PAGE_SIZE),
       });
@@ -497,7 +497,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
   function renderQueueHistory() {
     return (
       <View style={styles.queueHistory}>
-        <Text style={styles.queueHistoryTitle}>{t.liveQueueHistory}</Text>
+        <Text style={styles.queueHistoryTitle}>{t.allVisitHistory}</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -528,7 +528,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
           <Text style={styles.queueHistoryEmpty}>{t.loading}</Text>
         ) : null}
         {!queueLoading && queueVisits.length === 0 && !queueError ? (
-          <Text style={styles.queueHistoryEmpty}>{t.noLiveQueueHistory}</Text>
+          <Text style={styles.queueHistoryEmpty}>{t.noVisitHistory}</Text>
         ) : null}
         {queueVisits.map((visit) => (
           <Card key={visit.id} style={styles.queueVisitCard}>
@@ -562,7 +562,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
               </Text>
             </View>
             <Text style={styles.meta}>
-              {t.visitSourceLabel}: {t.sourceLiveQueue}
+              {t.visitSourceLabel}: {visit.source === "LIVE_QUEUE" ? t.sourceLiveQueue : t.sourceOnlineBooking}
             </Text>
             {visit.joinedAt ? (
               <Text style={styles.meta}>
@@ -602,7 +602,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
               </Text>
             ) : null}
             <Text style={styles.meta}>
-              {t.priceLabel}: {t.notRecordedLabel}
+              {t.priceLabel}: {visit.price === null ? t.notRecordedLabel : `${visit.currency ?? ""} ${visit.price}`}
             </Text>
             <Text style={styles.meta}>
               {t.feedbackLabel}:{" "}
@@ -614,7 +614,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
             </Text>
             <Text style={styles.meta}>
               {t.bookingIdPrefix}
-              {visit.queueEntryId?.slice(0, 8)}
+              {(visit.bookingId ?? visit.queueEntryId)?.slice(0, 8)}
             </Text>
           </Card>
         ))}
@@ -725,6 +725,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
             />
           }
         >
+          <Text style={styles.queueHistoryTitle}>{t.sourceOnlineBooking} · {t.bookingsTitle}</Text>
           {items.length === 0 && queueVisits.length === 0 && !queueLoading ? (
             <EmptyState title={t.noBookingsTitle} message={t.noBookingsHint} />
           ) : items.length > 0 ? (

@@ -246,7 +246,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
     async (cursor?: string, append = false) => {
       append ? setLiveQueueLoadingMore(true) : setLiveQueueLoading(true);
       setLiveQueueError(null);
-      const params = new URLSearchParams({ source: "LIVE_QUEUE", limit: "20" });
+      const params = new URLSearchParams({ source: "all", limit: "20" });
       if (cursor) params.set("cursor", cursor);
       try {
         const result = await apiFetch<
@@ -260,7 +260,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
         setLiveQueueError(
           err instanceof ApiError
             ? err.message
-            : "Could not load Live Queue visits.",
+            : "Could not load visit history.",
         );
       } finally {
         setLiveQueueLoading(false);
@@ -291,7 +291,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
   function renderLiveQueueHistory() {
     return (
       <View style={styles.queueHistory}>
-        <Text style={styles.queueHistoryTitle}>{t.liveQueueHistory}</Text>
+        <Text style={styles.queueHistoryTitle}>{t.allVisitHistory}</Text>
         {liveQueueError ? <InlineError message={liveQueueError} /> : null}
         {liveQueueLoading ? (
           <Text style={styles.queueHistoryEmpty}>Loading visits…</Text>
@@ -299,7 +299,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
         {!liveQueueLoading &&
         liveQueueVisits.length === 0 &&
         !liveQueueError ? (
-          <Text style={styles.queueHistoryEmpty}>{t.noLiveQueueHistory}</Text>
+          <Text style={styles.queueHistoryEmpty}>{t.noVisitHistory}</Text>
         ) : null}
         {liveQueueVisits.map((visit) => {
           const arrival = formatBookingArrivalTime(
@@ -340,7 +340,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
                 {!arrival.isDeviceLocalTimezone && t.shopLocalTimeSuffix}
               </Text>
               <Text style={styles.cardMeta}>
-                {t.visitSourceLabel}: {t.sourceLiveQueue}
+                {t.visitSourceLabel}: {visit.source === "LIVE_QUEUE" ? t.sourceLiveQueue : t.sourceOnlineBooking}
               </Text>
               {visit.assignedStaffName ? (
                 <Text style={styles.cardMeta}>
@@ -365,6 +365,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
               ) : null}
               {visit.reviewEligible || visit.myReview ? (
                 <ReviewPanel
+                  bookingId={visit.bookingId ?? undefined}
                   queueEntryId={visit.queueEntryId ?? undefined}
                   status={visit.status}
                   hasReview={Boolean(visit.myReview)}
@@ -428,6 +429,7 @@ export default function MyBookingsScreen({ navigation }: Props) {
             <>
               {rebookError ? <InlineError message={rebookError} /> : null}
               {renderLiveQueueHistory()}
+              {bookings.length > 0 ? <Text style={styles.queueHistoryTitle}>{t.sourceOnlineBooking}</Text> : null}
             </>
           }
           ListEmptyComponent={

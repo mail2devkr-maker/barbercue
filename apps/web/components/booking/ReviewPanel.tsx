@@ -50,6 +50,7 @@ function StarDisplay({ rating }: { rating: number }) {
  */
 export function ReviewPanel({
   booking,
+  bookingId,
   queueEntryId,
   status,
   hasReview: hasQueueReview,
@@ -58,6 +59,7 @@ export function ReviewPanel({
   onReviewed,
 }: {
   booking?: BookingDetailDto;
+  bookingId?: string;
   queueEntryId?: string;
   status?: string;
   hasReview?: boolean;
@@ -65,8 +67,8 @@ export function ReviewPanel({
   title?: string;
   onReviewed: (visitId: string) => void;
 }) {
-  const visitId = booking?.id ?? queueEntryId;
-  const isQueueVisit = Boolean(queueEntryId);
+  const visitId = booking?.id ?? bookingId ?? queueEntryId;
+  const isQueueVisit = Boolean(queueEntryId && !booking && !bookingId);
   const completed = booking?.status === "COMPLETED" || status === "COMPLETED";
   const hasReview = booking?.hasReview ?? hasQueueReview ?? false;
   const [review, setReview] = useState<ReviewDetailDto | null>(initialReview ?? null);

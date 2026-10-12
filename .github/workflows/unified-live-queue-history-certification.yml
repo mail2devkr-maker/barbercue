@@ -158,6 +158,12 @@ jobs:
           SQL
       - name: Exercise review guards on synthetic database rows
         run: psql "$PSQL_URL" -v ON_ERROR_STOP=1 -f .github/live-queue-review-guards.sql
+      - name: Authenticate guarded history and review routes against eleven synthetic historical visits
+        env:
+          FASTQUE_DISPOSABLE_DB: "1"
+          JWT_ACCESS_SECRET: "ci-only-unified-history-disposable-database-jwt-key"
+          NODE_ENV: test
+        run: npm run test:e2e --workspace=@barbercue/backend -- --runInBand test/unified-live-queue-history.e2e-spec.ts
       - name: Focused backend history and review tests
         run: >-
           npm test --workspace=@barbercue/backend -- --runInBand

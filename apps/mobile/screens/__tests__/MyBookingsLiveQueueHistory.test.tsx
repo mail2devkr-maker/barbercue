@@ -82,6 +82,15 @@ const expiredVisit = {
   reviewEligible: false,
 };
 
+const onlineVisit = {
+  ...completedVisit,
+  id: "ONLINE_BOOKING:booking-completed",
+  source: "ONLINE_BOOKING",
+  bookingId: "booking-completed",
+  queueEntryId: null,
+  serviceName: "Beard trim",
+};
+
 let tree: ReturnType<typeof TestRenderer.create> | undefined;
 
 function collectRenderedText(node: unknown): string {
@@ -97,7 +106,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   (apiFetch as jest.Mock).mockImplementation(async (path: string) => {
     if (path.includes("history/mine")) {
-      return { items: [completedVisit, expiredVisit], nextCursor: null };
+      return { items: [onlineVisit, completedVisit, expiredVisit], nextCursor: null };
     }
     if (path.endsWith("bookings/mine")) {
       return { items: [], nextCursor: null };
@@ -128,13 +137,15 @@ it("renders authenticated completed and expired Live Queue visits without changi
   );
   const renderedText = collectRenderedText(tree!.root);
 
-  expect(renderedText).toContain(t.liveQueueHistory);
+  expect(renderedText).toContain(t.allVisitHistory);
   expect(renderedText).toContain("Haircut");
   expect(renderedText).toContain(t.statusCompleted);
   expect(renderedText).toContain(t.statusExpired);
   expect(renderedText).toContain(t.sourceLiveQueue);
+  expect(renderedText).toContain(t.sourceOnlineBooking);
+  expect(renderedText).toContain("Beard trim");
   expect(renderedText).toContain(t.rateYourService);
   expect(apiFetch).toHaveBeenCalledWith(
-    expect.stringContaining("bookings/history/mine?source=LIVE_QUEUE&limit=20"),
+    expect.stringContaining("bookings/history/mine?source=all&limit=20"),
   );
 });

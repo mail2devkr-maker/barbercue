@@ -43,7 +43,7 @@ export function CustomerLiveQueueHistory() {
     if (append) setLoadingMore(true);
     else setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ source: "LIVE_QUEUE", limit: "20" });
+    const params = new URLSearchParams({ source: "all", limit: "20" });
     if (cursor) params.set("cursor", cursor);
     try {
       const result = await apiFetch<
@@ -57,7 +57,7 @@ export function CustomerLiveQueueHistory() {
       setError(
         err instanceof ApiError
           ? err.message
-          : "Could not load your Live Queue history.",
+          : "Could not load your visit history.",
       );
     } finally {
       setLoading(false);
@@ -67,7 +67,7 @@ export function CustomerLiveQueueHistory() {
 
   useEffect(() => {
     let cancelled = false;
-    const params = new URLSearchParams({ source: "LIVE_QUEUE", limit: "20" });
+    const params = new URLSearchParams({ source: "all", limit: "20" });
     apiFetch<PaginatedResult<CustomerVisitHistoryItemDto>>(
       `${BOOKING_PATHS.bookings}/${BOOKING_PATHS.mineHistory}?${params}`,
     )
@@ -81,7 +81,7 @@ export function CustomerLiveQueueHistory() {
         setError(
           err instanceof ApiError
             ? err.message
-            : "Could not load your Live Queue history.",
+            : "Could not load your visit history.",
         );
       })
       .finally(() => {
@@ -95,10 +95,10 @@ export function CustomerLiveQueueHistory() {
   return (
     <section
       className={styles.section}
-      aria-labelledby="live-queue-history-title"
+      aria-labelledby="visit-history-title"
     >
-      <h2 id="live-queue-history-title" className={styles.sectionTitle}>
-        Live Queue visits
+      <h2 id="visit-history-title" className={styles.sectionTitle}>
+        All visit history
       </h2>
       {error && (
         <p className={styles.errorPanel} role="alert">
@@ -107,10 +107,10 @@ export function CustomerLiveQueueHistory() {
       )}
       {loading ? (
         <Card className={styles.loadingCard}>
-          <p role="status">Loading Live Queue history…</p>
+          <p role="status">Loading visit history…</p>
         </Card>
       ) : items.length === 0 ? (
-        <p className={styles.emptyListNote}>No linked Live Queue visits yet.</p>
+        <p className={styles.emptyListNote}>No linked visits yet.</p>
       ) : (
         items.map((item) => (
           <Card key={item.id} className={styles.bookingRow}>
@@ -160,6 +160,7 @@ export function CustomerLiveQueueHistory() {
             )}
             {item.reviewEligible || item.myReview ? (
               <ReviewPanel
+                bookingId={item.bookingId ?? undefined}
                 queueEntryId={item.queueEntryId ?? undefined}
                 status={item.status}
                 hasReview={Boolean(item.myReview)}

@@ -383,6 +383,8 @@ export interface UiStrings {
   priceLabel: string;
   liveQueueHistory: string;
   noLiveQueueHistory: string;
+  allVisitHistory: string;
+  noVisitHistory: string;
   loadMoreVisits: string;
   feedbackUnavailable: string;
   rateYourService: string;
@@ -1161,6 +1163,8 @@ const enUi: UiStrings = {
   priceLabel: 'Price',
   liveQueueHistory: 'Live Queue visits',
   noLiveQueueHistory: 'No linked Live Queue visits yet.',
+  allVisitHistory: 'All visit history',
+  noVisitHistory: 'No linked visits yet.',
   loadMoreVisits: 'Load more visits',
   feedbackUnavailable: 'Feedback is unavailable because this visit is not linked to a verified customer account.',
   rateYourService: 'Rate your service',
@@ -1862,6 +1866,8 @@ const hiUi: UiStrings = {
   priceLabel: 'मूल्य',
   liveQueueHistory: 'लाइव कतार विज़िट',
   noLiveQueueHistory: 'अभी कोई लिंक की गई लाइव कतार विज़िट नहीं है।',
+  allVisitHistory: 'सभी विज़िट का इतिहास',
+  noVisitHistory: 'अभी कोई लिंक की गई विज़िट नहीं है।',
   loadMoreVisits: 'और विज़िट लोड करें',
   feedbackUnavailable: 'यह विज़िट सत्यापित ग्राहक खाते से लिंक नहीं है, इसलिए प्रतिक्रिया उपलब्ध नहीं है।',
   rateYourService: 'अपनी सेवा को रेट करें',
