@@ -27,10 +27,7 @@ describe('ServiceCatalogImportService', () => {
 
   it('rejects disguised image content before OCR and always checks salon access', async () => {
     await expect(subject.preview('actor', 'salon', file('menu.jpg', 'not a jpeg'), true))
-      .rejects.toMatchObject({ response: expect.anything() }).catch((error: unknown) => {
-        // AppException may not use Nest response field on all baselines; the rejection is sufficient.
-        expect(error).toBeDefined();
-      });
+      .rejects.toThrow(/Supported formats/);
     expect(access.assertOwnerOrAdminAccess).toHaveBeenCalledWith('actor', 'salon');
   });
 
@@ -58,7 +55,7 @@ describe('ServiceCatalogImportService', () => {
     };
     const auditLog = { create: jest.fn() };
     prisma.$transaction.mockImplementation(async (task: (tx: unknown) => Promise<unknown>) => task({
-      $executeRawUnsafe: jest.fn().mockResolvedValue(1),
+      $queryRawUnsafe: jest.fn().mockResolvedValue([{ pg_advisory_xact_lock: null }]),
       service,
       auditLog,
     }));
