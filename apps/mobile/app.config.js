@@ -42,6 +42,11 @@ module.exports = {
       enabled: false,
       url: undefined,
     },
+    // Production's Google Sign-In config plugin expects the production
+    // Firebase files/client IDs. This QA package MUST NOT copy those credentials
+    // or pretend native Google login is certified. Email/password and offline
+    // startup are the only intended flows in this disposable native smoke APK.
+    plugins: base.plugins.filter((plugin) => plugin !== 'react-native-nitro-google-signin'),
     extra: {
       ...base.extra,
       qaOnly: true,
