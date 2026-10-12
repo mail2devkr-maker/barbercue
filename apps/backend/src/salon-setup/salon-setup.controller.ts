@@ -56,6 +56,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { SalonServicesService } from './salon-services.service';
+import { ServiceCatalogImportService } from './service-catalog-import.service';
 import { SalonChairsService } from './salon-chairs.service';
 import { SalonStaffService } from './salon-staff.service';
 import { SalonActivationService } from './salon-activation.service';
@@ -90,6 +91,7 @@ const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:sal
 export class SalonSetupController {
   constructor(
     private readonly services: SalonServicesService,
+    private readonly catalogImports: ServiceCatalogImportService,
     private readonly chairs: SalonChairsService,
     private readonly staff: SalonStaffService,
     private readonly activation: SalonActivationService,
@@ -255,6 +257,29 @@ export class SalonSetupController {
     @Param('salonId') salonId: string,
   ) {
     return this.services.list(user.id, salonId);
+  }
+
+  // Preview never writes services. PDF/image extraction requires a deliberate external-AI consent.
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-preview`)
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 1 },
+  }))
+  previewServiceCatalog(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('consent') consent?: string,
+  ) {
+    return this.catalogImports.preview(user.id, salonId, file, consent === 'true');
+  }
+
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-reviewed`)
+  saveReviewedCatalog(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body() body: unknown,
+  ) {
+    return this.catalogImports.saveReviewed(user.id, salonId, body);
   }
 
   @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}`)
