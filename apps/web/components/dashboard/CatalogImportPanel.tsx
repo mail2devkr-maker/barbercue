@@ -52,7 +52,6 @@ export function CatalogImportPanel(props: {
   const { basePath, existingServices, onImported } = props;
   const [files, setFiles] = useState<File[]>([]);
   const [rows, setRows] = useState<ReviewRow[]>([]);
-  const [allowAi, setAllowAi] = useState(false);
   const [working, setWorking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);
@@ -88,18 +87,25 @@ export function CatalogImportPanel(props: {
 
   async function extract() {
     if (!files.length || working || saving) return;
+
+    // Keep the Services page uncluttered, but request explicit, just-in-time
+    // consent before transmitting any private PDF/photo catalog to Google Gemini.
+    // A declined confirmation leaves the selected files in place and uploads nothing.
+    const needsExternalProcessing = files.some((file) => external.test(file.name));
+    if (needsExternalProcessing && !window.confirm(
+      "PDF and photo catalogs are sent to Google Gemini for AI extraction. " +
+      "An external provider will process these files, and provider charges may apply. " +
+      "Do you agree to send the selected PDF/photo catalogs?"
+    )) return;
+
     setWorking(true);
     setError(null);
     const notices: string[] = [];
     const collected: ReviewRow[] = [];
     for (const file of files) {
-      if (external.test(file.name) && !allowAi) {
-        notices.push(file.name + ": confirm Google Gemini processing to extract PDF/photo data.");
-        continue;
-      }
       const body = new FormData();
       body.append("file", file);
-      body.append("consent", allowAi ? "true" : "false");
+      body.append("consent", external.test(file.name) && needsExternalProcessing ? "true" : "false");
       try {
         const result = await apiFetch<PreviewResult>(basePath + "/import-preview", {
           method: "POST",
@@ -169,11 +175,6 @@ export function CatalogImportPanel(props: {
   return (
     <section aria-labelledby="catalog-import-heading" style={styles.shell}>
       <h2 id="catalog-import-heading" style={{ marginTop: 0 }}>📁 Import services from catalogs</h2>
-      <p style={styles.help}>
-        Upload multiple shop menus and review the extracted services before saving.
-        XLSX and CSV work without AI. PDF, JPG, PNG and WEBP need a configured Google Gemini OCR service and your explicit consent. For older XLS files, save as XLSX first.
-        Prices and durations not clearly present in the catalog must be completed manually.
-      </p>
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => { event.preventDefault(); if (!working && !saving) addFiles(event.dataTransfer.files); }}
@@ -202,13 +203,6 @@ export function CatalogImportPanel(props: {
           </ul>
         )}
       </div>
-      <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 12, fontSize: 14 }}>
-        <input type="checkbox" checked={allowAi} onChange={(event) => setAllowAi(event.target.checked)} disabled={working || saving} />
-        <span>
-          I authorize sending uploaded PDF/photo catalogs to Google Gemini for AI extraction.
-          Processing may have provider costs. Spreadsheet/CSV extraction stays on the server.
-        </span>
-      </label>
       <button type="button" style={styles.button} disabled={working || saving || !files.length} onClick={() => void extract()}>
         {working ? "Extracting files…" : "Extract & preview (" + files.length + ")"}
       </button>
