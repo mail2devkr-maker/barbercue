@@ -22,12 +22,14 @@ import {
   type InvoicePaymentStatus,
   type InvoiceSummaryDto,
   type RecordInvoicePaymentInput,
+  type RecordedPaymentListDto,
   type VoidInvoiceInput,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
-import { resolveSalonTimeZone } from '../common/timezone/timezone';
+import { addZonedCalendarDays, resolveSalonTimeZone, zonedWallTimeToUtc } from '../common/timezone/timezone';
+import { todayLocal } from './local-time';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 import { renderInvoicePdf } from './invoice-pdf';
 
@@ -408,6 +410,91 @@ export class InvoicesService {
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     return { items: page, nextCursor: hasMore ? page[page.length - 1].id : null };
+  }
+
+  /**
+   * The shop's payment ledger for a salon-local date range (default: the last 30 days): every payment
+   * and refund the shop recorded, with totals. Windowed and paged; only the owner (or a delegated
+   * admin) may read it, and every row is salon-scoped in the WHERE clause.
+   */
+  async listPayments(
+    userId: string,
+    salonId: string,
+    query: { from?: string; to?: string; cursor?: string; limit?: number },
+  ): Promise<RecordedPaymentListDto> {
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { currency: true, timezone: true, city: { select: { countryCode: true } } },
+    });
+    if (!salon) {
+      throw new AppException(OwnerOpsErrorCode.INVOICE_NOT_FOUND, 'Shop not found.', HttpStatus.NOT_FOUND);
+    }
+    const timeZone = resolveSalonTimeZone({ timezone: salon.timezone, countryCode: salon.city.countryCode }) ?? 'UTC';
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    const today = todayLocal(timeZone);
+    const toDate = query.to && datePattern.test(query.to) ? query.to : today;
+    const fromDate = query.from && datePattern.test(query.from) ? query.from : addZonedCalendarDays(toDate, -29);
+    const start = zonedWallTimeToUtc(fromDate, '00:00', timeZone) ?? new Date(0);
+    const end = zonedWallTimeToUtc(addZonedCalendarDays(toDate, 1), '00:00', timeZone) ?? new Date();
+    const limit = Math.min(Math.max(query.limit ?? 25, 1), 100);
+    const where = { salonId, recordedAt: { gte: start, lt: end } };
+
+    const [rows, grouped] = await Promise.all([
+      this.prisma.invoicePayment.findMany({
+        where,
+        include: { invoice: { select: { number: true, customerName: true } } },
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+        take: limit + 1,
+        ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+      }),
+      this.prisma.invoicePayment.groupBy({ by: ['kind', 'method'], where, _sum: { amount: true } }),
+    ]);
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+
+    const recorders = await this.prisma.salonStaff.findMany({
+      where: { salonId, userId: { in: [...new Set(page.map((p) => p.recordedByUserId))] } },
+      select: { userId: true, displayName: true },
+    });
+    const nameByUser = new Map(recorders.map((r) => [r.userId, r.displayName]));
+
+    let received = 0;
+    let refunded = 0;
+    const methodNet = new Map<string, number>();
+    for (const g of grouped) {
+      const paise = decimalStringToPaise((g._sum.amount ?? 0).toString());
+      if (g.kind === InvoicePaymentKind.REFUND) refunded += paise;
+      else received += paise;
+      methodNet.set(g.method, (methodNet.get(g.method) ?? 0) + (g.kind === InvoicePaymentKind.REFUND ? -paise : paise));
+    }
+    const count = await this.prisma.invoicePayment.count({ where });
+    return {
+      from: fromDate,
+      to: toDate,
+      currency: salon.currency ?? (salon.city.countryCode === 'IN' ? 'INR' : null),
+      items: page.map((p) => ({
+        id: p.id,
+        invoiceId: p.invoiceId,
+        invoiceNumber: p.invoice.number,
+        customerName: p.invoice.customerName,
+        kind: p.kind,
+        method: p.method,
+        amount: Number(p.amount),
+        reference: p.reference,
+        note: p.note,
+        recordedAt: p.recordedAt.toISOString(),
+        recordedBy: nameByUser.get(p.recordedByUserId) ?? 'Owner',
+      })),
+      nextCursor: hasMore ? page[page.length - 1].id : null,
+      totals: {
+        received: paiseToRupees(received),
+        refunded: paiseToRupees(refunded),
+        net: paiseToRupees(received - refunded),
+        count,
+      },
+      byMethod: [...methodNet.entries()].map(([method, net]) => ({ method: method as RecordedPaymentListDto['byMethod'][number]['method'], net: paiseToRupees(net) })),
+    };
   }
 
   async pdf(userId: string, salonId: string, invoiceId: string): Promise<{ buffer: Buffer; filename: string }> {

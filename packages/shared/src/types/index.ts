@@ -1327,6 +1327,9 @@ export interface SalonStaffDto {
   roleInSalon: SalonStaffRole;
   status: StaffMemberStatus;
   hasPassword: boolean;
+  // Owner-operations mission: true once the owner removed this barber's login access. Distinct
+  // from `status` (the barber's own clock-in/out duty flag). Optional for older clients.
+  accessRevoked?: boolean;
   // Phase 17 (Barber Professional Profile) — owner/staff-editable, shown to customers on the
   // salon's public profile ("Meet the team") and the booking flow's barber picker.
   bio: string | null;

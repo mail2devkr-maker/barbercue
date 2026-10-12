@@ -394,6 +394,7 @@ export class SalonStaffService {
     displayName: string;
     roleInSalon: SalonStaffRole;
     status: StaffMemberStatus;
+    accessRevokedAt?: Date | null;
     bio: string | null;
     photoUrl: string | null;
     yearsExperience: number | null;
@@ -413,6 +414,7 @@ export class SalonStaffService {
       // Never leaks the hash itself — only whether the invitation has been redeemed, so the UI
       // can show an "invite pending" state.
       hasPassword: staff.user.passwordHash !== null,
+      accessRevoked: Boolean(staff.accessRevokedAt),
       bio: staff.bio,
       photoUrl: staff.photoUrl,
       yearsExperience: staff.yearsExperience,

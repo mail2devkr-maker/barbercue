@@ -6,6 +6,7 @@ import type { SalonStaffDto, StaffInviteResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
+import { Banner as OwnerBanner, Btn as OwnerBtn, Dialog as OwnerDialog } from "../../../../../../components/owner/parts";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { StaffHoursEditor } from "../../../../../../components/dashboard/StaffHoursEditor";
 import { StaffProfileEditor } from "../../../../../../components/dashboard/StaffProfileEditor";
@@ -36,6 +37,27 @@ export default function DashboardStaffPage({
   const [hoursOpenFor, setHoursOpenFor] = useState<string | null>(null);
   const [profileOpenFor, setProfileOpenFor] = useState<string | null>(null);
   const [verificationOpenFor, setVerificationOpenFor] = useState<string | null>(null);
+  // Owner-operations mission: removing/restoring a barber's login access (separate from clock-in/out).
+  const [accessChange, setAccessChange] = useState<{ member: SalonStaffDto; revoke: boolean } | null>(null);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+
+  async function applyAccessChange() {
+    if (!accessChange) return;
+    setAccessBusy(true);
+    setAccessError(null);
+    try {
+      await apiFetch(`${base}/${accessChange.member.id}/access/${accessChange.revoke ? "revoke" : "restore"}`, { method: "POST", body: JSON.stringify({}) });
+      const list = await apiFetch<SalonStaffDto[]>(base);
+      setStaff(list);
+      setNotice(accessChange.revoke ? `${accessChange.member.displayName} can no longer sign in to this shop.` : `${accessChange.member.displayName} can sign in again. They stay off duty until they clock in.`);
+      setAccessChange(null);
+    } catch (err) {
+      setAccessError(err instanceof ApiError ? err.message : "Could not change access.");
+    } finally {
+      setAccessBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -206,7 +228,7 @@ export default function DashboardStaffPage({
                 <div className={styles.rowMeta} style={{ wordBreak: "break-word" }}>
                   {m.phone ?? (m.email ? "Mobile not provided" : "No contact details")}
                   {m.email && ` · ${m.email}`}
-                  {m.status !== StaffMemberStatus.ACTIVE && " · not working"}
+                  {m.accessRevoked ? " · access removed" : m.status !== StaffMemberStatus.ACTIVE && " · not working"}
                   {m.email && !m.hasPassword && " · hasn't set their password yet"}
                 </div>
               </div>
@@ -218,6 +240,9 @@ export default function DashboardStaffPage({
                 )}
                 <Button type="button" variant="outline" onClick={() => void toggleActive(m)}>
                   {m.status === StaffMemberStatus.ACTIVE ? "Mark not working" : "Mark working"}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => { setAccessError(null); setAccessChange({ member: m, revoke: !m.accessRevoked }); }}>
+                  {m.accessRevoked ? "Restore access" : "Remove access"}
                 </Button>
                 <Button
                   type="button"
@@ -256,6 +281,22 @@ export default function DashboardStaffPage({
             </li>
           ))}
         </ul>
+      )}
+      {accessChange && (
+        <OwnerDialog title={accessChange.revoke ? `Remove ${accessChange.member.displayName}'s access?` : `Restore ${accessChange.member.displayName}'s access?`} onClose={() => setAccessChange(null)}>
+          {accessError && <OwnerBanner tone="error">{accessError}</OwnerBanner>}
+          <p>
+            {accessChange.revoke
+              ? "They will be signed out of this shop's dashboard straight away and taken off duty. Their past services and records are kept. You can restore access at any time."
+              : "They will be able to sign in to this shop again with their existing account. They stay off duty until they clock in."}
+          </p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <OwnerBtn variant="quiet" onClick={() => setAccessChange(null)}>Cancel</OwnerBtn>
+            <OwnerBtn variant={accessChange.revoke ? "danger" : "primary"} disabled={accessBusy} onClick={() => void applyAccessChange()}>
+              {accessBusy ? "Saving…" : accessChange.revoke ? "Remove access" : "Restore access"}
+            </OwnerBtn>
+          </div>
+        </OwnerDialog>
       )}
       <SetupNavigation salonId={salonId} currentStep="staff" section="actions" />
     </main>

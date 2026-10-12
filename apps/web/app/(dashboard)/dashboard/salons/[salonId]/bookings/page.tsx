@@ -1,13 +1,11 @@
-import Link from "next/link";
 import { OwnerBookingsView } from "../../../../../../components/bookings/OwnerBookingsView";
 import { ArrivalAlertOverlay } from "../../../../../../components/bookings/ArrivalAlertOverlay";
-import styles from "../../../../../../components/dashboard/dashboard.module.css";
-import scheduleStyles from "../../../../../../components/dashboard/schedule.module.css";
+import { BtnLink, PageHead } from "../../../../../../components/owner/parts";
 
 // Owner-only salon bookings dashboard: today/upcoming/completed/cancelled/no-show/history, with
-// realtime "new booking"/"booking cancelled" alerts over the same /realtime socket the live queue
-// page already uses. Not part of the guided setup wizard (SetupNavigation) — it's an ongoing
-// operational view, reachable from the settings hub nav like Live queue is.
+// realtime "new booking"/"booking cancelled" alerts over the same /realtime socket the Live Queue
+// uses. Appointments (online and in-shop) live here; people standing in the shop who want the next
+// free barber are added to the Live Queue instead.
 export default async function DashboardBookingsPage({
   params,
 }: {
@@ -15,17 +13,21 @@ export default async function DashboardBookingsPage({
 }) {
   const { salonId } = await params;
   return (
-    <main className={styles.pageWide}>
-      <h1 className={styles.pageTitle}>Bookings</h1>
-      <p className={styles.pageSubtitle}>
-        Incoming appointments, today&apos;s schedule, and booking history for your shop.
-      </p>
-      <nav className={scheduleStyles.viewToggle}>
-        <Link href={`/dashboard/salons/${salonId}/bookings`} className={scheduleStyles.viewToggleActive}>
-          List view
-        </Link>
-        <Link href={`/dashboard/salons/${salonId}/schedule`}>Day schedule</Link>
-      </nav>
+    <main aria-label="Bookings">
+      <PageHead
+        title="Bookings"
+        sub="Online and in-shop appointments, today's schedule and booking history for your shop."
+        actions={
+          <>
+            <BtnLink variant="primary" icon="plus" href={`/dashboard/salons/${salonId}/bookings/new`}>
+              New in-shop appointment
+            </BtnLink>
+            <BtnLink icon="calendarGrid" href={`/dashboard/salons/${salonId}/schedule`}>
+              Calendar
+            </BtnLink>
+          </>
+        }
+      />
       <OwnerBookingsView salonId={salonId} />
       <ArrivalAlertOverlay salonId={salonId} />
     </main>

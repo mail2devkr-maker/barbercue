@@ -297,6 +297,19 @@ export class OwnerOpsController {
     });
   }
 
+  @Get(`${SALON}/payments`)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  listPayments(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.invoices.listPayments(user.id, salonId, { from, to, cursor, limit: limit ? Number(limit) : undefined });
+  }
+
   @Get(`${SALON}/invoices/by-source`)
   invoiceBySource(
     @CurrentUser() user: AuthenticatedUser,

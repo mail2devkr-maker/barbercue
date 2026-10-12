@@ -1,0 +1,728 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { DASHBOARD_PATHS, StaffMemberStatus } from "@barbercue/shared";
+import type {
+  AutoAssignResultDto,
+  ChairOptionDto,
+  DashboardQueueDto,
+  QueueEntryDetailDto,
+  StaffStatusDto,
+} from "@barbercue/shared";
+import { apiFetch, ApiError } from "../../lib/api";
+import { newIdempotencyKey } from "../../lib/idempotency";
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
+import { useAuth } from "../../lib/auth-context";
+import { ownerVoiceAnnouncements, setVoiceEnabled, speakOwnerVoice, useVoiceEnabled } from "../../lib/voice-preference";
+import { formatShopTime } from "./format";
+import { InvoiceAction } from "./InvoiceActions";
+import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
+import { useOwnerShell } from "./OwnerShell";
+import { Badge, Banner, Btn, BtnLink, Card, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
+import ui from "./owner.module.css";
+
+type View = "waiting" | "in-service" | "completed" | "history";
+const VIEWS: ReadonlyArray<View> = ["waiting", "in-service", "completed", "history"];
+const FALLBACK_POLL_MS = 15_000;
+const LIVE_POLL_MS = 60_000;
+
+const STATUS_LABEL: Record<string, { text: string; tone: "ok" | "warn" | "bad" | "info" | "neutral" }> = {
+  WAITING: { text: "Waiting", tone: "warn" },
+  CALLED: { text: "Called to the counter", tone: "info" },
+  IN_SERVICE: { text: "In service", tone: "ok" },
+  COMPLETED: { text: "Completed", tone: "ok" },
+  CANCELLED: { text: "Cancelled", tone: "neutral" },
+  EXPIRED: { text: "Expired", tone: "neutral" },
+  NO_SHOW: { text: "No-show", tone: "bad" },
+};
+
+function availabilityText(member: StaffStatusDto): { text: string; dot: string } {
+  switch (member.availabilityState) {
+    case "AVAILABLE":
+      return { text: "Available", dot: ui.dotOk };
+    case "IN_SERVICE":
+      return { text: "With a customer", dot: ui.dotWarn };
+    case "RESERVED":
+      return { text: member.busyUntil ? `Booked until ${formatShopTime(member.busyUntil, null)}` : "Booked", dot: ui.dotInfo };
+    case "OFF_DUTY":
+      return { text: "Off duty", dot: ui.dotOff };
+    default:
+      return { text: member.status === StaffMemberStatus.ACTIVE ? "On duty" : "Off duty", dot: member.status === StaffMemberStatus.ACTIVE ? ui.dotOk : ui.dotOff };
+  }
+}
+
+/** A customer's display name. FastQue stores no name for account holders, so an entry without one is
+ * shown by its token - never an e-mail or a guess. */
+function whoLabel(entry: QueueEntryDetailDto): string {
+  return entry.customerName?.trim() || `Customer #${entry.tokenNumber}`;
+}
+
+function minutesSince(iso: string | null): number | null {
+  return iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000)) : null;
+}
+
+export function LiveQueueConsole({ salonId }: { salonId: string }) {
+  const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const { kind, refreshCounts } = useOwnerShell();
+  const voiceEnabled = useVoiceEnabled();
+
+  const requested = searchParams.get("view") as View | null;
+  const view: View = requested && VIEWS.includes(requested) ? requested : "waiting";
+
+  const [data, setData] = useState<DashboardQueueDto | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [assignFor, setAssignFor] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [live, setLive] = useState(true);
+  const [freshIds, setFreshIds] = useState<string[]>([]);
+  const [skipReasons, setSkipReasons] = useState<Record<string, string>>({});
+
+  const appliedRevision = useRef(0);
+  const knownWaiting = useRef<Set<string>>(new Set());
+  const initialized = useRef(false);
+  const audio = useRef<AudioContext | null>(null);
+  const refetchTimer = useRef<number | null>(null);
+  const language = useRef(user?.preferredLanguage);
+  language.current = user?.preferredLanguage;
+  const voiceRef = useRef(voiceEnabled);
+  voiceRef.current = voiceEnabled;
+
+  const chime = useCallback(async () => {
+    try {
+      const Ctx = window.AudioContext;
+      const ctx = audio.current ?? new Ctx();
+      audio.current = ctx;
+      if (ctx.state === "suspended") await ctx.resume();
+      if (ctx.state !== "running") return;
+      const now = ctx.currentTime;
+      [660, 880].forEach((frequency, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = frequency;
+        osc.type = "sine";
+        gain.gain.setValueAtTime(0.0001, now + i * 0.13);
+        gain.gain.exponentialRampToValueAtTime(0.14, now + i * 0.13 + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.13 + 0.12);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + i * 0.13);
+        osc.stop(now + i * 0.13 + 0.14);
+      });
+    } catch {
+      /* the browser may block audio until the first tap; the chime then plays from the next event */
+    }
+  }, []);
+
+  const apply = useCallback(
+    (snapshot: DashboardQueueDto, announce: boolean) => {
+      // A response older than what is already on screen can never overwrite it.
+      const revision = snapshot.revision ?? 0;
+      if (revision && revision < appliedRevision.current) return;
+      appliedRevision.current = Math.max(appliedRevision.current, revision);
+
+      const waiting = (snapshot.sections?.waiting ?? snapshot.entries.filter((e) => e.status === "WAITING")) as QueueEntryDetailDto[];
+      const waitingIds = new Set(waiting.map((e) => e.id));
+      if (announce && initialized.current) {
+        const arrivals = waiting.filter((e) => !knownWaiting.current.has(e.id));
+        if (arrivals.length > 0) {
+          setFreshIds((cur) => Array.from(new Set([...cur, ...arrivals.map((e) => e.id)])));
+          void chime();
+          if (voiceRef.current) {
+            const latest = arrivals[arrivals.length - 1];
+            speakOwnerVoice(ownerVoiceAnnouncements(language.current).newCustomerJoined(latest.tokenNumber, latest.serviceName), language.current);
+          }
+        }
+      }
+      knownWaiting.current = waitingIds;
+      initialized.current = true;
+      setData(snapshot);
+      refreshCounts();
+    },
+    [chime, refreshCounts],
+  );
+
+  const refetch = useCallback(
+    (announce = true) =>
+      apiFetch<DashboardQueueDto>(`${base}/${DASHBOARD_PATHS.queue}`)
+        .then((snapshot) => {
+          apply(snapshot, announce);
+          setError(null);
+        })
+        .catch((err) => setError(err instanceof ApiError ? err.message : "Could not refresh the queue. Retrying…")),
+    [base, apply],
+  );
+
+  useEffect(() => {
+    void refetch(false);
+  }, [refetch]);
+
+  useEffect(() => {
+    const socket = getRealtimeSocket();
+    joinSalonRoom(salonId);
+    setLive(socket.connected);
+    const onEvent = (payload: { salonId?: string; revision?: number }) => {
+      if (payload?.salonId && payload.salonId !== salonId) return;
+      // An event stamped with a revision we already show carries nothing new.
+      if (payload?.revision && payload.revision <= appliedRevision.current) return;
+      if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
+      refetchTimer.current = window.setTimeout(() => void refetch(true), 150);
+    };
+    const events = ["queue.updated", "queue.entry.called", "queue.entry.reassigned", "queue.entry.no_show", "queue.entry.expired", "staff.status.changed", "booking.cancelled", "booking.created"];
+    events.forEach((e) => socket.on(e, onEvent));
+    const onConnect = () => setLive(true);
+    const onDisconnect = () => setLive(false);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    const offReconnect = onReconnect(() => void refetch(true));
+    return () => {
+      if (refetchTimer.current) window.clearTimeout(refetchTimer.current);
+      events.forEach((e) => socket.off(e, onEvent));
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      offReconnect();
+    };
+  }, [salonId, refetch]);
+
+  // Polling is the safety net behind the socket: tighter while the socket is down.
+  useEffect(() => {
+    const timer = window.setInterval(() => void refetch(true), live ? LIVE_POLL_MS : FALLBACK_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [live, refetch]);
+
+  // Browsers keep audio locked until a gesture; arm it on the first interaction.
+  useEffect(() => {
+    const arm = () => void chime();
+    window.addEventListener("pointerdown", arm, { once: true });
+    return () => window.removeEventListener("pointerdown", arm);
+  }, [chime]);
+
+  function setView(next: View) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", next);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  async function run<T>(key: string, fn: () => Promise<T>, success?: string): Promise<T | undefined> {
+    setBusy(key);
+    setError(null);
+    try {
+      const result = await fn();
+      if (success) setNotice(success);
+      await refetch(false);
+      return result;
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "That did not work. Please try again.");
+      return undefined;
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const entryPath = (id: string, action: string) => `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.queueEntries}/${id}/${action}`;
+
+  async function assignAutomatically(entry?: QueueEntryDetailDto) {
+    setNotice(null);
+    if (entry) {
+      await run(`auto-${entry.id}`, () => apiFetch(entryPath(entry.id, "auto-assign"), { method: "POST" }), `${whoLabel(entry)} was seated.`);
+      return;
+    }
+    const result = await run("auto-all", () => apiFetch<AutoAssignResultDto>(`${base}/queue/auto-assign`, { method: "POST" }));
+    if (result) {
+      setSkipReasons(Object.fromEntries(result.skipped.map((s) => [s.entryId, s.reason])));
+      setNotice(
+        result.assigned.length === 0
+          ? "Nobody could be seated right now. The reason is shown on each waiting customer."
+          : `${result.assigned.length} customer${result.assigned.length === 1 ? " was" : "s were"} seated automatically${result.skipped.length ? `; ${result.skipped.length} still waiting` : ""}.`,
+      );
+    }
+  }
+
+  const sections = data?.sections;
+  const waiting = sections?.waiting ?? [];
+  const called = sections?.called ?? [];
+  const inService = sections?.inService ?? [];
+  const completed = sections?.completedToday ?? [];
+  const history = sections?.historyToday ?? [];
+  const counts = useMemo(
+    () => ({ waiting: waiting.length + called.length, inService: inService.length, completed: completed.length, history: history.length }),
+    [waiting.length, called.length, inService.length, completed.length, history.length],
+  );
+
+  if (!data) {
+    return (
+      <>
+        <PageHead title="Live Queue" />
+        {error ? <Banner tone="error">{error}</Banner> : <Skeleton height={140} />}
+      </>
+    );
+  }
+
+  const freeChairs = data.chairs.filter((c) => (c.occupancy ?? "FREE") === "FREE");
+
+  return (
+    <>
+      <PageHead
+        title="Live Queue"
+        sub={
+          <>
+            <span className={`${ui.liveDot} ${live ? "" : ui.liveDotOff}`} aria-hidden="true" />
+            {live ? "Live — updates appear instantly" : "Reconnecting — refreshing every 15 seconds"} · Q Chime on
+          </>
+        }
+        actions={
+          <>
+            <Btn variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
+              New Live Queue customer
+            </Btn>
+            <BtnLink icon="calendar" href={`/dashboard/salons/${salonId}/bookings/new`}>
+              New in-shop appointment
+            </BtnLink>
+            <Btn icon="scissors" disabled={busy !== null || waiting.length + called.length === 0} onClick={() => void assignAutomatically()}>
+              {busy === "auto-all" ? "Assigning…" : "Assign automatically"}
+            </Btn>
+            <Btn variant="quiet" aria-pressed={voiceEnabled} onClick={() => setVoiceEnabled(!voiceEnabled)}>
+              Voice: {voiceEnabled ? "on" : "off"}
+            </Btn>
+          </>
+        }
+      />
+      {error && <Banner tone="error">{error}</Banner>}
+      {notice && <Banner tone="ok">{notice}</Banner>}
+
+      <div className={ui.queueTop}>
+        <Tabs
+          label="Live Queue views"
+          value={view}
+          onChange={setView}
+          tabs={[
+            { id: "waiting", label: "Waiting", count: counts.waiting },
+            { id: "in-service", label: "In service", count: counts.inService },
+            { id: "completed", label: "Completed today", count: counts.completed },
+            { id: "history", label: "Cancelled & expired", count: counts.history },
+          ]}
+        />
+      </div>
+
+      <div className={ui.queueLayout}>
+        <div>
+          {view === "waiting" && (
+            <div className={ui.entryGrid}>
+              {called.length + waiting.length === 0 && (
+                <Card>
+                  <EmptyState title="Nobody is waiting" action={<Btn variant="primary" icon="plus" onClick={() => setAddOpen(true)}>New Live Queue customer</Btn>}>
+                    Customers who join through the app, the QR code or at the counter appear here in order.
+                  </EmptyState>
+                </Card>
+              )}
+              {called.map((entry) => (
+                <EntryCard key={entry.id} entry={entry} tone="called" salonId={salonId}>
+                  <div className={ui.entryActions}>
+                    <Btn variant="primary" small disabled={busy !== null} onClick={() => void assignAutomatically(entry)}>
+                      Assign automatically
+                    </Btn>
+                    <Btn small onClick={() => setAssignFor(assignFor === entry.id ? null : entry.id)}>
+                      Choose barber &amp; chair
+                    </Btn>
+                    <Btn small variant="danger" disabled={busy !== null} onClick={() => void run(`noshow-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.noShow), { method: "POST" }))}>
+                      Mark no-show
+                    </Btn>
+                    <Btn small variant="quiet" disabled={busy !== null} onClick={() => void run(`cancel-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.cancel), { method: "POST" }))}>
+                      Cancel
+                    </Btn>
+                  </div>
+                  {assignFor === entry.id && <AssignForm entry={entry} data={data} onDone={() => { setAssignFor(null); void refetch(false); }} base={base} />}
+                </EntryCard>
+              ))}
+              {waiting.map((entry) => (
+                <EntryCard key={entry.id} entry={entry} tone="waiting" salonId={salonId} fresh={freshIds.includes(entry.id)}>
+                  {skipReasons[entry.id] && <div className={ui.entryReason}>Not seated yet: {skipReasons[entry.id]}</div>}
+                  <div className={ui.entryActions}>
+                    <Btn variant="primary" small disabled={busy !== null} onClick={() => void assignAutomatically(entry)}>
+                      {busy === `auto-${entry.id}` ? "Assigning…" : "Assign automatically"}
+                    </Btn>
+                    <Btn small onClick={() => setAssignFor(assignFor === entry.id ? null : entry.id)}>
+                      Choose barber &amp; chair
+                    </Btn>
+                    {entry.arrivedAt === null && (
+                      <Btn small disabled={busy !== null} onClick={() => void run(`arrive-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.arrive), { method: "POST" }), "Marked as in the shop.")}>
+                        Mark as in the shop
+                      </Btn>
+                    )}
+                    <Btn small disabled={busy !== null} onClick={() => void run(`call-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.call), { method: "POST" }), "Customer called.")}>
+                      Call
+                    </Btn>
+                    <Btn small variant="quiet" disabled={busy !== null} onClick={() => void run(`cancel-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.cancel), { method: "POST" }))}>
+                      Cancel
+                    </Btn>
+                  </div>
+                  {assignFor === entry.id && <AssignForm entry={entry} data={data} onDone={() => { setAssignFor(null); void refetch(false); }} base={base} />}
+                </EntryCard>
+              ))}
+            </div>
+          )}
+
+          {view === "in-service" && (
+            <div className={ui.entryGrid}>
+              {inService.length === 0 && (
+                <Card>
+                  <EmptyState title="No one is in a chair right now">Seated customers appear here with their barber and chair.</EmptyState>
+                </Card>
+              )}
+              {inService.map((entry) => (
+                <EntryCard key={entry.id} entry={entry} tone="in-service" salonId={salonId}>
+                  <div className={ui.entryActions}>
+                    <Btn variant="primary" small icon="check" disabled={busy !== null || !entry.activeServiceSessionId} onClick={() => void run(`done-${entry.id}`, () => apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.serviceSessions}/${entry.activeServiceSessionId}/${DASHBOARD_PATHS.complete}`, { method: "POST" }), `${whoLabel(entry)} — service completed.`)}>
+                      Complete service
+                    </Btn>
+                    <Btn small onClick={() => setAssignFor(assignFor === entry.id ? null : entry.id)}>
+                      Change barber / chair
+                    </Btn>
+                    <Btn small variant="quiet" disabled={busy !== null} onClick={() => void run(`cancel-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.cancel), { method: "POST" }))}>
+                      Cancel visit
+                    </Btn>
+                  </div>
+                  {assignFor === entry.id && <ReassignForm entry={entry} data={data} base={base} onDone={() => { setAssignFor(null); void refetch(false); }} />}
+                </EntryCard>
+              ))}
+            </div>
+          )}
+
+          {view === "completed" && (
+            <div className={ui.entryGrid}>
+              {completed.length === 0 && (
+                <Card>
+                  <EmptyState title="Nothing completed yet today" />
+                </Card>
+              )}
+              {completed.map((entry) => (
+                <EntryCard key={entry.id} entry={entry} tone="done" salonId={salonId}>
+                  <div className={ui.entryActions}>
+                    <InvoiceAction salonId={salonId} bookingId={entry.bookingId} queueEntryId={entry.bookingId ? null : entry.id} />
+                  </div>
+                </EntryCard>
+              ))}
+            </div>
+          )}
+
+          {view === "history" && (
+            <div className={ui.entryGrid}>
+              {history.length === 0 && (
+                <Card>
+                  <EmptyState title="No cancelled, expired or no-show visits today">These stay here for the day and are counted in Analytics.</EmptyState>
+                </Card>
+              )}
+              {history.map((entry) => (
+                <EntryCard key={entry.id} entry={entry} tone="done" salonId={salonId} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className={ui.sideStack}>
+          <Card title="Barbers" sub={`${data.staffRoster.filter((s) => s.status === StaffMemberStatus.ACTIVE).length} on duty`}>
+            {data.staffRoster.length === 0 ? (
+              <EmptyState title="No barbers yet" action={<BtnLink small href={`/dashboard/salons/${salonId}/staff`} icon="plus">Add a barber</BtnLink>} />
+            ) : (
+              <div>
+                {data.staffRoster.map((member) => {
+                  const state = availabilityText(member);
+                  const on = member.status === StaffMemberStatus.ACTIVE;
+                  return (
+                    <div key={member.id} className={ui.barberRow}>
+                      <span className={`${ui.dot} ${state.dot}`} aria-hidden="true" />
+                      <div className={ui.listMain}>
+                        <div className={ui.listTitle}>{member.displayName}</div>
+                        <div className={ui.listSub}>{state.text}</div>
+                      </div>
+                      <Btn
+                        small
+                        variant="quiet"
+                        disabled={busy !== null}
+                        onClick={() => void run(`duty-${member.id}`, () => apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.staff}/${member.id}/${DASHBOARD_PATHS.status}`, { method: "PATCH", body: JSON.stringify({ status: on ? StaffMemberStatus.INACTIVE : StaffMemberStatus.ACTIVE }) }))}
+                      >
+                        {on ? "Clock out" : "Clock in"}
+                      </Btn>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card title="Chairs" sub={`${freeChairs.length} of ${data.chairs.length} free`}>
+            {data.chairs.length === 0 ? (
+              <EmptyState title="No chairs set up" action={<BtnLink small href={`/dashboard/salons/${salonId}/chairs`} icon="plus">Add chairs</BtnLink>} />
+            ) : (
+              <div className={ui.chairGrid}>
+                {data.chairs.map((chair) => (
+                  <ChairTile
+                    key={chair.id}
+                    chair={chair}
+                    busy={busy !== null}
+                    onFree={() => void run(`free-${chair.id}`, () => apiFetch(`${base}/${DASHBOARD_PATHS.chairOccupancy}/${chair.id}/${DASHBOARD_PATHS.freeLocal}`, { method: "POST" }), `${chair.label} is free.`)}
+                  />
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {kind === "owner" && (
+            <Card title="Automatic assignment">
+              <div className={ui.toggleRow}>
+                <div>
+                  <div className={ui.listTitle} style={{ whiteSpace: "normal" }}>
+                    Seat customers automatically
+                  </div>
+                  <div className={ui.cardSub}>
+                    When on, a customer who is in the shop is seated with a free, qualified barber and a free chair as soon as one is available — fairest workload first, and a customer&apos;s chosen barber is always respected. Seating starts the service, so it is off by default.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={data.autoAssignEnabled ?? false}
+                  aria-label="Automatic assignment"
+                  className={`${ui.switch} ${data.autoAssignEnabled ? ui.switchOn : ""}`}
+                  disabled={busy !== null}
+                  onClick={() => void run("auto-setting", () => apiFetch(`${base}/queue/settings`, { method: "PATCH", body: JSON.stringify({ autoAssignEnabled: !data.autoAssignEnabled }) }), data.autoAssignEnabled ? "Automatic assignment is off." : "Automatic assignment is on.")}
+                />
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {addOpen && (
+        <NewQueueCustomerDialog
+          salonId={salonId}
+          onClose={() => setAddOpen(false)}
+          onCreated={(entry) => {
+            setNotice(`Added ${entry.customerName ?? "customer"} as token #${entry.tokenNumber}.`);
+            setView("waiting");
+            void refetch(false);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function ChairTile({ chair, busy, onFree }: { chair: ChairOptionDto; busy: boolean; onFree: () => void }) {
+  const occupancy = chair.occupancy ?? "FREE";
+  return (
+    <div className={`${ui.chair} ${occupancy === "FREE" ? "" : ui.chairBusy}`}>
+      <div className={ui.chairName}>{chair.label}</div>
+      <div className={ui.chairState}>
+        {occupancy === "FREE" && "Free"}
+        {occupancy === "FASTQUE" && `${chair.assignedStaffName ?? "A barber"} · token #${chair.tokenNumber ?? "?"}`}
+        {occupancy === "LOCAL" && "Seated without a queue entry"}
+      </div>
+      {occupancy === "LOCAL" && (
+        <Btn small variant="secondary" className={ui.mt12} disabled={busy} onClick={onFree}>
+          Free this chair
+        </Btn>
+      )}
+    </div>
+  );
+}
+
+function EntryCard({
+  entry,
+  tone,
+  salonId,
+  fresh,
+  children,
+}: {
+  entry: QueueEntryDetailDto;
+  tone: "waiting" | "called" | "in-service" | "done";
+  salonId: string;
+  fresh?: boolean;
+  children?: React.ReactNode;
+}) {
+  const status = STATUS_LABEL[entry.status] ?? { text: entry.status, tone: "neutral" as const };
+  const since = minutesSince(entry.status === "IN_SERVICE" ? entry.calledAt ?? entry.joinedAt : entry.joinedAt);
+  return (
+    <article
+      className={`${ui.entry} ${tone === "waiting" ? ui.entryWaiting : tone === "called" ? ui.entryCalled : tone === "in-service" ? ui.entryInService : ui.entryDone} ${fresh ? ui.entryNew : ""}`}
+      aria-label={`${whoLabel(entry)}, token ${entry.tokenNumber}, ${status.text}`}
+    >
+      <div className={ui.entryHead}>
+        <div className={ui.token} title="Queue token">
+          #{entry.tokenNumber}
+        </div>
+        <div className={ui.entryWho}>
+          <div className={ui.entryName}>{whoLabel(entry)}</div>
+          <div className={ui.entryMeta}>
+            {entry.serviceName ?? "Service not chosen yet"}
+            {entry.status === "WAITING" && entry.position ? ` · position ${entry.position} in line` : ""}
+            {entry.status === "WAITING" && entry.estimatedWaitMinutes !== null ? ` · about ${entry.estimatedWaitMinutes} min` : ""}
+          </div>
+          {entry.customerPhone && (
+            <a className={`${ui.entryMeta} ${ui.entryPhone}`} href={`tel:${entry.customerPhone}`}>
+              {entry.customerPhone}
+            </a>
+          )}
+          {entry.assignedStaffName && (
+            <div className={ui.entryMeta}>
+              {entry.assignedStaffName}
+              {entry.assignedChairLabel ? ` · ${entry.assignedChairLabel}` : ""}
+            </div>
+          )}
+          {entry.preferredStaffName && entry.status !== "IN_SERVICE" && entry.status !== "COMPLETED" && <div className={ui.entryMeta}>Wants {entry.preferredStaffName}</div>}
+          {!entry.assignedStaffName && entry.bookingId && <div className={ui.entryMeta}>Online booking check-in</div>}
+        </div>
+        <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+          <Badge tone={status.tone}>{status.text}</Badge>
+          {(entry.status === "WAITING" || entry.status === "CALLED") && (entry.arrivedAt === null ? <Badge tone="warn">Not in the shop yet</Badge> : <Badge tone="ok">In the shop</Badge>)}
+          {since !== null && (entry.status === "WAITING" || entry.status === "CALLED" || entry.status === "IN_SERVICE") && <span className={ui.cardSub}>{since} min {entry.status === "IN_SERVICE" ? "in service" : "so far"}</span>}
+        </div>
+      </div>
+      {children}
+      <span className={ui.srOnly}>Salon {salonId}</span>
+    </article>
+  );
+}
+
+function AssignForm({ entry, data, base, onDone }: { entry: QueueEntryDetailDto; data: DashboardQueueDto; base: string; onDone: () => void }) {
+  const needsService = !entry.serviceId;
+  const [staffId, setStaffId] = useState(entry.preferredStaffId ?? "");
+  const [chairId, setChairId] = useState("");
+  const [serviceId, setServiceId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const staff = data.staffRoster.filter((s) => s.status === StaffMemberStatus.ACTIVE);
+  const options = entry.preferredStaffId ? staff.filter((s) => s.id === entry.preferredStaffId) : staff;
+  const chairs = data.chairs.filter((c) => (c.occupancy ?? "FREE") === "FREE");
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.queueEntries}/${entry.id}/${DASHBOARD_PATHS.assign}`, {
+        method: "POST",
+        headers: { "Idempotency-Key": newIdempotencyKey() },
+        body: JSON.stringify({ staffId, chairId, ...(needsService ? { serviceId } : {}) }),
+      });
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not assign this customer.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={ui.assignBox}>
+      {needsService && (
+        <Field label="Service" htmlFor={`as-svc-${entry.id}`}>
+          <select id={`as-svc-${entry.id}`} className={ui.select} value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+            <option value="">Choose…</option>
+            {data.services.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <Field label="Barber" htmlFor={`as-staff-${entry.id}`} hint={entry.preferredStaffId ? `Booked with ${entry.preferredStaffName ?? "a specific barber"}.` : undefined}>
+        <select id={`as-staff-${entry.id}`} className={ui.select} value={staffId} onChange={(e) => setStaffId(e.target.value)} disabled={Boolean(entry.preferredStaffId)}>
+          <option value="">Choose…</option>
+          {options.map((s) => {
+            const state = availabilityText(s);
+            return (
+              <option key={s.id} value={s.id} disabled={s.availabilityState === "IN_SERVICE" || s.availabilityState === "RESERVED"}>
+                {s.displayName} — {state.text}
+              </option>
+            );
+          })}
+        </select>
+      </Field>
+      <Field label="Chair" htmlFor={`as-chair-${entry.id}`}>
+        <select id={`as-chair-${entry.id}`} className={ui.select} value={chairId} onChange={(e) => setChairId(e.target.value)}>
+          <option value="">Choose…</option>
+          {chairs.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Btn variant="primary" disabled={busy || !staffId || !chairId || (needsService && !serviceId)} onClick={() => void submit()}>
+        {busy ? "Seating…" : "Seat customer"}
+      </Btn>
+      {error && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Banner tone="error">{error}</Banner>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReassignForm({ entry, data, base, onDone }: { entry: QueueEntryDetailDto; data: DashboardQueueDto; base: string; onDone: () => void }) {
+  const [staffId, setStaffId] = useState(entry.assignedStaffId ?? "");
+  const [chairId, setChairId] = useState(entry.assignedChairId ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const staff = data.staffRoster.filter((s) => s.status === StaffMemberStatus.ACTIVE);
+  const chairs = data.chairs.filter((c) => c.id === entry.assignedChairId || (c.occupancy ?? "FREE") === "FREE");
+  const changed = staffId !== entry.assignedStaffId || chairId !== entry.assignedChairId;
+  void base;
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    const body: { staffId?: string; chairId?: string } = {};
+    if (staffId !== entry.assignedStaffId) body.staffId = staffId;
+    if (chairId !== entry.assignedChairId) body.chairId = chairId;
+    try {
+      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.queueEntries}/${entry.id}/${DASHBOARD_PATHS.reassign}`, { method: "PATCH", body: JSON.stringify(body) });
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not move this visit.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={ui.assignBox}>
+      <Field label="Barber" htmlFor={`re-staff-${entry.id}`}>
+        <select id={`re-staff-${entry.id}`} className={ui.select} value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+          {staff.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.displayName}
+              {s.id !== entry.assignedStaffId ? ` — ${availabilityText(s).text}` : ""}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Chair" htmlFor={`re-chair-${entry.id}`}>
+        <select id={`re-chair-${entry.id}`} className={ui.select} value={chairId} onChange={(e) => setChairId(e.target.value)}>
+          {chairs.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <span />
+      <Btn variant="primary" disabled={busy || !changed} onClick={() => void submit()}>
+        {busy ? "Moving…" : "Confirm change"}
+      </Btn>
+      {error && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Banner tone="error">{error}</Banner>
+        </div>
+      )}
+    </div>
+  );
+}

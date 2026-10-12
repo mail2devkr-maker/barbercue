@@ -787,6 +787,32 @@ export interface InvoiceListDto {
   nextCursor: string | null;
 }
 
+export interface RecordedPaymentDto {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  customerName: string | null;
+  kind: InvoicePaymentKind;
+  method: InvoicePaymentMethod;
+  amount: number;
+  reference: string | null;
+  note: string | null;
+  recordedAt: string;
+  /** The barber's/owner's display name as the shop knows them ("Owner" for the shop owner). */
+  recordedBy: string;
+}
+
+/** GET dashboard/salons/:salonId/payments - what the shop recorded as received/refunded. */
+export interface RecordedPaymentListDto {
+  from: string;
+  to: string;
+  currency: string | null;
+  items: RecordedPaymentDto[];
+  nextCursor: string | null;
+  totals: { received: number; refunded: number; net: number; count: number };
+  byMethod: { method: InvoicePaymentMethod; net: number }[];
+}
+
 export interface BookingShopContactDto {
   /** Present only when the owner chose to publish it (Salon.showPhoneToCustomers). */
   shopPhone: string | null;
