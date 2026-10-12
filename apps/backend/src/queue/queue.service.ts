@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   BookingErrorCode,
@@ -7,6 +7,7 @@ import {
   QueueEntrySource,
   QueueEntryStatus,
   QueueErrorCode,
+  OwnerOpsErrorCode,
   ServiceSessionStatus,
   StaffMemberStatus,
   computeSlotCapacity,
@@ -20,6 +21,7 @@ import {
   type CapacitySummaryDto,
   type ChairOptionDto,
   type ServiceOptionDto,
+  type CreateQueueCustomerInput,
   type DashboardQueueDto,
   type QueueEntryDetailDto,
   type QueueStatusDto,
@@ -33,6 +35,7 @@ import { resolveEffectiveBookingServices } from '../bookings/effective-booking-s
 import { zonedDayBounds } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { QueueAutoAssignTrigger } from './queue-auto-assign.trigger';
 
 // Allowed from 15 minutes before slotStart onward, no upper bound — the automatic no-show sweep
 // that would otherwise cap lateness isn't built in this phase (see the plan's explicit scoping).
@@ -60,7 +63,7 @@ const bookingServiceSnapshotSelect = {
   },
 } satisfies Prisma.BookingSelect;
 
-const queueEntryDetailInclude = {
+export const queueEntryDetailInclude = {
   service: { select: { name: true } },
   customer: { select: { phone: true } },
   assignedStaff: { select: { displayName: true } },
@@ -90,7 +93,15 @@ export class QueueService {
     private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
     private readonly notifications: NotificationsService,
+    // Optional so unit tests (and any context without the owner-operations module) are unaffected.
+    @Optional() private readonly autoAssignTrigger?: QueueAutoAssignTrigger,
   ) {}
+
+  /** Lets the automatic allocator react to anything that may have freed a barber/chair or added a
+   * seatable customer. Fire-and-forget; never affects the caller (see QueueAutoAssignTrigger). */
+  private triggerAutoAssign(salonId: string): void {
+    this.autoAssignTrigger?.trigger(salonId);
+  }
 
   // ---------- Customer-facing ----------
 
@@ -143,8 +154,13 @@ export class QueueService {
       slotStart: Date;
       status: BookingStatus;
       serviceId: string;
+      // Owner-operations mission — an IN_SHOP appointment has no account: the guest's name/consented
+      // phone travel onto the queue entry so staff see who has arrived (never a fabricated user).
+      guestName?: string | null;
+      guestPhone?: string | null;
+      preferredStaffId?: string | null;
     },
-    customerId: string,
+    customerId: string | null,
   ): Promise<QueueEntryDetailDto> {
     if (booking.status !== BookingStatus.CONFIRMED) {
       throw new AppException(
@@ -165,7 +181,7 @@ export class QueueService {
       );
     }
 
-    await this.assertNotAlreadyInQueue(customerId);
+    if (customerId) await this.assertNotAlreadyInQueue(customerId);
 
     const earliestCheckIn =
       booking.slotStart.getTime() - EARLY_CHECKIN_WINDOW_MINUTES * 60_000;
@@ -190,6 +206,13 @@ export class QueueService {
             source: QueueEntrySource.APPOINTMENT,
             tokenNumber,
             status: QueueEntryStatus.WAITING,
+            ...(customerId === null
+              ? {
+                  contactName: booking.guestName ?? null,
+                  contactPhone: booking.guestPhone ?? null,
+                  preferredStaffId: booking.preferredStaffId ?? null,
+                }
+              : {}),
             // An appointment entry only exists because arrival was confirmed — by the customer's
             // own check-in or the owner's ARRIVED confirmation — so it is arrived from the start.
             arrivedAt: new Date(),
@@ -217,6 +240,7 @@ export class QueueService {
 
     await this.recomputeEtas(booking.salonId);
     this.realtime.emitQueueUpdated(booking.salonId);
+    this.triggerAutoAssign(booking.salonId);
     return this.getDetailOrThrow(entryId);
   }
 
@@ -269,6 +293,7 @@ export class QueueService {
 
     await this.recomputeEtas(salonId);
     this.realtime.emitQueueUpdated(salonId);
+    this.triggerAutoAssign(salonId);
     await this.notifications.notify(
       salon.ownerUserId,
       'owner.walk_in.joined',
@@ -372,6 +397,9 @@ export class QueueService {
     // Part 2 — delegated shop management. Read-only: no AuditLog write for a successful delegated
     // read, unlike the mutation methods below.
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
+    // Captured BEFORE any read: every snapshot is stamped with the instant its reads began, so a
+    // client can safely discard an older snapshot that arrives after a newer one.
+    const revision = Date.now();
 
     // Same freshness rationale as getActiveForCustomer above — the owner dashboard shouldn't show
     // a stale ETA for an overrunning service until some unrelated mutation happens to trigger one.
@@ -435,6 +463,43 @@ export class QueueService {
     const manualByChair = new Map(manualOccupancies.map((row) => [row.chairId, row]));
     const fastQueByChair = new Map(activeChairSessions.map((row) => [row.chairId, row]));
 
+    // Owner-operations mission - the finished/terminal side of "today", so completed visits and
+    // cancelled/expired/no-show outcomes stay visible (and separate) instead of vanishing the
+    // moment they leave the active states. "Today" is the salon's own calendar day (24h fallback
+    // when no trustworthy timezone exists, never a guess at IST).
+    const timeZone = await this.availability.getSalonTimeZone(salonId);
+    const dayBounds = timeZone ? zonedDayBounds(new Date(), timeZone) : null;
+    const dayStart = dayBounds?.start ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [completedRows, terminalRows, salonFlags] = await Promise.all([
+      this.prisma.queueEntry.findMany({
+        where: { salonId, status: QueueEntryStatus.COMPLETED, serviceCompletedAt: { gte: dayStart } },
+        include: queueEntryDetailInclude,
+        orderBy: { serviceCompletedAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.queueEntry.findMany({
+        where: {
+          salonId,
+          status: {
+            in: [QueueEntryStatus.CANCELLED, QueueEntryStatus.EXPIRED, QueueEntryStatus.NO_SHOW],
+          },
+          updatedAt: { gte: dayStart },
+        },
+        include: queueEntryDetailInclude,
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.salon.findUnique({
+        where: { id: salonId },
+        select: { queueAutoAssignEnabled: true },
+      }),
+    ]);
+    const completedToday = (completedRows ?? []).map((e) => this.toDetailDto(e, null));
+    const historyToday = (terminalRows ?? []).map((e) => this.toDetailDto(e, null));
+    const waiting = detailed.filter((e) => e.status === QueueEntryStatus.WAITING);
+    const called = detailed.filter((e) => e.status === QueueEntryStatus.CALLED);
+    const inService = detailed.filter((e) => e.status === QueueEntryStatus.IN_SERVICE);
+
     // Part 9/18/19 — the derived, point-in-time answer to "can this person actually take a
     // customer right now," alongside (not instead of) their own working/clock-in `status`. Bounded
     // by this salon's own staff count (typically a handful), never an unbounded scan.
@@ -451,6 +516,17 @@ export class QueueService {
 
     return {
       entries: detailed,
+      revision,
+      serverTime: new Date(revision).toISOString(),
+      sections: { waiting, called, inService, completedToday, historyToday },
+      counts: {
+        waiting: waiting.length,
+        called: called.length,
+        inService: inService.length,
+        completedToday: completedToday.length,
+        historyToday: historyToday.length,
+      },
+      autoAssignEnabled: salonFlags?.queueAutoAssignEnabled ?? false,
       staffRoster: staffRoster.map((s, i) => ({
         id: s.id,
         displayName: s.displayName,
@@ -721,7 +797,27 @@ export class QueueService {
   ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
     const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+    return this.assignLoaded(entry, input, { userId, actor });
+  }
 
+  /**
+   * Owner-operations mission - the SAME transaction-safe seating as assign() (identical
+   * qualification, reservation-window, chair/barber exclusivity and claim logic, one engine), used
+   * by the automatic allocator, which has no signed-in user. Differences: no per-user access check
+   * (the allocator only ever runs for a salon whose owner enabled automatic assignment, or on an
+   * already-authorized request), and the audit row carries no human actor.
+   */
+  async assignAsSystem(entryId: string, input: AssignQueueEntryInput): Promise<QueueEntryDetailDto> {
+    const entry = await this.getEntryOrThrow(entryId);
+    return this.assignLoaded(entry, input, null);
+  }
+
+  private async assignLoaded(
+    entry: Awaited<ReturnType<QueueService['getEntryOrThrow']>>,
+    input: AssignQueueEntryInput,
+    by: { userId: string; actor: 'STAFF_OR_OWNER' | 'PLATFORM_ADMIN' } | null,
+  ): Promise<QueueEntryDetailDto> {
+    const entryId = entry.id;
     const serviceId = input.serviceId ?? entry.serviceId;
     if (!serviceId) {
       throw new AppException(
@@ -893,12 +989,24 @@ export class QueueService {
         throw err;
       }
     }, TRANSACTION_OPTIONS);
-    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_ASSIGNED', entryId, {
-      salonId: entry.salonId,
-      staffId: input.staffId,
-      chairId: input.chairId,
-      serviceId,
-    });
+    if (by) {
+      await this.logAdminQueueAction(by.actor, by.userId, 'ADMIN_QUEUE_ENTRY_ASSIGNED', entryId, {
+        salonId: entry.salonId,
+        staffId: input.staffId,
+        chairId: input.chairId,
+        serviceId,
+      });
+    } else {
+      await this.prisma.auditLog.create({
+        data: {
+          actorUserId: null,
+          action: 'QUEUE_ENTRY_AUTO_ASSIGNED',
+          entityType: 'QueueEntry',
+          entityId: entryId,
+          metadata: { salonId: entry.salonId, staffId: input.staffId, chairId: input.chairId, serviceId },
+        },
+      });
+    }
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitQueueUpdated(entry.salonId);
@@ -1104,6 +1212,103 @@ export class QueueService {
     return this.getDetailOrThrow(entryId);
   }
 
+  /**
+   * Owner-operations mission - "New Live Queue customer": an operator adds someone who is standing
+   * in the shop and has no FastQue account. It is a real WAITING queue entry (same token numbering,
+   * ETA and realtime path as every other join); customerId stays NULL and no account is invented -
+   * the name (and, only with the customer's consent, the phone) live on the entry itself. Because
+   * the person is physically present, `arrivedAt` is set immediately, which is what makes them
+   * eligible for automatic allocation.
+   *
+   * Distinct from an in-shop APPOINTMENT (a scheduled booking, BookingsService.createInShop): this
+   * is a "serve me when it's my turn" visit.
+   */
+  async createOperatorEntry(
+    userId: string,
+    salonId: string,
+    input: CreateQueueCustomerInput,
+  ): Promise<QueueEntryDetailDto> {
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
+    await this.availability.getSalonOrThrow(salonId);
+    if (input.serviceId) await this.availability.getServiceOrThrow(salonId, input.serviceId);
+    if (input.preferredStaffId) {
+      const staff = await this.prisma.salonStaff.findFirst({
+        where: { id: input.preferredStaffId, salonId },
+        select: { id: true },
+      });
+      if (!staff) {
+        throw new AppException(
+          BookingErrorCode.STAFF_NOT_FOUND,
+          'Staff member not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (input.serviceId) {
+        await this.availability.assertStaffQualified(salonId, input.serviceId, input.preferredStaffId);
+      }
+    }
+    const contactPhone = input.contactConsent && input.phone ? input.phone : null;
+
+    const entryId = await this.prisma.$transaction(async (tx) => {
+      const tokenNumber = await this.nextTokenNumber(tx, salonId);
+      // Two taps on "Add" (or a retry with a fresh key) must not seat the same person twice.
+      const duplicate = await tx.queueEntry.findFirst({
+        where: {
+          salonId,
+          customerId: null,
+          source: QueueEntrySource.WALK_IN,
+          status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+          contactName: { equals: input.name, mode: 'insensitive' },
+          joinedAt: { gte: new Date(Date.now() - 2 * 60_000) },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new AppException(
+          OwnerOpsErrorCode.QUEUE_ENTRY_ALREADY_ACTIVE,
+          'This customer was just added to the Live Queue.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      const created = await tx.queueEntry.create({
+        data: {
+          salonId,
+          customerId: null,
+          serviceId: input.serviceId ?? null,
+          source: QueueEntrySource.WALK_IN,
+          tokenNumber,
+          status: QueueEntryStatus.WAITING,
+          contactName: input.name,
+          contactPhone,
+          arrivedAt: new Date(),
+          createdByUserId: userId,
+          preferredStaffId: input.preferredStaffId ?? null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'QUEUE_ENTRY_CREATED_BY_OPERATOR',
+          entityType: 'QueueEntry',
+          entityId: created.id,
+          metadata: {
+            salonId,
+            actor,
+            phoneStored: Boolean(contactPhone),
+            serviceId: input.serviceId ?? null,
+            preferredStaffId: input.preferredStaffId ?? null,
+          },
+        },
+      });
+      return created.id;
+    }, TRANSACTION_OPTIONS);
+
+    await this.recomputeEtas(salonId);
+    this.realtime.emitQueueUpdated(salonId);
+    this.triggerAutoAssign(salonId);
+    return this.getDetailOrThrow(entryId);
+  }
+
   async completeSession(
     userId: string,
     sessionId: string,
@@ -1123,6 +1328,24 @@ export class QueueService {
       userId,
       session.queueEntry.salonId,
     );
+    // Owner-operations mission: an owner (or delegated admin) may complete any service, but a
+    // barber may only complete the service THEY are performing - never a colleague's.
+    if (actor === 'STAFF_OR_OWNER') {
+      const kind = await this.salonAccess.getActorKind(userId, session.queueEntry.salonId);
+      if (kind === 'STAFF') {
+        const performer = await this.prisma.salonStaff.findUnique({
+          where: { id: session.staffId },
+          select: { userId: true },
+        });
+        if (performer?.userId !== userId) {
+          throw new AppException(
+            OwnerOpsErrorCode.NOT_YOUR_SERVICE_SESSION,
+            'You can only complete the service you are performing.',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+      }
+    }
 
     await this.prisma.$transaction(async (tx) => {
       const claim = await tx.serviceSession.updateMany({
@@ -1171,6 +1394,7 @@ export class QueueService {
 
     await this.recomputeEtas(session.queueEntry.salonId);
     this.realtime.emitQueueUpdated(session.queueEntry.salonId);
+    this.triggerAutoAssign(session.queueEntry.salonId);
     return this.getDetailOrThrow(session.queueEntryId);
   }
 
@@ -1243,6 +1467,7 @@ export class QueueService {
   async onChairOccupancyChanged(salonId: string): Promise<void> {
     await this.recomputeEtas(salonId);
     this.realtime.emitQueueUpdated(salonId);
+    this.triggerAutoAssign(salonId);
   }
 
   // ---------- Shared internals ----------
@@ -1538,7 +1763,7 @@ export class QueueService {
     return this.toDetailDto(entry, position);
   }
 
-  private toDetailDto(
+  toDetailDto(
     entry: QueueEntryWithDetails,
     position: number | null,
   ): QueueEntryDetailDto {

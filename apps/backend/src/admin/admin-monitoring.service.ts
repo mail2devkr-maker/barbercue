@@ -210,8 +210,12 @@ export class AdminMonitoringService {
         serviceName: summarizeServiceNames(
           resolveEffectiveBookingServices(booking).map((service) => service.serviceName),
         ),
-        customerEmail: maskPii ? maskEmail(booking.customer.email) : booking.customer.email,
-        customerPhone: maskPii ? maskPhone(booking.customer.phone) : booking.customer.phone,
+        // An IN_SHOP appointment has no account (customer is null): the guest contact is shown
+        // only through the same masking rules and never invented.
+        customerEmail: maskPii ? maskEmail(booking.customer?.email ?? null) : (booking.customer?.email ?? null),
+        customerPhone: maskPii
+          ? maskPhone(booking.customer?.phone ?? booking.guestPhone ?? null)
+          : (booking.customer?.phone ?? booking.guestPhone ?? null),
       })),
       recentQueue: recentQueue.map((entry) => ({
         id: entry.id,

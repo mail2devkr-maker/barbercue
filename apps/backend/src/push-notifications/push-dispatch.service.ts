@@ -48,6 +48,20 @@ function redactToken(token: string): string {
   return `${token.slice(0, 12)}…(${token.length} chars)`;
 }
 
+/**
+ * What actually happened when a push was attempted — the truth the delivery ledger records. A push
+ * is only `delivered` when Expo accepted it for at least one device; "no devices" and "preference
+ * off" are skips, not failures, and a failed request is `transientFailure` (retryable).
+ */
+export interface PushSendResult {
+  attempted: number;
+  delivered: number;
+  noDevices: boolean;
+  /** The provider request itself failed (network / 5xx): worth retrying later. */
+  transientFailure: boolean;
+  error: string | null;
+}
+
 @Injectable()
 export class PushDispatchService {
   private readonly logger = new Logger(PushDispatchService.name);
@@ -137,14 +151,25 @@ export class PushDispatchService {
    * registration wired — Codex's mobile-side half of this handoff).
    */
   async dispatchToUser(userId: string, payload: PushPayload): Promise<void> {
+    await this.sendToUser(userId, payload);
+  }
+
+  /**
+   * Same delivery as dispatchToUser (which now simply calls this and ignores the result), but
+   * reports what happened so a caller that must record delivery truth — the notification delivery
+   * ledger — never has to guess. Still never throws.
+   */
+  async sendToUser(userId: string, payload: PushPayload): Promise<PushSendResult> {
     let devices: PushDevice[];
     try {
       devices = await this.devices.devicesForUser(userId);
     } catch (err) {
       this.logger.warn(`Could not load push devices: ${errorMessage(err)}`);
-      return;
+      return { attempted: 0, delivered: 0, noDevices: false, transientFailure: true, error: errorMessage(err) };
     }
-    if (devices.length === 0) return;
+    if (devices.length === 0) {
+      return { attempted: 0, delivered: 0, noDevices: true, transientFailure: false, error: null };
+    }
 
     const messages: ExpoPushMessage[] = devices.map((device) => ({
       to: device.expoPushToken,
@@ -162,9 +187,16 @@ export class PushDispatchService {
       tickets = await this.expo.send(messages);
     } catch (err) {
       this.logger.warn(`Expo push dispatch failed: ${errorMessage(err)}`);
-      return;
+      return {
+        attempted: devices.length,
+        delivered: 0,
+        noDevices: false,
+        transientFailure: true,
+        error: errorMessage(err),
+      };
     }
 
+    const delivered = tickets.filter((ticket) => ticket.status === 'ok').length;
     const staleTokens: string[] = [];
     tickets.forEach((ticket, index) => {
       const device = devices[index];
@@ -188,6 +220,41 @@ export class PushDispatchService {
           ),
         );
     }
+    return {
+      attempted: devices.length,
+      delivered,
+      noDevices: false,
+      transientFailure: false,
+      error: delivered > 0 ? null : 'PROVIDER_REJECTED_ALL_TICKETS',
+    };
+  }
+
+  /** Whether this user wants native push for a category (default: yes), exposed for the ledger. */
+  async isPushAllowed(userId: string, category: NotificationCategory): Promise<boolean> {
+    return this.isPushEnabled(userId, category);
+  }
+
+  /**
+   * Renders the CUSTOMER-facing copy for a shop-initiated booking change in the recipient's own
+   * language (English fallback), so the delivery ledger can store the exact text it will send and
+   * a later retry never re-renders something different.
+   */
+  async renderShopBookingPush(
+    userId: string,
+    kind: 'shopCancelledBooking' | 'shopRescheduledBooking',
+    params: { shopName: string; serviceName: string | null; whenText: string | null },
+  ): Promise<{ title: string; body: string }> {
+    let preferredLanguage: Language | null = null;
+    try {
+      const recipient = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { preferredLanguage: true },
+      });
+      preferredLanguage = recipient?.preferredLanguage ?? null;
+    } catch (err) {
+      this.logger.warn(`Could not load recipient language, defaulting to English push copy: ${errorMessage(err)}`);
+    }
+    return pushCopyFor(preferredLanguage)[kind](params);
   }
 }
 

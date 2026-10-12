@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { isCustomerBookingActionable, type BookingDetailDto } from "@barbercue/shared";
+import { isCustomerBookingActionable, telHrefFor, type BookingDetailDto } from "@barbercue/shared";
 import { directionsUrl, rebookUrl, salonPageUrl, shareOrCopy, whatsappShareUrl } from "../../lib/booking-actions";
 import styles from "./booking.module.css";
 
@@ -37,6 +37,12 @@ export function BookingActionsBar({
       <a href={directionsUrl(booking)} target="_blank" rel="noopener noreferrer" className={styles.actionLink}>
         Get Directions
       </a>
+      {/* Present only when the shop owner chose to publish their number (see Shop settings). */}
+      {telHrefFor(booking.shopPhone) && (
+        <a href={telHrefFor(booking.shopPhone)!} className={styles.actionLink}>
+          Call shop
+        </a>
+      )}
       <button type="button" className={styles.actionLink} onClick={() => void handleShare()}>
         Share
       </button>

@@ -1,11 +1,10 @@
-import { DashboardQueueView } from "../../../../../../components/queue/DashboardQueueView";
-import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
-import { CapacitySummaryPanel } from "../../../../../../components/dashboard/CapacitySummaryPanel";
 import { ArrivalAlertOverlay } from "../../../../../../components/bookings/ArrivalAlertOverlay";
-import styles from "../../../../../../components/dashboard/dashboard.module.css";
+import { LiveQueueConsole } from "../../../../../../components/owner/LiveQueueConsole";
 
-// Live queue view for salon staff/owners — call/assign/complete/no-show/cancel and staff
-// clock-in/out, all with realtime push updates over the /realtime socket namespace.
+// The operational floor: separate Waiting / In service / Completed / History views, one-tap
+// automatic seating, realtime updates with a polling fallback. (It no longer carries the shop-setup
+// wizard's "Finish setup" step or the seat-a-local-customer chair buttons: adding someone who is in
+// the shop is the explicit "New Live Queue customer" action, which gives them a real queue entry.)
 export default async function DashboardQueuePage({
   params,
 }: {
@@ -13,25 +12,9 @@ export default async function DashboardQueuePage({
 }) {
   const { salonId } = await params;
   return (
-    <main className={styles.pageWide}>
-      <h1 className={styles.pageTitle}>Live queue</h1>
-      <p className={styles.pageSubtitle}>
-        Your operational floor: call, assign and complete customer visits in real time.
-      </p>
-      <SetupNavigation salonId={salonId} currentStep="queue" section="steps" />
-      <CapacitySummaryPanel salonId={salonId} />
-      <DashboardQueueView salonId={salonId} />
+    <main aria-label="Live Queue">
+      <LiveQueueConsole salonId={salonId} />
       <ArrivalAlertOverlay salonId={salonId} />
-      <SetupNavigation
-        salonId={salonId}
-        currentStep="queue"
-        section="actions"
-        nextAction={{
-          kind: "link",
-          href: `/dashboard/salons/${salonId}/settings?setup=complete`,
-          label: "Finish setup",
-        }}
-      />
     </main>
   );
 }

@@ -3208,6 +3208,8 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'owner.walk_in.joined': 'New walk-in',
   'staff.assigned': 'You were assigned a customer',
   'owner.booking.arrival_check': 'Appointment arrival check',
+  'booking.cancelled_by_shop': 'Appointment cancelled by the shop',
+  'booking.rescheduled_by_shop': 'Appointment time changed by the shop',
 };
 
 const hiNotificationTypeLabels: NotificationTypeLabels = {
@@ -3225,6 +3227,8 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'owner.walk_in.joined': 'नया वॉक-इन',
   'staff.assigned': 'आपको एक ग्राहक सौंपा गया',
   'owner.booking.arrival_check': 'अपॉइंटमेंट आगमन जांच',
+  'booking.cancelled_by_shop': 'दुकान ने अपॉइंटमेंट रद्द की',
+  'booking.rescheduled_by_shop': 'दुकान ने अपॉइंटमेंट का समय बदला',
 };
 
 export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTypeLabels>> = {
@@ -3259,6 +3263,18 @@ export interface PushCopy {
   /** P0 arrival-alert mission — the one-shot T-5-minute push. Never a customer name (see
    * ArrivalAlertDto's own comment on why one is never invented). */
   arrivalCheck(serviceName: string | null): { title: string; body: string };
+  /** Owner-operations mission — CUSTOMER-facing push when the shop cancels their appointment.
+   * `whenText` is the already-formatted, salon-local date/time (or null when it cannot be
+   * resolved — the copy then simply omits it rather than guessing a timezone). */
+  shopCancelledBooking(input: { shopName: string; serviceName: string | null; whenText: string | null }): {
+    title: string;
+    body: string;
+  };
+  /** Same, for a shop-initiated reschedule. */
+  shopRescheduledBooking(input: { shopName: string; serviceName: string | null; whenText: string | null }): {
+    title: string;
+    body: string;
+  };
 }
 
 const enPush: PushCopy = {
@@ -3284,6 +3300,20 @@ const enPush: PushCopy = {
       ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.`
       : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
   }),
+  shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
+    title: 'Appointment cancelled by the shop',
+    body:
+      `Your appointment at ${shopName}${serviceName ? ` for ${serviceName}` : ''}` +
+      `${whenText ? ` on ${whenText}` : ''} has been cancelled by the shop. ` +
+      'Please open FastQue to view your booking details or contact the shop for assistance.',
+  }),
+  shopRescheduledBooking: ({ shopName, serviceName, whenText }) => ({
+    title: 'Appointment time changed by the shop',
+    body:
+      `Your appointment at ${shopName}${serviceName ? ` for ${serviceName}` : ''}` +
+      `${whenText ? ` has been moved to ${whenText}` : ' has been moved'} by the shop. ` +
+      'Open FastQue to review the new time or contact the shop if it does not work for you.',
+  }),
 };
 
 const hiPush: PushCopy = {
@@ -3308,6 +3338,20 @@ const hiPush: PushCopy = {
     body: serviceName
       ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।`
       : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
+  }),
+  shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
+    title: 'दुकान ने अपॉइंटमेंट रद्द की',
+    body:
+      `${shopName} पर ${serviceName ? `${serviceName} की ` : ''}आपकी अपॉइंटमेंट` +
+      `${whenText ? ` (${whenText})` : ''} दुकान द्वारा रद्द कर दी गई है। ` +
+      'विवरण देखने या दुकान से संपर्क करने के लिए FastQue खोलें।',
+  }),
+  shopRescheduledBooking: ({ shopName, serviceName, whenText }) => ({
+    title: 'दुकान ने अपॉइंटमेंट का समय बदला',
+    body:
+      `${shopName} पर ${serviceName ? `${serviceName} की ` : ''}आपकी अपॉइंटमेंट` +
+      `${whenText ? ` अब ${whenText} पर` : ''} दुकान द्वारा स्थानांतरित कर दी गई है। ` +
+      'नया समय देखने के लिए FastQue खोलें या असुविधा होने पर दुकान से संपर्क करें।',
   }),
 };
 

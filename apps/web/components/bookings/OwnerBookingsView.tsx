@@ -20,6 +20,7 @@ import {
   useVoiceEnabled,
 } from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
+import { ShopBookingActions } from "../owner/ShopBookingActions";
 import styles from "./bookings.module.css";
 
 const PAGE_SIZE = 20;
@@ -40,6 +41,15 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED: "Cancelled",
   NO_SHOW: "No-show",
   EXPIRED: "Expired",
+};
+
+// User-facing names for how a booking was made. WALK_IN is a persisted enum value and is shown as
+// the Live Queue (never as "walk-in") - see the owner-operations terminology rule.
+const SOURCE_LABEL: Record<string, string> = {
+  APP: "FastQue app",
+  WEB: "Website",
+  IN_SHOP: "In-shop appointment",
+  WALK_IN: "Live Queue",
 };
 
 function statusClass(status: string): string {
@@ -80,6 +90,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           {isNew && <span className={styles.newBadge}>NEW</span>}
           <p className={styles.cardMeta}>
             {formatSlot(booking.slotStart)}
+            {booking.guestName ? ` · ${booking.guestName}` : ""}
             {booking.customerPhone ? ` · ${booking.customerPhone}` : ""}
             {booking.assignedStaffName
               ? ` · ${booking.assignedStaffName}`
@@ -125,7 +136,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           )}
           <div className={styles.detailItem}>
             <dt>Source</dt>
-            <dd>{booking.source}</dd>
+            <dd>{SOURCE_LABEL[booking.source] ?? booking.source}</dd>
           </div>
           {booking.customerEmail && (
             <div className={styles.detailItem}>
@@ -153,6 +164,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           )}
         </dl>
       )}
+      {open && <ShopBookingActions booking={booking} />}
     </div>
   );
 }

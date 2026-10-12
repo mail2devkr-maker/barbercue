@@ -11,6 +11,7 @@ import { StaffStatusService } from './staff-status.service';
 import { QueueEntryExpiryService } from './queue-entry-expiry.service';
 import { ManualChairOccupancyController } from './manual-chair-occupancy.controller';
 import { ManualChairOccupancyService } from './manual-chair-occupancy.service';
+import { QueueAutoAssignTrigger } from './queue-auto-assign.trigger';
 
 @Module({
   // forwardRef: BookingsService now also depends back on QueueService (Issue 3 — a cancelled
@@ -29,9 +30,10 @@ import { ManualChairOccupancyService } from './manual-chair-occupancy.service';
     DashboardQueueController,
     ManualChairOccupancyController,
   ],
-  providers: [QueueService, StaffStatusService, QueueEntryExpiryService, ManualChairOccupancyService],
+  providers: [QueueService, StaffStatusService, QueueEntryExpiryService, ManualChairOccupancyService, QueueAutoAssignTrigger],
   // Phase 9: PublicQueueModule reuses this exact QueueService (joinWalkIn) for the QR flow rather
   // than duplicating queue logic — no other change to this module.
-  exports: [QueueService],
+  // QueueAutoAssignTrigger is the seam the owner-operations allocator registers itself on.
+  exports: [QueueService, QueueAutoAssignTrigger],
 })
 export class QueueModule {}

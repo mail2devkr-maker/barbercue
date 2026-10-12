@@ -1,16 +1,12 @@
-import { OwnerShopNav } from "../../../../../components/dashboard/OwnerShopNav";
-import { AdminManagingBanner } from "../../../../../components/dashboard/AdminManagingBanner";
-import styles from "../../../../../components/dashboard/dashboard.module.css";
+import { OwnerShell } from "../../../../../components/owner/OwnerShell";
 
-// Issue #13 Mission B: wraps every shop-management section (queue, settings, bookings,
-// schedule, customers, analytics, reviews, verification, services, hours, photos, chairs,
-// staff) with one persistent nav, so entering any single section is never a dead end — see
-// OwnerShopNav's own doc comment for the full reasoning. Nested under salons/layout.tsx's
-// existing RequireRole gate, so no auth duplication is needed here.
+// Every shop-management and operations page lives inside the Owner shell: a narrow icon rail, the
+// grouped navigation sidebar, a toolbar with search/notifications/account, and (on phones) a bottom
+// bar. It replaces the former dark scope + horizontal tab strip, so no section page can be a dead
+// end and the owner/staff menus come from ONE definition (components/owner/owner-nav.ts).
 //
-// AdminManagingBanner (Part 2) renders here too, once, so every section under a shop — not just
-// the handful with delegated-admin backend support today — visibly discloses an admin session
-// rather than only the ones an admin can currently mutate.
+// Nested under salons/layout.tsx's RequireRole gate (owner, staff or delegated platform admin); the
+// shell only decides what to PRESENT - every API call re-checks who the caller is at this shop.
 export default async function SalonSectionLayout({
   children,
   params,
@@ -19,11 +15,5 @@ export default async function SalonSectionLayout({
   params: Promise<{ salonId: string }>;
 }) {
   const { salonId } = await params;
-  return (
-    <div className={styles.darkScope}>
-      <OwnerShopNav salonId={salonId} />
-      <AdminManagingBanner />
-      {children}
-    </div>
-  );
+  return <OwnerShell salonId={salonId}>{children}</OwnerShell>;
 }

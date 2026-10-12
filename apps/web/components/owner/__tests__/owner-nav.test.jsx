@@ -1,0 +1,77 @@
+import fs from "fs";
+import path from "path";
+import { NAV_GROUPS, NAV_ITEMS, activeItemId, hrefFor, navItemsFor } from "../owner-nav";
+
+// The dashboard's own promise: EVERY visible menu entry leads to a real page. This walks the app
+// directory, so a menu item pointing at a page that does not exist (a dead link) fails the build.
+const SALON_DIR = path.join(__dirname, "../../../app/(dashboard)/dashboard/salons/[salonId]");
+const APP_DIR = path.join(__dirname, "../../../app");
+
+function pageExists(relative) {
+  return fs.existsSync(path.join(SALON_DIR, relative, "page.tsx"));
+}
+
+describe("owner navigation", () => {
+  it("has unique ids and only known groups", () => {
+    const ids = NAV_ITEMS.map((i) => i.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const groups = new Set(NAV_GROUPS.map((g) => g.id));
+    for (const item of NAV_ITEMS) expect(groups.has(item.group)).toBe(true);
+  });
+
+  it("every salon-scoped menu item points at a page that exists", () => {
+    for (const item of NAV_ITEMS.filter((i) => i.path !== undefined)) {
+      expect({ id: item.id, exists: pageExists(item.path) }).toEqual({ id: item.id, exists: true });
+    }
+  });
+
+  it("every site-level menu item points at a real route", () => {
+    for (const item of NAV_ITEMS.filter((i) => i.href)) {
+      const route = item.href.replace(/^\//, "");
+      const candidates = ["(public)", "(customer)", "(auth)", ""].map((group) => path.join(APP_DIR, group, route, "page.tsx"));
+      expect({ id: item.id, exists: candidates.some((p) => fs.existsSync(p)) }).toEqual({ id: item.id, exists: true });
+    }
+  });
+
+  it("the actions the menu promises exist as pages: in-shop appointment form and the notification centre", () => {
+    expect(pageExists("bookings/new")).toBe(true);
+    expect(pageExists("notifications")).toBe(true);
+  });
+
+  it("does not list modules FastQue does not have (no inventory, payroll, orders, leave or salary rules)", () => {
+    const labels = NAV_ITEMS.map((i) => i.label.toLowerCase()).join(" | ");
+    for (const absent of ["inventory", "payroll", "orders", "delivery", "leave", "salary"]) expect(labels).not.toContain(absent);
+  });
+
+  it("gives a barber the operational menu only; billing, analytics and settings stay owner-only", () => {
+    const staff = navItemsFor("staff").map((i) => i.id);
+    for (const id of ["overview", "queue", "in-service", "notifications", "help", "account"]) expect(staff).toContain(id);
+    for (const id of ["bookings", "customers", "analytics", "revenue", "payments", "invoices", "settings", "staff", "payment-qr", "cancellations"]) {
+      expect(staff).not.toContain(id);
+    }
+    expect(navItemsFor("owner").length).toBe(NAV_ITEMS.length);
+  });
+
+  it("puts Analytics in the left navigation, once", () => {
+    expect(NAV_ITEMS.filter((i) => i.id === "analytics")).toHaveLength(1);
+    expect(NAV_ITEMS.find((i) => i.id === "analytics").group).toBe("BUSINESS");
+  });
+
+  it("builds hrefs and tells apart items that share a page by their view/tab", () => {
+    const salon = "s1";
+    const byId = (id) => NAV_ITEMS.find((i) => i.id === id);
+    expect(hrefFor(byId("overview"), salon)).toBe("/dashboard/salons/s1");
+    expect(hrefFor(byId("queue"), salon)).toBe("/dashboard/salons/s1/queue?view=waiting");
+    expect(hrefFor(byId("help"), salon)).toBe("/contact-us");
+    const items = NAV_ITEMS;
+    expect(activeItemId("/dashboard/salons/s1", "", salon, items)).toBe("overview");
+    expect(activeItemId("/dashboard/salons/s1/queue", "view=in-service", salon, items)).toBe("in-service");
+    expect(activeItemId("/dashboard/salons/s1/queue", "view=waiting", salon, items)).toBe("queue");
+    expect(activeItemId("/dashboard/salons/s1/queue", "view=history", salon, items)).toBe("queue");
+    expect(activeItemId("/dashboard/salons/s1/team", "tab=schedule", salon, items)).toBe("staff-schedule");
+    expect(activeItemId("/dashboard/salons/s1/team", "tab=performance", salon, items)).toBe("staff-performance");
+    expect(activeItemId("/dashboard/salons/s1/bookings/new", "", salon, items)).toBe("bookings");
+    expect(activeItemId("/dashboard/salons/s1/customers/abc", "", salon, items)).toBe("customers");
+    expect(activeItemId("/dashboard/salons/other/queue", "", salon, items)).toBeNull();
+  });
+});

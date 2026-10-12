@@ -89,6 +89,30 @@ async function fetchOrOffline(path: string, options: RequestInit): Promise<Respo
 }
 
 /**
+ * Authenticated binary download (e.g. an invoice PDF) with the same one-shot silent refresh as
+ * apiFetch. Returns the file as a Blob plus the server-suggested filename. The bytes are never
+ * placed in a URL or in storage - the caller turns the Blob into a temporary object URL.
+ */
+export async function apiFetchBlob(path: string): Promise<{ blob: Blob; filename: string | null }> {
+  let res = await fetchOrOffline(path, { method: "GET" });
+  if (res.status === 401 && path !== REFRESH_PATH) {
+    if (await tryRefresh()) res = await fetchOrOffline(path, { method: "GET" });
+  }
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = JSON.parse(await res.text());
+    } catch {
+      body = null;
+    }
+    throw new ApiError(res.status, (body ?? {}) as ApiErrorBody);
+  }
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
+  return { blob: await res.blob(), filename: match ? match[1] : null };
+}
+
+/**
  * Every authenticated call goes through here. On a 401 (access token expired — a normal,
  * expected event every ~15 minutes per ARCHITECTURE.md §4), it attempts exactly one silent
  * refresh via the httpOnly cookie and retries the original request once. If that also fails, the
