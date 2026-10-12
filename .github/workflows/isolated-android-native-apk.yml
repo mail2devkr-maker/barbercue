@@ -1,0 +1,60 @@
+name: Isolated FastQue QA Android Native APK
+
+on:
+  push:
+    branches:
+      - qa/isolated-android-native-probe-20261013
+
+permissions:
+  contents: read
+
+jobs:
+  build-offline-qa-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      FASTQUE_LOCAL_QA_NATIVE: 'true'
+      EXPO_PUBLIC_FASTQUE_QA_ISOLATED: 'true'
+      EXPO_PUBLIC_API_BASE_URL: 'http://10.0.2.2:3000/api/v1'
+      GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx3072m'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install locked JS dependencies
+        run: npm ci
+      - name: Build shared types
+        run: npm run build:shared
+      - name: Mobile TypeScript
+        run: npm run typecheck --workspace=@barbercue/mobile
+      - name: Verify isolated QA native configuration (no production APK identity)
+        working-directory: apps/mobile
+        run: |
+          node -e "const c=require('./app.config.js').expo; if(c.android.package!=='com.dcw.fastque.qalocal'||c.updates.enabled!==false||c.extra.qaOnly!==true)process.exit(1);console.log('QA Android identity isolated; OTA disabled')"
+      - name: Expo native Android prebuild (QA package only)
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --clean --no-install
+      - name: Compile offline QA Android release APK
+        working-directory: apps/mobile/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon --max-workers=2
+      - name: Check signed app artifact path
+        working-directory: apps/mobile
+        run: |
+          find android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print
+          test -n "$(find android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fastque-isolated-qa-native-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 1
