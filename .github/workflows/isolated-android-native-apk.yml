@@ -42,6 +42,27 @@ jobs:
       - name: Expo native Android prebuild (QA package only)
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --clean --no-install
+      - name: Use the runner's already-installed compatible NDK (avoid auto-download ZIP corruption)
+        working-directory: apps/mobile/android
+        run: |
+          NDK_HOME="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}/ndk"
+          echo "NDK installations present:"
+          ls -la "$NDK_HOME" || true
+          # GitHub-hosted Android runners normally include NDK 27.x. Preserve
+          # Expo's exact version if already present; otherwise prefer a valid
+          # locally installed NDK 27.x instead of relying on auto-download.
+          if test -f "$NDK_HOME/27.0.12077973/source.properties"; then
+            version="27.0.12077973"
+          else
+            version="$(find "$NDK_HOME" -mindepth 1 -maxdepth 1 -type d -name '27.*' -exec basename {} \; 2>/dev/null | sort -V | tail -n 1)"
+          fi
+          if test -z "$version"; then
+            echo "No verified NDK 27.x installation; fail without selecting an arbitrary Android NDK."
+            exit 1
+          fi
+          test -f "$NDK_HOME/$version/source.properties"
+          echo "Using preinstalled Android NDK $version"
+          echo "android.ndkVersion=$version" >> gradle.properties
       - name: Compile offline QA Android release APK
         working-directory: apps/mobile/android
         run: |
