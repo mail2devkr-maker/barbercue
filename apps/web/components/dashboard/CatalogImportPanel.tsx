@@ -171,7 +171,7 @@ export function CatalogImportPanel(props: {
       <h2 id="catalog-import-heading" style={{ marginTop: 0 }}>📁 Import services from catalogs</h2>
       <p style={styles.help}>
         Upload multiple shop menus and review the extracted services before saving.
-        Supported: XLSX, CSV, PDF, JPG, PNG and WEBP. For older XLS files, save as XLSX first.
+        XLSX and CSV work without AI. PDF, JPG, PNG and WEBP need a configured Google Gemini OCR service and your explicit consent. For older XLS files, save as XLSX first.
         Prices and durations not clearly present in the catalog must be completed manually.
       </p>
       <div
