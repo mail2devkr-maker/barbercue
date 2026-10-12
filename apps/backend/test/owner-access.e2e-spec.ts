@@ -67,7 +67,7 @@ databaseDescribe(
     let inviteUrl: string | null = null;
     let deliveryFails = false;
     const seed = `owner-access-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const secret = 'JBSWY3DPEHPK3PXP'; // Synthetic test secret; never a production credential.
+  const secret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'; // Synthetic 160-bit test secret; never a production credential.
     const api = () => request(app.getHttpServer());
     const auth = (id: string, roles: Role[], audience: SessionAudience) =>
       `Bearer ${tokens.signAccessToken(id, roles, audience)}`;
