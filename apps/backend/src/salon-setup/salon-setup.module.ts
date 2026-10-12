@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { SalonSetupController } from './salon-setup.controller';
 import { SalonServicesService } from './salon-services.service';
+import { ServiceCatalogImportService } from './service-catalog-import.service';
 import { SalonChairsService } from './salon-chairs.service';
 import { SalonStaffService } from './salon-staff.service';
 import { SalonActivationService } from './salon-activation.service';
@@ -23,6 +24,7 @@ import { StorageModule } from '../storage/storage.module';
   controllers: [SalonSetupController],
   providers: [
     SalonServicesService,
+    ServiceCatalogImportService,
     SalonChairsService,
     SalonStaffService,
     SalonActivationService,

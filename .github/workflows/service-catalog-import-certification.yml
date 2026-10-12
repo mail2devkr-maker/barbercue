@@ -1,0 +1,42 @@
+name: Service Catalog Import Certification
+
+on:
+  pull_request:
+    paths:
+      - 'apps/backend/src/salon-setup/**'
+      - 'apps/web/app/(dashboard)/dashboard/salons/**'
+      - 'apps/web/components/dashboard/CatalogImportPanel.tsx'
+      - '.github/workflows/service-catalog-import-certification.yml'
+  push:
+    branches:
+      - 'feat/urgent-catalog-multi-import-20261013'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared DTOs
+        run: npm run build:shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Typecheck backend
+        run: npm run typecheck --workspace=@barbercue/backend
+      - name: Typecheck web
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Catalog importer unit tests
+        run: npm run test --workspace=@barbercue/backend -- --runInBand service-catalog-import
+      - name: Backend build
+        run: npm run build --workspace=@barbercue/backend
+      - name: Web build
+        run: npm run build --workspace=@barbercue/web

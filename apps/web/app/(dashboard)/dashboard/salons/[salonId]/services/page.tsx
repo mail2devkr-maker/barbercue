@@ -6,6 +6,7 @@ import type { SalonServiceDto, SalonTypeResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { ServiceCatalogPicker } from "../../../../../../components/dashboard/ServiceCatalogPicker";
+import { CatalogImportPanel } from "../../../../../../components/dashboard/CatalogImportPanel";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { Button } from "../../../../../../components/ui/Button";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
@@ -259,6 +260,14 @@ export default function DashboardServicesPage({
       {error && <p className={`${styles.banner} ${styles.bannerError}`} role="alert">{error}</p>}
       {notice && <p className={`${styles.banner} ${styles.bannerNotice}`} role="status">{notice}</p>}
       {(services === null || salonType === null) && !error && <p className={styles.loadingText}>Loading services…</p>}
+
+      {services && (
+        <CatalogImportPanel
+          basePath={base}
+          existingServices={services}
+          onImported={async () => { setServices(await apiFetch<SalonServiceDto[]>(base)); }}
+        />
+      )}
 
       {services && salonType && (
         <ServiceCatalogPicker
