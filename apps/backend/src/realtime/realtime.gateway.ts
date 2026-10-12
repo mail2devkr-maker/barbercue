@@ -87,7 +87,9 @@ export class RealtimeGateway implements OnGatewayConnection {
   emitQueueUpdated(salonId: string): void {
     this.deadlineScheduler?.signal('queue');
     this.deadlineScheduler?.signal('booking');
-    this.server.to(`salon:${salonId}`).emit('queue.updated', { salonId });
+    // `revision` (server clock, ms) lets a client skip a refetch it has already satisfied and never
+    // let an older snapshot overwrite a newer one. Additive: clients that read only `salonId` work.
+    this.server.to(`salon:${salonId}`).emit('queue.updated', { salonId, revision: Date.now() });
   }
 
   emitQueueEntryReassigned(salonId: string, queueEntryId: string): void {

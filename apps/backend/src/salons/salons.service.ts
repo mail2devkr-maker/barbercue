@@ -431,7 +431,9 @@ export class SalonsService {
       }),
       onlineBookingDiscountPercent: salon.onlineBookingDiscountPercent,
       description: salon.description,
-      phone: salon.phone,
+      // Owner-operations mission: the owner may choose not to publish the shop phone. The column
+      // defaults to true (the phone was already public), so only an explicit opt-out hides it.
+      phone: salon.showPhoneToCustomers === false ? null : salon.phone,
       services: salon.services.map((s) => ({
         id: s.id,
         salonId: s.salonId,

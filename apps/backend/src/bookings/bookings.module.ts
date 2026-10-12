@@ -48,6 +48,8 @@ import { ArrivalAlertsService } from './arrival-alerts.service';
   // DashboardQueueController — which already lives in QueueModule and already imports BookingsModule
   // for the two exports above — can mount the new manual no-show/correction/alert endpoints without
   // a second, competing controller.
-  exports: [AvailabilityService, ReservationService, CancellationPolicyService, BookingNoShowService, ArrivalAlertsService],
+  // BookingsService is exported (owner-operations mission) so OwnerOpsModule's shop-side cancel /
+  // reschedule / in-shop booking reuse the one booking engine instead of a second implementation.
+  exports: [AvailabilityService, ReservationService, CancellationPolicyService, BookingNoShowService, ArrivalAlertsService, BookingsService],
 })
 export class BookingsModule {}

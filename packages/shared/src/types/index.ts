@@ -997,10 +997,42 @@ export interface ServiceOptionDto {
 // inactive staff member invisible here and unable to clock themselves back in. The assign action
 // itself still separately re-validates ACTIVE + qualified via AvailabilityService.
 export interface DashboardQueueDto {
+  /** WAITING + CALLED + IN_SERVICE in join order — unchanged, for clients that predate `sections`. */
   entries: QueueEntryDetailDto[];
   staffRoster: StaffStatusDto[];
   chairs: ChairOptionDto[];
   services: ServiceOptionDto[];
+  // Owner-operations mission — additive and optional so every released client keeps working.
+  /**
+   * Monotonic revision (epoch ms the snapshot was generated at, server clock). A client applies a
+   * snapshot only if its revision is not older than the one it already shows, so a slow response can
+   * never overwrite newer state. Realtime `queue.updated` events carry the same kind of revision.
+   */
+  revision?: number;
+  serverTime?: string;
+  /** Server-authoritative sections: every entry appears in exactly ONE of these. */
+  sections?: DashboardQueueSectionsDto;
+  counts?: {
+    waiting: number;
+    called: number;
+    inService: number;
+    completedToday: number;
+    historyToday: number;
+  };
+  autoAssignEnabled?: boolean;
+}
+
+export interface DashboardQueueSectionsDto {
+  /** Waiting for a barber, in queue order (position 1 = next). */
+  waiting: QueueEntryDetailDto[];
+  /** Called to the counter but not yet seated. */
+  called: QueueEntryDetailDto[];
+  /** Seated: an ACTIVE service session exists. */
+  inService: QueueEntryDetailDto[];
+  /** Completed today, newest first. */
+  completedToday: QueueEntryDetailDto[];
+  /** Cancelled / expired / no-show today, newest first. */
+  historyToday: QueueEntryDetailDto[];
 }
 
 // GET /dashboard/salons/:salonId/capacity (Phase 6 — Owner Capacity Dashboard). "Busy" means

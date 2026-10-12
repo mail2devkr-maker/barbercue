@@ -14,7 +14,6 @@ import type {
   QueueEntryStatus,
   StaffMemberStatus,
 } from './enums';
-import type { QueueEntryDetailDto } from './types';
 
 // ---------- Enumerations (mirror schema.prisma) ----------
 
@@ -639,33 +638,7 @@ export interface InShopBookingDto {
   createdAt: string;
 }
 
-export type QueueSectionKey = 'waiting' | 'inService' | 'completed' | 'history';
-
-/** Server-authoritative Live Queue view: one entry appears in exactly one section. */
-export interface LiveQueueBoardDto {
-  /**
-   * Monotonic revision (epoch ms of the most recent change). Clients drop any response or event
-   * whose revision is lower than the one they already applied, so a slow request can never
-   * overwrite newer state.
-   */
-  revision: number;
-  serverTime: string;
-  waiting: QueueEntryDetailDto[];
-  /** CALLED entries: told to come to the counter, not yet in a chair. Shown with Waiting. */
-  called: QueueEntryDetailDto[];
-  inService: QueueEntryDetailDto[];
-  completedToday: QueueEntryDetailDto[];
-  /** Cancelled / expired / no-show today, for the History tab. */
-  historyToday: QueueEntryDetailDto[];
-  counts: {
-    waiting: number;
-    called: number;
-    inService: number;
-    completedToday: number;
-    historyToday: number;
-  };
-  autoAssignEnabled: boolean;
-}
+export type QueueSectionKey = 'waiting' | 'called' | 'inService' | 'completedToday' | 'historyToday';
 
 export interface QueueBoardEntryNote {
   /** Why an automatic allocation did not seat this customer (shown to staff as a plain sentence). */
