@@ -84,7 +84,9 @@ jobs:
           trap 'rm -rf "$staging_root"' EXIT
           mkdir -p "$staging_root/prisma/migrations"
           cp apps/backend/prisma/schema.prisma "$staging_root/prisma/schema.prisma"
-          cp apps/backend/prisma/migration_lock.toml "$staging_root/prisma/migration_lock.toml"
+          # This repository has no committed migration_lock.toml; keep the temporary staged
+          # Prisma directory explicit about its provider without adding a repository-wide file.
+          printf 'provider = "postgresql"\n' > "$staging_root/prisma/migration_lock.toml"
 
           # The historical city-repair migrations require the reference rows that production
           # receives from its location import. Apply the exact committed chain only through the
