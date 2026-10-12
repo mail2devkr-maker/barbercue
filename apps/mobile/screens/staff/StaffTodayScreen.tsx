@@ -10,6 +10,7 @@ import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
+import { StaffMyDayCard } from '../../components/dashboard/StaffMyDayCard';
 import type { StaffTabParamList } from '../../navigation/StaffNavigator';
 
 function meePath(salonId: string): string {
@@ -153,7 +154,8 @@ export default function StaffTodayScreen() {
       )}
 
       {selectedSalonId && <SelfStatusCard salonId={selectedSalonId} />}
-      {selectedSalonId && <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} />}
+      {selectedSalonId && <StaffMyDayCard salonId={selectedSalonId} onChanged={() => void panelRef.current?.refresh()} />}
+      {selectedSalonId && <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} role="staff" />}
     </Screen>
   );
 }

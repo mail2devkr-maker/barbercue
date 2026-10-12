@@ -1,0 +1,158 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import type { StaffWorkDto } from '@barbercue/shared';
+import { apiFetch, ApiError } from '../../lib/api';
+import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
+import { liveQueuePaths } from '../../lib/live-queue-actions';
+import { ownerOpsPaths, formatShopTime } from '../../lib/owner/ops';
+import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
+import { Button, Card, InlineError } from '../ui';
+
+const AVAILABILITY_LABEL: Record<string, string> = {
+  AVAILABLE: 'Available',
+  IN_SERVICE: 'With a customer',
+  RESERVED: 'Booked soon',
+  OFF_DUTY: 'Off duty',
+};
+
+/**
+ * A barber's own day: the customer they are serving right now (with "Complete service"), the shop's
+ * waiting list with the customers THEY can take, and their appointments. Everything is scoped by the
+ * server to this barber's own records - the app only renders it.
+ */
+export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChanged?: () => void }) {
+  const [work, setWork] = useState<StaffWorkDto | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const requestId = useRef(0);
+
+  const load = useCallback(async () => {
+    const id = ++requestId.current;
+    try {
+      const next = await apiFetch<StaffWorkDto>(ownerOpsPaths.staffMeWork(salonId));
+      if (id !== requestId.current) return;
+      // A response older than what is already shown never replaces it.
+      setWork((current) => (current && next.revision < current.revision ? current : next));
+      setError(null);
+    } catch (err) {
+      if (id !== requestId.current) return;
+      // A user with no barber record at this shop (e.g. an owner) simply has no "my day".
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403)) setWork(null);
+      else setError(err instanceof ApiError ? err.message : 'Could not load your day.');
+    }
+  }, [salonId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  useEffect(() => {
+    const socket = getRealtimeSocket();
+    joinSalonRoom(salonId);
+    const onUpdate = (payload: { salonId?: string }) => {
+      if (!payload?.salonId || payload.salonId === salonId) void load();
+    };
+    socket.on('queue.updated', onUpdate);
+    const unsubscribe = onReconnect(() => void load());
+    return () => {
+      socket.off('queue.updated', onUpdate);
+      unsubscribe();
+    };
+  }, [salonId, load]);
+
+  async function run(key: string, request: () => Promise<unknown>, done: string) {
+    setBusy(key);
+    setError(null);
+    setNotice(null);
+    try {
+      await request();
+      setNotice(done);
+      await load();
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'That could not be completed. Please try again.');
+      void load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (work === undefined || work === null) {
+    return error ? <InlineError message={error} /> : null;
+  }
+
+  const current = work.current;
+  const eligible = work.waiting.filter((w) => w.eligible);
+
+  function confirmComplete() {
+    if (!current?.serviceSessionId) return;
+    const sessionId = current.serviceSessionId;
+    Alert.alert('Complete this service?', `Mark #${current.tokenNumber} (${current.customerLabel}) as finished.`, [
+      { text: 'Keep going', style: 'cancel' },
+      { text: 'Complete service', style: 'destructive', onPress: () => void run('complete', () => apiFetch(liveQueuePaths.complete(sessionId), { method: 'POST' }), 'Service completed.') },
+    ]);
+  }
+
+  return (
+    <Card style={styles.card}>
+      <Text style={styles.title}>My day</Text>
+      <Text style={styles.sub}>{`${work.displayName} · ${AVAILABILITY_LABEL[work.availabilityState] ?? work.availabilityState} · ${work.completedToday} done today`}</Text>
+      {error && <InlineError message={error} />}
+      {notice && <Text style={styles.notice}>{notice}</Text>}
+
+      <Text style={styles.heading}>Current service</Text>
+      {current ? (
+        <View style={styles.block} testID="staff-current">
+          <Text style={styles.strong}>{`#${current.tokenNumber} · ${current.customerLabel}`}</Text>
+          <Text style={styles.sub}>{`${current.serviceName ?? 'Service'}${current.chairLabel ? ` · ${current.chairLabel}` : ''}${current.startedAt ? ` · started ${formatShopTime(current.startedAt, null)}` : ''}`}</Text>
+          <Button title="Complete service" onPress={confirmComplete} loading={busy === 'complete'} style={styles.button} />
+        </View>
+      ) : (
+        <Text style={styles.sub}>You are not serving anyone right now.</Text>
+      )}
+
+      <Text style={styles.heading}>{`Waiting you can take (${eligible.length})`}</Text>
+      {eligible.length === 0 ? (
+        <Text style={styles.sub}>Nobody waiting is eligible for you right now.</Text>
+      ) : (
+        eligible.map((w) => (
+          <Text key={w.queueEntryId} style={styles.row}>{`#${w.tokenNumber} · ${w.customerLabel} · ${w.serviceName ?? 'Service'} · position ${w.position}`}</Text>
+        ))
+      )}
+      {!current && eligible.length > 0 && work.availabilityState === 'AVAILABLE' && (
+        <Button
+          title="Take next customer"
+          variant="outline"
+          onPress={() => void run('take', () => apiFetch(ownerOpsPaths.queueTakeNext(salonId), { method: 'POST' }), 'Next customer assigned to you.')}
+          loading={busy === 'take'}
+          style={styles.button}
+        />
+      )}
+
+      <Text style={styles.heading}>{`My appointments today (${work.appointmentsToday.length})`}</Text>
+      {work.appointmentsToday.length === 0 ? (
+        <Text style={styles.sub}>No appointments booked with you today.</Text>
+      ) : (
+        work.appointmentsToday.map((a) => (
+          <Text key={a.bookingId} style={styles.row}>{`${formatShopTime(a.slotStart, null)} · ${a.customerLabel} · ${a.serviceNames.join(' + ')}${a.source === 'IN_SHOP' ? ' · In-shop' : ''}`}</Text>
+        ))
+      )}
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { marginBottom: space[4] },
+  title: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, lineHeight: lineHeightFor(fontSize.lg), color: color.ink },
+  heading: { fontFamily: font.bodyBold, fontSize: fontSize.xs, color: color.ink, marginTop: space[3], textTransform: 'uppercase', letterSpacing: 0.4 },
+  sub: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted, marginTop: space[1] },
+  strong: { fontFamily: font.bodySemiBold, fontSize: fontSize.base, color: color.ink },
+  row: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink, marginTop: space[1] },
+  block: { marginTop: space[1], padding: space[3], borderWidth: 1, borderColor: color.border, borderRadius: radius.sm },
+  button: { marginTop: space[2] },
+  notice: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink, marginTop: space[2] },
+});

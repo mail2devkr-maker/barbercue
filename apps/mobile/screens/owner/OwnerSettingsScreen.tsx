@@ -21,6 +21,7 @@ import { EmptyState, InlineError, PremiumCard, PremiumScreen, PremiumSectionHead
 import { PaymentQrSection, scope } from '../../components/owner/ShopSetupSections';
 import { OwnerVoiceSettingsCard } from '../../components/owner/OwnerVoiceSettingsCard';
 import { SalonSwitcher } from '../../components/owner/SalonSwitcher';
+import { BillingProfileCard, ShopContactVisibilityCard } from '../../components/owner/OwnerBusinessSettingsCards';
 import { ProfileSection, QueueQrSection, ShopStatusSection, TimezoneSection } from '../../components/owner/SettingsSections';
 import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 
@@ -104,6 +105,8 @@ export default function OwnerSettingsScreen() {
 
           <ProfileSection salonId={selectedSalonId} onSaved={() => reload()} />
           <PaymentQrSection salonId={selectedSalonId} paymentQr={paymentQr} onChanged={() => void load(selectedSalonId, false)} />
+          <ShopContactVisibilityCard salonId={selectedSalonId} />
+          <BillingProfileCard salonId={selectedSalonId} />
           <ShopStatusSection
             salonId={selectedSalonId}
             salon={salon}
