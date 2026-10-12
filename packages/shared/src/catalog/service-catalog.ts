@@ -661,11 +661,11 @@ export const SERVICE_CATALOG: readonly ServiceCatalogItem[] = [
 
 /** Match services consistently without changing the owner's display spelling. */
 export function normalizeServiceIdentity(name: string, category: string | null | undefined): string {
-  const normalizedName = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const normalizedName = name.trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, " ").trim();
   const normalizedCategory = (category ?? "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ")
     .trim();
   return `${normalizedCategory}::${normalizedName}`;
 }
