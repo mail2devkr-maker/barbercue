@@ -1,0 +1,47 @@
+name: Android QA Backend Isolation Certification
+
+on:
+  push:
+    branches:
+      - fix/android-qa-backend-fail-closed-20261013
+  pull_request:
+    paths:
+      - 'apps/mobile/lib/api.ts'
+      - 'apps/mobile/lib/qa-backend-isolation.ts'
+      - 'apps/mobile/lib/__tests__/qa-backend-isolation.test.ts'
+      - 'apps/mobile/.env.example'
+      - '.github/workflows/android-qa-backend-isolation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qa-android-bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exactly locked dependencies
+        run: npm ci
+      - name: Build shared package
+        run: npm run build:shared
+      - name: Android mobile TypeScript
+        run: npm run typecheck --workspace=@barbercue/mobile
+      - name: QA isolation security tests
+        run: npm run test --workspace=@barbercue/mobile -- --runInBand qa-backend-isolation
+      - name: Export QA Android JS bundle (no EAS publication)
+        env:
+          EXPO_PUBLIC_FASTQUE_QA_ISOLATED: 'true'
+          EXPO_PUBLIC_API_BASE_URL: 'http://10.0.2.2:3000/api/v1'
+          EXPO_NO_TELEMETRY: '1'
+          CI: '1'
+        working-directory: apps/mobile
+        run: npx expo export --platform android --output-dir /tmp/fastque-qa-android-export
+      - name: Check export artifact exists
+        run: |
+          test -d /tmp/fastque-qa-android-export
+          test -n "$(find /tmp/fastque-qa-android-export -type f -name '*.hbc' -o -name '*.js' | head -n 1)"
