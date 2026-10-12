@@ -19,6 +19,13 @@ export interface EmailSender {
     setupUrl: string,
     expiresInDays: number,
   ): Promise<void>;
+  /** Production returns SENT; local capture never exposes a live owner invite token. */
+  sendSalonOwnerInvitation(
+    email: string,
+    invitationUrl: string,
+    salonName: string,
+    expiresInDays: number,
+  ): Promise<'SENT' | 'DEV_NOT_DELIVERED'>;
 }
 
 export const EMAIL_SENDER = Symbol('EMAIL_SENDER');
@@ -50,6 +57,13 @@ export class ConsoleEmailSender implements EmailSender {
     );
     return Promise.resolve();
   }
+
+  sendSalonOwnerInvitation(): Promise<'DEV_NOT_DELIVERED'> {
+    this.logger.warn(
+      'Development shop-owner invitation created; no email was delivered.',
+    );
+    return Promise.resolve('DEV_NOT_DELIVERED');
+  }
 }
 
 /** Production fails truthfully until an explicitly approved transactional transport is bound. */
@@ -68,6 +82,10 @@ export class UnavailableProductionEmailSender implements EmailSender {
   }
 
   sendStaffInvitation(): Promise<void> {
+    this.assertAvailable();
+  }
+
+  sendSalonOwnerInvitation(): Promise<'SENT'> {
     this.assertAvailable();
   }
 }

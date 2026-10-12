@@ -1,0 +1,14 @@
+.page{width:min(1000px,100%);margin:auto;padding:28px 18px 70px;color:#f7f7fb;min-height:100vh;background:#09090c}
+.header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:24px}
+.header h1{font-size:clamp(2rem,5vw,3rem);letter-spacing:-.04em;margin:4px 0 8px}.header p{color:#afb0be;max-width:64ch}
+.eyebrow{color:#ff6f91!important;font-weight:750;font-size:.75rem;letter-spacing:.12em;text-transform:uppercase}
+.panel{background:#171720;border:1px solid #383842;border-radius:18px;padding:clamp(18px,3vw,28px);margin:18px 0}
+.panel h2{margin:0 0 14px}.identity{color:#aeb0bb;font-size:.85rem;overflow-wrap:anywhere}
+.inlineForm,.stack{display:grid;gap:9px;margin:20px 0}.inlineForm label,.stack{font-weight:700}
+.inlineForm>div{display:flex;gap:10px}.inlineForm input,.stack textarea{min-width:0;flex:1;min-height:46px;border:1px solid #52525c;border-radius:10px;background:#0d0d14;color:white;padding:10px 12px;font:16px inherit}
+.stack textarea{min-height:90px;width:100%;box-sizing:border-box;resize:vertical;margin-top:8px}
+.results{padding:0;list-style:none}.results li,.invitation{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #363642}.results small,.invitation small{display:block;color:#aaaab7;margin-top:4px;overflow-wrap:anywhere}
+.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.details div{background:#101018;border-radius:10px;padding:12px}.details dt{color:#aeb0bb;font-size:.8rem}.details dd{margin:5px 0 0;overflow-wrap:anywhere}
+.preview{border-top:1px solid #444450;padding-top:14px}.preview p{line-height:1.5}.warning{color:#ffd5af;background:#3a2619;padding:12px;border-radius:10px}.notice{color:#b8ebd1;background:#17352a;padding:12px;border-radius:10px}.error{color:#ffb6c7;background:#401b28;padding:12px;border-radius:10px}.confirm{display:flex;gap:10px;align-items:flex-start;margin:14px 0}.confirm input{width:20px;height:20px;flex:none}
+.audit{border-top:1px solid #444450;margin-top:24px;padding-top:14px}.audit ol{padding-left:20px}.audit li{padding:12px 0;border-bottom:1px solid #34343e}.audit small{display:block;color:#aaaab7;margin-top:5px;overflow-wrap:anywhere}.audit p{overflow-wrap:anywhere}
+@media(max-width:680px){.header,.inlineForm>div,.results li,.invitation{flex-direction:column;align-items:stretch}.details{grid-template-columns:1fr}.page{padding:20px 14px 60px}}

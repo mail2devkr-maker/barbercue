@@ -20,6 +20,7 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
 
   if (pathname === "/dashboard/admin") return true;
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
+  if (pathname.startsWith("/dashboard/admin/shops/owner-access")) return superAdmin;
   if (pathname.startsWith("/dashboard/admin/crm")) return superAdmin || coFounder || hr || sales;
   if (pathname.startsWith("/dashboard/admin/employees")) return superAdmin || coFounder || hr;
   if (pathname.startsWith("/dashboard/admin/verification")) return superAdmin || coFounder;

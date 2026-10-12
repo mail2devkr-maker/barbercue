@@ -153,6 +153,7 @@ export default function AdminDashboardPage() {
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
           {superAdmin && <LinkButton href="/dashboard/admin/access" variant="outline">Access</LinkButton>}
+          {superAdmin && <LinkButton href="/dashboard/admin/shops/owner-access" variant="outline">Manage owner access</LinkButton>}
           {canManageEmployees && <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>}
           {canOpenCrm && <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>}
           {canReviewVerification && <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>}
@@ -251,6 +252,7 @@ export default function AdminDashboardPage() {
                     ) : (
                       <>
                         <LinkButton href={`/dashboard/salons/${shop.id}/settings`} variant="secondary">Manage</LinkButton>
+                        {superAdmin && <LinkButton href={`/dashboard/admin/shops/owner-access?shop=${encodeURIComponent(shop.id)}`} variant="outline">Owner access</LinkButton>}
                         {getNextShopStatus(shop.status) && (
                           <Button type="button" variant={shop.status === SalonStatus.ACTIVE ? "outline" : "primary"} disabled={statusShopId === shop.id} onClick={() => void handleStatusChange(shop.id, shop.name, shop.status)}>
                             {statusShopId === shop.id ? "Saving…" : getNextShopStatus(shop.status)?.label}

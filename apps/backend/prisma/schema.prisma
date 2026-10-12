@@ -346,6 +346,9 @@ model User {
   manualChairOccupanciesStarted ManualChairOccupancy[] @relation("ManualChairOccupancyStartedBy")
   manualChairOccupanciesEnded   ManualChairOccupancy[] @relation("ManualChairOccupancyEndedBy")
   employeeProfile               EmployeeProfile?
+  ownerInvitationsReceived SalonOwnerInvitation[] @relation("OwnerInvitationTarget")
+  ownerInvitationsIssued   SalonOwnerInvitation[] @relation("OwnerInvitationAdmin")
+  ownerInvitationsPrevious SalonOwnerInvitation[] @relation("OwnerInvitationPreviousOwner")
 
   @@map("users")
 }
@@ -789,6 +792,7 @@ model Salon {
 
   userRoles             UserRole[]
   staff                 SalonStaff[]
+  ownerInvitations      SalonOwnerInvitation[]
   chairs                Chair[]
   services              Service[]
   bookings              Booking[]
@@ -810,6 +814,38 @@ model Salon {
 
   @@unique([cityId, slug])
   @@map("salons")
+}
+
+enum SalonOwnerInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+// Email links are stored only as hashes. An invitation never grants a role until it is accepted.
+model SalonOwnerInvitation {
+  id                  String @id @default(uuid())
+  salonId             String
+  salon               Salon @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  email               String @db.VarChar(320)
+  targetUserId        String?
+  targetUser          User? @relation("OwnerInvitationTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+  expectedOwnerUserId String
+  expectedOwner       User @relation("OwnerInvitationPreviousOwner", fields: [expectedOwnerUserId], references: [id], onDelete: Restrict)
+  actorUserId         String
+  actor               User @relation("OwnerInvitationAdmin", fields: [actorUserId], references: [id], onDelete: Restrict)
+  reason              String @db.VarChar(1000)
+  transferConfirmed   Boolean
+  tokenHash           String @unique @db.Char(64)
+  status              SalonOwnerInvitationStatus @default(PENDING)
+  expiresAt           DateTime
+  acceptedAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([salonId, status])
+  @@index([targetUserId, status])
+  @@map("salon_owner_invitations")
 }
 
 model SalonPaymentPolicy {

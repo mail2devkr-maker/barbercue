@@ -487,6 +487,18 @@ export const AuthErrorCode = {
 } as const;
 export type AuthErrorCode = (typeof AuthErrorCode)[keyof typeof AuthErrorCode];
 
+export const OwnerAccessErrorCode = {
+  SHOP_NOT_FOUND: 'OWNER_ACCESS_SHOP_NOT_FOUND',
+  ACCOUNT_UNAVAILABLE: 'OWNER_ACCESS_ACCOUNT_UNAVAILABLE',
+  EMAIL_AMBIGUOUS: 'OWNER_ACCESS_EMAIL_AMBIGUOUS',
+  TRANSFER_CONFIRMATION_REQUIRED: 'OWNER_ACCESS_TRANSFER_CONFIRMATION_REQUIRED',
+  STALE_OWNER: 'OWNER_ACCESS_STALE_OWNER',
+  INVITATION_INVALID: 'OWNER_ACCESS_INVITATION_INVALID',
+  INVITATION_EXPIRED: 'OWNER_ACCESS_INVITATION_EXPIRED',
+  INVITATION_CONFLICT: 'OWNER_ACCESS_INVITATION_CONFLICT',
+} as const;
+export type OwnerAccessErrorCode = (typeof OwnerAccessErrorCode)[keyof typeof OwnerAccessErrorCode];
+
 // Stable machine-readable error codes for the AI Style Advisor (major-upgrade phase) — same
 // convention as AuthErrorCode/BookingErrorCode.
 export const StyleAdvisorErrorCode = {

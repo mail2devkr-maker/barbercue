@@ -1,0 +1,151 @@
+name: Shop Owner Access Certification
+
+on:
+  push:
+    branches:
+      - codex/fastque-owner-email-mapping
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'apps/backend/prisma/**'
+      - 'apps/backend/src/admin/**'
+      - 'apps/backend/src/auth/services/email-sender.ts'
+      - 'apps/backend/src/auth/services/resend-email-sender.ts'
+      - 'apps/backend/test/owner-access.e2e-spec.ts'
+      - 'apps/web/app/(dashboard)/dashboard/admin/**'
+      - 'apps/web/app/(auth)/owner-invitation/**'
+      - 'apps/web/lib/admin-route-access.ts'
+      - 'packages/shared/**'
+      - '.github/workflows/shop-owner-access-certification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shop-owner-access-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: fastque_owner_access_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d fastque_owner_access_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/fastque_owner_access_ci?schema=public
+      PSQL_URL: postgresql://ci:ci@127.0.0.1:5432/fastque_owner_access_ci
+      NEXT_TELEMETRY_DISABLED: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared contracts
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate and validate Prisma client
+        run: |
+          npm run prisma:validate --workspace=@barbercue/backend
+          npm run prisma:generate --workspace=@barbercue/backend
+      - name: Apply initial migration and synthetic admin prerequisite
+        working-directory: apps/backend
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260801060723_init/migration.sql
+          npx prisma migrate resolve --applied 20260801060723_init
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "users" ("id", "email", "updatedAt")
+          VALUES ('ci-primary-admin', 'mail2dev.kr@gmail.com', CURRENT_TIMESTAMP);
+          SQL
+      - name: Seed disposable location prerequisites and apply complete migration chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_root="$(mktemp -d "$RUNNER_TEMP/fastque-owner-access-prisma.XXXXXX")"
+          trap 'rm -rf "$staging_root"' EXIT
+          mkdir -p "$staging_root/prisma/migrations"
+          cp apps/backend/prisma/schema.prisma "$staging_root/prisma/schema.prisma"
+          printf 'provider = "postgresql"\n' > "$staging_root/prisma/migration_lock.toml"
+          bootstrap_migration='20260826151700_add_global_location_master_data'
+          found_bootstrap=false
+          while IFS= read -r migration_dir; do
+            migration_name="$(basename "$migration_dir")"
+            cp -a "$migration_dir" "$staging_root/prisma/migrations/"
+            if [[ "$migration_name" == "$bootstrap_migration" ]]; then
+              found_bootstrap=true
+              break
+            fi
+          done < <(find apps/backend/prisma/migrations -mindepth 1 -maxdepth 1 -type d | sort)
+          test "$found_bootstrap" = true
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend -- --schema "$staging_root/prisma/schema.prisma"
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "Country" ("id", "isoCode2", "isoCode3", "name", "slug")
+          VALUES ('ci-country-india', 'IN', 'IND', 'India', 'india-ci');
+          INSERT INTO "Region" ("id", "countryId", "code", "name", "slug")
+          VALUES
+            ('ci-region-uttar-pradesh', 'ci-country-india', 'IN-UP', 'Uttar Pradesh', 'uttar-pradesh-ci'),
+            ('ci-region-odisha', 'ci-country-india', 'IN-OR', 'Odisha', 'odisha-ci');
+          SQL
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend
+      - name: Assert owner-invitation schema and canonical migration checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_name='20261013120000_salon_owner_invitations'
+          migration_file="apps/backend/prisma/migrations/$migration_name/migration.sql"
+          expected_checksum="$(sha256sum "$migration_file" | cut -d ' ' -f 1)"
+          recorded_checksum="$(psql "$PSQL_URL" -Atqc "SELECT checksum FROM _prisma_migrations WHERE migration_name = '$migration_name' AND finished_at IS NOT NULL AND rolled_back_at IS NULL")"
+          test "$recorded_checksum" = "$expected_checksum"
+          expected_count="$(find apps/backend/prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+          applied_count="$(psql "$PSQL_URL" -Atqc "SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL")"
+          test "$applied_count" = "$expected_count"
+          echo "Applied and checksummed $applied_count committed migrations"
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'salon_owner_invitations_one_pending_per_salon') THEN
+              RAISE EXCEPTION 'pending invitation uniqueness index missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'salon_owner_invitations_tokenHash_key') THEN
+              RAISE EXCEPTION 'token hash uniqueness index missing';
+            END IF;
+            IF (SELECT count(*) FROM pg_constraint WHERE conrelid = 'salon_owner_invitations'::regclass AND contype = 'f') <> 4 THEN
+              RAISE EXCEPTION 'owner invitation foreign keys missing';
+            END IF;
+          END $$;
+          SQL
+      - name: Authenticated owner mapping and invitation PostgreSQL E2E
+        env:
+          OWNER_ACCESS_DB_E2E: '1'
+        run: npm run test:e2e --workspace=@barbercue/backend -- --runInBand owner-access.e2e-spec.ts
+      - name: Shared tests and workspace typechecks
+        run: |
+          npm test --workspace=@barbercue/shared -- --runInBand
+          npm test --workspace=@barbercue/web -- --runInBand components/auth/__tests__/admin-route-access.test.jsx
+          npm run typecheck --workspace=@barbercue/backend
+          npm run typecheck --workspace=@barbercue/web
+      - name: Scoped production-source lint
+        run: |
+          (cd apps/backend && npx eslint src/admin/admin-salon-owner-access.service.ts src/admin/admin-salon-owner-access.controller.ts src/admin/admin.module.ts src/auth/services/email-sender.ts src/auth/services/resend-email-sender.ts --no-fix)
+          (cd apps/web && npx eslint 'app/(dashboard)/dashboard/admin/shops/owner-access/page.tsx' 'app/(auth)/owner-invitation/accept/page.tsx' 'app/(dashboard)/dashboard/admin/page.tsx' lib/admin-route-access.ts --no-fix)
+      - name: Production builds
+        run: |
+          npm run build --workspace=@barbercue/backend
+          npm run build --workspace=@barbercue/web
+      - name: Diff whitespace check
+        run: git diff --check
