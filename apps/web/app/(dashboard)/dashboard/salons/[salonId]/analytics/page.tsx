@@ -408,6 +408,7 @@ export default function DashboardAnalyticsPage({
           <button
             key={item}
             type="button"
+            aria-pressed={range === item}
             onClick={() => setRange(item)}
             style={{
               padding: "6px 14px",

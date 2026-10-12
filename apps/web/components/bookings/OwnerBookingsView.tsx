@@ -425,6 +425,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
             key={f}
             type="button"
             className={`${styles.filterChip} ${filter === f ? styles.filterChipActive : ""}`}
+            aria-pressed={filter === f}
             onClick={() => setFilter(f)}
           >
             {FILTER_LABEL[f]}
