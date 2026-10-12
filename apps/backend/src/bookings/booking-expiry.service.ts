@@ -109,13 +109,17 @@ export class BookingExpiryService {
           },
         });
 
-        await this.notifications.notifyInTransaction(
-          tx,
-          booking.customerId,
-          'booking.expired',
-          { salonId: booking.salonId },
-          'account/bookings',
-        );
+        // Only a PENDING_PAYMENT online booking can expire, and those always have an account; the
+        // guard keeps the types honest for IN_SHOP rows (no customer to notify).
+        if (booking.customerId) {
+          await this.notifications.notifyInTransaction(
+            tx,
+            booking.customerId,
+            'booking.expired',
+            { salonId: booking.salonId },
+            'account/bookings',
+          );
+        }
         await this.notifications.notifyInTransaction(
           tx,
           booking.salon.ownerUserId,

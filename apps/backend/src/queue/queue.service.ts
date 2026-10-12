@@ -143,8 +143,13 @@ export class QueueService {
       slotStart: Date;
       status: BookingStatus;
       serviceId: string;
+      // Owner-operations mission — an IN_SHOP appointment has no account: the guest's name/consented
+      // phone travel onto the queue entry so staff see who has arrived (never a fabricated user).
+      guestName?: string | null;
+      guestPhone?: string | null;
+      preferredStaffId?: string | null;
     },
-    customerId: string,
+    customerId: string | null,
   ): Promise<QueueEntryDetailDto> {
     if (booking.status !== BookingStatus.CONFIRMED) {
       throw new AppException(
@@ -165,7 +170,7 @@ export class QueueService {
       );
     }
 
-    await this.assertNotAlreadyInQueue(customerId);
+    if (customerId) await this.assertNotAlreadyInQueue(customerId);
 
     const earliestCheckIn =
       booking.slotStart.getTime() - EARLY_CHECKIN_WINDOW_MINUTES * 60_000;
@@ -190,6 +195,13 @@ export class QueueService {
             source: QueueEntrySource.APPOINTMENT,
             tokenNumber,
             status: QueueEntryStatus.WAITING,
+            ...(customerId === null
+              ? {
+                  contactName: booking.guestName ?? null,
+                  contactPhone: booking.guestPhone ?? null,
+                  preferredStaffId: booking.preferredStaffId ?? null,
+                }
+              : {}),
             // An appointment entry only exists because arrival was confirmed — by the customer's
             // own check-in or the owner's ARRIVED confirmation — so it is arrived from the start.
             arrivedAt: new Date(),

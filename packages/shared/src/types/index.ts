@@ -550,7 +550,10 @@ export interface PaginatedResult<T> {
 export interface BookingDto {
   id: string;
   salonId: string;
-  customerId: string;
+  // Null ONLY for an IN_SHOP appointment a shop operator created for someone without an account
+  // (see BookingSource.IN_SHOP). Every customer-facing endpoint only ever returns the caller's own
+  // bookings, so a customer's client always receives a value here.
+  customerId: string | null;
   // Multi-service booking core mission: the PRIMARY (first-selected) service only, kept for every
   // consumer that predates multi-service bookings and still needs exactly one id — QueueEntry/
   // ServiceSession linkage at check-in time, and any read-only display that hasn't been updated to
@@ -641,6 +644,10 @@ export interface BookingDetailDto extends BookingDto {
   // ISO-4217 of the salon this booking belongs to; null when unknown.
   currency: string | null;
   salonName: string;
+  // Owner-operations mission — the shop's public phone, present ONLY when the owner has chosen to
+  // publish it (Salon.showPhoneToCustomers). Drives the "Call shop" action for rescheduling,
+  // cancellation questions and penalty disputes. Optional so older clients keep working.
+  shopPhone?: string | null;
   salonSlug: string;
   citySlug: string;
   salonCountryCode: string;
@@ -718,6 +725,14 @@ export type OwnerBookingFilter = (typeof OWNER_BOOKING_FILTERS)[number];
 export interface OwnerBookingDetailDto extends BookingDetailDto {
   customerPhone: string | null;
   customerEmail: string | null;
+  // Owner-operations mission — in-shop appointment provenance and trusted cancellation
+  // attribution. All optional/nullable so an older client that predates them keeps working.
+  // guestName/guestPhone are set only on BookingSource.IN_SHOP rows; internalNote is staff-only.
+  guestName?: string | null;
+  guestPhone?: string | null;
+  internalNote?: string | null;
+  cancelledByActor?: 'CUSTOMER' | 'OWNER' | 'STAFF' | 'SYSTEM' | 'ADMIN' | null;
+  cancellationReason?: string | null;
   // The barber actually assigned at queue check-in (QueueEntry.assignedStaffId), distinct from
   // preferredStaffId/preferredStaffName above (the customer's soft preference at booking time).
   // Null until the booking reaches check-in.
@@ -1035,6 +1050,11 @@ export const NOTIFICATION_TYPES = [
   // 'owner.booking.no_show' (a terminal, financially-consequential state) and from
   // 'booking.reminder' (customer-facing, much larger lead window).
   'owner.booking.arrival_check',
+  // Owner-operations mission — told to a customer when THE SHOP cancels or moves their booking.
+  // Distinct from 'booking.cancelled' (the customer's own cancellation echoed back) so the copy,
+  // deep link and delivery ledger can never confuse who did what.
+  'booking.cancelled_by_shop',
+  'booking.rescheduled_by_shop',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

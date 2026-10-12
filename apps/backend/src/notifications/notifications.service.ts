@@ -32,6 +32,8 @@ const TYPE_CATEGORY: Record<NotificationType, NotificationCategory> = {
   'owner.walk_in.joined': NotificationCategory.QUEUE_UPDATES,
   'staff.assigned': NotificationCategory.QUEUE_UPDATES,
   'owner.booking.arrival_check': NotificationCategory.BOOKING_UPDATES,
+  'booking.cancelled_by_shop': NotificationCategory.BOOKING_UPDATES,
+  'booking.rescheduled_by_shop': NotificationCategory.BOOKING_UPDATES,
 };
 
 const ALL_CATEGORIES: NotificationCategory[] = [
