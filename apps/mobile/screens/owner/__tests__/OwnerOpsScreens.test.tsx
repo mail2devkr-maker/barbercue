@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { act, createElement } from 'react';
+import { act, createElement, type ReactElement } from 'react';
 import TestRenderer from 'react-test-renderer';
 import { Share } from 'react-native';
 import { apiFetch } from '../../../lib/api';
@@ -93,7 +93,7 @@ const tap = async (title: string) => {
   });
 };
 const type = async (testID: string, value: string) => act(async () => byTestId(testID).props.onChangeText(value));
-async function render(component: () => JSX.Element | null) {
+async function render(component: () => ReactElement | null) {
   await act(async () => {
     tree = TestRenderer.create(createElement(component));
   });
