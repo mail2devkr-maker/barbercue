@@ -1,4 +1,4 @@
-import { DASHBOARD_PATHS, QueueErrorCode, type UiStrings } from '@barbercue/shared';
+import { DASHBOARD_PATHS, OwnerOpsErrorCode, QueueErrorCode, type UiStrings } from '@barbercue/shared';
 
 // The owner/staff queue mutations all live on DashboardQueueController, which is mounted under
 // `dashboard/`. The Live Queue used to call `queue-entries/:id/call` (no prefix) and every action —
@@ -25,7 +25,9 @@ interface ApiErrorLike {
   message?: unknown;
 }
 
-const CURATED_QUEUE_CODES: ReadonlySet<string> = new Set(Object.values(QueueErrorCode));
+// The owner-operations codes ("Every qualified barber is busy...", "This customer has not arrived...") are
+// just as human-written as the queue ones, so an owner is told the real reason, not a generic failure.
+const CURATED_QUEUE_CODES: ReadonlySet<string> = new Set([...Object.values(QueueErrorCode), ...Object.values(OwnerOpsErrorCode)]);
 
 /**
  * Turns a failed queue action into copy an owner can act on. Never surfaces raw transport/router
