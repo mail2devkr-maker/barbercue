@@ -44,7 +44,7 @@ describe('ServiceCatalogImportService', () => {
     await expect(subject.saveReviewed('actor', 'salon', { services: [
       { name: 'Haircut', price: 150, durationMinutes: 30 },
       { name: 'Haircut', price: 200, durationMinutes: 40 },
-    ] })).rejects.toThrow(/duplicate/i);
+    ] })).rejects.toThrow(/only one copy/i);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
