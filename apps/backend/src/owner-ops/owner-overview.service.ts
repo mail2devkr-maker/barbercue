@@ -125,7 +125,7 @@ export class OwnerOverviewService {
       this.queueSummary(salonId, dayWindow),
       this.prisma.salonStaff.findMany({
         where: { salonId, accessRevokedAt: null },
-        select: { id: true, displayName: true, status: true },
+        select: { id: true, displayName: true, status: true, photoUrl: true },
         orderBy: { displayName: 'asc' },
       }),
       this.prisma.serviceSession.findMany({
@@ -659,7 +659,12 @@ export class OwnerOverviewService {
 
   private async staffPerformance(
     salon: SalonCtx,
-    staff: { id: string; displayName: string; status: string }[],
+    staff: {
+      id: string;
+      displayName: string;
+      status: string;
+      photoUrl: string | null;
+    }[],
     busyIds: Set<string>,
     dayStart: Date,
     today: string,
@@ -713,6 +718,7 @@ export class OwnerOverviewService {
           ),
         ),
         rating: null,
+        photoUrl: member.photoUrl,
       };
     });
   }
@@ -735,7 +741,14 @@ export class OwnerOverviewService {
         },
       },
       include: {
-        service: { select: { name: true, durationMinutes: true, price: true } },
+        service: {
+          select: {
+            name: true,
+            durationMinutes: true,
+            price: true,
+            category: true,
+          },
+        },
         services: { orderBy: { sortOrder: 'asc' } },
         preferredStaff: { select: { displayName: true } },
         queueEntries: {
@@ -760,6 +773,7 @@ export class OwnerOverviewService {
       // FastQue stores no customer display name for account holders: never derive one from a
       // phone or e-mail. An in-shop guest has the name the shop typed in.
       customerLabel: b.guestName ?? GUEST_LABEL,
+      category: b.service?.category ?? null,
       staffName:
         b.queueEntries[0]?.assignedStaff?.displayName ??
         b.preferredStaff?.displayName ??

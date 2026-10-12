@@ -130,6 +130,7 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   refresh: <path d="M20 8a8 8 0 0 0-14-2.5L4 8M4 4v4h4M4 16a8 8 0 0 0 14 2.5L20 16M20 20v-4h-4" />,
+  arrowUpRight: <path d="M7 17 17 7M8.5 7H17v8.5" />,
 };
 
 export type IconName = keyof typeof PATHS;

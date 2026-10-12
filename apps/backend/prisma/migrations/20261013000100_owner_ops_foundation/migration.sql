@@ -195,12 +195,15 @@ ALTER TABLE "invoice_payments" ADD CONSTRAINT "invoice_payments_invoiceId_fkey" 
 
 -- A booking is either an in-shop appointment (no account, a named guest, a named creator) or a
 -- normal booking with a customer account. Never neither, never both.
+-- Added NOT VALID and then validated, so existing rows are checked under a lock that does not block
+-- concurrent bookings from being written (a plain ADD CONSTRAINT would hold ACCESS EXCLUSIVE for the scan).
 ALTER TABLE "bookings"
   ADD CONSTRAINT "bookings_customer_or_in_shop_guest_check"
   CHECK (
     ("source" = 'IN_SHOP' AND "customerId" IS NULL AND "guestName" IS NOT NULL AND "createdByUserId" IS NOT NULL)
     OR ("source" <> 'IN_SHOP' AND "customerId" IS NOT NULL)
-  );
+  ) NOT VALID;
+ALTER TABLE "bookings" VALIDATE CONSTRAINT "bookings_customer_or_in_shop_guest_check";
 
 -- An invoice refers to exactly one real visit, and a visit has at most one ISSUED invoice (a VOID
 -- one may be replaced). Partial unique indexes make repeated/concurrent issuance a database-level

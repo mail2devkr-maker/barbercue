@@ -6,11 +6,12 @@ import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { OwnerOverviewDto, OwnerRevenueDto, PeriodComparisonDto, QueueEntryDetailDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
-import { BarChart, LineChart, ShareBar } from "./charts";
-import { formatMoney, formatPercentChange, formatShopDate, formatShopTime, greetingFor, shopHour } from "./format";
+import { AreaChart, BarChart, ShareBar } from "./charts";
+import { DaySchedule } from "./DaySchedule";
+import { formatMoney, formatPercentChange, formatShopDate, formatShopTime, initialsOf } from "./format";
 import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
-import { Badge, Banner, Btn, BtnLink, Card, EmptyState, Kpi, PageHead, Skeleton, Tabs } from "./parts";
-import { Icon } from "./icons";
+import { Banner, Btn, BtnLink, Card, EmptyState, PageHead, Skeleton, Tabs } from "./parts";
+import { Icon, type IconName } from "./icons";
 import ui from "./owner.module.css";
 
 const REFRESH_MS = 60_000;
@@ -42,6 +43,63 @@ const ACTOR_COLOR: Record<string, string> = {
   ADMIN: "#1a1533",
   UNKNOWN: "#98a2b3",
 };
+const SERVICE_TINTS = [ui.svcIconGreen, ui.svcIconPink, ui.svcIconBlue];
+const BRANCH_TINTS = [ui.branchBarPink, ui.branchBarLilac, ui.branchBarGreen, ui.branchBarBlue];
+
+/** Large, scannable figure with a small icon chip - the three headline cards beside the greeting. */
+function HeadlineCard({ label, value, foot, icon, href }: { label: string; value: React.ReactNode; foot: string; icon: IconName; href?: string }) {
+  const body = (
+    <>
+      <div className={ui.headlineTop}>
+        <span className={ui.headlineLabel}>{label}</span>
+        <span className={ui.headlineIcon}>
+          <Icon name={icon} size={16} />
+        </span>
+      </div>
+      <div className={ui.headlineValue}>{value}</div>
+      <div className={ui.headlineFoot}>{foot}</div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className={`${ui.card} ${ui.headlineCard} ${ui.kpiLinkCard}`}>
+      {body}
+    </Link>
+  ) : (
+    <div className={`${ui.card} ${ui.headlineCard}`}>{body}</div>
+  );
+}
+
+/** Compact figure for the "today at a glance" strip. */
+function GlanceCard({ label, value, foot, icon, tone, href }: { label: string; value: React.ReactNode; foot: string; icon: IconName; tone: "ok" | "warn" | "info" | "brand"; href?: string }) {
+  const tint = tone === "ok" ? ui.kpiIconOk : tone === "warn" ? ui.kpiIconWarn : tone === "info" ? ui.kpiIconInfo : "";
+  const body = (
+    <>
+      <span className={`${ui.kpiIcon} ${tint}`}>
+        <Icon name={icon} size={16} />
+      </span>
+      <div className={ui.glanceText}>
+        <div className={ui.glanceLabel}>{label}</div>
+        <div className={ui.glanceValue}>{value}</div>
+        <div className={ui.glanceFoot}>{foot}</div>
+      </div>
+    </>
+  );
+  return href ? (
+    <Link href={href} className={`${ui.card} ${ui.glanceCard} ${ui.kpiLinkCard}`}>
+      {body}
+    </Link>
+  ) : (
+    <div className={`${ui.card} ${ui.glanceCard}`}>{body}</div>
+  );
+}
+
+function CardLinkIcon({ href, label }: { href: string; label: string }) {
+  return (
+    <Link href={href} className={ui.cardArrow} aria-label={label} title={label}>
+      <Icon name="arrowUpRight" size={16} />
+    </Link>
+  );
+}
 
 export function OwnerOverview({ salonId }: { salonId: string }) {
   const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
@@ -96,6 +154,8 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
     return series.map((p) => ({ label: label(p.date), value: p.amount }));
   }, [data, revenueView]);
 
+  const staffNames = useMemo(() => (data ? data.staffPerformance.filter((s) => s.status === "ACTIVE").map((s) => s.displayName) : []), [data]);
+
   if (error && !data) {
     return (
       <>
@@ -132,7 +192,6 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
   }
 
   const k = data.kpis;
-  const hour = shopHour(data.timezone);
   const today = new Intl.DateTimeFormat("en-IN", { timeZone: data.timezone, weekday: "long", day: "numeric", month: "long" }).format(new Date());
   const qs = data.queueSummary;
   const revenue = data.revenue;
@@ -141,65 +200,78 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
     value: data.cancellationSummary.byActor[actor] ?? 0,
     color: ACTOR_COLOR[actor],
   }));
+  const rangeTotal = revenuePoints.reduce((sum, p) => sum + p.value, 0);
+  const rangeLabel = revenueView === "daily" ? "last 14 days" : revenueView === "weekly" ? "recent weeks" : "recent months";
+  const topPerformer = [...data.staffPerformance].filter((s) => s.completedLast30Days > 0).sort((a, b) => b.completedLast30Days - a.completedLast30Days || b.completedToday - a.completedToday)[0] ?? null;
+  const branchMax = Math.max(...data.branches.map((b) => b.recordedRevenueToday), 1);
 
   return (
     <>
       {notice && <Banner tone="ok">{notice}</Banner>}
       {error && <Banner tone="warn">{error.message} Showing the last loaded numbers.</Banner>}
 
-      <section className={ui.welcome} aria-label="Welcome">
-        <div>
-          <p className={ui.welcomeSub}>{today}</p>
-          <h1 className={ui.welcomeTitle}>
-            {greetingFor(hour)}, {data.salonName}
-          </h1>
-          <p className={ui.welcomeSub}>
-            {qs.waiting > 0 ? `${qs.waiting} customer${qs.waiting === 1 ? " is" : "s are"} waiting` : "Nobody is waiting right now"} · {k.availableBarbers} barber{k.availableBarbers === 1 ? "" : "s"} free
+      <section className={ui.ovTop} aria-label="Welcome">
+        <div className={ui.ovWelcome}>
+          <p className={ui.welcomeHello}>Welcome back,</p>
+          <h1 className={ui.welcomeName}>{data.salonName}</h1>
+          <p className={ui.welcomeLine}>
+            {today} · {qs.waiting > 0 ? `${qs.waiting} customer${qs.waiting === 1 ? " is" : "s are"} waiting` : "Nobody is waiting right now"} · {k.availableBarbers} barber{k.availableBarbers === 1 ? "" : "s"} free
           </p>
+          <div className={ui.welcomeButtons}>
+            <Btn variant="primary" icon="plus" onClick={() => setAddOpen(true)}>
+              New Live Queue customer
+            </Btn>
+            <BtnLink variant="secondary" href={`/dashboard/salons/${salonId}/bookings/new`} icon="calendar">
+              New in-shop appointment
+            </BtnLink>
+            <BtnLink variant="secondary" href={`/dashboard/salons/${salonId}/queue`} icon="queue">
+              Open Live Queue
+            </BtnLink>
+          </div>
         </div>
-        <div className={ui.welcomeActions}>
-          <Btn variant="secondary" className={ui.welcomeBtn} icon="plus" onClick={() => setAddOpen(true)}>
-            New Live Queue customer
-          </Btn>
-          <BtnLink variant="secondary" className={ui.welcomeBtnGhost} href={`/dashboard/salons/${salonId}/bookings/new`} icon="calendar">
-            New in-shop appointment
-          </BtnLink>
-          <BtnLink variant="secondary" className={ui.welcomeBtnGhost} href={`/dashboard/salons/${salonId}/queue`} icon="queue">
-            Open Live Queue
-          </BtnLink>
+        <div className={ui.headline3} role="list" aria-label="Today">
+          <HeadlineCard label="Appointments today" value={k.appointmentsToday} foot="Booked for today" icon="calendar" href={`/dashboard/salons/${salonId}/schedule`} />
+          <HeadlineCard label="Customers served" value={k.customersServedToday} foot="Finished today" icon="users" />
+          <HeadlineCard label="Active staff" value={k.activeStaff} foot="Clocked in" icon="team" href={`/dashboard/salons/${salonId}/staff`} />
         </div>
       </section>
 
-      <div className={`${ui.grid} ${ui.kpiGrid}`} role="list" aria-label="Today at a glance">
-        <Kpi label="Today's appointments" value={k.appointmentsToday} icon="calendar" tone="info" href={`/dashboard/salons/${salonId}/schedule`} foot="Booked for today" />
-        <Kpi label="Customers served" value={k.customersServedToday} icon="users" tone="ok" foot="Finished today" />
-        <Kpi label="Waiting in Live Queue" value={k.waitingInQueue} icon="queue" tone="warn" href={`/dashboard/salons/${salonId}/queue?view=waiting`} foot="Not yet seated" />
-        <Kpi label="In service now" value={k.inService} icon="scissors" tone="ok" href={`/dashboard/salons/${salonId}/queue?view=in-service`} foot="Seated customers" />
-        <Kpi label="Revenue recorded today" value={revenue.hasRecordedPayments ? money(k.recordedRevenueToday) : "—"} icon="rupee" foot={revenue.hasRecordedPayments ? `${k.recordedPaymentsToday} payment${k.recordedPaymentsToday === 1 ? "" : "s"} recorded` : "No payments recorded yet"} href={`/dashboard/salons/${salonId}/revenue`} />
-        <Kpi label="Barbers available" value={k.availableBarbers} icon="team" tone="ok" foot="On duty and free" />
-        <Kpi label="Barbers busy" value={k.busyBarbers} icon="scissors" tone="warn" foot="With a customer" />
-        <Kpi label="Active staff" value={k.activeStaff} icon="users" tone="info" href={`/dashboard/salons/${salonId}/staff`} foot="Clocked in" />
-        <Kpi label="Services completed" value={k.completedServicesToday} icon="check" tone="ok" foot="Today" />
-        <Kpi label="Cancelled today" value={k.cancelledToday} icon="alert" tone="warn" href={`/dashboard/salons/${salonId}/cancellations`} foot="Bookings cancelled" />
+      <div className={ui.glanceStrip} role="list" aria-label="Today at a glance">
+        <GlanceCard label="Waiting in Live Queue" value={k.waitingInQueue} foot="Not yet seated" icon="queue" tone="warn" href={`/dashboard/salons/${salonId}/queue?view=waiting`} />
+        <GlanceCard label="In service now" value={k.inService} foot="Seated customers" icon="scissors" tone="ok" href={`/dashboard/salons/${salonId}/queue?view=in-service`} />
+        <GlanceCard label="Revenue recorded today" value={revenue.hasRecordedPayments ? money(k.recordedRevenueToday) : "—"} foot={revenue.hasRecordedPayments ? `${k.recordedPaymentsToday} payment${k.recordedPaymentsToday === 1 ? "" : "s"} recorded` : "No payments recorded yet"} icon="rupee" tone="brand" href={`/dashboard/salons/${salonId}/revenue`} />
+        <GlanceCard label="Barbers available" value={k.availableBarbers} foot="On duty and free" icon="team" tone="ok" />
+        <GlanceCard label="Barbers busy" value={k.busyBarbers} foot="With a customer" icon="scissors" tone="warn" />
+        <GlanceCard label="Services completed" value={k.completedServicesToday} foot="Today" icon="check" tone="ok" />
+        <GlanceCard label="Cancelled today" value={k.cancelledToday} foot="Bookings cancelled" icon="alert" tone="warn" href={`/dashboard/salons/${salonId}/cancellations`} />
       </div>
 
-      <div className={`${ui.grid} ${ui.twoCol} ${ui.mt16}`}>
+      <div className={ui.ovGrid}>
         <Card
           title="Revenue overview"
           sub="Money your shop recorded as received, after recorded refunds"
           action={
-            <Tabs
-              label="Revenue range"
-              value={revenueView}
-              onChange={setRevenueView}
-              tabs={[
-                { id: "daily", label: "Daily" },
-                { id: "weekly", label: "Weekly" },
-                { id: "monthly", label: "Monthly" },
-              ]}
-            />
+            <div className={ui.cardActions}>
+              <Tabs
+                label="Revenue range"
+                value={revenueView}
+                onChange={setRevenueView}
+                tabs={[
+                  { id: "daily", label: "Daily" },
+                  { id: "weekly", label: "Weekly" },
+                  { id: "monthly", label: "Monthly" },
+                ]}
+              />
+              <CardLinkIcon href={`/dashboard/salons/${salonId}/revenue`} label="Open revenue details" />
+            </div>
           }
         >
+          <div className={ui.bigFigure}>
+            <div className={ui.bigFigureLabel}>Recorded revenue · {rangeLabel}</div>
+            <div className={ui.bigFigureRow}>
+              <span className={ui.bigFigureValue}>{revenue.hasRecordedPayments ? money(rangeTotal) : "—"}</span>
+            </div>
+          </div>
           {!revenue.hasRecordedPayments && (
             <Banner tone="info">
               No payments have been recorded yet, so there is no revenue to show. Revenue appears here once you record a payment on an{" "}
@@ -210,14 +282,27 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
             </Banner>
           )}
           {revenueView === "daily" ? (
-            <LineChart points={revenuePoints} formatValue={moneyCompact} ariaLabel="Daily recorded revenue, last 14 days" />
+            <AreaChart points={revenuePoints} formatValue={moneyCompact} ariaLabel="Daily recorded revenue, last 14 days" />
           ) : (
             <BarChart points={revenuePoints} formatValue={moneyCompact} ariaLabel={`${revenueView === "weekly" ? "Weekly" : "Monthly"} recorded revenue`} />
           )}
+          <div className={ui.tilePair}>
+            <div className={`${ui.tile} ${ui.tileGreen}`}>
+              <div className={ui.tileLabel}>This week recorded</div>
+              <div className={ui.tileValue}>{money(revenue.thisWeek.current)}</div>
+              <Delta comparison={revenue.thisWeek} label="vs same days last week" />
+            </div>
+            <Link href={`/dashboard/salons/${salonId}/invoices`} className={`${ui.tile} ${ui.tileAmber}`}>
+              <div className={ui.tileLabel}>Awaiting payment</div>
+              <div className={ui.tileValue}>{money(revenue.unpaidInvoiceTotal)}</div>
+              <div className={ui.tileFoot}>
+                {revenue.unpaidInvoiceCount} invoice{revenue.unpaidInvoiceCount === 1 ? "" : "s"} still due
+              </div>
+            </Link>
+          </div>
           <div className={`${ui.statGrid} ${ui.mt12}`}>
             {[
               { label: "Today", c: revenue.today, vs: "vs yesterday" },
-              { label: "This week", c: revenue.thisWeek, vs: "vs same days last week" },
               { label: "This month", c: revenue.thisMonth, vs: "vs same days last month" },
             ].map(({ label, c, vs }) => (
               <div key={label} className={ui.stat}>
@@ -226,11 +311,6 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
                 <Delta comparison={c} label={vs} />
               </div>
             ))}
-            <div className={ui.stat}>
-              <div className={ui.statLabel}>Invoices awaiting payment</div>
-              <div className={ui.statValue}>{revenue.unpaidInvoiceCount}</div>
-              <div className={ui.cardSub}>{money(revenue.unpaidInvoiceTotal)} still due</div>
-            </div>
           </div>
           {revenue.estimatedServiceValueToday > 0 && (
             <p className={ui.cardSub} style={{ marginTop: 10 }}>
@@ -239,63 +319,145 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
           )}
         </Card>
 
-        <div className={ui.sideStack}>
-          <Card
-            title="Live Queue"
-            action={
-              <Link href={`/dashboard/salons/${salonId}/queue`} className={ui.cardLink}>
-                Open
-              </Link>
-            }
-          >
-            <div className={ui.statGrid} style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-              <div className={ui.stat}>
-                <div className={ui.statLabel}>Waiting</div>
-                <div className={ui.statValue}>{qs.waiting}</div>
+        <div className={ui.ovCol}>
+          <Card title="Top services" sub="Last 30 days" action={<CardLinkIcon href={`/dashboard/salons/${salonId}/analytics`} label="Open full analytics" />}>
+            {data.topServices.length === 0 ? (
+              <EmptyState title="No completed services yet">Completed services will appear here with their popularity and recorded revenue.</EmptyState>
+            ) : (
+              <div className={ui.tableWrap}>
+                <table className={ui.table}>
+                  <thead>
+                    <tr>
+                      <th>Services</th>
+                      <th className={ui.num}>Avg. price</th>
+                      <th className={ui.num}>Done</th>
+                      <th className={ui.num}>Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.topServices.map((s, index) => (
+                      <tr key={s.serviceId ?? s.name} title={`${s.popularityPercent}% of completed services`}>
+                        <td>
+                          <span className={ui.svcCell}>
+                            <span className={`${ui.svcIcon} ${SERVICE_TINTS[index % SERVICE_TINTS.length]}`}>
+                              <Icon name="scissors" size={14} />
+                            </span>
+                            <strong>{s.name}</strong>
+                          </span>
+                        </td>
+                        <td className={`${ui.num} ${s.averageChargedAmount === null ? ui.mutedCell : ""}`}>{s.averageChargedAmount === null ? "No invoices" : money(s.averageChargedAmount)}</td>
+                        <td className={ui.num}>{s.completedCount}</td>
+                        <td className={ui.num}>{money(s.recordedRevenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div className={ui.stat}>
-                <div className={ui.statLabel}>Called</div>
-                <div className={ui.statValue}>{qs.called}</div>
-              </div>
-              <div className={ui.stat}>
-                <div className={ui.statLabel}>In service</div>
-                <div className={ui.statValue}>{qs.inService}</div>
-              </div>
-              <div className={ui.stat}>
-                <div className={ui.statLabel}>Completed</div>
-                <div className={ui.statValue}>{qs.completedToday}</div>
-              </div>
-              <div className={ui.stat}>
-                <div className={ui.statLabel}>Cancelled</div>
-                <div className={ui.statValue}>{qs.cancelledToday + qs.expiredToday}</div>
-              </div>
-              <div className={ui.stat}>
-                <div className={ui.statLabel}>No-show</div>
-                <div className={ui.statValue}>{qs.noShowToday}</div>
-              </div>
-            </div>
-            <p className={ui.cardSub} style={{ marginTop: 10 }}>
-              Each person is counted once: seated customers are not also counted as waiting.
+            )}
+            <p className={ui.cardSub} style={{ marginTop: 8 }}>
+              Revenue counts fully paid invoices only; average price is taken from issued invoices.
             </p>
-            <div className={`${ui.rowWrap} ${ui.mt12}`}>
-              <Btn variant="primary" small icon="plus" onClick={() => setAddOpen(true)}>
-                New customer
-              </Btn>
-              <BtnLink small href={`/dashboard/salons/${salonId}/queue?view=waiting`}>
-                See waiting list
-              </BtnLink>
-            </div>
           </Card>
 
-          <Card
-            title="Cancellations"
-            sub={`Last ${data.cancellationSummary.windowDays} days`}
-            action={
-              <Link href={`/dashboard/salons/${salonId}/cancellations`} className={ui.cardLink}>
-                Details
-              </Link>
-            }
-          >
+          <div className={ui.ovPair}>
+            <Card title="Live Queue" action={<CardLinkIcon href={`/dashboard/salons/${salonId}/queue`} label="Open the Live Queue" />}>
+              <div className={`${ui.statGrid} ${ui.statGridCompact}`}>
+                {[
+                  ["Waiting", qs.waiting],
+                  ["Called", qs.called],
+                  ["In service", qs.inService],
+                  ["Completed", qs.completedToday],
+                  ["Cancelled", qs.cancelledToday + qs.expiredToday],
+                  ["No-show", qs.noShowToday],
+                ].map(([label, value]) => (
+                  <div key={label as string} className={ui.stat}>
+                    <div className={ui.statLabel}>{label}</div>
+                    <div className={ui.statValue}>{value}</div>
+                  </div>
+                ))}
+              </div>
+              <p className={ui.cardSub} style={{ marginTop: 10 }}>
+                Each person is counted once: seated customers are not also counted as waiting.
+              </p>
+              <div className={`${ui.rowWrap} ${ui.mt12}`}>
+                <Btn variant="primary" small icon="plus" onClick={() => setAddOpen(true)}>
+                  New customer
+                </Btn>
+                <BtnLink small href={`/dashboard/salons/${salonId}/queue?view=waiting`}>
+                  See waiting list
+                </BtnLink>
+              </div>
+            </Card>
+
+            <Card title="Top performer" sub="Most completed · last 30 days" action={<CardLinkIcon href={`/dashboard/salons/${salonId}/team?tab=performance`} label="Open staff performance" />}>
+              {topPerformer === null ? (
+                <EmptyState title="No completed services yet">The barber with the most completed services shows here.</EmptyState>
+              ) : (
+                <div className={ui.performer}>
+                  {topPerformer.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- the barber's own uploaded photo, any host
+                    <img className={ui.performerPhoto} src={topPerformer.photoUrl} alt={`${topPerformer.displayName}`} />
+                  ) : (
+                    <span className={ui.performerInitials} aria-hidden="true">
+                      {initialsOf(topPerformer.displayName)}
+                    </span>
+                  )}
+                  <div className={ui.performerBody}>
+                    <div className={ui.performerName}>{topPerformer.displayName}</div>
+                    <div className={ui.performerSub}>{topPerformer.completedLast30Days} services completed</div>
+                    <div className={ui.performerSub}>{topPerformer.completedToday} today</div>
+                    <div className={ui.performerValue}>{money(topPerformer.estimatedValueLast30Days)}</div>
+                    <div className={ui.performerFoot}>listed-price value, not revenue</div>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      <div className={ui.ovGrid}>
+        {data.branches.length > 1 ? (
+          <Card title="Top performing branches" sub="Recorded revenue today · only shops you own">
+            <div className={ui.branchBars} role="list" aria-label="Recorded revenue today by shop">
+              {data.branches.map((b, index) => (
+                <Link key={b.salonId} href={`/dashboard/salons/${b.salonId}`} role="listitem" className={ui.branchCol} title={`${b.name}: ${formatMoney(b.recordedRevenueToday, b.currency)} recorded today`}>
+                  <span className={ui.branchValue}>{formatMoney(b.recordedRevenueToday, b.currency, { compact: true })}</span>
+                  <span className={`${ui.branchBar} ${BRANCH_TINTS[index % BRANCH_TINTS.length]}`} style={{ height: `${Math.max(14, (b.recordedRevenueToday / branchMax) * 100)}%` }}>
+                    <span className={ui.branchName}>{b.name}</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+            <div className={`${ui.tableWrap} ${ui.mt12}`}>
+              <table className={ui.table}>
+                <thead>
+                  <tr>
+                    <th>Shop</th>
+                    <th className={ui.num}>Waiting</th>
+                    <th className={ui.num}>In service</th>
+                    <th className={ui.num}>Completed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.branches.map((b) => (
+                    <tr key={b.salonId}>
+                      <td>
+                        <Link href={`/dashboard/salons/${b.salonId}`} className={ui.cardLink}>
+                          {b.name}
+                        </Link>
+                      </td>
+                      <td className={ui.num}>{b.waiting}</td>
+                      <td className={ui.num}>{b.inService}</td>
+                      <td className={ui.num}>{b.completedToday}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        ) : (
+          <Card title="Cancellations" sub={`Last ${data.cancellationSummary.windowDays} days`} action={<CardLinkIcon href={`/dashboard/salons/${salonId}/cancellations`} label="Open cancellation details" />}>
             {data.cancellationSummary.total === 0 ? (
               <EmptyState title="No cancellations">Nothing was cancelled in this period.</EmptyState>
             ) : (
@@ -314,105 +476,46 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
               </>
             )}
           </Card>
-        </div>
-      </div>
-
-      <div className={`${ui.grid} ${ui.twoCol} ${ui.mt16}`}>
-        <Card
-          title="Top services"
-          sub="Last 30 days"
-          action={
-            <Link href={`/dashboard/salons/${salonId}/analytics`} className={ui.cardLink}>
-              Full analytics
-            </Link>
-          }
-        >
-          {data.topServices.length === 0 ? (
-            <EmptyState title="No completed services yet">Completed services will appear here with their popularity and recorded revenue.</EmptyState>
-          ) : (
-            <div className={ui.tableWrap}>
-              <table className={ui.table}>
-                <thead>
-                  <tr>
-                    <th>Service</th>
-                    <th className={ui.num}>Done</th>
-                    <th>Popularity</th>
-                    <th className={ui.num}>Avg. charged</th>
-                    <th className={ui.num}>Recorded revenue</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.topServices.map((s) => (
-                    <tr key={s.serviceId ?? s.name}>
-                      <td>
-                        <strong>{s.name}</strong>
-                      </td>
-                      <td className={ui.num}>{s.completedCount}</td>
-                      <td>
-                        <div className={ui.rowWrap} style={{ flexWrap: "nowrap" }}>
-                          <div className={ui.bar} aria-hidden="true" style={{ flex: 1 }}>
-                            <div className={ui.barFill} style={{ width: `${Math.min(100, s.popularityPercent)}%` }} />
-                          </div>
-                          <span className={ui.mutedCell}>{s.popularityPercent}%</span>
-                        </div>
-                      </td>
-                      <td className={`${ui.num} ${s.averageChargedAmount === null ? ui.mutedCell : ""}`}>{s.averageChargedAmount === null ? "No invoices" : money(s.averageChargedAmount)}</td>
-                      <td className={ui.num}>{money(s.recordedRevenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className={ui.cardSub} style={{ marginTop: 8 }}>
-            Recorded revenue counts fully paid invoices only; average charged is taken from issued invoices.
-          </p>
-        </Card>
+        )}
 
         <Card
-          title="Today's schedule"
-          action={
-            <Link href={`/dashboard/salons/${salonId}/schedule`} className={ui.cardLink}>
-              Calendar
-            </Link>
-          }
+          title="Day schedule"
+          sub={`${data.todaysSchedule.length} appointment${data.todaysSchedule.length === 1 ? "" : "s"} today`}
+          action={<CardLinkIcon href={`/dashboard/salons/${salonId}/schedule`} label="Open the calendar" />}
         >
           {data.todaysSchedule.length === 0 ? (
             <EmptyState title="No appointments today" action={<BtnLink small href={`/dashboard/salons/${salonId}/bookings/new`} icon="plus">New in-shop appointment</BtnLink>}>
               Customers who arrive without a booking join the Live Queue.
             </EmptyState>
           ) : (
-            <ul className={ui.list}>
-              {data.todaysSchedule.slice(0, 7).map((item) => (
-                <li key={item.id} className={ui.listRow}>
-                  <span className={ui.timeChip}>{formatShopTime(item.slotStart, data.timezone)}</span>
-                  <div className={ui.listMain}>
-                    <div className={ui.listTitle}>{item.serviceNames.join(" + ")}</div>
-                    <div className={ui.listSub}>
-                      {item.customerLabel}
-                      {item.staffName ? ` · ${item.staffName}` : " · barber not assigned"}
-                    </div>
-                  </div>
-                  <Badge tone={item.status === "COMPLETED" ? "ok" : item.status === "NO_SHOW" ? "bad" : "info"}>
-                    {item.status === "COMPLETED" ? "Done" : item.status === "NO_SHOW" ? "No-show" : item.source === "IN_SHOP" ? "In-shop" : "Booked"}
-                  </Badge>
-                </li>
-              ))}
-            </ul>
+            <DaySchedule items={data.todaysSchedule} timeZone={data.timezone} staffNames={staffNames} />
           )}
         </Card>
       </div>
 
-      <div className={`${ui.grid} ${ui.twoCol} ${ui.mt16}`}>
-        <Card
-          title="Staff performance"
-          sub="Completed services"
-          action={
-            <Link href={`/dashboard/salons/${salonId}/team?tab=performance`} className={ui.cardLink}>
-              Details
-            </Link>
-          }
-        >
+      <div className={ui.ovRow}>
+        {data.branches.length > 1 && (
+          <Card title="Cancellations" sub={`Last ${data.cancellationSummary.windowDays} days`} action={<CardLinkIcon href={`/dashboard/salons/${salonId}/cancellations`} label="Open cancellation details" />}>
+            {data.cancellationSummary.total === 0 ? (
+              <EmptyState title="No cancellations">Nothing was cancelled in this period.</EmptyState>
+            ) : (
+              <>
+                <div className={ui.spaceBetween} style={{ marginBottom: 10 }}>
+                  <div>
+                    <div className={ui.kpiValue}>{data.cancellationSummary.total}</div>
+                    <div className={ui.cardSub}>cancelled</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div className={ui.kpiValue}>{data.cancellationSummary.ratePercent === null ? "—" : `${data.cancellationSummary.ratePercent}%`}</div>
+                    <div className={ui.cardSub}>of bookings made</div>
+                  </div>
+                </div>
+                <ShareBar parts={cancelParts} ariaLabel="Cancellations by who cancelled" />
+              </>
+            )}
+          </Card>
+        )}
+        <Card title="Staff performance" sub="Completed services" action={<CardLinkIcon href={`/dashboard/salons/${salonId}/team?tab=performance`} label="Open staff performance" />}>
           {data.staffPerformance.length === 0 ? (
             <EmptyState title="No barbers yet" action={<BtnLink small href={`/dashboard/salons/${salonId}/staff`} icon="plus">Add a barber</BtnLink>} />
           ) : (
@@ -493,39 +596,6 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
           </div>
         </Card>
       </div>
-
-      {data.branches.length > 1 && (
-        <Card title="Branch performance" sub="Only shops you own" tight>
-          <div className={ui.tableWrap}>
-            <table className={ui.table}>
-              <thead>
-                <tr>
-                  <th>Shop</th>
-                  <th className={ui.num}>Waiting</th>
-                  <th className={ui.num}>In service</th>
-                  <th className={ui.num}>Completed today</th>
-                  <th className={ui.num}>Recorded revenue today</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.branches.map((b) => (
-                  <tr key={b.salonId}>
-                    <td>
-                      <Link href={`/dashboard/salons/${b.salonId}`} className={ui.cardLink}>
-                        {b.name}
-                      </Link>
-                    </td>
-                    <td className={ui.num}>{b.waiting}</td>
-                    <td className={ui.num}>{b.inService}</td>
-                    <td className={ui.num}>{b.completedToday}</td>
-                    <td className={ui.num}>{formatMoney(b.recordedRevenueToday, b.currency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
 
       {addOpen && (
         <NewQueueCustomerDialog
