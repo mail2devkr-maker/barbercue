@@ -189,7 +189,7 @@ export function InShopAppointmentForm({ salonId }: { salonId: string }) {
       <PageHead
         eyebrow="Bookings"
         title="New in-shop appointment"
-        sub="For a customer who walked in or phoned and wants a set time. They do not need a FastQue account or an online payment. To seat someone right now, add them to the Live Queue instead."
+        sub="For a customer who came to the shop or phoned and wants a set time. They do not need a FastQue account or an online payment. To seat someone right now, add them to the Live Queue instead."
         actions={
           <BtnLink href={`/dashboard/salons/${salonId}/queue`} icon="queue">
             Add to Live Queue instead

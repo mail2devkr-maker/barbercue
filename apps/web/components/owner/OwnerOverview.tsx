@@ -30,8 +30,8 @@ const ACTOR_LABEL: Record<string, string> = {
   CUSTOMER: "Customer",
   OWNER: "Owner",
   STAFF: "Barber",
-  SYSTEM: "System",
-  ADMIN: "FastQue admin",
+  SYSTEM: "Automatic",
+  ADMIN: "FastQue support",
   UNKNOWN: "Not recorded",
 };
 const ACTOR_COLOR: Record<string, string> = {

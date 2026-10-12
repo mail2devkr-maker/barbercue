@@ -322,7 +322,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                 </Card>
               )}
               {called.map((entry) => (
-                <EntryCard key={entry.id} entry={entry} tone="called" salonId={salonId}>
+                <EntryCard key={entry.id} entry={entry} tone="called">
                   <div className={ui.entryActions}>
                     <Btn variant="primary" small disabled={busy !== null} onClick={() => void assignAutomatically(entry)}>
                       Assign automatically
@@ -341,7 +341,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                 </EntryCard>
               ))}
               {waiting.map((entry) => (
-                <EntryCard key={entry.id} entry={entry} tone="waiting" salonId={salonId} fresh={freshIds.includes(entry.id)}>
+                <EntryCard key={entry.id} entry={entry} tone="waiting" fresh={freshIds.includes(entry.id)}>
                   {skipReasons[entry.id] && <div className={ui.entryReason}>Not seated yet: {skipReasons[entry.id]}</div>}
                   <div className={ui.entryActions}>
                     <Btn variant="primary" small disabled={busy !== null} onClick={() => void assignAutomatically(entry)}>
@@ -376,7 +376,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                 </Card>
               )}
               {inService.map((entry) => (
-                <EntryCard key={entry.id} entry={entry} tone="in-service" salonId={salonId}>
+                <EntryCard key={entry.id} entry={entry} tone="in-service">
                   <div className={ui.entryActions}>
                     <Btn variant="primary" small icon="check" disabled={busy !== null || !entry.activeServiceSessionId} onClick={() => void run(`done-${entry.id}`, () => apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.serviceSessions}/${entry.activeServiceSessionId}/${DASHBOARD_PATHS.complete}`, { method: "POST" }), `${whoLabel(entry)} — service completed.`)}>
                       Complete service
@@ -402,7 +402,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                 </Card>
               )}
               {completed.map((entry) => (
-                <EntryCard key={entry.id} entry={entry} tone="done" salonId={salonId}>
+                <EntryCard key={entry.id} entry={entry} tone="done">
                   <div className={ui.entryActions}>
                     <InvoiceAction salonId={salonId} bookingId={entry.bookingId} queueEntryId={entry.bookingId ? null : entry.id} />
                   </div>
@@ -419,7 +419,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                 </Card>
               )}
               {history.map((entry) => (
-                <EntryCard key={entry.id} entry={entry} tone="done" salonId={salonId} />
+                <EntryCard key={entry.id} entry={entry} tone="done" />
               ))}
             </div>
           )}
@@ -536,13 +536,11 @@ function ChairTile({ chair, busy, onFree }: { chair: ChairOptionDto; busy: boole
 function EntryCard({
   entry,
   tone,
-  salonId,
   fresh,
   children,
 }: {
   entry: QueueEntryDetailDto;
   tone: "waiting" | "called" | "in-service" | "done";
-  salonId: string;
   fresh?: boolean;
   children?: React.ReactNode;
 }) {
@@ -585,7 +583,6 @@ function EntryCard({
         </div>
       </div>
       {children}
-      <span className={ui.srOnly}>Salon {salonId}</span>
     </article>
   );
 }

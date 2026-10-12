@@ -296,7 +296,7 @@ export default async function SalonPage({
             <OperatingHoursTable hours={salon.operatingHours} />
           </section>
           <div className={styles.queueNote}>
-            <strong>Prefer a walk-in?</strong>
+            <strong>Prefer to join the Live Queue?</strong>
             <p>Check the live queue path to see whether this shop is currently accepting joins.</p>
           </div>
         </aside>

@@ -10,13 +10,13 @@ import { formatMoney, formatShopDate, formatShopTime } from "./format";
 import { Badge, Banner, Card, EmptyState, PageHead, Skeleton, type BadgeTone } from "./parts";
 import ui from "./owner.module.css";
 
-const ACTORS: ReadonlyArray<{ id: CancellationActorOrUnknown; label: string; color: string; tone: BadgeTone }> = [
-  { id: "CUSTOMER", label: "Cancelled by customer", color: "#3b6df0", tone: "info" },
-  { id: "OWNER", label: "Cancelled by owner", color: "#c8104d", tone: "brand" },
-  { id: "STAFF", label: "Cancelled by a barber", color: "#e0891a", tone: "warn" },
-  { id: "SYSTEM", label: "Cancelled automatically", color: "#7a5af8", tone: "neutral" },
-  { id: "ADMIN", label: "Cancelled by FastQue support", color: "#1a1533", tone: "neutral" },
-  { id: "UNKNOWN", label: "Not recorded (older bookings)", color: "#98a2b3", tone: "neutral" },
+const ACTORS: ReadonlyArray<{ id: CancellationActorOrUnknown; label: string; short: string; color: string; tone: BadgeTone }> = [
+  { id: "CUSTOMER", label: "Cancelled by customer", short: "Customer", color: "#3b6df0", tone: "info" },
+  { id: "OWNER", label: "Cancelled by owner", short: "Owner", color: "#c8104d", tone: "brand" },
+  { id: "STAFF", label: "Cancelled by a barber", short: "Barber", color: "#e0891a", tone: "warn" },
+  { id: "SYSTEM", label: "Cancelled automatically", short: "Automatic", color: "#7a5af8", tone: "neutral" },
+  { id: "ADMIN", label: "Cancelled by FastQue support", short: "FastQue support", color: "#1a1533", tone: "neutral" },
+  { id: "UNKNOWN", label: "Not recorded (older bookings)", short: "Not recorded", color: "#98a2b3", tone: "neutral" },
 ];
 
 /**
@@ -84,7 +84,7 @@ export function CancellationsPanel({ salonId }: { salonId: string }) {
               {data.totalCancellations === 0 && actor === "ALL" ? (
                 <EmptyState title="No cancellations in this period" />
               ) : (
-                <ShareBar ariaLabel="Cancellations by who cancelled" parts={ACTORS.map((a) => ({ label: a.label.replace("Cancelled by ", "").replace("Cancelled ", ""), value: data.byActor[a.id], color: a.color }))} />
+                <ShareBar ariaLabel="Cancellations by who cancelled" parts={ACTORS.map((a) => ({ label: a.short, value: data.byActor[a.id], color: a.color }))} />
               )}
               {data.unattributedCount > 0 && (
                 <p className={ui.cardSub} style={{ marginTop: 10 }}>
@@ -132,7 +132,7 @@ export function CancellationsPanel({ salonId }: { salonId: string }) {
                             <td>{formatShopDate(r.cancelledAt, null, true)} {formatShopTime(r.cancelledAt, null)}</td>
                             <td>{formatShopDate(r.slotStart, null, true)} {formatShopTime(r.slotStart, null)}</td>
                             <td>{r.serviceNames.join(" + ")}</td>
-                            <td><Badge tone={a.tone}>{a.label.replace("Cancelled by ", "").replace("Cancelled ", "").replace(" (older bookings)", "")}</Badge></td>
+                            <td><Badge tone={a.tone}>{a.short}</Badge></td>
                             <td>{r.reason ?? <span className={ui.mutedCell}>—</span>}</td>
                             <td className={ui.num}>
                               {r.chargeStatus === null ? <span className={ui.mutedCell}>None</span> : (

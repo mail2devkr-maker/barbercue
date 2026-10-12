@@ -23,7 +23,13 @@ const DATABASE_URL = process.env.DATABASE_URL ?? '';
 const LOCAL_DB = /@(127\.0\.0\.1|localhost)[:/]/.test(DATABASE_URL);
 const maybe = LOCAL_DB ? describe : describe.skip;
 
-const TZ = 'Asia/Kolkata';
+// The fixture shop uses whichever zone currently has mid-day local hours, so scenarios that book
+// "a few minutes from now" (check-in has a 15-minute window) never straddle the shop's closing time
+// or local midnight, whatever hour the suite runs at. Production code is timezone-aware throughout.
+const CANDIDATE_ZONES = ['Asia/Kolkata', 'Europe/London', 'America/New_York', 'Asia/Tokyo', 'Australia/Sydney', 'America/Los_Angeles'];
+const localHourIn = (zone: string) =>
+  Number(new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', hour12: false }).format(new Date())) % 24;
+const TZ = CANDIDATE_ZONES.find((zone) => localHourIn(zone) >= 7 && localHourIn(zone) <= 19) ?? 'Asia/Kolkata';
 
 maybe('Owner operations (e2e, disposable local database)', () => {
   let app: INestApplication<App>;
@@ -881,6 +887,22 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect(guestInvoice.body).toMatchObject({ customerName: 'Guest Gita', customerPhone: '+919876522222' });
       // a guest has no account, so no customer can ever open it
       expect(await prisma.invoice.findUniqueOrThrow({ where: { id: guestInvoice.body.id } })).toMatchObject({ customerId: null });
+    });
+
+    it('lists what the shop recorded as received, with totals, for the owner only', async () => {
+      const res = await api('get', `${SALON()}/payments`, tok.owner).expect(200);
+      expect(res.body.totals).toMatchObject({ received: 295, refunded: 50, net: 245 });
+      expect(res.body.totals.count).toBe(3);
+      expect((res.body.items as Array<{ kind: string; recordedBy: string }>).map((p) => p.kind).sort()).toEqual(['PAYMENT', 'PAYMENT', 'REFUND']);
+      // the barber who recorded the cash payment is named; the owner's entries say "Owner"
+      expect((res.body.items as Array<{ recordedBy: string }>).map((p) => p.recordedBy)).toEqual(expect.arrayContaining(['Ravi', 'Owner']));
+      expect(res.body.byMethod).toEqual(expect.arrayContaining([{ method: 'CASH', net: 50 }, { method: 'UPI', net: 195 }]));
+      await api('get', `${SALON()}/payments`, tok.ravi).expect(403);
+      await api('get', `${SALON()}/payments`, tok.outsider).expect(403);
+      await api('get', `${SALON()}/payments?from=2020-01-01&to=2020-01-02`, tok.owner).expect(200).expect((r) => {
+        expect(r.body.items).toEqual([]);
+        expect(r.body.totals.net).toBe(0);
+      });
     });
 
     it('reports revenue as money the shop recorded - not completed services, and not unpaid invoices', async () => {

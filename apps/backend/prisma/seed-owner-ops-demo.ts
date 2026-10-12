@@ -152,7 +152,7 @@ async function main() {
   // today: finished visits
   const nowIst = new Date();
   for (let k = 0; k < 5; k++) {
-    await finishedVisit(new Date(nowIst.getTime() - (200 - k * 30) * 60_000), catalog[k % catalog.length], staffKeys[k % 3], k % 2 ? ((k + 1) % 6) + 1 : null, k < 3 ? 'full' : 'none', k % 2 ? undefined : `Walk Guest ${k + 1}`);
+    await finishedVisit(new Date(nowIst.getTime() - (200 - k * 30) * 60_000), catalog[k % catalog.length], staffKeys[k % 3], k % 2 ? ((k + 1) % 6) + 1 : null, k < 3 ? 'full' : 'none', k % 2 ? undefined : `Queue Guest ${k + 1}`);
   }
 
   // ---- today's live queue

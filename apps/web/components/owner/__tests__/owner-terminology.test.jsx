@@ -24,6 +24,25 @@ describe("owner dashboard wording", () => {
     }
   });
 
+  it("the shop-facing pages outside the owner folder do not say walk-in either", () => {
+    const webRoot = path.join(__dirname, "../../..");
+    const extra = [
+      "components/dashboard/SetupChecklist.tsx",
+      "components/layout/NotificationBell.tsx",
+      "app/(dashboard)/dashboard/salons/[salonId]/analytics/page.tsx",
+      "app/(dashboard)/dashboard/salons/[salonId]/hours/page.tsx",
+      "app/(public)/[countryCode]/[citySlug]/[salonSlug]/page.tsx",
+    ];
+    for (const rel of extra) {
+      const source = fs.readFileSync(path.join(webRoot, rel), "utf8");
+      // Comments are not shown to anyone; the persisted WALK_IN value and event keys such as
+      // owner.walk_in.joined use an underscore and are not matched.
+      const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+      const shown = [...code.matchAll(/walk[- ]ins?\b/gi)].map((m) => m[0]);
+      expect({ rel, shown }).toEqual({ rel, shown: [] });
+    }
+  });
+
   it("does not offer the confusing local-customer chair control or the setup wizard's 'Finish setup' on the queue", () => {
     const consoleSource = fs.readFileSync(path.join(OWNER_DIR, "LiveQueueConsole.tsx"), "utf8");
     expect(consoleSource).not.toMatch(/Seat local customer/i);
