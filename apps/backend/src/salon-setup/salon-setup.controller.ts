@@ -259,6 +259,14 @@ export class SalonSetupController {
     return this.services.list(user.id, salonId);
   }
 
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-capabilities`)
+  catalogImportCapabilities(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.catalogImports.capabilities(user.id, salonId);
+  }
+
   // Preview never writes services. PDF/image extraction requires a deliberate external-AI consent.
   @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-preview`)
   @UseInterceptors(FileInterceptor('file', {
