@@ -11,6 +11,8 @@ export const liveQueuePaths = {
   call: (entryId: string): string => entryPath(entryId, DASHBOARD_PATHS.call),
   arrive: (entryId: string): string => entryPath(entryId, DASHBOARD_PATHS.arrive),
   assign: (entryId: string): string => entryPath(entryId, DASHBOARD_PATHS.assign),
+  // Assigning a barber and STARTING the service are separate steps: this is the explicit start.
+  startService: (entryId: string): string => entryPath(entryId, DASHBOARD_PATHS.startService),
   noShow: (entryId: string): string => entryPath(entryId, DASHBOARD_PATHS.noShow),
   cancel: (entryId: string): string => entryPath(entryId, DASHBOARD_PATHS.cancel),
   complete: (sessionId: string): string =>
@@ -27,7 +29,8 @@ interface ApiErrorLike {
 
 // The owner-operations codes ("Every qualified barber is busy...", "This customer has not arrived...") are
 // just as human-written as the queue ones, so an owner is told the real reason, not a generic failure.
-const CURATED_QUEUE_CODES: ReadonlySet<string> = new Set([...Object.values(QueueErrorCode), ...Object.values(OwnerOpsErrorCode)]);
+const OWNER_OPS_CODES: ReadonlySet<string> = new Set(Object.values(OwnerOpsErrorCode));
+const CURATED_QUEUE_CODES: ReadonlySet<string> = new Set([...Object.values(QueueErrorCode), ...OWNER_OPS_CODES]);
 
 /**
  * Turns a failed queue action into copy an owner can act on. Never surfaces raw transport/router
@@ -44,6 +47,10 @@ export function friendlyQueueActionError(err: unknown, t: UiStrings, action?: Li
   console.warn('[live-queue] action failed', { action, status, code });
 
   if (code === 'NETWORK_OFFLINE' || status === 0) return t.queueNetworkError;
+  // The owner-operations refusals carry their own precise reason ("This customer is assigned to another
+  // barber.", "You can only complete the service you are performing.") even though some are HTTP 403, so
+  // they are shown as written rather than collapsed into a generic "no permission".
+  if (code && OWNER_OPS_CODES.has(code) && typeof e.message === 'string' && e.message.trim()) return e.message;
   if (status === 403 || code === QueueErrorCode.SALON_ACCESS_DENIED) return t.queueActionNotAllowedError;
   if (
     code === QueueErrorCode.INVALID_QUEUE_TRANSITION ||

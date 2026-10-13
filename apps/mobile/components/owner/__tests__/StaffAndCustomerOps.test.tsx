@@ -20,6 +20,11 @@ jest.mock('../../../lib/api', () => ({
   },
 }));
 jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => 'idem-key' }));
+// A stable language object, like the real provider (screens depend on `t` staying referentially equal).
+const mockLanguage: { current: { language: string; t: Record<string, string> } } = {
+  current: { language: 'EN', t: require('@barbercue/shared').uiStringsFor('EN') },
+};
+jest.mock('../../../lib/language-context', () => ({ useLanguage: () => mockLanguage.current }));
 jest.mock('../../../lib/realtime', () => ({
   getRealtimeSocket: () => ({ on: jest.fn(), off: jest.fn() }),
   joinSalonRoom: jest.fn(),
@@ -136,6 +141,74 @@ describe('barber: my day', () => {
     await mount(createElement(StaffMyDayCard, { salonId: 's1' }));
     await act(async () => button('Take next customer').props.onPress());
     expect(writes().map((w) => w.path)).toContain('dashboard/salons/s1/queue/take-next');
+  });
+});
+
+describe('barber: a customer assigned to them is not yet in service', () => {
+  const assignedItem = { queueEntryId: 'q70', serviceSessionId: null, tokenNumber: 70, customerLabel: 'Asha Rao', customerPhone: null, serviceName: 'Classic Haircut', startedAt: null, status: 'CALLED', chairLabel: 'Chair 2' };
+
+  beforeEach(() => {
+    mockLanguage.current = { language: 'EN', t: require('@barbercue/shared').uiStringsFor('EN') };
+    (apiFetch as jest.Mock).mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (init?.method === 'POST') return {};
+      if (path === 'dashboard/salons/s1/staff/me/work') return work({ current: null, assigned: assignedItem, availabilityState: 'RESERVED' });
+      return {};
+    });
+  });
+
+  it('shows the customer as assigned to the barber - with Start service, and not as a service in progress', async () => {
+    await mount(createElement(StaffMyDayCard, { salonId: 's1' }));
+    const screen = text();
+    expect(screen).toContain('Assigned to you');
+    expect(screen).toContain('#70 · Asha Rao');
+    expect(screen).toContain('Assigned · not started');
+    expect(screen).toContain('The service has not started');
+    expect(byTestId('staff-assigned')).toBeDefined();
+    expect(byTestId('staff-current')).toBeUndefined();
+    expect(button('Complete service')).toBeUndefined();
+  });
+
+  it('Start service starts exactly that customer through the explicit start route', async () => {
+    const onChanged = jest.fn();
+    await mount(createElement(StaffMyDayCard, { salonId: 's1', onChanged }));
+    await act(async () => button('Start service').props.onPress());
+    const sent = writes();
+    expect(sent.map((w) => w.path)).toEqual(['dashboard/queue-entries/q70/start-service']);
+    expect(sent[0].init.headers['Idempotency-Key']).toBe('idem-key');
+    expect(onChanged).toHaveBeenCalled();
+    expect(text()).toContain('Service started.');
+  });
+
+  it('does not offer Take next customer while a customer is already assigned', async () => {
+    (apiFetch as jest.Mock).mockImplementation(async (path: string) =>
+      path.endsWith('/staff/me/work') ? work({ current: null, assigned: assignedItem, availabilityState: 'AVAILABLE' }) : {},
+    );
+    await mount(createElement(StaffMyDayCard, { salonId: 's1' }));
+    expect(button('Take next customer')).toBeUndefined();
+  });
+
+  it('once started it is the current service with Complete service, and the assigned card is gone', async () => {
+    (apiFetch as jest.Mock).mockImplementation(async (path: string) =>
+      path.endsWith('/staff/me/work')
+        ? work({ current: { ...assignedItem, serviceSessionId: 'sess70', status: 'IN_SERVICE', startedAt: '2026-10-13T10:05:00.000Z' }, assigned: null, availabilityState: 'IN_SERVICE' })
+        : {},
+    );
+    await mount(createElement(StaffMyDayCard, { salonId: 's1' }));
+    expect(byTestId('staff-current')).toBeDefined();
+    expect(byTestId('staff-assigned')).toBeUndefined();
+    expect(button('Start service')).toBeUndefined();
+    expect(button('Complete service')).toBeDefined();
+  });
+
+  it('is shown in Hindi when the account language is Hindi', async () => {
+    const hi = require('@barbercue/shared').uiStringsFor('HI');
+    mockLanguage.current = { language: 'HI', t: hi };
+    await mount(createElement(StaffMyDayCard, { salonId: 's1' }));
+    const screen = text();
+    expect(screen).toContain(hi.assignedToYouTitle);
+    expect(screen).toContain(hi.assignedNotStartedBadge);
+    expect(button(hi.startServiceAction)).toBeDefined();
+    expect(screen).not.toContain('Assigned to you');
   });
 });
 

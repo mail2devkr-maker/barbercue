@@ -75,7 +75,7 @@ function setSalon(selectedId: string | null) {
   };
 }
 
-type Handlers = Partial<Record<'detail' | 'services' | 'chairs' | 'staff' | 'profile' | 'timezone' | 'queueQr' | 'paymentQr' | 'status', (method: string, body?: unknown) => unknown>>;
+type Handlers = Partial<Record<'detail' | 'services' | 'chairs' | 'staff' | 'profile' | 'timezone' | 'queueQr' | 'paymentQr' | 'status' | 'queueSettings', (method: string, body?: unknown) => unknown>>;
 const state = { salon: { id: 'salon-a', publicId: 'BC-SHOP-000001', slug: 'handsome-center', name: 'Handsome Center', status: 'ACTIVE', isClosedForToday: false } };
 const PROFILE = { id: 'salon-a', name: 'Handsome Center', phone: '+919876543210', email: 'shop@example.com', addressLine: 'Main Road, Hajipur', postalCode: '844101', description: 'Fades' };
 const TZ_NOT_SET = { id: 'salon-a', timezone: null, countryCode: 'IN', timezoneAutoDetected: false, timezoneManuallyOverridden: false, suggestion: { timezone: 'Asia/Kolkata', confidence: 'HIGH', source: 'country' } };
@@ -97,6 +97,8 @@ function route(h: Handlers = {}, data: { services: unknown[]; chairs: unknown[];
     if (path.endsWith('/payment-qr')) return call('paymentQr', { salonId: 'salon-a', paymentQrImageUrl: null });
     if (path.endsWith('/profile')) return call('profile', method === 'PATCH' ? { ...PROFILE, ...body } : PROFILE);
     if (path.endsWith('/timezone')) return call('timezone', method === 'PATCH' ? { ...TZ_NOT_SET, timezone: body.timezone, suggestion: null } : { ...TZ_NOT_SET, timezone: 'Asia/Kolkata', suggestion: null });
+    // Automatic staff assignment: the server's stored value (ON by default for every shop).
+    if (path.endsWith('/queue/settings')) return call('queueSettings', method === 'PATCH' ? { autoAssignEnabled: body.autoAssignEnabled } : { autoAssignEnabled: true });
     if (path.endsWith('/queue-qr')) return call('queueQr', { publicQueueToken: 'tok123', publicQueueUrl: 'https://fastque.com/q/tok123' });
     if (path.endsWith('/status')) return call('status', { id: 'salon-a', status: body.status, isClosedForToday: false });
     throw new Error(`unexpected ${method} ${path}`);
@@ -298,5 +300,55 @@ describe('Owner Settings', () => {
     await flush(4);
     expect(apiMock).not.toHaveBeenCalled();
     expect(allText(none)).toContain(t.selectShopTitle);
+  });
+});
+
+describe('Owner Settings - automatic staff assignment', () => {
+  const switchOf = (r: Awaited<ReturnType<typeof render>>) => byTestId(r, 'auto-assign-setting-switch')[0];
+
+  it('shows ON for a shop whose server value is ON (the default for every new shop)', async () => {
+    route();
+    const r = await mount();
+    await flush(8);
+    expect(allText(r)).toContain(t.automaticAssignmentTitle);
+    expect(allText(r)).toContain(t.automaticAssignmentLabel);
+    expect(switchOf(r).props.value).toBe(true);
+    expect(callsTo('/queue/settings', 'GET')[0][0]).toBe('dashboard/salons/salon-a/queue/settings');
+  });
+
+  it('shows OFF for a shop whose owner switched it off - the screen never invents a default', async () => {
+    route({ queueSettings: (method) => (method === 'GET' ? { autoAssignEnabled: false } : { autoAssignEnabled: false }) });
+    const r = await mount();
+    await flush(8);
+    expect(switchOf(r).props.value).toBe(false);
+  });
+
+  it('switching it off is sent to the server and only shown once the server accepted it', async () => {
+    route();
+    const r = await mount();
+    await flush(8);
+    await act(async () => switchOf(r).props.onChange(false));
+    await flush(4);
+    const [path, options] = callsTo('/queue/settings', 'PATCH')[0];
+    expect(path).toBe('dashboard/salons/salon-a/queue/settings');
+    expect(JSON.parse(options.body)).toEqual({ autoAssignEnabled: false });
+    expect(switchOf(r).props.value).toBe(false);
+    expect(allText(r)).toContain(t.automaticAssignmentOff);
+  });
+
+  it('a refused change leaves the switch where the server has it and says why', async () => {
+    route({ queueSettings: (method) => (method === 'PATCH' ? new ApiErr('Only the owner can change this.') : { autoAssignEnabled: true }) });
+    const r = await mount();
+    await flush(8);
+    await act(async () => switchOf(r).props.onChange(false));
+    await flush(4);
+    expect(switchOf(r).props.value).toBe(true);
+    expect(allText(r)).toContain('Only the owner can change this.');
+  });
+
+  it('shows the control in Hindi when the account language is Hindi', async () => {
+    const hi = uiStringsFor('HI');
+    expect(hi.automaticAssignmentTitle).not.toBe(t.automaticAssignmentTitle);
+    expect(hi.automaticAssignmentTitle).toMatch(/[\u0900-\u097F]/);
   });
 });

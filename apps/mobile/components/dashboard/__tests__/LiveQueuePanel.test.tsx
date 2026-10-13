@@ -223,7 +223,8 @@ describe('operator actions use the authoritative /dashboard routes', () => {
     await press(t.confirmAssignmentAction);
     const [call] = postCalls();
     expect(call.path).toBe('dashboard/queue-entries/q1/assign');
-    expect(JSON.parse(call.init.body)).toEqual({ staffId: 'st1', chairId: 'ch1', serviceId: 'sv1' });
+    // Assigning only RESERVES the barber and chair: the service is started by a separate, explicit action.
+    expect(JSON.parse(call.init.body)).toEqual({ staffId: 'st1', chairId: 'ch1', startService: false, serviceId: 'sv1' });
     expect(call.init.headers['Idempotency-Key']).toBe('idem-key');
   });
 

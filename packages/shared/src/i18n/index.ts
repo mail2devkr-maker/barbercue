@@ -1138,6 +1138,38 @@ export interface UiStrings {
   queueIsEmptyTitle: string;
   queueIsEmptyHint: string;
   statusCalledShort: string;
+  // Owner operations: assigned is not in service (assignment and the start of service are separate steps).
+  statusAssigned: string;
+  assignedNotStartedBadge: string;
+  assignedSectionTitle: string;
+  assignedSectionEmpty: string;
+  serviceNotStartedHint: string;
+  startServiceAction: string;
+  completeServiceAction: string;
+  changeBarberChairAction: string;
+  assignedToLabel: string;
+  assignedToYouTitle: string;
+  takeNextCustomerAction: string;
+  serviceStartedNotice: string;
+  automaticAssignmentTitle: string;
+  automaticAssignmentLabel: string;
+  automaticAssignmentHint: string;
+  automaticAssignmentOn: string;
+  automaticAssignmentOff: string;
+  waitingForAvailableStaff: string;
+  waitingToBeAssigned: string;
+  noAvailableStaff: string;
+  chairReservedLabel: string;
+  assignedToTokenNotStarted: string;
+  autoAssignedNotice: string;
+  assignAllAutomaticallyAction: string;
+  assignAutomaticallyAction: string;
+  queueSectionWaiting: string;
+  queueSectionAssigned: string;
+  queueSectionInService: string;
+  customerAssignedMessage: string;
+  customerAssignedDetail: string;
+  customerAssignedDetailNoChair: string;
 
   // Style Advisor screen (mobile)
   photoLibraryAccessNeeded: string;
@@ -2099,6 +2131,37 @@ const enUi: UiStrings = {
   queueIsEmptyTitle: 'Queue is empty',
   queueIsEmptyHint: 'Live Queue customers and checked-in bookings will appear here in real time.',
   statusCalledShort: 'Called',
+  statusAssigned: 'Assigned',
+  assignedNotStartedBadge: 'Assigned · not started',
+  assignedSectionTitle: 'Assigned',
+  assignedSectionEmpty: 'Nobody is assigned right now.',
+  serviceNotStartedHint: 'The service has not started. The barber starts it when the customer is in the chair.',
+  startServiceAction: 'Start service',
+  completeServiceAction: 'Complete service',
+  changeBarberChairAction: 'Change barber & chair',
+  assignedToLabel: 'Assigned to',
+  assignedToYouTitle: 'Assigned to you',
+  takeNextCustomerAction: 'Take next customer',
+  serviceStartedNotice: 'Service started.',
+  automaticAssignmentTitle: 'Automatic assignment',
+  automaticAssignmentLabel: 'Assign staff automatically',
+  automaticAssignmentHint: 'On by default. A customer who is in the shop is assigned a free, qualified barber and a free chair as soon as one is available. Assigning does not start the service: the barber starts it. You can turn this off and on at any time.',
+  automaticAssignmentOn: 'Automatic assignment is on.',
+  automaticAssignmentOff: 'Automatic assignment is off.',
+  waitingForAvailableStaff: 'Waiting for available staff',
+  waitingToBeAssigned: 'Waiting to be assigned',
+  noAvailableStaff: 'No available staff',
+  chairReservedLabel: 'Reserved · not started',
+  assignedToTokenNotStarted: 'Assigned to #{token} · not started',
+  autoAssignedNotice: '#{token} was assigned. The barber starts the service.',
+  assignAllAutomaticallyAction: 'Assign all automatically',
+  assignAutomaticallyAction: 'Assign automatically',
+  queueSectionWaiting: 'Waiting ({count})',
+  queueSectionAssigned: 'Assigned ({count})',
+  queueSectionInService: 'In service ({count})',
+  customerAssignedMessage: 'Your barber is ready',
+  customerAssignedDetail: '{barber} will serve you at {chair}. Please head over: your service starts when they begin.',
+  customerAssignedDetailNoChair: '{barber} will serve you. Please head over: your service starts when they begin.',
 
   photoLibraryAccessNeeded: 'Photo library access is needed to try the AI Style Advisor.',
   aiStylePreviewUnavailable: 'AI Style Preview is temporarily unavailable while we prepare the image-generation service. Your photo was not stored.',
@@ -3035,6 +3098,37 @@ const hiUi: UiStrings = {
   queueIsEmptyTitle: 'कतार खाली है',
   queueIsEmptyHint: 'लाइव कतार के ग्राहक और चेक-इन की गई बुकिंग्स यहां वास्तविक समय में दिखेंगी।',
   statusCalledShort: 'बुलाया गया',
+  statusAssigned: 'नियुक्त',
+  assignedNotStartedBadge: 'नियुक्त · शुरू नहीं हुआ',
+  assignedSectionTitle: 'नियुक्त',
+  assignedSectionEmpty: 'अभी किसी को नियुक्त नहीं किया गया है।',
+  serviceNotStartedHint: 'सेवा शुरू नहीं हुई है। ग्राहक के कुर्सी पर बैठने पर नाई इसे शुरू करता है।',
+  startServiceAction: 'सेवा शुरू करें',
+  completeServiceAction: 'सेवा पूर्ण करें',
+  changeBarberChairAction: 'नाई और कुर्सी बदलें',
+  assignedToLabel: 'नियुक्त नाई',
+  assignedToYouTitle: 'आपको नियुक्त',
+  takeNextCustomerAction: 'अगला ग्राहक लें',
+  serviceStartedNotice: 'सेवा शुरू हो गई।',
+  automaticAssignmentTitle: 'स्वचालित नियुक्ति',
+  automaticAssignmentLabel: 'स्टाफ को अपने-आप नियुक्त करें',
+  automaticAssignmentHint: 'डिफ़ॉल्ट रूप से चालू। दुकान में मौजूद ग्राहक को जैसे ही कोई खाली, योग्य नाई और कुर्सी मिलती है, उसे नियुक्त कर दिया जाता है। नियुक्ति से सेवा शुरू नहीं होती: नाई उसे शुरू करता है। आप इसे कभी भी बंद और चालू कर सकते हैं।',
+  automaticAssignmentOn: 'स्वचालित नियुक्ति चालू है।',
+  automaticAssignmentOff: 'स्वचालित नियुक्ति बंद है।',
+  waitingForAvailableStaff: 'उपलब्ध स्टाफ की प्रतीक्षा में',
+  waitingToBeAssigned: 'नियुक्ति की प्रतीक्षा में',
+  noAvailableStaff: 'कोई स्टाफ उपलब्ध नहीं',
+  chairReservedLabel: 'आरक्षित · शुरू नहीं हुआ',
+  assignedToTokenNotStarted: '#{token} को नियुक्त · शुरू नहीं हुआ',
+  autoAssignedNotice: '#{token} को नियुक्त किया गया। नाई सेवा शुरू करेगा।',
+  assignAllAutomaticallyAction: 'सभी को अपने-आप नियुक्त करें',
+  assignAutomaticallyAction: 'अपने-आप नियुक्त करें',
+  queueSectionWaiting: 'प्रतीक्षा में ({count})',
+  queueSectionAssigned: 'नियुक्त ({count})',
+  queueSectionInService: 'सेवा जारी है ({count})',
+  customerAssignedMessage: 'आपका नाई तैयार है',
+  customerAssignedDetail: '{barber} आपकी सेवा {chair} पर करेंगे। कृपया पहुँचें: उनके शुरू करते ही आपकी सेवा शुरू होगी।',
+  customerAssignedDetailNoChair: '{barber} आपकी सेवा करेंगे। कृपया पहुँचें: उनके शुरू करते ही आपकी सेवा शुरू होगी।',
 
   photoLibraryAccessNeeded: 'AI स्टाइल एडवाइज़र आज़माने के लिए फोटो लाइब्रेरी की अनुमति आवश्यक है।',
   aiStylePreviewUnavailable: 'इमेज-जनरेशन सेवा तैयार करते समय AI स्टाइल प्रीव्यू अस्थायी रूप से अनुपलब्ध है। आपकी फोटो सेव नहीं की गई।',

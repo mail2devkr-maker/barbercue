@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { billingProfileSchema, type BillingProfileDto, type OwnerOverviewDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { ownerOpsPaths } from '../../lib/owner/ops';
+import { useLanguage } from '../../lib/language-context';
 import { fastQue, font, fontSize, space } from '../../lib/theme';
 import { InlineError, PremiumButton, PremiumCard, PremiumTextField } from '../ui';
 import { Chip, ChipRow, FieldLabel, Hint, ToggleRow } from './ops-ui';
@@ -51,6 +52,69 @@ export function ShopContactVisibilityCard({ salonId }: { salonId: string }) {
           testID="show-phone-switch"
           label="Show my shop phone number to customers"
           hint="When on, customers see a “Call shop” button on their booking, for example to ask about rescheduling or a cancellation charge. When off, your number is never sent to a customer’s app."
+          value={value}
+          onChange={(next) => void change(next)}
+          disabled={busy}
+        />
+      ) : null}
+    </PremiumCard>
+  );
+}
+
+/**
+ * Automatic staff assignment. The SERVER is the source of truth: the switch shows what the server stores
+ * (ON for every new shop) and only changes after the server accepted the change, so the website, the
+ * Live Queue and this screen can never disagree. Assigning never starts a service - the barber does.
+ */
+export function AutoAssignmentCard({ salonId }: { salonId: string }) {
+  const { t } = useLanguage();
+  const [value, setValue] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setValue(null);
+    setError(null);
+    apiFetch<{ autoAssignEnabled: boolean }>(ownerOpsPaths.queueSettings(salonId))
+      .then((settings) => !cancelled && setValue(settings.autoAssignEnabled))
+      .catch(() => !cancelled && setError(t.couldNotCompleteAction));
+    return () => {
+      cancelled = true;
+    };
+  }, [salonId, t]);
+
+  async function change(next: boolean) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await apiFetch<{ autoAssignEnabled: boolean }>(ownerOpsPaths.queueSettings(salonId), {
+        method: 'PATCH',
+        body: JSON.stringify({ autoAssignEnabled: next }),
+      });
+      setValue(result.autoAssignEnabled);
+      setNotice(result.autoAssignEnabled ? t.automaticAssignmentOn : t.automaticAssignmentOff);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <PremiumCard style={styles.card} testID="settings-auto-assign">
+      <Text style={styles.title}>{t.automaticAssignmentTitle}</Text>
+      {error && <InlineError message={error} />}
+      {notice && <Text style={styles.ok}>{notice}</Text>}
+      {value === null && !error ? (
+        <Hint>Loading…</Hint>
+      ) : value !== null ? (
+        <ToggleRow
+          testID="auto-assign-setting-switch"
+          label={t.automaticAssignmentLabel}
+          hint={t.automaticAssignmentHint}
           value={value}
           onChange={(next) => void change(next)}
           disabled={busy}

@@ -5,6 +5,8 @@ import type { StaffWorkDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { liveQueuePaths } from '../../lib/live-queue-actions';
+import { newIdempotencyKey } from '../../lib/idempotency';
+import { useLanguage } from '../../lib/language-context';
 import { ownerOpsPaths, formatShopTime } from '../../lib/owner/ops';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
@@ -22,6 +24,7 @@ const AVAILABILITY_LABEL: Record<string, string> = {
  * server to this barber's own records - the app only renders it.
  */
 export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChanged?: () => void }) {
+  const { t } = useLanguage();
   const [work, setWork] = useState<StaffWorkDto | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -56,10 +59,11 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
     const onUpdate = (payload: { salonId?: string }) => {
       if (!payload?.salonId || payload.salonId === salonId) void load();
     };
-    socket.on('queue.updated', onUpdate);
+    const events = ['queue.updated', 'queue.entry.called', 'queue.entry.reassigned', 'staff.status.changed'];
+    events.forEach((name) => socket.on(name, onUpdate));
     const unsubscribe = onReconnect(() => void load());
     return () => {
-      socket.off('queue.updated', onUpdate);
+      events.forEach((name) => socket.off(name, onUpdate));
       unsubscribe();
     };
   }, [salonId, load]);
@@ -86,6 +90,8 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
   }
 
   const current = work.current;
+  // A customer assigned to THIS barber whose service has not started: they start it themselves.
+  const assigned = current ? null : (work.assigned ?? null);
   const eligible = work.waiting.filter((w) => w.eligible);
 
   function confirmComplete() {
@@ -93,7 +99,7 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
     const sessionId = current.serviceSessionId;
     Alert.alert('Complete this service?', `Mark #${current.tokenNumber} (${current.customerLabel}) as finished.`, [
       { text: 'Keep going', style: 'cancel' },
-      { text: 'Complete service', style: 'destructive', onPress: () => void run('complete', () => apiFetch(liveQueuePaths.complete(sessionId), { method: 'POST' }), 'Service completed.') },
+      { text: t.completeServiceAction, style: 'destructive', onPress: () => void run('complete', () => apiFetch(liveQueuePaths.complete(sessionId), { method: 'POST' }), 'Service completed.') },
     ]);
   }
 
@@ -104,15 +110,39 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
       {error && <InlineError message={error} />}
       {notice && <Text style={styles.notice}>{notice}</Text>}
 
+      {assigned && (
+        <>
+          <Text style={styles.heading}>{t.assignedToYouTitle}</Text>
+          <View style={styles.block} testID="staff-assigned">
+            <Text style={styles.strong}>{`#${assigned.tokenNumber} · ${assigned.customerLabel}`}</Text>
+            <Text style={styles.sub}>{`${assigned.serviceName ?? 'Service'}${assigned.chairLabel ? ` · ${assigned.chairLabel}` : ''}`}</Text>
+            <Text style={styles.badge}>{t.assignedNotStartedBadge}</Text>
+            <Text style={styles.sub}>{t.serviceNotStartedHint}</Text>
+            <Button
+              title={t.startServiceAction}
+              onPress={() =>
+                void run(
+                  'start',
+                  () => apiFetch(liveQueuePaths.startService(assigned.queueEntryId), { method: 'POST', headers: { 'Idempotency-Key': newIdempotencyKey() } }),
+                  t.serviceStartedNotice,
+                )
+              }
+              loading={busy === 'start'}
+              style={styles.button}
+            />
+          </View>
+        </>
+      )}
+
       <Text style={styles.heading}>Current service</Text>
       {current ? (
         <View style={styles.block} testID="staff-current">
           <Text style={styles.strong}>{`#${current.tokenNumber} · ${current.customerLabel}`}</Text>
           <Text style={styles.sub}>{`${current.serviceName ?? 'Service'}${current.chairLabel ? ` · ${current.chairLabel}` : ''}${current.startedAt ? ` · started ${formatShopTime(current.startedAt, null)}` : ''}`}</Text>
-          <Button title="Complete service" onPress={confirmComplete} loading={busy === 'complete'} style={styles.button} />
+          <Button title={t.completeServiceAction} onPress={confirmComplete} loading={busy === 'complete'} style={styles.button} />
         </View>
       ) : (
-        <Text style={styles.sub}>You are not serving anyone right now.</Text>
+        <Text style={styles.sub}>{assigned ? t.serviceNotStartedHint : 'You are not serving anyone right now.'}</Text>
       )}
 
       <Text style={styles.heading}>{`Waiting you can take (${eligible.length})`}</Text>
@@ -123,11 +153,11 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
           <Text key={w.queueEntryId} style={styles.row}>{`#${w.tokenNumber} · ${w.customerLabel} · ${w.serviceName ?? 'Service'} · position ${w.position}`}</Text>
         ))
       )}
-      {!current && eligible.length > 0 && work.availabilityState === 'AVAILABLE' && (
+      {!current && !assigned && eligible.length > 0 && work.availabilityState === 'AVAILABLE' && (
         <Button
-          title="Take next customer"
+          title={t.takeNextCustomerAction}
           variant="outline"
-          onPress={() => void run('take', () => apiFetch(ownerOpsPaths.queueTakeNext(salonId), { method: 'POST' }), 'Next customer assigned to you.')}
+          onPress={() => void run('take', () => apiFetch(ownerOpsPaths.queueTakeNext(salonId), { method: 'POST' }), 'Next customer assigned to you. Start the service when they are in your chair.')}
           loading={busy === 'take'}
           style={styles.button}
         />
@@ -154,5 +184,6 @@ const styles = StyleSheet.create({
   row: { fontFamily: font.bodyMedium, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink, marginTop: space[1] },
   block: { marginTop: space[1], padding: space[3], borderWidth: 1, borderColor: color.border, borderRadius: radius.sm },
   button: { marginTop: space[2] },
+  badge: { fontFamily: font.bodyBold, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', color: color.gold, marginTop: space[1] },
   notice: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink, marginTop: space[2] },
 });

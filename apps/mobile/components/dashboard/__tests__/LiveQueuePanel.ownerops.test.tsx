@@ -20,8 +20,10 @@ jest.mock('../../../lib/idempotency', () => ({ newIdempotencyKey: () => 'idem-ke
 jest.mock('../../../lib/language-context', () => ({
   useLanguage: () => ({ language: 'EN', t: require('@barbercue/shared').uiStringsFor('EN') }),
 }));
+// One shared socket so a test can see which events the panel subscribed to.
+const mockSocket = { on: jest.fn(), off: jest.fn() };
 jest.mock('../../../lib/realtime', () => ({
-  getRealtimeSocket: () => ({ on: jest.fn(), off: jest.fn() }),
+  getRealtimeSocket: () => mockSocket,
   joinSalonRoom: jest.fn(),
   onReconnect: () => () => undefined,
 }));
@@ -177,7 +179,7 @@ describe('Live Queue board - owner operations', () => {
     expect(text()).toContain('was added to the Live Queue as #9');
   });
 
-  it('seats one customer with the server\'s allocation engine, not a second client-side one', async () => {
+  it('assigns one customer with the allocation engine of the server, not a second client-side one', async () => {
     await render();
     await press('Assign automatically');
     expect(posts().map((p) => p.path)).toContain('dashboard/queue-entries/q1/auto-assign');
@@ -187,7 +189,7 @@ describe('Live Queue board - owner operations', () => {
     await render();
     await press('Assign all automatically');
     expect(posts().map((p) => p.path)).toContain('dashboard/salons/s1/queue/auto-assign');
-    expect(text()).toContain('Seated 1 customer.');
+    expect(text()).toContain('Assigned 1 customer. The barber starts each service.');
   });
 
   it('only offers automatic seating for customers who are actually in the shop', async () => {
@@ -246,6 +248,191 @@ describe('Live Queue board - owner operations', () => {
     });
     expect(text()).toContain('Newest');
     expect(text()).not.toContain('Stale');
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------------
+// Owner-operations corrective mission: ASSIGNED is not IN SERVICE.
+//   WAITING -> ASSIGNED (a barber and chair are reserved) -> IN SERVICE (the barber starts) -> COMPLETED
+// ---------------------------------------------------------------------------------------------------
+describe('Live Queue board - assigned is not in service', () => {
+  const assigned = (overrides: Record<string, unknown> = {}) =>
+    entry({
+      id: 'qa',
+      tokenNumber: 11,
+      status: 'CALLED',
+      phase: 'ASSIGNED',
+      position: null,
+      customerName: 'Asha Rao',
+      assignedStaffId: 'st1',
+      assignedChairId: 'ch1',
+      assignedStaffName: 'Sam',
+      assignedChairLabel: 'Chair 1',
+      assignedAt: '2026-10-13T10:00:00.000Z',
+      serviceStartedAt: null,
+      ...overrides,
+    });
+  const seated = entry({ id: 'qs', tokenNumber: 12, status: 'IN_SERVICE', phase: 'IN_SERVICE', position: null, customerName: 'Serviced Sam', activeServiceSessionId: 'sess1', assignedStaffId: 'st2', assignedStaffName: 'Ria', assignedChairLabel: 'Chair 2' });
+
+  beforeEach(() => {
+    board = {
+      ...board,
+      sections: { waiting: [entry()], called: [], assigned: [assigned()], inService: [seated], completedToday: [], historyToday: [] },
+      staffRoster: [
+        { id: 'st1', displayName: 'Sam', status: 'ACTIVE', availabilityState: 'RESERVED' },
+        { id: 'st2', displayName: 'Ria', status: 'ACTIVE', availabilityState: 'IN_SERVICE' },
+        { id: 'st3', displayName: 'Meena', status: 'ACTIVE', availabilityState: 'AVAILABLE' },
+      ],
+      chairs: [
+        { id: 'ch1', label: 'Chair 1', occupancy: 'FREE', reservedForEntryId: 'qa', reservedForTokenNumber: 11 },
+        { id: 'ch2', label: 'Chair 2', occupancy: 'FASTQUE', tokenNumber: 12 },
+        { id: 'ch3', label: 'Chair 3', occupancy: 'FREE' },
+      ],
+      autoAssignEnabled: true,
+    };
+  });
+
+  it('keeps Waiting, Assigned and In service as three separate places with exact counts', async () => {
+    await render();
+    const screen = text();
+    expect(screen).toContain('Waiting (1)');
+    expect(screen).toContain('Assigned (1)');
+    expect(screen).toContain('In service (1)');
+    // each customer is listed once, under their own heading
+    expect(screen.match(/Asha Rao/g)).toHaveLength(1);
+    expect(screen.match(/Ravi Kumar/g)).toHaveLength(1);
+    expect(screen.match(/Serviced Sam/g)).toHaveLength(1);
+  });
+
+  it('shows an assigned customer as assigned and NOT started, with their barber and chair', async () => {
+    await render();
+    expect(byTestId('entry-status-11').props.children).toBe('Assigned · not started');
+    expect(text()).toContain('Assigned to: Sam - Chair 1');
+    expect(byTestId('service-not-started-11')).toBeDefined();
+    // a seated customer reads "In service", and only they have Complete
+    expect(byTestId('entry-status-12').props.children).toBe('In service');
+  });
+
+  it('Start service starts the assigned customer through the explicit start action (not through assign)', async () => {
+    await render();
+    await press('Start service');
+    const started = posts().find((p) => p.path === 'dashboard/queue-entries/qa/start-service');
+    expect(started).toBeDefined();
+    expect(started!.init.headers['Idempotency-Key']).toBe('idem-key');
+    expect(posts().some((p) => p.path.endsWith('/assign'))).toBe(false);
+    expect(text()).toContain('Service started.');
+  });
+
+  it('a waiting customer is told they are waiting for available staff (or to be assigned when automatic assignment is off)', async () => {
+    await render();
+    expect(byTestId('waiting-for-staff-7').props.children).toBe('Waiting for available staff');
+    await act(async () => tree!.unmount());
+    tree = undefined;
+    board = { ...board, autoAssignEnabled: false };
+    await render();
+    expect(byTestId('waiting-for-staff-7').props.children).toBe('Waiting to be assigned');
+  });
+
+  it('a waiting customer has no Start service, and neither does an in-service one', async () => {
+    board = { ...board, sections: { waiting: [entry()], called: [], assigned: [], inService: [seated], completedToday: [], historyToday: [] } };
+    await render();
+    expect(button('Start service')).toBeUndefined();
+  });
+
+  it('the owner may start anyone\'s customer; a barber only their own', async () => {
+    await render({ role: 'staff', myStaffId: 'someone-else' });
+    expect(button('Start service')).toBeUndefined();
+    await act(async () => tree!.unmount());
+    tree = undefined;
+    await render({ role: 'staff', myStaffId: 'st1' });
+    expect(button('Start service')).toBeDefined();
+    await act(async () => tree!.unmount());
+    tree = undefined;
+    await render({ role: 'owner' });
+    expect(button('Start service')).toBeDefined();
+  });
+
+  it('shows the chair held by the assigned customer as reserved, and offers only free chairs (plus their own) when changing', async () => {
+    await render();
+    expect(text()).toContain('Reserved · not started · #11');
+    await press('Change barber & chair');
+    const chipLabels = nodes((n) => typeof n.props?.onPress === 'function' && n.props?.style !== undefined)
+      .flatMap((n) => n.findAll((c) => typeof c.props?.children === 'string').map((c) => c.props.children as string));
+    expect(chipLabels).toContain('Chair 1'); // the customer's own held chair
+    expect(chipLabels).toContain('Chair 3');
+    expect(chipLabels).not.toContain('Chair 2'); // occupied by a service in progress
+  });
+
+  it('manually assigning sends startService:false so the service is not started by the assignment', async () => {
+    board = { ...board, sections: { waiting: [], called: [entry({ status: 'CALLED' })], assigned: [], inService: [], completedToday: [], historyToday: [] } };
+    await render();
+    await press('Assign');
+    const chip = (label: string) => nodes((n) => typeof n.props?.onPress === 'function' && n.findAll((c) => Boolean((c as unknown as { children?: unknown[] }).children?.includes(label))).length > 0)[0];
+    await act(async () => chip('Meena').props.onPress());
+    await act(async () => chip('Chair 3').props.onPress());
+    await press('Confirm assignment');
+    const post = posts().find((p) => p.path === 'dashboard/queue-entries/q1/assign');
+    expect(JSON.parse(post!.init.body)).toMatchObject({ staffId: 'st3', chairId: 'ch3', startService: false });
+  });
+
+  it('refuses nothing silently: a refused start shows the server\'s own reason', async () => {
+    (apiFetch as jest.Mock).mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path.endsWith('/start-service')) {
+        const { ApiError } = jest.requireMock('../../../lib/api') as { ApiError: new (status: number, body: { error: { code: string; message: string } }) => Error };
+        throw new ApiError(403, { error: { code: 'NOT_YOUR_ASSIGNMENT', message: 'This customer is assigned to another barber.' } });
+      }
+      if (init?.method === 'POST' || init?.method === 'PATCH') return {};
+      return path.endsWith('/queue') ? board : {};
+    });
+    await render();
+    await press('Start service');
+    expect(byTestId('inline-error').props.children).toBe('This customer is assigned to another barber.');
+  });
+
+  it('the automatic assignment switch shows what the server says; and is absent when the server does not report it', async () => {
+    await render({ role: 'owner' });
+    expect(byTestId('auto-assign-switch').props.value).toBe(true);
+    await act(async () => tree!.unmount());
+    tree = undefined;
+    board = { ...board, autoAssignEnabled: false };
+    await render({ role: 'owner' });
+    expect(byTestId('auto-assign-switch').props.value).toBe(false);
+    await act(async () => tree!.unmount());
+    tree = undefined;
+    const { autoAssignEnabled: _omitted, ...withoutFlag } = board;
+    board = withoutFlag;
+    await render({ role: 'owner' });
+    expect(byTestId('auto-assign-switch')).toBeUndefined();
+  });
+
+  it('refreshes on every realtime event that can move a customer between the places', async () => {
+    await render();
+    const subscribed = mockSocket.on.mock.calls.map(([name]) => name);
+    for (const name of ['queue.updated', 'queue.entry.called', 'queue.entry.reassigned', 'queue.entry.no_show', 'queue.entry.expired', 'staff.status.changed']) {
+      expect(subscribed).toContain(name);
+    }
+  });
+});
+
+describe('Live Queue board - Hindi', () => {
+  it('shows the new controls in Hindi when the account language is Hindi', async () => {
+    const shared = require('@barbercue/shared') as { uiStringsFor: (l: string) => Record<string, string> };
+    const hi = shared.uiStringsFor('HI');
+    board = {
+      ...board,
+      sections: { waiting: [], called: [], assigned: [{ ...entry(), id: 'qa', tokenNumber: 11, status: 'CALLED', phase: 'ASSIGNED', position: null, assignedStaffId: 'st1', assignedStaffName: 'Sam', assignedChairLabel: 'Chair 1' }], inService: [], completedToday: [], historyToday: [] },
+      autoAssignEnabled: true,
+    };
+    const lang = jest.requireMock('../../../lib/language-context') as { useLanguage: () => unknown };
+    jest.spyOn(lang, 'useLanguage').mockReturnValue({ language: 'HI', t: hi });
+    await render();
+    const screen = text();
+    expect(screen).toContain(hi.startServiceAction);
+    expect(screen).toContain(hi.assignedNotStartedBadge);
+    expect(screen).toContain(hi.automaticAssignmentLabel);
+    expect(screen).toContain(hi.serviceNotStartedHint);
+    expect(screen).not.toContain('Start service');
   });
 });
 

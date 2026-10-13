@@ -124,8 +124,8 @@ export function OwnerOverviewPanel({
   const tiles: { id: string; label: string; value: string; foot: string }[] = [
     { id: 'appointments', label: 'Today’s appointments', value: String(kpis.appointmentsToday), foot: 'Booked for today' },
     { id: 'served', label: 'Customers served', value: String(kpis.customersServedToday), foot: 'Finished today' },
-    { id: 'waiting', label: 'Waiting in Live Queue', value: String(kpis.waitingInQueue), foot: 'Not yet seated' },
-    { id: 'inservice', label: 'In service now', value: String(kpis.inService), foot: 'Seated customers' },
+    { id: 'waiting', label: 'Waiting in Live Queue', value: String(kpis.waitingInQueue), foot: 'Waiting for available staff' },
+    { id: 'inservice', label: 'In service now', value: String(kpis.inService), foot: 'Service started' },
     { id: 'revenue', label: 'Revenue recorded today', value: money(kpis.recordedRevenueToday), foot: `${kpis.recordedPaymentsToday} payment${kpis.recordedPaymentsToday === 1 ? '' : 's'} recorded` },
     { id: 'available', label: 'Barbers available', value: String(kpis.availableBarbers), foot: 'On duty and free' },
     { id: 'busy', label: 'Barbers busy', value: String(kpis.busyBarbers), foot: 'With a customer' },
@@ -234,8 +234,9 @@ export function OwnerOverviewPanel({
         </View>
         <View style={styles.queueGrid}>
           {[
-            ['Waiting', queue.waiting],
-            ['Called', queue.called],
+            // Called-to-the-counter customers have no barber yet, so they are still waiting for staff.
+            ['Waiting', queue.waiting + queue.called],
+            ['Assigned', queue.assigned ?? 0],
             ['In service', queue.inService],
             ['Completed', queue.completedToday],
             ['Cancelled', queue.cancelledToday],
@@ -247,7 +248,7 @@ export function OwnerOverviewPanel({
             </View>
           ))}
         </View>
-        <Text style={styles.disclaimer}>Each person is counted once: seated customers are not also counted as waiting.</Text>
+        <Text style={styles.disclaimer}>Each person is counted once: an assigned customer is not waiting, and is not in service until the barber starts the service.</Text>
       </PremiumCard>
 
       <PremiumCard style={styles.section} testID="overview-top-services">
