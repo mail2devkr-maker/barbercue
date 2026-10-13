@@ -20,7 +20,7 @@ function buttonText(button) {
     : String(button.props.children);
 }
 
-it("requires explicit typed intent and browser confirmation before removing exactly the listed active count", async () => {
+it("requires typed intent and browser confirmation for all 180 services even when 0 active", async () => {
   let renderer;
   const priorWindow = globalThis.window;
   const confirm = jest.fn().mockReturnValue(false);
@@ -31,44 +31,45 @@ it("requires explicit typed intent and browser confirmation before removing exac
       renderer = TestRenderer.create(
         <RemoveAllServicesControl
           basePath="dashboard/salons/shop-one/services"
-          activeCount={131}
+          activeCount={0}
+          totalCount={180}
           onRemoved={onRemoved}
         />
       );
     });
     expect(renderer.root.findAllByType("button").some((b) =>
-      buttonText(b) === "Remove All Services (131)"
+      buttonText(b) === "Remove All Services (180)"
     )).toBe(true);
     const open = renderer.root.findAllByType("button").find((b) =>
-      buttonText(b) === "Remove All Services (131)"
+      buttonText(b) === "Remove All Services (180)"
     );
     await act(async () => open.props.onClick());
     const dangerButton = () => renderer.root.findAllByType("button").find((b) =>
-      b.props.children === "Confirm Remove All (131)"
+      b.props.children === "Confirm Permanent Delete (180)"
     );
     expect(dangerButton().props.disabled).toBe(true);
     expect(apiFetch).not.toHaveBeenCalled();
     await act(async () => renderer.root.findByProps({
       id: "confirm-remove-all-services",
-    }).props.onChange({ target: { value: "REMOVE ALL" } }));
+    }).props.onChange({ target: { value: "DELETE ALL" } }));
     expect(dangerButton().props.disabled).toBe(false);
     await act(async () => dangerButton().props.onClick());
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(apiFetch).not.toHaveBeenCalled();
 
     confirm.mockReturnValue(true);
-    apiFetch.mockResolvedValueOnce({ removedCount: 131, remainingActive: 0 });
+    apiFetch.mockResolvedValueOnce({ deletedCount: 180, remainingCount: 0 });
     await act(async () => dangerButton().props.onClick());
     expect(apiFetch).toHaveBeenCalledWith(
-      "dashboard/salons/shop-one/services/remove-all",
+      "dashboard/salons/shop-one/services/delete-all",
       { method: "POST", body: JSON.stringify({
-        confirmation: "REMOVE ALL", expectedActiveCount: 131,
+        confirmation: "DELETE ALL", expectedTotalCount: 180,
       }) },
     );
-    expect(onRemoved).toHaveBeenCalledWith(131);
+    expect(onRemoved).toHaveBeenCalledWith(180);
     // A replay click is blocked even before the page finishes navigating.
     expect(renderer.root.findAllByType("button").find((b) =>
-      buttonText(b) === "Remove All Services (131)"
+      buttonText(b) === "Remove All Services (180)"
     ).props.disabled).toBe(true);
   } finally {
     if (renderer) await act(async () => renderer.unmount());
@@ -77,13 +78,13 @@ it("requires explicit typed intent and browser confirmation before removing exac
   }
 });
 
-it("disabled for a shop with zero active services", async () => {
+it("disabled only when the shop has zero total services", async () => {
   let renderer;
   try {
     await act(async () => {
       renderer = TestRenderer.create(
         <RemoveAllServicesControl basePath="dashboard/salons/shop-two/services"
-          activeCount={0} onRemoved={async () => {}} />
+          activeCount={0} totalCount={0} onRemoved={async () => {}} />
       );
     });
     const removeButton = renderer.root.findAllByType("button").find((b) =>
