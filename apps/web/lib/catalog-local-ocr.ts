@@ -78,7 +78,6 @@ export async function extractCatalogLocally(
     return result.data.text ?? '';
   };
 
-  let doc: Awaited<ReturnType<typeof import('pdfjs-dist/build/pdf.mjs')['getDocument']>> | null = null;
   try {
     if (pdf) {
       onProgress('Opening PDF locally…');
