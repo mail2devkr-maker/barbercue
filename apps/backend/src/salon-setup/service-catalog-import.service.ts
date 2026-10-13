@@ -110,24 +110,24 @@ export function parseXlsxTables(buffer: Buffer): Array<{ source: string; rows: s
     if (xml.length !== uncompressed || parts.has(name)) failure('CATALOG_INVALID_XLSX', 'Invalid Excel entry length.');
     parts.set(name, xml.toString('utf8'));
   }
-  const strings = [...(parts.get('xl/sharedStrings.xml') ?? '').matchAll(/<si(?:\s[^>]*)?>([\s\S]*?)<\/si>/g)]
-    .map((m) => [...m[1].matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map((t) => xmlDecode(t[1])).join(''));
+  const strings = [...(parts.get('xl/sharedStrings.xml') ?? '').matchAll(/<(?:[\w.-]+:)?si(?:\s[^>]*)?>([\s\S]*?)<\/(?:[\w.-]+:)?si>/g)]
+    .map((m) => [...m[1].matchAll(/<(?:[\w.-]+:)?t(?:\s[^>]*)?>([\s\S]*?)<\/(?:[\w.-]+:)?t>/g)].map((t) => xmlDecode(t[1])).join(''));
   if (strings.length > 50_000) failure('CATALOG_XLSX_LIMIT', 'Too many Excel shared strings.');
   const sheets = [...parts.entries()].filter(([name]) => /\/worksheets\/sheet\d+\.xml$/i.test(name))
     .sort(([a], [b]) => Number(a.match(/sheet(\d+)/)?.[1] ?? 0) - Number(b.match(/sheet(\d+)/)?.[1] ?? 0));
   if (!sheets.length) failure('CATALOG_INVALID_XLSX', 'No readable sheets.');
   return sheets.map(([name, xml]) => {
     const rows: string[][] = [];
-    for (const m of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+    for (const m of xml.matchAll(/<(?:[\w.-]+:)?row\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?row>/g)) {
       const row: string[] = [];
-      for (const c of m[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+      for (const c of m[1].matchAll(/<(?:[\w.-]+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:[\w.-]+:)?c>)/g)) {
         const coordinate = /\br="([A-Z]+)\d+"/i.exec(c[1])?.[1];
         const column = coordinate ? [...coordinate.toUpperCase()].reduce((k, v) => k * 26 + v.charCodeAt(0) - 64, 0) - 1 : row.length;
         if (column > 100 || column < 0) continue;
         const type = /\bt="([^"]+)"/.exec(c[1])?.[1];
-        const v = /<v(?:\s[^>]*)?>([\s\S]*?)<\/v>/.exec(c[2] ?? '')?.[1] ?? '';
+        const v = /<(?:[\w.-]+:)?v(?:\s[^>]*)?>([\s\S]*?)<\/(?:[\w.-]+:)?v>/.exec(c[2] ?? '')?.[1] ?? '';
         row[column] = type === 's' ? strings[Number(v)] ?? ''
-          : type === 'inlineStr' ? [...(c[2] ?? '').matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map((z) => xmlDecode(z[1])).join('')
+          : type === 'inlineStr' ? [...(c[2] ?? '').matchAll(/<(?:[\w.-]+:)?t(?:\s[^>]*)?>([\s\S]*?)<\/(?:[\w.-]+:)?t>/g)].map((z) => xmlDecode(z[1])).join('')
           : xmlDecode(v);
       }
       if (row.some((v) => v?.trim())) rows.push(row);
@@ -136,19 +136,37 @@ export function parseXlsxTables(buffer: Buffer): Array<{ source: string; rows: s
     return { source: name.split('/').pop() ?? name, rows };
   });
 }
-function candidates(rows: string[][], source: string): CatalogCandidate[] {
+function candidates(rows: string[][], source: string, requireHeader = false): CatalogCandidate[] {
   if (!rows.length) return [];
-  const headers = rows[0].map((v) => v?.trim().toLowerCase() ?? '');
-  const index = (re: RegExp) => headers.findIndex((v) => re.test(v));
-  let name = index(/^(service|name|item|particular|treatment|सेवा|सर्विस)/);
-  let cost = index(/(price|rate|amount|cost|mrp|मूल्य|कीमत|रेट)/);
-  let time = index(/(duration|minutes?|time|अवधि|समय)/);
-  const category = index(/(category|section|type|श्रेणी)/);
-  const description = index(/(description|details|notes|विवरण)/);
-  const header = name >= 0 || cost >= 0;
-  if (!header) { name = 0; cost = 1; time = 2; }
-  if (name < 0) name = 0;
-  return rows.slice(header ? 1 : 0).map((row) => ({
+
+  // Real Excel reports often contain a cover page or a title above the service table.
+  // A header is mandatory for XLSX: never interpret summary labels or row numbers as services.
+  let name = -1, cost = -1, time = -1, category = -1, description = -1;
+  let firstServiceRow = -1;
+  for (let rowIndex = 0; rowIndex < Math.min(rows.length, 15); rowIndex++) {
+    const headers = rows[rowIndex].map((v) => v?.trim().toLowerCase() ?? '');
+    const index = (re: RegExp) => headers.findIndex((v) => re.test(v));
+    const candidateName = index(/^(?:service(?:\s+name)?|name|item|particular|treatment|सेवा|सर्विस)(?:$|\b)/);
+    const candidatePrice = index(/^(?:(?:price|rate|amount|cost|mrp|मूल्य|कीमत|रेट)(?:$|\b)|exact\s+import\b)/);
+    const candidateTime = index(/(duration|minutes?|time|अवधि|समय)/);
+    const candidateCategory = index(/^(category|section|type|श्रेणी)/);
+    const candidateDescription = index(/^(description|details|notes|विवरण)/);
+    if (candidateName < 0 || (candidatePrice < 0 && candidateTime < 0 && candidateCategory < 0)) continue;
+    name = candidateName;
+    cost = candidatePrice;
+    time = candidateTime;
+    category = candidateCategory;
+    description = candidateDescription;
+    firstServiceRow = rowIndex + 1;
+    break;
+  }
+  if (firstServiceRow < 0) {
+    if (requireHeader) return [];
+    // Preserve compatibility with simple headerless CSV and TSV files.
+    name = 0; cost = 1; time = 2;
+    firstServiceRow = 0;
+  }
+  return rows.slice(firstServiceRow).map((row) => ({
     name: trim(row[name], 120), price: cost < 0 ? null : price(row[cost]),
     durationMinutes: time < 0 ? null : duration(row[time]),
     category: category < 0 ? '' : trim(row[category], 60),
@@ -156,6 +174,7 @@ function candidates(rows: string[][], source: string): CatalogCandidate[] {
   })).filter((v) => !!v.name && !/^(total|subtotal|discount|tax|gst|service|price list)$/i.test(v.name))
     .slice(0, MAX_ROWS);
 }
+
 function type(file: Express.Multer.File): 'csv' | 'xlsx' | 'pdf' | 'jpeg' | 'png' | 'webp' {
   const name = file.originalname.toLowerCase(), bytes = file.buffer;
   if (name.endsWith('.xlsx') && bytes.subarray(0, 4).equals(Buffer.from([80, 75, 3, 4]))) return 'xlsx';
@@ -193,8 +212,29 @@ export class ServiceCatalogImportService {
     const source = trim(file.originalname.split(/[\\/]/).pop(), 100);
     let services: CatalogCandidate[] = [];
     if (format === 'csv') services = candidates(csvRows(file.buffer.toString('utf8')), source);
-    else if (format === 'xlsx') services = parseXlsxTables(file.buffer)
-      .flatMap((table) => candidates(table.rows, source + ' / ' + table.source)).slice(0, MAX_ROWS);
+    else if (format === 'xlsx') {
+      const parsed = parseXlsxTables(file.buffer)
+        .flatMap((table) => candidates(table.rows, source + ' / ' + table.source, true));
+      // A workbook can contain the same menu as both a review table and an upload preview.
+      // Collapse only identical service identities with the SAME price and duration.
+      // Conflicting prices stay separate for manual review; no missing values are inferred.
+      const deduplicated = new Map<string, CatalogCandidate>();
+      for (const item of parsed) {
+        const key = JSON.stringify([
+          normalizeServiceIdentity(item.name, item.category), item.price, item.durationMinutes,
+        ]);
+        const previous = deduplicated.get(key);
+        if (!previous) deduplicated.set(key, item);
+        else if (item.description.length > previous.description.length) {
+          deduplicated.set(key, { ...previous, description: item.description });
+        }
+      }
+      services = [...deduplicated.values()].slice(0, MAX_ROWS);
+      if (!services.length) {
+        failure('CATALOG_XLSX_NO_SERVICE_TABLE',
+          'No Excel service table found. Use columns Name, Price, Duration Minutes, Category, Description.');
+      }
+    }
     else {
       if (!consent) failure('CATALOG_CONSENT_REQUIRED', 'Confirm use of Google Gemini to read your PDF/photo.');
       const apiKey = process.env.GEMINI_API_KEY;
