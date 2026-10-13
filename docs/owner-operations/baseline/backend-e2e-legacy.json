@@ -1,0 +1,112 @@
+{
+  "_why": "Older e2e suites that no longer match master (reproduced on master f2f2b2c6, same disposable-PostgreSQL environment): queue and booking do not compile because tokens.signAccessToken now takes a third argument (the session audience); rbac gets 401 where it expects 200/403 for the same reason (tokens without an audience); salon-setup-activation builds its own Nest module without the catalog-import service that SalonSetupController now needs; discovery expects seeded Bengaluru data an empty database does not have. None of these files is touched by owner operations.",
+  "generatedFrom": "master f2f2b2c6f9d979898f2d85e27ab412928c3ef03c (clean npm ci, Node v24.18.0)",
+  "totals": {
+    "passed": 8,
+    "failed": 18,
+    "suites": 6,
+    "failedSuites": 5
+  },
+  "failures": [
+    {
+      "file": "apps/backend/test/queue.e2e-spec.ts",
+      "name": "*",
+      "reason": "● Test suite failed to run"
+    },
+    {
+      "file": "apps/backend/test/booking.e2e-spec.ts",
+      "name": "*",
+      "reason": "● Test suite failed to run"
+    },
+    {
+      "file": "apps/backend/test/salon-setup-activation.e2e-spec.ts",
+      "name": "Salon setup activation — PATCH dashboard/salons/:salonId/status (e2e) reaches activation logic and activates a ready PENDING salon — the exact \"Open my shop\" path",
+      "reason": "Error: Nest can't resolve dependencies of the SalonSetupController (SalonServicesService, ?, SalonChairsService, SalonStaffService, SalonActivationService, SalonOperatingHoursService, SalonPhotosServi"
+    },
+    {
+      "file": "apps/backend/test/salon-setup-activation.e2e-spec.ts",
+      "name": "Salon setup activation — PATCH dashboard/salons/:salonId/status (e2e) returns SALON_SETUP_INCOMPLETE with readiness details for a genuinely incomplete PENDING salon",
+      "reason": "Error: Nest can't resolve dependencies of the SalonSetupController (SalonServicesService, ?, SalonChairsService, SalonStaffService, SalonActivationService, SalonOperatingHoursService, SalonPhotosServi"
+    },
+    {
+      "file": "apps/backend/test/salon-setup-activation.e2e-spec.ts",
+      "name": "Salon setup activation — PATCH dashboard/salons/:salonId/status (e2e) still returns VALIDATION_ERROR for a genuinely invalid body, and only for the body",
+      "reason": "Error: Nest can't resolve dependencies of the SalonSetupController (SalonServicesService, ?, SalonChairsService, SalonStaffService, SalonActivationService, SalonOperatingHoursService, SalonPhotosServi"
+    },
+    {
+      "file": "apps/backend/test/salon-setup-activation.e2e-spec.ts",
+      "name": "Salon setup activation — PATCH dashboard/salons/:salonId/status (e2e) keeps owner-of-this-salon access protection intact",
+      "reason": "Error: Nest can't resolve dependencies of the SalonSetupController (SalonServicesService, ?, SalonChairsService, SalonStaffService, SalonActivationService, SalonOperatingHoursService, SalonPhotosServi"
+    },
+    {
+      "file": "apps/backend/test/salon-setup-activation.e2e-spec.ts",
+      "name": "Salon setup activation — PATCH dashboard/salons/:salonId/status (e2e) keeps the SALON_OWNER role gate intact",
+      "reason": "Error: Nest can't resolve dependencies of the SalonSetupController (SalonServicesService, ?, SalonChairsService, SalonStaffService, SalonActivationService, SalonOperatingHoursService, SalonPhotosServi"
+    },
+    {
+      "file": "apps/backend/test/salon-setup-activation.e2e-spec.ts",
+      "name": "Salon setup activation — PATCH dashboard/salons/:salonId/status (e2e) rejects an unauthenticated request",
+      "reason": "Error: Nest can't resolve dependencies of the SalonSetupController (SalonServicesService, ?, SalonChairsService, SalonStaffService, SalonActivationService, SalonOperatingHoursService, SalonPhotosServi"
+    },
+    {
+      "file": "apps/backend/test/rbac.e2e-spec.ts",
+      "name": "RBAC (e2e) allows a protected route with a valid token for any role",
+      "reason": "Error: expected 200 \"OK\", got 401 \"Unauthorized\""
+    },
+    {
+      "file": "apps/backend/test/rbac.e2e-spec.ts",
+      "name": "RBAC (e2e) rejects a CUSTOMER on an admin-only route",
+      "reason": "Error: expected 403 \"Forbidden\", got 401 \"Unauthorized\""
+    },
+    {
+      "file": "apps/backend/test/rbac.e2e-spec.ts",
+      "name": "RBAC (e2e) allows a PLATFORM_ADMIN on an admin-only route",
+      "reason": "Error: expected 200 \"OK\", got 401 \"Unauthorized\""
+    },
+    {
+      "file": "apps/backend/test/rbac.e2e-spec.ts",
+      "name": "RBAC (e2e) allows SALON_STAFF and SALON_OWNER, but not each other-excluded roles, on a multi-role route",
+      "reason": "Error: expected 200 \"OK\", got 401 \"Unauthorized\""
+    },
+    {
+      "file": "apps/backend/test/discovery.e2e-spec.ts",
+      "name": "Discovery (e2e, live database) GET /cities includes the seeded Bengaluru city",
+      "reason": "Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "apps/backend/test/discovery.e2e-spec.ts",
+      "name": "Discovery (e2e, live database) GET /cities/in/bengaluru returns the single city detail (country-scoped, B9)",
+      "reason": "Error: expected 200 \"OK\", got 404 \"Not Found\""
+    },
+    {
+      "file": "apps/backend/test/discovery.e2e-spec.ts",
+      "name": "Discovery (e2e, live database) GET /cities/in/bengaluru/localities includes the seeded Indiranagar locality",
+      "reason": "Error: expected 200 \"OK\", got 404 \"Not Found\""
+    },
+    {
+      "file": "apps/backend/test/discovery.e2e-spec.ts",
+      "name": "Discovery (e2e, live database) GET /cities/:countryCode/:citySlug/localities/:localitySlug 404s for an unknown locality",
+      "reason": "Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "apps/backend/test/discovery.e2e-spec.ts",
+      "name": "Discovery (e2e, live database) GET /salons?city=bengaluru returns the seeded demo salon with a real computed rating",
+      "reason": "Error: expect(received).toBeDefined()"
+    },
+    {
+      "file": "apps/backend/test/discovery.e2e-spec.ts",
+      "name": "Discovery (e2e, live database) GET /cities/:countryCode/:citySlug accepts an uppercase country segment identically",
+      "reason": "Error: expected 200 \"OK\", got 404 \"Not Found\""
+    },
+    {
+      "file": "apps/backend/test/discovery.e2e-spec.ts",
+      "name": "Discovery (e2e, live database) GET /salons/:countryCode/:citySlug/:salonSlug returns the full seeded profile (B9)",
+      "reason": "Error: expected 200 \"OK\", got 404 \"Not Found\""
+    },
+    {
+      "file": "apps/backend/test/discovery.e2e-spec.ts",
+      "name": "Discovery (e2e, live database) GET /salons/:countryCode/:citySlug/:salonSlug 404s for a nonexistent salon",
+      "reason": "Error: expect(received).toBe(expected) // Object.is equality"
+    }
+  ]
+}

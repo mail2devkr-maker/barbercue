@@ -161,6 +161,7 @@ jobs:
           npx jest --ci --json --outputFile="$RUNNER_TEMP/mobile-jest.json" || true
           node ../../scripts/ci/jest-baseline-compare.js "$RUNNER_TEMP/mobile-jest.json" ../../docs/owner-operations/baseline/mobile-jest.json mobile-jest
       - name: Expo Android JavaScript export (a bundle check only - NOT proof of native behaviour)
+        if: ${{ !cancelled() }}
         working-directory: apps/mobile
         run: npx expo export --platform android --output-dir "$RUNNER_TEMP/android-export"
 
