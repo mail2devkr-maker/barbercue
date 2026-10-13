@@ -1,4 +1,4 @@
-import { CANCELLATION_ACTOR_LABEL, describeCancellationNotice, formatChange, formatMoney, initialsOf, ownerOpsPaths } from '../ops';
+import { CANCELLATION_ACTOR_LABEL, describeCancellationNotice, describeRescheduleNotice, formatChange, formatMoney, initialsOf, ownerOpsPaths } from '../ops';
 
 describe('owner-ops routes', () => {
   it('every route is under the authoritative dashboard prefix (never an un-prefixed path)', () => {
@@ -104,5 +104,19 @@ describe('cancellation notice wording tells only what is true', () => {
     for (const push of ['SENT', 'FAILED', 'NO_DEVICE']) {
       expect(describeCancellationNotice({ notification: { inApp: 'SENT', push } })).not.toMatch(/sms|text message/i);
     }
+  });
+});
+
+describe('reschedule notice wording tells only what is true', () => {
+  it('says plainly when the customer has no account (an in-shop guest)', () => {
+    expect(describeRescheduleNotice({ notification: { inApp: 'NO_ACCOUNT', push: 'NO_ACCOUNT' } })).toMatch(/without a FastQue account/);
+  });
+  it('claims delivery only when it happened', () => {
+    expect(describeRescheduleNotice({ notification: { inApp: 'SENT', push: 'SENT' } })).toMatch(/in the app and by push/);
+    expect(describeRescheduleNotice({ notification: { inApp: 'PENDING', push: 'PENDING' } })).toMatch(/queued/);
+  });
+  it('claims nothing when the server reports nothing', () => {
+    expect(describeRescheduleNotice(undefined)).toBe('');
+    expect(describeRescheduleNotice({})).toBe('');
   });
 });

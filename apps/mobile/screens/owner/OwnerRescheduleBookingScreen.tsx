@@ -4,7 +4,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { DASHBOARD_PATHS, shopRescheduleBookingSchema, type SalonTimezoneResultDto } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../../lib/api';
 import { newIdempotencyKey } from '../../lib/idempotency';
-import { formatShopDate, formatShopTime, ownerOpsPaths } from '../../lib/owner/ops';
+import { describeRescheduleNotice, formatShopDate, formatShopTime, ownerOpsPaths } from '../../lib/owner/ops';
 import { fastQue, font, fontSize, space } from '../../lib/theme';
 import { InlineError, PremiumButton, PremiumCard, PremiumScreen, PremiumSectionHeader } from '../../components/ui';
 import { Hint } from '../../components/owner/ops-ui';
@@ -43,12 +43,12 @@ export default function OwnerRescheduleBookingScreen() {
     }
     setBusy(true);
     try {
-      await apiFetch(ownerOpsPaths.rescheduleBooking(salonId, bookingId), {
+      const result = await apiFetch<{ notification?: { inApp: string; push: string } }>(ownerOpsPaths.rescheduleBooking(salonId, bookingId), {
         method: 'POST',
         headers: { 'Idempotency-Key': newIdempotencyKey() },
         body: JSON.stringify(parsed.data),
       });
-      setDone(`Moved to ${formatShopDate(parsed.data.slotStart, timeZone)} at ${formatShopTime(parsed.data.slotStart, timeZone)}. The customer has been notified.`);
+      setDone(`Moved to ${formatShopDate(parsed.data.slotStart, timeZone)} at ${formatShopTime(parsed.data.slotStart, timeZone)}. ${describeRescheduleNotice(result)}`.trim());
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not move this appointment. Nothing was changed.');
     } finally {

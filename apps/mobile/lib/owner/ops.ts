@@ -135,3 +135,16 @@ export function describeCancellationNotice(result: {
   if (inAppSent) return 'The customer was notified in the app. The push notification will be retried automatically.';
   return 'The appointment is cancelled. The customer notification is queued and will be retried automatically.';
 }
+
+/** One honest sentence about whether the customer was told their appointment moved. */
+export function describeRescheduleNotice(result?: { notification?: { inApp: string; push: string } } | null): string {
+  const notification = result?.notification;
+  if (!notification) return '';
+  const { inApp, push } = notification;
+  if (inApp === 'NO_ACCOUNT') return 'This appointment was made for a customer without a FastQue account, so no app notification was sent.';
+  const inAppSent = inApp === 'SENT';
+  if (inAppSent && push === 'SENT') return 'The customer was notified in the app and by push notification.';
+  if (inAppSent && push === 'NO_DEVICE') return 'The customer was notified in the app. They have no device registered for push notifications.';
+  if (inAppSent) return 'The customer was notified in the app. The push notification will be retried automatically.';
+  return 'The customer notification is queued and will be retried automatically.';
+}
