@@ -85,11 +85,16 @@ it('selects private on-device OCR by default when server Gemini OCR is unconfigu
     apiFetch.mockResolvedValueOnce({
       createdCount: 1, skippedCount: 0, added: ['Haircut'], skipped: [],
     });
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    // Jest uses the Node test environment. Provide only the confirm dialog used
+    // by this save path rather than requiring a DOM/browser or network.
+    const originalWindow = globalThis.window;
+    globalThis.window = { confirm: jest.fn().mockReturnValue(true) };
     try {
       await act(async () => eligible.props.onClick());
+      expect(globalThis.window.confirm).toHaveBeenCalledTimes(1);
     } finally {
-      confirm.mockRestore();
+      if (originalWindow === undefined) delete globalThis.window;
+      else globalThis.window = originalWindow;
     }
     expect(apiFetch).toHaveBeenCalledTimes(2);
     const [endpoint, options] = apiFetch.mock.calls[1];
