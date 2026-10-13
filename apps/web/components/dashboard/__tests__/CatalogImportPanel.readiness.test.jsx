@@ -107,3 +107,65 @@ it('selects private on-device OCR by default when server Gemini OCR is unconfigu
     if (renderer) await act(async () => renderer.unmount());
   }
 });
+
+
+it('Add Imported Services saves eligible rows and keeps unpriced services for review', async () => {
+  apiFetch.mockImplementation(async (path) => {
+    if (path.endsWith('/import-capabilities')) return { pdfPhotoOcrAvailable: false };
+    if (path.endsWith('/import-reviewed')) return {
+      createdCount: 1, skippedCount: 0, added: ['Hydra Facial'], skipped: [],
+    };
+    throw new Error('Unexpected API call: ' + path);
+  });
+  extractCatalogLocally.mockResolvedValue({
+    text: '', notes: [], services: [
+      { name: 'Hydra Facial', category: 'Facial', price: 4999, durationMinutes: 90, description: '', source: 'menu.jpg' },
+      { name: 'Kanpeki Facial', category: 'Facial', price: null, durationMinutes: 75, description: 'Range needs approval', source: 'menu.jpg' },
+    ],
+  });
+  let renderer;
+  const priorWindow = globalThis.window;
+  globalThis.window = { confirm: jest.fn().mockReturnValue(true) };
+  try {
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <CatalogImportPanel basePath="dashboard/salons/shop123/services"
+          existingServices={[]} onImported={async () => {}} />
+      );
+    });
+    const input = renderer.root.findByProps({ id: 'catalog-multiple-input' });
+    const file = { name: 'menu.jpg', size: 2048, lastModified: 123 };
+    await act(async () => input.props.onChange({ target: { files: [file] } }));
+    const extract = renderer.root.findAllByType('button').find((b) =>
+      b.props.children === 'Step 1: Extract & preview (1)'
+    );
+    expect(extract).toBeDefined();
+    await act(async () => extract.props.onClick());
+    const addImported = renderer.root.findAllByType('button').filter((b) =>
+      b.props.children === 'Add Imported Services (1 ready)'
+    );
+    expect(addImported).toHaveLength(2);
+    expect(addImported.every((b) => !b.props.disabled)).toBe(true);
+    expect(renderer.root.findAllByType('strong').some((node) =>
+      node.props.children.join('') === '1 ready to add out of 2 selected.'
+    )).toBe(true);
+    await act(async () => addImported[0].props.onClick());
+    const saves = apiFetch.mock.calls.filter(([path]) => path.endsWith('/import-reviewed'));
+    expect(saves).toHaveLength(1);
+    expect(saves[0][0]).toBe('dashboard/salons/shop123/services/import-reviewed');
+    expect(JSON.parse(saves[0][1].body).services).toEqual([{
+      name: 'Hydra Facial', category: 'Facial',
+      price: 4999, durationMinutes: 90,
+    }]);
+    expect(globalThis.window.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('1 selected service(s) require correction')
+    );
+    expect(JSON.stringify(renderer.toJSON())).toContain('Kanpeki Facial');
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('"value":"Hydra Facial"');
+    expect(JSON.stringify(renderer.toJSON())).toContain('remain in review');
+  } finally {
+    if (renderer) await act(async () => renderer.unmount());
+    if (priorWindow === undefined) delete globalThis.window;
+    else globalThis.window = priorWindow;
+  }
+});
