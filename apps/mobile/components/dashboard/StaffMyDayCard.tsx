@@ -106,7 +106,7 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
   return (
     <Card style={styles.card}>
       <Text style={styles.title}>My day</Text>
-      <Text style={styles.sub}>{`${work.displayName} · ${AVAILABILITY_LABEL[work.availabilityState] ?? work.availabilityState} · ${work.completedToday} done today`}</Text>
+      <Text style={styles.sub}>{`${work.displayName} · ${work.assigned && !work.current ? t.statusAssigned : (AVAILABILITY_LABEL[work.availabilityState] ?? work.availabilityState)} · ${work.completedToday} done today`}</Text>
       {error && <InlineError message={error} />}
       {notice && <Text style={styles.notice}>{notice}</Text>}
 
