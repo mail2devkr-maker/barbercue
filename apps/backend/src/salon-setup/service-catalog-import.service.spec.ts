@@ -122,6 +122,64 @@ describe('ServiceCatalogImportService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it('reads prefixed Excel XML while ignoring cover sheets, title rows and identical review duplicates', async () => {
+    // Mirrors an exported FastQue review workbook: XML namespace prefixes, a cover
+    // worksheet, an editable review worksheet and a canonical upload preview.
+    const txt = (ref: string, value: string) =>
+      `<x:c r="${ref}" t="inlineStr"><x:is><x:t>${value}</x:t></x:is></x:c>`;
+    const num = (ref: string, value: number) =>
+      `<x:c r="${ref}"><x:v>${value}</x:v></x:c>`;
+    const row = (index: number, ...cells: string[]) =>
+      `<x:row r="${index}">${cells.join('')}</x:row>`;
+    const sheet = (...rows: string[]) =>
+      `<x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><x:sheetData>${rows.join('')}</x:sheetData></x:worksheet>`;
+    const book = miniXlsx({
+      'xl/worksheets/sheet1.xml': sheet(
+        row(1, txt('A1', 'FastQue Catalog Mapping - Review Only')),
+        row(4, txt('A4', 'Salon (printed)'), txt('B4', 'Glow and Gaze')),
+      ),
+      'xl/worksheets/sheet2.xml': sheet(
+        row(1, txt('A1', 'PHOTO-TRANSCRIBED SERVICES - EDIT BEFORE IMPORT')),
+        row(3, txt('A3', '#'), txt('B3', 'Category'), txt('C3', 'Service name'),
+          txt('D3', 'Catalog min ₹'), txt('E3', 'Catalog max ₹'),
+          txt('F3', 'Exact import ₹'), txt('G3', 'Duration min')),
+        row(4, num('A4', 1), txt('B4', 'Facial Treatment'),
+          txt('C4', 'Hydra Facial Advance'), num('D4', 4999), num('F4', 4999)),
+        row(5, num('A5', 2), txt('B5', 'Facial Treatment'),
+          txt('C5', 'Kanpeki Facial'), num('D5', 2499), num('E5', 3999)),
+      ),
+      'xl/worksheets/sheet3.xml': sheet(
+        row(1, txt('A1', 'Name'), txt('B1', 'Price'),
+          txt('C1', 'Duration Minutes'), txt('D1', 'Category'),
+          txt('E1', 'Description')),
+        row(2, txt('A2', 'Hydra Facial Advance'), num('B2', 4999),
+          txt('D2', 'Facial Treatment')),
+        row(3, txt('A3', 'Kanpeki Facial'), txt('D3', 'Facial Treatment'),
+          txt('E3', 'Range ₹2499-₹3999: exact price not approved')),
+      ),
+    });
+    const preview = await subject.preview('actor', 'salon', file('report.xlsx', book), false);
+    expect(preview.services.map((item) => ({
+      name: item.name, price: item.price,
+      durationMinutes: item.durationMinutes, category: item.category,
+    }))).toEqual([
+      { name: 'Hydra Facial Advance', price: 4999, durationMinutes: null, category: 'Facial Treatment' },
+      { name: 'Kanpeki Facial', price: null, durationMinutes: null, category: 'Facial Treatment' },
+    ]);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses to invent service rows from a summary-only Excel workbook', async () => {
+    const book = miniXlsx({
+      'xl/worksheets/sheet1.xml':
+        '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Salon name</t></is></c>' +
+        '<c r="B1" t="inlineStr"><is><t>Example salon</t></is></c></row></sheetData></worksheet>',
+    });
+    await expect(subject.preview('actor', 'salon', file('summary.xlsx', book), false))
+      .rejects.toThrow(/No Excel service table found/);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed XLSX safely', () => {
     expect(() => parseXlsxTables(Buffer.from('PK fake archive'))).toThrow();
   });
