@@ -1170,6 +1170,34 @@ export interface UiStrings {
   customerAssignedMessage: string;
   customerAssignedDetail: string;
   customerAssignedDetailNoChair: string;
+  myDayTitle: string;
+  myDaySummary: string;
+  currentServiceHeading: string;
+  waitingYouCanTakeHeading: string;
+  notServingNow: string;
+  nobodyEligibleForYou: string;
+  myAppointmentsHeading: string;
+  noAppointmentsForMe: string;
+  availabilityAvailable: string;
+  availabilityWithCustomer: string;
+  availabilityBookedSoon: string;
+  availabilityOffDuty: string;
+  clockedInLabel: string;
+  clockedOutLabel: string;
+  clockInAction: string;
+  clockOutAction: string;
+  newLiveQueueCustomerAction: string;
+  newInShopAppointmentAction: string;
+  nobodyWaitingNote: string;
+  nobodyBeingServedNote: string;
+  chairStatusTitle: string;
+  chairFreeLabel: string;
+  chairOccupiedToken: string;
+  chairOccupiedNotQueue: string;
+  queueSectionCompleted: string;
+  queueSectionHistory: string;
+  serviceCompletedNotice: string;
+  nextCustomerAssignedNotice: string;
 
   // Style Advisor screen (mobile)
   photoLibraryAccessNeeded: string;
@@ -2162,6 +2190,34 @@ const enUi: UiStrings = {
   customerAssignedMessage: 'Your barber is ready',
   customerAssignedDetail: '{barber} will serve you at {chair}. Please head over: your service starts when they begin.',
   customerAssignedDetailNoChair: '{barber} will serve you. Please head over: your service starts when they begin.',
+  myDayTitle: 'My day',
+  myDaySummary: '{name} · {status} · {count} done today',
+  currentServiceHeading: 'Current service',
+  waitingYouCanTakeHeading: 'Waiting you can take ({count})',
+  notServingNow: 'You are not serving anyone right now.',
+  nobodyEligibleForYou: 'Nobody waiting is eligible for you right now.',
+  myAppointmentsHeading: 'My appointments today ({count})',
+  noAppointmentsForMe: 'No appointments booked with you today.',
+  availabilityAvailable: 'Available',
+  availabilityWithCustomer: 'With a customer',
+  availabilityBookedSoon: 'Booked soon',
+  availabilityOffDuty: 'Off duty',
+  clockedInLabel: 'You\'re clocked in',
+  clockedOutLabel: 'You\'re clocked out',
+  clockInAction: 'Clock in',
+  clockOutAction: 'Clock out',
+  newLiveQueueCustomerAction: 'New Live Queue customer',
+  newInShopAppointmentAction: 'New in-shop appointment',
+  nobodyWaitingNote: 'Nobody is waiting.',
+  nobodyBeingServedNote: 'Nobody is being served.',
+  chairStatusTitle: 'Chair status',
+  chairFreeLabel: 'Free',
+  chairOccupiedToken: 'Occupied — token #{token}',
+  chairOccupiedNotQueue: 'Occupied — not on the queue',
+  queueSectionCompleted: 'Completed today ({count})',
+  queueSectionHistory: 'Cancelled & expired ({count})',
+  serviceCompletedNotice: 'Service completed.',
+  nextCustomerAssignedNotice: 'Next customer assigned to you. Start the service when they are in your chair.',
 
   photoLibraryAccessNeeded: 'Photo library access is needed to try the AI Style Advisor.',
   aiStylePreviewUnavailable: 'AI Style Preview is temporarily unavailable while we prepare the image-generation service. Your photo was not stored.',
@@ -3129,6 +3185,34 @@ const hiUi: UiStrings = {
   customerAssignedMessage: 'आपका नाई तैयार है',
   customerAssignedDetail: '{barber} आपकी सेवा {chair} पर करेंगे। कृपया पहुँचें: उनके शुरू करते ही आपकी सेवा शुरू होगी।',
   customerAssignedDetailNoChair: '{barber} आपकी सेवा करेंगे। कृपया पहुँचें: उनके शुरू करते ही आपकी सेवा शुरू होगी।',
+  myDayTitle: 'मेरा दिन',
+  myDaySummary: '{name} · {status} · आज {count} पूरे',
+  currentServiceHeading: 'वर्तमान सेवा',
+  waitingYouCanTakeHeading: 'आप जिन्हें ले सकते हैं ({count})',
+  notServingNow: 'आप अभी किसी की सेवा नहीं कर रहे हैं।',
+  nobodyEligibleForYou: 'प्रतीक्षा में कोई भी अभी आपके लिए उपयुक्त नहीं है।',
+  myAppointmentsHeading: 'आज मेरी अपॉइंटमेंट ({count})',
+  noAppointmentsForMe: 'आज आपके साथ कोई अपॉइंटमेंट बुक नहीं है।',
+  availabilityAvailable: 'उपलब्ध',
+  availabilityWithCustomer: 'ग्राहक के साथ',
+  availabilityBookedSoon: 'जल्द ही बुक',
+  availabilityOffDuty: 'ड्यूटी से बाहर',
+  clockedInLabel: 'आप ड्यूटी पर हैं',
+  clockedOutLabel: 'आप ड्यूटी से बाहर हैं',
+  clockInAction: 'ड्यूटी शुरू करें',
+  clockOutAction: 'ड्यूटी समाप्त करें',
+  newLiveQueueCustomerAction: 'लाइव कतार में नया ग्राहक',
+  newInShopAppointmentAction: 'दुकान में नई अपॉइंटमेंट',
+  nobodyWaitingNote: 'कोई प्रतीक्षा में नहीं है।',
+  nobodyBeingServedNote: 'अभी किसी की सेवा नहीं हो रही।',
+  chairStatusTitle: 'कुर्सियों की स्थिति',
+  chairFreeLabel: 'खाली',
+  chairOccupiedToken: 'व्यस्त — टोकन #{token}',
+  chairOccupiedNotQueue: 'व्यस्त — कतार में नहीं',
+  queueSectionCompleted: 'आज पूर्ण ({count})',
+  queueSectionHistory: 'रद्द और समाप्त ({count})',
+  serviceCompletedNotice: 'सेवा पूर्ण हुई।',
+  nextCustomerAssignedNotice: 'अगला ग्राहक आपको नियुक्त किया गया। जब वे आपकी कुर्सी पर हों तब सेवा शुरू करें।',
 
   photoLibraryAccessNeeded: 'AI स्टाइल एडवाइज़र आज़माने के लिए फोटो लाइब्रेरी की अनुमति आवश्यक है।',
   aiStylePreviewUnavailable: 'इमेज-जनरेशन सेवा तैयार करते समय AI स्टाइल प्रीव्यू अस्थायी रूप से अनुपलब्ध है। आपकी फोटो सेव नहीं की गई।',

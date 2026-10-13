@@ -566,15 +566,15 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, LiveQueuePanelPro
 
   const toolbar = (
     <View style={styles.toolbar}>
-      <Button title="New Live Queue customer" onPress={() => setShowNewCustomer(true)} style={styles.toolbarButton} />
-      {onNewAppointment && <Button title="New in-shop appointment" variant="outline" onPress={onNewAppointment} style={styles.toolbarButton} />}
+      <Button title={t.newLiveQueueCustomerAction} onPress={() => setShowNewCustomer(true)} style={styles.toolbarButton} />
+      {onNewAppointment && <Button title={t.newInShopAppointmentAction} variant="outline" onPress={onNewAppointment} style={styles.toolbarButton} />}
       {anyoneInShop && <Button title={t.assignAllAutomaticallyAction} variant="outline" onPress={() => void autoAssignAll()} loading={autoBusy === 'all'} style={styles.toolbarButton} />}
     </View>
   );
 
   const chairStatus = (
     <Card style={styles.entryCard}>
-      <View style={styles.entryHeaderRow}><Text style={styles.token}>Chair status</Text></View>
+      <View style={styles.entryHeaderRow}><Text style={styles.token}>{t.chairStatusTitle}</Text></View>
       {data.chairs.length === 0 ? <Text style={styles.meta}>No chairs are set up yet.</Text> : null}
       {data.chairs.map((chair) => {
         const occupancy = chair.occupancy ?? 'FREE';
@@ -585,10 +585,10 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, LiveQueuePanelPro
               {occupancy === 'FREE' && chair.reservedForEntryId
                 ? `${t.chairReservedLabel} · #${chair.reservedForTokenNumber ?? '?'}`
                 : occupancy === 'FREE'
-                  ? 'Free'
+                  ? t.chairFreeLabel
                   : occupancy === 'LOCAL'
-                    ? 'Occupied — not on the queue'
-                    : `Occupied — token #${chair.tokenNumber ?? '?'}`}
+                    ? t.chairOccupiedNotQueue
+                    : t.chairOccupiedToken.replace('{token}', String(chair.tokenNumber ?? '?'))}
             </Text>
           </View>
           {occupancy === 'LOCAL' && <Button title="Free chair" variant="outline" onPress={() => void freeLegacyChair(chair)} loading={chairBusyId === chair.id} />}
@@ -632,7 +632,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, LiveQueuePanelPro
       )}
 
       <Text style={styles.sectionTitle} testID="section-waiting">{t.queueSectionWaiting.replace('{count}', String(waiting.length))}</Text>
-      {waiting.length === 0 ? <Text style={styles.empty}>Nobody is waiting.</Text> : null}
+      {waiting.length === 0 ? <Text style={styles.empty}>{t.nobodyWaitingNote}</Text> : null}
       {waiting.map((entry) => (
         <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} autoAssignEnabled={data.autoAssignEnabled} canStart={false} onAction={reload} onNotice={setNotice} />
       ))}
@@ -644,7 +644,7 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, LiveQueuePanelPro
       ))}
 
       <Text style={styles.sectionTitle} testID="section-in-service">{t.queueSectionInService.replace('{count}', String(sections.inService.length))}</Text>
-      {sections.inService.length === 0 ? <Text style={styles.empty}>Nobody is being served.</Text> : null}
+      {sections.inService.length === 0 ? <Text style={styles.empty}>{t.nobodyBeingServedNote}</Text> : null}
       {sections.inService.map((entry) => (
         <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} canStart={false} onAction={reload} onNotice={setNotice} />
       ))}
@@ -655,12 +655,12 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, LiveQueuePanelPro
       {automatic}
 
       <Pressable accessibilityRole="button" testID="toggle-completed" onPress={() => setShowCompleted((v) => !v)} style={styles.sectionToggle}>
-        <Text style={styles.sectionTitle}>{`Completed today (${sections.completedToday.length}) ${showCompleted ? '▲' : '▼'}`}</Text>
+        <Text style={styles.sectionTitle}>{`${t.queueSectionCompleted.replace('{count}', String(sections.completedToday.length))} ${showCompleted ? '▲' : '▼'}`}</Text>
       </Pressable>
       {showCompleted && (sections.completedToday.length === 0 ? <Text style={styles.empty}>No visits completed yet today.</Text> : sections.completedToday.map((entry) => <PastRow key={entry.id} entry={entry} salonId={salonId} invoiceable onOpenInvoice={onOpenInvoice} />))}
 
       <Pressable accessibilityRole="button" testID="toggle-history" onPress={() => setShowHistory((v) => !v)} style={styles.sectionToggle}>
-        <Text style={styles.sectionTitle}>{`Cancelled & expired (${sections.historyToday.length}) ${showHistory ? '▲' : '▼'}`}</Text>
+        <Text style={styles.sectionTitle}>{`${t.queueSectionHistory.replace('{count}', String(sections.historyToday.length))} ${showHistory ? '▲' : '▼'}`}</Text>
       </Pressable>
       {showHistory && (sections.historyToday.length === 0 ? <Text style={styles.empty}>Nothing ended early today.</Text> : sections.historyToday.map((entry) => <PastRow key={entry.id} entry={entry} salonId={salonId} invoiceable={false} />))}
     </>

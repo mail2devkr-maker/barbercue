@@ -271,7 +271,7 @@ describe('owner operations strings are available in Hindi', () => {
   });
 
   it('every placeholder in an English owner-operations string is kept in the Hindi one', () => {
-    for (const key of ['assignedToTokenNotStarted', 'autoAssignedNotice', 'queueSectionWaiting', 'queueSectionAssigned', 'queueSectionInService']) {
+    for (const key of ['assignedToTokenNotStarted', 'autoAssignedNotice', 'queueSectionWaiting', 'queueSectionAssigned', 'queueSectionInService', 'queueSectionCompleted', 'queueSectionHistory', 'chairOccupiedToken', 'myDaySummary', 'waitingYouCanTakeHeading', 'myAppointmentsHeading', 'customerAssignedDetail', 'customerAssignedDetailNoChair']) {
       const placeholders = String(en[key]).match(/\{[a-z]+\}/g) ?? [];
       expect(placeholders.length).toBeGreaterThan(0);
       for (const placeholder of placeholders) expect(String(hi[key])).toContain(placeholder);

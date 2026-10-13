@@ -25,6 +25,7 @@ function statusPath(staffId: string): string {
 // dashboard/salons/:salonId/staff/me lookup, then reuses the existing self-status PATCH
 // (staff-status.service.ts already lets a SALON_STAFF update their own row with no owner check).
 function SelfStatusCard({ salonId, onMe }: { salonId: string; onMe?: (staffId: string | null) => void }) {
+  const { t } = useLanguage();
   const [me, setMe] = useState<StaffStatusDto | null | undefined>(undefined);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,11 +81,11 @@ function SelfStatusCard({ salonId, onMe }: { salonId: string; onMe?: (staffId: s
   return (
     <View style={styles.selfCard}>
       <View>
-        <Text style={styles.selfLabel}>You&apos;re {me.status === 'ACTIVE' ? 'clocked in' : 'clocked out'}</Text>
+        <Text style={styles.selfLabel}>{me.status === 'ACTIVE' ? t.clockedInLabel : t.clockedOutLabel}</Text>
         {error && <InlineError message={error} />}
       </View>
       <Button
-        title={me.status === 'ACTIVE' ? 'Clock out' : 'Clock in'}
+        title={me.status === 'ACTIVE' ? t.clockOutAction : t.clockInAction}
         variant={me.status === 'ACTIVE' ? 'outline' : 'primary'}
         onPress={() => void toggle()}
         loading={updating}

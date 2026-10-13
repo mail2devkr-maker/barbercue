@@ -11,13 +11,6 @@ import { ownerOpsPaths, formatShopTime } from '../../lib/owner/ops';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Button, Card, InlineError } from '../ui';
 
-const AVAILABILITY_LABEL: Record<string, string> = {
-  AVAILABLE: 'Available',
-  IN_SERVICE: 'With a customer',
-  RESERVED: 'Booked soon',
-  OFF_DUTY: 'Off duty',
-};
-
 /**
  * A barber's own day: the customer they are serving right now (with "Complete service"), the shop's
  * waiting list with the customers THEY can take, and their appointments. Everything is scoped by the
@@ -89,6 +82,12 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
     return error ? <InlineError message={error} /> : null;
   }
 
+  const availabilityLabel: Record<string, string> = {
+    AVAILABLE: t.availabilityAvailable,
+    IN_SERVICE: t.availabilityWithCustomer,
+    RESERVED: t.availabilityBookedSoon,
+    OFF_DUTY: t.availabilityOffDuty,
+  };
   const current = work.current;
   // A customer assigned to THIS barber whose service has not started: they start it themselves.
   const assigned = current ? null : (work.assigned ?? null);
@@ -97,16 +96,21 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
   function confirmComplete() {
     if (!current?.serviceSessionId) return;
     const sessionId = current.serviceSessionId;
-    Alert.alert('Complete this service?', `Mark #${current.tokenNumber} (${current.customerLabel}) as finished.`, [
-      { text: 'Keep going', style: 'cancel' },
-      { text: t.completeServiceAction, style: 'destructive', onPress: () => void run('complete', () => apiFetch(liveQueuePaths.complete(sessionId), { method: 'POST' }), 'Service completed.') },
+    Alert.alert(t.confirmCompleteServiceTitle, `#${current.tokenNumber} (${current.customerLabel})`, [
+      { text: t.keepEntryAction, style: 'cancel' },
+      { text: t.completeServiceAction, style: 'destructive', onPress: () => void run('complete', () => apiFetch(liveQueuePaths.complete(sessionId), { method: 'POST' }), t.serviceCompletedNotice) },
     ]);
   }
 
   return (
     <Card style={styles.card}>
-      <Text style={styles.title}>My day</Text>
-      <Text style={styles.sub}>{`${work.displayName} · ${work.assigned && !work.current ? t.statusAssigned : (AVAILABILITY_LABEL[work.availabilityState] ?? work.availabilityState)} · ${work.completedToday} done today`}</Text>
+      <Text style={styles.title}>{t.myDayTitle}</Text>
+      <Text style={styles.sub}>
+        {t.myDaySummary
+          .replace('{name}', work.displayName)
+          .replace('{status}', work.assigned && !work.current ? t.statusAssigned : (availabilityLabel[work.availabilityState] ?? work.availabilityState))
+          .replace('{count}', String(work.completedToday))}
+      </Text>
       {error && <InlineError message={error} />}
       {notice && <Text style={styles.notice}>{notice}</Text>}
 
@@ -134,7 +138,7 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
         </>
       )}
 
-      <Text style={styles.heading}>Current service</Text>
+      <Text style={styles.heading}>{t.currentServiceHeading}</Text>
       {current ? (
         <View style={styles.block} testID="staff-current">
           <Text style={styles.strong}>{`#${current.tokenNumber} · ${current.customerLabel}`}</Text>
@@ -142,12 +146,12 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
           <Button title={t.completeServiceAction} onPress={confirmComplete} loading={busy === 'complete'} style={styles.button} />
         </View>
       ) : (
-        <Text style={styles.sub}>{assigned ? t.serviceNotStartedHint : 'You are not serving anyone right now.'}</Text>
+        <Text style={styles.sub}>{assigned ? t.serviceNotStartedHint : t.notServingNow}</Text>
       )}
 
-      <Text style={styles.heading}>{`Waiting you can take (${eligible.length})`}</Text>
+      <Text style={styles.heading}>{t.waitingYouCanTakeHeading.replace('{count}', String(eligible.length))}</Text>
       {eligible.length === 0 ? (
-        <Text style={styles.sub}>Nobody waiting is eligible for you right now.</Text>
+        <Text style={styles.sub}>{t.nobodyEligibleForYou}</Text>
       ) : (
         eligible.map((w) => (
           <Text key={w.queueEntryId} style={styles.row}>{`#${w.tokenNumber} · ${w.customerLabel} · ${w.serviceName ?? 'Service'} · position ${w.position}`}</Text>
@@ -157,15 +161,15 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
         <Button
           title={t.takeNextCustomerAction}
           variant="outline"
-          onPress={() => void run('take', () => apiFetch(ownerOpsPaths.queueTakeNext(salonId), { method: 'POST' }), 'Next customer assigned to you. Start the service when they are in your chair.')}
+          onPress={() => void run('take', () => apiFetch(ownerOpsPaths.queueTakeNext(salonId), { method: 'POST' }), t.nextCustomerAssignedNotice)}
           loading={busy === 'take'}
           style={styles.button}
         />
       )}
 
-      <Text style={styles.heading}>{`My appointments today (${work.appointmentsToday.length})`}</Text>
+      <Text style={styles.heading}>{t.myAppointmentsHeading.replace('{count}', String(work.appointmentsToday.length))}</Text>
       {work.appointmentsToday.length === 0 ? (
-        <Text style={styles.sub}>No appointments booked with you today.</Text>
+        <Text style={styles.sub}>{t.noAppointmentsForMe}</Text>
       ) : (
         work.appointmentsToday.map((a) => (
           <Text key={a.bookingId} style={styles.row}>{`${formatShopTime(a.slotStart, null)} · ${a.customerLabel} · ${a.serviceNames.join(' + ')}${a.source === 'IN_SHOP' ? ' · In-shop' : ''}`}</Text>
