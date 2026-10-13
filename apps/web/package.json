@@ -13,10 +13,12 @@
   "dependencies": {
     "@barbercue/shared": "*",
     "next": "16.3.4",
+    "pdfjs-dist": "5.4.296",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "tesseract.js": "6.0.1"
   },
   "devDependencies": {
     "@types/node": "^20",
