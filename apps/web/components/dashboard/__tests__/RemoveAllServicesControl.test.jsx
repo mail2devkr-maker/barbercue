@@ -13,6 +13,13 @@ beforeEach(() => {
   jest.clearAllMocks();
 });
 
+// JSX text and interpolated numbers are separate React children in the Node renderer.
+function buttonText(button) {
+  return Array.isArray(button.props.children)
+    ? button.props.children.join("")
+    : String(button.props.children);
+}
+
 it("requires explicit typed intent and browser confirmation before removing exactly the listed active count", async () => {
   let renderer;
   const priorWindow = globalThis.window;
@@ -30,10 +37,10 @@ it("requires explicit typed intent and browser confirmation before removing exac
       );
     });
     expect(renderer.root.findAllByType("button").some((b) =>
-      b.props.children === "Remove All Services (131)"
+      buttonText(b) === "Remove All Services (131)"
     )).toBe(true);
     const open = renderer.root.findAllByType("button").find((b) =>
-      b.props.children === "Remove All Services (131)"
+      buttonText(b) === "Remove All Services (131)"
     );
     await act(async () => open.props.onClick());
     const dangerButton = () => renderer.root.findAllByType("button").find((b) =>
@@ -61,7 +68,7 @@ it("requires explicit typed intent and browser confirmation before removing exac
     expect(onRemoved).toHaveBeenCalledWith(131);
     // A replay click is blocked even before the page finishes navigating.
     expect(renderer.root.findAllByType("button").find((b) =>
-      b.props.children === "Remove All Services (131)"
+      buttonText(b) === "Remove All Services (131)"
     ).props.disabled).toBe(true);
   } finally {
     if (renderer) await act(async () => renderer.unmount());
@@ -80,7 +87,7 @@ it("disabled for a shop with zero active services", async () => {
       );
     });
     const removeButton = renderer.root.findAllByType("button").find((b) =>
-      b.props.children === "Remove All Services (0)"
+      buttonText(b) === "Remove All Services (0)"
     );
     expect(removeButton.props.disabled).toBe(true);
     expect(apiFetch).not.toHaveBeenCalled();
