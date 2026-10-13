@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CrmFollowUpChannel,
@@ -442,7 +443,7 @@ export default function EmployeeDashboardPage() {
               </div>
               <div className={styles.tableWrap}>
                 <table>
-                  <thead><tr><th>Lead</th><th>Contact</th><th>Stage</th><th>Location</th><th>Onboarding attribution</th></tr></thead>
+                  <thead><tr><th>Lead</th><th>Contact</th><th>Stage</th><th>Location</th><th>Onboarding attribution</th><th>Field voice log</th></tr></thead>
                   <tbody>
                     {filteredLeads.map((lead) => (
                       <tr key={lead.id}>
@@ -479,6 +480,11 @@ export default function EmployeeDashboardPage() {
                               </button>
                             </div>
                           )}
+                        </td>
+                        <td>
+                          <Link className={styles.smallButton} href={`/employee/voice-onboarding/${lead.id}`}>
+                            Start voice onboarding
+                          </Link>
                         </td>
                       </tr>
                     ))}
