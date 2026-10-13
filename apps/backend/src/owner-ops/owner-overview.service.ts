@@ -147,6 +147,19 @@ export class OwnerOverviewService {
     ]);
 
     const busyIds = new Set(activeSessions.map((s) => s.staffId));
+    // A barber with a customer ASSIGNED (service not started) is spoken for: neither available nor
+    // "in service". They count as busy here but never as a service in progress.
+    const heldRows = await this.prisma.queueEntry.findMany({
+      where: {
+        salonId,
+        status: QueueEntryStatus.CALLED,
+        assignedStaffId: { not: null },
+      },
+      select: { assignedStaffId: true },
+    });
+    const heldIds = new Set(
+      heldRows.map((h) => h.assignedStaffId).filter((id): id is string => id !== null),
+    );
     const onDuty = staffRows.filter(
       (s) => s.status === StaffMemberStatus.ACTIVE,
     );
@@ -170,8 +183,8 @@ export class OwnerOverviewService {
         customersServedToday: queueSummary.completedToday,
         waitingInQueue: queueSummary.waiting,
         inService: queueSummary.inService,
-        availableBarbers: onDuty.filter((s) => !busyIds.has(s.id)).length,
-        busyBarbers: onDuty.filter((s) => busyIds.has(s.id)).length,
+        availableBarbers: onDuty.filter((s) => !busyIds.has(s.id) && !heldIds.has(s.id)).length,
+        busyBarbers: onDuty.filter((s) => busyIds.has(s.id) || heldIds.has(s.id)).length,
         activeStaff: onDuty.length,
         completedServicesToday: completedSessionsToday,
         cancelledToday,
@@ -273,7 +286,7 @@ export class OwnerOverviewService {
     salonId: string,
     day: { start: Date; end: Date },
   ): Promise<OwnerQueueSummaryDto> {
-    const [active, completedToday, terminal] = await Promise.all([
+    const [active, assignedCount, completedToday, terminal] = await Promise.all([
       this.prisma.queueEntry.groupBy({
         by: ['status'],
         where: {
@@ -287,6 +300,14 @@ export class OwnerOverviewService {
           },
         },
         _count: { _all: true },
+      }),
+      // CALLED with a reserved barber = ASSIGNED (service not started).
+      this.prisma.queueEntry.count({
+        where: {
+          salonId,
+          status: QueueEntryStatus.CALLED,
+          assignedStaffId: { not: null },
+        },
       }),
       this.prisma.queueEntry.count({
         where: {
@@ -317,7 +338,9 @@ export class OwnerOverviewService {
     ) => rows.find((r) => r.status === status)?._count._all ?? 0;
     return {
       waiting: n(active, QueueEntryStatus.WAITING),
-      called: n(active, QueueEntryStatus.CALLED),
+      // Called to the counter, no barber yet; assigned customers are counted separately.
+      called: Math.max(0, n(active, QueueEntryStatus.CALLED) - assignedCount),
+      assigned: assignedCount,
       inService: n(active, QueueEntryStatus.IN_SERVICE),
       completedToday,
       cancelledToday: n(terminal, QueueEntryStatus.CANCELLED),

@@ -20,8 +20,10 @@ export interface NavItem {
   path?: string;
   /** Query string that selects a view within the page (kept separate so "active" can ignore it). */
   query?: string;
-  /** A site-level route outside the salon (Help, Account). */
+  /** A site-level route outside the salon (Help). */
   href?: string;
+  /** Open `href` in a new tab so the dashboard (and its session) stays exactly where it was. */
+  newTab?: boolean;
   badge?: NavBadge;
   /** Short description used by global search ("Open Analytics..."). */
   keywords?: string[];
@@ -37,7 +39,7 @@ export const NAV_GROUPS: ReadonlyArray<{ id: NavGroupId; label: string; icon: Ic
 ];
 
 export const NAV_ITEMS: ReadonlyArray<NavItem> = [
-  { id: "overview", label: "Overview", icon: "home", group: "HOME", audience: "both", path: "", keywords: ["dashboard", "home", "my day"] },
+  { id: "overview", label: "Dashboard", icon: "home", group: "HOME", audience: "both", path: "", keywords: ["overview", "home", "my day"] },
 
   { id: "queue", label: "Live Queue", icon: "queue", group: "OPERATIONS", audience: "both", path: "queue", query: "view=waiting", badge: "waiting", keywords: ["waiting", "tokens"] },
   { id: "in-service", label: "In Service", icon: "scissors", group: "OPERATIONS", audience: "both", path: "queue", query: "view=in-service", badge: "inService", keywords: ["seated", "chairs"] },
@@ -63,8 +65,10 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { id: "payment-qr", label: "Payment QR", icon: "qr", group: "SHOP", audience: "owner", path: "payment-qr", keywords: ["upi", "scan"] },
   { id: "notifications", label: "Notifications", icon: "bell", group: "SHOP", audience: "both", path: "notifications", badge: "unread", keywords: ["alerts", "inbox"] },
 
-  { id: "help", label: "Help & Support", icon: "help", group: "OTHER", audience: "both", href: "/contact-us", keywords: ["contact", "faq"] },
-  { id: "account", label: "Account Settings", icon: "user", group: "OTHER", audience: "both", href: "/account/profile", keywords: ["profile", "language", "password"] },
+  // Help is a public page, so it opens in a NEW tab: ordinary dashboard navigation never leaves the
+  // signed-in owner area. (There is deliberately no "Account settings" link into /account: that area
+  // is the customer's, gated to customer accounts, and would bounce an owner to the customer login.)
+  { id: "help", label: "Help & Support", icon: "help", group: "OTHER", audience: "both", href: "/contact-us", newTab: true, keywords: ["contact", "faq"] },
 ];
 
 /** Items a given kind of user may see (presentation only - every API re-checks on the server). */

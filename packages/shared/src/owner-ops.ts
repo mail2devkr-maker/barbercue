@@ -87,6 +87,10 @@ export const OwnerOpsErrorCode = {
   NOT_YOUR_SERVICE_SESSION: 'NOT_YOUR_SERVICE_SESSION',
   NO_ELIGIBLE_BARBER: 'NO_ELIGIBLE_BARBER',
   NO_FREE_CHAIR: 'NO_FREE_CHAIR',
+  // Assignment vs start of service (corrective mission)
+  NOT_YOUR_ASSIGNMENT: 'NOT_YOUR_ASSIGNMENT',
+  NOT_ASSIGNED: 'NOT_ASSIGNED',
+  ASSIGNMENT_NOT_STARTABLE: 'ASSIGNMENT_NOT_STARTABLE',
   CUSTOMER_NOT_ARRIVED: 'CUSTOMER_NOT_ARRIVED',
   QUEUE_ENTRY_ALREADY_ACTIVE: 'QUEUE_ENTRY_ALREADY_ACTIVE',
   // Staff
@@ -531,6 +535,8 @@ export interface OwnerScheduleItemDto {
 export interface OwnerQueueSummaryDto {
   waiting: number;
   called: number;
+  /** A barber and chair are reserved, service not started. Optional: absent on older servers. */
+  assigned?: number;
   inService: number;
   completedToday: number;
   cancelledToday: number;
@@ -642,7 +648,7 @@ export interface InShopBookingDto {
   createdAt: string;
 }
 
-export type QueueSectionKey = 'waiting' | 'called' | 'inService' | 'completedToday' | 'historyToday';
+export type QueueSectionKey = 'waiting' | 'called' | 'assigned' | 'inService' | 'completedToday' | 'historyToday';
 
 export interface QueueBoardEntryNote {
   /** Why an automatic allocation did not seat this customer (shown to staff as a plain sentence). */
@@ -689,6 +695,12 @@ export interface StaffWorkDto {
   availabilityState: 'AVAILABLE' | 'IN_SERVICE' | 'RESERVED' | 'OFF_DUTY';
   /** The one session this barber is serving right now, if any — the only one they may complete. */
   current: StaffWorkItemDto | null;
+  /**
+   * A customer the shop (or the automatic allocator) has assigned to THIS barber whose service has
+   * not started: the barber starts it explicitly. Never set at the same time as `current`. Optional:
+   * absent on older servers.
+   */
+  assigned?: StaffWorkItemDto | null;
   /** The shop's waiting list, with the entries THIS barber is eligible to take flagged. */
   waiting: (StaffWorkItemDto & { eligible: boolean; position: number })[];
   appointmentsToday: StaffAppointmentDto[];

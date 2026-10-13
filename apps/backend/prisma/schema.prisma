@@ -795,10 +795,13 @@ model Salon {
   // Owner-operations mission. showPhoneToCustomers: the owner's opt-in to publish `phone` to
   // customers (public profile + "Call shop" on their own booking). Defaults to true because the
   // phone was already public before this column existed — the migration changes no behavior; an
-  // owner can now switch it off. queueAutoAssignEnabled: opt-in automatic barber/chair allocation
-  // for customers who are physically present (default OFF — assignment starts the service).
+  // owner can now switch it off. queueAutoAssignEnabled: automatic barber/chair allocation for
+  // customers who are physically present. Default ON for every new shop (owner decision, 13 Oct
+  // 2026); the owner can switch it off and on again. Automatic allocation only ASSIGNS - a barber
+  // still starts the service explicitly. Migration 20261014000000 moved the default from OFF to ON
+  // without overwriting any shop with a recorded owner choice (see docs/OWNER_OPERATIONS.md).
   showPhoneToCustomers   Boolean @default(true)
-  queueAutoAssignEnabled Boolean @default(false)
+  queueAutoAssignEnabled Boolean @default(true)
 
   // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
   planId                String?
@@ -1401,6 +1404,12 @@ model QueueEntry {
   arrivedAt            DateTime?
   joinedAt             DateTime  @default(now())
   calledAt             DateTime?
+  // Owner-operations corrective mission: when a barber + chair were reserved for this customer.
+  // An ASSIGNED customer is status CALLED with assignedStaffId/assignedChairId set and NO
+  // serviceStartedAt and NO ServiceSession; the barber's explicit start moves it to IN_SERVICE.
+  // Two partial unique indexes (migration 20261014000000) stop one barber or one chair being held
+  // by two assigned customers at once.
+  assignedAt           DateTime?
   serviceStartedAt     DateTime?
   serviceCompletedAt   DateTime?
   estimatedWaitMinutes Int?

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { DASHBOARD_PATHS, StaffMemberStatus } from "@barbercue/shared";
+import { DASHBOARD_PATHS, StaffMemberStatus, queuePhaseOf } from "@barbercue/shared";
+import type { QueueEntryPhase } from "@barbercue/shared";
 import type {
   AutoAssignResultDto,
   ChairOptionDto,
@@ -22,14 +23,17 @@ import { useOwnerShell } from "./OwnerShell";
 import { Badge, Banner, Btn, BtnLink, Card, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
 import ui from "./owner.module.css";
 
-type View = "waiting" | "in-service" | "completed" | "history";
-const VIEWS: ReadonlyArray<View> = ["waiting", "in-service", "completed", "history"];
+type View = "waiting" | "assigned" | "in-service" | "completed" | "history";
+const VIEWS: ReadonlyArray<View> = ["waiting", "assigned", "in-service", "completed", "history"];
 const FALLBACK_POLL_MS = 15_000;
 const LIVE_POLL_MS = 60_000;
 
-const STATUS_LABEL: Record<string, { text: string; tone: "ok" | "warn" | "bad" | "info" | "neutral" }> = {
+// Keyed by PHASE, not raw status: "Assigned" (a barber and chair are reserved) is a CALLED entry that
+// holds a barber, and it must never read as waiting for a barber or as already in service.
+const PHASE_LABEL: Record<QueueEntryPhase, { text: string; tone: "ok" | "warn" | "bad" | "info" | "neutral" }> = {
   WAITING: { text: "Waiting", tone: "warn" },
   CALLED: { text: "Called to the counter", tone: "info" },
+  ASSIGNED: { text: "Assigned · not started", tone: "info" },
   IN_SERVICE: { text: "In service", tone: "ok" },
   COMPLETED: { text: "Completed", tone: "ok" },
   CANCELLED: { text: "Cancelled", tone: "neutral" },
@@ -37,7 +41,11 @@ const STATUS_LABEL: Record<string, { text: string; tone: "ok" | "warn" | "bad" |
   NO_SHOW: { text: "No-show", tone: "bad" },
 };
 
-function availabilityText(member: StaffStatusDto): { text: string; dot: string } {
+function availabilityText(member: StaffStatusDto, assignedTo?: QueueEntryDetailDto): { text: string; dot: string } {
+  // A barber who has been given a customer (service not started) is spoken for - say so precisely.
+  if (assignedTo && member.status === StaffMemberStatus.ACTIVE) {
+    return { text: `Assigned to #${assignedTo.tokenNumber} · not started`, dot: ui.dotInfo };
+  }
   switch (member.availabilityState) {
     case "AVAILABLE":
       return { text: "Available", dot: ui.dotOk };
@@ -234,7 +242,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
   async function assignAutomatically(entry?: QueueEntryDetailDto) {
     setNotice(null);
     if (entry) {
-      await run(`auto-${entry.id}`, () => apiFetch(entryPath(entry.id, "auto-assign"), { method: "POST" }), `${whoLabel(entry)} was seated.`);
+      await run(`auto-${entry.id}`, () => apiFetch(entryPath(entry.id, "auto-assign"), { method: "POST" }), `${whoLabel(entry)} was assigned. The barber starts the service.`);
       return;
     }
     const result = await run("auto-all", () => apiFetch<AutoAssignResultDto>(`${base}/queue/auto-assign`, { method: "POST" }));
@@ -242,8 +250,8 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
       setSkipReasons(Object.fromEntries(result.skipped.map((s) => [s.entryId, s.reason])));
       setNotice(
         result.assigned.length === 0
-          ? "Nobody could be seated right now. The reason is shown on each waiting customer."
-          : `${result.assigned.length} customer${result.assigned.length === 1 ? " was" : "s were"} seated automatically${result.skipped.length ? `; ${result.skipped.length} still waiting` : ""}.`,
+          ? "Nobody could be assigned right now. The reason is shown on each waiting customer."
+          : `${result.assigned.length} customer${result.assigned.length === 1 ? " was" : "s were"} assigned${result.skipped.length ? `; ${result.skipped.length} still waiting` : ""}. The barber starts each service.`,
       );
     }
   }
@@ -251,12 +259,17 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
   const sections = data?.sections;
   const waiting = sections?.waiting ?? [];
   const called = sections?.called ?? [];
+  const assigned = useMemo(
+    () => sections?.assigned ?? data?.entries.filter((e) => queuePhaseOf(e) === "ASSIGNED") ?? [],
+    [sections?.assigned, data?.entries],
+  );
+  const assignedByStaff = useMemo(() => new Map(assigned.filter((e) => e.assignedStaffId).map((e) => [e.assignedStaffId as string, e])), [assigned]);
   const inService = sections?.inService ?? [];
   const completed = sections?.completedToday ?? [];
   const history = sections?.historyToday ?? [];
   const counts = useMemo(
-    () => ({ waiting: waiting.length + called.length, inService: inService.length, completed: completed.length, history: history.length }),
-    [waiting.length, called.length, inService.length, completed.length, history.length],
+    () => ({ waiting: waiting.length + called.length, assigned: assigned.length, inService: inService.length, completed: completed.length, history: history.length }),
+    [waiting.length, called.length, assigned.length, inService.length, completed.length, history.length],
   );
 
   if (!data) {
@@ -268,7 +281,8 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
     );
   }
 
-  const freeChairs = data.chairs.filter((c) => (c.occupancy ?? "FREE") === "FREE");
+  // A chair reserved for an assigned customer is not free for anyone else.
+  const freeChairs = data.chairs.filter((c) => (c.occupancy ?? "FREE") === "FREE" && !c.reservedForEntryId);
 
   return (
     <>
@@ -307,6 +321,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
           onChange={setView}
           tabs={[
             { id: "waiting", label: "Waiting", count: counts.waiting },
+            { id: "assigned", label: "Assigned", count: counts.assigned },
             { id: "in-service", label: "In service", count: counts.inService },
             { id: "completed", label: "Completed today", count: counts.completed },
             { id: "history", label: "Cancelled & expired", count: counts.history },
@@ -346,7 +361,11 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
               ))}
               {waiting.map((entry) => (
                 <EntryCard key={entry.id} entry={entry} tone="waiting" fresh={freshIds.includes(entry.id)}>
-                  {skipReasons[entry.id] && <div className={ui.entryReason}>Not seated yet: {skipReasons[entry.id]}</div>}
+                  {skipReasons[entry.id] ? (
+                    <div className={ui.entryReason}>Not assigned yet: {skipReasons[entry.id]}</div>
+                  ) : (
+                    <div className={ui.entryReason}>{data.autoAssignEnabled === false ? "Waiting to be assigned" : "Waiting for available staff"}</div>
+                  )}
                   <div className={ui.entryActions}>
                     <Btn variant="primary" small disabled={busy !== null} onClick={() => void assignAutomatically(entry)}>
                       {busy === `auto-${entry.id}` ? "Assigning…" : "Assign automatically"}
@@ -372,11 +391,49 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
             </div>
           )}
 
+          {view === "assigned" && (
+            <div className={ui.entryGrid}>
+              {assigned.length === 0 && (
+                <Card>
+                  <EmptyState title="Nobody is assigned right now">
+                    A customer who has been given a barber and a chair appears here until the barber starts the service.
+                  </EmptyState>
+                </Card>
+              )}
+              {assigned.map((entry) => (
+                <EntryCard key={entry.id} entry={entry} tone="assigned">
+                  <div className={ui.entryReason}>Service not started. The barber presses Start service when the customer is in the chair.</div>
+                  <div className={ui.entryActions}>
+                    <Btn
+                      variant="primary"
+                      small
+                      icon="scissors"
+                      disabled={busy !== null}
+                      onClick={() => void run(`start-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.startService), { method: "POST" }), `${whoLabel(entry)} — service started.`)}
+                    >
+                      {busy === `start-${entry.id}` ? "Starting…" : "Start service"}
+                    </Btn>
+                    <Btn small onClick={() => setAssignFor(assignFor === entry.id ? null : entry.id)}>
+                      Change barber &amp; chair
+                    </Btn>
+                    <Btn small variant="danger" disabled={busy !== null} onClick={() => void run(`noshow-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.noShow), { method: "POST" }))}>
+                      Mark no-show
+                    </Btn>
+                    <Btn small variant="quiet" disabled={busy !== null} onClick={() => void run(`cancel-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.cancel), { method: "POST" }))}>
+                      Cancel
+                    </Btn>
+                  </div>
+                  {assignFor === entry.id && <AssignForm entry={entry} data={data} onDone={() => { setAssignFor(null); void refetch(false); }} />}
+                </EntryCard>
+              ))}
+            </div>
+          )}
+
           {view === "in-service" && (
             <div className={ui.entryGrid}>
               {inService.length === 0 && (
                 <Card>
-                  <EmptyState title="No one is in a chair right now">Seated customers appear here with their barber and chair.</EmptyState>
+                  <EmptyState title="No one is in service right now">A customer appears here once their barber has started the service.</EmptyState>
                 </Card>
               )}
               {inService.map((entry) => (
@@ -436,7 +493,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
             ) : (
               <div>
                 {data.staffRoster.map((member) => {
-                  const state = availabilityText(member);
+                  const state = availabilityText(member, assignedByStaff.get(member.id));
                   const on = member.status === StaffMemberStatus.ACTIVE;
                   return (
                     <div key={member.id} className={ui.barberRow}>
@@ -482,18 +539,18 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
               <div className={ui.toggleRow}>
                 <div>
                   <div className={ui.listTitle} style={{ whiteSpace: "normal" }}>
-                    Seat customers automatically
+                    Assign staff automatically
                   </div>
                   <div className={ui.cardSub}>
-                    When on, a customer who is in the shop is seated with a free, qualified barber and a free chair as soon as one is available — fairest workload first, and a customer&apos;s chosen barber is always respected. Seating starts the service, so it is off by default.
+                    On by default. When on, a customer who is in the shop is assigned a free, qualified barber and a free chair as soon as one is available — fairest workload first, and a customer&apos;s chosen barber is always respected. Assigning does not start the service: the barber presses Start service. You can turn this off and on at any time.
                   </div>
                 </div>
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={data.autoAssignEnabled ?? false}
+                  aria-checked={data.autoAssignEnabled === true}
                   aria-label="Automatic assignment"
-                  className={`${ui.switch} ${data.autoAssignEnabled ? ui.switchOn : ""}`}
+                  className={`${ui.switch} ${data.autoAssignEnabled === true ? ui.switchOn : ""}`}
                   disabled={busy !== null}
                   onClick={() => void run("auto-setting", () => apiFetch(`${base}/queue/settings`, { method: "PATCH", body: JSON.stringify({ autoAssignEnabled: !data.autoAssignEnabled }) }), data.autoAssignEnabled ? "Automatic assignment is off." : "Automatic assignment is on.")}
                 />
@@ -520,11 +577,13 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
 
 function ChairTile({ chair, busy, onFree }: { chair: ChairOptionDto; busy: boolean; onFree: () => void }) {
   const occupancy = chair.occupancy ?? "FREE";
+  const reserved = occupancy === "FREE" && Boolean(chair.reservedForEntryId);
   return (
-    <div className={`${ui.chair} ${occupancy === "FREE" ? "" : ui.chairBusy}`}>
+    <div className={`${ui.chair} ${occupancy === "FREE" && !reserved ? "" : ui.chairBusy}`}>
       <div className={ui.chairName}>{chair.label}</div>
       <div className={ui.chairState}>
-        {occupancy === "FREE" && "Free"}
+        {occupancy === "FREE" && !reserved && "Free"}
+        {reserved && `Reserved · token #${chair.reservedForTokenNumber ?? "?"} · not started`}
         {occupancy === "FASTQUE" && `${chair.assignedStaffName ?? "A barber"} · token #${chair.tokenNumber ?? "?"}`}
         {occupancy === "LOCAL" && "Seated without a queue entry"}
       </div>
@@ -544,15 +603,20 @@ function EntryCard({
   children,
 }: {
   entry: QueueEntryDetailDto;
-  tone: "waiting" | "called" | "in-service" | "done";
+  tone: "waiting" | "called" | "assigned" | "in-service" | "done";
   fresh?: boolean;
   children?: React.ReactNode;
 }) {
-  const status = STATUS_LABEL[entry.status] ?? { text: entry.status, tone: "neutral" as const };
-  const since = minutesSince(entry.status === "IN_SERVICE" ? entry.calledAt ?? entry.joinedAt : entry.joinedAt);
+  const phase = queuePhaseOf(entry);
+  const status = PHASE_LABEL[phase] ?? { text: entry.status, tone: "neutral" as const };
+  // Time since the right thing happened: since service STARTED when in service, since the barber was
+  // ASSIGNED when assigned, since joining otherwise.
+  const since = minutesSince(
+    phase === "IN_SERVICE" ? entry.serviceStartedAt ?? entry.calledAt ?? entry.joinedAt : phase === "ASSIGNED" ? entry.assignedAt ?? entry.calledAt ?? entry.joinedAt : entry.joinedAt,
+  );
   return (
     <article
-      className={`${ui.entry} ${tone === "waiting" ? ui.entryWaiting : tone === "called" ? ui.entryCalled : tone === "in-service" ? ui.entryInService : ui.entryDone} ${fresh ? ui.entryNew : ""}`}
+      className={`${ui.entry} ${tone === "waiting" ? ui.entryWaiting : tone === "called" ? ui.entryCalled : tone === "assigned" ? ui.entryAssigned : tone === "in-service" ? ui.entryInService : ui.entryDone} ${fresh ? ui.entryNew : ""}`}
       aria-label={`${whoLabel(entry)}, token ${entry.tokenNumber}, ${status.text}`}
     >
       <div className={ui.entryHead}>
@@ -573,6 +637,7 @@ function EntryCard({
           )}
           {entry.assignedStaffName && (
             <div className={ui.entryMeta}>
+              {phase === "ASSIGNED" ? "Assigned to " : ""}
               {entry.assignedStaffName}
               {entry.assignedChairLabel ? ` · ${entry.assignedChairLabel}` : ""}
             </div>
@@ -583,7 +648,11 @@ function EntryCard({
         <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
           <Badge tone={status.tone}>{status.text}</Badge>
           {(entry.status === "WAITING" || entry.status === "CALLED") && (entry.arrivedAt === null ? <Badge tone="warn">Not in the shop yet</Badge> : <Badge tone="ok">In the shop</Badge>)}
-          {since !== null && (entry.status === "WAITING" || entry.status === "CALLED" || entry.status === "IN_SERVICE") && <span className={ui.cardSub}>{since} min {entry.status === "IN_SERVICE" ? "in service" : "so far"}</span>}
+          {since !== null && (entry.status === "WAITING" || entry.status === "CALLED" || entry.status === "IN_SERVICE") && (
+            <span className={ui.cardSub}>
+              {since} min {phase === "IN_SERVICE" ? "in service" : phase === "ASSIGNED" ? "since assigned" : "so far"}
+            </span>
+          )}
         </div>
       </div>
       {children}
@@ -600,7 +669,8 @@ function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data:
   const [busy, setBusy] = useState(false);
   const staff = data.staffRoster.filter((s) => s.status === StaffMemberStatus.ACTIVE);
   const options = entry.preferredStaffId ? staff.filter((s) => s.id === entry.preferredStaffId) : staff;
-  const chairs = data.chairs.filter((c) => (c.occupancy ?? "FREE") === "FREE");
+  // Free chairs, plus the one this very customer already holds.
+  const chairs = data.chairs.filter((c) => (c.occupancy ?? "FREE") === "FREE" && (!c.reservedForEntryId || c.reservedForEntryId === entry.id));
 
   async function submit() {
     setBusy(true);
@@ -609,7 +679,8 @@ function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data:
       await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.queueEntries}/${entry.id}/${DASHBOARD_PATHS.assign}`, {
         method: "POST",
         headers: { "Idempotency-Key": newIdempotencyKey() },
-        body: JSON.stringify({ staffId, chairId, ...(needsService ? { serviceId } : {}) }),
+        // Assigning never starts the service: the barber (or the owner) presses Start service.
+        body: JSON.stringify({ staffId, chairId, startService: false, ...(needsService ? { serviceId } : {}) }),
       });
       onDone();
     } catch (err) {
@@ -637,9 +708,9 @@ function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data:
         <select id={`as-staff-${entry.id}`} className={ui.select} value={staffId} onChange={(e) => setStaffId(e.target.value)} disabled={Boolean(entry.preferredStaffId)}>
           <option value="">Choose…</option>
           {options.map((s) => {
-            const state = availabilityText(s);
+            const state = s.id === entry.assignedStaffId ? { text: "currently assigned" } : availabilityText(s);
             return (
-              <option key={s.id} value={s.id} disabled={s.availabilityState === "IN_SERVICE" || s.availabilityState === "RESERVED"}>
+              <option key={s.id} value={s.id} disabled={s.id !== entry.assignedStaffId && (s.availabilityState === "IN_SERVICE" || s.availabilityState === "RESERVED")}>
                 {s.displayName} — {state.text}
               </option>
             );
@@ -657,7 +728,7 @@ function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data:
         </select>
       </Field>
       <Btn variant="primary" disabled={busy || !staffId || !chairId || (needsService && !serviceId)} onClick={() => void submit()}>
-        {busy ? "Seating…" : "Seat customer"}
+        {busy ? "Assigning…" : "Assign customer"}
       </Btn>
       {error && (
         <div style={{ gridColumn: "1 / -1" }}>

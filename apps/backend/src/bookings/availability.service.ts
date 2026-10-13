@@ -5,6 +5,7 @@ import {
   BookingStatus,
   ChairStatus,
   MAX_SERVICES_PER_BOOKING,
+  QueueEntryStatus,
   SalonStatus,
   ServiceSessionStatus,
   StaffMemberStatus,
@@ -545,12 +546,36 @@ export class AvailabilityService {
         queueEntry: { select: { bookingId: true } },
       },
     });
-    const projectedSessions = activeSessions.map((s) => ({
-      staffId: s.staffId,
-      isWalkIn: s.queueEntry.bookingId === null,
-      start: s.startedAt,
-      end: this.reservations.projectedActiveSessionEnd(s.startedAt, s.service.durationMinutes, now),
-    }));
+    // A customer ASSIGNED to a barber but not yet started holds that barber exactly like an active
+    // session does (owner-operations corrective mission) - without this a slot could be offered for a
+    // barber who is already spoken for.
+    const assignedHolds = await this.prisma.queueEntry.findMany({
+      where: { salonId, status: QueueEntryStatus.CALLED, assignedStaffId: { not: null } },
+      select: {
+        assignedStaffId: true,
+        assignedAt: true,
+        calledAt: true,
+        bookingId: true,
+        service: { select: { durationMinutes: true } },
+      },
+    });
+    const projectedSessions = [
+      ...activeSessions.map((s) => ({
+        staffId: s.staffId,
+        isWalkIn: s.queueEntry.bookingId === null,
+        start: s.startedAt,
+        end: this.reservations.projectedActiveSessionEnd(s.startedAt, s.service.durationMinutes, now),
+      })),
+      ...assignedHolds.map((e) => {
+        const from = e.assignedAt ?? e.calledAt ?? now;
+        return {
+          staffId: e.assignedStaffId as string,
+          isWalkIn: e.bookingId === null,
+          start: from,
+          end: this.reservations.projectedActiveSessionEnd(from, e.service?.durationMinutes ?? 30, now),
+        };
+      }),
+    ];
 
     const slots: AvailabilitySlotDto[] = [];
     for (

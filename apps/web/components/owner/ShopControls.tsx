@@ -6,6 +6,7 @@ import { DASHBOARD_PATHS } from "@barbercue/shared";
 import type { OwnerOverviewDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { Icon, type IconName } from "./icons";
+import { AutoAssignSetting } from "./AutoAssignSetting";
 import { Banner, Card } from "./parts";
 import ui from "./owner.module.css";
 
@@ -66,6 +67,7 @@ export function ShopControls({ salonId }: { salonId: string }) {
           ))}
         </div>
       </Card>
+      <AutoAssignSetting salonId={salonId} />
       {showPhone !== null && (
         <Card title="Customer contact">
           {error && <Banner tone="error">{error}</Banner>}

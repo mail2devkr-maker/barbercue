@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import {
   ChairStatus,
   QueueErrorCode,
@@ -9,6 +9,7 @@ import {
 import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { QueueAssignmentReleaseService } from '../queue/queue-assignment-release.service';
 
 /**
  * Owner-side Chair CRUD, same assertOwnerAccess-first shape as SalonServicesService.
@@ -24,6 +25,7 @@ export class SalonChairsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
+    @Optional() private readonly assignmentRelease?: QueueAssignmentReleaseService,
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonChairDto[]> {
@@ -83,6 +85,11 @@ export class SalonChairsService {
         ...(input.status !== undefined && { status: input.status }),
       },
     });
+    // A chair taken out of use can no longer seat a customer who was assigned to it but not started:
+    // they go back to waiting so another chair can be found.
+    if (input.status !== undefined && updated.status !== ChairStatus.ACTIVE) {
+      await this.assignmentRelease?.releaseForChair(salonId, chairId, 'CHAIR_UNAVAILABLE', userId);
+    }
     // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor.
     // There is no chair `delete` in this service at all (Chair is FK'd from ServiceSession/
     // QueueEntry — see this file's own header comment) — setting status to INACTIVE via this same
