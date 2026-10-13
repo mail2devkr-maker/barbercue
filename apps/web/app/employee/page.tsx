@@ -18,8 +18,9 @@ import {
 import { ApiError, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import styles from "./employee.module.css";
+import { VoiceOnboardingPanel } from "./VoiceOnboardingPanel";
 
-type Tab = "dashboard" | "leads" | "visits" | "followups";
+type Tab = "dashboard" | "leads" | "visits" | "followups" | "voice";
 
 const employeeBase = EMPLOYEE_PATHS.employee;
 
@@ -343,6 +344,7 @@ export default function EmployeeDashboardPage() {
             ["leads", `Leads (${leads.length})`],
             ["visits", `Visits (${visits.length})`],
             ["followups", `Follow-ups (${openFollowUps.length})`],
+            ["voice", "🎙 Voice onboarding"],
           ] as const).map(([value, label]) => (
             <button
               key={value}
@@ -377,6 +379,7 @@ export default function EmployeeDashboardPage() {
                 <button type="button" className={styles.primaryButton} onClick={() => setTab("leads")}>+ Add lead</button>
                 <button type="button" className={styles.secondaryButton} onClick={() => setTab("visits")}>Log visit</button>
                 <button type="button" className={styles.secondaryButton} onClick={() => setTab("followups")}>Schedule follow-up</button>
+                <button type="button" className={styles.primaryButton} onClick={() => setTab("voice")}>🎙 Capture shop details by voice</button>
               </div>
             </section>
             <section className={styles.panel}>
@@ -415,6 +418,8 @@ export default function EmployeeDashboardPage() {
             </section>
           </div>
         )}
+
+        {tab === "voice" && <VoiceOnboardingPanel leads={leads} />}
 
         {tab === "leads" && (
           <>
