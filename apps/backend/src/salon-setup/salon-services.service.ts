@@ -125,6 +125,9 @@ export class SalonServicesService {
       );
     }
     return this.prisma.$transaction(async (tx) => {
+      // Serialize bulk removal with the existing catalog importer lock.
+      // executeRaw avoids Prisma attempting to deserialize PostgreSQL's void return.
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', salonId);
       const scope = { salonId, isActive: true };
       const actual = await tx.service.count({ where: scope });
       if (actual !== expectedActiveCount) {
