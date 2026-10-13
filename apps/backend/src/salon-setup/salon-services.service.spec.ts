@@ -493,4 +493,115 @@ describe('SalonServicesService', () => {
     });
   });
 
+  describe('permanent catalog reset', () => {
+    const intent = { confirmation: 'DELETE ALL', expectedTotalCount: 180 };
+    let tx: {
+      $executeRawUnsafe: jest.Mock;
+      service: { findMany: jest.Mock; deleteMany: jest.Mock };
+      staffService: { deleteMany: jest.Mock };
+      booking: { count: jest.Mock };
+      bookingService: { count: jest.Mock };
+      queueEntry: { count: jest.Mock };
+      serviceSession: { count: jest.Mock };
+      auditLog: { create: jest.Mock };
+    };
+    beforeEach(() => {
+      tx = {
+        $executeRawUnsafe: jest.fn().mockResolvedValue(1),
+        service: {
+          findMany: jest.fn().mockResolvedValue(
+            Array.from({ length: 180 }, (_, i) => ({ id: 's-' + i })),
+          ),
+          deleteMany: jest.fn().mockResolvedValue({ count: 180 }),
+        },
+        staffService: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+        booking: { count: jest.fn().mockResolvedValue(0) },
+        bookingService: { count: jest.fn().mockResolvedValue(0) },
+        queueEntry: { count: jest.fn().mockResolvedValue(0) },
+        serviceSession: { count: jest.fn().mockResolvedValue(0) },
+        auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit' }) },
+      };
+      prisma.$transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx));
+    });
+
+    it('requires salon owner or delegated platform admin before reading any rows', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(service.deleteAll('intruder', 'shop-other', intent))
+        .rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      undefined, {}, { confirmation: 'REMOVE ALL', expectedTotalCount: 180 },
+      { confirmation: 'DELETE ALL', expectedTotalCount: 0 },
+      { confirmation: 'DELETE ALL', expectedTotalCount: '180' },
+      { confirmation: 'DELETE ALL', expectedTotalCount: 10.5 },
+    ])('never deletes without exact irreversible intent %p', async (raw) => {
+      await expect(service.deleteAll('owner', 'shop', raw))
+        .rejects.toMatchObject({ code: 'SERVICE_BULK_DELETE_CONFIRMATION_REQUIRED' });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('refuses stale counts and leaves the entire catalog unchanged', async () => {
+      tx.service.findMany.mockResolvedValueOnce([{ id: 's-1' }]);
+      await expect(service.deleteAll('owner', 'shop', intent))
+        .rejects.toMatchObject({ code: 'SERVICE_CATALOG_CHANGED' });
+      expect(tx.staffService.deleteMany).not.toHaveBeenCalled();
+      expect(tx.service.deleteMany).not.toHaveBeenCalled();
+      expect(tx.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['booking', 'bookings'], ['bookingService', 'bookingServices'],
+      ['queueEntry', 'queueEntries'], ['serviceSession', 'serviceSessions'],
+    ] as const)('protects all historical foreign keys %s', async (model, label) => {
+      tx[model].count.mockResolvedValueOnce(1);
+      await expect(service.deleteAll('owner', 'shop', intent))
+        .rejects.toMatchObject({
+          code: 'SERVICE_HISTORY_PROTECTED',
+          details: expect.objectContaining({
+            references: expect.objectContaining({ [label]: 1 }),
+          }),
+        });
+      expect(tx.staffService.deleteMany).not.toHaveBeenCalled();
+      expect(tx.service.deleteMany).not.toHaveBeenCalled();
+      expect(tx.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('deletes all 180 inactive and active records only for the authorized shop', async () => {
+      await expect(service.deleteAll('owner', 'glow-gaze-shop', intent))
+        .resolves.toEqual({ deletedCount: 180, remainingCount: 0 });
+      const ids = Array.from({ length: 180 }, (_, i) => 's-' + i);
+      expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
+        'SELECT pg_advisory_xact_lock(hashtext($1))', 'glow-gaze-shop',
+      );
+      expect(tx.service.findMany).toHaveBeenCalledWith({
+        where: { salonId: 'glow-gaze-shop' }, select: { id: true },
+      });
+      expect(tx.staffService.deleteMany).toHaveBeenCalledWith({
+        where: { serviceId: { in: ids } },
+      });
+      expect(tx.service.deleteMany).toHaveBeenCalledWith({
+        where: { salonId: 'glow-gaze-shop', id: { in: ids } },
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'owner',
+          action: 'OWNER_SALON_SERVICES_PERMANENTLY_DELETED',
+          metadata: expect.objectContaining({ deletedCount: 180, method: 'HARD_DELETE' }),
+        }),
+      });
+    });
+
+    it('audits a delegated platform administrator and rolls back on count mismatch', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      tx.service.deleteMany.mockResolvedValueOnce({ count: 179 });
+      await expect(service.deleteAll('admin', 'shop', intent))
+        .rejects.toMatchObject({ code: 'SERVICE_CATALOG_CHANGED' });
+      expect(tx.auditLog.create).not.toHaveBeenCalled();
+    });
+  });
+
 });

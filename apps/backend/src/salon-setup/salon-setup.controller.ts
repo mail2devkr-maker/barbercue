@@ -290,6 +290,16 @@ export class SalonSetupController {
     return this.catalogImports.saveReviewed(user.id, salonId, body);
   }
 
+  // Explicit permanent removal; never reachable through the legacy soft-delete action.
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/delete-all`)
+  deleteAllServices(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body() body: unknown,
+  ) {
+    return this.services.deleteAll(user.id, salonId, body);
+  }
+
   // Placed above dynamic /:serviceId routes; never physically deletes referenced rows.
   @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/remove-all`)
   removeAllServices(

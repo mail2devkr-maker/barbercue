@@ -324,15 +324,16 @@ export default function DashboardServicesPage({
         <h2 id="existing-services-heading" className={styles.sectionHeading}>Your services</h2>
         {services && (
           <RemoveAllServicesControl
-            key={salonId + ":" + activeCount}
+            key={salonId + ":" + services.length}
             basePath={base}
             activeCount={activeCount}
+            totalCount={services.length}
             onRemoved={async (removedCount) => {
               const refreshed = await apiFetch<SalonServiceDto[]>(base);
               setServices(refreshed);
               setEditingId(null);
               setShowInactive(false);
-              setNotice(removedCount + " services turned off. Historical records are preserved.");
+              setNotice(removedCount + " services permanently removed. You can now import a fresh catalog.");
               setError(null);
             }}
           />

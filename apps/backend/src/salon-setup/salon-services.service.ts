@@ -160,6 +160,87 @@ export class SalonServicesService {
     });
   }
 
+  /**
+   * Physical catalog reset for a selected salon. Unlike the legacy soft
+   * remove-all action this deletes inactive records too, so re-imports
+   * are not blocked by stale normalized service identities.
+   *
+   * Fail closed if ANY booking/queue/session history references any service.
+   * Do not alter historical bookings just to make deletion possible.
+   * Only staff-to-service qualifications (non-historical links) are cleared.
+   */
+  async deleteAll(
+    userId: string,
+    salonId: string,
+    raw: unknown,
+  ): Promise<{ deletedCount: number; remainingCount: number }> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const input = raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>) : {};
+    const expectedTotalCount = input.expectedTotalCount;
+    if (input.confirmation !== 'DELETE ALL' ||
+      typeof expectedTotalCount !== 'number' ||
+      !Number.isSafeInteger(expectedTotalCount) ||
+      expectedTotalCount < 1 || expectedTotalCount > 10000) {
+      throw new AppException(
+        'SERVICE_BULK_DELETE_CONFIRMATION_REQUIRED',
+        'Type DELETE ALL and confirm the number of all services, including inactive ones.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize with imported catalogs and legacy bulk deactivation.
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', salonId);
+      const services = await tx.service.findMany({
+        where: { salonId }, select: { id: true },
+      });
+      if (services.length !== expectedTotalCount) {
+        throw new AppException(
+          'SERVICE_CATALOG_CHANGED',
+          'Shop service count changed. Refresh before deleting services.',
+          HttpStatus.CONFLICT,
+          { expectedTotalCount, actualTotalCount: services.length },
+        );
+      }
+      const serviceId = { in: services.map((service) => service.id) };
+      // These relations are immutable business history. Do not cascade or orphan them.
+      const references = {
+        bookings: await tx.booking.count({ where: { serviceId } }),
+        bookingServices: await tx.bookingService.count({ where: { serviceId } }),
+        queueEntries: await tx.queueEntry.count({ where: { serviceId } }),
+        serviceSessions: await tx.serviceSession.count({ where: { serviceId } }),
+      };
+      if (Object.values(references).some((count) => count > 0)) {
+        throw new AppException(
+          'SERVICE_HISTORY_PROTECTED',
+          'Some services are linked to bookings, queues or service history and cannot be permanently deleted. Nothing was deleted.',
+          HttpStatus.CONFLICT,
+          { references },
+        );
+      }
+      // Staff qualifications are configuration, not completed service history.
+      await tx.staffService.deleteMany({ where: { serviceId } });
+      const deleted = await tx.service.deleteMany({ where: { salonId, id: serviceId } });
+      if (deleted.count !== services.length) {
+        throw new AppException(
+          'SERVICE_CATALOG_CHANGED',
+          'Shop catalog changed during deletion. No partial changes were saved.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await tx.auditLog.create({ data: {
+        actorUserId: userId,
+        action: actor === 'PLATFORM_ADMIN'
+          ? 'ADMIN_SALON_SERVICES_PERMANENTLY_DELETED'
+          : 'OWNER_SALON_SERVICES_PERMANENTLY_DELETED',
+        entityType: 'Salon', entityId: salonId,
+        metadata: { salonId, deletedCount: deleted.count, method: 'HARD_DELETE',
+          staffQualificationsRemoved: true },
+      } });
+      return { deletedCount: deleted.count, remainingCount: 0 };
+    }, { timeout: 30000 });
+  }
+
   async create(
     userId: string,
     salonId: string,
