@@ -954,3 +954,40 @@ export const siteVisitSchema = z.object({
   visitorId: z.string().uuid(),
 });
 export type SiteVisitInput = z.infer<typeof siteVisitSchema>;
+
+
+// ---------- Field Executive: consent-first voice onboarding log ----------
+// The server stores only employee-confirmed TEXT, never raw microphone recordings.
+// Logs are internal CRM evidence, NOT published salon services or verified pricing.
+export const voiceOnboardingServiceSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  priceInr: z.number().int().min(0).max(1000000),
+});
+export const createEmployeeVoiceLogSchema = z.object({
+  clientRequestId: z.string().uuid(),
+  leadId: z.string().uuid().nullable().optional(),
+  shopName: z.string().trim().min(2).max(180),
+  consentConfirmed: z.literal(true),
+  transcript: z.string().trim().min(1).max(12000),
+  language: z.enum(['hi-IN', 'en-IN']).default('hi-IN'),
+  contactName: optionalCrmText(120),
+  phone: optionalCrmText(32),
+  city: optionalCrmText(120),
+  locality: optionalCrmText(160),
+  addressLine: optionalCrmText(300),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  chairCount: z.number().int().min(0).max(1000).nullable().optional(),
+  staffCount: z.number().int().min(0).max(10000).nullable().optional(),
+  services: z.array(voiceOnboardingServiceSchema).max(200),
+  notes: optionalCrmText(2000),
+}).strict().superRefine((value, context) => {
+  if ((value.latitude == null) !== (value.longitude == null)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Both latitude and longitude are required together.',
+      path: ['latitude'],
+    });
+  }
+});
+export type CreateEmployeeVoiceLogInput = z.infer<typeof createEmployeeVoiceLogSchema>;
