@@ -200,7 +200,7 @@ export function CatalogImportPanel(props: {
     setRows((current) => current.map((row) => ({ ...row, selected: false })));
   };
 
-  async function save(mode: "ready" | "selected") {
+  async function save(mode: "ready" | "selected" | "imported") {
     if (saving || working) return;
     if (mode === "selected") {
       if (selectedRows.length === 0) {
@@ -219,11 +219,14 @@ export function CatalogImportPanel(props: {
       }
     }
     if (!importable.length || importable.length > 200) return;
-    const action = mode === "selected" ? "Add ALL " : "Import ";
-    if (!window.confirm(
-      action + importable.length + " reviewed services into this shop? " +
-      "Existing services will not be overwritten."
-    )) return;
+    const confirmation = mode === "imported"
+      ? "Add " + importable.length + " VALID imported services to this shop? " +
+        needsAttention.length + " selected service(s) require correction and will REMAIN in review, not be saved. " +
+        "Existing services will not be overwritten."
+      : (mode === "selected" ? "Add ALL " : "Import ") +
+        importable.length + " reviewed services into this shop? " +
+        "Existing services will not be overwritten.";
+    if (!window.confirm(confirmation)) return;
     setSelectionFeedback(null);
     setSaving(true);
     setError(null);
@@ -243,6 +246,9 @@ export function CatalogImportPanel(props: {
       setRows((current) => current.filter((row) => !importable.some((item) => item.key === row.key)));
       setMessages([
         result.createdCount + " services added; " + result.skippedCount + " already existed.",
+        ...(mode === "imported" && needsAttention.length > 0
+          ? [needsAttention.length + " selected service(s) remain in review. Correct their prices/durations before adding."]
+          : []),
         ...(result.skipped.length ? ["Skipped: " + result.skipped.join(", ")] : []),
       ]);
       try {
@@ -364,8 +370,14 @@ export function CatalogImportPanel(props: {
               onClick={() => void save("selected")}>
               {saving ? "Saving…" : "Add selected services (" + selectedRows.length + ")"}
             </button>
+            <button type="button" style={styles.secondary}
+              disabled={saving || working || importable.length === 0 || importable.length > 200}
+              onClick={() => void save("imported")}>
+              {saving ? "Saving…" : "Add Imported Services (" + importable.length + " ready)"}
+            </button>
             <span style={styles.help}>
-              Import saves only ready services; Add selected requires every checked service to have valid details.
+              Import / Add Imported save only validated services and leave incomplete rows in review.
+              Add selected requires every checked service to be valid.
             </span>
           </div>
           {selectionFeedback && <p role="alert" style={{ color: "#b42318", fontWeight: 600 }}>
@@ -421,6 +433,11 @@ export function CatalogImportPanel(props: {
               disabled={saving || working || selectedRows.length === 0 || selectedRows.length > 200}
               onClick={() => void save("selected")}>
               {saving ? "Saving…" : "Add selected services (" + selectedRows.length + ")"}
+            </button>
+            <button type="button" style={styles.secondary}
+              disabled={saving || working || importable.length === 0 || importable.length > 200}
+              onClick={() => void save("imported")}>
+              {saving ? "Saving…" : "Add Imported Services (" + importable.length + " ready)"}
             </button>
           </div>
           {selectionFeedback && <p role="alert" style={{ color: "#b42318", fontWeight: 600 }}>{selectionFeedback}</p>}
