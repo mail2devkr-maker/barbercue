@@ -32,7 +32,7 @@ function miniXlsx(entries: Record<string, string>): Buffer {
   return Buffer.concat([...locals, dir, end]);
 }
 
-import { ServiceCatalogImportService, parseXlsxTables } from './service-catalog-import.service';
+import { CATALOG_IMPORT_ADVISORY_LOCK_SQL, ServiceCatalogImportService, parseXlsxTables } from './service-catalog-import.service';
 
 describe('ServiceCatalogImportService', () => {
   const access = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
@@ -88,8 +88,9 @@ describe('ServiceCatalogImportService', () => {
       create: jest.fn().mockResolvedValue({ id: 'new' }),
     };
     const auditLog = { create: jest.fn() };
+    const acquireLock = jest.fn().mockResolvedValue(1);
     prisma.$transaction.mockImplementation(async (task: (tx: unknown) => Promise<unknown>) => task({
-      $queryRawUnsafe: jest.fn().mockResolvedValue([{ pg_advisory_xact_lock: null }]),
+      $executeRawUnsafe: acquireLock,
       service,
       auditLog,
     }));
@@ -99,6 +100,10 @@ describe('ServiceCatalogImportService', () => {
     ] });
     expect(result).toMatchObject({ createdCount: 1, skippedCount: 1 });
     expect(service.create).toHaveBeenCalledTimes(1);
+    // Real pg_advisory_xact_lock returns void. The backend must not use Prisma
+    // queryRaw to decode its result; executeRaw invokes it without deserializing.
+    expect(acquireLock).toHaveBeenCalledTimes(1);
+    expect(acquireLock).toHaveBeenCalledWith(CATALOG_IMPORT_ADVISORY_LOCK_SQL, 'salon');
     expect(service.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       salonId: 'salon', name: 'Facial', durationMinutes: 45, price: '500',
     }) });

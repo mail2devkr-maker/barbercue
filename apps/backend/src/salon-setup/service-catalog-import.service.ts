@@ -17,6 +17,9 @@ export interface CatalogCandidate {
 
 const MAX_BYTES = 6 * 1024 * 1024;
 const MAX_ROWS = 300;
+
+/** PostgreSQL returns void for this lock. Use executeRaw, not queryRaw: Prisma cannot deserialize void. */
+export const CATALOG_IMPORT_ADVISORY_LOCK_SQL = 'SELECT pg_advisory_xact_lock(hashtext($1))';
 function failure(code: string, reason: string, status = HttpStatus.BAD_REQUEST): never {
   throw new AppException(code, reason, status);
 }
@@ -279,7 +282,7 @@ export class ServiceCatalogImportService {
       ids.add(identity);
     }
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtext($1))', salonId);
+      await tx.$executeRawUnsafe(CATALOG_IMPORT_ADVISORY_LOCK_SQL, salonId);
       const existing = await tx.service.findMany({ where: { salonId }, select: { name: true, category: true } });
       const known = new Set(existing.map((s) => normalizeServiceIdentity(s.name, s.category)));
       const added: string[] = [], skipped: string[] = [];
