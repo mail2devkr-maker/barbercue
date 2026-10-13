@@ -246,11 +246,12 @@ function EntryRow({
         <Button title={t.startServiceAction} onPress={() => void startService()} loading={submitting === 'startService'} style={styles.fullButton} />
       )}
 
+      {entry.status === 'CALLED' && !assigning && (arrived || assignedNotStarted) && (
+        <Button title={assignedNotStarted ? t.changeBarberChairAction : t.assignAction} variant={assignedNotStarted ? 'outline' : 'primary'} onPress={() => setAssigning(true)} style={styles.fullButton} />
+      )}
+
       {entry.status === 'CALLED' && !assigning && (
         <View style={styles.actionRow}>
-          {(arrived || assignedNotStarted) && (
-            <Button title={assignedNotStarted ? t.changeBarberChairAction : t.assignAction} variant={assignedNotStarted ? 'outline' : 'primary'} onPress={() => setAssigning(true)} style={styles.actionButton} />
-          )}
           <Button
             title={t.noShowAction}
             variant="outline"
