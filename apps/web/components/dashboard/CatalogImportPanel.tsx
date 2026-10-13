@@ -106,6 +106,10 @@ export function CatalogImportPanel(props: {
     // consent before transmitting any private PDF/photo catalog to Google Gemini.
     // A declined confirmation leaves the selected files in place and uploads nothing.
     const needsExternalProcessing = files.some((file) => external.test(file.name));
+    if (needsExternalProcessing && ocrAvailable === false) {
+      setError("PDF/photo extraction is not configured yet. Remove PDF/photo files and retry the CSV/XLSX files.");
+      return;
+    }
     if (needsExternalProcessing && !window.confirm(
       "PDF and photo catalogs are sent to Google Gemini for AI extraction. " +
       "An external provider will process these files, and provider charges may apply. " +
