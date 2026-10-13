@@ -511,9 +511,9 @@ model EmployeeOnboardingVoiceLog {
   notes             String? @db.VarChar(2000)
   createdAt         DateTime @default(now())
 
-  @@unique([employeeProfileId, clientRequestId])
-  @@index([employeeProfileId, createdAt])
-  @@index([leadId, createdAt])
+  @@unique([employeeProfileId, clientRequestId], map: "voice_log_employee_request_uq")
+  @@index([employeeProfileId, createdAt], map: "voice_log_employee_created_idx")
+  @@index([leadId, createdAt], map: "voice_log_lead_created_idx")
   @@map("employee_onboarding_voice_logs")
 }
 
