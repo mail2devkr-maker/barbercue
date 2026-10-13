@@ -1,0 +1,186 @@
+name: Owner Operations Certification
+
+# A dedicated certification of the Owner Operations work (dashboard, Live Queue, automatic staff
+# assignment, assigned-vs-in-service, owner navigation, invoices, notifications, Android parity).
+#
+# It exists because the other workflows on these pull requests (catalog import, employee ID card, ...)
+# do not exercise any of this. Everything runs from the lockfile (`npm ci`), against a throw-away
+# PostgreSQL service container. It never connects to Neon, Railway, Play, Expo/EAS or any production
+# system, and it publishes nothing.
+#
+# Failing tests are compared with a BASELINE recorded on the base commit (docs/owner-operations/baseline).
+# A baseline test still runs on every build and is listed in the log; only a failure that is NOT in the
+# baseline (a regression) fails the job. Nothing is skipped to make the build green.
+
+on:
+  pull_request:
+    paths:
+      - 'apps/backend/**'
+      - 'apps/web/**'
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - 'scripts/ci/**'
+      - 'docs/owner-operations/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/owner-operations-certification.yml'
+  push:
+    branches:
+      - 'feat/owner-ops-dashboard'
+      - 'feat/owner-ops-mobile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owner-operations-certification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend - migrations, unit, e2e (disposable PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      CHAIN_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/owner_ops_chain?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared DTOs
+        run: npm run build:shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Typecheck backend
+        run: npm run typecheck --workspace=@barbercue/backend
+      - name: Create disposable databases
+        run: |
+          psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE owner_ops_chain"
+      - name: Prisma validate, the full committed migration chain, checksums and schema drift
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+        run: bash scripts/verify-migration-chain.sh
+      - name: Owner-operations migration safety on populated databases (defaults, explicit choices, hold indexes)
+        working-directory: apps/backend
+        run: bash scripts/verify-owner-ops-migrations.sh
+      - name: Backend production build
+        run: npm run build --workspace=@barbercue/backend
+      - name: Shared package tests
+        run: npm run test --workspace=@barbercue/shared -- --ci
+      - name: Backend unit tests (regressions vs the recorded baseline)
+        working-directory: apps/backend
+        run: |
+          npx jest --ci --json --outputFile="$RUNNER_TEMP/backend-unit.json" || true
+          node ../../scripts/ci/jest-baseline-compare.js "$RUNNER_TEMP/backend-unit.json" ../../docs/owner-operations/baseline/backend-unit.json backend-unit
+      - name: Owner Operations E2E - assignment, start of service, concurrency, release, billing, notifications (must ALL pass)
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/owner-ops.e2e-spec.ts
+      - name: Remaining backend E2E suites (regressions vs the recorded baseline)
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci --json --outputFile="$RUNNER_TEMP/backend-e2e.json" || true
+          node ../../scripts/ci/jest-baseline-compare.js "$RUNNER_TEMP/backend-e2e.json" ../../docs/owner-operations/baseline/backend-e2e-legacy.json backend-e2e
+
+  web:
+    name: Website - typecheck, tests, production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared DTOs
+        run: npm run build:shared
+      - name: Typecheck web
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Web tests - owner routing, shop selection, Live Queue status rendering, barber day (regressions vs the recorded baseline)
+        working-directory: apps/web
+        run: |
+          npx jest --ci --json --outputFile="$RUNNER_TEMP/web-jest.json" || true
+          node ../../scripts/ci/jest-baseline-compare.js "$RUNNER_TEMP/web-jest.json" ../../docs/owner-operations/baseline/web-jest.json web-jest
+      - name: Web production build
+        run: npm run build --workspace=@barbercue/web
+
+  android:
+    name: Android - typecheck, Jest, JS export
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared DTOs
+        run: npm run build:shared
+      - name: Typecheck mobile
+        run: npm run typecheck --workspace=@barbercue/mobile
+      - name: Mobile Jest - owner navigation, queue assignment, start/complete, session restoration, Hindi (regressions vs the recorded baseline)
+        working-directory: apps/mobile
+        run: |
+          npx jest --ci --json --outputFile="$RUNNER_TEMP/mobile-jest.json" || true
+          node ../../scripts/ci/jest-baseline-compare.js "$RUNNER_TEMP/mobile-jest.json" ../../docs/owner-operations/baseline/mobile-jest.json mobile-jest
+      - name: Expo Android JavaScript export (a bundle check only - NOT proof of native behaviour)
+        working-directory: apps/mobile
+        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/android-export"
+
+  certification:
+    name: Owner Operations certification result
+    runs-on: ubuntu-latest
+    needs: [backend, web, android]
+    if: always()
+    steps:
+      - name: Summarise
+        run: |
+          {
+            echo "### Owner Operations certification"
+            echo ""
+            echo "| Job | Result |"
+            echo "| --- | --- |"
+            echo "| Backend (migrations on PostgreSQL, unit, e2e) | ${{ needs.backend.result }} |"
+            echo "| Website (typecheck, tests, build) | ${{ needs.web.result }} |"
+            echo "| Android (typecheck, Jest, JS export) | ${{ needs.android.result }} |"
+            echo ""
+            echo "Native Android behaviour is certified separately on an emulator/device and is NOT covered by this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+          test "${{ needs.backend.result }}" = "success" && test "${{ needs.web.result }}" = "success" && test "${{ needs.android.result }}" = "success"
