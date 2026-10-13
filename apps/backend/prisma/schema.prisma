@@ -441,6 +441,7 @@ model EmployeeCrmLead {
 
   @@index([employeeProfileId, status])
   @@index([employeeProfileId, createdAt])
+  @@unique([id, employeeProfileId])
   @@index([phone])
   @@index([email])
   @@map("employee_crm_leads")
@@ -452,13 +453,18 @@ model EmployeeVoiceVisitLog {
   employeeProfileId String
   employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
   leadId            String
-  lead              EmployeeCrmLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead              EmployeeCrmLead @relation(fields: [leadId, employeeProfileId], references: [id, employeeProfileId], onDelete: Cascade)
   transcript        String          @db.Text
   structuredDraft   Json
   language          String          @default("hi-IN") @db.VarChar(16)
+  status            String          @default("DRAFT") @db.VarChar(16)
+  submissionKey     String?         @db.VarChar(80)
   createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  confirmedAt       DateTime?
 
-  @@index([employeeProfileId, leadId, createdAt])
+  @@unique([employeeProfileId, submissionKey])
+  @@index([employeeProfileId, leadId, status, createdAt, id])
   @@map("employee_voice_visit_logs")
 }
 

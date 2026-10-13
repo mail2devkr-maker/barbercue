@@ -1,30 +1,48 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   EMPLOYEE_PATHS,
   Role,
   createCrmFollowUpSchema,
   createCrmLeadSchema,
   createCrmVisitSchema,
+  createEmployeeVoiceVisitLogSchema,
+  employeeVoiceVisitLogListQuerySchema,
   onboardCrmLeadSchema,
   updateCrmFollowUpSchema,
   updateCrmLeadSchema,
+  updateEmployeeVoiceVisitLogSchema,
   type AuthenticatedUser,
   type CreateCrmFollowUpInput,
   type CreateCrmLeadInput,
   type CreateCrmVisitInput,
+  type CreateEmployeeVoiceVisitLogInput,
+  type EmployeeVoiceVisitLogListQuery,
   type OnboardCrmLeadInput,
   type UpdateCrmFollowUpInput,
   type UpdateCrmLeadInput,
+  type UpdateEmployeeVoiceVisitLogInput,
 } from '@barbercue/shared';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { EmployeeService } from './employee.service';
+import { EmployeeVoiceVisitService } from './employee-voice-visit.service';
 
 @Controller(EMPLOYEE_PATHS.employee)
 @Roles(Role.FIELD_EXECUTIVE)
 export class EmployeeController {
-  constructor(private readonly employees: EmployeeService) {}
+  constructor(
+    private readonly employees: EmployeeService,
+    private readonly voiceVisits: EmployeeVoiceVisitService,
+  ) {}
 
   @Get(EMPLOYEE_PATHS.me)
   me(@CurrentUser() user: AuthenticatedUser) {
@@ -65,7 +83,8 @@ export class EmployeeController {
   onboardLead(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(onboardCrmLeadSchema)) body: OnboardCrmLeadInput,
+    @Body(new ZodValidationPipe(onboardCrmLeadSchema))
+    body: OnboardCrmLeadInput,
   ) {
     return this.employees.onboardLead(user.id, id, body);
   }
@@ -78,7 +97,8 @@ export class EmployeeController {
   @Post(EMPLOYEE_PATHS.visits)
   createVisit(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createCrmVisitSchema)) body: CreateCrmVisitInput,
+    @Body(new ZodValidationPipe(createCrmVisitSchema))
+    body: CreateCrmVisitInput,
   ) {
     return this.employees.createVisit(user.id, body);
   }
@@ -108,5 +128,36 @@ export class EmployeeController {
     body: UpdateCrmFollowUpInput,
   ) {
     return this.employees.updateFollowUp(user.id, id, body);
+  }
+
+  @Get(`${EMPLOYEE_PATHS.leads}/:id/${EMPLOYEE_PATHS.voiceVisitLogs}`)
+  listVoiceVisitLogs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') leadId: string,
+    @Query(new ZodValidationPipe(employeeVoiceVisitLogListQuerySchema))
+    query: EmployeeVoiceVisitLogListQuery,
+  ) {
+    return this.voiceVisits.list(user.id, leadId, query);
+  }
+
+  @Post(`${EMPLOYEE_PATHS.leads}/:id/${EMPLOYEE_PATHS.voiceVisitLogs}`)
+  createVoiceVisitLog(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') leadId: string,
+    @Body(new ZodValidationPipe(createEmployeeVoiceVisitLogSchema))
+    body: CreateEmployeeVoiceVisitLogInput,
+  ) {
+    return this.voiceVisits.create(user.id, leadId, body);
+  }
+
+  @Patch(`${EMPLOYEE_PATHS.leads}/:leadId/${EMPLOYEE_PATHS.voiceVisitLogs}/:id`)
+  updateVoiceVisitLog(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('leadId') leadId: string,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateEmployeeVoiceVisitLogSchema))
+    body: UpdateEmployeeVoiceVisitLogInput,
+  ) {
+    return this.voiceVisits.update(user.id, leadId, id, body);
   }
 }

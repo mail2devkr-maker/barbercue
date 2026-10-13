@@ -50,6 +50,7 @@ export const EMPLOYEE_PATHS = {
   visits: 'visits',
   followUps: 'follow-ups',
   onboard: 'onboard',
+  voiceVisitLogs: 'voice-visit-logs',
 } as const;
 
 export const EMPLOYEE_RESERVED_ID_MIN = 1;
