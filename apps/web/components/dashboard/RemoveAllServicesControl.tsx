@@ -7,15 +7,15 @@ import { Button } from "../ui/Button";
 interface Props {
   basePath: string;
   activeCount: number;
+  totalCount: number;
   onRemoved: (removedCount: number) => Promise<void>;
 }
 
 /**
- * Safety: never hard-delete referenced Service rows. This removes all ACTIVE
- * services from future booking/queue options; older bookings and invoices stay
- * attached to the historical, now-inactive service records.
+ * Physical reset is forbidden if any service is referenced by booking, queue,
+ * or service-session history. Only unreferenced records can be deleted.
  */
-export function RemoveAllServicesControl({ basePath, activeCount, onRemoved }: Props) {
+export function RemoveAllServicesControl({ basePath, activeCount, totalCount, onRemoved }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [saving, setSaving] = useState(false);
@@ -23,20 +23,21 @@ export function RemoveAllServicesControl({ basePath, activeCount, onRemoved }: P
   const [completed, setCompleted] = useState(false);
 
   async function removeAll() {
-    if (saving || completed || confirmation !== "REMOVE ALL" || activeCount === 0) return;
+    if (saving || completed || confirmation !== "DELETE ALL" || totalCount === 0) return;
     if (!window.confirm(
-      "Turn off ALL " + activeCount + " active services in this shop? " +
-      "New customers will no longer be able to book them. Past bookings and " +
-      "service history will be preserved. Continue?"
+      "PERMANENTLY DELETE ALL " + totalCount + " services (including " +
+      (totalCount - activeCount) + " turned-off services) in this shop? " +
+      "You cannot undo this. If any service is used in booking or visit history, " +
+      "the deletion will be blocked without modifying anything. Continue?"
     )) return;
     setSaving(true);
     setError(null);
     try {
-      const result = await apiFetch<{ removedCount: number; remainingActive: number }>(
-        basePath + "/remove-all",
+      const result = await apiFetch<{ deletedCount: number; remainingCount: number }>(
+        basePath + "/delete-all",
         { method: "POST", body: JSON.stringify({
-          confirmation: "REMOVE ALL",
-          expectedActiveCount: activeCount,
+          confirmation: "DELETE ALL",
+          expectedTotalCount: totalCount,
         }) },
       );
       // The POST already committed: prevent another click even if reloading fails.
@@ -44,13 +45,13 @@ export function RemoveAllServicesControl({ basePath, activeCount, onRemoved }: P
       setConfirmation("");
       setExpanded(false);
       try {
-        await onRemoved(result.removedCount);
+        await onRemoved(result.deletedCount);
       } catch {
-        setError("Services were turned off, but the list did not refresh. Reload the page. Do not retry.");
+        setError("Services were deleted, but the list did not refresh. Reload the page. Do not retry.");
       }
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message :
-        "Could not confirm service removal. Refresh the list before trying again.");
+        "Could not verify service deletion. Refresh before retrying; no retry is automatic.");
     } finally {
       setSaving(false);
     }
@@ -63,20 +64,22 @@ export function RemoveAllServicesControl({ basePath, activeCount, onRemoved }: P
         Remove All Services
       </h3>
       <p style={{ margin: "0 0 12px", lineHeight: 1.6 }}>
-        This removes all <strong>{activeCount} active services</strong> from future bookings
-        in this shop. Nothing is permanently deleted; past bookings, payments and visit
-        history remain intact. You can reactivate services later under Turned-off services.
+        Permanently remove all <strong>{totalCount} services</strong> from this shop
+        ({activeCount} active, {totalCount - activeCount} turned off) so you can import a fresh
+        catalog without existing-name conflicts. This cannot be undone. If any services
+        are referenced by past bookings, queues or visit history, the server will block
+        the entire deletion to protect those records. No other shop is affected.
       </p>
       {!expanded ? (
-        <Button type="button" variant="outline" disabled={activeCount === 0 || saving || completed}
+        <Button type="button" variant="outline" disabled={totalCount === 0 || saving || completed}
           onClick={() => { setExpanded(true); setError(null); }}>
-          Remove All Services ({activeCount})
+          Remove All Services ({totalCount})
         </Button>
       ) : (
         <div>
           <p role="alert" style={{ color: "#b45309", fontWeight: 650 }}>
-            You are about to turn off {activeCount} services for this shop. Type
-            <strong> REMOVE ALL </strong> to confirm.
+            You are about to permanently delete {totalCount} services, including inactive services.
+            Type <strong> DELETE ALL </strong> to confirm. Existing booking history will never be erased.
           </p>
           <label htmlFor="confirm-remove-all-services" style={{ display: "block", marginBottom: 8 }}>
             Confirmation phrase
@@ -88,7 +91,7 @@ export function RemoveAllServicesControl({ basePath, activeCount, onRemoved }: P
             value={confirmation}
             disabled={saving}
             onChange={(event) => setConfirmation(event.target.value)}
-            placeholder="REMOVE ALL"
+            placeholder="DELETE ALL"
             style={{ padding: 10, border: "1px solid var(--bc-border)", borderRadius: 8,
               background: "var(--bc-surface)", color: "var(--bc-ink)" }}
           />
@@ -98,9 +101,9 @@ export function RemoveAllServicesControl({ basePath, activeCount, onRemoved }: P
               Cancel
             </Button>
             <Button type="button" variant="secondary"
-              disabled={saving || completed || confirmation !== "REMOVE ALL" || activeCount === 0}
+              disabled={saving || completed || confirmation !== "DELETE ALL" || totalCount === 0}
               onClick={() => void removeAll()}>
-              {saving ? "Removing…" : "Confirm Remove All (" + activeCount + ")"}
+              {saving ? "Removing…" : "Confirm Permanent Delete (" + totalCount + ")"}
             </Button>
           </div>
         </div>
