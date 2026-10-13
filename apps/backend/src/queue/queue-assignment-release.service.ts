@@ -6,9 +6,7 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { QueueAutoAssignTrigger } from './queue-auto-assign.trigger';
 
 export type AssignmentReleaseReason =
-  | 'STAFF_OFF_DUTY'
-  | 'STAFF_ACCESS_REVOKED'
-  | 'CHAIR_UNAVAILABLE';
+  'STAFF_OFF_DUTY' | 'STAFF_ACCESS_REVOKED' | 'CHAIR_UNAVAILABLE';
 
 /**
  * Owner-operations corrective mission: an ASSIGNED customer (status CALLED with a reserved barber and
@@ -41,7 +39,12 @@ export class QueueAssignmentReleaseService {
     reason: AssignmentReleaseReason,
     actorUserId: string | null = null,
   ): Promise<number> {
-    return this.release(salonId, { assignedStaffId: staffId }, reason, actorUserId);
+    return this.release(
+      salonId,
+      { assignedStaffId: staffId },
+      reason,
+      actorUserId,
+    );
   }
 
   releaseForChair(
@@ -50,7 +53,12 @@ export class QueueAssignmentReleaseService {
     reason: AssignmentReleaseReason,
     actorUserId: string | null = null,
   ): Promise<number> {
-    return this.release(salonId, { assignedChairId: chairId }, reason, actorUserId);
+    return this.release(
+      salonId,
+      { assignedChairId: chairId },
+      reason,
+      actorUserId,
+    );
   }
 
   private async release(
@@ -105,7 +113,9 @@ export class QueueAssignmentReleaseService {
       if (done) released += 1;
     }
     if (released > 0) {
-      this.logger.log(`Released ${released} assigned customer(s) at salon ${salonId} (${reason}).`);
+      this.logger.log(
+        `Released ${released} assigned customer(s) at salon ${salonId} (${reason}).`,
+      );
       this.realtime.emitQueueUpdated(salonId);
       // Someone else may now be able to take them.
       this.trigger.trigger(salonId);

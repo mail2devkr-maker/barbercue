@@ -98,7 +98,11 @@ export class StaffWorkService {
       }),
       // The customer assigned to THIS barber whose service has not started: they start it themselves.
       this.prisma.queueEntry.findFirst({
-        where: { salonId, status: QueueEntryStatus.CALLED, assignedStaffId: me.id },
+        where: {
+          salonId,
+          status: QueueEntryStatus.CALLED,
+          assignedStaffId: me.id,
+        },
         include: {
           service: { select: { name: true } },
           assignedChair: { select: { label: true } },
@@ -106,9 +110,16 @@ export class StaffWorkService {
           booking: {
             select: {
               serviceId: true,
-              service: { select: { name: true, durationMinutes: true, price: true } },
+              service: {
+                select: { name: true, durationMinutes: true, price: true },
+              },
               services: {
-                select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+                select: {
+                  serviceId: true,
+                  serviceName: true,
+                  durationMinutes: true,
+                  price: true,
+                },
                 orderBy: { sortOrder: 'asc' },
               },
             },
@@ -206,7 +217,8 @@ export class StaffWorkService {
           serviceSessionId: null,
           tokenNumber: assignedRow.tokenNumber,
           customerLabel: assignedRow.contactName ?? GUEST_LABEL,
-          customerPhone: assignedRow.contactPhone ?? assignedRow.customer?.phone ?? null,
+          customerPhone:
+            assignedRow.contactPhone ?? assignedRow.customer?.phone ?? null,
           serviceName: assignedRow.booking
             ? resolveEffectiveBookingServices(assignedRow.booking)
                 .map((s) => s.serviceName)

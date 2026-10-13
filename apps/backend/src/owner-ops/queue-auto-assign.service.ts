@@ -273,7 +273,8 @@ export class QueueAutoAssignService implements OnModuleInit {
     return this.runForSalon(salonId, {
       requireEnabled: false,
       includeNotArrived: true,
-      seat: (id, i) => this.queue.assign(userId, id, { ...i, startService: false }),
+      seat: (id, i) =>
+        this.queue.assign(userId, id, { ...i, startService: false }),
     });
   }
 
@@ -298,7 +299,8 @@ export class QueueAutoAssignService implements OnModuleInit {
       requireEnabled: false,
       includeNotArrived: true,
       onlyEntryId: entryId,
-      seat: (id, i) => this.queue.assign(userId, id, { ...i, startService: false }),
+      seat: (id, i) =>
+        this.queue.assign(userId, id, { ...i, startService: false }),
     });
     if (result.assigned.length === 1) return this.detail(entryId);
     const reason =
@@ -345,7 +347,11 @@ export class QueueAutoAssignService implements OnModuleInit {
         select: { id: true },
       }),
       this.prisma.queueEntry.findFirst({
-        where: { salonId, status: QueueEntryStatus.CALLED, assignedStaffId: me.id },
+        where: {
+          salonId,
+          status: QueueEntryStatus.CALLED,
+          assignedStaffId: me.id,
+        },
         select: { id: true },
       }),
     ]);
@@ -362,7 +368,8 @@ export class QueueAutoAssignService implements OnModuleInit {
       requireEnabled: false,
       onlyStaffId: me.id,
       stopAfterFirst: true,
-      seat: (id, i) => this.queue.assign(userId, id, { ...i, startService: false }),
+      seat: (id, i) =>
+        this.queue.assign(userId, id, { ...i, startService: false }),
     });
     const first = result.assigned[0];
     if (first) return this.detail(first.queueEntryId);
@@ -499,7 +506,9 @@ export class QueueAutoAssignService implements OnModuleInit {
     const busyChairs = new Set([
       ...activeSessions.map((s) => s.chairId),
       ...manualOccupancies.map((m) => m.chairId),
-      ...assignedHolds.map((h) => h.assignedChairId).filter((id): id is string => id !== null),
+      ...assignedHolds
+        .map((h) => h.assignedChairId)
+        .filter((id): id is string => id !== null),
     ]);
     const doneByStaff = new Map<string, { count: number; last: Date | null }>();
     for (const row of todaySessions) {

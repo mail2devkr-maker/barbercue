@@ -15,7 +15,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
-import { ledgerRowSelect, toLedgerEntryDto, type LedgerRow } from './ledger-entry';
+import {
+  ledgerRowSelect,
+  toLedgerEntryDto,
+  type LedgerRow,
+} from './ledger-entry';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -165,7 +169,10 @@ export class DashboardCustomersService {
       staffGrouped,
       ledgerRows,
     ] = await Promise.all([
-      this.prisma.salon.findUnique({ where: { id: salonId }, select: { currency: true } }),
+      this.prisma.salon.findUnique({
+        where: { id: salonId },
+        select: { currency: true },
+      }),
       this.prisma.user.findMany({
         where: { id: { in: customerIds } },
         select: { id: true, phone: true, email: true },
@@ -218,9 +225,16 @@ export class DashboardCustomersService {
         select: {
           customerId: true,
           serviceId: true,
-          service: { select: { name: true, durationMinutes: true, price: true } },
+          service: {
+            select: { name: true, durationMinutes: true, price: true },
+          },
           services: {
-            select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+            select: {
+              serviceId: true,
+              serviceName: true,
+              durationMinutes: true,
+              price: true,
+            },
           },
         },
       }),
@@ -385,7 +399,8 @@ export class DashboardCustomersService {
             ? (staffNameById.get(agg.preferredStaffId) ?? null)
             : null,
           segment: segmentFor(agg.completed),
-          newCustomerGraceEligible: agg.completed < NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT,
+          newCustomerGraceEligible:
+            agg.completed < NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT,
           ledgerEntries,
           outstandingTotalAmount,
         };
@@ -407,7 +422,11 @@ export class DashboardCustomersService {
     ledgerEntryId: string,
   ): Promise<LedgerActionResultDto> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    const entry = await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId);
+    const entry = await this.getOwnedLedgerEntry(
+      salonId,
+      customerId,
+      ledgerEntryId,
+    );
 
     if (entry.reason !== LedgerReason.NO_SHOW_CHARGE) {
       throw new AppException(
@@ -477,13 +496,22 @@ export class DashboardCustomersService {
         },
       });
 
-      return tx.customerLedgerEntry.findUniqueOrThrow({ where: { id: ledgerEntryId }, select: ledgerRowSelect });
+      return tx.customerLedgerEntry.findUniqueOrThrow({
+        where: { id: ledgerEntryId },
+        select: ledgerRowSelect,
+      });
     });
 
     if (!result) {
       // Lost the race to a concurrent waive/restore between the read above and this transaction —
       // re-read and return the current state rather than a confusing generic error.
-      return { ledgerEntry: await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId) };
+      return {
+        ledgerEntry: await this.getOwnedLedgerEntry(
+          salonId,
+          customerId,
+          ledgerEntryId,
+        ),
+      };
     }
     return { ledgerEntry: toLedgerEntryDto(result as unknown as LedgerRow) };
   }
@@ -496,7 +524,11 @@ export class DashboardCustomersService {
     ledgerEntryId: string,
   ): Promise<LedgerActionResultDto> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    const entry = await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId);
+    const entry = await this.getOwnedLedgerEntry(
+      salonId,
+      customerId,
+      ledgerEntryId,
+    );
 
     if (entry.status === LedgerStatus.OUTSTANDING) {
       // Idempotent no-op — mirrors waiveNoShowDue's own retry handling.
@@ -529,7 +561,12 @@ export class DashboardCustomersService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       const claim = await tx.customerLedgerEntry.updateMany({
-        where: { id: ledgerEntryId, salonId, customerId, status: LedgerStatus.WAIVED },
+        where: {
+          id: ledgerEntryId,
+          salonId,
+          customerId,
+          status: LedgerStatus.WAIVED,
+        },
         data: { status: LedgerStatus.OUTSTANDING },
       });
       if (claim.count === 0) return null;
@@ -553,11 +590,20 @@ export class DashboardCustomersService {
         },
       });
 
-      return tx.customerLedgerEntry.findUniqueOrThrow({ where: { id: ledgerEntryId }, select: ledgerRowSelect });
+      return tx.customerLedgerEntry.findUniqueOrThrow({
+        where: { id: ledgerEntryId },
+        select: ledgerRowSelect,
+      });
     });
 
     if (!result) {
-      return { ledgerEntry: await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId) };
+      return {
+        ledgerEntry: await this.getOwnedLedgerEntry(
+          salonId,
+          customerId,
+          ledgerEntryId,
+        ),
+      };
     }
     return { ledgerEntry: toLedgerEntryDto(result as unknown as LedgerRow) };
   }

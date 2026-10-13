@@ -74,7 +74,13 @@ export class OwnerSearchService {
           ...(/^\d{1,4}$/.test(q) ? [{ tokenNumber: Number(q) }] : []),
         ],
       },
-      select: { id: true, tokenNumber: true, contactName: true, status: true, assignedStaffId: true },
+      select: {
+        id: true,
+        tokenNumber: true,
+        contactName: true,
+        status: true,
+        assignedStaffId: true,
+      },
       take: PER_GROUP,
       orderBy: { joinedAt: 'asc' },
     });
@@ -83,7 +89,7 @@ export class OwnerSearchService {
         type: 'queue',
         id: e.id,
         title: `#${e.tokenNumber}${e.contactName ? ` · ${e.contactName}` : ''}`,
-        subtitle: `Live Queue · ${(e.status === QueueEntryStatus.CALLED && e.assignedStaffId ? 'assigned' : e.status.replace('_', ' ').toLowerCase())}`,
+        subtitle: `Live Queue · ${e.status === QueueEntryStatus.CALLED && e.assignedStaffId ? 'assigned' : e.status.replace('_', ' ').toLowerCase()}`,
         href: `${base}/queue`,
       });
     }

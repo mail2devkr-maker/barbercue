@@ -95,10 +95,16 @@ export class AvailabilityService {
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
     });
-    if (!salon || salon.status !== SalonStatus.ACTIVE || salon.isClosedForToday) {
+    if (
+      !salon ||
+      salon.status !== SalonStatus.ACTIVE ||
+      salon.isClosedForToday
+    ) {
       throw new AppException(
         BookingErrorCode.SALON_NOT_FOUND,
-        salon?.isClosedForToday ? 'This shop is closed for today.' : 'Salon not found.',
+        salon?.isClosedForToday
+          ? 'This shop is closed for today.'
+          : 'Salon not found.',
         salon?.isClosedForToday ? HttpStatus.CONFLICT : HttpStatus.NOT_FOUND,
       );
     }
@@ -182,7 +188,10 @@ export class AvailabilityService {
     salonId: string,
     serviceIds: string[],
   ): Promise<Service[]> {
-    if (serviceIds.length === 0 || serviceIds.length > MAX_SERVICES_PER_BOOKING) {
+    if (
+      serviceIds.length === 0 ||
+      serviceIds.length > MAX_SERVICES_PER_BOOKING
+    ) {
       throw new AppException(
         BookingErrorCode.SERVICE_NOT_FOUND,
         'Select at least one and no more than the maximum number of services.',
@@ -250,9 +259,13 @@ export class AvailabilityService {
       status: StaffMemberStatus.ACTIVE,
     };
     const qualificationCounts = await Promise.all(
-      serviceIds.map((serviceId) => db.staffService.count({ where: { serviceId } })),
+      serviceIds.map((serviceId) =>
+        db.staffService.count({ where: { serviceId } }),
+      ),
     );
-    const restrictedServiceIds = serviceIds.filter((_, i) => qualificationCounts[i] > 0);
+    const restrictedServiceIds = serviceIds.filter(
+      (_, i) => qualificationCounts[i] > 0,
+    );
     if (restrictedServiceIds.length === 0) return base;
     return {
       ...base,
@@ -395,7 +408,11 @@ export class AvailabilityService {
     salonId: string,
     serviceIds: string[],
   ): Promise<number> {
-    const where = await this.qualifiedStaffWhereForServices(db, salonId, serviceIds);
+    const where = await this.qualifiedStaffWhereForServices(
+      db,
+      salonId,
+      serviceIds,
+    );
     const [qualifiedStaffCount, chairCount] = await Promise.all([
       db.salonStaff.count({ where }),
       db.chair.count({ where: { salonId, status: ChairStatus.ACTIVE } }),
@@ -461,7 +478,8 @@ export class AvailabilityService {
     // an unknown/foreign-salon/inactive/duplicate id is rejected here, before any slot math runs,
     // exactly as it was for a single serviceId.
     const services = await this.getServicesOrThrow(salonId, serviceIds);
-    if (staffId) await this.assertStaffQualifiedForServices(salonId, serviceIds, staffId);
+    if (staffId)
+      await this.assertStaffQualifiedForServices(salonId, serviceIds, staffId);
     const timeZone = await this.resolveTimeZoneOrThrow(salonId);
 
     const now = new Date();
@@ -507,7 +525,10 @@ export class AvailabilityService {
       }
     }
 
-    const totalDurationMinutes = services.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const totalDurationMinutes = services.reduce(
+      (sum, s) => sum + s.durationMinutes,
+      0,
+    );
     const durationMs = totalDurationMinutes * 60_000;
     const slotCapacity = await this.getSlotCapacityForServices(
       this.prisma,
@@ -550,7 +571,11 @@ export class AvailabilityService {
     // session does (owner-operations corrective mission) - without this a slot could be offered for a
     // barber who is already spoken for.
     const assignedHolds = await this.prisma.queueEntry.findMany({
-      where: { salonId, status: QueueEntryStatus.CALLED, assignedStaffId: { not: null } },
+      where: {
+        salonId,
+        status: QueueEntryStatus.CALLED,
+        assignedStaffId: { not: null },
+      },
       select: {
         assignedStaffId: true,
         assignedAt: true,
@@ -564,7 +589,11 @@ export class AvailabilityService {
         staffId: s.staffId,
         isWalkIn: s.queueEntry.bookingId === null,
         start: s.startedAt,
-        end: this.reservations.projectedActiveSessionEnd(s.startedAt, s.service.durationMinutes, now),
+        end: this.reservations.projectedActiveSessionEnd(
+          s.startedAt,
+          s.service.durationMinutes,
+          now,
+        ),
       })),
       ...assignedHolds.map((e) => {
         const from = e.assignedAt ?? e.calledAt ?? now;
@@ -572,7 +601,11 @@ export class AvailabilityService {
           staffId: e.assignedStaffId as string,
           isWalkIn: e.bookingId === null,
           start: from,
-          end: this.reservations.projectedActiveSessionEnd(from, e.service?.durationMinutes ?? 30, now),
+          end: this.reservations.projectedActiveSessionEnd(
+            from,
+            e.service?.durationMinutes ?? 30,
+            now,
+          ),
         };
       }),
     ];
@@ -594,7 +627,14 @@ export class AvailabilityService {
       // represented above; an appointment's own check-in session is already counted via its
       // Booking row and would double-count the same reservation if included here too.
       const overlappingWalkInSessions = projectedSessions.filter(
-        (s) => s.isWalkIn && this.reservations.intervalsOverlap(s.start, s.end, slotStart, slotEnd),
+        (s) =>
+          s.isWalkIn &&
+          this.reservations.intervalsOverlap(
+            s.start,
+            s.end,
+            slotStart,
+            slotEnd,
+          ),
       );
       // Pool capacity governs "Any Staff" bookability regardless of who holds each overlapping
       // slot. A specific requested staffId additionally needs that exact professional free — the
@@ -603,9 +643,17 @@ export class AvailabilityService {
         !!staffId &&
         (overlappingBookings.some((b) => b.preferredStaffId === staffId) ||
           projectedSessions.some(
-            (s) => s.staffId === staffId && this.reservations.intervalsOverlap(s.start, s.end, slotStart, slotEnd),
+            (s) =>
+              s.staffId === staffId &&
+              this.reservations.intervalsOverlap(
+                s.start,
+                s.end,
+                slotStart,
+                slotEnd,
+              ),
           ));
-      const consumed = overlappingBookings.length + overlappingWalkInSessions.length;
+      const consumed =
+        overlappingBookings.length + overlappingWalkInSessions.length;
       const available = isSlotBookable(slotCapacity, consumed) && !staffTaken;
       slots.push({
         slotStart: slotStart.toISOString(),

@@ -67,7 +67,10 @@ export class DashboardReviewsService {
     reviewId: string,
     ownerResponse: string,
   ): Promise<OwnerReviewDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     // Scoped by salonId, not just id — a staff/owner at salon A must never respond to a review
     // that belongs to salon B even if they somehow know its id.
     const existing = await this.prisma.review.findFirst({

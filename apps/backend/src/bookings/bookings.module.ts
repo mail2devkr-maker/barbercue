@@ -50,6 +50,13 @@ import { ArrivalAlertsService } from './arrival-alerts.service';
   // a second, competing controller.
   // BookingsService is exported (owner-operations mission) so OwnerOpsModule's shop-side cancel /
   // reschedule / in-shop booking reuse the one booking engine instead of a second implementation.
-  exports: [AvailabilityService, ReservationService, CancellationPolicyService, BookingNoShowService, ArrivalAlertsService, BookingsService],
+  exports: [
+    AvailabilityService,
+    ReservationService,
+    CancellationPolicyService,
+    BookingNoShowService,
+    ArrivalAlertsService,
+    BookingsService,
+  ],
 })
 export class BookingsModule {}

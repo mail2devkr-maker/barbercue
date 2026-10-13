@@ -59,7 +59,12 @@ const bookingServiceSnapshotSelect = {
   serviceId: true,
   service: { select: { name: true, durationMinutes: true, price: true } },
   services: {
-    select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+    select: {
+      serviceId: true,
+      serviceName: true,
+      durationMinutes: true,
+      price: true,
+    },
     orderBy: { sortOrder: 'asc' as const },
   },
 } satisfies Prisma.BookingSelect;
@@ -77,7 +82,11 @@ export const queueEntryDetailInclude = {
   // Part 7 — preferredStaffId/preferredStaff alongside the existing service-snapshot fields, so
   // toDetailDto can surface the customer's own barber preference without a second query.
   booking: {
-    select: { ...bookingServiceSnapshotSelect, preferredStaffId: true, preferredStaff: { select: { displayName: true } } },
+    select: {
+      ...bookingServiceSnapshotSelect,
+      preferredStaffId: true,
+      preferredStaff: { select: { displayName: true } },
+    },
   },
 } satisfies Prisma.QueueEntryInclude;
 
@@ -348,30 +357,38 @@ export class QueueService {
     const waitingCount = await this.prisma.queueEntry.count({
       where: { salonId, status: QueueEntryStatus.WAITING },
     });
-    const [staffCount, chairCount, manualOccupiedCount, avgDuration, activeSessions] =
-      await Promise.all([
-        this.prisma.salonStaff.count({
-          where: { salonId, status: StaffMemberStatus.ACTIVE },
-        }),
-        this.prisma.chair.count({
-          where: { salonId, status: ChairStatus.ACTIVE },
-        }),
-        this.prisma.manualChairOccupancy.count({
-          where: { salonId, endedAt: null },
-        }),
-        this.prisma.service.aggregate({
-          where: { salonId, isActive: true },
-          _avg: { durationMinutes: true },
-        }),
-        this.prisma.serviceSession.findMany({
-          where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
-          select: {
-            startedAt: true,
-            service: { select: { durationMinutes: true } },
-          },
-        }),
-      ]);
-    const serverCount = computeSlotCapacity(staffCount, Math.max(0, chairCount - manualOccupiedCount));
+    const [
+      staffCount,
+      chairCount,
+      manualOccupiedCount,
+      avgDuration,
+      activeSessions,
+    ] = await Promise.all([
+      this.prisma.salonStaff.count({
+        where: { salonId, status: StaffMemberStatus.ACTIVE },
+      }),
+      this.prisma.chair.count({
+        where: { salonId, status: ChairStatus.ACTIVE },
+      }),
+      this.prisma.manualChairOccupancy.count({
+        where: { salonId, endedAt: null },
+      }),
+      this.prisma.service.aggregate({
+        where: { salonId, isActive: true },
+        _avg: { durationMinutes: true },
+      }),
+      this.prisma.serviceSession.findMany({
+        where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
+        select: {
+          startedAt: true,
+          service: { select: { durationMinutes: true } },
+        },
+      }),
+    ]);
+    const serverCount = computeSlotCapacity(
+      staffCount,
+      Math.max(0, chairCount - manualOccupiedCount),
+    );
     const avgServiceDurationMinutes =
       avgDuration._avg.durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES;
     const activeRemaining = this.averageRemainingMinutes(activeSessions);
@@ -435,7 +452,13 @@ export class QueueService {
     // Full roster (both statuses) — an ACTIVE-only filter would make an off-duty staff member
     // invisible here and unable to clock themselves back in via this same dashboard. The assign
     // action itself still separately re-validates ACTIVE + qualified via AvailabilityService.
-    const [staffRoster, chairs, services, manualOccupancies, activeChairSessions] = await Promise.all([
+    const [
+      staffRoster,
+      chairs,
+      services,
+      manualOccupancies,
+      activeChairSessions,
+    ] = await Promise.all([
       this.prisma.salonStaff.findMany({
         where: { salonId },
         orderBy: { displayName: 'asc' },
@@ -457,12 +480,21 @@ export class QueueService {
       }),
       this.prisma.serviceSession.findMany({
         where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
-        select: { id: true, chairId: true, queueEntry: { select: { tokenNumber: true } }, staff: { select: { displayName: true } } },
+        select: {
+          id: true,
+          chairId: true,
+          queueEntry: { select: { tokenNumber: true } },
+          staff: { select: { displayName: true } },
+        },
       }),
     ]);
 
-    const manualByChair = new Map(manualOccupancies.map((row) => [row.chairId, row]));
-    const fastQueByChair = new Map(activeChairSessions.map((row) => [row.chairId, row]));
+    const manualByChair = new Map(
+      manualOccupancies.map((row) => [row.chairId, row]),
+    );
+    const fastQueByChair = new Map(
+      activeChairSessions.map((row) => [row.chairId, row]),
+    );
 
     // Owner-operations mission - the finished/terminal side of "today", so completed visits and
     // cancelled/expired/no-show outcomes stay visible (and separate) instead of vanishing the
@@ -470,10 +502,15 @@ export class QueueService {
     // when no trustworthy timezone exists, never a guess at IST).
     const timeZone = await this.availability.getSalonTimeZone(salonId);
     const dayBounds = timeZone ? zonedDayBounds(new Date(), timeZone) : null;
-    const dayStart = dayBounds?.start ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const dayStart =
+      dayBounds?.start ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
     const [completedRows, terminalRows, salonFlags] = await Promise.all([
       this.prisma.queueEntry.findMany({
-        where: { salonId, status: QueueEntryStatus.COMPLETED, serviceCompletedAt: { gte: dayStart } },
+        where: {
+          salonId,
+          status: QueueEntryStatus.COMPLETED,
+          serviceCompletedAt: { gte: dayStart },
+        },
         include: queueEntryDetailInclude,
         orderBy: { serviceCompletedAt: 'desc' },
         take: 100,
@@ -482,7 +519,11 @@ export class QueueService {
         where: {
           salonId,
           status: {
-            in: [QueueEntryStatus.CANCELLED, QueueEntryStatus.EXPIRED, QueueEntryStatus.NO_SHOW],
+            in: [
+              QueueEntryStatus.CANCELLED,
+              QueueEntryStatus.EXPIRED,
+              QueueEntryStatus.NO_SHOW,
+            ],
           },
           updatedAt: { gte: dayStart },
         },
@@ -495,15 +536,23 @@ export class QueueService {
         select: { queueAutoAssignEnabled: true },
       }),
     ]);
-    const completedToday = (completedRows ?? []).map((e) => this.toDetailDto(e, null));
-    const historyToday = (terminalRows ?? []).map((e) => this.toDetailDto(e, null));
-    const waiting = detailed.filter((e) => e.status === QueueEntryStatus.WAITING);
+    const completedToday = (completedRows ?? []).map((e) =>
+      this.toDetailDto(e, null),
+    );
+    const historyToday = (terminalRows ?? []).map((e) =>
+      this.toDetailDto(e, null),
+    );
+    const waiting = detailed.filter(
+      (e) => e.status === QueueEntryStatus.WAITING,
+    );
     // CALLED splits in two: called to the counter with no barber yet, and ASSIGNED (a barber and
     // chair are reserved but the service has not started). An assigned customer is neither waiting
     // for a barber nor in service.
     const called = detailed.filter((e) => queuePhaseOf(e) === 'CALLED');
     const assigned = detailed.filter((e) => queuePhaseOf(e) === 'ASSIGNED');
-    const inService = detailed.filter((e) => e.status === QueueEntryStatus.IN_SERVICE);
+    const inService = detailed.filter(
+      (e) => e.status === QueueEntryStatus.IN_SERVICE,
+    );
     const reservedByChair = new Map(
       assigned
         .filter((e) => e.assignedChairId)
@@ -528,7 +577,14 @@ export class QueueService {
       entries: detailed,
       revision,
       serverTime: new Date(revision).toISOString(),
-      sections: { waiting, called, assigned, inService, completedToday, historyToday },
+      sections: {
+        waiting,
+        called,
+        assigned,
+        inService,
+        completedToday,
+        historyToday,
+      },
       counts: {
         waiting: waiting.length,
         called: called.length,
@@ -544,7 +600,8 @@ export class QueueService {
         status: s.status,
         availabilityState: staffAvailability[i].availabilityState,
         busyUntil: staffAvailability[i].busyUntil?.toISOString() ?? null,
-        nextBookingStart: staffAvailability[i].nextBookingStart?.toISOString() ?? null,
+        nextBookingStart:
+          staffAvailability[i].nextBookingStart?.toISOString() ?? null,
       })),
       chairs: chairs.map((c): ChairOptionDto => {
         const fastQue = fastQueByChair.get(c.id);
@@ -558,7 +615,8 @@ export class QueueService {
           tokenNumber: fastQue?.queueEntry.tokenNumber ?? null,
           assignedStaffName: fastQue?.staff.displayName ?? null,
           reservedForEntryId: reservedByChair.get(c.id)?.id ?? null,
-          reservedForTokenNumber: reservedByChair.get(c.id)?.tokenNumber ?? null,
+          reservedForTokenNumber:
+            reservedByChair.get(c.id)?.tokenNumber ?? null,
         };
       }),
       services: services.map((s): ServiceOptionDto => ({
@@ -673,7 +731,11 @@ export class QueueService {
       // An ASSIGNED (not yet started) customer holds their barber and chair: spoken for, so neither
       // counts as available - but it is not a service in progress (currentServices is unchanged).
       this.prisma.queueEntry.findMany({
-        where: { salonId, status: QueueEntryStatus.CALLED, assignedStaffId: { not: null } },
+        where: {
+          salonId,
+          status: QueueEntryStatus.CALLED,
+          assignedStaffId: { not: null },
+        },
         select: { assignedStaffId: true, assignedChairId: true },
       }),
     ]);
@@ -681,12 +743,16 @@ export class QueueService {
     const busyChairIds = new Set([
       ...activeSessions.map((s) => s.chairId),
       ...activeManualOccupancies.map((s) => s.chairId),
-      ...assignedHolds.map((h) => h.assignedChairId).filter((id): id is string => id !== null),
+      ...assignedHolds
+        .map((h) => h.assignedChairId)
+        .filter((id): id is string => id !== null),
     ]);
     const busyStaffIds = new Set([
       ...activeSessions.map((s) => s.staffId),
       ...reservedStaffRows.map((r) => r.preferredStaffId as string),
-      ...assignedHolds.map((h) => h.assignedStaffId).filter((id): id is string => id !== null),
+      ...assignedHolds
+        .map((h) => h.assignedStaffId)
+        .filter((id): id is string => id !== null),
     ]);
     const activeChairs = chairs.filter((c) => c.status === ChairStatus.ACTIVE);
     const activeStaff = staff.filter(
@@ -731,7 +797,10 @@ export class QueueService {
 
   async call(userId: string, entryId: string): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
 
     // A conditional UPDATE (WHERE id AND status) is atomic in Postgres — no separate row lock
     // needed for a plain status transition, unlike the ServiceSession insert in assign() below,
@@ -747,9 +816,15 @@ export class QueueService {
         HttpStatus.CONFLICT,
       );
     }
-    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_CALLED', entryId, {
-      salonId: entry.salonId,
-    });
+    await this.logAdminQueueAction(
+      actor,
+      userId,
+      'ADMIN_QUEUE_ENTRY_CALLED',
+      entryId,
+      {
+        salonId: entry.salonId,
+      },
+    );
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitEntryCalled(entry.salonId, entryId, entry.customerId);
@@ -764,9 +839,15 @@ export class QueueService {
    * Idempotent: acknowledging an already-arrived entry returns it unchanged, and two staff
    * tapping at once converge on the first timestamp (the claim only ever fills a NULL).
    */
-  async markArrived(userId: string, entryId: string): Promise<QueueEntryDetailDto> {
+  async markArrived(
+    userId: string,
+    entryId: string,
+  ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
 
     if (
       entry.status !== QueueEntryStatus.WAITING &&
@@ -789,9 +870,15 @@ export class QueueService {
         data: { arrivedAt: new Date() },
       });
       if (claim.count > 0) {
-        await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_ARRIVED', entryId, {
-          salonId: entry.salonId,
-        });
+        await this.logAdminQueueAction(
+          actor,
+          userId,
+          'ADMIN_QUEUE_ENTRY_ARRIVED',
+          entryId,
+          {
+            salonId: entry.salonId,
+          },
+        );
         this.realtime.emitQueueUpdated(entry.salonId);
       } else {
         // Lost a race: either another operator acknowledged it first (fine — idempotent) or the
@@ -818,11 +905,19 @@ export class QueueService {
     input: AssignQueueEntryInput,
   ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
     // `startService: false` (every current first-party client) only RESERVES the barber and chair;
     // omitted keeps the pre-existing seat-and-start behaviour for already-installed clients that
     // have no Start Service action (see assignQueueEntrySchema).
-    return this.assignLoaded(entry, input, { userId, actor }, { startService: input.startService !== false });
+    return this.assignLoaded(
+      entry,
+      input,
+      { userId, actor },
+      { startService: input.startService !== false },
+    );
   }
 
   /**
@@ -832,7 +927,10 @@ export class QueueService {
    * (the allocator only ever runs for a salon whose owner enabled automatic assignment, or on an
    * already-authorized request), and the audit row carries no human actor.
    */
-  async assignAsSystem(entryId: string, input: AssignQueueEntryInput): Promise<QueueEntryDetailDto> {
+  async assignAsSystem(
+    entryId: string,
+    input: AssignQueueEntryInput,
+  ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
     // The allocator never starts a service: it only reserves a barber and chair. The barber (or the
     // owner) starts the service explicitly with startService().
@@ -916,28 +1014,41 @@ export class QueueService {
       // booking for this salon and this assign() now serialize against each other, so exactly one
       // of a competing "book Ramesh" vs "assign walk-in to Ramesh" can win instead of both reading
       // a stale reservation state.
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${entry.salonId}))`);
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${input.chairId}`}))`);
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${entry.salonId}))`,
+      );
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${input.chairId}`}))`,
+      );
       const manualOccupancy = await tx.manualChairOccupancy.findFirst({
         where: { chairId: input.chairId, endedAt: null },
         select: { id: true },
       });
       if (manualOccupancy) {
-        throw new AppException(QueueErrorCode.CHAIR_ALREADY_OCCUPIED, 'This chair is occupied by a local customer.', HttpStatus.CONFLICT);
+        throw new AppException(
+          QueueErrorCode.CHAIR_ALREADY_OCCUPIED,
+          'This chair is occupied by a local customer.',
+          HttpStatus.CONFLICT,
+        );
       }
       // Part 5 — a queue assignment starts service now; it must not consume a barber through an
       // interval that overlaps their own upcoming/current appointment reservation. This entry's
       // own linked booking (an appointment assigned to its own preferredStaffId — Case O) and its
       // own not-yet-existing session are excluded so an appointment can never conflict with itself.
       const now = new Date();
-      const candidateEnd = new Date(now.getTime() + service.durationMinutes * 60_000);
+      const candidateEnd = new Date(
+        now.getTime() + service.durationMinutes * 60_000,
+      );
       const staffCheck = await this.reservations.isStaffFreeForInterval(
         tx,
         entry.salonId,
         input.staffId,
         now,
         candidateEnd,
-        { excludeBookingId: entry.bookingId ?? undefined, excludeQueueEntryId: entryId },
+        {
+          excludeBookingId: entry.bookingId ?? undefined,
+          excludeQueueEntryId: entryId,
+        },
       );
       if (!staffCheck.free) {
         // Someone else already holds this barber: serving a customer right now, or assigned to a
@@ -1017,17 +1128,29 @@ export class QueueService {
       }
 
       if (options.startService) {
-        await this.createActiveSession(tx, entryId, input.staffId, input.chairId, serviceId);
+        await this.createActiveSession(
+          tx,
+          entryId,
+          input.staffId,
+          input.chairId,
+          serviceId,
+        );
       }
     }, TRANSACTION_OPTIONS);
     if (by) {
-      await this.logAdminQueueAction(by.actor, by.userId, 'ADMIN_QUEUE_ENTRY_ASSIGNED', entryId, {
-        salonId: entry.salonId,
-        staffId: input.staffId,
-        chairId: input.chairId,
-        serviceId,
-        serviceStarted: options.startService,
-      });
+      await this.logAdminQueueAction(
+        by.actor,
+        by.userId,
+        'ADMIN_QUEUE_ENTRY_ASSIGNED',
+        entryId,
+        {
+          salonId: entry.salonId,
+          staffId: input.staffId,
+          chairId: input.chairId,
+          serviceId,
+          serviceStarted: options.startService,
+        },
+      );
     } else {
       await this.prisma.auditLog.create({
         data: {
@@ -1084,11 +1207,18 @@ export class QueueService {
    *
    * Idempotent for a double tap: an entry that is already IN_SERVICE is returned unchanged.
    */
-  async startService(userId: string, entryId: string): Promise<QueueEntryDetailDto> {
+  async startService(
+    userId: string,
+    entryId: string,
+  ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
 
-    if (entry.status === QueueEntryStatus.IN_SERVICE) return this.getDetailOrThrow(entryId);
+    if (entry.status === QueueEntryStatus.IN_SERVICE)
+      return this.getDetailOrThrow(entryId);
     if (
       entry.status !== QueueEntryStatus.CALLED ||
       !entry.assignedStaffId ||
@@ -1105,7 +1235,13 @@ export class QueueService {
 
     const staff = await this.prisma.salonStaff.findFirst({
       where: { id: assignedStaffId, salonId: entry.salonId },
-      select: { id: true, userId: true, status: true, accessRevokedAt: true, displayName: true },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        accessRevokedAt: true,
+        displayName: true,
+      },
     });
     // A barber may only start THEIR OWN assigned customer; the owner (or a delegated admin) may start
     // anyone's, e.g. when the barber has their hands full.
@@ -1119,7 +1255,11 @@ export class QueueService {
         );
       }
     }
-    if (!staff || staff.status !== StaffMemberStatus.ACTIVE || staff.accessRevokedAt) {
+    if (
+      !staff ||
+      staff.status !== StaffMemberStatus.ACTIVE ||
+      staff.accessRevokedAt
+    ) {
       throw new AppException(
         OwnerOpsErrorCode.ASSIGNMENT_NOT_STARTABLE,
         'The assigned barber is no longer on duty. Assign this customer to another barber.',
@@ -1134,13 +1274,19 @@ export class QueueService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    await this.availability.assertStaffQualified(entry.salonId, serviceId, assignedStaffId);
+    await this.availability.assertStaffQualified(
+      entry.salonId,
+      serviceId,
+      assignedStaffId,
+    );
     const [service, chair] = await Promise.all([
       this.prisma.service.findFirst({
         where: { id: serviceId, salonId: entry.salonId },
         select: { durationMinutes: true },
       }),
-      this.prisma.chair.findFirst({ where: { id: assignedChairId, salonId: entry.salonId } }),
+      this.prisma.chair.findFirst({
+        where: { id: assignedChairId, salonId: entry.salonId },
+      }),
     ]);
     if (!service) {
       throw new AppException(
@@ -1158,8 +1304,12 @@ export class QueueService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${entry.salonId}))`);
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${assignedChairId}`}))`);
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${entry.salonId}))`,
+      );
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${assignedChairId}`}))`,
+      );
       const manualOccupancy = await tx.manualChairOccupancy.findFirst({
         where: { chairId: assignedChairId, endedAt: null },
         select: { id: true },
@@ -1179,7 +1329,10 @@ export class QueueService {
         now,
         new Date(now.getTime() + service.durationMinutes * 60_000),
         // The entry's own booking and its own assignment hold must not conflict with itself.
-        { excludeBookingId: entry.bookingId ?? undefined, excludeQueueEntryId: entryId },
+        {
+          excludeBookingId: entry.bookingId ?? undefined,
+          excludeQueueEntryId: entryId,
+        },
       );
       if (!staffCheck.free) {
         throw new AppException(
@@ -1214,14 +1367,25 @@ export class QueueService {
           HttpStatus.CONFLICT,
         );
       }
-      await this.createActiveSession(tx, entryId, assignedStaffId, assignedChairId, serviceId);
+      await this.createActiveSession(
+        tx,
+        entryId,
+        assignedStaffId,
+        assignedChairId,
+        serviceId,
+      );
       await tx.auditLog.create({
         data: {
           actorUserId: userId,
           action: 'QUEUE_ENTRY_SERVICE_STARTED',
           entityType: 'QueueEntry',
           entityId: entryId,
-          metadata: { salonId: entry.salonId, staffId: assignedStaffId, chairId: assignedChairId, actor },
+          metadata: {
+            salonId: entry.salonId,
+            staffId: assignedStaffId,
+            chairId: assignedChairId,
+            actor,
+          },
         },
       });
     }, TRANSACTION_OPTIONS);
@@ -1253,7 +1417,10 @@ export class QueueService {
     } catch (err) {
       // A P2002 here rolls back the whole transaction, including the claim before it, so the entry
       // correctly reverts to its prior status for a retry with a different staff/chair.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         const target = this.uniqueTarget(err);
         if (target.includes('staff')) {
           throw new AppException(
@@ -1278,7 +1445,11 @@ export class QueueService {
    * partial unique indexes on queue_entries): returns the friendly conflict, or null for anything
    * else. */
   private mapHoldConflict(err: unknown): AppException | null {
-    if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') return null;
+    if (
+      !(err instanceof Prisma.PrismaClientKnownRequestError) ||
+      err.code !== 'P2002'
+    )
+      return null;
     const target = this.uniqueTarget(err);
     if (target.includes('staff')) {
       return new AppException(
@@ -1320,7 +1491,10 @@ export class QueueService {
     input: ReassignQueueEntryInput,
   ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
     if (entry.status !== QueueEntryStatus.IN_SERVICE) {
       throw new AppException(
         QueueErrorCode.INVALID_QUEUE_TRANSITION,
@@ -1389,18 +1563,27 @@ export class QueueService {
         // against a concurrent booking for this salon the same way assign() does. reassign() is
         // itself the deliberate, explicit staff/owner action Part 7 asks for when a barber genuinely
         // needs to change ("Reassign appointment") — it is not locked to Booking.preferredStaffId.
-        await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${entry.salonId}))`);
-        await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${chairId}`}))`);
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${entry.salonId}))`,
+        );
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${chairId}`}))`,
+        );
         if (staffId !== session.staffId) {
           const now = new Date();
-          const candidateEnd = new Date(now.getTime() + service.durationMinutes * 60_000);
+          const candidateEnd = new Date(
+            now.getTime() + service.durationMinutes * 60_000,
+          );
           const staffCheck = await this.reservations.isStaffFreeForInterval(
             tx,
             entry.salonId,
             staffId,
             now,
             candidateEnd,
-            { excludeBookingId: entry.bookingId ?? undefined, excludeQueueEntryId: entryId },
+            {
+              excludeBookingId: entry.bookingId ?? undefined,
+              excludeQueueEntryId: entryId,
+            },
           );
           if (!staffCheck.free) {
             throw new AppException(
@@ -1410,9 +1593,16 @@ export class QueueService {
             );
           }
         }
-        const manualOccupancy = await tx.manualChairOccupancy.findFirst({ where: { chairId, endedAt: null }, select: { id: true } });
+        const manualOccupancy = await tx.manualChairOccupancy.findFirst({
+          where: { chairId, endedAt: null },
+          select: { id: true },
+        });
         if (manualOccupancy) {
-          throw new AppException(QueueErrorCode.CHAIR_ALREADY_OCCUPIED, 'This chair is occupied by a local customer.', HttpStatus.CONFLICT);
+          throw new AppException(
+            QueueErrorCode.CHAIR_ALREADY_OCCUPIED,
+            'This chair is occupied by a local customer.',
+            HttpStatus.CONFLICT,
+          );
         }
         const sessionClaim = await tx.serviceSession.updateMany({
           where: {
@@ -1482,11 +1672,17 @@ export class QueueService {
       }
       throw error;
     }
-    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_REASSIGNED', entryId, {
-      salonId: entry.salonId,
-      staffId,
-      chairId,
-    });
+    await this.logAdminQueueAction(
+      actor,
+      userId,
+      'ADMIN_QUEUE_ENTRY_REASSIGNED',
+      entryId,
+      {
+        salonId: entry.salonId,
+        staffId,
+        chairId,
+      },
+    );
 
     this.realtime.emitQueueEntryReassigned(entry.salonId, entryId);
     this.realtime.emitQueueUpdated(entry.salonId);
@@ -1509,9 +1705,13 @@ export class QueueService {
     salonId: string,
     input: CreateQueueCustomerInput,
   ): Promise<QueueEntryDetailDto> {
-    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      salonId,
+    );
     await this.availability.getSalonOrThrow(salonId);
-    if (input.serviceId) await this.availability.getServiceOrThrow(salonId, input.serviceId);
+    if (input.serviceId)
+      await this.availability.getServiceOrThrow(salonId, input.serviceId);
     if (input.preferredStaffId) {
       const staff = await this.prisma.salonStaff.findFirst({
         where: { id: input.preferredStaffId, salonId },
@@ -1525,10 +1725,15 @@ export class QueueService {
         );
       }
       if (input.serviceId) {
-        await this.availability.assertStaffQualified(salonId, input.serviceId, input.preferredStaffId);
+        await this.availability.assertStaffQualified(
+          salonId,
+          input.serviceId,
+          input.preferredStaffId,
+        );
       }
     }
-    const contactPhone = input.contactConsent && input.phone ? input.phone : null;
+    const contactPhone =
+      input.contactConsent && input.phone ? input.phone : null;
 
     const entryId = await this.prisma.$transaction(async (tx) => {
       const tokenNumber = await this.nextTokenNumber(tx, salonId);
@@ -1612,7 +1817,10 @@ export class QueueService {
     // Owner-operations mission: an owner (or delegated admin) may complete any service, but a
     // barber may only complete the service THEY are performing - never a colleague's.
     if (actor === 'STAFF_OR_OWNER') {
-      const kind = await this.salonAccess.getActorKind(userId, session.queueEntry.salonId);
+      const kind = await this.salonAccess.getActorKind(
+        userId,
+        session.queueEntry.salonId,
+      );
       if (kind === 'STAFF') {
         const performer = await this.prisma.salonStaff.findUnique({
           where: { id: session.staffId },
@@ -1681,7 +1889,10 @@ export class QueueService {
 
   async noShow(userId: string, entryId: string): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
 
     const claim = await this.prisma.queueEntry.updateMany({
       where: { id: entryId, status: QueueEntryStatus.CALLED },
@@ -1694,9 +1905,15 @@ export class QueueService {
         HttpStatus.CONFLICT,
       );
     }
-    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_NO_SHOW', entryId, {
-      salonId: entry.salonId,
-    });
+    await this.logAdminQueueAction(
+      actor,
+      userId,
+      'ADMIN_QUEUE_ENTRY_NO_SHOW',
+      entryId,
+      {
+        salonId: entry.salonId,
+      },
+    );
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitQueueUpdated(entry.salonId);
@@ -1710,7 +1927,10 @@ export class QueueService {
     entryId: string,
   ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    const actor = await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
+    const actor = await this.salonAccess.assertAccessOrAdminAccess(
+      userId,
+      entry.salonId,
+    );
 
     const cancellableStatuses = [
       QueueEntryStatus.WAITING,
@@ -1737,9 +1957,15 @@ export class QueueService {
         data: { status: ServiceSessionStatus.CANCELLED, endedAt: new Date() },
       });
     }, TRANSACTION_OPTIONS);
-    await this.logAdminQueueAction(actor, userId, 'ADMIN_QUEUE_ENTRY_CANCELLED', entryId, {
-      salonId: entry.salonId,
-    });
+    await this.logAdminQueueAction(
+      actor,
+      userId,
+      'ADMIN_QUEUE_ENTRY_CANCELLED',
+      entryId,
+      {
+        salonId: entry.salonId,
+      },
+    );
 
     await this.recomputeEtas(entry.salonId);
     this.realtime.emitQueueUpdated(entry.salonId);
@@ -1807,8 +2033,15 @@ export class QueueService {
     reservationBusyStaffIds: Set<string>,
   ): Promise<number> {
     if (reservationBusyStaffIds.size === 0) return 0;
-    const where = await this.availability.qualifiedStaffWhereForServices(this.prisma, salonId, serviceIds);
-    const qualified = await this.prisma.salonStaff.findMany({ where, select: { id: true } });
+    const where = await this.availability.qualifiedStaffWhereForServices(
+      this.prisma,
+      salonId,
+      serviceIds,
+    );
+    const qualified = await this.prisma.salonStaff.findMany({
+      where,
+      select: { id: true },
+    });
     return qualified.filter((s) => reservationBusyStaffIds.has(s.id)).length;
   }
 
@@ -1844,15 +2077,29 @@ export class QueueService {
     if (waiting.length === 0) return;
 
     const now = new Date();
-    const [liveSessions, assignedHolds, manualOccupiedCount, activeChairCount, reservedStaffRows] = await Promise.all([
+    const [
+      liveSessions,
+      assignedHolds,
+      manualOccupiedCount,
+      activeChairCount,
+      reservedStaffRows,
+    ] = await Promise.all([
       this.prisma.serviceSession.findMany({
         where: { status: ServiceSessionStatus.ACTIVE, chair: { salonId } },
-        select: { staffId: true, startedAt: true, service: { select: { durationMinutes: true } } },
+        select: {
+          staffId: true,
+          startedAt: true,
+          service: { select: { durationMinutes: true } },
+        },
       }),
       // An assigned (not yet started) customer keeps their barber busy for a whole service, exactly
       // like a session that has just begun.
       this.prisma.queueEntry.findMany({
-        where: { salonId, status: QueueEntryStatus.CALLED, assignedStaffId: { not: null } },
+        where: {
+          salonId,
+          status: QueueEntryStatus.CALLED,
+          assignedStaffId: { not: null },
+        },
         select: {
           assignedStaffId: true,
           assignedAt: true,
@@ -1860,8 +2107,12 @@ export class QueueService {
           service: { select: { durationMinutes: true } },
         },
       }),
-      this.prisma.manualChairOccupancy.count({ where: { salonId, endedAt: null } }),
-      this.prisma.chair.count({ where: { salonId, status: ChairStatus.ACTIVE } }),
+      this.prisma.manualChairOccupancy.count({
+        where: { salonId, endedAt: null },
+      }),
+      this.prisma.chair.count({
+        where: { salonId, status: ChairStatus.ACTIVE },
+      }),
       // Part 12 — a barber currently reservation-busy (an appointment window covering `now`) must
       // not be counted as an available server, even before any ServiceSession has started for
       // them. This is a present-instant, conservative signal (not a full future-interval
@@ -1883,11 +2134,17 @@ export class QueueService {
       ...(assignedHolds ?? []).map((h) => ({
         staffId: h.assignedStaffId as string,
         startedAt: h.assignedAt ?? h.calledAt ?? now,
-        service: { durationMinutes: h.service?.durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES },
+        service: {
+          durationMinutes:
+            h.service?.durationMinutes ?? DEFAULT_SERVICE_DURATION_MINUTES,
+        },
       })),
     ];
     const activeRemaining = this.averageRemainingMinutes(activeSessions);
-    const availableOperationalChairs = Math.max(0, activeChairCount - manualOccupiedCount);
+    const availableOperationalChairs = Math.max(
+      0,
+      activeChairCount - manualOccupiedCount,
+    );
     // Deduped against activeSessions' own staff — a barber already reflected via activeRemaining
     // (an ACTIVE session, walk-in or the same appointment's own check-in) must not ALSO be
     // subtracted a second time as a separate reservation-busy unit.
@@ -1907,18 +2164,22 @@ export class QueueService {
         // Appointment-sourced entry — use the FULL selected service set (not just the legacy
         // primary Booking.serviceId) so a multi-service appointment's ETA reflects its true
         // combined duration and only counts staff qualified for every selected service.
-        const effectiveServices = resolveEffectiveBookingServices(entry.booking);
+        const effectiveServices = resolveEffectiveBookingServices(
+          entry.booking,
+        );
         const serviceIds = effectiveServices.map((s) => s.serviceId);
-        const configuredCapacity = await this.availability.getSlotCapacityForServices(
-          this.prisma,
-          salonId,
-          serviceIds,
-        );
-        const reservationBusyCount = await this.countReservationBusyQualifiedStaff(
-          salonId,
-          serviceIds,
-          reservationBusyStaffIds,
-        );
+        const configuredCapacity =
+          await this.availability.getSlotCapacityForServices(
+            this.prisma,
+            salonId,
+            serviceIds,
+          );
+        const reservationBusyCount =
+          await this.countReservationBusyQualifiedStaff(
+            salonId,
+            serviceIds,
+            reservationBusyStaffIds,
+          );
         serverCount = Math.min(
           Math.max(0, configuredCapacity - reservationBusyCount),
           availableOperationalChairs,
@@ -1933,11 +2194,12 @@ export class QueueService {
           salonId,
           entry.serviceId,
         );
-        const reservationBusyCount = await this.countReservationBusyQualifiedStaff(
-          salonId,
-          [entry.serviceId],
-          reservationBusyStaffIds,
-        );
+        const reservationBusyCount =
+          await this.countReservationBusyQualifiedStaff(
+            salonId,
+            [entry.serviceId],
+            reservationBusyStaffIds,
+          );
         serverCount = Math.min(
           Math.max(0, configuredCapacity - reservationBusyCount),
           availableOperationalChairs,
@@ -1948,8 +2210,14 @@ export class QueueService {
         const staffCount = await this.prisma.salonStaff.count({
           where: { salonId, status: StaffMemberStatus.ACTIVE },
         });
-        const adjustedStaffCount = Math.max(0, staffCount - reservationBusyStaffIds.size);
-        serverCount = computeSlotCapacity(adjustedStaffCount, availableOperationalChairs);
+        const adjustedStaffCount = Math.max(
+          0,
+          staffCount - reservationBusyStaffIds.size,
+        );
+        serverCount = computeSlotCapacity(
+          adjustedStaffCount,
+          availableOperationalChairs,
+        );
         avgServiceDurationMinutes = DEFAULT_SERVICE_DURATION_MINUTES;
       }
       const eta = estimateWaitMinutes(
@@ -2111,7 +2379,10 @@ export class QueueService {
       assignedAt: entry.assignedAt?.toISOString() ?? null,
       // Null until the service ACTUALLY starts - an assigned customer has not started.
       serviceStartedAt: entry.serviceStartedAt?.toISOString() ?? null,
-      phase: queuePhaseOf({ status: entry.status, assignedStaffId: entry.assignedStaffId }),
+      phase: queuePhaseOf({
+        status: entry.status,
+        assignedStaffId: entry.assignedStaffId,
+      }),
       estimatedWaitRangeMinutes: estimateWaitRangeMinutes(
         entry.estimatedWaitMinutes,
       ),

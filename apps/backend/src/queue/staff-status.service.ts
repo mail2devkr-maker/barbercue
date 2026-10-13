@@ -29,7 +29,8 @@ export class StaffStatusService {
     private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
     @Optional() private readonly autoAssignTrigger?: QueueAutoAssignTrigger,
-    @Optional() private readonly assignmentRelease?: QueueAssignmentReleaseService,
+    @Optional()
+    private readonly assignmentRelease?: QueueAssignmentReleaseService,
   ) {}
 
   async updateStatus(
@@ -86,9 +87,16 @@ export class StaffStatusService {
     });
     this.realtime.emitStaffStatusChanged(staff.salonId, staffId);
     // Someone coming on duty may be able to take the next waiting customer.
-    if (status === StaffMemberStatusValue.ACTIVE) this.autoAssignTrigger?.trigger(staff.salonId);
+    if (status === StaffMemberStatusValue.ACTIVE)
+      this.autoAssignTrigger?.trigger(staff.salonId);
     // Going off duty hands any customer who was assigned to them (but not started) back to waiting.
-    else await this.assignmentRelease?.releaseForStaff(staff.salonId, staffId, 'STAFF_OFF_DUTY', actor.id);
+    else
+      await this.assignmentRelease?.releaseForStaff(
+        staff.salonId,
+        staffId,
+        'STAFF_OFF_DUTY',
+        actor.id,
+      );
     return {
       id: updated.id,
       displayName: updated.displayName,

@@ -107,7 +107,9 @@ export class RemindersService {
     let sentCount = 0;
     for (const booking of due) {
       const serviceName = summarizeServiceNames(
-        resolveEffectiveBookingServices(booking).map((service) => service.serviceName),
+        resolveEffectiveBookingServices(booking).map(
+          (service) => service.serviceName,
+        ),
       );
 
       const sent = await this.prisma.$transaction(async (tx) => {
@@ -153,7 +155,11 @@ export class RemindersService {
           booking.customerId,
           'bookingReminder',
           serviceName,
-          { type: 'booking.reminder', bookingId: booking.id, salonId: booking.salonId },
+          {
+            type: 'booking.reminder',
+            bookingId: booking.id,
+            salonId: booking.salonId,
+          },
         );
       }
     }

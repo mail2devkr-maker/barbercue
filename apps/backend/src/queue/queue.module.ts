@@ -31,7 +31,12 @@ import { AssignmentReleaseModule } from './assignment-release.module';
     DashboardQueueController,
     ManualChairOccupancyController,
   ],
-  providers: [QueueService, StaffStatusService, QueueEntryExpiryService, ManualChairOccupancyService],
+  providers: [
+    QueueService,
+    StaffStatusService,
+    QueueEntryExpiryService,
+    ManualChairOccupancyService,
+  ],
   // Phase 9: PublicQueueModule reuses this exact QueueService (joinWalkIn) for the QR flow rather
   // than duplicating queue logic — no other change to this module.
   // QueueAutoAssignTrigger is the seam the owner-operations allocator registers itself on.

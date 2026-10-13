@@ -15,7 +15,6 @@ function useMeasuredWidth(fallback: number): [React.RefObject<HTMLDivElement | n
     const node = ref.current;
     if (!node || typeof ResizeObserver === "undefined") return;
     const update = () => setWidth(Math.max(280, Math.round(node.getBoundingClientRect().width)));
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- measuring the DOM is an external system
     update();
     const observer = new ResizeObserver(update);
     observer.observe(node);

@@ -98,7 +98,8 @@ export class QueueEntryExpiryService {
   private async findNextDueAt(): Promise<Date | null> {
     let earliest: Date | null = null;
     const consider = (candidate: Date | null) => {
-      if (candidate && (!earliest || candidate.getTime() < earliest.getTime())) earliest = candidate;
+      if (candidate && (!earliest || candidate.getTime() < earliest.getTime()))
+        earliest = candidate;
     };
 
     // Only customers called to the counter with NO barber yet: an ASSIGNED customer (a barber and
@@ -112,7 +113,9 @@ export class QueueEntryExpiryService {
       if (!entry.calledAt) continue;
       let policy = policyCache.get(entry.salonId);
       if (!policy) {
-        policy = await this.cancellationPolicy.getEffectivePolicy(entry.salonId);
+        policy = await this.cancellationPolicy.getEffectivePolicy(
+          entry.salonId,
+        );
         policyCache.set(entry.salonId, policy);
       }
       consider(
@@ -126,14 +129,25 @@ export class QueueEntryExpiryService {
     // An assigned-but-never-started customer is released at the end of the salon-local day it was
     // assigned on (see markStaleAssignedExpired) - the only automatic rule for assignments.
     const assignedStale = await this.prisma.queueEntry.findMany({
-      where: { status: QueueEntryStatus.CALLED, assignedStaffId: { not: null } },
-      select: { salonId: true, joinedAt: true, calledAt: true, assignedAt: true },
+      where: {
+        status: QueueEntryStatus.CALLED,
+        assignedStaffId: { not: null },
+      },
+      select: {
+        salonId: true,
+        joinedAt: true,
+        calledAt: true,
+        assignedAt: true,
+      },
     });
     for (const entry of assignedStale) {
       const zone = await this.availability.getSalonTimeZone(entry.salonId);
       if (!zone) continue;
       consider(
-        zonedDayBounds(entry.assignedAt ?? entry.calledAt ?? entry.joinedAt, zone)?.end ?? null,
+        zonedDayBounds(
+          entry.assignedAt ?? entry.calledAt ?? entry.joinedAt,
+          zone,
+        )?.end ?? null,
       );
     }
 
@@ -172,7 +186,8 @@ export class QueueEntryExpiryService {
       const today = hours.find((h) => h.dayOfWeek === dayOfWeek);
       const boundary =
         today && !today.isClosed
-          ? (zonedWallTimeToUtc(joinDateStr, today.closeTime, timeZone) ?? dayEnd)
+          ? (zonedWallTimeToUtc(joinDateStr, today.closeTime, timeZone) ??
+            dayEnd)
           : dayEnd;
       consider(boundary);
     }
@@ -191,7 +206,9 @@ export class QueueEntryExpiryService {
     }
     const staleAssigned = await this.markStaleAssignedExpired();
     if (staleAssigned > 0) {
-      this.logger.log(`Expired ${staleAssigned} assignment(s) left unstarted past the end of their day.`);
+      this.logger.log(
+        `Expired ${staleAssigned} assignment(s) left unstarted past the end of their day.`,
+      );
     }
   }
 
@@ -211,8 +228,17 @@ export class QueueEntryExpiryService {
   async markStaleAssignedExpired(): Promise<number> {
     const now = Date.now();
     const candidates = await this.prisma.queueEntry.findMany({
-      where: { status: QueueEntryStatus.CALLED, assignedStaffId: { not: null } },
-      select: { id: true, salonId: true, joinedAt: true, calledAt: true, assignedAt: true },
+      where: {
+        status: QueueEntryStatus.CALLED,
+        assignedStaffId: { not: null },
+      },
+      select: {
+        id: true,
+        salonId: true,
+        joinedAt: true,
+        calledAt: true,
+        assignedAt: true,
+      },
     });
     if (candidates.length === 0) return 0;
 
@@ -221,7 +247,10 @@ export class QueueEntryExpiryService {
     const affectedSalons = new Set<string>();
     for (const entry of candidates) {
       if (!timeZoneCache.has(entry.salonId)) {
-        timeZoneCache.set(entry.salonId, await this.availability.getSalonTimeZone(entry.salonId));
+        timeZoneCache.set(
+          entry.salonId,
+          await this.availability.getSalonTimeZone(entry.salonId),
+        );
       }
       const zone = timeZoneCache.get(entry.salonId);
       if (!zone) continue;
@@ -305,7 +334,11 @@ export class QueueEntryExpiryService {
       const result = await this.prisma.$transaction(async (tx) => {
         const claim = await tx.queueEntry.updateMany({
           // Re-checked inside the claim: a barber assigned between the read and this write wins.
-          where: { id: entry.id, status: QueueEntryStatus.CALLED, assignedStaffId: null },
+          where: {
+            id: entry.id,
+            status: QueueEntryStatus.CALLED,
+            assignedStaffId: null,
+          },
           data: { status: QueueEntryStatus.NO_SHOW },
         });
         if (claim.count === 0) return false;

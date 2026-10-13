@@ -259,11 +259,14 @@ export class DashboardBookingsService {
     const arrivalAlertDue =
       booking.status === BookingStatus.CONFIRMED &&
       !hasCheckedIn &&
-      booking.slotStart.getTime() - ARRIVAL_ALERT_LEAD_MINUTES * 60_000 <= Date.now();
+      booking.slotStart.getTime() - ARRIVAL_ALERT_LEAD_MINUTES * 60_000 <=
+        Date.now();
     const noShowEligible =
       booking.status === BookingStatus.CONFIRMED &&
       !hasCheckedIn &&
-      booking.slotStart.getTime() + policy.appointmentArrivalGraceMinutes * 60_000 <= Date.now();
+      booking.slotStart.getTime() +
+        policy.appointmentArrivalGraceMinutes * 60_000 <=
+        Date.now();
     // Production-safety hardening (P0 #2): falls back to the live Service join for a booking a
     // rolling-deploy old backend created with zero BookingService rows — see
     // resolveEffectiveBookingServices's own doc comment. The owner view must never show 0
@@ -314,24 +317,35 @@ export class DashboardBookingsService {
       // Multi-service booking core mission — same combined-total/summary semantics as
       // bookings.service.ts's customer-facing toDetailDto; owner views must never show only the
       // first selected service (see this mission's explicit "owner booking views" requirement).
-      serviceName: summarizeServiceNames(effectiveServices.map((s) => s.serviceName)),
-      serviceDurationMinutes: effectiveServices.reduce((sum, s) => sum + s.durationMinutes, 0),
+      serviceName: summarizeServiceNames(
+        effectiveServices.map((s) => s.serviceName),
+      ),
+      serviceDurationMinutes: effectiveServices.reduce(
+        (sum, s) => sum + s.durationMinutes,
+        0,
+      ),
       servicePrice: paiseToRupees(
-        effectiveServices.reduce((sum, s) => sum + decimalStringToPaise(s.price.toString()), 0),
+        effectiveServices.reduce(
+          (sum, s) => sum + decimalStringToPaise(s.price.toString()),
+          0,
+        ),
       ),
-      services: effectiveServices.map(
-        (s): BookingServiceItemDto => ({
-          serviceId: s.serviceId,
-          name: s.serviceName,
-          durationMinutes: s.durationMinutes,
-          price: Number(s.price),
-        }),
-      ),
+      services: effectiveServices.map((s): BookingServiceItemDto => ({
+        serviceId: s.serviceId,
+        name: s.serviceName,
+        durationMinutes: s.durationMinutes,
+        price: Number(s.price),
+      })),
       payableAmount: paiseToRupees(
         Math.max(
           0,
-          effectiveServices.reduce((sum, s) => sum + decimalStringToPaise(s.price.toString()), 0) -
-            decimalStringToPaise((booking.creditsRedeemedAmount ?? '0').toString()),
+          effectiveServices.reduce(
+            (sum, s) => sum + decimalStringToPaise(s.price.toString()),
+            0,
+          ) -
+            decimalStringToPaise(
+              (booking.creditsRedeemedAmount ?? '0').toString(),
+            ),
         ),
       ),
       preferredStaffName: booking.preferredStaff?.displayName ?? null,

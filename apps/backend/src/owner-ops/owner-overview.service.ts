@@ -158,7 +158,9 @@ export class OwnerOverviewService {
       select: { assignedStaffId: true },
     });
     const heldIds = new Set(
-      heldRows.map((h) => h.assignedStaffId).filter((id): id is string => id !== null),
+      heldRows
+        .map((h) => h.assignedStaffId)
+        .filter((id): id is string => id !== null),
     );
     const onDuty = staffRows.filter(
       (s) => s.status === StaffMemberStatus.ACTIVE,
@@ -183,8 +185,12 @@ export class OwnerOverviewService {
         customersServedToday: queueSummary.completedToday,
         waitingInQueue: queueSummary.waiting,
         inService: queueSummary.inService,
-        availableBarbers: onDuty.filter((s) => !busyIds.has(s.id) && !heldIds.has(s.id)).length,
-        busyBarbers: onDuty.filter((s) => busyIds.has(s.id) || heldIds.has(s.id)).length,
+        availableBarbers: onDuty.filter(
+          (s) => !busyIds.has(s.id) && !heldIds.has(s.id),
+        ).length,
+        busyBarbers: onDuty.filter(
+          (s) => busyIds.has(s.id) || heldIds.has(s.id),
+        ).length,
         activeStaff: onDuty.length,
         completedServicesToday: completedSessionsToday,
         cancelledToday,
@@ -286,52 +292,54 @@ export class OwnerOverviewService {
     salonId: string,
     day: { start: Date; end: Date },
   ): Promise<OwnerQueueSummaryDto> {
-    const [active, assignedCount, completedToday, terminal] = await Promise.all([
-      this.prisma.queueEntry.groupBy({
-        by: ['status'],
-        where: {
-          salonId,
-          status: {
-            in: [
-              QueueEntryStatus.WAITING,
-              QueueEntryStatus.CALLED,
-              QueueEntryStatus.IN_SERVICE,
-            ],
+    const [active, assignedCount, completedToday, terminal] = await Promise.all(
+      [
+        this.prisma.queueEntry.groupBy({
+          by: ['status'],
+          where: {
+            salonId,
+            status: {
+              in: [
+                QueueEntryStatus.WAITING,
+                QueueEntryStatus.CALLED,
+                QueueEntryStatus.IN_SERVICE,
+              ],
+            },
           },
-        },
-        _count: { _all: true },
-      }),
-      // CALLED with a reserved barber = ASSIGNED (service not started).
-      this.prisma.queueEntry.count({
-        where: {
-          salonId,
-          status: QueueEntryStatus.CALLED,
-          assignedStaffId: { not: null },
-        },
-      }),
-      this.prisma.queueEntry.count({
-        where: {
-          salonId,
-          status: QueueEntryStatus.COMPLETED,
-          serviceCompletedAt: { gte: day.start, lt: day.end },
-        },
-      }),
-      this.prisma.queueEntry.groupBy({
-        by: ['status'],
-        where: {
-          salonId,
-          status: {
-            in: [
-              QueueEntryStatus.CANCELLED,
-              QueueEntryStatus.EXPIRED,
-              QueueEntryStatus.NO_SHOW,
-            ],
+          _count: { _all: true },
+        }),
+        // CALLED with a reserved barber = ASSIGNED (service not started).
+        this.prisma.queueEntry.count({
+          where: {
+            salonId,
+            status: QueueEntryStatus.CALLED,
+            assignedStaffId: { not: null },
           },
-          updatedAt: { gte: day.start, lt: day.end },
-        },
-        _count: { _all: true },
-      }),
-    ]);
+        }),
+        this.prisma.queueEntry.count({
+          where: {
+            salonId,
+            status: QueueEntryStatus.COMPLETED,
+            serviceCompletedAt: { gte: day.start, lt: day.end },
+          },
+        }),
+        this.prisma.queueEntry.groupBy({
+          by: ['status'],
+          where: {
+            salonId,
+            status: {
+              in: [
+                QueueEntryStatus.CANCELLED,
+                QueueEntryStatus.EXPIRED,
+                QueueEntryStatus.NO_SHOW,
+              ],
+            },
+            updatedAt: { gte: day.start, lt: day.end },
+          },
+          _count: { _all: true },
+        }),
+      ],
+    );
     const n = (
       rows: { status: string; _count: { _all: number } }[],
       status: QueueEntryStatus,

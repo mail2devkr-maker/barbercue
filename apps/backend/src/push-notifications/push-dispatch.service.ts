@@ -32,7 +32,11 @@ export interface PushPayload {
 const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
 
 const PUSH_KIND_CATEGORY: Record<
-  'newBooking' | 'bookingRescheduled' | 'bookingCancelled' | 'bookingReminder' | 'arrivalCheck',
+  | 'newBooking'
+  | 'bookingRescheduled'
+  | 'bookingCancelled'
+  | 'bookingReminder'
+  | 'arrivalCheck',
   NotificationCategory
 > = {
   newBooking: NotificationCategory.BOOKING_UPDATES,
@@ -87,7 +91,12 @@ export class PushDispatchService {
    */
   async dispatchLocalizedToUser(
     userId: string,
-    kind: 'newBooking' | 'bookingRescheduled' | 'bookingCancelled' | 'bookingReminder' | 'arrivalCheck',
+    kind:
+      | 'newBooking'
+      | 'bookingRescheduled'
+      | 'bookingCancelled'
+      | 'bookingReminder'
+      | 'arrivalCheck',
     serviceName: string | null,
     data: Record<string, unknown>,
   ): Promise<void> {
@@ -103,7 +112,9 @@ export class PushDispatchService {
       });
       preferredLanguage = recipient?.preferredLanguage ?? null;
     } catch (err) {
-      this.logger.warn(`Could not load recipient language, defaulting to English push copy: ${errorMessage(err)}`);
+      this.logger.warn(
+        `Could not load recipient language, defaulting to English push copy: ${errorMessage(err)}`,
+      );
     }
     const { title, body } = pushCopyFor(preferredLanguage)[kind](serviceName);
     await this.dispatchToUser(userId, {
@@ -138,7 +149,9 @@ export class PushDispatchService {
       return preference?.enabled ?? true;
     } catch (err) {
       // Preference lookup failure must not turn a booking event into a silent notification loss.
-      this.logger.warn(`Could not load push preference, defaulting to enabled: ${errorMessage(err)}`);
+      this.logger.warn(
+        `Could not load push preference, defaulting to enabled: ${errorMessage(err)}`,
+      );
       return true;
     }
   }
@@ -159,16 +172,31 @@ export class PushDispatchService {
    * reports what happened so a caller that must record delivery truth — the notification delivery
    * ledger — never has to guess. Still never throws.
    */
-  async sendToUser(userId: string, payload: PushPayload): Promise<PushSendResult> {
+  async sendToUser(
+    userId: string,
+    payload: PushPayload,
+  ): Promise<PushSendResult> {
     let devices: PushDevice[];
     try {
       devices = await this.devices.devicesForUser(userId);
     } catch (err) {
       this.logger.warn(`Could not load push devices: ${errorMessage(err)}`);
-      return { attempted: 0, delivered: 0, noDevices: false, transientFailure: true, error: errorMessage(err) };
+      return {
+        attempted: 0,
+        delivered: 0,
+        noDevices: false,
+        transientFailure: true,
+        error: errorMessage(err),
+      };
     }
     if (devices.length === 0) {
-      return { attempted: 0, delivered: 0, noDevices: true, transientFailure: false, error: null };
+      return {
+        attempted: 0,
+        delivered: 0,
+        noDevices: true,
+        transientFailure: false,
+        error: null,
+      };
     }
 
     const messages: ExpoPushMessage[] = devices.map((device) => ({
@@ -230,7 +258,10 @@ export class PushDispatchService {
   }
 
   /** Whether this user wants native push for a category (default: yes), exposed for the ledger. */
-  async isPushAllowed(userId: string, category: NotificationCategory): Promise<boolean> {
+  async isPushAllowed(
+    userId: string,
+    category: NotificationCategory,
+  ): Promise<boolean> {
     return this.isPushEnabled(userId, category);
   }
 
@@ -242,7 +273,11 @@ export class PushDispatchService {
   async renderShopBookingPush(
     userId: string,
     kind: 'shopCancelledBooking' | 'shopRescheduledBooking',
-    params: { shopName: string; serviceName: string | null; whenText: string | null },
+    params: {
+      shopName: string;
+      serviceName: string | null;
+      whenText: string | null;
+    },
   ): Promise<{ title: string; body: string }> {
     let preferredLanguage: Language | null = null;
     try {
@@ -252,7 +287,9 @@ export class PushDispatchService {
       });
       preferredLanguage = recipient?.preferredLanguage ?? null;
     } catch (err) {
-      this.logger.warn(`Could not load recipient language, defaulting to English push copy: ${errorMessage(err)}`);
+      this.logger.warn(
+        `Could not load recipient language, defaulting to English push copy: ${errorMessage(err)}`,
+      );
     }
     return pushCopyFor(preferredLanguage)[kind](params);
   }

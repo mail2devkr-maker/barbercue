@@ -20,19 +20,43 @@ export class ManualChairOccupancyService {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lockChair(tx, chairId);
-      const chair = await tx.chair.findFirst({ where: { id: chairId, salonId } });
-      if (!chair) throw new AppException(QueueErrorCode.CHAIR_NOT_FOUND, 'Chair not found.', HttpStatus.NOT_FOUND);
+      const chair = await tx.chair.findFirst({
+        where: { id: chairId, salonId },
+      });
+      if (!chair)
+        throw new AppException(
+          QueueErrorCode.CHAIR_NOT_FOUND,
+          'Chair not found.',
+          HttpStatus.NOT_FOUND,
+        );
       if (chair.status !== ChairStatus.ACTIVE) {
-        throw new AppException(QueueErrorCode.CHAIR_INACTIVE, 'This chair is not active.', HttpStatus.CONFLICT);
+        throw new AppException(
+          QueueErrorCode.CHAIR_INACTIVE,
+          'This chair is not active.',
+          HttpStatus.CONFLICT,
+        );
       }
       const [session, existing, held] = await Promise.all([
-        tx.serviceSession.findFirst({ where: { chairId, status: 'ACTIVE' }, select: { id: true } }),
-        tx.manualChairOccupancy.findFirst({ where: { chairId, endedAt: null }, select: { id: true } }),
+        tx.serviceSession.findFirst({
+          where: { chairId, status: 'ACTIVE' },
+          select: { id: true },
+        }),
+        tx.manualChairOccupancy.findFirst({
+          where: { chairId, endedAt: null },
+          select: { id: true },
+        }),
         // A chair reserved for an assigned (not yet started) customer is not free for a local customer.
-        tx.queueEntry.findFirst({ where: { assignedChairId: chairId, status: 'CALLED' }, select: { id: true } }),
+        tx.queueEntry.findFirst({
+          where: { assignedChairId: chairId, status: 'CALLED' },
+          select: { id: true },
+        }),
       ]);
       if (session || existing || held) {
-        throw new AppException(QueueErrorCode.CHAIR_ALREADY_OCCUPIED, 'This chair is already occupied.', HttpStatus.CONFLICT);
+        throw new AppException(
+          QueueErrorCode.CHAIR_ALREADY_OCCUPIED,
+          'This chair is already occupied.',
+          HttpStatus.CONFLICT,
+        );
       }
       const created = await tx.manualChairOccupancy.create({
         data: { salonId, chairId, startedByUserId: userId },
@@ -57,10 +81,21 @@ export class ManualChairOccupancyService {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     const result = await this.prisma.$transaction(async (tx) => {
       await this.lockChair(tx, chairId);
-      const chair = await tx.chair.findFirst({ where: { id: chairId, salonId }, select: { id: true } });
-      if (!chair) throw new AppException(QueueErrorCode.CHAIR_NOT_FOUND, 'Chair not found.', HttpStatus.NOT_FOUND);
-      const active = await tx.manualChairOccupancy.findFirst({ where: { chairId, salonId, endedAt: null } });
-      if (!active) return { cleared: false, occupancyId: null as string | null };
+      const chair = await tx.chair.findFirst({
+        where: { id: chairId, salonId },
+        select: { id: true },
+      });
+      if (!chair)
+        throw new AppException(
+          QueueErrorCode.CHAIR_NOT_FOUND,
+          'Chair not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      const active = await tx.manualChairOccupancy.findFirst({
+        where: { chairId, salonId, endedAt: null },
+      });
+      if (!active)
+        return { cleared: false, occupancyId: null as string | null };
       const endedAt = new Date();
       await tx.manualChairOccupancy.update({
         where: { id: active.id },
@@ -84,7 +119,9 @@ export class ManualChairOccupancyService {
   async freeAllLocal(userId: string, salonId: string) {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     const count = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-local-chairs:${salonId}`}))`);
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-local-chairs:${salonId}`}))`,
+      );
       const active = await tx.manualChairOccupancy.findMany({
         where: { salonId, endedAt: null },
         select: { id: true },
@@ -111,6 +148,8 @@ export class ManualChairOccupancyService {
   }
 
   private lockChair(tx: Prisma.TransactionClient, chairId: string) {
-    return tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${chairId}`}))`);
+    return tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${chairId}`}))`,
+    );
   }
 }

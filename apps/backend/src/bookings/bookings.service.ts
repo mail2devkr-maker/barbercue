@@ -34,7 +34,10 @@ import { resolveSalonTimeZone } from '../common/timezone/timezone';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushDispatchService } from '../push-notifications/push-dispatch.service';
-import { QueueService, EARLY_CHECKIN_WINDOW_MINUTES } from '../queue/queue.service';
+import {
+  QueueService,
+  EARLY_CHECKIN_WINDOW_MINUTES,
+} from '../queue/queue.service';
 import { CustomerCreditsService } from '../credits/customer-credits.service';
 import { AvailabilityService } from './availability.service';
 import { ReservationService } from './reservation.service';
@@ -133,7 +136,10 @@ export class BookingsService {
       input.salonId,
       input.serviceIds,
     );
-    const totalDurationMinutes = services.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const totalDurationMinutes = services.reduce(
+      (sum, s) => sum + s.durationMinutes,
+      0,
+    );
     const totalPricePaise = services.reduce(
       (sum, s) => sum + decimalStringToPaise(s.price.toString()),
       0,
@@ -155,7 +161,9 @@ export class BookingsService {
       0,
       totalPricePaise - onlineBookingDiscountAmountPaise,
     );
-    const discountedTotalPrice = paiseToDecimalString(discountedTotalPricePaise);
+    const discountedTotalPrice = paiseToDecimalString(
+      discountedTotalPricePaise,
+    );
 
     const slotStart = new Date(input.slotStart);
     if (slotStart.getTime() <= Date.now()) {
@@ -245,7 +253,9 @@ export class BookingsService {
     // onto the booking itself — see schema.prisma's doc comment on
     // checkInOpensMinutesBefore/checkInDueGraceMinutes for why this must never be a live join to
     // CancellationPolicy at read time.
-    const arrivalPolicy = await this.cancellationPolicy.getEffectivePolicy(input.salonId);
+    const arrivalPolicy = await this.cancellationPolicy.getEffectivePolicy(
+      input.salonId,
+    );
 
     // Online payment is optional. A shop may accept online bookings without ever configuring a
     // payment QR; those bookings are confirmed normally and can be paid at the shop. A configured
@@ -263,7 +273,8 @@ export class BookingsService {
     // Number(price) — so the authoritative cap is derived via integer paise, not a float division
     // of the price. Multi-service booking core mission: the cap now applies to the COMBINED price
     // of every selected service, never just the first/primary one.
-    const maxCreditsAllowed = this.credits.computeMaxRedeemable(discountedTotalPrice);
+    const maxCreditsAllowed =
+      this.credits.computeMaxRedeemable(discountedTotalPrice);
 
     const prepaymentRequirement =
       paymentPolicy?.prepaymentRequirement ?? PrepaymentRequirement.NONE;
@@ -367,7 +378,9 @@ export class BookingsService {
           preferredStaffId: input.preferredStaffId ?? null,
           prepaymentRequiredAmount,
           onlineBookingDiscountPercent,
-          onlineBookingDiscountAmount: paiseToDecimalString(onlineBookingDiscountAmountPaise),
+          onlineBookingDiscountAmount: paiseToDecimalString(
+            onlineBookingDiscountAmountPaise,
+          ),
           selectedStyleName: input.selectedStyleName ?? null,
           checkInOpensMinutesBefore: EARLY_CHECKIN_WINDOW_MINUTES,
           checkInDueGraceMinutes: arrivalPolicy.appointmentArrivalGraceMinutes,
@@ -403,7 +416,9 @@ export class BookingsService {
         if (actualUsedPaise > 0) {
           await tx.booking.update({
             where: { id: created.id },
-            data: { creditsRedeemedAmount: paiseToDecimalString(actualUsedPaise) },
+            data: {
+              creditsRedeemedAmount: paiseToDecimalString(actualUsedPaise),
+            },
           });
         }
         // FastQue subsidizes only the portion it actually funded — a future SHOP_FUNDED grant
@@ -495,8 +510,14 @@ export class BookingsService {
   }): Promise<{ bookingId: string }> {
     const { salonId, actorUserId, input, idempotencyKey } = params;
     await this.availability.getSalonOrThrow(salonId);
-    const services = await this.availability.getServicesOrThrow(salonId, input.serviceIds);
-    const totalDurationMinutes = services.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const services = await this.availability.getServicesOrThrow(
+      salonId,
+      input.serviceIds,
+    );
+    const totalDurationMinutes = services.reduce(
+      (sum, s) => sum + s.durationMinutes,
+      0,
+    );
 
     const slotStart = new Date(input.slotStart);
     // A few minutes of tolerance: the operator is typing a time for "now-ish" at the counter.
@@ -507,8 +528,14 @@ export class BookingsService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    const slotEnd = new Date(slotStart.getTime() + totalDurationMinutes * 60_000);
-    await this.availability.assertWithinOperatingHours(salonId, slotStart, slotEnd);
+    const slotEnd = new Date(
+      slotStart.getTime() + totalDurationMinutes * 60_000,
+    );
+    await this.availability.assertWithinOperatingHours(
+      salonId,
+      slotStart,
+      slotEnd,
+    );
     if (input.preferredStaffId) {
       await this.availability.assertStaffQualifiedForServices(
         salonId,
@@ -522,15 +549,19 @@ export class BookingsService {
         slotEnd,
       );
     }
-    const arrivalPolicy = await this.cancellationPolicy.getEffectivePolicy(salonId);
+    const arrivalPolicy =
+      await this.cancellationPolicy.getEffectivePolicy(salonId);
 
     const guestName = input.guestName;
-    const guestPhone = input.contactConsent && input.guestPhone ? input.guestPhone : null;
+    const guestPhone =
+      input.contactConsent && input.guestPhone ? input.guestPhone : null;
 
     let bookingId: string;
     try {
       bookingId = await this.prisma.$transaction(async (tx) => {
-        await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${salonId}))`);
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${salonId}))`,
+        );
 
         const duplicate = await tx.booking.findFirst({
           where: {
@@ -538,8 +569,12 @@ export class BookingsService {
             source: BookingSource.IN_SHOP,
             slotStart,
             guestName: { equals: guestName, mode: 'insensitive' },
-            status: { in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT] },
-            AND: services.map((s) => ({ services: { some: { serviceId: s.id } } })),
+            status: {
+              in: [BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT],
+            },
+            AND: services.map((s) => ({
+              services: { some: { serviceId: s.id } },
+            })),
           },
           select: { id: true },
         });
@@ -603,7 +638,8 @@ export class BookingsService {
             createdByUserId: actorUserId,
             internalNote: input.note ?? null,
             checkInOpensMinutesBefore: EARLY_CHECKIN_WINDOW_MINUTES,
-            checkInDueGraceMinutes: arrivalPolicy.appointmentArrivalGraceMinutes,
+            checkInDueGraceMinutes:
+              arrivalPolicy.appointmentArrivalGraceMinutes,
             services: {
               create: services.map((s, sortOrder) => ({
                 serviceId: s.id,
@@ -634,7 +670,10 @@ export class BookingsService {
       }, TRANSACTION_OPTIONS);
     } catch (err) {
       // The Booking.idempotencyKey unique index is the backstop for a retried request.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         throw new AppException(
           OwnerOpsErrorCode.IN_SHOP_DUPLICATE_BOOKING,
           'This appointment was already created.',
@@ -926,7 +965,8 @@ export class BookingsService {
       );
     }
     const cancellable = (status: BookingStatus) =>
-      status === BookingStatus.CONFIRMED || status === BookingStatus.PENDING_PAYMENT;
+      status === BookingStatus.CONFIRMED ||
+      status === BookingStatus.PENDING_PAYMENT;
     if (!cancellable(booking.status)) {
       throw new AppException(
         OwnerOpsErrorCode.BOOKING_NOT_CANCELLABLE_BY_SHOP,
@@ -935,81 +975,95 @@ export class BookingsService {
       );
     }
 
-    const { updated, linkedQueueEntryCancelled } = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw(
-        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`booking-cancel:${bookingId}`}))`,
-      );
-      const current = await tx.booking.findUnique({
-        where: { id: bookingId },
-        select: { status: true },
-      });
-      if (!current || !cancellable(current.status as BookingStatus)) {
-        throw new AppException(
-          OwnerOpsErrorCode.BOOKING_NOT_CANCELLABLE_BY_SHOP,
-          'This booking can no longer be cancelled.',
-          HttpStatus.CONFLICT,
+    const { updated, linkedQueueEntryCancelled } =
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`booking-cancel:${bookingId}`}))`,
         );
-      }
-      // A customer already in the chair (or finished) is the queue engine's business.
-      const started = await tx.queueEntry.findFirst({
-        where: {
-          bookingId,
-          status: { in: [QueueEntryStatus.IN_SERVICE, QueueEntryStatus.COMPLETED] },
-        },
-        select: { id: true },
-      });
-      if (started) {
-        throw new AppException(
-          OwnerOpsErrorCode.BOOKING_NOT_CANCELLABLE_BY_SHOP,
-          'This customer has already been seated, so the booking cannot be cancelled.',
-          HttpStatus.CONFLICT,
-        );
-      }
-
-      const result = await tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          status: BookingStatus.CANCELLED,
-          cancelledAt: new Date(),
-          cancelledById: actorUserId,
-          cancelledByActor: actor,
-          cancellationReason: reason,
-          cancellationChargeAmount: null,
-        },
-        include: bookingDetailInclude,
-      });
-
-      const queueClaim = await tx.queueEntry.updateMany({
-        where: { bookingId, status: { in: QUEUE_ENTRY_STATUSES_CANCELLABLE_FROM_BOOKING } },
-        data: { status: QueueEntryStatus.CANCELLED },
-      });
-
-      // Give back exactly the credits snapshot at creation and void the matching subsidy entry -
-      // the same restoration the customer cancellation performs (the service never happened).
-      if (booking.customerId && booking.creditsRedeemedAmount != null) {
-        await this.credits.restoreForCancelledBooking(
-          tx,
-          booking.customerId,
-          bookingId,
-          decimalStringToPaise(booking.creditsRedeemedAmount.toString()),
-        );
-        await tx.platformShopSubsidyEntry.updateMany({
-          where: { bookingId, status: SubsidyLedgerStatus.OUTSTANDING },
-          data: { status: SubsidyLedgerStatus.VOIDED, voidedAt: new Date() },
+        const current = await tx.booking.findUnique({
+          where: { id: bookingId },
+          select: { status: true },
         });
-      }
+        if (!current || !cancellable(current.status)) {
+          throw new AppException(
+            OwnerOpsErrorCode.BOOKING_NOT_CANCELLABLE_BY_SHOP,
+            'This booking can no longer be cancelled.',
+            HttpStatus.CONFLICT,
+          );
+        }
+        // A customer already in the chair (or finished) is the queue engine's business.
+        const started = await tx.queueEntry.findFirst({
+          where: {
+            bookingId,
+            status: {
+              in: [QueueEntryStatus.IN_SERVICE, QueueEntryStatus.COMPLETED],
+            },
+          },
+          select: { id: true },
+        });
+        if (started) {
+          throw new AppException(
+            OwnerOpsErrorCode.BOOKING_NOT_CANCELLABLE_BY_SHOP,
+            'This customer has already been seated, so the booking cannot be cancelled.',
+            HttpStatus.CONFLICT,
+          );
+        }
 
-      await tx.auditLog.create({
-        data: {
-          actorUserId,
-          action: 'BOOKING_CANCELLED_BY_SHOP',
-          entityType: 'Booking',
-          entityId: bookingId,
-          metadata: { actor, reason, salonId, customerId: booking.customerId },
-        },
-      });
-      return { updated: result, linkedQueueEntryCancelled: queueClaim.count > 0 };
-    }, TRANSACTION_OPTIONS);
+        const result = await tx.booking.update({
+          where: { id: bookingId },
+          data: {
+            status: BookingStatus.CANCELLED,
+            cancelledAt: new Date(),
+            cancelledById: actorUserId,
+            cancelledByActor: actor,
+            cancellationReason: reason,
+            cancellationChargeAmount: null,
+          },
+          include: bookingDetailInclude,
+        });
+
+        const queueClaim = await tx.queueEntry.updateMany({
+          where: {
+            bookingId,
+            status: { in: QUEUE_ENTRY_STATUSES_CANCELLABLE_FROM_BOOKING },
+          },
+          data: { status: QueueEntryStatus.CANCELLED },
+        });
+
+        // Give back exactly the credits snapshot at creation and void the matching subsidy entry -
+        // the same restoration the customer cancellation performs (the service never happened).
+        if (booking.customerId && booking.creditsRedeemedAmount != null) {
+          await this.credits.restoreForCancelledBooking(
+            tx,
+            booking.customerId,
+            bookingId,
+            decimalStringToPaise(booking.creditsRedeemedAmount.toString()),
+          );
+          await tx.platformShopSubsidyEntry.updateMany({
+            where: { bookingId, status: SubsidyLedgerStatus.OUTSTANDING },
+            data: { status: SubsidyLedgerStatus.VOIDED, voidedAt: new Date() },
+          });
+        }
+
+        await tx.auditLog.create({
+          data: {
+            actorUserId,
+            action: 'BOOKING_CANCELLED_BY_SHOP',
+            entityType: 'Booking',
+            entityId: bookingId,
+            metadata: {
+              actor,
+              reason,
+              salonId,
+              customerId: booking.customerId,
+            },
+          },
+        });
+        return {
+          updated: result,
+          linkedQueueEntryCancelled: queueClaim.count > 0,
+        };
+      }, TRANSACTION_OPTIONS);
 
     this.realtime.emitBookingCancelled(salonId, bookingId);
     if (linkedQueueEntryCancelled) {
@@ -1017,7 +1071,11 @@ export class BookingsService {
       this.queue.onCapacityFreed?.(salonId);
     }
     this.realtime.emitQueueUpdated(salonId);
-    return { booking: updated, customerId: booking.customerId, linkedQueueEntryCancelled };
+    return {
+      booking: updated,
+      customerId: booking.customerId,
+      linkedQueueEntryCancelled,
+    };
   }
 
   // Moves an existing booking to a new slot in place (same id) rather than cancel-and-recreate —
@@ -1057,7 +1115,11 @@ export class BookingsService {
     bookingId: string;
     actorUserId: string;
     input: RescheduleBookingInput;
-  }): Promise<{ booking: BookingDetailDto; previousSlotStart: Date; customerId: string | null }> {
+  }): Promise<{
+    booking: BookingDetailDto;
+    previousSlotStart: Date;
+    customerId: string | null;
+  }> {
     const booking = await this.prisma.booking.findFirst({
       where: { id: params.bookingId, salonId: params.salonId },
       include: bookingDetailInclude,
@@ -1070,8 +1132,17 @@ export class BookingsService {
       );
     }
     const previousSlotStart = booking.slotStart;
-    const detail = await this.rescheduleLoaded(booking, params.actorUserId, params.input, 'SHOP');
-    return { booking: detail, previousSlotStart, customerId: booking.customerId };
+    const detail = await this.rescheduleLoaded(
+      booking,
+      params.actorUserId,
+      params.input,
+      'SHOP',
+    );
+    return {
+      booking: detail,
+      previousSlotStart,
+      customerId: booking.customerId,
+    };
   }
 
   private async rescheduleLoaded(
@@ -1196,7 +1267,10 @@ export class BookingsService {
       await tx.auditLog.create({
         data: {
           actorUserId,
-          action: actor === 'SHOP' ? 'BOOKING_RESCHEDULED_BY_SHOP' : 'BOOKING_RESCHEDULED',
+          action:
+            actor === 'SHOP'
+              ? 'BOOKING_RESCHEDULED_BY_SHOP'
+              : 'BOOKING_RESCHEDULED',
           entityType: 'Booking',
           entityId: bookingId,
           metadata: {
@@ -1283,7 +1357,10 @@ export class BookingsService {
       // Salon-scoped: a booking's amounts are denominated in its salon's currency.
       currency: booking.salon.currency,
       salonName: booking.salon.name,
-      shopPhone: booking.salon.showPhoneToCustomers === false ? null : (booking.salon.phone ?? null),
+      shopPhone:
+        booking.salon.showPhoneToCustomers === false
+          ? null
+          : (booking.salon.phone ?? null),
       salonSlug: booking.salon.slug,
       citySlug: booking.salon.city.slug,
       salonCountryCode: booking.salon.city.countryCode,
@@ -1307,9 +1384,16 @@ export class BookingsService {
       // caller that hasn't been updated to render the full `services` breakdown below: it now sees
       // the true total price/duration instead of a single service's, and a truthful multi-service
       // name summary instead of a misleadingly incomplete one.
-      serviceName: summarizeServiceNames(effectiveServices.map((s) => s.serviceName)),
-      serviceDurationMinutes: effectiveServices.reduce((sum, s) => sum + s.durationMinutes, 0),
-      servicePrice: paiseToRupees(this.totalServicePricePaise(effectiveServices)),
+      serviceName: summarizeServiceNames(
+        effectiveServices.map((s) => s.serviceName),
+      ),
+      serviceDurationMinutes: effectiveServices.reduce(
+        (sum, s) => sum + s.durationMinutes,
+        0,
+      ),
+      servicePrice: paiseToRupees(
+        this.totalServicePricePaise(effectiveServices),
+      ),
       discountedServicePrice: paiseToRupees(
         this.discountedServicePricePaise(
           effectiveServices,
@@ -1319,14 +1403,12 @@ export class BookingsService {
       // The complete, ordered per-service breakdown — every booking (including one created before
       // this mission existed, backfilled by this mission's migration, AND one a rolling-deploy old
       // backend created with zero BookingService rows) has at least one entry here.
-      services: effectiveServices.map(
-        (s): BookingServiceItemDto => ({
-          serviceId: s.serviceId,
-          name: s.serviceName,
-          durationMinutes: s.durationMinutes,
-          price: Number(s.price),
-        }),
-      ),
+      services: effectiveServices.map((s): BookingServiceItemDto => ({
+        serviceId: s.serviceId,
+        name: s.serviceName,
+        durationMinutes: s.durationMinutes,
+        price: Number(s.price),
+      })),
       // Payable invariant is computed in integer paise:
       // original service subtotal - shop online discount - FastQue Credits.
       payableAmount: paiseToRupees(

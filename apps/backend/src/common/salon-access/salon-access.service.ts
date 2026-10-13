@@ -1,5 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { BookingErrorCode, QueueErrorCode, Role, SalonStatus } from '@barbercue/shared';
+import {
+  BookingErrorCode,
+  QueueErrorCode,
+  Role,
+  SalonStatus,
+} from '@barbercue/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../exceptions/app.exception';
 
@@ -76,7 +81,11 @@ export class SalonAccessService {
     salonId: string,
   ): Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'> {
     const membership = await this.prisma.userRole.findFirst({
-      where: { userId, salonId, role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] } },
+      where: {
+        userId,
+        salonId,
+        role: { in: [Role.SALON_STAFF, Role.SALON_OWNER] },
+      },
     });
     if (membership) return 'STAFF_OR_OWNER';
     return this.assertGlobalAdminOperationalAccess(userId, salonId);
@@ -87,7 +96,10 @@ export class SalonAccessService {
    * beats global platform admin), or null when none. A pure lookup used to record trusted
    * attribution (e.g. Booking.cancelledByActor); it grants nothing by itself.
    */
-  async getActorKind(userId: string, salonId: string): Promise<SalonActorKind | null> {
+  async getActorKind(
+    userId: string,
+    salonId: string,
+  ): Promise<SalonActorKind | null> {
     const owner = await this.prisma.userRole.findFirst({
       where: { userId, salonId, role: Role.SALON_OWNER },
     });
