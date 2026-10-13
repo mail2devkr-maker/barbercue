@@ -1,0 +1,11 @@
+{
+  "_why": "No failing tests on the #181 base.",
+  "generatedFrom": "feat/mobile-owner-parity-recovery (#181) 64020119cac674f2a47af380f05821746b5c13b6 (clean npm ci)",
+  "totals": {
+    "passed": 513,
+    "failed": 0,
+    "suites": 44,
+    "failedSuites": 0
+  },
+  "failures": []
+}
