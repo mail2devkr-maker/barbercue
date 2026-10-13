@@ -89,7 +89,7 @@ describe('ServiceCatalogImportService', () => {
     };
     const auditLog = { create: jest.fn() };
     prisma.$transaction.mockImplementation(async (task: (tx: unknown) => Promise<unknown>) => task({
-      $queryRawUnsafe: jest.fn().mockResolvedValue([{ pg_advisory_xact_lock: null }]),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(1),
       service,
       auditLog,
     }));
@@ -99,6 +99,10 @@ describe('ServiceCatalogImportService', () => {
     ] });
     expect(result).toMatchObject({ createdCount: 1, skippedCount: 1 });
     expect(service.create).toHaveBeenCalledTimes(1);
+    // Real pg_advisory_xact_lock returns void. The backend must not use Prisma
+    // queryRaw to decode its result; executeRaw invokes it without deserializing.
+    const transaction = prisma.$transaction.mock.calls[0][0];
+    expect(transaction).toEqual(expect.any(Function));
     expect(service.create).toHaveBeenCalledWith({ data: expect.objectContaining({
       salonId: 'salon', name: 'Facial', durationMinutes: 45, price: '500',
     }) });
