@@ -18,6 +18,22 @@ jobs:
   certify:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: catalog_import_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d catalog_import_smoke"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/catalog_import_smoke?schema=public
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +52,8 @@ jobs:
         run: npm run typecheck --workspace=@barbercue/web
       - name: Catalog importer unit tests
         run: npm run test --workspace=@barbercue/backend -- --runInBand service-catalog-import
+      - name: Real PostgreSQL advisory-lock transaction smoke
+        run: npx ts-node --transpile-only --project apps/backend/tsconfig.json apps/backend/scripts/certify-catalog-advisory-lock.ts
       - name: Catalog importer web readiness tests
         run: npm run test --workspace=@barbercue/web -- --runInBand 'CatalogImportPanel.readiness|CatalogLocalOcr.parse'
       - name: Synthetic real OCR and PDF reader smoke (no catalog uploads)
