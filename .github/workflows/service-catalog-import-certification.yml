@@ -36,6 +36,8 @@ jobs:
         run: npm run typecheck --workspace=@barbercue/web
       - name: Catalog importer unit tests
         run: npm run test --workspace=@barbercue/backend -- --runInBand service-catalog-import
+      - name: Catalog importer web readiness tests
+        run: npm run test --workspace=@barbercue/web -- --runInBand CatalogImportPanel.readiness
       - name: Backend build
         run: npm run build --workspace=@barbercue/backend
       - name: Web build
