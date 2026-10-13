@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BOOKING_PATHS, QUEUE_ENTRIES_PATH,
+import { BOOKING_PATHS, QUEUE_ENTRIES_PATH, VISIT_HISTORY_SOURCE_LABELS,
   formatBookingArrivalTime,
   formatMoney,
   formatZonedDateTime,
@@ -25,6 +25,7 @@ import { BookingActionsBar } from "../../../../components/booking/BookingActions
 import { ReviewPanel } from "../../../../components/booking/ReviewPanel";
 import { CheckInPanel, canCheckIn } from "../../../../components/queue/CheckInPanel";
 import { QueueStatusPanel } from "../../../../components/queue/QueueStatusPanel";
+import { CustomerLiveQueueHistory } from "../../../../components/queue/CustomerLiveQueueHistory";
 import { Card } from "../../../../components/ui/Card";
 import { Button, LinkButton } from "../../../../components/ui/Button";
 import styles from "./bookings.module.css";
@@ -102,6 +103,7 @@ function BookingRow({
       <p className={styles.bookingRowSalon}>
         {booking.salonName} — {formatWhen(booking.slotStart, booking.salonTimezone)}
       </p>
+      <p className={styles.bookingRowMeta}>Source: {VISIT_HISTORY_SOURCE_LABELS.ONLINE_BOOKING}</p>
       {checkInByLabel(booking) && <p className={styles.bookingRowMeta}>{checkInByLabel(booking)}</p>}
       {booking.preferredStaffName && (
         <p className={styles.bookingRowMeta}>Preferred barber: {booking.preferredStaffName}</p>
@@ -384,6 +386,8 @@ export default function MyBookingsPage() {
           ))}
         </section>
       )}
+
+      <CustomerLiveQueueHistory />
 
       {nextCursor && (
         <div className={styles.loadMoreWrap}>

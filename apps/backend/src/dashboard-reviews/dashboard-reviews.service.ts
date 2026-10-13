@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   ReviewErrorCode,
+  summarizeServiceNames,
   type OwnerReviewDto,
   type PaginatedResult,
 } from '@barbercue/shared';
@@ -17,6 +18,17 @@ const reviewInclude = {
     select: {
       customer: { select: { phone: true, email: true } },
       service: { select: { name: true } },
+    },
+  },
+  queueEntry: {
+    select: {
+      contactPhone: true,
+      service: { select: { name: true } },
+      serviceSessions: {
+        orderBy: [{ startedAt: 'asc' }, { id: 'asc' }],
+        include: { service: { select: { name: true } } },
+      },
+      customer: { select: { phone: true, email: true } },
     },
   },
 } satisfies Prisma.ReviewInclude;
@@ -67,7 +79,10 @@ export class DashboardReviewsService {
     reviewId: string,
     ownerResponse: string,
   ): Promise<OwnerReviewDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     // Scoped by salonId, not just id — a staff/owner at salon A must never respond to a review
     // that belongs to salon B even if they somehow know its id.
     const existing = await this.prisma.review.findFirst({
@@ -108,18 +123,36 @@ export class DashboardReviewsService {
   }
 
   private toOwnerDto(review: ReviewWithDetails): OwnerReviewDto {
+    const queueServiceNames =
+      review.queueEntry?.serviceSessions.map(
+        (session) => session.service.name,
+      ) ?? [];
+    const serviceName = review.booking
+      ? review.booking.service.name
+      : queueServiceNames.length
+        ? summarizeServiceNames([...new Set(queueServiceNames)])
+        : (review.queueEntry?.service?.name ?? 'Service not recorded');
     return {
       id: review.id,
       bookingId: review.bookingId,
+      queueEntryId: review.queueEntryId,
       salonId: review.salonId,
       rating: review.rating,
       comment: review.comment,
       ownerResponse: review.ownerResponse,
       createdAt: review.createdAt.toISOString(),
       updatedAt: review.updatedAt.toISOString(),
-      customerPhone: review.booking.customer.phone,
-      customerEmail: review.booking.customer.email,
-      serviceName: review.booking.service.name,
+      customerPhone:
+        review.booking?.customer.phone ??
+        review.queueEntry?.contactPhone ??
+        review.queueEntry?.customer?.phone ??
+        null,
+      customerEmail:
+        review.booking?.customer.email ??
+        review.queueEntry?.customer?.email ??
+        null,
+      serviceName,
+      source: review.bookingId ? 'ONLINE_BOOKING' : 'LIVE_QUEUE',
     };
   }
 }

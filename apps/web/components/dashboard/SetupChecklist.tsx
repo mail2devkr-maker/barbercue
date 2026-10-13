@@ -156,13 +156,13 @@ export function SetupChecklist({
       label: "Set your opening hours (Optional — required only for online bookings)",
       done: hasOpenDay,
       href: `/dashboard/salons/${salonId}/hours`,
-      why: "Customers can only book appointments during your opening hours. You can skip this if you want to use FastQue only for walk-ins and the live queue.",
+      why: "Customers can only book appointments during your opening hours. You can skip this if you want to use FastQue only for Live Queue visits.",
     },
     {
       label: "Add a payment QR (Optional — required only for online bookings)",
       done: hasPaymentQr,
       href: `/dashboard/salons/${salonId}/payment-qr`,
-      why: "Shown to a customer paying for an app/website booking so they can scan and pay you directly. You can skip this for walk-ins; no payment is made to FastQue by uploading the QR.",
+      why: "Shown to a customer paying for an app/website booking so they can scan and pay you directly. Live Queue customers can pay you directly; no payment is made to FastQue by uploading the QR.",
     },
   ];
 

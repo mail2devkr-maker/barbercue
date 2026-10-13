@@ -137,16 +137,14 @@ export const CrmFollowUpChannel = {
   EMAIL: 'EMAIL',
   OTHER: 'OTHER',
 } as const;
-export type CrmFollowUpChannel =
-  (typeof CrmFollowUpChannel)[keyof typeof CrmFollowUpChannel];
+export type CrmFollowUpChannel = (typeof CrmFollowUpChannel)[keyof typeof CrmFollowUpChannel];
 
 export const CrmFollowUpStatus = {
   OPEN: 'OPEN',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED',
 } as const;
-export type CrmFollowUpStatus =
-  (typeof CrmFollowUpStatus)[keyof typeof CrmFollowUpStatus];
+export type CrmFollowUpStatus = (typeof CrmFollowUpStatus)[keyof typeof CrmFollowUpStatus];
 
 export const CrmErrorCode = {
   LEAD_NOT_FOUND: 'LEAD_NOT_FOUND',
@@ -177,8 +175,7 @@ export const PrepaymentRequirement = {
   PARTIAL: 'PARTIAL',
   FULL: 'FULL',
 } as const;
-export type PrepaymentRequirement =
-  (typeof PrepaymentRequirement)[keyof typeof PrepaymentRequirement];
+export type PrepaymentRequirement = (typeof PrepaymentRequirement)[keyof typeof PrepaymentRequirement];
 
 // FastQue Credits / Wallet V1 — see schema.prisma's CreditTransactionType doc comment for what
 // each value means and why this is a separate concept from LedgerReason/LedgerStatus above. There
@@ -190,8 +187,7 @@ export const CreditTransactionType = {
   RESTORED: 'RESTORED',
   MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT',
 } as const;
-export type CreditTransactionType =
-  (typeof CreditTransactionType)[keyof typeof CreditTransactionType];
+export type CreditTransactionType = (typeof CreditTransactionType)[keyof typeof CreditTransactionType];
 
 // FastQue Credits / Wallet V1 — see schema.prisma's CreditFundingSource doc comment. Only
 // FASTQUE_FUNDED is ever actually produced by any code in this phase.
@@ -199,8 +195,7 @@ export const CreditFundingSource = {
   FASTQUE_FUNDED: 'FASTQUE_FUNDED',
   SHOP_FUNDED: 'SHOP_FUNDED',
 } as const;
-export type CreditFundingSource =
-  (typeof CreditFundingSource)[keyof typeof CreditFundingSource];
+export type CreditFundingSource = (typeof CreditFundingSource)[keyof typeof CreditFundingSource];
 
 // FastQue Credits / Wallet V1 — see schema.prisma's PlatformShopSubsidyEntry doc comment.
 export const SubsidyLedgerStatus = {
@@ -208,8 +203,7 @@ export const SubsidyLedgerStatus = {
   SETTLED: 'SETTLED',
   VOIDED: 'VOIDED',
 } as const;
-export type SubsidyLedgerStatus =
-  (typeof SubsidyLedgerStatus)[keyof typeof SubsidyLedgerStatus];
+export type SubsidyLedgerStatus = (typeof SubsidyLedgerStatus)[keyof typeof SubsidyLedgerStatus];
 
 export const BookingStatus = {
   PENDING_PAYMENT: 'PENDING_PAYMENT',
@@ -309,8 +303,7 @@ export const CustomerSubscriptionStatus = {
   EXPIRED: 'EXPIRED',
   CANCELLED: 'CANCELLED',
 } as const;
-export type CustomerSubscriptionStatus =
-  (typeof CustomerSubscriptionStatus)[keyof typeof CustomerSubscriptionStatus];
+export type CustomerSubscriptionStatus = (typeof CustomerSubscriptionStatus)[keyof typeof CustomerSubscriptionStatus];
 
 // Every balance-affecting event on a CustomerSubscription's AI credits — see AiCreditTransaction
 // in schema.prisma and AiCreditService, the only writer of this table.
@@ -321,8 +314,7 @@ export const AiCreditTransactionType = {
   RELEASE: 'RELEASE',
   MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT',
 } as const;
-export type AiCreditTransactionType =
-  (typeof AiCreditTransactionType)[keyof typeof AiCreditTransactionType];
+export type AiCreditTransactionType = (typeof AiCreditTransactionType)[keyof typeof AiCreditTransactionType];
 
 export const SubscriptionStatus = {
   PILOT: 'PILOT',
@@ -359,8 +351,7 @@ export const NotificationCategory = {
   REMINDERS: 'REMINDERS',
   PROMOTIONAL: 'PROMOTIONAL',
 } as const;
-export type NotificationCategory =
-  (typeof NotificationCategory)[keyof typeof NotificationCategory];
+export type NotificationCategory = (typeof NotificationCategory)[keyof typeof NotificationCategory];
 
 // Stable machine-readable error codes for authentication — API.md's convention: clients branch on
 // `error.code`, never on `error.message`. Shared so backend and every client agree on the exact
@@ -538,6 +529,8 @@ export const ReviewErrorCode = {
   BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
   // Only a COMPLETED booking can be reviewed — the service was actually received.
   BOOKING_NOT_COMPLETED: 'BOOKING_NOT_COMPLETED',
+  VISIT_NOT_FOUND: 'VISIT_NOT_FOUND',
+  VISIT_NOT_COMPLETED: 'VISIT_NOT_COMPLETED',
   REVIEW_ALREADY_EXISTS: 'REVIEW_ALREADY_EXISTS',
   REVIEW_NOT_FOUND: 'REVIEW_NOT_FOUND',
   // The review exists, but the caller isn't the customer who wrote it.
@@ -552,8 +545,7 @@ export const VerificationSubjectType = {
   SHOP: 'SHOP',
   PROFESSIONAL: 'PROFESSIONAL',
 } as const;
-export type VerificationSubjectType =
-  (typeof VerificationSubjectType)[keyof typeof VerificationSubjectType];
+export type VerificationSubjectType = (typeof VerificationSubjectType)[keyof typeof VerificationSubjectType];
 
 // NOT_SUBMITTED is never a stored value — see VerificationRequest's own doc comment: absence of a
 // row IS "not submitted," the same "no row = default" convention used elsewhere in this schema.
@@ -577,8 +569,7 @@ export const VerificationErrorCode = {
   // e.g. deciding a request that isn't UNDER_REVIEW, or starting review on one that isn't SUBMITTED.
   INVALID_VERIFICATION_TRANSITION: 'INVALID_VERIFICATION_TRANSITION',
 } as const;
-export type VerificationErrorCode =
-  (typeof VerificationErrorCode)[keyof typeof VerificationErrorCode];
+export type VerificationErrorCode = (typeof VerificationErrorCode)[keyof typeof VerificationErrorCode];
 
 export const PremiumErrorCode = {
   PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',

@@ -1,41 +1,87 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import {
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import {
   DASHBOARD_PATHS,
   OWNER_BOOKING_FILTERS,
   formatVoiceDateTime,
+  formatZonedDateTime,
+  VISIT_HISTORY_FILTERS,
   type Language,
   type OwnerBookingDetailDto,
   type OwnerBookingFilter,
+  type OwnerVisitHistoryItemDto,
   type PaginatedResult,
   type SalonTimezoneResultDto,
   type UiStrings,
-} from '@barbercue/shared';
-import { apiFetch, ApiError } from '../../lib/api';
-import { dateLocaleFor } from '../../lib/date-locale';
-import { useLanguage } from '../../lib/language-context';
-import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
-import { useSalon } from '../../lib/salon-context';
-import { speakBooking } from '../../lib/voice-announce';
-import { claimBookingVoiceEvent } from '../../lib/booking-voice-dedupe';
-import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
-import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
-import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
+  type VisitHistoryFilter,
+} from "@barbercue/shared";
+import { apiFetch, ApiError } from "../../lib/api";
+import { dateLocaleFor } from "../../lib/date-locale";
+import { useLanguage } from "../../lib/language-context";
+import {
+  getRealtimeSocket,
+  joinSalonRoom,
+  onReconnect,
+} from "../../lib/realtime";
+import { useSalon } from "../../lib/salon-context";
+import { speakBooking } from "../../lib/voice-announce";
+import { claimBookingVoiceEvent } from "../../lib/booking-voice-dedupe";
+import {
+  color,
+  font,
+  fontSize,
+  lineHeightFor,
+  radius,
+  space,
+} from "../../lib/theme";
+import {
+  Screen,
+  SectionHeader,
+  Card,
+  Button,
+  EmptyState,
+  Skeleton,
+  InlineError,
+} from "../../components/ui";
+import type { OwnerTabParamList } from "../../navigation/OwnerNavigator";
 
-type Props = BottomTabScreenProps<OwnerTabParamList, 'OwnerBookingsTab'>;
+type Props = BottomTabScreenProps<OwnerTabParamList, "OwnerBookingsTab">;
 
 const PAGE_SIZE = 20;
 
 function filterLabel(t: UiStrings, filter: OwnerBookingFilter): string {
   const labels: Record<OwnerBookingFilter, string> = {
+    active: t.filterActive,
     today: t.filterToday,
     upcoming: t.filterUpcoming,
     completed: t.filterCompleted,
     cancelled: t.filterCancelled,
+    expired: t.statusExpired,
     no_show: t.filterNoShow,
     all: t.filterHistory,
+  };
+  return labels[filter];
+}
+
+function visitFilterLabel(t: UiStrings, filter: VisitHistoryFilter): string {
+  const labels: Record<VisitHistoryFilter, string> = {
+    all: t.filterHistory,
+    active: t.filterActive,
+    today: t.filterToday,
+    upcoming: t.filterUpcoming,
+    completed: t.filterCompleted,
+    cancelled: t.filterCancelled,
+    expired: t.statusExpired,
+    no_show: t.filterNoShow,
   };
   return labels[filter];
 }
@@ -48,6 +94,9 @@ function statusLabel(t: UiStrings, status: string): string {
     CANCELLED: t.statusCancelled,
     NO_SHOW: t.statusNoShow,
     EXPIRED: t.statusExpired,
+    WAITING: t.waiting,
+    CALLED: t.called,
+    IN_SERVICE: t.inService,
   };
   return labels[status] ?? status;
 }
@@ -56,17 +105,27 @@ function bookingsPath(salonId: string): string {
   return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.bookings}`;
 }
 
-function formatSlot(iso: string, language: Language): string {
-  return new Date(iso).toLocaleString(dateLocaleFor(language), {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
+function formatSlot(
+  iso: string,
+  language: Language,
+  timezone: string | null,
+): string {
+  return formatZonedDateTime(iso, timezone, dateLocaleFor(language), {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
-function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
+function BookingRow({
+  booking,
+  isNew,
+}: {
+  booking: OwnerBookingDetailDto;
+  isNew: boolean;
+}) {
   const { t, language } = useLanguage();
   return (
     <Card style={styles.card}>
@@ -76,18 +135,28 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
             {booking.serviceName}
             {isNew && <Text style={styles.newBadge}> {t.newBadge}</Text>}
           </Text>
-          <Text style={styles.meta}>{formatSlot(booking.slotStart, language)}</Text>
-          {booking.customerPhone && <Text style={styles.meta}>{booking.customerPhone}</Text>}
+          <Text style={styles.meta}>
+            {formatSlot(booking.slotStart, language, booking.salonTimezone)}
+          </Text>
+          <Text style={styles.meta}>
+            {t.visitSourceLabel}: {t.sourceOnlineBooking}
+          </Text>
+          {booking.customerPhone && (
+            <Text style={styles.meta}>{booking.customerPhone}</Text>
+          )}
           {(booking.assignedStaffName ?? booking.preferredStaffName) && (
             <Text style={styles.meta}>
-              {booking.assignedStaffName ? booking.assignedStaffName : `${t.preferredPrefix}${booking.preferredStaffName}`}
+              {booking.assignedStaffName
+                ? booking.assignedStaffName
+                : `${t.preferredPrefix}${booking.preferredStaffName}`}
             </Text>
           )}
         </View>
         <Text style={styles.statusBadge}>{statusLabel(t, booking.status)}</Text>
       </View>
       <Text style={styles.priceText}>
-        {booking.currency ?? ''} {booking.servicePrice} · {t.bookingRefPrefix}{booking.id.slice(0, 8)}
+        {booking.currency ?? ""} {booking.servicePrice} · {t.bookingRefPrefix}
+        {booking.id.slice(0, 8)}
       </Text>
     </Card>
   );
@@ -103,7 +172,9 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
 export default function OwnerBookingsScreen({ route }: Props) {
   const { selectedSalonId } = useSalon();
   const { t, language } = useLanguage();
-  const [filter, setFilter] = useState<OwnerBookingFilter>(route.params?.filter ?? 'today');
+  const [filter, setFilter] = useState<OwnerBookingFilter>(
+    route.params?.filter ?? "today",
+  );
   const [items, setItems] = useState<OwnerBookingDetailDto[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,12 +182,22 @@ export default function OwnerBookingsScreen({ route }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newIds, setNewIds] = useState<string[]>([]);
-  const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(null);
+  const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(
+    null,
+  );
   const [cancelNotice, setCancelNotice] = useState(false);
   // Build 10 physical-device retest (Hindi TTS blocker) — set (throttled, see voice-announce.ts)
   // when Hindi is the active language but this device has no installed Hindi voice, so
   // speakBooking skipped speaking rather than risking an English/default-voice fallback.
   const [hindiVoiceWarning, setHindiVoiceWarning] = useState(false);
+  const [queueFilter, setQueueFilter] = useState<VisitHistoryFilter>("all");
+  const [queueVisits, setQueueVisits] = useState<OwnerVisitHistoryItemDto[]>(
+    [],
+  );
+  const [queueCursor, setQueueCursor] = useState<string | null>(null);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [queueLoadingMore, setQueueLoadingMore] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
 
   const notifiedIdsRef = useRef<Set<string>>(new Set());
   const filterRef = useRef(filter);
@@ -154,19 +235,34 @@ export default function OwnerBookingsScreen({ route }: Props) {
   }, [selectedSalonId]);
 
   const loadPage = useCallback(
-    (targetFilter: OwnerBookingFilter, cursor: string | undefined, append: boolean) => {
+    (
+      targetFilter: OwnerBookingFilter,
+      cursor: string | undefined,
+      append: boolean,
+    ) => {
       if (!selectedSalonId) return Promise.resolve();
       if (append) setLoadingMore(true);
       else if (!append) setLoading((prev) => (cursor ? prev : true));
       setError(null);
-      const params = new URLSearchParams({ filter: targetFilter, limit: String(PAGE_SIZE) });
-      if (cursor) params.set('cursor', cursor);
-      return apiFetch<PaginatedResult<OwnerBookingDetailDto>>(`${bookingsPath(selectedSalonId)}?${params}`)
+      const params = new URLSearchParams({
+        filter: targetFilter,
+        limit: String(PAGE_SIZE),
+      });
+      if (cursor) params.set("cursor", cursor);
+      return apiFetch<PaginatedResult<OwnerBookingDetailDto>>(
+        `${bookingsPath(selectedSalonId)}?${params}`,
+      )
         .then((result) => {
-          setItems((prev) => (append ? [...prev, ...result.items] : result.items));
+          setItems((prev) =>
+            append ? [...prev, ...result.items] : result.items,
+          );
           setNextCursor(result.nextCursor);
         })
-        .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Could not load bookings.'))
+        .catch((err: unknown) =>
+          setError(
+            err instanceof ApiError ? err.message : "Could not load bookings.",
+          ),
+        )
         .finally(() => {
           setLoading(false);
           setLoadingMore(false);
@@ -174,6 +270,35 @@ export default function OwnerBookingsScreen({ route }: Props) {
         });
     },
     [selectedSalonId],
+  );
+
+  const loadQueueHistory = useCallback(
+    async (cursor?: string, append = false) => {
+      if (!selectedSalonId) return;
+      append ? setQueueLoadingMore(true) : setQueueLoading(true);
+      setQueueError(null);
+      const params = new URLSearchParams({
+        source: "all",
+        filter: queueFilter,
+        limit: String(PAGE_SIZE),
+      });
+      if (cursor) params.set("cursor", cursor);
+      try {
+        const result = await apiFetch<
+          PaginatedResult<OwnerVisitHistoryItemDto>
+        >(`${bookingsPath(selectedSalonId)}/history?${params}`);
+        setQueueVisits((current) =>
+          append ? [...current, ...result.items] : result.items,
+        );
+        setQueueCursor(result.nextCursor);
+      } catch (err) {
+        setQueueError(err instanceof ApiError ? err.message : t.genericError);
+      } finally {
+        setQueueLoading(false);
+        setQueueLoadingMore(false);
+      }
+    },
+    [selectedSalonId, queueFilter, t.genericError],
   );
 
   // Re-applies the tab's own param filter every time this screen gains focus with a fresh
@@ -192,6 +317,12 @@ export default function OwnerBookingsScreen({ route }: Props) {
     }, [filter, selectedSalonId]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      void loadQueueHistory();
+    }, [loadQueueHistory]),
+  );
+
   useEffect(() => {
     if (!selectedSalonId) return undefined;
     const socket = getRealtimeSocket();
@@ -208,13 +339,21 @@ export default function OwnerBookingsScreen({ route }: Props) {
       void loadPage(filterRef.current, undefined, false);
       const dedupeKey = `created:${payload.bookingId}`;
       if (notifiedIdsRef.current.has(dedupeKey)) {
-        console.warn('[voice] booking.created ignored — already announced', payload.bookingId);
+        console.warn(
+          "[voice] booking.created ignored — already announced",
+          payload.bookingId,
+        );
         return;
       }
       notifiedIdsRef.current.add(dedupeKey);
       setNewIds((current) => [...current, payload.bookingId]);
-      console.warn('[voice] booking.created received, fetching detail to announce', payload.bookingId);
-      apiFetch<OwnerBookingDetailDto>(`${bookingsPath(selectedSalonId)}/${payload.bookingId}`)
+      console.warn(
+        "[voice] booking.created received, fetching detail to announce",
+        payload.bookingId,
+      );
+      apiFetch<OwnerBookingDetailDto>(
+        `${bookingsPath(selectedSalonId)}/${payload.bookingId}`,
+      )
         .then((detail) => {
           setNewNotice(detail);
           // Real assigned barber wins over the customer's soft preference (Part 6 of the mobile
@@ -222,14 +361,17 @@ export default function OwnerBookingsScreen({ route }: Props) {
           // only ever happens later, at queue check-in. Never invented when both are null (the
           // customer picked "Any staff" and no one is assigned yet) — the announcement itself says
           // so instead ("Barber not assigned yet."), see packages/shared/src/i18n.
-          const barberName = detail.assignedStaffName ?? detail.preferredStaffName ?? null;
+          const barberName =
+            detail.assignedStaffName ?? detail.preferredStaffName ?? null;
           const timeZone = salonTimeZoneRef.current;
-          const { date, time } = detail.slotStart && timeZone
-            ? formatVoiceDateTime(detail.slotStart, timeZone)
-            : { date: null, time: null };
-          if (!claimBookingVoiceEvent('booking.created', payload.bookingId)) return;
+          const { date, time } =
+            detail.slotStart && timeZone
+              ? formatVoiceDateTime(detail.slotStart, timeZone)
+              : { date: null, time: null };
+          if (!claimBookingVoiceEvent("booking.created", payload.bookingId))
+            return;
           speakBooking({
-            event: 'booking.created',
+            event: "booking.created",
             bookingId: payload.bookingId,
             language: preferredLanguageRef.current,
             serviceName: detail.serviceName ?? null,
@@ -242,7 +384,10 @@ export default function OwnerBookingsScreen({ route }: Props) {
         })
         .catch((err: unknown) => {
           // toast just won't have rich details — the list refresh above still shows it
-          console.warn('[voice] could not fetch booking detail for announcement', err);
+          console.warn(
+            "[voice] could not fetch booking detail for announcement",
+            err,
+          );
         });
     }
 
@@ -251,14 +396,17 @@ export default function OwnerBookingsScreen({ route }: Props) {
       void loadPage(filterRef.current, undefined, false);
       const dedupeKey = `cancelled:${payload.bookingId}`;
       if (notifiedIdsRef.current.has(dedupeKey)) {
-        console.warn('[voice] booking.cancelled ignored — already announced', payload.bookingId);
+        console.warn(
+          "[voice] booking.cancelled ignored — already announced",
+          payload.bookingId,
+        );
         return;
       }
       notifiedIdsRef.current.add(dedupeKey);
       setCancelNotice(true);
-      if (claimBookingVoiceEvent('booking.cancelled', payload.bookingId)) {
+      if (claimBookingVoiceEvent("booking.cancelled", payload.bookingId)) {
         speakBooking({
-          event: 'booking.cancelled',
+          event: "booking.cancelled",
           bookingId: payload.bookingId,
           language: preferredLanguageRef.current,
           onHindiVoiceMissing: () => setHindiVoiceWarning(true),
@@ -269,16 +417,29 @@ export default function OwnerBookingsScreen({ route }: Props) {
     function onRescheduled(payload: { salonId: string; bookingId: string }) {
       if (payload.salonId !== selectedSalonId) return;
       void loadPage(filterRef.current, undefined, false);
-      console.warn('[voice] booking.rescheduled received, fetching updated detail to announce', payload.bookingId);
-      apiFetch<OwnerBookingDetailDto>(`${bookingsPath(selectedSalonId)}/${payload.bookingId}`)
+      console.warn(
+        "[voice] booking.rescheduled received, fetching updated detail to announce",
+        payload.bookingId,
+      );
+      apiFetch<OwnerBookingDetailDto>(
+        `${bookingsPath(selectedSalonId)}/${payload.bookingId}`,
+      )
         .then((detail) => {
           const timeZone = detail.salonTimezone ?? salonTimeZoneRef.current;
-          const { date, time } = detail.slotStart && timeZone
-            ? formatVoiceDateTime(detail.slotStart, timeZone)
-            : { date: null, time: null };
-          if (!claimBookingVoiceEvent('booking.rescheduled', payload.bookingId, detail.slotStart)) return;
+          const { date, time } =
+            detail.slotStart && timeZone
+              ? formatVoiceDateTime(detail.slotStart, timeZone)
+              : { date: null, time: null };
+          if (
+            !claimBookingVoiceEvent(
+              "booking.rescheduled",
+              payload.bookingId,
+              detail.slotStart,
+            )
+          )
+            return;
           speakBooking({
-            event: 'booking.rescheduled',
+            event: "booking.rescheduled",
             bookingId: payload.bookingId,
             language: preferredLanguageRef.current,
             date,
@@ -287,10 +448,20 @@ export default function OwnerBookingsScreen({ route }: Props) {
           });
         })
         .catch((err: unknown) => {
-          console.warn('[voice] could not fetch rescheduled booking detail for announcement', err);
-          if (!claimBookingVoiceEvent('booking.rescheduled', payload.bookingId, 'detail-unavailable')) return;
+          console.warn(
+            "[voice] could not fetch rescheduled booking detail for announcement",
+            err,
+          );
+          if (
+            !claimBookingVoiceEvent(
+              "booking.rescheduled",
+              payload.bookingId,
+              "detail-unavailable",
+            )
+          )
+            return;
           speakBooking({
-            event: 'booking.rescheduled',
+            event: "booking.rescheduled",
             bookingId: payload.bookingId,
             language: preferredLanguageRef.current,
             date: null,
@@ -300,9 +471,9 @@ export default function OwnerBookingsScreen({ route }: Props) {
         });
     }
 
-    socket.on('booking.created', onCreated);
-    socket.on('booking.rescheduled', onRescheduled);
-    socket.on('booking.cancelled', onCancelled);
+    socket.on("booking.created", onCreated);
+    socket.on("booking.rescheduled", onRescheduled);
+    socket.on("booking.cancelled", onCancelled);
     // Phase 15: resync once the socket reconnects — a missed booking.created/cancelled while
     // offline is never replayed by the backend, so the list catches up but any voice/toast for
     // whatever was missed during the disconnect never fires. Diagnostic-only warn (no behavior
@@ -310,16 +481,155 @@ export default function OwnerBookingsScreen({ route }: Props) {
     // explains a "voice didn't play" report: if this line appears in logcat between a created and
     // a cancelled announcement, the socket was briefly down and the gap is expected, not a bug.
     const unsubscribeReconnect = onReconnect(() => {
-      console.warn('[voice] realtime socket reconnected — resyncing list; any event missed while disconnected will not retroactively announce');
+      console.warn(
+        "[voice] realtime socket reconnected — resyncing list; any event missed while disconnected will not retroactively announce",
+      );
       void loadPage(filterRef.current, undefined, false);
     });
     return () => {
-      socket.off('booking.created', onCreated);
-      socket.off('booking.rescheduled', onRescheduled);
-      socket.off('booking.cancelled', onCancelled);
+      socket.off("booking.created", onCreated);
+      socket.off("booking.rescheduled", onRescheduled);
+      socket.off("booking.cancelled", onCancelled);
       unsubscribeReconnect();
     };
   }, [selectedSalonId, loadPage]);
+
+  function renderQueueHistory() {
+    return (
+      <View style={styles.queueHistory}>
+        <Text style={styles.queueHistoryTitle}>{t.allVisitHistory}</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.queueFilterRow}
+        >
+          {VISIT_HISTORY_FILTERS.map((value) => (
+            <Pressable
+              key={value}
+              style={[
+                styles.filterChip,
+                queueFilter === value && styles.filterChipActive,
+              ]}
+              onPress={() => setQueueFilter(value)}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  queueFilter === value && styles.filterChipTextActive,
+                ]}
+              >
+                {visitFilterLabel(t, value)}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {queueError ? <InlineError message={queueError} /> : null}
+        {queueLoading ? (
+          <Text style={styles.queueHistoryEmpty}>{t.loading}</Text>
+        ) : null}
+        {!queueLoading && queueVisits.length === 0 && !queueError ? (
+          <Text style={styles.queueHistoryEmpty}>{t.noVisitHistory}</Text>
+        ) : null}
+        {queueVisits.map((visit) => (
+          <Card key={visit.id} style={styles.queueVisitCard}>
+            <View style={styles.cardHeadRow}>
+              <View style={styles.cardHeadText}>
+                <Text style={styles.serviceName}>{visit.serviceName}</Text>
+                <Text style={styles.meta}>
+                  {formatZonedDateTime(
+                    visit.serviceDate,
+                    visit.salonTimezone,
+                    dateLocaleFor(language),
+                    {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    },
+                  )}
+                </Text>
+                {visit.customerName || visit.customerPhone ? (
+                  <Text style={styles.meta}>
+                    {[visit.customerName, visit.customerPhone]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={styles.statusBadge}>
+                {statusLabel(t, visit.status)}
+              </Text>
+            </View>
+            <Text style={styles.meta}>
+              {t.visitSourceLabel}: {visit.source === "LIVE_QUEUE" ? t.sourceLiveQueue : t.sourceOnlineBooking}
+            </Text>
+            {visit.joinedAt ? (
+              <Text style={styles.meta}>
+                {t.joinedAtLabel}:{" "}
+                {formatZonedDateTime(
+                  visit.joinedAt,
+                  visit.salonTimezone,
+                  dateLocaleFor(language),
+                  { hour: "numeric", minute: "2-digit" },
+                )}
+              </Text>
+            ) : null}
+            {visit.assignedStaffName ? (
+              <Text style={styles.meta}>
+                {t.staffLabel}: {visit.assignedStaffName}
+              </Text>
+            ) : null}
+            {visit.services.length > 0 ? (
+              <Text style={styles.meta}>
+                {visit.services.map((service) => service.name).join(" · ")}
+              </Text>
+            ) : null}
+            {visit.completedAt ? (
+              <Text style={styles.meta}>
+                {t.completedAtLabel}:{" "}
+                {formatZonedDateTime(
+                  visit.completedAt,
+                  visit.salonTimezone,
+                  dateLocaleFor(language),
+                  {
+                    day: "numeric",
+                    month: "short",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  },
+                )}
+              </Text>
+            ) : null}
+            <Text style={styles.meta}>
+              {t.priceLabel}: {visit.price === null ? t.notRecordedLabel : `${visit.currency ?? ""} ${visit.price}`}
+            </Text>
+            <Text style={styles.meta}>
+              {t.feedbackLabel}:{" "}
+              {visit.review
+                ? `${t.yourReviewTitle} · ${visit.review.rating}/5`
+                : visit.reviewEligible
+                  ? t.filterCompleted
+                  : t.notRecordedLabel}
+            </Text>
+            <Text style={styles.meta}>
+              {t.bookingIdPrefix}
+              {(visit.bookingId ?? visit.queueEntryId)?.slice(0, 8)}
+            </Text>
+          </Card>
+        ))}
+        {queueCursor ? (
+          <Button
+            title={queueLoadingMore ? t.loading : t.loadMoreVisits}
+            variant="outline"
+            onPress={() => void loadQueueHistory(queueCursor, true)}
+            loading={queueLoadingMore}
+            style={styles.loadMoreButton}
+          />
+        ) : null}
+      </View>
+    );
+  }
 
   if (!selectedSalonId) {
     return (
@@ -335,16 +645,23 @@ export default function OwnerBookingsScreen({ route }: Props) {
       <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
 
       {newNotice && (
-        <Pressable style={styles.noticeBanner} onPress={() => setNewNotice(null)}>
+        <Pressable
+          style={styles.noticeBanner}
+          onPress={() => setNewNotice(null)}
+        >
           <Text style={styles.noticeTitle}>{t.newBookingReceivedBanner}</Text>
           <Text style={styles.noticeBody}>
-            {newNotice.serviceName} · {formatSlot(newNotice.slotStart, language)}
-            {newNotice.customerPhone ? ` · ${newNotice.customerPhone}` : ''}
+            {newNotice.serviceName} ·{" "}
+            {formatSlot(newNotice.slotStart, language, newNotice.salonTimezone)}
+            {newNotice.customerPhone ? ` · ${newNotice.customerPhone}` : ""}
           </Text>
         </Pressable>
       )}
       {cancelNotice && (
-        <Pressable style={[styles.noticeBanner, styles.cancelBanner]} onPress={() => setCancelNotice(false)}>
+        <Pressable
+          style={[styles.noticeBanner, styles.cancelBanner]}
+          onPress={() => setCancelNotice(false)}
+        >
           <Text style={styles.noticeTitle}>{t.bookingCancelledBanner}</Text>
         </Pressable>
       )}
@@ -353,7 +670,9 @@ export default function OwnerBookingsScreen({ route }: Props) {
           style={[styles.noticeBanner, styles.warningBanner]}
           onPress={() => setHindiVoiceWarning(false)}
         >
-          <Text style={styles.noticeBody}>{t.hindiVoiceUnavailableWarning}</Text>
+          <Text style={styles.noticeBody}>
+            {t.hindiVoiceUnavailableWarning}
+          </Text>
         </Pressable>
       )}
 
@@ -371,7 +690,14 @@ export default function OwnerBookingsScreen({ route }: Props) {
             style={[styles.filterChip, filter === f && styles.filterChipActive]}
             onPress={() => setFilter(f)}
           >
-            <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>{filterLabel(t, f)}</Text>
+            <Text
+              style={[
+                styles.filterChipText,
+                filter === f && styles.filterChipTextActive,
+              ]}
+            >
+              {filterLabel(t, f)}
+            </Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -392,19 +718,25 @@ export default function OwnerBookingsScreen({ route }: Props) {
               onRefresh={() => {
                 setRefreshing(true);
                 void loadPage(filter, undefined, false);
+                void loadQueueHistory();
               }}
               tintColor={color.accent}
               colors={[color.accent]}
             />
           }
         >
-          {items.length === 0 ? (
+          <Text style={styles.queueHistoryTitle}>{t.sourceOnlineBooking} · {t.bookingsTitle}</Text>
+          {items.length === 0 && queueVisits.length === 0 && !queueLoading ? (
             <EmptyState title={t.noBookingsTitle} message={t.noBookingsHint} />
-          ) : (
+          ) : items.length > 0 ? (
             items.map((booking) => (
-              <BookingRow key={booking.id} booking={booking} isNew={newIds.includes(booking.id)} />
+              <BookingRow
+                key={booking.id}
+                booking={booking}
+                isNew={newIds.includes(booking.id)}
+              />
             ))
-          )}
+          ) : null}
           {nextCursor && (
             <Button
               title={loadingMore ? t.loading : t.loadMore}
@@ -414,6 +746,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
               style={styles.loadMoreButton}
             />
           )}
+          {renderQueueHistory()}
         </ScrollView>
       )}
     </Screen>
@@ -425,44 +758,104 @@ const styles = StyleSheet.create({
   noticeBanner: {
     backgroundColor: color.successSoft,
     borderWidth: 1,
-    borderColor: 'rgba(46, 125, 50, 0.24)',
+    borderColor: "rgba(46, 125, 50, 0.24)",
     borderRadius: radius.sm,
     padding: space[3],
     marginBottom: space[3],
   },
   cancelBanner: { backgroundColor: color.goldSoft, borderColor: color.border },
-  warningBanner: { backgroundColor: color.accentSoft, borderColor: 'rgba(179, 107, 0, 0.32)' },
-  noticeTitle: { fontFamily: font.bodyBold, fontSize: fontSize.sm, color: color.ink },
-  noticeBody: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
+  warningBanner: {
+    backgroundColor: color.accentSoft,
+    borderColor: "rgba(179, 107, 0, 0.32)",
+  },
+  noticeTitle: {
+    fontFamily: font.bodyBold,
+    fontSize: fontSize.sm,
+    color: color.ink,
+  },
+  noticeBody: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.xs,
+    color: color.muted,
+    marginTop: 2,
+  },
   filterScroll: { marginBottom: space[3] },
-  filterRow: { gap: space[2], paddingRight: space[4], alignItems: 'stretch' },
+  filterRow: { gap: space[2], paddingRight: space[4], alignItems: "stretch" },
   filterChip: {
     minHeight: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: space[2],
     paddingHorizontal: space[3],
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: color.border,
   },
-  filterChipActive: { borderColor: color.accent, backgroundColor: color.accentSoft },
-  filterChipText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, lineHeight: lineHeightFor(fontSize.xs), color: color.muted },
+  filterChipActive: {
+    borderColor: color.accent,
+    backgroundColor: color.accentSoft,
+  },
+  filterChipText: {
+    fontFamily: font.bodyMedium,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeightFor(fontSize.xs),
+    color: color.muted,
+  },
   filterChipTextActive: { color: color.accent },
   card: { marginBottom: space[3] },
-  cardHeadRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardHeadRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
   cardHeadText: { flex: 1, paddingRight: space[2] },
-  serviceName: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink },
-  newBadge: { fontFamily: font.bodyBold, fontSize: 10, color: color.surface, backgroundColor: '#2e7d32' },
-  meta: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.muted, marginTop: 2 },
+  serviceName: {
+    fontFamily: font.displaySemiBold,
+    fontSize: fontSize.base,
+    lineHeight: lineHeightFor(fontSize.base),
+    color: color.ink,
+  },
+  newBadge: {
+    fontFamily: font.bodyBold,
+    fontSize: 10,
+    color: color.surface,
+    backgroundColor: "#2e7d32",
+  },
+  meta: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.sm,
+    lineHeight: lineHeightFor(fontSize.sm),
+    color: color.muted,
+    marginTop: 2,
+  },
   statusBadge: {
     fontFamily: font.bodyBold,
     fontSize: 11,
     lineHeight: lineHeightFor(11),
     letterSpacing: 0.5,
     color: color.gold,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
-  priceText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: color.muted, marginTop: space[2] },
+  priceText: {
+    fontFamily: font.bodyMedium,
+    fontSize: fontSize.xs,
+    color: color.muted,
+    marginTop: space[2],
+  },
   loadMoreButton: { marginTop: space[2], marginBottom: space[6] },
+  queueHistory: { marginTop: space[3], paddingBottom: space[6] },
+  queueHistoryTitle: {
+    fontFamily: font.displaySemiBold,
+    fontSize: fontSize.lg,
+    color: color.ink,
+    marginBottom: space[2],
+  },
+  queueHistoryEmpty: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.sm,
+    color: color.muted,
+    marginVertical: space[2],
+  },
+  queueFilterRow: { gap: space[2], paddingBottom: space[3] },
+  queueVisitCard: { marginBottom: space[3] },
 });

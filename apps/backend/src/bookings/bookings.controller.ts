@@ -25,13 +25,17 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Idempotent } from '../common/decorators/idempotent.decorator';
 import { BookingsService } from './bookings.service';
+import { VisitHistoryService } from '../visit-history/visit-history.service';
 
 const MINE_PAGE_LIMIT = 20;
 
 @Controller(BOOKING_PATHS.bookings)
 @Roles(Role.CUSTOMER)
 export class BookingsController {
-  constructor(private readonly bookingsService: BookingsService) {}
+  constructor(
+    private readonly bookingsService: BookingsService,
+    private readonly visitHistory: VisitHistoryService,
+  ) {}
 
   // Web and mobile both send this so BookingSource is recorded accurately; anything else (or a
   // missing header, e.g. a raw API call) defaults to WEB rather than rejecting the request.
@@ -69,6 +73,18 @@ export class BookingsController {
     return this.bookingsService.listMine(user.id, cursor, MINE_PAGE_LIMIT);
   }
 
+  // Separate typed aggregation over Booking and authenticated standalone QueueEntry records.
+  // Kept additive so clients using the long-standing booking-only endpoint remain compatible.
+  @Get(BOOKING_PATHS.mineHistory)
+  listMyVisitHistory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('source') source?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.visitHistory.listCustomer(user.id, source, cursor, limit);
+  }
+
   @Get(':id')
   getOne(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
     return this.bookingsService.getOne(user.id, id);
@@ -87,7 +103,8 @@ export class BookingsController {
   reschedule(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(rescheduleBookingSchema)) body: RescheduleBookingInput,
+    @Body(new ZodValidationPipe(rescheduleBookingSchema))
+    body: RescheduleBookingInput,
   ) {
     return this.bookingsService.reschedule(user.id, id, body);
   }

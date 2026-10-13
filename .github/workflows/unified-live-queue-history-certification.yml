@@ -1,0 +1,191 @@
+name: Unified Live Queue History Certification
+
+on:
+  push:
+    branches:
+      - codex/p0-unified-live-queue-history
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "apps/backend/prisma/**"
+      - "apps/backend/src/visit-history/**"
+      - "apps/backend/src/reviews/**"
+      - "apps/backend/src/dashboard-reviews/**"
+      - "apps/backend/src/dashboard-bookings/**"
+      - "apps/backend/src/bookings/**"
+      - "apps/web/**"
+      - "apps/mobile/**"
+      - "packages/shared/**"
+      - ".github/workflows/unified-live-queue-history-certification.yml"
+      - ".github/live-queue-review-guards.sql"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unified-live-queue-history-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: fastque_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d fastque_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/fastque_ci?schema=public
+      PSQL_URL: postgresql://ci:ci@127.0.0.1:5432/fastque_ci
+      NEXT_TELEMETRY_DISABLED: "1"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked workspaces
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared contracts
+        run: npm run build --workspace=@barbercue/shared
+      - name: Validate and generate Prisma client
+        run: |
+          npm run prisma:validate --workspace=@barbercue/backend
+          npm run prisma:generate --workspace=@barbercue/backend
+      - name: Apply exact initial migration and synthetic bootstrap prerequisite
+        working-directory: apps/backend
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260801060723_init/migration.sql
+          npx prisma migrate resolve --applied 20260801060723_init
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "users" ("id", "email", "updatedAt")
+          VALUES ('ci-primary-admin', 'mail2dev.kr@gmail.com', CURRENT_TIMESTAMP);
+          SQL
+      - name: Seed synthetic location prerequisites and apply complete migration chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_root="$(mktemp -d "$RUNNER_TEMP/fastque-prisma-stage.XXXXXX")"
+          trap 'rm -rf "$staging_root"' EXIT
+          mkdir -p "$staging_root/prisma/migrations"
+          cp apps/backend/prisma/schema.prisma "$staging_root/prisma/schema.prisma"
+          # This repository has no committed migration_lock.toml; keep the temporary staged
+          # Prisma directory explicit about its provider without adding a repository-wide file.
+          printf 'provider = "postgresql"\n' > "$staging_root/prisma/migration_lock.toml"
+
+          # The historical city-repair migrations require the reference rows that production
+          # receives from its location import. Apply the exact committed chain only through the
+          # additive schema migration that creates Country/Region, then seed minimal CI-only
+          # prerequisites before applying the remaining committed migrations in the real tree.
+          bootstrap_migration='20260826151700_add_global_location_master_data'
+          found_bootstrap=false
+          while IFS= read -r migration_dir; do
+            migration_name="$(basename "$migration_dir")"
+            cp -a "$migration_dir" "$staging_root/prisma/migrations/"
+            if [[ "$migration_name" == "$bootstrap_migration" ]]; then
+              found_bootstrap=true
+              break
+            fi
+          done < <(find apps/backend/prisma/migrations -mindepth 1 -maxdepth 1 -type d | sort)
+          if [[ "$found_bootstrap" != true ]]; then
+            echo "Required location schema migration not found: $bootstrap_migration" >&2
+            exit 1
+          fi
+
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend -- --schema "$staging_root/prisma/schema.prisma"
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "Country" ("id", "isoCode2", "isoCode3", "name", "slug")
+          VALUES ('ci-country-india', 'IN', 'IND', 'India', 'india-ci');
+          INSERT INTO "Region" ("id", "countryId", "code", "name", "slug")
+          VALUES
+            ('ci-region-uttar-pradesh', 'ci-country-india', 'IN-UP', 'Uttar Pradesh', 'uttar-pradesh-ci'),
+            ('ci-region-odisha', 'ci-country-india', 'IN-OR', 'Odisha', 'odisha-ci');
+          SQL
+
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend
+      - name: Assert migration history and recovery schema
+        run: |
+          migration_file='apps/backend/prisma/migrations/20261012120000_reviews_for_live_queue_visits/migration.sql'
+          expected_checksum="$(sha256sum "$migration_file" | cut -d ' ' -f 1)"
+          recorded_checksum="$(psql "$PSQL_URL" -Atqc "SELECT checksum FROM _prisma_migrations WHERE migration_name = '20261012120000_reviews_for_live_queue_visits' AND finished_at IS NOT NULL AND rolled_back_at IS NULL")"
+          test "$recorded_checksum" = "$expected_checksum"
+          echo "Prisma migration checksum matches canonical checked-out bytes: $expected_checksum"
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM "_prisma_migrations"
+              WHERE "migration_name" = '20261012120000_reviews_for_live_queue_visits'
+                AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL
+            ) THEN RAISE EXCEPTION 'unified history migration is not successfully recorded'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint
+              WHERE conrelid = 'reviews'::regclass AND conname = 'reviews_exactly_one_visit_target_check'
+            ) THEN RAISE EXCEPTION 'review target XOR constraint missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_trigger
+              WHERE tgrelid = 'reviews'::regclass AND tgname = 'reviews_validate_queue_visit_target'
+                AND tgenabled IN ('O', 'A') AND NOT tgisinternal
+            ) THEN RAISE EXCEPTION 'queue review ownership/completion trigger missing or disabled'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'reviews_queueEntryId_key') THEN
+              RAISE EXCEPTION 'queue review uniqueness index missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'bookings_customer_slotStart_id_idx') THEN
+              RAISE EXCEPTION 'customer booking history index missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'queue_entries_salon_source_joinedAt_id_idx') THEN
+              RAISE EXCEPTION 'salon queue history index missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'queue_entries_customer_source_joinedAt_id_idx') THEN
+              RAISE EXCEPTION 'customer queue history index missing';
+            END IF;
+          END $$;
+          SQL
+      - name: Exercise review guards on synthetic database rows
+        run: psql "$PSQL_URL" -v ON_ERROR_STOP=1 -f .github/live-queue-review-guards.sql
+      - name: Authenticate guarded history and review routes against eleven synthetic historical visits
+        env:
+          FASTQUE_DISPOSABLE_DB: "1"
+          JWT_ACCESS_SECRET: "ci-only-unified-history-disposable-database-jwt-key"
+          NODE_ENV: test
+        run: npm run test:e2e --workspace=@barbercue/backend -- --runInBand test/unified-live-queue-history.e2e-spec.ts
+      - name: Focused backend history and review tests
+        run: >-
+          npm test --workspace=@barbercue/backend -- --runInBand
+          src/visit-history/visit-history.service.spec.ts
+          src/reviews/reviews.service.spec.ts
+          src/dashboard-reviews/dashboard-reviews.service.spec.ts
+          src/dashboard-bookings/dashboard-bookings.service.spec.ts
+          src/bookings/bookings.service.spec.ts
+      - name: Shared tests
+        run: npm test --workspace=@barbercue/shared -- --runInBand
+      - name: Web and mobile Live Queue history rendering tests
+        run: |
+          npm test --workspace=@barbercue/web -- --runInBand components/bookings/__tests__/live-queue-history.test.jsx
+          npm test --workspace=@barbercue/mobile -- --runInBand components/__tests__/ReviewPanel.test.tsx screens/__tests__/MyBookingsLiveQueueHistory.test.tsx screens/__tests__/OwnerBookingsLiveQueueHistory.test.tsx
+      - name: Workspace typechecks
+        run: |
+          npm run typecheck --workspace=@barbercue/backend
+          npm run typecheck --workspace=@barbercue/web
+          npm run typecheck --workspace=@barbercue/mobile
+      - name: Production builds
+        run: |
+          npm run build --workspace=@barbercue/backend
+          npm run build --workspace=@barbercue/web
+      - name: Diff whitespace check
+        run: git diff --check

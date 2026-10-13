@@ -28,13 +28,7 @@ export interface VoiceAnnouncements {
    * customer chose "Any staff" and no one has been assigned yet — callers must never invent a
    * name for that null case (see formatVoiceBarberDate below for how `date`/`time` are produced).
    */
-  newBookingReceived(
-    serviceName: string | null,
-    barberName: string | null,
-    salonName: string | null,
-    date: string | null,
-    time: string | null,
-  ): string;
+  newBookingReceived(serviceName: string | null, barberName: string | null, salonName: string | null, date: string | null, time: string | null): string;
   /** Owner/staff: a booking on this salon was moved to a new slot. */
   bookingRescheduled(date: string | null, time: string | null): string;
   /** Owner/staff: a booking on this salon was just cancelled. */
@@ -70,8 +64,7 @@ const en: VoiceAnnouncements = {
     return when ? `Booking rescheduled ${when}.` : 'Booking rescheduled.';
   },
   bookingCancelled: () => 'Booking cancelled.',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `New customer joined the queue. Token number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
+  newCustomerJoined: (tokenNumber, serviceName) => `New customer joined the queue. Token number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
   voiceAnnouncementsOn: () => 'Voice announcements on.',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} customer` : 'customer';
@@ -104,8 +97,7 @@ const hi: VoiceAnnouncements = {
     return when ? `बुकिंग पुनर्निर्धारित की गई है। नया समय ${when}।` : 'बुकिंग पुनर्निर्धारित की गई है।';
   },
   bookingCancelled: () => 'बुकिंग रद्द कर दी गई है।',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `कतार में नया ग्राहक जुड़ा। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
+  newCustomerJoined: (tokenNumber, serviceName) => `कतार में नया ग्राहक जुड़ा। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
   voiceAnnouncementsOn: () => 'आवाज़ में सूचनाएं चालू हैं।',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} ग्राहक` : 'अपॉइंटमेंट के ग्राहक';
@@ -113,7 +105,6 @@ const hi: VoiceAnnouncements = {
     return `अपॉइंटमेंट रिमाइंडर। क्या ${when}${service} पहुंच चुका है? कृपया पुष्टि करें, आया या नहीं आया।`;
   },
 };
-
 
 /**
  * Owner-facing voice can be independent of the app UI language. This is deliberately a speech
@@ -168,8 +159,7 @@ const hiBihar: VoiceAnnouncements = {
     return when ? `बुकिंग का समय बदल गया है। नया समय ${when} है।` : 'बुकिंग का समय बदल गया है।';
   },
   bookingCancelled: () => 'बुकिंग रद्द हो गई है।',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `कतार में नया ग्राहक आया है। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
+  newCustomerJoined: (tokenNumber, serviceName) => `कतार में नया ग्राहक आया है। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
   voiceAnnouncementsOn: () => 'आवाज़ वाली सूचना चालू हो गई है।',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} वाले ग्राहक` : 'अपॉइंटमेंट वाले ग्राहक';
@@ -178,20 +168,14 @@ const hiBihar: VoiceAnnouncements = {
   },
 };
 
-export function voiceAnnouncementsForStyle(
-  style: OwnerVoiceStyle,
-  accountLanguage: Language | null | undefined,
-): VoiceAnnouncements {
+export function voiceAnnouncementsForStyle(style: OwnerVoiceStyle, accountLanguage: Language | null | undefined): VoiceAnnouncements {
   if (style === 'HINDI') return hi;
   if (style === 'ENGLISH') return en;
   if (style === 'HINDI_BIHAR') return hiBihar;
   return voiceAnnouncementsFor(accountLanguage);
 }
 
-export function speechLocaleForVoiceStyle(
-  style: OwnerVoiceStyle,
-  accountLanguage: Language | null | undefined,
-): string {
+export function speechLocaleForVoiceStyle(style: OwnerVoiceStyle, accountLanguage: Language | null | undefined): string {
   if (style === 'HINDI' || style === 'HINDI_BIHAR') return 'hi-IN';
   if (style === 'ENGLISH') return 'en-IN';
   return accountLanguage ? SPEECH_LOCALE[accountLanguage] : SPEECH_LOCALE[Language.EN];
@@ -383,11 +367,27 @@ export interface UiStrings {
   todayTitle: string;
   filterToday: string;
   filterUpcoming: string;
+  filterActive: string;
   filterCompleted: string;
   filterCancelled: string;
   filterNoShow: string;
   filterHistory: string;
   loadMore: string;
+  visitSourceLabel: string;
+  sourceOnlineBooking: string;
+  sourceLiveQueue: string;
+  joinedAtLabel: string;
+  completedAtLabel: string;
+  feedbackLabel: string;
+  notRecordedLabel: string;
+  priceLabel: string;
+  liveQueueHistory: string;
+  noLiveQueueHistory: string;
+  allVisitHistory: string;
+  noVisitHistory: string;
+  loadMoreVisits: string;
+  feedbackUnavailable: string;
+  rateYourService: string;
 
   // RoleSelectScreen (the pre-auth landing screen) — a real Build 9 physical-device screenshot
   // showed this exact screen half-translated: the browse card's own `t.city`/`t.book`/etc. calls
@@ -1103,7 +1103,7 @@ const enUi: UiStrings = {
   statusNoShow: 'No-show',
   statusExpired: 'Expired',
   genericError: 'Something went wrong. Please try again.',
-  offline: "You appear to be offline.",
+  offline: 'You appear to be offline.',
 
   tabHome: 'Home',
   tabSearch: 'Search',
@@ -1147,11 +1147,27 @@ const enUi: UiStrings = {
   todayTitle: 'Today',
   filterToday: 'Today',
   filterUpcoming: 'Upcoming',
+  filterActive: 'Active',
   filterCompleted: 'Completed',
   filterCancelled: 'Cancelled',
   filterNoShow: 'No-show',
   filterHistory: 'History',
   loadMore: 'Load more',
+  visitSourceLabel: 'Source',
+  sourceOnlineBooking: 'Online Booking',
+  sourceLiveQueue: 'Live Queue',
+  joinedAtLabel: 'Joined',
+  completedAtLabel: 'Completed',
+  feedbackLabel: 'Feedback',
+  notRecordedLabel: 'Not recorded',
+  priceLabel: 'Price',
+  liveQueueHistory: 'Live Queue visits',
+  noLiveQueueHistory: 'No linked Live Queue visits yet.',
+  allVisitHistory: 'All visit history',
+  noVisitHistory: 'No linked visits yet.',
+  loadMoreVisits: 'Load more visits',
+  feedbackUnavailable: 'Feedback is unavailable because this visit is not linked to a verified customer account.',
+  rateYourService: 'Rate your service',
 
   findAShop: 'Find a shop',
   browseHint: 'Book or join a live queue — no sign-in needed to look around.',
@@ -1236,8 +1252,7 @@ const enUi: UiStrings = {
   bookingsTitle: 'Bookings',
   newBookingReceivedBanner: 'New booking received',
   bookingCancelledBanner: 'Booking cancelled',
-  hindiVoiceUnavailableWarning:
-    "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings, then reopen FastQue to try again.",
+  hindiVoiceUnavailableWarning: "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings, then reopen FastQue to try again.",
   noShopSelected: 'No shop selected',
   selectShopHint: 'Select a shop from the Dashboard tab to see its bookings.',
   noBookingsTitle: 'No bookings',
@@ -1289,7 +1304,7 @@ const enUi: UiStrings = {
   useCurrentLocationAction: 'Use my current location',
   detectingLocationEllipsis: 'Detecting location…',
   locationDetectedLabel: 'Location detected',
-  locationSkippedHint: "No problem — your address and city are enough to register.",
+  locationSkippedHint: 'No problem — your address and city are enough to register.',
   chooseCountryFirstError: 'Please choose the country your shop is in.',
   chooseCityFirstError: "Please search for and select your shop's city.",
   registerShopAction: 'Register shop',
@@ -1305,7 +1320,7 @@ const enUi: UiStrings = {
   onboardingChairsStepTitle: 'Add your chairs',
   onboardingStaffStepTitle: 'Add your staff',
   onboardingPaymentQrStepTitle: 'Add a payment QR',
-  onboardingPaymentQrStepHint: 'Shown to customers paying for an app or website booking. Walk-ins can still pay you directly without one.',
+  onboardingPaymentQrStepHint: 'Shown to customers paying for an app or website booking. Live Queue customers can still pay you directly without one.',
   onboardingGoLiveStepTitle: 'Go live',
   saveAndNextAction: 'Save & Next',
   previousAction: 'Previous',
@@ -1647,7 +1662,7 @@ const enUi: UiStrings = {
   completeAction: 'Complete',
   couldNotLoadQueue: 'Could not load the queue.',
   queueIsEmptyTitle: 'Queue is empty',
-  queueIsEmptyHint: 'Walk-ins and checked-in bookings will appear here in real time.',
+  queueIsEmptyHint: 'Live Queue arrivals and checked-in bookings will appear here in real time.',
   statusCalledShort: 'Called',
 
   photoLibraryAccessNeeded: 'Photo library access is needed to try the AI Style Advisor.',
@@ -1835,11 +1850,27 @@ const hiUi: UiStrings = {
   todayTitle: 'आज',
   filterToday: 'आज',
   filterUpcoming: 'आगामी',
+  filterActive: 'सक्रिय',
   filterCompleted: 'पूर्ण',
   filterCancelled: 'रद्द',
   filterNoShow: 'नो-शो',
   filterHistory: 'इतिहास',
   loadMore: 'और लोड करें',
+  visitSourceLabel: 'स्रोत',
+  sourceOnlineBooking: 'ऑनलाइन बुकिंग',
+  sourceLiveQueue: 'लाइव कतार',
+  joinedAtLabel: 'कतार में शामिल हुए',
+  completedAtLabel: 'पूर्ण हुआ',
+  feedbackLabel: 'प्रतिक्रिया',
+  notRecordedLabel: 'दर्ज नहीं',
+  priceLabel: 'मूल्य',
+  liveQueueHistory: 'लाइव कतार विज़िट',
+  noLiveQueueHistory: 'अभी कोई लिंक की गई लाइव कतार विज़िट नहीं है।',
+  allVisitHistory: 'सभी विज़िट का इतिहास',
+  noVisitHistory: 'अभी कोई लिंक की गई विज़िट नहीं है।',
+  loadMoreVisits: 'और विज़िट लोड करें',
+  feedbackUnavailable: 'यह विज़िट सत्यापित ग्राहक खाते से लिंक नहीं है, इसलिए प्रतिक्रिया उपलब्ध नहीं है।',
+  rateYourService: 'अपनी सेवा को रेट करें',
 
   findAShop: 'दुकान खोजें',
   browseHint: 'बुक करें या लाइव कतार में शामिल हों — देखने के लिए साइन-इन ज़रूरी नहीं।',
@@ -1993,7 +2024,7 @@ const hiUi: UiStrings = {
   onboardingChairsStepTitle: 'अपनी कुर्सियां जोड़ें',
   onboardingStaffStepTitle: 'अपना स्टाफ जोड़ें',
   onboardingPaymentQrStepTitle: 'भुगतान QR जोड़ें',
-  onboardingPaymentQrStepHint: 'ऐप या वेबसाइट बुकिंग के लिए भुगतान करने वाले ग्राहकों को दिखाया जाता है। वॉक-इन ग्राहक इसके बिना भी सीधे आपको भुगतान कर सकते हैं।',
+  onboardingPaymentQrStepHint: 'ऐप या वेबसाइट बुकिंग के लिए भुगतान करने वाले ग्राहकों को दिखाया जाता है। लाइव कतार के ग्राहक इसके बिना भी सीधे आपको भुगतान कर सकते हैं।',
   onboardingGoLiveStepTitle: 'लाइव जाएं',
   saveAndNextAction: 'सेव करें और आगे बढ़ें',
   previousAction: 'पिछला',
@@ -2335,7 +2366,7 @@ const hiUi: UiStrings = {
   completeAction: 'पूर्ण करें',
   couldNotLoadQueue: 'कतार लोड नहीं हो सकी।',
   queueIsEmptyTitle: 'कतार खाली है',
-  queueIsEmptyHint: 'वॉक-इन और चेक-इन की गई बुकिंग्स यहां वास्तविक समय में दिखेंगी।',
+  queueIsEmptyHint: 'लाइव कतार और चेक-इन की गई बुकिंग्स यहां वास्तविक समय में दिखेंगी।',
   statusCalledShort: 'बुलाया गया',
 
   photoLibraryAccessNeeded: 'AI स्टाइल एडवाइज़र आज़माने के लिए फोटो लाइब्रेरी की अनुमति आवश्यक है।',
@@ -2479,7 +2510,7 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'owner.booking.cancelled': 'Booking cancelled',
   'owner.booking.no_show': 'Customer no-show',
   'owner.booking.expired': 'Booking expired',
-  'owner.walk_in.joined': 'New walk-in',
+  'owner.walk_in.joined': 'New Live Queue visit',
   'staff.assigned': 'You were assigned a customer',
   'owner.booking.arrival_check': 'Appointment arrival check',
 };
@@ -2496,7 +2527,7 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'owner.booking.cancelled': 'बुकिंग रद्द हुई',
   'owner.booking.no_show': 'ग्राहक नो-शो',
   'owner.booking.expired': 'बुकिंग समाप्त हो गई',
-  'owner.walk_in.joined': 'नया वॉक-इन',
+  'owner.walk_in.joined': 'नई लाइव क्यू विज़िट',
   'staff.assigned': 'आपको एक ग्राहक सौंपा गया',
   'owner.booking.arrival_check': 'अपॉइंटमेंट आगमन जांच',
 };
@@ -2509,10 +2540,7 @@ export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTyp
 /** Never throws on an unrecognised type/language — falls back to English labels, then to the raw
  * type string itself, so a future NotificationType added to the enum without a translation entry
  * degrades to something readable rather than crashing the list. */
-export function notificationTypeLabel(
-  language: Language | null | undefined,
-  type: NotificationType,
-): string {
+export function notificationTypeLabel(language: Language | null | undefined, type: NotificationType): string {
   const table = (language && NOTIFICATION_TYPE_LABELS[language]) || NOTIFICATION_TYPE_LABELS[Language.EN];
   return table[type] ?? enNotificationTypeLabels[type] ?? type;
 }
@@ -2527,7 +2555,10 @@ export function notificationTypeLabel(
  */
 export interface PushCopy {
   newBooking(serviceName: string | null): { title: string; body: string };
-  bookingRescheduled(serviceName: string | null): { title: string; body: string };
+  bookingRescheduled(serviceName: string | null): {
+    title: string;
+    body: string;
+  };
   bookingCancelled(serviceName: string | null): { title: string; body: string };
   bookingReminder(serviceName: string | null): { title: string; body: string };
   /** P0 arrival-alert mission — the one-shot T-5-minute push. Never a customer name (see
@@ -2554,9 +2585,7 @@ const enPush: PushCopy = {
   }),
   arrivalCheck: (serviceName) => ({
     title: 'Appointment in 5 minutes',
-    body: serviceName
-      ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.`
-      : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
+    body: serviceName ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.` : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
   }),
 };
 
@@ -2579,9 +2608,7 @@ const hiPush: PushCopy = {
   }),
   arrivalCheck: (serviceName) => ({
     title: 'अपॉइंटमेंट 5 मिनट में',
-    body: serviceName
-      ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।`
-      : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
+    body: serviceName ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।` : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
   }),
 };
 

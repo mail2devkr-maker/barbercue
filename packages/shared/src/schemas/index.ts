@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  CONTACT_NAME_MAX_LENGTH,
-  CONTACT_NAME_MIN_LENGTH,
-  normalizeContactName,
-  normalizeContactPhone,
-} from '../contact';
+import { CONTACT_NAME_MAX_LENGTH, CONTACT_NAME_MIN_LENGTH, normalizeContactName, normalizeContactPhone } from '../contact';
 import {
   ChairStatus,
   ChargeType,
@@ -41,10 +36,7 @@ import { isValidPostalCode, postalCodeRuleFor } from '../locale';
 // services, inactive services and empty selections are all rejected server-side against real data
 // (AvailabilityService.getServicesOrThrow), never here — a schema has no salon/DB context to check
 // any of that against.
-const serviceIdsSchema = z
-  .array(z.string().uuid())
-  .min(1, 'Select at least one service.')
-  .max(MAX_SERVICES_PER_BOOKING, `Select at most ${MAX_SERVICES_PER_BOOKING} services.`);
+const serviceIdsSchema = z.array(z.string().uuid()).min(1, 'Select at least one service.').max(MAX_SERVICES_PER_BOOKING, `Select at most ${MAX_SERVICES_PER_BOOKING} services.`);
 
 // Production-safety hardening (P0 #1) — an already-installed FastQue client (mobile not yet
 // updated, or any external integration) still sends the ORIGINAL single `serviceId` field on
@@ -74,14 +66,9 @@ function checkServiceSelection(value: ServiceSelectionInput, ctx: z.RefinementCt
   }
 }
 
-function normalizeServiceSelection<T extends ServiceSelectionInput>(
-  value: T,
-): Omit<T, 'serviceId' | 'serviceIds'> & { serviceIds: string[] } {
+function normalizeServiceSelection<T extends ServiceSelectionInput>(value: T): Omit<T, 'serviceId' | 'serviceIds'> & { serviceIds: string[] } {
   const { serviceId, serviceIds, ...rest } = value;
-  return { ...rest, serviceIds: serviceIds ?? [serviceId as string] } as Omit<
-    T,
-    'serviceId' | 'serviceIds'
-  > & { serviceIds: string[] };
+  return { ...rest, serviceIds: serviceIds ?? [serviceId as string] } as Omit<T, 'serviceId' | 'serviceIds'> & { serviceIds: string[] };
 }
 
 export const createBookingSchema = z
@@ -254,9 +241,7 @@ export const registerSalonSchema = z
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['postalCode'],
-      message: rule.example
-        ? `Enter a valid ${rule.label} (for example ${rule.example})`
-        : `Enter a valid ${rule.label}`,
+      message: rule.example ? `Enter a valid ${rule.label} (for example ${rule.example})` : `Enter a valid ${rule.label}`,
     });
   });
 export type RegisterSalonInput = z.infer<typeof registerSalonSchema>;
@@ -317,9 +302,7 @@ export const citySearchQuerySchema = z.object({
 export type CitySearchQueryInput = z.infer<typeof citySearchQuerySchema>;
 
 export const otpRequestSchema = z.object({
-  phone: z
-    .string()
-    .regex(/^\+[1-9]\d{7,14}$/, 'phone must be in E.164 format, e.g. +919876543210'),
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'phone must be in E.164 format, e.g. +919876543210'),
 });
 export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 
@@ -338,10 +321,7 @@ export const googleLoginSchema = z.object({
 export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
 
 // Shared password rule: staff/owner/admin accounts only (customers never have a password).
-const passwordSchema = z
-  .string()
-  .min(8, 'password must be at least 8 characters')
-  .max(72, 'password must be at most 72 characters'); // bcrypt truncates beyond 72 bytes
+const passwordSchema = z.string().min(8, 'password must be at least 8 characters').max(72, 'password must be at most 72 characters'); // bcrypt truncates beyond 72 bytes
 
 export const staffLoginSchema = z.object({
   email: z.string().email(),
@@ -365,7 +345,12 @@ export const ownerSignupSchema = z
 export type OwnerSignupInput = z.infer<typeof ownerSignupSchema>;
 
 export const employeeLoginSchema = z.object({
-  employeeCode: z.string().trim().min(3).max(32).transform((value) => value.toUpperCase()),
+  employeeCode: z
+    .string()
+    .trim()
+    .min(3)
+    .max(32)
+    .transform((value) => value.toUpperCase()),
   password: passwordSchema,
 });
 export type EmployeeLoginInput = z.infer<typeof employeeLoginSchema>;
@@ -417,8 +402,7 @@ export const resetEmployeePasswordSchema = z
 export type ResetEmployeePasswordInput = z.infer<typeof resetEmployeePasswordSchema>;
 
 // ---------- FastQue internal Field CRM ----------
-const optionalCrmText = (max: number) =>
-  z.union([z.string().trim().max(max), z.literal('')]).optional();
+const optionalCrmText = (max: number) => z.union([z.string().trim().max(max), z.literal('')]).optional();
 
 export const createCrmLeadSchema = z.object({
   shopName: z.string().trim().min(2).max(180),
@@ -496,12 +480,7 @@ export const updateCrmFollowUpSchema = z
   });
 export type UpdateCrmFollowUpInput = z.infer<typeof updateCrmFollowUpSchema>;
 
-export const managedAdminRoleSchema = z.enum([
-  Role.CO_FOUNDER,
-  Role.HR_ADMIN,
-  Role.SALES_ADMIN,
-  Role.PLATFORM_VIEWER,
-]);
+export const managedAdminRoleSchema = z.enum([Role.CO_FOUNDER, Role.HR_ADMIN, Role.SALES_ADMIN, Role.PLATFORM_VIEWER]);
 export type ManagedAdminRole = z.infer<typeof managedAdminRoleSchema>;
 
 export const grantAdminAccessSchema = z.object({
@@ -589,10 +568,10 @@ export const salonPaymentPolicySchema = z
     prepaymentRequirement: z.nativeEnum(PrepaymentRequirement),
     prepaymentPercentage: z.number().int().min(1).max(100).optional(),
   })
-  .refine(
-    (val) => val.prepaymentRequirement !== PrepaymentRequirement.PARTIAL || !!val.prepaymentPercentage,
-    { message: 'prepaymentPercentage is required when prepaymentRequirement is PARTIAL', path: ['prepaymentPercentage'] },
-  );
+  .refine((val) => val.prepaymentRequirement !== PrepaymentRequirement.PARTIAL || !!val.prepaymentPercentage, {
+    message: 'prepaymentPercentage is required when prepaymentRequirement is PARTIAL',
+    path: ['prepaymentPercentage'],
+  });
 export type SalonPaymentPolicyInput = z.infer<typeof salonPaymentPolicySchema>;
 
 export const cancellationPolicySchema = z.object({
@@ -681,32 +660,17 @@ export const setStaffWorkingHoursSchema = z
     message: 'Provide exactly one entry for each day of the week',
     path: ['days'],
   });
-export type SetStaffWorkingHoursInput = z.infer<
-  typeof setStaffWorkingHoursSchema
->;
+export type SetStaffWorkingHoursInput = z.infer<typeof setStaffWorkingHoursSchema>;
 
 // PUT notifications/preferences (Phase 13) — one (category, channel) toggle per call; the client
 // already has the full NotificationPreferencesDto to render from, so there's no need for a
 // whole-preferences-replaced-at-once shape the way OperatingHours/StaffWorkingHours use.
 export const setNotificationPreferenceSchema = z.object({
-  category: z.enum([
-    NotificationCategory.BOOKING_UPDATES,
-    NotificationCategory.QUEUE_UPDATES,
-    NotificationCategory.REMINDERS,
-    NotificationCategory.PROMOTIONAL,
-  ]),
-  channel: z.enum([
-    NotificationChannel.IN_APP,
-    NotificationChannel.PUSH,
-    NotificationChannel.EMAIL,
-    NotificationChannel.SMS,
-    NotificationChannel.WHATSAPP,
-  ]),
+  category: z.enum([NotificationCategory.BOOKING_UPDATES, NotificationCategory.QUEUE_UPDATES, NotificationCategory.REMINDERS, NotificationCategory.PROMOTIONAL]),
+  channel: z.enum([NotificationChannel.IN_APP, NotificationChannel.PUSH, NotificationChannel.EMAIL, NotificationChannel.SMS, NotificationChannel.WHATSAPP]),
   enabled: z.boolean(),
 });
-export type SetNotificationPreferenceInput = z.infer<
-  typeof setNotificationPreferenceSchema
->;
+export type SetNotificationPreferenceInput = z.infer<typeof setNotificationPreferenceSchema>;
 
 // PATCH auth/language (Phase 14).
 export const setLanguageSchema = z.object({
@@ -873,11 +837,17 @@ export type DevActivatePremiumInput = z.infer<typeof devActivatePremiumSchema>;
 
 // POST reviews — one review per booking (Review.bookingId is @unique; ReviewsService's own
 // re-check gives a friendlier ALREADY_REVIEWED error before the DB constraint would).
-export const createReviewSchema = z.object({
-  bookingId: z.string().uuid(),
-  rating: z.number().int().min(1).max(5),
-  comment: z.string().trim().max(1000).optional(),
-});
+export const createReviewSchema = z
+  .object({
+    bookingId: z.string().uuid().optional(),
+    queueEntryId: z.string().uuid().optional(),
+    rating: z.number().int().min(1).max(5),
+    comment: z.string().trim().max(1000).optional(),
+  })
+  .refine((value) => Number(Boolean(value.bookingId)) + Number(Boolean(value.queueEntryId)) === 1, {
+    message: 'Exactly one completed visit must be selected.',
+    path: ['bookingId'],
+  });
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 
 // PATCH reviews/:id — both fields optional (edit just the rating, or just the comment), but at
@@ -887,7 +857,9 @@ export const updateReviewSchema = z
     rating: z.number().int().min(1).max(5).optional(),
     comment: z.string().trim().max(1000).optional(),
   })
-  .refine((v) => v.rating !== undefined || v.comment !== undefined, { message: 'No fields to update' });
+  .refine((v) => v.rating !== undefined || v.comment !== undefined, {
+    message: 'No fields to update',
+  });
 export type UpdateReviewInput = z.infer<typeof updateReviewSchema>;
 
 // PUT dashboard/salons/:salonId/reviews/:reviewId/response — owner's reply. Required non-empty:
@@ -945,7 +917,6 @@ export const grantPromotionalCreditsSchema = z.object({
   expiresAt: z.string().datetime().optional(),
 });
 export type GrantPromotionalCreditsInput = z.infer<typeof grantPromotionalCreditsSchema>;
-
 
 // First-party FastQue visitor registration. The browser-generated UUID is never stored raw in the
 // database; the backend hashes it before persistence. This endpoint records one durable unique

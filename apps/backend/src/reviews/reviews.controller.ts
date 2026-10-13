@@ -41,4 +41,12 @@ export class ReviewsController {
   ) {
     return this.reviews.getForBooking(user.id, bookingId);
   }
+
+  @Get(`${REVIEW_PATHS.queueEntry}/:queueEntryId`)
+  getForQueueEntry(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('queueEntryId') queueEntryId: string,
+  ) {
+    return this.reviews.getForQueueEntry(user.id, queueEntryId);
+  }
 }

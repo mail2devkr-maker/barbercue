@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
-import { DASHBOARD_PATHS } from "@barbercue/shared";
+import { DASHBOARD_PATHS, VISIT_HISTORY_SOURCE_LABELS } from "@barbercue/shared";
 import type { OwnerReviewDto, PaginatedResult } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { Button } from "../../../../../../components/ui/Button";
@@ -63,7 +63,7 @@ function ReviewRow({
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <Stars rating={review.rating} />
         <span className={styles.rowMeta}>
-          {review.serviceName} · {new Date(review.createdAt).toLocaleDateString()}
+          {review.serviceName} · {VISIT_HISTORY_SOURCE_LABELS[review.source]} · {new Date(review.createdAt).toLocaleDateString()}
         </span>
       </div>
       {review.comment && <p style={{ margin: "4px 0", fontSize: "var(--bc-text-sm)" }}>{review.comment}</p>}

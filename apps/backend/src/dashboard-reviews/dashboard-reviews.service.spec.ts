@@ -7,6 +7,7 @@ function makeReviewRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'r1',
     bookingId: 'b1',
+    queueEntryId: null,
     salonId: 's1',
     rating: 5,
     comment: 'Great cut',
@@ -38,7 +39,9 @@ describe('DashboardReviewsService', () => {
       },
       auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
+    salonAccess = {
+      assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER'),
+    };
     const moduleRef = await Test.createTestingModule({
       providers: [
         DashboardReviewsService,
@@ -52,7 +55,10 @@ describe('DashboardReviewsService', () => {
   describe('list', () => {
     it('checks salon access before listing', async () => {
       await service.list('u1', 's1', undefined, undefined);
-      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('u1', 's1');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
+        'u1',
+        's1',
+      );
     });
 
     it('does not query reviews when salon-scoped ownership is denied', async () => {
@@ -72,6 +78,7 @@ describe('DashboardReviewsService', () => {
       expect(result.items[0]).toEqual({
         id: 'r1',
         bookingId: 'b1',
+        queueEntryId: null,
         salonId: 's1',
         rating: 5,
         comment: 'Great cut',
@@ -81,6 +88,31 @@ describe('DashboardReviewsService', () => {
         customerPhone: '+919876543210',
         customerEmail: null,
         serviceName: 'Haircut',
+        source: 'ONLINE_BOOKING',
+      });
+    });
+
+    it('includes standalone Live Queue reviews with their source and service in owner history', async () => {
+      prisma.review.findMany.mockResolvedValueOnce([
+        makeReviewRow({
+          bookingId: null,
+          queueEntryId: 'q1',
+          booking: null,
+          queueEntry: {
+            contactPhone: '+919876543210',
+            service: { name: 'Beard trim' },
+            serviceSessions: [],
+            customer: { phone: '+919876543210', email: null },
+          },
+        }),
+      ]);
+      const result = await service.list('u1', 's1', undefined, undefined);
+      expect(result.items[0]).toMatchObject({
+        bookingId: null,
+        queueEntryId: 'q1',
+        source: 'LIVE_QUEUE',
+        serviceName: 'Beard trim',
+        customerPhone: '+919876543210',
       });
     });
 
@@ -102,22 +134,36 @@ describe('DashboardReviewsService', () => {
         makeReviewRow({ ownerResponse: 'Thank you!' }),
       );
       await service.respond('u1', 's1', 'r1', 'Thank you!');
-      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('u1', 's1');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
+        'u1',
+        's1',
+      );
     });
 
     it('an owner responding to their own review writes no AuditLog row', async () => {
       prisma.review.findFirst.mockResolvedValue(makeReviewRow());
-      prisma.review.update.mockResolvedValue(makeReviewRow({ ownerResponse: 'Thanks!' }));
+      prisma.review.update.mockResolvedValue(
+        makeReviewRow({ ownerResponse: 'Thanks!' }),
+      );
       await service.respond('owner-1', 's1', 'r1', 'Thanks!');
       expect(prisma.auditLog.create).not.toHaveBeenCalled();
     });
 
     // Part 2 — delegated shop management.
     it('a delegated PLATFORM_ADMIN responding to a review is recorded under the real admin actor', async () => {
-      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce(
+        'PLATFORM_ADMIN',
+      );
       prisma.review.findFirst.mockResolvedValue(makeReviewRow());
-      prisma.review.update.mockResolvedValue(makeReviewRow({ ownerResponse: 'On behalf of the shop, thank you!' }));
-      await service.respond('admin-1', 's1', 'r1', 'On behalf of the shop, thank you!');
+      prisma.review.update.mockResolvedValue(
+        makeReviewRow({ ownerResponse: 'On behalf of the shop, thank you!' }),
+      );
+      await service.respond(
+        'admin-1',
+        's1',
+        'r1',
+        'On behalf of the shop, thank you!',
+      );
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
         data: {
           actorUserId: 'admin-1',

@@ -5,7 +5,7 @@ export type AuthAudience = "customer" | "owner" | "staff" | "employee" | "admin"
 
 const STORIES: Record<AuthAudience, { eyebrow: string; title: string; copy: string }> = {
   customer: {
-    eyebrow: "BOOK AHEAD · WALK IN SMARTER",
+    eyebrow: "BOOK AHEAD · LIVE QUEUE MADE CLEARER",
     title: "Your barber. Your time.",
     copy: "Keep bookings, live queue visits and style inspiration together in one calm place.",
   },
