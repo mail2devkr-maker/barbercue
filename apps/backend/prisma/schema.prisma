@@ -409,6 +409,7 @@ model EmployeeProfile {
   crmLeads     EmployeeCrmLead[]
   crmVisits    EmployeeCrmVisit[]
   crmFollowUps EmployeeCrmFollowUp[]
+  voiceOnboardingLogs EmployeeOnboardingVoiceLog[]
 
   @@map("employee_profiles")
 }
@@ -436,6 +437,7 @@ model EmployeeCrmLead {
 
   visits            EmployeeCrmVisit[]
   followUps         EmployeeCrmFollowUp[]
+  voiceOnboardingLogs EmployeeOnboardingVoiceLog[]
 
   @@index([employeeProfileId, status])
   @@index([employeeProfileId, createdAt])
@@ -480,6 +482,39 @@ model EmployeeCrmFollowUp {
   @@index([employeeProfileId, status, dueAt])
   @@index([leadId, dueAt])
   @@map("employee_crm_follow_ups")
+}
+
+// Employee-collected shop details are saved as PRIVATE field CRM evidence only.
+// This table does not create/publish salon services, owner accounts, or verified prices.
+// Voice processing is browser-side; no audio is stored or sent to this backend.
+model EmployeeOnboardingVoiceLog {
+  id                String @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  leadId            String?
+  lead              EmployeeCrmLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  clientRequestId   String @db.Uuid
+  shopName          String @db.VarChar(180)
+  transcript        String @db.Text
+  language          String @db.VarChar(16)
+  consentConfirmed  Boolean
+  contactName       String? @db.VarChar(120)
+  phone             String? @db.VarChar(32)
+  city              String? @db.VarChar(120)
+  locality          String? @db.VarChar(160)
+  addressLine       String? @db.VarChar(300)
+  latitude          Float?
+  longitude         Float?
+  chairCount        Int?
+  staffCount        Int?
+  services          Json
+  notes             String? @db.VarChar(2000)
+  createdAt         DateTime @default(now())
+
+  @@unique([employeeProfileId, clientRequestId])
+  @@index([employeeProfileId, createdAt])
+  @@index([leadId, createdAt])
+  @@map("employee_onboarding_voice_logs")
 }
 
 model RefreshToken {
