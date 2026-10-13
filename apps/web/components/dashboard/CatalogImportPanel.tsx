@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { normalizeServiceIdentity } from "@barbercue/shared";
 import type { SalonServiceDto } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../lib/api";
+import { extractCatalogLocally, parseCatalogRateText } from "../../lib/catalog-local-ocr";
 
 interface Candidate {
   name: string;
@@ -57,6 +58,9 @@ export function CatalogImportPanel(props: {
   const [messages, setMessages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ocrAvailable, setOcrAvailable] = useState<boolean | null>(null);
+  const [useDeviceOcr, setUseDeviceOcr] = useState(true);
+  const [ocrProgress, setOcrProgress] = useState("");
+  const [recognizedText, setRecognizedText] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const idCounter = useRef(0);
 
@@ -77,10 +81,6 @@ export function CatalogImportPanel(props: {
       for (const file of additions) {
         if (!supported.split(",").some((extension) => file.name.toLowerCase().endsWith(extension))) {
           setError("Unsupported file: " + file.name + ". Save old .xls spreadsheets as .xlsx.");
-          continue;
-        }
-        if (external.test(file.name) && ocrAvailable === false) {
-          setError("PDF/photo extraction is not configured yet. Use CSV/XLSX or add services manually; no file was sent.");
           continue;
         }
         if (!file.size || file.size > fileLimit) {
@@ -106,30 +106,42 @@ export function CatalogImportPanel(props: {
     // consent before transmitting any private PDF/photo catalog to Google Gemini.
     // A declined confirmation leaves the selected files in place and uploads nothing.
     const needsExternalProcessing = files.some((file) => external.test(file.name));
-    if (needsExternalProcessing && ocrAvailable === false) {
-      setError("PDF/photo extraction is not configured yet. Remove PDF/photo files and retry the CSV/XLSX files.");
+    if (needsExternalProcessing && !useDeviceOcr && ocrAvailable !== true) {
+      setError("Cloud OCR is not configured. Enable private on-device extraction to read PDF/photos.");
       return;
     }
-    if (needsExternalProcessing && !window.confirm(
+    if (needsExternalProcessing && !useDeviceOcr && !window.confirm(
       "PDF and photo catalogs are sent to Google Gemini for AI extraction. " +
       "An external provider will process these files, and provider charges may apply. " +
       "Do you agree to send the selected PDF/photo catalogs?"
     )) return;
 
     setWorking(true);
+    setOcrProgress("");
     setError(null);
     const notices: string[] = [];
     const collected: ReviewRow[] = [];
     const failed: File[] = [];
     for (const file of files) {
-      const body = new FormData();
-      body.append("file", file);
-      body.append("consent", external.test(file.name) && needsExternalProcessing ? "true" : "false");
       try {
-        const result = await apiFetch<PreviewResult>(basePath + "/import-preview", {
-          method: "POST",
-          body,
-        });
+        let result: PreviewResult;
+        if (external.test(file.name) && useDeviceOcr) {
+          // PDF/photo bytes never leave this browser; only reviewed service rows are saved.
+          const local = await extractCatalogLocally(file, setOcrProgress);
+          result = { filename: file.name, format: "on-device", services: local.services, requiresReview: true };
+          if (local.text.trim()) setRecognizedText((current) =>
+            (current ? current + "\n" : "") + local.text
+          );
+          notices.push(...local.notes.map((note) => file.name + ": " + note));
+        } else {
+          const body = new FormData();
+          body.append("file", file);
+          body.append("consent", external.test(file.name) && needsExternalProcessing ? "true" : "false");
+          result = await apiFetch<PreviewResult>(basePath + "/import-preview", {
+            method: "POST",
+            body,
+          });
+        }
         const extracted = result.services.map((row) => ({
           ...row, key: ++idCounter.current, selected: true,
         }));
@@ -150,6 +162,7 @@ export function CatalogImportPanel(props: {
     setFiles(failed);
     if (fileInput.current) fileInput.current.value = "";
     setMessages(notices);
+    setOcrProgress("");
     if (failed.length) setError(failed.length + " file(s) failed. See the reasons below; failed files are kept for retry.");
     setWorking(false);
   }
@@ -209,10 +222,16 @@ export function CatalogImportPanel(props: {
       <h2 id="catalog-import-heading" style={{ marginTop: 0 }}>📁 Import services from catalogs</h2>
       {ocrAvailable === false && (
         <p role="status" style={{ ...styles.help, padding: 12, border: "1px solid #b45309", borderRadius: 9 }}>
-          PDF/photo extraction is unavailable because the server-side AI provider is not configured.
-          CSV, TSV and XLSX imports do not need AI. You can also add services manually.
+          Cloud PDF/photo extraction is not configured. Free on-device OCR is available below
+          without a Gemini API key. Image/PDF bytes stay on your device; OCR models download on first use.
+          Check extracted prices and durations before saving.
         </p>
       )}
+      <label style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12, ...styles.help }}>
+        <input type="checkbox" checked={useDeviceOcr} disabled={working || saving || ocrAvailable === false}
+          onChange={(event) => setUseDeviceOcr(event.target.checked)} />
+        Read PDF/photo locally on this device (recommended; no third-party catalog upload)
+      </label>
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => { event.preventDefault(); if (!working && !saving) addFiles(event.dataTransfer.files); }}
@@ -244,8 +263,28 @@ export function CatalogImportPanel(props: {
       <button type="button" style={styles.button} disabled={working || saving || !files.length} onClick={() => void extract()}>
         {working ? "Extracting files…" : "Extract & preview (" + files.length + ")"}
       </button>
+      {!!ocrProgress && <p role="status" aria-live="polite" style={styles.help}>{ocrProgress}</p>}
       {error && <p role="alert" style={{ color: "#b42318", fontWeight: 600 }}>{error}</p>}
       {!!messages.length && <div role="status" aria-live="polite" style={{ marginTop: 14 }}>{messages.map((message, i) => <p key={i} style={styles.help}>{message}</p>)}</div>}
+      {recognizedText.trim().length > 0 && (
+        <details style={{ marginTop: 16 }}>
+          <summary style={{ cursor: "pointer" }}>Review and edit locally recognized PDF/photo text</summary>
+          <p style={styles.help}>Uncertain OCR results should be corrected before parsing. This draft is not published.</p>
+          <textarea aria-label="Recognized catalog text" value={recognizedText}
+            onChange={(e) => setRecognizedText(e.target.value)}
+            rows={9} style={{ ...styles.input, minHeight: 160 }} />
+          <div style={{ marginTop: 8 }}>
+            <button type="button" style={styles.secondary} disabled={working || saving}
+              onClick={() => {
+                const entries = parseCatalogRateText(recognizedText, "Edited local OCR");
+                setRows((current) => [...current, ...entries.map((item) => ({
+                  ...item, key: ++idCounter.current, selected: true,
+                }))]);
+                setMessages(["Extracted " + entries.length + " candidate(s) from edited text. Review duplicates, prices and durations."]);
+              }}>Parse edited text into review rows</button>
+          </div>
+        </details>
+      )}
       {rows.length > 0 && (
         <div style={{ marginTop: 20 }}>
           <h3>Review extracted services ({rows.length})</h3>
