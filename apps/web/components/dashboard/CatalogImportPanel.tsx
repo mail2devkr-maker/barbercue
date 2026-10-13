@@ -323,6 +323,16 @@ export function CatalogImportPanel(props: {
               Previewing does not save anything to the shop.
             </p>
           </div>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <button type="button" style={styles.button}
+              disabled={saving || working || importable.length === 0 || importable.length > 200}
+              onClick={() => void save()}>
+              {saving ? "Adding services…" : "Step 3: Add " + importable.length + " reviewed services to this shop"}
+            </button>
+            {importable.length === 0 && <span style={styles.help}>
+              Action unlocks once at least one selected service has a valid name, price and duration.
+            </span>}
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
             <button type="button" style={styles.secondary} onClick={selectAll}>Select all</button>
             <button type="button" style={styles.secondary} onClick={selectNone}>Select none</button>
