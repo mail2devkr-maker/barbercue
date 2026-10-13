@@ -1483,3 +1483,26 @@ export interface HealthCheckResponse {
   service: string;
   timestamp: string;
 }
+
+
+/** A FIELD_EXECUTIVE-owned CRM visit note. Never an approved/public salon service listing. */
+export interface EmployeeVoiceOnboardingLogDto {
+  id: string;
+  leadId: string | null;
+  shopName: string;
+  transcript: string;
+  language: 'hi-IN' | 'en-IN';
+  consentConfirmed: true;
+  contactName: string | null;
+  phone: string | null;
+  city: string | null;
+  locality: string | null;
+  addressLine: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  chairCount: number | null;
+  staffCount: number | null;
+  services: Array<{ name: string; priceInr: number }>;
+  notes: string | null;
+  createdAt: string;
+}
