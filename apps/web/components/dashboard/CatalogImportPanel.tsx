@@ -379,7 +379,7 @@ export function CatalogImportPanel(props: {
           {importable.length === 0 && <p role="status" style={styles.help}>
             Add services is disabled because no selected row has an approved name, exact price,
             and duration yet. Edit the fields above (or select eligible rows) to enable it.
-          </p>
+          </p>}
           {importable.length > 200 && <p role="alert">Import up to 200 rows at a time. Deselect some rows and import in batches.</p>}
         </div>
       )}
