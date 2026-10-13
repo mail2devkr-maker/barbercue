@@ -36,7 +36,7 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Draft lifecycle status constraint is missing';
   END IF;
-  IF to_regclass('employee_voice_visit_logs_employeeProfileId_submissionKey_key') IS NULL THEN
+  IF to_regclass('"employee_voice_visit_logs_employeeProfileId_submissionKey_key"') IS NULL THEN
     RAISE EXCEPTION 'Submission idempotency unique index is missing';
   END IF;
 

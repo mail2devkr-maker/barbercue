@@ -14,6 +14,9 @@ ALTER TABLE "employee_voice_visit_logs"
   ADD COLUMN "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   ADD COLUMN "confirmedAt" TIMESTAMP(3);
 
+ALTER TABLE "employee_voice_visit_logs"
+  ALTER COLUMN "updatedAt" DROP DEFAULT;
+
 DROP INDEX "employee_voice_visit_logs_employeeProfileId_leadId_createdAt_idx";
 
 ALTER TABLE "employee_voice_visit_logs"
