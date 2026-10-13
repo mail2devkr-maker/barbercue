@@ -346,7 +346,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
 
   if (!selectedSalonId) {
     return (
-      <Screen scroll={false}>
+      <Screen scroll={false} contentStyle={styles.screenPad}>
         <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
         <EmptyState title={t.noShopSelected} message={t.selectShopHint} />
       </Screen>
@@ -354,7 +354,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
   }
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} contentStyle={styles.screenPad}>
       <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
 
       {newNotice && (
@@ -468,6 +468,8 @@ export default function OwnerBookingsScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
+  // Screen with scroll={false} adds no side padding of its own; without this the title and cards touch the screen edges.
+  screenPad: { paddingHorizontal: space[5], paddingTop: space[5] },
   skeleton: { height: 90, borderRadius: radius.lg, marginBottom: space[3] },
   noticeBanner: {
     backgroundColor: color.successSoft,
