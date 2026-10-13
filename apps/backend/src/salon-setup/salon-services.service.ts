@@ -17,11 +17,10 @@ import { SalonAccessService } from '../common/salon-access/salon-access.service'
  * Service catalog CRUD. Every method begins with SalonAccessService.assertOwnerOrAdminAccess,
  * preserving salon isolation while allowing explicit platform-admin delegated support.
  *
- * There is deliberately no delete: Service is foreign-keyed from Booking, QueueEntry, and
- * ServiceSession, so removing a row would orphan historical bookings and completed visits.
- * `isActive: false` is the soft-delete — AvailabilityService.getServiceOrThrow already filters
- * on isActive, so a deactivated service immediately stops being bookable while its history
- * stays intact.
+ * Never hard-delete services: Booking, BookingService, QueueEntry and ServiceSession
+ * hold historical foreign keys. The bulk "Remove All" action only deactivates
+ * active services for this salon (reversible, preserves bookings and history).
+ * AvailabilityService already filters on isActive.
  */
 @Injectable()
 export class SalonServicesService {
@@ -99,6 +98,63 @@ export class SalonServicesService {
     });
     const currency = await this.currencyFor(salonId);
     return services.map((s) => this.toDto(s, currency));
+  }
+
+  /**
+   * Owner-facing "Remove All Services" means remove ALL ACTIVE services from future
+   * booking choices; never erase historical FK rows. Requires exact typed intent and
+   * the owner-observed active count to avoid silently acting on a stale page.
+   */
+  async removeAll(
+    userId: string,
+    salonId: string,
+    raw: unknown,
+  ): Promise<{ removedCount: number; remainingActive: number }> {
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const input = raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>) : {};
+    const expectedActiveCount = input.expectedActiveCount;
+    if (input.confirmation !== 'REMOVE ALL' ||
+        typeof expectedActiveCount !== 'number' ||
+        !Number.isSafeInteger(expectedActiveCount) ||
+        expectedActiveCount < 1 || expectedActiveCount > 100000) {
+      throw new AppException(
+        'SERVICE_BULK_CONFIRMATION_REQUIRED',
+        'Type REMOVE ALL and confirm the current number of active services.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const scope = { salonId, isActive: true };
+      const actual = await tx.service.count({ where: scope });
+      if (actual !== expectedActiveCount) {
+        throw new AppException(
+          'SERVICE_CATALOG_CHANGED',
+          'Your shop catalog changed. Refresh the page and review the count before trying again.',
+          HttpStatus.CONFLICT,
+          { expectedActiveCount, actualActiveCount: actual },
+        );
+      }
+      const result = await tx.service.updateMany({
+        where: scope, data: { isActive: false },
+      });
+      if (result.count !== actual) {
+        throw new AppException(
+          'SERVICE_CATALOG_CHANGED',
+          'The catalog changed while you were removing services. Refresh and try again.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await tx.auditLog.create({ data: {
+        actorUserId: userId,
+        action: actor === 'PLATFORM_ADMIN'
+          ? 'ADMIN_SERVICES_BULK_DEACTIVATED' : 'OWNER_SERVICES_BULK_DEACTIVATED',
+        entityType: 'Salon',
+        entityId: salonId,
+        metadata: { salonId, removedCount: result.count, method: 'SOFT_DEACTIVATE' },
+      } });
+      return { removedCount: result.count, remainingActive: 0 };
+    });
   }
 
   async create(
