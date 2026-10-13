@@ -409,6 +409,7 @@ model EmployeeProfile {
   crmLeads     EmployeeCrmLead[]
   crmVisits    EmployeeCrmVisit[]
   crmFollowUps EmployeeCrmFollowUp[]
+  voiceVisitLogs EmployeeVoiceVisitLog[]
 
   @@map("employee_profiles")
 }
@@ -436,12 +437,29 @@ model EmployeeCrmLead {
 
   visits            EmployeeCrmVisit[]
   followUps         EmployeeCrmFollowUp[]
+  voiceVisitLogs    EmployeeVoiceVisitLog[]
 
   @@index([employeeProfileId, status])
   @@index([employeeProfileId, createdAt])
   @@index([phone])
   @@index([email])
   @@map("employee_crm_leads")
+}
+
+// Employee-owned, shop-scoped draft voice notes; never an approved/onboarded service catalog.
+model EmployeeVoiceVisitLog {
+  id                String          @id @default(uuid())
+  employeeProfileId String
+  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  leadId            String
+  lead              EmployeeCrmLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  transcript        String          @db.Text
+  structuredDraft   Json
+  language          String          @default("hi-IN") @db.VarChar(16)
+  createdAt         DateTime        @default(now())
+
+  @@index([employeeProfileId, leadId, createdAt])
+  @@map("employee_voice_visit_logs")
 }
 
 model EmployeeCrmVisit {
