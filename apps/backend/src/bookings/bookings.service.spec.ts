@@ -87,7 +87,11 @@ interface PrismaMock {
     create: jest.Mock<Promise<unknown>, [unknown]>;
     update: jest.Mock<Promise<unknown>, [unknown]>;
   };
-  queueEntry: { updateMany: jest.Mock<Promise<{ count: number }>, [unknown]> };
+  queueEntry: {
+    updateMany: jest.Mock<Promise<{ count: number }>, [unknown]>;
+    findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
+    findFirst: jest.Mock<Promise<unknown>, [unknown]>;
+  };
   auditLog: { create: jest.Mock<Promise<unknown>, [unknown]> };
   platformShopSubsidyEntry: {
     create: jest.Mock<Promise<unknown>, [unknown]>;
@@ -180,6 +184,9 @@ describe('BookingsService', () => {
       },
       queueEntry: {
         updateMany: jest.fn<Promise<{ count: number }>, [unknown]>().mockResolvedValue({ count: 0 }),
+        // No assigned-but-not-started customer holds a barber unless a test says so.
+        findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+        findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(null),
       },
       auditLog: { create: jest.fn<Promise<unknown>, [unknown]>() },
       platformShopSubsidyEntry: {

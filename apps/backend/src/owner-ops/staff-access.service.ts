@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import {
   BookingErrorCode,
   OwnerOpsErrorCode,
@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { QueueAssignmentReleaseService } from '../queue/queue-assignment-release.service';
 
 export interface StaffAccessResult {
   staffId: string;
@@ -34,6 +35,7 @@ export class StaffAccessService {
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
+    @Optional() private readonly assignmentRelease?: QueueAssignmentReleaseService,
   ) {}
 
   async revoke(
@@ -116,6 +118,8 @@ export class StaffAccessService {
         },
       });
     });
+    // A customer assigned to this barber (service not started) goes back to waiting.
+    await this.assignmentRelease?.releaseForStaff(salonId, staffId, 'STAFF_ACCESS_REVOKED', userId);
     this.realtime.emitStaffStatusChanged(salonId, staffId);
     this.realtime.emitQueueUpdated(salonId);
     return { staffId, accessRevoked: true, status: StaffMemberStatus.INACTIVE };

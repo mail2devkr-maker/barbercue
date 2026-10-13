@@ -853,6 +853,8 @@ export class BookingsService {
       // shift, salon.updated realtime fires) instead of a second, drifting implementation.
       await this.queue.recomputeEtas(updated.salonId);
       this.realtime.emitQueueUpdated(updated.salonId);
+      // A cancelled assigned customer frees a barber and chair for the next person in line.
+      this.queue.onCapacityFreed?.(updated.salonId);
     }
     await this.notifications.notify(
       customerId,
@@ -1012,6 +1014,7 @@ export class BookingsService {
     this.realtime.emitBookingCancelled(salonId, bookingId);
     if (linkedQueueEntryCancelled) {
       await this.queue.recomputeEtas(salonId);
+      this.queue.onCapacityFreed?.(salonId);
     }
     this.realtime.emitQueueUpdated(salonId);
     return { booking: updated, customerId: booking.customerId, linkedQueueEntryCancelled };

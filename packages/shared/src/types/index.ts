@@ -31,6 +31,7 @@ import type {
   VerificationStatus,
   VerificationSubjectType,
 } from '../enums';
+import type { QueueEntryPhase } from '../queue-phase';
 
 // DTO shapes only — no I/O, no ORM types leak here. These mirror DATABASE.md/API.md and are the
 // contract both apps/web and apps/mobile code against; the backend is the source of truth for
@@ -959,6 +960,15 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
   activeServiceSessionId: string | null; // target id for POST .../service-sessions/:id/complete
   joinedAt: string; // ISO 8601
   calledAt: string | null;
+  // Owner-operations corrective mission - "assigned" and "service started" are different facts.
+  // assignedAt: when a barber + chair were reserved for this customer (null = never assigned).
+  // serviceStartedAt: when the barber actually STARTED the service (null until then - an assigned
+  // customer has NOT started). `phase` is the server's one-word answer to "where is this customer";
+  // clients that predate it derive the same value with queuePhaseOf() from status + assignedStaffId.
+  // All three are optional on the wire so every released client keeps parsing responses.
+  assignedAt?: string | null;
+  serviceStartedAt?: string | null;
+  phase?: QueueEntryPhase;
   // Smart Queue (Phase 5) — a realistic range around estimatedWaitMinutes ("arrive between X-Y")
   // rather than presenting queue timing as exact. Null exactly when estimatedWaitMinutes is null.
   estimatedWaitRangeMinutes: { min: number; max: number } | null;
@@ -973,6 +983,11 @@ export type ChairOccupancyKind = 'FREE' | 'LOCAL' | 'FASTQUE';
 export interface ChairOptionDto {
   id: string;
   label: string;
+  // Owner-operations corrective mission: set while an ASSIGNED (not yet started) customer holds this
+  // chair. `occupancy` stays 'FREE' for released clients, so they would still offer it; the server
+  // refuses a second assignment, and current clients grey it out using these fields.
+  reservedForEntryId?: string | null;
+  reservedForTokenNumber?: number | null;
   // Optional for wire/backward compatibility with older cached clients; current backend always
   // populates these fields. Missing occupancy is treated as FREE by clients.
   occupancy?: ChairOccupancyKind;
@@ -1014,7 +1029,10 @@ export interface DashboardQueueDto {
   sections?: DashboardQueueSectionsDto;
   counts?: {
     waiting: number;
+    /** Called to the counter but not yet given a barber. */
     called: number;
+    /** A barber and chair are reserved, service NOT started. Optional: absent on older servers. */
+    assigned?: number;
     inService: number;
     completedToday: number;
     historyToday: number;
@@ -1025,9 +1043,14 @@ export interface DashboardQueueDto {
 export interface DashboardQueueSectionsDto {
   /** Waiting for a barber, in queue order (position 1 = next). */
   waiting: QueueEntryDetailDto[];
-  /** Called to the counter but not yet seated. */
+  /** Called to the counter but not yet given a barber (no barber/chair reserved). */
   called: QueueEntryDetailDto[];
-  /** Seated: an ACTIVE service session exists. */
+  /**
+   * Assigned: a barber and a chair are reserved for this customer and the barber has NOT started the
+   * service. Never counted as waiting and never as in service. Optional: absent on older servers.
+   */
+  assigned?: QueueEntryDetailDto[];
+  /** In service: the barber started it and an ACTIVE service session exists. */
   inService: QueueEntryDetailDto[];
   /** Completed today, newest first. */
   completedToday: QueueEntryDetailDto[];

@@ -68,6 +68,7 @@ export class StaffWorkService {
     const [
       availability,
       currentSession,
+      assignedRow,
       waitingRows,
       bookingRows,
       completedToday,
@@ -95,10 +96,35 @@ export class StaffWorkService {
           },
         },
       }),
+      // The customer assigned to THIS barber whose service has not started: they start it themselves.
+      this.prisma.queueEntry.findFirst({
+        where: { salonId, status: QueueEntryStatus.CALLED, assignedStaffId: me.id },
+        include: {
+          service: { select: { name: true } },
+          assignedChair: { select: { label: true } },
+          customer: { select: { phone: true } },
+          booking: {
+            select: {
+              serviceId: true,
+              service: { select: { name: true, durationMinutes: true, price: true } },
+              services: {
+                select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+                orderBy: { sortOrder: 'asc' },
+              },
+            },
+          },
+        },
+        orderBy: { assignedAt: 'asc' },
+      }),
       this.prisma.queueEntry.findMany({
         where: {
           salonId,
-          status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+          // WAITING, plus customers called to the counter with no barber yet. A customer who is
+          // ASSIGNED (to anyone) is not waiting for staff any more and is shown separately.
+          OR: [
+            { status: QueueEntryStatus.WAITING },
+            { status: QueueEntryStatus.CALLED, assignedStaffId: null },
+          ],
         },
         include: {
           service: { select: { name: true } },
@@ -174,6 +200,25 @@ export class StaffWorkService {
         }
       : null;
 
+    const assigned: StaffWorkItemDto | null = assignedRow
+      ? {
+          queueEntryId: assignedRow.id,
+          serviceSessionId: null,
+          tokenNumber: assignedRow.tokenNumber,
+          customerLabel: assignedRow.contactName ?? GUEST_LABEL,
+          customerPhone: assignedRow.contactPhone ?? assignedRow.customer?.phone ?? null,
+          serviceName: assignedRow.booking
+            ? resolveEffectiveBookingServices(assignedRow.booking)
+                .map((s) => s.serviceName)
+                .join(' + ')
+            : (assignedRow.service?.name ?? null),
+          // Assigned is NOT started: there is no start time.
+          startedAt: null,
+          status: assignedRow.status,
+          chairLabel: assignedRow.assignedChair?.label ?? null,
+        }
+      : null;
+
     let position = 0;
     const waiting = waitingRows.map((entry) => {
       if (entry.status === QueueEntryStatus.WAITING) position += 1;
@@ -234,6 +279,7 @@ export class StaffWorkService {
       status: me.status,
       availabilityState: availability.availabilityState,
       current,
+      assigned,
       waiting,
       appointmentsToday,
       completedToday,

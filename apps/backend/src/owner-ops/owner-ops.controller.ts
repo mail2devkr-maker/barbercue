@@ -198,6 +198,14 @@ export class OwnerOpsController {
     return this.autoAssign.takeNext(user.id, salonId);
   }
 
+  @Get(`${SALON}/queue/settings`)
+  getQueueSettings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+  ) {
+    return this.autoAssign.getAutomaticAssignment(user.id, salonId);
+  }
+
   @Patch(`${SALON}/queue/settings`)
   @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
   setQueueSettings(

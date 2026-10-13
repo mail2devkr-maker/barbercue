@@ -175,15 +175,20 @@ type Seater = (
 /**
  * Automatic and one-click barber/chair allocation.
  *
- * IMPORTANT product fact this service is built around: in FastQue, seating a customer IS the
- * start of their service (QueueService.assign sets IN_SERVICE and opens the ACTIVE session). So
- * allocation is deliberately conservative about WHEN it fires:
- *  - the automatic pass (an owner opt-in per shop, OFF by default) only ever considers customers who
- *    are physically present (`arrivedAt` set) - never a remote QR joiner who is still on the way;
+ * Product rule (owner decision, Oct 2026): ASSIGNING a barber and STARTING the service are two
+ * different steps - WAITING -> ASSIGNED -> IN_SERVICE -> COMPLETED. Everything in this service only
+ * ever ASSIGNS: it reserves a barber and a chair through the one transactional routine
+ * (QueueService.assign with startService:false / assignAsSystem), leaving the customer "Assigned"
+ * with no serviceStartedAt and no ServiceSession. The barber (or the owner) starts the service
+ * explicitly with QueueService.startService.
+ *
+ * Allocation is still deliberately conservative about WHEN it fires:
+ *  - the automatic pass (a per-shop setting, ON by default, which the owner can switch off) only ever
+ *    considers customers who are physically present (`arrivedAt` set) - never a remote QR joiner who
+ *    is still on the way;
  *  - the manual buttons ("Assign automatically", a barber's "Take next customer") are explicit human
- *    decisions, so they do not need the opt-in.
- * Nothing here marks service started on its own authority: it always goes through the one seating
- * routine, and every automatic seating leaves a QUEUE_ENTRY_AUTO_ASSIGNED audit row.
+ *    decisions, so they do not need the setting.
+ * Every automatic assignment leaves a QUEUE_ENTRY_AUTO_ASSIGNED audit row.
  */
 @Injectable()
 export class QueueAutoAssignService implements OnModuleInit {
@@ -237,6 +242,26 @@ export class QueueAutoAssignService implements OnModuleInit {
     return { autoAssignEnabled: enabled };
   }
 
+  /** The effective setting as stored on the server - the single source of truth for every client. */
+  async getAutomaticAssignment(
+    userId: string,
+    salonId: string,
+  ): Promise<{ autoAssignEnabled: boolean }> {
+    await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { queueAutoAssignEnabled: true },
+    });
+    if (!salon) {
+      throw new AppException(
+        QueueErrorCode.SALON_ACCESS_DENIED,
+        'Shop not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return { autoAssignEnabled: salon.queueAutoAssignEnabled };
+  }
+
   // ---------- Manual, authorized entry points ----------
 
   /** "Assign automatically": one pass over everyone waiting, regardless of the opt-in. */
@@ -248,7 +273,7 @@ export class QueueAutoAssignService implements OnModuleInit {
     return this.runForSalon(salonId, {
       requireEnabled: false,
       includeNotArrived: true,
-      seat: (id, i) => this.queue.assign(userId, id, i),
+      seat: (id, i) => this.queue.assign(userId, id, { ...i, startService: false }),
     });
   }
 
@@ -273,7 +298,7 @@ export class QueueAutoAssignService implements OnModuleInit {
       requireEnabled: false,
       includeNotArrived: true,
       onlyEntryId: entryId,
-      seat: (id, i) => this.queue.assign(userId, id, i),
+      seat: (id, i) => this.queue.assign(userId, id, { ...i, startService: false }),
     });
     if (result.assigned.length === 1) return this.detail(entryId);
     const reason =
@@ -291,7 +316,7 @@ export class QueueAutoAssignService implements OnModuleInit {
   /**
    * A barber's "Take next customer": the first waiting customer (FIFO) this barber may serve -
    * qualified for their services, not reserved for another barber, and physically present - is
-   * seated with THIS barber on a free chair. The barber, not the system, decides to start.
+   * ASSIGNED to THIS barber on a free chair. The barber, not the system, then decides to start.
    */
   async takeNext(
     userId: string,
@@ -314,11 +339,30 @@ export class QueueAutoAssignService implements OnModuleInit {
         HttpStatus.FORBIDDEN,
       );
     }
+    const [serving, holding] = await Promise.all([
+      this.prisma.serviceSession.findFirst({
+        where: { staffId: me.id, status: ServiceSessionStatus.ACTIVE },
+        select: { id: true },
+      }),
+      this.prisma.queueEntry.findFirst({
+        where: { salonId, status: QueueEntryStatus.CALLED, assignedStaffId: me.id },
+        select: { id: true },
+      }),
+    ]);
+    if (serving || holding) {
+      throw new AppException(
+        QueueErrorCode.STAFF_ALREADY_OCCUPIED,
+        serving
+          ? 'You are serving a customer. Complete that service first.'
+          : 'You already have a customer assigned. Start their service first.',
+        HttpStatus.CONFLICT,
+      );
+    }
     const result = await this.runForSalon(salonId, {
       requireEnabled: false,
       onlyStaffId: me.id,
       stopAfterFirst: true,
-      seat: (id, i) => this.queue.assign(userId, id, i),
+      seat: (id, i) => this.queue.assign(userId, id, { ...i, startService: false }),
     });
     const first = result.assigned[0];
     if (first) return this.detail(first.queueEntryId);
@@ -359,6 +403,9 @@ export class QueueAutoAssignService implements OnModuleInit {
       where: {
         salonId,
         status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+        // A customer who already has a barber reserved is not planned again (reassigning is a
+        // deliberate, explicit action).
+        assignedStaffId: null,
         ...(options.includeNotArrived ? {} : { arrivedAt: { not: null } }),
         ...(options.onlyEntryId ? { id: options.onlyEntryId } : {}),
       },
@@ -398,6 +445,7 @@ export class QueueAutoAssignService implements OnModuleInit {
       activeSessions,
       manualOccupancies,
       todaySessions,
+      assignedHolds,
     ] = await Promise.all([
       this.prisma.salonStaff.findMany({
         where: {
@@ -433,12 +481,25 @@ export class QueueAutoAssignService implements OnModuleInit {
         },
         select: { staffId: true, endedAt: true },
       }),
+      // Barbers and chairs already reserved for an assigned (not yet started) customer.
+      this.prisma.queueEntry.findMany({
+        where: {
+          salonId,
+          status: QueueEntryStatus.CALLED,
+          assignedStaffId: { not: null },
+        },
+        select: { assignedStaffId: true, assignedChairId: true },
+      }),
     ]);
 
-    const busyStaff = new Set(activeSessions.map((s) => s.staffId));
+    const busyStaff = new Set([
+      ...activeSessions.map((s) => s.staffId),
+      ...assignedHolds.map((h) => h.assignedStaffId as string),
+    ]);
     const busyChairs = new Set([
       ...activeSessions.map((s) => s.chairId),
       ...manualOccupancies.map((m) => m.chairId),
+      ...assignedHolds.map((h) => h.assignedChairId).filter((id): id is string => id !== null),
     ]);
     const doneByStaff = new Map<string, { count: number; last: Date | null }>();
     for (const row of todaySessions) {
