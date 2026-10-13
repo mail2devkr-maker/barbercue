@@ -1,4 +1,4 @@
-const { parseOnboardingServices, suggestOnboardingCounts } = require('../employee-voice-parser');
+const { parseOnboardingServices, suggestOnboardingCounts, suggestShopDetails } = require('../employee-voice-parser');
 
 describe('employee voice onboarding: conservative transcription hints', () => {
   test('extracts multiple Hindi-English numeric service prices', () => {
@@ -22,6 +22,21 @@ describe('employee voice onboarding: conservative transcription hints', () => {
     expect(parseOnboardingServices('Phone 9876543210. Address Patna. Fee 500.')).toEqual([]);
     expect(parseOnboardingServices('Haircut available, ask owner for price.')).toEqual([]);
     expect(parseOnboardingServices('Haircut 9999999')).toEqual([]);
+  });
+
+  test('parses only explicitly labelled shop facts from dictation', () => {
+    expect(suggestShopDetails(
+      'Shop name Smart Salon, owner name Ravi Kumar, mobile number 9876543210, city Hajipur, area Cinema Road, address Near Clock Tower'
+    )).toEqual({
+      shopName: 'Smart Salon',
+      contactName: 'Ravi Kumar',
+      phone: '9876543210',
+      city: 'Hajipur',
+      locality: 'Cinema Road',
+      addressLine: 'Near Clock Tower',
+    });
+    expect(suggestShopDetails('Call 9876543210 and haircut 150')).toEqual({});
+    expect(suggestShopDetails('phone number 1234')).toEqual({});
   });
 
   test('suggests explicit chair/staff counts only when numeric', () => {
