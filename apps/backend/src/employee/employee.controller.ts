@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   EMPLOYEE_PATHS,
   Role,
@@ -54,7 +62,8 @@ export class EmployeeController {
   @Post(EMPLOYEE_PATHS.leads)
   createLead(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createCrmLeadSchema)) body: CreateCrmLeadInput,
+    @Body(new ZodValidationPipe(createCrmLeadSchema))
+    body: CreateCrmLeadInput,
   ) {
     return this.employees.createLead(user.id, body);
   }
@@ -63,7 +72,8 @@ export class EmployeeController {
   updateLead(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(updateCrmLeadSchema)) body: UpdateCrmLeadInput,
+    @Body(new ZodValidationPipe(updateCrmLeadSchema))
+    body: UpdateCrmLeadInput,
   ) {
     return this.employees.updateLead(user.id, id, body);
   }
@@ -72,7 +82,8 @@ export class EmployeeController {
   onboardLead(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
-    @Body(new ZodValidationPipe(onboardCrmLeadSchema)) body: OnboardCrmLeadInput,
+    @Body(new ZodValidationPipe(onboardCrmLeadSchema))
+    body: OnboardCrmLeadInput,
   ) {
     return this.employees.onboardLead(user.id, id, body);
   }
@@ -85,7 +96,8 @@ export class EmployeeController {
   @Post(EMPLOYEE_PATHS.visits)
   createVisit(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createCrmVisitSchema)) body: CreateCrmVisitInput,
+    @Body(new ZodValidationPipe(createCrmVisitSchema))
+    body: CreateCrmVisitInput,
   ) {
     return this.employees.createVisit(user.id, body);
   }
@@ -101,7 +113,8 @@ export class EmployeeController {
   @Throttle({ default: { limit: 15, ttl: 60000 } })
   saveVoiceLog(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(createEmployeeVoiceLogSchema)) body: CreateEmployeeVoiceLogInput,
+    @Body(new ZodValidationPipe(createEmployeeVoiceLogSchema))
+    body: CreateEmployeeVoiceLogInput,
   ) {
     return this.voiceLogs.create(user.id, body);
   }
