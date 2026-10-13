@@ -1,0 +1,140 @@
+name: Employee Voice Onboarding Certification
+
+on:
+  push:
+    branches:
+      - feat/employee-voice-onboarding-20261013
+  pull_request:
+    paths:
+      - 'apps/web/app/employee/**'
+      - 'apps/web/lib/employee-voice-parser.ts'
+      - 'apps/web/lib/__tests__/employee-voice-parser.test.jsx'
+      - 'apps/backend/src/employee/**'
+      - 'apps/backend/prisma/**'
+      - 'packages/shared/**'
+      - '.github/workflows/employee-voice-onboarding-certification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: employee-voice-onboarding-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: fastque_voice_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d fastque_voice_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/fastque_voice_ci?schema=public
+      PSQL_URL: postgresql://ci:ci@127.0.0.1:5432/fastque_voice_ci
+      NEXT_TELEMETRY_DISABLED: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Locked install
+        run: npm ci
+      - name: Shared types/build
+        run: npm run build:shared
+      - name: Prisma generate + validate
+        run: |
+          npm run prisma:validate --workspace=@barbercue/backend
+          npm run prisma:generate --workspace=@barbercue/backend
+      - name: Employee voice security and parser tests
+        run: |
+          npm run test --workspace=@barbercue/backend -- --runInBand employee-voice-logs.service.spec.ts
+          npm run test --workspace=@barbercue/web -- --runInBand employee-voice-parser.test.jsx
+      - name: Typechecks
+        run: |
+          npm run typecheck --workspace=@barbercue/backend
+          npm run typecheck --workspace=@barbercue/web
+      - name: Scoped lint
+        run: |
+          (cd apps/backend && npx eslint src/employee/employee.controller.ts src/employee/employee-voice-logs.service.ts src/employee/employee.module.ts --no-fix)
+          (cd apps/web && npx eslint app/employee/VoiceOnboardingPanel.tsx app/employee/page.tsx lib/employee-voice-parser.ts --no-fix)
+      - name: Apply baseline initialization and synthetic migration prerequisites
+        working-directory: apps/backend
+        run: |
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/20260801060723_init/migration.sql
+          npx prisma migrate resolve --applied 20260801060723_init
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "users" ("id", "email", "updatedAt")
+          VALUES ('ci-primary-admin', 'mail2dev.kr@gmail.com', CURRENT_TIMESTAMP);
+          SQL
+      - name: Apply complete committed migrations to disposable Postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$(mktemp -d "$RUNNER_TEMP/fastque-employee-voice.XXXXXX")"
+          trap 'rm -rf "$stage"' EXIT
+          mkdir -p "$stage/prisma/migrations"
+          cp apps/backend/prisma/schema.prisma "$stage/prisma/schema.prisma"
+          printf 'provider = "postgresql"\n' > "$stage/prisma/migration_lock.toml"
+          seed_marker='20260826151700_add_global_location_master_data'
+          found=false
+          while IFS= read -r dir; do
+            name="$(basename "$dir")"
+            cp -a "$dir" "$stage/prisma/migrations/"
+            if [[ "$name" == "$seed_marker" ]]; then found=true; break; fi
+          done < <(find apps/backend/prisma/migrations -mindepth 1 -maxdepth 1 -type d | sort)
+          test "$found" = true
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend -- --schema "$stage/prisma/schema.prisma"
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO "Country" ("id", "isoCode2", "isoCode3", "name", "slug")
+          VALUES ('ci-country-india', 'IN', 'IND', 'India', 'india-ci');
+          INSERT INTO "Region" ("id", "countryId", "code", "name", "slug")
+          VALUES
+            ('ci-region-uttar-pradesh', 'ci-country-india', 'IN-UP', 'Uttar Pradesh', 'uttar-pradesh-ci'),
+            ('ci-region-odisha', 'ci-country-india', 'IN-OR', 'Odisha', 'odisha-ci');
+          SQL
+          npm run prisma:migrate:deploy --workspace=@barbercue/backend
+      - name: Verify migrated log table, keys and SQL checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          name='20261013143000_employee_voice_onboarding_logs'
+          file="apps/backend/prisma/migrations/$name/migration.sql"
+          expected="$(sha256sum "$file" | cut -d' ' -f1)"
+          applied="$(psql "$PSQL_URL" -Atqc "SELECT checksum FROM _prisma_migrations WHERE migration_name='$name' AND finished_at IS NOT NULL")"
+          test "$expected" = "$applied"
+          total="$(find apps/backend/prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+          count="$(psql "$PSQL_URL" -Atqc "SELECT count(*) FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL")"
+          test "$total" = "$count"
+          psql "$PSQL_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF (SELECT count(*) FROM pg_constraint WHERE conrelid='employee_onboarding_voice_logs'::regclass AND contype='f') <> 2 THEN
+              RAISE EXCEPTION 'Voice-log foreign keys missing';
+            END IF;
+            IF NOT EXISTS(SELECT 1 FROM pg_indexes WHERE indexname='voice_log_employee_request_uq') THEN
+              RAISE EXCEPTION 'Idempotency index missing';
+            END IF;
+            IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='voice_log_explicit_consent_check') THEN
+              RAISE EXCEPTION 'Consent database check missing';
+            END IF;
+          END $$;
+          SQL
+      - name: Production builds without deployment
+        run: |
+          npm run build --workspace=@barbercue/backend
+          npm run build --workspace=@barbercue/web
+      - name: Whitespace check
+        run: git diff --check
