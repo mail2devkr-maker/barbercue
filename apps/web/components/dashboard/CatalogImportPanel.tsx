@@ -55,6 +55,7 @@ export function CatalogImportPanel(props: {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [working, setWorking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectionFeedback, setSelectionFeedback] = useState<string | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [ocrAvailable, setOcrAvailable] = useState<boolean | null>(null);
@@ -96,6 +97,7 @@ export function CatalogImportPanel(props: {
   }
 
   function updateRow(key: number, changes: Partial<ReviewRow>) {
+    setSelectionFeedback(null);
     setRows((current) => current.map((row) => row.key === key ? { ...row, ...changes } : row));
   }
 
@@ -189,12 +191,40 @@ export function CatalogImportPanel(props: {
     row.price === null || !Number.isFinite(row.price) ||
     row.price < 0 || row.price > 1_000_000
   ).length;
-  const selectAll = () => setRows((current) => current.map((row) => ({ ...row, selected: true })));
-  const selectNone = () => setRows((current) => current.map((row) => ({ ...row, selected: false })));
+  const selectAll = () => {
+    setSelectionFeedback(null);
+    setRows((current) => current.map((row) => ({ ...row, selected: true })));
+  };
+  const selectNone = () => {
+    setSelectionFeedback(null);
+    setRows((current) => current.map((row) => ({ ...row, selected: false })));
+  };
 
-  async function save() {
-    if (!importable.length || saving || working) return;
-    if (!window.confirm("Import " + importable.length + " reviewed services into this shop? Existing services will not be overwritten.")) return;
+  async function save(mode: "ready" | "selected") {
+    if (saving || working) return;
+    if (mode === "selected") {
+      if (selectedRows.length === 0) {
+        setSelectionFeedback("Select at least one service before adding it.");
+        return;
+      }
+      if (needsAttention.length > 0) {
+        setSelectionFeedback(
+          "Cannot add all " + selectedRows.length + " selected services: " +
+          needsAttention.length + " require correction, are duplicates or already exist. " +
+          missingDuration + " have missing/invalid duration; " +
+          missingPrice + " have missing/invalid exact price. " +
+          "Correct or deselect the flagged rows, then try again. No services were saved."
+        );
+        return;
+      }
+    }
+    if (!importable.length || importable.length > 200) return;
+    const action = mode === "selected" ? "Add ALL " : "Import ";
+    if (!window.confirm(
+      action + importable.length + " reviewed services into this shop? " +
+      "Existing services will not be overwritten."
+    )) return;
+    setSelectionFeedback(null);
     setSaving(true);
     setError(null);
     try {
@@ -326,13 +356,21 @@ export function CatalogImportPanel(props: {
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <button type="button" style={styles.button}
               disabled={saving || working || importable.length === 0 || importable.length > 200}
-              onClick={() => void save()}>
-              {saving ? "Adding services…" : "Step 3: Add " + importable.length + " reviewed services to this shop"}
+              onClick={() => void save("ready")}>
+              {saving ? "Saving…" : "Import " + importable.length + " reviewed services"}
             </button>
-            {importable.length === 0 && <span style={styles.help}>
-              Action unlocks once at least one selected service has a valid name, price and duration.
-            </span>}
+            <button type="button" style={styles.secondary}
+              disabled={saving || working || selectedRows.length === 0 || selectedRows.length > 200}
+              onClick={() => void save("selected")}>
+              {saving ? "Saving…" : "Add selected services (" + selectedRows.length + ")"}
+            </button>
+            <span style={styles.help}>
+              Import saves only ready services; Add selected requires every checked service to have valid details.
+            </span>
           </div>
+          {selectionFeedback && <p role="alert" style={{ color: "#b42318", fontWeight: 600 }}>
+            {selectionFeedback}
+          </p>}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
             <button type="button" style={styles.secondary} onClick={selectAll}>Select all</button>
             <button type="button" style={styles.secondary} onClick={selectNone}>Select none</button>
@@ -373,9 +411,19 @@ export function CatalogImportPanel(props: {
             </table>
           </div>
           {needsAttention.length > 0 && <p style={styles.help}>{needsAttention.length} selected entries need correction, are duplicates, or already exist. They will not be imported.</p>}
-          <button type="button" style={styles.button} disabled={saving || working || importable.length === 0 || importable.length > 200} onClick={() => void save()}>
-            {saving ? "Adding services…" : "Step 3: Add " + importable.length + " reviewed services to this shop"}
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+            <button type="button" style={styles.button}
+              disabled={saving || working || importable.length === 0 || importable.length > 200}
+              onClick={() => void save("ready")}>
+              {saving ? "Saving…" : "Import " + importable.length + " reviewed services"}
+            </button>
+            <button type="button" style={styles.secondary}
+              disabled={saving || working || selectedRows.length === 0 || selectedRows.length > 200}
+              onClick={() => void save("selected")}>
+              {saving ? "Saving…" : "Add selected services (" + selectedRows.length + ")"}
+            </button>
+          </div>
+          {selectionFeedback && <p role="alert" style={{ color: "#b42318", fontWeight: 600 }}>{selectionFeedback}</p>}
           {importable.length === 0 && <p role="status" style={styles.help}>
             Add services is disabled because no selected row has an approved name, exact price,
             and duration yet. Edit the fields above (or select eligible rows) to enable it.
