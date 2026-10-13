@@ -56,6 +56,10 @@ jobs:
         run: npx ts-node --transpile-only --project apps/backend/tsconfig.json apps/backend/scripts/certify-catalog-advisory-lock.ts
       - name: Catalog importer web readiness tests
         run: npm run test --workspace=@barbercue/web -- --runInBand 'CatalogImportPanel.readiness|CatalogLocalOcr.parse'
+      - name: Safe Remove All backend authorization and transaction tests
+        run: npm run test --workspace=@barbercue/backend -- --runInBand salon-services.service.spec
+      - name: Safe Remove All web confirmation tests
+        run: npm run test --workspace=@barbercue/web -- --runInBand RemoveAllServicesControl
       - name: Synthetic real OCR and PDF reader smoke (no catalog uploads)
         run: node apps/web/scripts/certify-local-ocr.mjs
       - name: Backend build
