@@ -63,25 +63,25 @@ export async function extractCatalogLocally(
   const notes: string[] = [];
   const pages: string[] = [];
   type OcrWorker = Awaited<ReturnType<typeof import('tesseract.js')['createWorker']>>;
-  let worker: OcrWorker | null = null;
+  const workerState: { current: OcrWorker | null } = { current: null };
   const recognise = async (image: File | HTMLCanvasElement): Promise<string> => {
-    if (!worker) {
+    if (!workerState.current) {
       onProgress('Downloading English/Hindi OCR language data (first use may take time)…');
       const { createWorker } = await import('tesseract.js');
-      worker = await createWorker(['eng', 'hin'], 1, {
+      workerState.current = await createWorker(['eng', 'hin'], 1, {
         logger: (status) => {
           if (status.status === 'recognizing text') onProgress('Reading text: ' + Math.round(status.progress * 100) + '%');
         },
       });
     }
-    const result = await worker.recognize(image);
+    const result = await workerState.current.recognize(image);
     return result.data.text ?? '';
   };
 
   try {
     if (pdf) {
       onProgress('Opening PDF locally…');
-      const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
+      const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = new URL(
         'pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url,
       ).toString();
@@ -129,6 +129,6 @@ export async function extractCatalogLocally(
     if (services.some((s) => s.durationMinutes === null)) notes.push('Missing durations remain blank until you explicitly review them.');
     return { text, services, notes };
   } finally {
-    if (worker) await worker.terminate();
+    if (workerState.current) await workerState.current.terminate();
   }
 }
