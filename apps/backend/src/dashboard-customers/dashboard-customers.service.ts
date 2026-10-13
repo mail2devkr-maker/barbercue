@@ -96,7 +96,8 @@ export class DashboardCustomersService {
     // the next offset encoded as a string, so clients page through it exactly the same way.
     const page = await this.prisma.booking.groupBy({
       by: ['customerId'],
-      where: { salonId },
+      // Customer management lists FastQue accounts; an IN_SHOP guest (customerId NULL) is not one.
+      where: { salonId, customerId: { not: null } },
       _max: { slotStart: true },
       orderBy: { _max: { slotStart: 'desc' } },
       skip: offset,
@@ -104,13 +105,15 @@ export class DashboardCustomersService {
     });
     const hasMore = page.length > limit;
     const rows = hasMore ? page.slice(0, limit) : page;
-    const customerIds = rows.map((r) => r.customerId);
+    const customerIds = rows
+      .map((r) => r.customerId)
+      .filter((id): id is string => id !== null);
     if (customerIds.length === 0) return { items: [], nextCursor: null };
 
     const summaries = await this.buildSummaries(salonId, customerIds);
     const byId = new Map(summaries.map((s) => [s.customerId, s]));
     const items = rows
-      .map((r) => byId.get(r.customerId))
+      .map((r) => (r.customerId ? byId.get(r.customerId) : undefined))
       .filter((s): s is OwnerCustomerSummaryDto => s !== undefined);
 
     return {
@@ -259,11 +262,11 @@ export class DashboardCustomersService {
       });
     }
     for (const row of totalGrouped) {
-      const agg = aggregates.get(row.customerId);
+      const agg = row.customerId ? aggregates.get(row.customerId) : undefined;
       if (agg) agg.total = row._count._all;
     }
     for (const row of completedGrouped) {
-      const agg = aggregates.get(row.customerId);
+      const agg = row.customerId ? aggregates.get(row.customerId) : undefined;
       if (agg) {
         agg.completed = row._count._all;
         agg.firstVisitAt = row._min.slotStart;
@@ -271,16 +274,18 @@ export class DashboardCustomersService {
       }
     }
     for (const row of cancelledGrouped) {
-      const agg = aggregates.get(row.customerId);
+      const agg = row.customerId ? aggregates.get(row.customerId) : undefined;
       if (agg) agg.cancelled = row._count._all;
     }
     for (const row of noShowGrouped) {
-      const agg = aggregates.get(row.customerId);
+      const agg = row.customerId ? aggregates.get(row.customerId) : undefined;
       if (agg) agg.noShow = row._count._all;
     }
 
     const serviceCounts = new Map<string, Map<string, number>>();
     for (const row of serviceGrouped) {
+      // IN_SHOP guest appointments have no account and are not part of customer management.
+      if (!row.customerId) continue;
       const byService =
         serviceCounts.get(row.customerId) ?? new Map<string, number>();
       for (const svc of resolveEffectiveBookingServices(row)) {

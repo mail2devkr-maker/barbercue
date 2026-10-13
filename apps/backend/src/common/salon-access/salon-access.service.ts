@@ -5,6 +5,10 @@ import { AppException } from '../exceptions/app.exception';
 
 export type SalonAccessActor = 'OWNER' | 'PLATFORM_ADMIN';
 
+/** How a caller relates to ONE salon — used for attribution (who cancelled/created/etc.), never
+ * for authorization: every operation still passes through one of the assert* methods below. */
+export type SalonActorKind = 'OWNER' | 'STAFF' | 'PLATFORM_ADMIN';
+
 /**
  * "May this authenticated user operate the dashboard for salonId X" — checked against `UserRole`,
  * NOT `SalonStaff`. An owner has authority over their salon but no roster row (only barbers/
@@ -76,6 +80,26 @@ export class SalonAccessService {
     });
     if (membership) return 'STAFF_OR_OWNER';
     return this.assertGlobalAdminOperationalAccess(userId, salonId);
+  }
+
+  /**
+   * Owner-operations mission — which capacity the caller acts in at THIS salon (owner beats staff
+   * beats global platform admin), or null when none. A pure lookup used to record trusted
+   * attribution (e.g. Booking.cancelledByActor); it grants nothing by itself.
+   */
+  async getActorKind(userId: string, salonId: string): Promise<SalonActorKind | null> {
+    const owner = await this.prisma.userRole.findFirst({
+      where: { userId, salonId, role: Role.SALON_OWNER },
+    });
+    if (owner) return 'OWNER';
+    const staff = await this.prisma.userRole.findFirst({
+      where: { userId, salonId, role: Role.SALON_STAFF },
+    });
+    if (staff) return 'STAFF';
+    const admin = await this.prisma.userRole.findFirst({
+      where: { userId, role: Role.PLATFORM_ADMIN, salonId: null },
+    });
+    return admin ? 'PLATFORM_ADMIN' : null;
   }
 
   /** Explicit platform-admin gate for lifecycle operations. */

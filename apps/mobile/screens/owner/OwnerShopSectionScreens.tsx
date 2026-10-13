@@ -27,6 +27,7 @@ import {
   styles as sectionStyles,
 } from '../../components/owner/ShopSetupSections';
 import { SalonSwitcher } from '../../components/owner/SalonSwitcher';
+import { StaffMemberRow } from '../../components/owner/StaffMemberRow';
 
 type SectionKind = 'services' | 'chairs' | 'staff' | 'hours' | 'photos';
 
@@ -135,14 +136,7 @@ function OwnerShopSectionScreen({ kind }: { kind: SectionKind }) {
               <Text style={sectionStyles.emptyText}>{t.noBarbersYet}</Text>
             ) : (
               (data as SalonStaffDto[]).map((member) => (
-                <View key={member.id} style={sectionStyles.row}>
-                  <View style={sectionStyles.rowBody}>
-                    <Text style={sectionStyles.rowTitle}>{member.displayName}</Text>
-                    <Text style={sectionStyles.rowMeta}>
-                      {member.status} {member.hasPassword ? '' : t.invitePendingSuffix}
-                    </Text>
-                  </View>
-                </View>
+                <StaffMemberRow key={member.id} salonId={selectedSalonId} member={member} invitePendingSuffix={t.invitePendingSuffix} onChanged={reload} />
               ))
             )}
           </Card>

@@ -1,0 +1,18 @@
+{
+  "_why": "The mobile app on master has one failing test (shop-registration-intent: the guest-to-owner registration replay), reproduced on master f2f2b2c6 locally and on the GitHub runner (Linux, Node 22). The Android stack (#170/#181, and the PR #194 branch) fixes it, so there it passes. Two further master tests (walk-in-join-contact, salon-profile-multi-service) exceeded Jest's 5 s timeout only on a busy local machine and did not fail on the GitHub runner, so they are environmental and not recorded.",
+  "generatedFrom": "PR #193 branch (master f2f2b2c6 mobile app) on GitHub Actions run 38366577986; the #181 stack (64020119) has 44 suites / 513 tests with 0 failures",
+  "totals": {
+    "passed": 513,
+    "failed": 0,
+    "suites": 44,
+    "failedSuites": 0
+  },
+  "failures": [
+    {
+      "file": "apps/mobile/lib/__tests__/shop-registration-intent.test.ts",
+      "name": "shop-registration-intent starts at customer login and replays the authenticated user into Register Shop",
+      "reason": "Error: expect(received).toBe(expected) // Object.is equality",
+      "appliesTo": "master f2f2b2c6 (the PR #193 branch). The #170/#181 Android stack contains the fix, so it passes on the PR #194 branch."
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "_comment": "sha256 over the LF-normalised committed bytes of each owner-operations migration. Changing a migration that may already be applied is a deliberate act: update this file in the same reviewed commit and explain why in the PR.",
+  "migrations": {
+    "20261013000000_owner_ops_enums": "732d71413a5c1b753c3565813b20804cd1a2d4bb1aa7b40b8f19fe6c73e93c20",
+    "20261013000100_owner_ops_foundation": "3a47b2d40f2b90b7fb59944ff7ea5954569e679f561d70c2fdbbbc0563e0b01d",
+    "20261014000000_owner_ops_assignment_state_default_on": "fe056835b56f8a20396534f93f2ac9b61243b051187a61659f0b3eb12165c417"
+  }
+}

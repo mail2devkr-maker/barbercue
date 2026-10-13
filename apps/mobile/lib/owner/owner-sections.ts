@@ -4,7 +4,7 @@ import type { UiStrings } from '@barbercue/shared';
 type TextKey = { [K in keyof UiStrings]: UiStrings[K] extends string ? K : never }[keyof UiStrings];
 
 /**
- * The owner's shop-management sections — the same 13 the website's OwnerShopNav shows, in the same
+ * The owner's shop-management sections — the same ones the website's owner navigation offers, in the same
  * order, so the two products can be compared line by line. Each maps to the native place that
  * handles it: either one of the existing owner tabs, or a screen inside the Shop tab's stack.
  */
@@ -12,9 +12,12 @@ export type OwnerSectionId =
   | 'queue'
   | 'settings'
   | 'bookings'
+  | 'newAppointment'
   | 'schedule'
   | 'customers'
   | 'analytics'
+  | 'cancellations'
+  | 'invoices'
   | 'reviews'
   | 'verification'
   | 'services'
@@ -32,6 +35,9 @@ export type OwnerSectionTarget =
         | 'OwnerSchedule'
         | 'OwnerCustomers'
         | 'OwnerAnalytics'
+        | 'OwnerCancellations'
+        | 'OwnerInvoices'
+        | 'OwnerInShopAppointment'
         | 'OwnerReviews'
         | 'OwnerVerification'
         | 'OwnerServices'
@@ -52,9 +58,12 @@ export const OWNER_SECTIONS: readonly OwnerSection[] = [
   { id: 'queue', labelKey: 'ownerSectionQueue', hintKey: 'ownerSectionQueueHint', target: { kind: 'tab', tab: 'OwnerQueueTab' } },
   { id: 'settings', labelKey: 'ownerSectionSettings', hintKey: 'ownerSectionSettingsHint', target: { kind: 'screen', screen: 'OwnerSettings' } },
   { id: 'bookings', labelKey: 'ownerSectionBookings', hintKey: 'ownerSectionBookingsHint', target: { kind: 'tab', tab: 'OwnerBookingsTab' } },
+  { id: 'newAppointment', labelKey: 'ownerSectionNewAppointment', hintKey: 'ownerSectionNewAppointmentHint', target: { kind: 'screen', screen: 'OwnerInShopAppointment' } },
   { id: 'schedule', labelKey: 'ownerSectionSchedule', hintKey: 'ownerSectionScheduleHint', target: { kind: 'screen', screen: 'OwnerSchedule' } },
   { id: 'customers', labelKey: 'ownerSectionCustomers', hintKey: 'ownerSectionCustomersHint', target: { kind: 'screen', screen: 'OwnerCustomers' } },
   { id: 'analytics', labelKey: 'ownerSectionAnalytics', hintKey: 'ownerSectionAnalyticsHint', target: { kind: 'screen', screen: 'OwnerAnalytics' } },
+  { id: 'cancellations', labelKey: 'ownerSectionCancellations', hintKey: 'ownerSectionCancellationsHint', target: { kind: 'screen', screen: 'OwnerCancellations' } },
+  { id: 'invoices', labelKey: 'ownerSectionInvoices', hintKey: 'ownerSectionInvoicesHint', target: { kind: 'screen', screen: 'OwnerInvoices' } },
   { id: 'reviews', labelKey: 'ownerSectionReviews', hintKey: 'ownerSectionReviewsHint', target: { kind: 'screen', screen: 'OwnerReviews' } },
   { id: 'verification', labelKey: 'ownerSectionVerification', hintKey: 'ownerSectionVerificationHint', target: { kind: 'screen', screen: 'OwnerVerification' } },
   { id: 'services', labelKey: 'ownerSectionServices', hintKey: 'ownerSectionServicesHint', target: { kind: 'screen', screen: 'OwnerServices' } },
@@ -69,9 +78,12 @@ export const WEBSITE_SECTION_IDS: readonly OwnerSectionId[] = [
   'queue',
   'settings',
   'bookings',
+  'newAppointment',
   'schedule',
   'customers',
   'analytics',
+  'cancellations',
+  'invoices',
   'reviews',
   'verification',
   'services',

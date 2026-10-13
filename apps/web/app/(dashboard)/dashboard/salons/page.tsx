@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DASHBOARD_PATHS, DISCOVERY_PATHS, SalonStatus } from "@barbercue/shared";
 import type { OwnerMultiShopOverviewDto, SalonWorkplaceDto } from "@barbercue/shared";
 import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
+import { readLastShop, rememberLastShop } from "../../../../lib/last-shop";
+import { chooseShopHome, shopHomePath } from "../../../../lib/shop-home";
 import { Button, LinkButton } from "../../../../components/ui/Button";
 import styles from "../../../../components/dashboard/dashboard.module.css";
 
@@ -17,7 +20,15 @@ const STATUS_LABEL: Record<SalonStatus, string> = {
 };
 
 /**
- * Landing page after an owner or staff login.
+ * Where an owner or barber lands after signing in, and the shop picker.
+ *
+ * It is a RESOLVER first: a single-shop owner (or a multi-shop owner who has a last-used shop the
+ * server still lists for them) is sent straight to that shop's dashboard home. The picker below is
+ * only shown when there is genuinely a choice to make (several shops and no valid last shop), when
+ * the user asks for it ("All my shops" -> ?select=1), or when there is no shop yet (the registration
+ * / invitation path). While the shop list loads a loading state is shown, never the picker.
+ *
+ * Originally:
  *
  * Reads salons/workplaces rather than the owner-only salons/mine: membership there is resolved
  * from UserRole, the same rule SalonAccessService enforces, so a barber sees the salon they work
@@ -26,9 +37,26 @@ const STATUS_LABEL: Record<SalonStatus, string> = {
  */
 export default function SalonsDashboardHomePage() {
   const { user, logout } = useAuth();
+  const router = useRouter();
   const [workplaces, setWorkplaces] = useState<SalonWorkplaceDto[] | null>(null);
   const [overview, setOverview] = useState<OwnerMultiShopOverviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // null until the query string has been read (it is not available while prerendering).
+  const [pickerRequested, setPickerRequested] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the query string only exists in the browser
+    setPickerRequested(new URLSearchParams(window.location.search).get("select") === "1");
+  }, []);
+
+  // The shop home this user should be taken to - decided only from the server's own list of shops.
+  const homeShopId = useMemo(
+    () => (workplaces && user && pickerRequested === false ? chooseShopHome(workplaces, readLastShop(user.id)) : null),
+    [workplaces, user, pickerRequested],
+  );
+  useEffect(() => {
+    if (homeShopId) router.replace(shopHomePath(homeShopId));
+  }, [homeShopId, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +91,20 @@ export default function SalonsDashboardHomePage() {
       cancelled = true;
     };
   }, [workplaces]);
+
+  // Never flash the picker while deciding, and never leave a blank page while redirecting.
+  const deciding = !error && (pickerRequested === null || workplaces === null || homeShopId !== null);
+  if (deciding) {
+    return (
+      <div className={`${styles.darkScope} ${styles.salonsHomeDark}`}>
+        <main className={styles.page} aria-busy="true">
+          <p className={styles.loadingText} role="status">
+            {homeShopId ? "Opening your shop…" : "Loading your dashboard…"}
+          </p>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className={`${styles.darkScope} ${styles.salonsHomeDark}`}>
@@ -156,6 +198,13 @@ export default function SalonsDashboardHomePage() {
                   )}
 
                   <div className={styles.shopCardLinks}>
+                    <Link
+                      href={shopHomePath(s.id)}
+                      onClick={() => user && rememberLastShop(user.id, s.id)}
+                      aria-label={`Open the dashboard for ${s.name}`}
+                    >
+                      Open dashboard
+                    </Link>
                     {/* A barber gets the one thing they need — today's queue. Setup links are
                         owner-only here purely so the UI matches what the API will allow; the server
                         is what actually enforces it. */}

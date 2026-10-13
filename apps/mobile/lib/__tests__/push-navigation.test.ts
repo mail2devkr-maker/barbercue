@@ -17,4 +17,11 @@ describe('owner booking push payload parsing', () => {
     expect(parseCustomerBookingPushData({ type: 'booking.reminder', salonId: '', bookingId: 'b1' })).toBeNull();
     expect(parseCustomerBookingPushData({ type: 'booking.created', salonId: 's1', bookingId: 'b1' })).toBeNull();
   });
+
+  it('accepts the notices a customer gets when the shop cancelled or moved their appointment', () => {
+    for (const type of ['booking.cancelled_by_shop', 'booking.rescheduled_by_shop']) {
+      expect(parseCustomerBookingPushData({ type, salonId: 's1', bookingId: 'b1' })).toEqual({ type, salonId: 's1', bookingId: 'b1' });
+      expect(parseCustomerBookingPushData({ type, salonId: 's1' })).toBeNull();
+    }
+  });
 });

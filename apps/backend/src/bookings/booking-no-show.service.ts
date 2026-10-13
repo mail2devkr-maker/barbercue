@@ -109,7 +109,9 @@ export class BookingNoShowService {
       );
     }
 
-    const chargeAmount = this.computeNoShowCharge(booking, policy);
+    // A guest (IN_SHOP) appointment has no account to bill: it is recorded as a no-show but never
+    // carries a charge that could not be collected.
+    const chargeAmount = booking.customerId ? this.computeNoShowCharge(booking, policy) : 0;
 
     const claimed = await this.prisma.$transaction(async (tx) => {
       // Claim-based re-check, exactly as the removed automatic sweep did: a concurrent check-in
@@ -128,7 +130,8 @@ export class BookingNoShowService {
       });
       if (claim.count === 0) return false;
 
-      if (chargeAmount > 0) {
+      // A guest (IN_SHOP) booking has no account to bill, so it never creates a ledger due.
+      if (chargeAmount > 0 && booking.customerId) {
         await tx.customerLedgerEntry.create({
           data: {
             customerId: booking.customerId,
@@ -155,13 +158,15 @@ export class BookingNoShowService {
         },
       });
 
-      await this.notifications.notifyInTransaction(
-        tx,
-        booking.customerId,
-        'booking.no_show',
-        { salonId: booking.salonId },
-        'account/bookings',
-      );
+      if (booking.customerId) {
+        await this.notifications.notifyInTransaction(
+          tx,
+          booking.customerId,
+          'booking.no_show',
+          { salonId: booking.salonId },
+          'account/bookings',
+        );
+      }
       await this.notifications.notifyInTransaction(
         tx,
         booking.salon.ownerUserId,
@@ -284,13 +289,15 @@ export class BookingNoShowService {
         },
       });
 
-      await this.notifications.notifyInTransaction(
-        tx,
-        booking.customerId,
-        'booking.corrected',
-        { salonId: booking.salonId, bookingId: booking.id },
-        'account/bookings',
-      );
+      if (booking.customerId) {
+        await this.notifications.notifyInTransaction(
+          tx,
+          booking.customerId,
+          'booking.corrected',
+          { salonId: booking.salonId, bookingId: booking.id },
+          'account/bookings',
+        );
+      }
 
       return outstanding.map((e) => e.id);
     });

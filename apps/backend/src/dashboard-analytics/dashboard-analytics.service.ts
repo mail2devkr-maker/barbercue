@@ -376,7 +376,9 @@ export class DashboardAnalyticsService {
   private async classifyCustomers(
     salonId: string,
     completedBookings: Array<{
-      customerId: string;
+      // NULL for an IN_SHOP guest appointment: a guest has no account to recognise across visits,
+      // so such bookings are left out of the new/repeat customer split (never guessed).
+      customerId: string | null;
       slotStart?: Date;
     }>,
     from: Date,
@@ -385,7 +387,13 @@ export class DashboardAnalyticsService {
     repeatCustomerCount: number;
     newVisitBookings: Set<(typeof completedBookings)[number]>;
   }> {
-    const customerIds = [...new Set(completedBookings.map((booking) => booking.customerId))];
+    const customerIds = [
+      ...new Set(
+        completedBookings
+          .map((booking) => booking.customerId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
     if (customerIds.length === 0) {
       return {
         newCustomerCount: 0,
@@ -404,9 +412,12 @@ export class DashboardAnalyticsService {
       },
       _count: { _all: true },
     });
-    const priorCustomerIds = new Set(priorVisitors.map((row) => row.customerId));
+    const priorCustomerIds = new Set(
+      priorVisitors.map((row) => row.customerId).filter((id): id is string => id !== null),
+    );
     const visitsByCustomer = new Map<string, (typeof completedBookings)[number][]>();
     for (const booking of completedBookings) {
+      if (!booking.customerId) continue;
       const visits = visitsByCustomer.get(booking.customerId) ?? [];
       visits.push(booking);
       visitsByCustomer.set(booking.customerId, visits);

@@ -17,6 +17,7 @@ import { useAuth } from "../../../../../lib/auth-context";
 import { canGenerateOfferLetter } from "../../../../../lib/admin-route-access";
 import styles from "../admin.module.css";
 import { buildOfferLetterPdf, extractResumeHints, loadFastQueLogoForPdf, type SalaryBasis } from "./offer-letter";
+import EmployeeIdCardGenerator from "./EmployeeIdCardGenerator";
 
 function pretty(value: string): string {
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -246,6 +247,7 @@ export default function AdminCrmPage() {
         </div>
         <div className={styles.headerActions}>
           {showOfferLetter && <a className={styles.offerHeaderButton} href="#offer-letter">Offer letter</a>}
+          {showOfferLetter && <a className={styles.offerHeaderButton} href="#company-id-card">Company ID card</a>}
           {(user?.roles.includes(Role.PLATFORM_ADMIN) || user?.roles.includes(Role.CO_FOUNDER) || user?.roles.includes(Role.HR_ADMIN)) && (
             <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
           )}
@@ -319,6 +321,8 @@ export default function AdminCrmPage() {
           </form>
         </section>
       )}
+
+      {showOfferLetter && <EmployeeIdCardGenerator />}
 
       {error && <p className={styles.error} role="alert">{error}</p>}
       {loading && !overview && <p className={styles.loading}>Loading field CRM…</p>}

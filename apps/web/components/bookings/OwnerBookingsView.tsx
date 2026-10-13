@@ -20,6 +20,7 @@ import {
   useVoiceEnabled,
 } from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
+import { ShopBookingActions } from "../owner/ShopBookingActions";
 import styles from "./bookings.module.css";
 
 const PAGE_SIZE = 20;
@@ -40,6 +41,15 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED: "Cancelled",
   NO_SHOW: "No-show",
   EXPIRED: "Expired",
+};
+
+// User-facing names for how a booking was made. WALK_IN is a persisted enum value and is shown as
+// the Live Queue (never as "walk-in") - see the owner-operations terminology rule.
+const SOURCE_LABEL: Record<string, string> = {
+  APP: "FastQue app",
+  WEB: "Website",
+  IN_SHOP: "In-shop appointment",
+  WALK_IN: "Live Queue",
 };
 
 function statusClass(status: string): string {
@@ -65,7 +75,7 @@ function formatSlot(iso: string): string {
 }
 
 
-function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
+function BookingCard({ booking, isNew, onOutcome }: { booking: OwnerBookingDetailDto; isNew: boolean; onOutcome: (message: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={`${styles.card} ${isNew ? styles.cardNew : ""}`}>
@@ -80,6 +90,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           {isNew && <span className={styles.newBadge}>NEW</span>}
           <p className={styles.cardMeta}>
             {formatSlot(booking.slotStart)}
+            {booking.guestName ? ` · ${booking.guestName}` : ""}
             {booking.customerPhone ? ` · ${booking.customerPhone}` : ""}
             {booking.assignedStaffName
               ? ` · ${booking.assignedStaffName}`
@@ -125,7 +136,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           )}
           <div className={styles.detailItem}>
             <dt>Source</dt>
-            <dd>{booking.source}</dd>
+            <dd>{SOURCE_LABEL[booking.source] ?? booking.source}</dd>
           </div>
           {booking.customerEmail && (
             <div className={styles.detailItem}>
@@ -153,6 +164,7 @@ function BookingCard({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew
           )}
         </dl>
       )}
+      {open && <ShopBookingActions booking={booking} onOutcome={onOutcome} />}
     </div>
   );
 }
@@ -177,6 +189,8 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(null);
   const [cancelNotice, setCancelNotice] = useState<string | null>(null);
+  // What the shop's own cancel / reschedule told the customer; kept here because the list reload remounts the cards.
+  const [shopOutcome, setShopOutcome] = useState<string | null>(null);
   // Shared with every other voice consumer (see lib/voice-preference.ts) rather than a private copy.
   const alertsEnabled = useVoiceEnabled();
 
@@ -395,6 +409,16 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
             </Button>
           </div>
         )}
+        {shopOutcome && (
+          <div className={styles.newBookingBanner} role="status">
+            <div>
+              <strong>{shopOutcome}</strong>
+            </div>
+            <Button type="button" variant="outline" onClick={() => setShopOutcome(null)}>
+              Dismiss
+            </Button>
+          </div>
+        )}
         {cancelNotice && (
           <div className={`${styles.newBookingBanner} ${styles.cancelBanner}`}>
             <div>
@@ -413,6 +437,7 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
             key={f}
             type="button"
             className={`${styles.filterChip} ${filter === f ? styles.filterChipActive : ""}`}
+            aria-pressed={filter === f}
             onClick={() => setFilter(f)}
           >
             {FILTER_LABEL[f]}
@@ -428,7 +453,15 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
       ) : (
         <div className={styles.list}>
           {items.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} isNew={newIds.includes(booking.id)} />
+            <BookingCard
+              key={booking.id}
+              booking={booking}
+              isNew={newIds.includes(booking.id)}
+              onOutcome={(message) => {
+                setShopOutcome(message);
+                void loadPage(filter, undefined, false);
+              }}
+            />
           ))}
         </div>
       )}

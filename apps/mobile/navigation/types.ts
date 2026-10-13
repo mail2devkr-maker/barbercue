@@ -103,6 +103,7 @@ export type AccountStackParamList = {
   Account: undefined;
   StyleAdvisor: undefined;
   Notifications: undefined;
+  MyInvoices: undefined;
   CreditsHistory: undefined;
   // Mobile Shop Owner Onboarding mission — reachable directly from Account ("List your shop") and
   // via the pending-intent replay from the signed-out CTAs (see shop-registration-intent.ts).

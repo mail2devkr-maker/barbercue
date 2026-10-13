@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
@@ -22,6 +23,7 @@ import { speakBooking } from '../../lib/voice-announce';
 import { claimBookingVoiceEvent } from '../../lib/booking-voice-dedupe';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Card, Button, EmptyState, Skeleton, InlineError } from '../../components/ui';
+import { ShopBookingActionsNative } from '../../components/owner/ShopBookingActionsNative';
 import type { OwnerTabParamList } from '../../navigation/OwnerNavigator';
 
 type Props = BottomTabScreenProps<OwnerTabParamList, 'OwnerBookingsTab'>;
@@ -66,8 +68,24 @@ function formatSlot(iso: string, language: Language): string {
   });
 }
 
-function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew: boolean }) {
+function BookingRow({
+  booking,
+  isNew,
+  onChanged,
+  onNotice,
+  onReschedule,
+  onOpenInvoice,
+}: {
+  booking: OwnerBookingDetailDto;
+  isNew: boolean;
+  onChanged: () => void;
+  onNotice: (message: string) => void;
+  onReschedule: (booking: OwnerBookingDetailDto) => void;
+  onOpenInvoice: (invoiceId: string) => void;
+}) {
   const { t, language } = useLanguage();
+  // In-shop appointments belong to a guest, not a FastQue account: show the name the shop wrote down.
+  const guest = booking.source === 'IN_SHOP' ? booking.guestName ?? null : null;
   return (
     <Card style={styles.card}>
       <View style={styles.cardHeadRow}>
@@ -77,7 +95,8 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
             {isNew && <Text style={styles.newBadge}> {t.newBadge}</Text>}
           </Text>
           <Text style={styles.meta}>{formatSlot(booking.slotStart, language)}</Text>
-          {booking.customerPhone && <Text style={styles.meta}>{booking.customerPhone}</Text>}
+          {guest && <Text style={styles.meta}>{guest} · In-shop appointment</Text>}
+          {(booking.customerPhone ?? booking.guestPhone) && <Text style={styles.meta}>{booking.customerPhone ?? booking.guestPhone}</Text>}
           {(booking.assignedStaffName ?? booking.preferredStaffName) && (
             <Text style={styles.meta}>
               {booking.assignedStaffName ? booking.assignedStaffName : `${t.preferredPrefix}${booking.preferredStaffName}`}
@@ -89,6 +108,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
       <Text style={styles.priceText}>
         {booking.currency ?? ''} {booking.servicePrice} · {t.bookingRefPrefix}{booking.id.slice(0, 8)}
       </Text>
+      <ShopBookingActionsNative booking={booking} onChanged={onChanged} onNotice={onNotice} onReschedule={onReschedule} onOpenInvoice={onOpenInvoice} />
     </Card>
   );
 }
@@ -101,6 +121,7 @@ function BookingRow({ booking, isNew }: { booking: OwnerBookingDetailDto; isNew:
  * work around, so a new booking speaks immediately while this screen is mounted.
  */
 export default function OwnerBookingsScreen({ route }: Props) {
+  const navigation = useNavigation<BottomTabNavigationProp<OwnerTabParamList>>();
   const { selectedSalonId } = useSalon();
   const { t, language } = useLanguage();
   const [filter, setFilter] = useState<OwnerBookingFilter>(route.params?.filter ?? 'today');
@@ -113,6 +134,8 @@ export default function OwnerBookingsScreen({ route }: Props) {
   const [newIds, setNewIds] = useState<string[]>([]);
   const [newNotice, setNewNotice] = useState<OwnerBookingDetailDto | null>(null);
   const [cancelNotice, setCancelNotice] = useState(false);
+  // What the shop's own cancel told the customer (kept here: the list reload remounts the cards).
+  const [shopNotice, setShopNotice] = useState<string | null>(null);
   // Build 10 physical-device retest (Hindi TTS blocker) — set (throttled, see voice-announce.ts)
   // when Hindi is the active language but this device has no installed Hindi voice, so
   // speakBooking skipped speaking rather than risking an English/default-voice fallback.
@@ -323,7 +346,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
 
   if (!selectedSalonId) {
     return (
-      <Screen scroll={false}>
+      <Screen scroll={false} contentStyle={styles.screenPad}>
         <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
         <EmptyState title={t.noShopSelected} message={t.selectShopHint} />
       </Screen>
@@ -331,7 +354,7 @@ export default function OwnerBookingsScreen({ route }: Props) {
   }
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} contentStyle={styles.screenPad}>
       <SectionHeader eyebrow={t.ownerEyebrow} title={t.bookingsTitle} />
 
       {newNotice && (
@@ -341,6 +364,11 @@ export default function OwnerBookingsScreen({ route }: Props) {
             {newNotice.serviceName} · {formatSlot(newNotice.slotStart, language)}
             {newNotice.customerPhone ? ` · ${newNotice.customerPhone}` : ''}
           </Text>
+        </Pressable>
+      )}
+      {shopNotice && (
+        <Pressable testID="shop-cancel-notice" style={styles.noticeBanner} onPress={() => setShopNotice(null)}>
+          <Text style={styles.noticeTitle}>{shopNotice}</Text>
         </Pressable>
       )}
       {cancelNotice && (
@@ -402,7 +430,26 @@ export default function OwnerBookingsScreen({ route }: Props) {
             <EmptyState title={t.noBookingsTitle} message={t.noBookingsHint} />
           ) : (
             items.map((booking) => (
-              <BookingRow key={booking.id} booking={booking} isNew={newIds.includes(booking.id)} />
+              <BookingRow
+                key={booking.id}
+                booking={booking}
+                isNew={newIds.includes(booking.id)}
+                onChanged={() => void loadPage(filter, undefined, false)}
+                onNotice={setShopNotice}
+                onReschedule={(b) =>
+                  navigation.navigate('OwnerShopTab', { initial: false,
+                    screen: 'OwnerRescheduleBooking',
+                    params: {
+                      salonId: b.salonId,
+                      bookingId: b.id,
+                      serviceIds: b.services.map((s) => s.serviceId),
+                      staffId: b.assignedStaffId ?? b.preferredStaffId ?? null,
+                      label: `${b.serviceName} · ${formatSlot(b.slotStart, language)}`,
+                    },
+                  })
+                }
+                onOpenInvoice={(invoiceId) => navigation.navigate('OwnerShopTab', { initial: false, screen: 'OwnerInvoiceDetail', params: { invoiceId } })}
+              />
             ))
           )}
           {nextCursor && (
@@ -421,6 +468,8 @@ export default function OwnerBookingsScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
+  // Screen with scroll={false} adds no side padding of its own; without this the title and cards touch the screen edges.
+  screenPad: { paddingHorizontal: space[5], paddingTop: space[5] },
   skeleton: { height: 90, borderRadius: radius.lg, marginBottom: space[3] },
   noticeBanner: {
     backgroundColor: color.successSoft,
@@ -434,7 +483,8 @@ const styles = StyleSheet.create({
   warningBanner: { backgroundColor: color.accentSoft, borderColor: 'rgba(179, 107, 0, 0.32)' },
   noticeTitle: { fontFamily: font.bodyBold, fontSize: fontSize.sm, color: color.ink },
   noticeBody: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
-  filterScroll: { marginBottom: space[3] },
+  // A horizontal ScrollView grows to fill the column by default; without flexGrow 0 the chips become tall pills.
+  filterScroll: { marginBottom: space[3], flexGrow: 0 },
   filterRow: { gap: space[2], paddingRight: space[4], alignItems: 'stretch' },
   filterChip: {
     minHeight: 40,

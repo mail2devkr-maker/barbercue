@@ -1,0 +1,82 @@
+{
+  "_why": "ArrivalAlertOverlay: the test double for window.speechSynthesis has no getVoices(), which the Hindi voice code on master calls. ServiceCatalogPicker: a test-harness lookup finds no element. Neither suite is touched by owner operations.",
+  "generatedFrom": "master f2f2b2c6f9d979898f2d85e27ab412928c3ef03c (clean npm ci, Node v24.18.0)",
+  "totals": {
+    "passed": 113,
+    "failed": 14,
+    "suites": 16,
+    "failedSuites": 2
+  },
+  "failures": [
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "Select All selects every available service in the full catalog, not just the current filter/search view",
+      "reason": "Error: expect(received).toBeDefined()"
+    },
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "every service selected via Select All receives its canonical default duration, and price is left blank (no fabricated default exists)",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'props')"
+    },
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "an individually newly-selected service also receives its canonical default duration with a blank required price",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'findByType')"
+    },
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "Select All toggles to Clear all selections once every selectable service is selected, and clearing removes every draft (no stale hidden payload)",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'props')"
+    },
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "a manual price/duration edit survives Select All being clicked again for the remaining items",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'findByType')"
+    },
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "blocks submission with a blank price instead of silently treating it as 0",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'findByType')"
+    },
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "\"Apply to all\" fills every selected blank price without overwriting one already typed in individually",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'findByType')"
+    },
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "submits the correct name/category/price/duration payload for every selected service on Add selected services",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'findByType')"
+    },
+    {
+      "file": "apps/web/components/dashboard/__tests__/ServiceCatalogPicker.test.jsx",
+      "name": "Select All never re-selects a service already added to the shop",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'props')"
+    },
+    {
+      "file": "apps/web/components/bookings/__tests__/ArrivalAlertOverlay.test.jsx",
+      "name": "voice preference voice ON: announces immediately and then repeats about every 25 seconds",
+      "reason": "TypeError: window.speechSynthesis.getVoices is not a function"
+    },
+    {
+      "file": "apps/web/components/bookings/__tests__/ArrivalAlertOverlay.test.jsx",
+      "name": "voice preference voice ON with Hindi: speaks Hindi text with the hi-IN locale",
+      "reason": "TypeError: window.speechSynthesis.getVoices is not a function"
+    },
+    {
+      "file": "apps/web/components/bookings/__tests__/ArrivalAlertOverlay.test.jsx",
+      "name": "voice preference turning voice OFF while an alert is active cancels speech immediately and stops the repeats",
+      "reason": "TypeError: window.speechSynthesis.getVoices is not a function"
+    },
+    {
+      "file": "apps/web/components/bookings/__tests__/ArrivalAlertOverlay.test.jsx",
+      "name": "voice preference turning voice back ON resumes the unresolved reminder",
+      "reason": "TypeError: window.speechSynthesis.getVoices is not a function"
+    },
+    {
+      "file": "apps/web/components/bookings/__tests__/ArrivalAlertOverlay.test.jsx",
+      "name": "voice preference does not talk over an open confirmation dialog",
+      "reason": "TypeError: window.speechSynthesis.getVoices is not a function"
+    }
+  ]
+}

@@ -21,6 +21,7 @@ import {
   DISCOVERY_PATHS,
   QUEUE_ENTRIES_PATH,
   formatMoney,
+  queuePhaseOf,
   type BookingDetailDto,
   type CustomerCreditBalanceDto,
   type Language,
@@ -445,7 +446,9 @@ export default function HomeScreen({ navigation }: Props) {
                   <Text style={styles.statusEyebrow}>{t.liveQueueLabel}</Text>
                   <Text style={styles.statusTitle}>{t.tokenNumberPrefix}{activeQueueEntry.tokenNumber}</Text>
                   <Text style={styles.statusMeta}>
-                    {activeQueueEntry.status === 'CALLED'
+                    {queuePhaseOf(activeQueueEntry) === 'ASSIGNED'
+                      ? t.customerAssignedMessage
+                      : activeQueueEntry.status === 'CALLED'
                       ? t.calledMessage
                       : activeQueueEntry.status === 'IN_SERVICE'
                         ? t.inService

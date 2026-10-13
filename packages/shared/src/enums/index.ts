@@ -225,6 +225,9 @@ export const BookingSource = {
   APP: 'APP',
   WEB: 'WEB',
   WALK_IN: 'WALK_IN',
+  // Owner-operations mission: an appointment a shop operator created for someone without a
+  // FastQue account (user-facing label: "In-shop appointment").
+  IN_SHOP: 'IN_SHOP',
 } as const;
 export type BookingSource = (typeof BookingSource)[keyof typeof BookingSource];
 

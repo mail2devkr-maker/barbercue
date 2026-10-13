@@ -15,6 +15,7 @@ import { SetupChecklist } from "../../../../../../components/dashboard/SetupChec
 import { PaymentQrSection } from "../../../../../../components/dashboard/PaymentQrSection";
 import { ProfileSection } from "../../../../../../components/dashboard/ProfileSection";
 import { OwnerVoiceSettings } from "../../../../../../components/dashboard/OwnerVoiceSettings";
+import { ShopControls } from "../../../../../../components/owner/ShopControls";
 import { Button } from "../../../../../../components/ui/Button";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
@@ -277,7 +278,8 @@ function TimezoneSection({ salonId }: { salonId: string }) {
   );
 }
 
-// Payment policy and cancellation policy configuration — placeholder, not yet implemented.
+// There is no prepayment/cancellation-policy editor yet: the platform default policy applies, and
+// this page deliberately offers no control for it.
 // publicId display (major-upgrade phase) is real: it's the shop's permanent, shareable identity.
 export default function DashboardSettingsPage({
   params,
@@ -453,9 +455,7 @@ export default function DashboardSettingsPage({
       {salon && <TimezoneSection salonId={salonId} />}
       {salon && <OwnerVoiceSettings />}
 
-      <p className={styles.pageSubtitle} style={{ marginTop: 24 }}>
-        Prepayment policy and cancellation policy settings — placeholder, not yet implemented.
-      </p>
+      {salon && <ShopControls salonId={salonId} />}
       {salon && <QueueQrSection salonId={salonId} salonName={salon.name} />}
     </main>
   );

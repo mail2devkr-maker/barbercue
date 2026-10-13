@@ -479,6 +479,12 @@ export interface UiStrings {
   ownerSectionChairsHint: string;
   ownerSectionStaff: string;
   ownerSectionStaffHint: string;
+  ownerSectionInvoices: string;
+  ownerSectionInvoicesHint: string;
+  ownerSectionCancellations: string;
+  ownerSectionCancellationsHint: string;
+  ownerSectionNewAppointment: string;
+  ownerSectionNewAppointmentHint: string;
   ownerOpenSection: string;
   ownerManageShop: string;
   analyticsTitle: string;
@@ -693,6 +699,7 @@ export interface UiStrings {
 
   // OwnerShopScreen (Manage Shop).
   selectShopTitle: string;
+  pickShopToContinueHint: string;
   chooseShopHint: string;
   shopSubtitle: string;
   noServicesYet: string;
@@ -1132,6 +1139,66 @@ export interface UiStrings {
   queueIsEmptyTitle: string;
   queueIsEmptyHint: string;
   statusCalledShort: string;
+  // Owner operations: assigned is not in service (assignment and the start of service are separate steps).
+  statusAssigned: string;
+  assignedNotStartedBadge: string;
+  assignedSectionTitle: string;
+  assignedSectionEmpty: string;
+  serviceNotStartedHint: string;
+  startServiceAction: string;
+  completeServiceAction: string;
+  changeBarberChairAction: string;
+  assignedToLabel: string;
+  assignedToYouTitle: string;
+  takeNextCustomerAction: string;
+  serviceStartedNotice: string;
+  automaticAssignmentTitle: string;
+  automaticAssignmentLabel: string;
+  automaticAssignmentHint: string;
+  automaticAssignmentOn: string;
+  automaticAssignmentOff: string;
+  waitingForAvailableStaff: string;
+  waitingToBeAssigned: string;
+  noAvailableStaff: string;
+  chairReservedLabel: string;
+  assignedToTokenNotStarted: string;
+  autoAssignedNotice: string;
+  assignAllAutomaticallyAction: string;
+  assignAutomaticallyAction: string;
+  queueSectionWaiting: string;
+  queueSectionAssigned: string;
+  queueSectionInService: string;
+  customerAssignedMessage: string;
+  customerAssignedDetail: string;
+  customerAssignedDetailNoChair: string;
+  myDayTitle: string;
+  myDaySummary: string;
+  currentServiceHeading: string;
+  waitingYouCanTakeHeading: string;
+  notServingNow: string;
+  nobodyEligibleForYou: string;
+  myAppointmentsHeading: string;
+  noAppointmentsForMe: string;
+  availabilityAvailable: string;
+  availabilityWithCustomer: string;
+  availabilityBookedSoon: string;
+  availabilityOffDuty: string;
+  clockedInLabel: string;
+  clockedOutLabel: string;
+  clockInAction: string;
+  clockOutAction: string;
+  newLiveQueueCustomerAction: string;
+  newInShopAppointmentAction: string;
+  nobodyWaitingNote: string;
+  nobodyBeingServedNote: string;
+  chairStatusTitle: string;
+  chairFreeLabel: string;
+  chairOccupiedToken: string;
+  chairOccupiedNotQueue: string;
+  queueSectionCompleted: string;
+  queueSectionHistory: string;
+  serviceCompletedNotice: string;
+  nextCustomerAssignedNotice: string;
 
   // Style Advisor screen (mobile)
   photoLibraryAccessNeeded: string;
@@ -1453,7 +1520,7 @@ const enUi: UiStrings = {
   ownerManageSubtitle: 'Everything you can do on the FastQue website, in one place.',
   ownerManageShopLabel: 'Shop',
   ownerSectionQueue: 'Live queue',
-  ownerSectionQueueHint: 'Call, serve and manage walk-ins right now',
+  ownerSectionQueueHint: 'Call, serve and manage the Live Queue right now',
   ownerSectionSettings: 'Settings',
   ownerSectionSettingsHint: 'Profile, status, time zone and QR codes',
   ownerSectionBookings: 'Bookings',
@@ -1478,6 +1545,12 @@ const enUi: UiStrings = {
   ownerSectionChairsHint: 'Chairs and capacity',
   ownerSectionStaff: 'Barbers',
   ownerSectionStaffHint: 'Your team and their access',
+  ownerSectionInvoices: 'Billing & invoices',
+  ownerSectionInvoicesHint: 'Invoices and the payments you recorded',
+  ownerSectionCancellations: 'Cancellations',
+  ownerSectionCancellationsHint: 'Who cancelled, and why',
+  ownerSectionNewAppointment: 'New in-shop appointment',
+  ownerSectionNewAppointmentHint: 'For a customer who contacted the shop directly',
   ownerOpenSection: 'Open',
   ownerManageShop: 'Manage your shop',
   analyticsTitle: 'Analytics',
@@ -1498,13 +1571,13 @@ const enUi: UiStrings = {
   analyticsCancelled: 'Cancelled',
   analyticsNoShow: 'No-show',
   analyticsExpired: 'Expired',
-  analyticsWalkIns: 'Walk-ins joined',
+  analyticsWalkIns: 'Live Queue joins',
   analyticsNewCustomers: 'New customers acquired',
   analyticsReturningCustomers: 'Returning customers served',
   analyticsAvgWait: 'Avg queue wait',
   analyticsAvgService: 'Avg service time',
   analyticsServiceValue: 'Estimated service value',
-  analyticsServiceValueHint: 'Completed appointments + completed walk-ins',
+  analyticsServiceValueHint: 'Completed appointments + completed Live Queue visits',
   analyticsServicePopularity: 'Service popularity',
   analyticsBarberActivity: 'Barber activity',
   analyticsChairActivity: 'Chair activity',
@@ -1515,15 +1588,15 @@ const enUi: UiStrings = {
   analyticsSessionsLine: '{count} sessions · {minutes}',
   analyticsCompletedCount: '{count} completed',
   analyticsValueTrend: 'Service value trend',
-  analyticsValueTrendSub: 'Daily listed-price value of completed appointments and walk-ins. This is not audited payment revenue.',
+  analyticsValueTrendSub: 'Daily listed-price value of completed appointments and Live Queue visits. This is not audited payment revenue.',
   analyticsValueByService: 'Value by service',
   analyticsValueByServiceSub: 'Which services add the most completed service value.',
   analyticsValueByBarber: 'Value by barber',
   analyticsValueByBarberSub: 'Listed-price value of completed sessions handled by each barber.',
-  analyticsBookingsVsWalkIns: 'Bookings vs walk-ins',
+  analyticsBookingsVsWalkIns: 'Bookings vs Live Queue',
   analyticsBookingsVsWalkInsSub: 'Completed customer source mix.',
   analyticsBookings: 'Bookings',
-  analyticsWalkInsLabel: 'Walk-ins',
+  analyticsWalkInsLabel: 'Live Queue',
   analyticsNewVsRepeat: 'New vs repeat value',
   analyticsNewVsRepeatSub: 'Booked-appointment value by visit history: the first completed visit is new; later ones are repeat.',
   analyticsNew: 'New',
@@ -1683,6 +1756,7 @@ const enUi: UiStrings = {
   preferredPrefix: 'Pref: ',
 
   selectShopTitle: 'Select a shop',
+  pickShopToContinueHint: 'You work at more than one shop. Choose the shop you want to open.',
   chooseShopHint: 'Choose a shop from the Dashboard tab first.',
   shopSubtitle: 'Services, chairs, staff, and hours',
   noServicesYet: 'No services yet.',
@@ -1743,7 +1817,7 @@ const enUi: UiStrings = {
   onboardingChairsStepTitle: 'Add your chairs',
   onboardingStaffStepTitle: 'Add your staff',
   onboardingPaymentQrStepTitle: 'Add a payment QR',
-  onboardingPaymentQrStepHint: 'Shown to customers paying for an app or website booking. Walk-ins can still pay you directly without one.',
+  onboardingPaymentQrStepHint: 'Optional. Shown to customers paying for an app or website booking. Customers who join the Live Queue or book at the shop never need one.',
   onboardingGoLiveStepTitle: 'Go live',
   saveAndNextAction: 'Save & Next',
   previousAction: 'Previous',
@@ -2085,8 +2159,67 @@ const enUi: UiStrings = {
   completeAction: 'Complete',
   couldNotLoadQueue: 'Could not load the queue.',
   queueIsEmptyTitle: 'Queue is empty',
-  queueIsEmptyHint: 'Walk-ins and checked-in bookings will appear here in real time.',
+  queueIsEmptyHint: 'Live Queue customers and checked-in bookings will appear here in real time.',
   statusCalledShort: 'Called',
+  statusAssigned: 'Assigned',
+  assignedNotStartedBadge: 'Assigned · not started',
+  assignedSectionTitle: 'Assigned',
+  assignedSectionEmpty: 'Nobody is assigned right now.',
+  serviceNotStartedHint: 'The service has not started. The barber starts it when the customer is in the chair.',
+  startServiceAction: 'Start service',
+  completeServiceAction: 'Complete service',
+  changeBarberChairAction: 'Change barber & chair',
+  assignedToLabel: 'Assigned to',
+  assignedToYouTitle: 'Assigned to you',
+  takeNextCustomerAction: 'Take next customer',
+  serviceStartedNotice: 'Service started.',
+  automaticAssignmentTitle: 'Automatic assignment',
+  automaticAssignmentLabel: 'Assign staff automatically',
+  automaticAssignmentHint: 'On by default. A customer who is in the shop is assigned a free, qualified barber and a free chair as soon as one is available. Assigning does not start the service: the barber starts it. You can turn this off and on at any time.',
+  automaticAssignmentOn: 'Automatic assignment is on.',
+  automaticAssignmentOff: 'Automatic assignment is off.',
+  waitingForAvailableStaff: 'Waiting for available staff',
+  waitingToBeAssigned: 'Waiting to be assigned',
+  noAvailableStaff: 'No available staff',
+  chairReservedLabel: 'Reserved · not started',
+  assignedToTokenNotStarted: 'Assigned to #{token} · not started',
+  autoAssignedNotice: '#{token} was assigned. The barber starts the service.',
+  assignAllAutomaticallyAction: 'Assign all automatically',
+  assignAutomaticallyAction: 'Assign automatically',
+  queueSectionWaiting: 'Waiting ({count})',
+  queueSectionAssigned: 'Assigned ({count})',
+  queueSectionInService: 'In service ({count})',
+  customerAssignedMessage: 'Your barber is ready',
+  customerAssignedDetail: '{barber} will serve you at {chair}. Please head over: your service starts when they begin.',
+  customerAssignedDetailNoChair: '{barber} will serve you. Please head over: your service starts when they begin.',
+  myDayTitle: 'My day',
+  myDaySummary: '{name} · {status} · {count} done today',
+  currentServiceHeading: 'Current service',
+  waitingYouCanTakeHeading: 'Waiting you can take ({count})',
+  notServingNow: 'You are not serving anyone right now.',
+  nobodyEligibleForYou: 'Nobody waiting is eligible for you right now.',
+  myAppointmentsHeading: 'My appointments today ({count})',
+  noAppointmentsForMe: 'No appointments booked with you today.',
+  availabilityAvailable: 'Available',
+  availabilityWithCustomer: 'With a customer',
+  availabilityBookedSoon: 'Booked soon',
+  availabilityOffDuty: 'Off duty',
+  clockedInLabel: 'You\'re clocked in',
+  clockedOutLabel: 'You\'re clocked out',
+  clockInAction: 'Clock in',
+  clockOutAction: 'Clock out',
+  newLiveQueueCustomerAction: 'New Live Queue customer',
+  newInShopAppointmentAction: 'New in-shop appointment',
+  nobodyWaitingNote: 'Nobody is waiting.',
+  nobodyBeingServedNote: 'Nobody is being served.',
+  chairStatusTitle: 'Chair status',
+  chairFreeLabel: 'Free',
+  chairOccupiedToken: 'Occupied — token #{token}',
+  chairOccupiedNotQueue: 'Occupied — not on the queue',
+  queueSectionCompleted: 'Completed today ({count})',
+  queueSectionHistory: 'Cancelled & expired ({count})',
+  serviceCompletedNotice: 'Service completed.',
+  nextCustomerAssignedNotice: 'Next customer assigned to you. Start the service when they are in your chair.',
 
   photoLibraryAccessNeeded: 'Photo library access is needed to try the AI Style Advisor.',
   aiStylePreviewUnavailable: 'AI Style Preview is temporarily unavailable while we prepare the image-generation service. Your photo was not stored.',
@@ -2184,8 +2317,8 @@ const enUi: UiStrings = {
   restoredCreditsEntryLabel: 'Restored',
   manualAdjustmentEntryLabel: 'Adjustment',
   paymentQrRequiredMessage: "This shop hasn't set up online payment yet. Please try again later or visit in person.",
-  paymentQrSectionTitle: 'Payment QR',
-  paymentQrSectionHint: 'Customers scan this to pay online. Required before online booking can be enabled.',
+  paymentQrSectionTitle: 'Online Booking Payment QR',
+  paymentQrSectionHint: 'Optional. Customers booking through the app or website can scan this to pay your shop directly. Without one, online bookings are still confirmed and customers pay at the shop. Customers booking at your shop or joining the Live Queue never need it. Showing a QR is not proof of payment - record what you receive on the invoice.',
   uploadPaymentQrAction: 'Upload QR code',
   linkPaymentQrAction: 'Link QR code image',
   removePaymentQrAction: 'Remove QR code',
@@ -2383,7 +2516,7 @@ const hiUi: UiStrings = {
   ownerManageSubtitle: 'FastQue वेबसाइट पर जो कुछ भी कर सकते हैं, एक ही जगह।',
   ownerManageShopLabel: 'दुकान',
   ownerSectionQueue: 'लाइव कतार',
-  ownerSectionQueueHint: 'अभी वॉक-इन बुलाएँ, सेवा दें और संभालें',
+  ownerSectionQueueHint: 'अभी लाइव कतार में कॉल करें, सेवा दें और संभालें',
   ownerSectionSettings: 'सेटिंग्स',
   ownerSectionSettingsHint: 'प्रोफ़ाइल, स्थिति, समय क्षेत्र और QR कोड',
   ownerSectionBookings: 'बुकिंग',
@@ -2408,6 +2541,12 @@ const hiUi: UiStrings = {
   ownerSectionChairsHint: 'कुर्सियाँ और क्षमता',
   ownerSectionStaff: 'नाई',
   ownerSectionStaffHint: 'आपकी टीम और उनकी पहुँच',
+  ownerSectionInvoices: 'बिलिंग और इनवॉइस',
+  ownerSectionInvoicesHint: 'इनवॉइस और आपके दर्ज किए गए भुगतान',
+  ownerSectionCancellations: 'रद्दीकरण',
+  ownerSectionCancellationsHint: 'किसने और क्यों रद्द किया',
+  ownerSectionNewAppointment: 'दुकान पर नई अपॉइंटमेंट',
+  ownerSectionNewAppointmentHint: 'दुकान से सीधे संपर्क करने वाले ग्राहक के लिए',
   ownerOpenSection: 'खोलें',
   ownerManageShop: 'अपनी दुकान संभालें',
   analyticsTitle: 'एनालिटिक्स',
@@ -2428,13 +2567,13 @@ const hiUi: UiStrings = {
   analyticsCancelled: 'रद्द',
   analyticsNoShow: 'नहीं आए',
   analyticsExpired: 'समाप्त',
-  analyticsWalkIns: 'वॉक-इन जुड़े',
+  analyticsWalkIns: 'लाइव कतार से जुड़े',
   analyticsNewCustomers: 'नए ग्राहक मिले',
   analyticsReturningCustomers: 'लौटे ग्राहकों को सेवा',
   analyticsAvgWait: 'औसत कतार प्रतीक्षा',
   analyticsAvgService: 'औसत सेवा समय',
   analyticsServiceValue: 'अनुमानित सेवा मूल्य',
-  analyticsServiceValueHint: 'पूरी हुई अपॉइंटमेंट + पूरे हुए वॉक-इन',
+  analyticsServiceValueHint: 'पूरी हुई अपॉइंटमेंट + पूरी हुई लाइव कतार की सेवाएँ',
   analyticsServicePopularity: 'सेवा लोकप्रियता',
   analyticsBarberActivity: 'नाई की गतिविधि',
   analyticsChairActivity: 'कुर्सी की गतिविधि',
@@ -2445,15 +2584,15 @@ const hiUi: UiStrings = {
   analyticsSessionsLine: '{count} सत्र · {minutes}',
   analyticsCompletedCount: '{count} पूरे',
   analyticsValueTrend: 'सेवा मूल्य का रुझान',
-  analyticsValueTrendSub: 'पूरी हुई अपॉइंटमेंट और वॉक-इन का दैनिक सूचीबद्ध-कीमत मूल्य। यह जाँचा हुआ भुगतान राजस्व नहीं है।',
+  analyticsValueTrendSub: 'पूरी हुई अपॉइंटमेंट और लाइव कतार की सेवाओं का दैनिक सूचीबद्ध-कीमत मूल्य। यह जाँचा हुआ भुगतान राजस्व नहीं है।',
   analyticsValueByService: 'सेवा के अनुसार मूल्य',
   analyticsValueByServiceSub: 'कौन-सी सेवाएँ सबसे ज़्यादा पूरा सेवा मूल्य जोड़ती हैं।',
   analyticsValueByBarber: 'नाई के अनुसार मूल्य',
   analyticsValueByBarberSub: 'हर नाई द्वारा संभाले पूरे सत्रों का सूचीबद्ध-कीमत मूल्य।',
-  analyticsBookingsVsWalkIns: 'बुकिंग बनाम वॉक-इन',
+  analyticsBookingsVsWalkIns: 'बुकिंग बनाम लाइव कतार',
   analyticsBookingsVsWalkInsSub: 'पूरे हुए ग्राहकों का स्रोत।',
   analyticsBookings: 'बुकिंग',
-  analyticsWalkInsLabel: 'वॉक-इन',
+  analyticsWalkInsLabel: 'लाइव कतार',
   analyticsNewVsRepeat: 'नए बनाम दोबारा आए ग्राहकों का मूल्य',
   analyticsNewVsRepeatSub: 'विज़िट इतिहास के अनुसार बुक की गई अपॉइंटमेंट का मूल्य: पहली पूरी विज़िट नई, बाद की दोबारा।',
   analyticsNew: 'नए',
@@ -2613,6 +2752,7 @@ const hiUi: UiStrings = {
   preferredPrefix: 'पसंदीदा: ',
 
   selectShopTitle: 'एक दुकान चुनें',
+  pickShopToContinueHint: 'आप एक से अधिक दुकानों में काम करते हैं। जिस दुकान को खोलना है उसे चुनें।',
   chooseShopHint: 'पहले डैशबोर्ड टैब से एक दुकान चुनें।',
   shopSubtitle: 'सेवाएं, कुर्सियां, स्टाफ और समय',
   noServicesYet: 'अभी कोई सेवा नहीं है।',
@@ -2673,7 +2813,7 @@ const hiUi: UiStrings = {
   onboardingChairsStepTitle: 'अपनी कुर्सियां जोड़ें',
   onboardingStaffStepTitle: 'अपना स्टाफ जोड़ें',
   onboardingPaymentQrStepTitle: 'भुगतान QR जोड़ें',
-  onboardingPaymentQrStepHint: 'ऐप या वेबसाइट बुकिंग के लिए भुगतान करने वाले ग्राहकों को दिखाया जाता है। वॉक-इन ग्राहक इसके बिना भी सीधे आपको भुगतान कर सकते हैं।',
+  onboardingPaymentQrStepHint: 'वैकल्पिक। ऐप या वेबसाइट बुकिंग के लिए भुगतान करने वाले ग्राहकों को दिखाया जाता है। लाइव कतार में जुड़ने या दुकान पर बुकिंग करने वाले ग्राहकों को इसकी ज़रूरत नहीं होती।',
   onboardingGoLiveStepTitle: 'लाइव जाएं',
   saveAndNextAction: 'सेव करें और आगे बढ़ें',
   previousAction: 'पिछला',
@@ -3015,8 +3155,67 @@ const hiUi: UiStrings = {
   completeAction: 'पूर्ण करें',
   couldNotLoadQueue: 'कतार लोड नहीं हो सकी।',
   queueIsEmptyTitle: 'कतार खाली है',
-  queueIsEmptyHint: 'वॉक-इन और चेक-इन की गई बुकिंग्स यहां वास्तविक समय में दिखेंगी।',
+  queueIsEmptyHint: 'लाइव कतार के ग्राहक और चेक-इन की गई बुकिंग्स यहां वास्तविक समय में दिखेंगी।',
   statusCalledShort: 'बुलाया गया',
+  statusAssigned: 'नियुक्त',
+  assignedNotStartedBadge: 'नियुक्त · शुरू नहीं हुआ',
+  assignedSectionTitle: 'नियुक्त',
+  assignedSectionEmpty: 'अभी किसी को नियुक्त नहीं किया गया है।',
+  serviceNotStartedHint: 'सेवा शुरू नहीं हुई है। ग्राहक के कुर्सी पर बैठने पर नाई इसे शुरू करता है।',
+  startServiceAction: 'सेवा शुरू करें',
+  completeServiceAction: 'सेवा पूर्ण करें',
+  changeBarberChairAction: 'नाई और कुर्सी बदलें',
+  assignedToLabel: 'नियुक्त नाई',
+  assignedToYouTitle: 'आपको नियुक्त',
+  takeNextCustomerAction: 'अगला ग्राहक लें',
+  serviceStartedNotice: 'सेवा शुरू हो गई।',
+  automaticAssignmentTitle: 'स्वचालित नियुक्ति',
+  automaticAssignmentLabel: 'स्टाफ को अपने-आप नियुक्त करें',
+  automaticAssignmentHint: 'डिफ़ॉल्ट रूप से चालू। दुकान में मौजूद ग्राहक को जैसे ही कोई खाली, योग्य नाई और कुर्सी मिलती है, उसे नियुक्त कर दिया जाता है। नियुक्ति से सेवा शुरू नहीं होती: नाई उसे शुरू करता है। आप इसे कभी भी बंद और चालू कर सकते हैं।',
+  automaticAssignmentOn: 'स्वचालित नियुक्ति चालू है।',
+  automaticAssignmentOff: 'स्वचालित नियुक्ति बंद है।',
+  waitingForAvailableStaff: 'उपलब्ध स्टाफ की प्रतीक्षा में',
+  waitingToBeAssigned: 'नियुक्ति की प्रतीक्षा में',
+  noAvailableStaff: 'कोई स्टाफ उपलब्ध नहीं',
+  chairReservedLabel: 'आरक्षित · शुरू नहीं हुआ',
+  assignedToTokenNotStarted: '#{token} को नियुक्त · शुरू नहीं हुआ',
+  autoAssignedNotice: '#{token} को नियुक्त किया गया। नाई सेवा शुरू करेगा।',
+  assignAllAutomaticallyAction: 'सभी को अपने-आप नियुक्त करें',
+  assignAutomaticallyAction: 'अपने-आप नियुक्त करें',
+  queueSectionWaiting: 'प्रतीक्षा में ({count})',
+  queueSectionAssigned: 'नियुक्त ({count})',
+  queueSectionInService: 'सेवा जारी है ({count})',
+  customerAssignedMessage: 'आपका नाई तैयार है',
+  customerAssignedDetail: '{barber} आपकी सेवा {chair} पर करेंगे। कृपया पहुँचें: उनके शुरू करते ही आपकी सेवा शुरू होगी।',
+  customerAssignedDetailNoChair: '{barber} आपकी सेवा करेंगे। कृपया पहुँचें: उनके शुरू करते ही आपकी सेवा शुरू होगी।',
+  myDayTitle: 'मेरा दिन',
+  myDaySummary: '{name} · {status} · आज {count} पूरे',
+  currentServiceHeading: 'वर्तमान सेवा',
+  waitingYouCanTakeHeading: 'आप जिन्हें ले सकते हैं ({count})',
+  notServingNow: 'आप अभी किसी की सेवा नहीं कर रहे हैं।',
+  nobodyEligibleForYou: 'प्रतीक्षा में कोई भी अभी आपके लिए उपयुक्त नहीं है।',
+  myAppointmentsHeading: 'आज मेरी अपॉइंटमेंट ({count})',
+  noAppointmentsForMe: 'आज आपके साथ कोई अपॉइंटमेंट बुक नहीं है।',
+  availabilityAvailable: 'उपलब्ध',
+  availabilityWithCustomer: 'ग्राहक के साथ',
+  availabilityBookedSoon: 'जल्द ही बुक',
+  availabilityOffDuty: 'ड्यूटी से बाहर',
+  clockedInLabel: 'आप ड्यूटी पर हैं',
+  clockedOutLabel: 'आप ड्यूटी से बाहर हैं',
+  clockInAction: 'ड्यूटी शुरू करें',
+  clockOutAction: 'ड्यूटी समाप्त करें',
+  newLiveQueueCustomerAction: 'लाइव कतार में नया ग्राहक',
+  newInShopAppointmentAction: 'दुकान में नई अपॉइंटमेंट',
+  nobodyWaitingNote: 'कोई प्रतीक्षा में नहीं है।',
+  nobodyBeingServedNote: 'अभी किसी की सेवा नहीं हो रही।',
+  chairStatusTitle: 'कुर्सियों की स्थिति',
+  chairFreeLabel: 'खाली',
+  chairOccupiedToken: 'व्यस्त — टोकन #{token}',
+  chairOccupiedNotQueue: 'व्यस्त — कतार में नहीं',
+  queueSectionCompleted: 'आज पूर्ण ({count})',
+  queueSectionHistory: 'रद्द और समाप्त ({count})',
+  serviceCompletedNotice: 'सेवा पूर्ण हुई।',
+  nextCustomerAssignedNotice: 'अगला ग्राहक आपको नियुक्त किया गया। जब वे आपकी कुर्सी पर हों तब सेवा शुरू करें।',
 
   photoLibraryAccessNeeded: 'AI स्टाइल एडवाइज़र आज़माने के लिए फोटो लाइब्रेरी की अनुमति आवश्यक है।',
   aiStylePreviewUnavailable: 'इमेज-जनरेशन सेवा तैयार करते समय AI स्टाइल प्रीव्यू अस्थायी रूप से अनुपलब्ध है। आपकी फोटो सेव नहीं की गई।',
@@ -3114,8 +3313,8 @@ const hiUi: UiStrings = {
   restoredCreditsEntryLabel: 'वापस किया गया',
   manualAdjustmentEntryLabel: 'समायोजन',
   paymentQrRequiredMessage: 'इस दुकान ने अभी तक ऑनलाइन भुगतान सेट अप नहीं किया है। कृपया बाद में पुनः प्रयास करें या व्यक्तिगत रूप से जाएँ।',
-  paymentQrSectionTitle: 'भुगतान QR',
-  paymentQrSectionHint: 'ग्राहक ऑनलाइन भुगतान के लिए इसे स्कैन करते हैं। ऑनलाइन बुकिंग चालू करने से पहले यह आवश्यक है।',
+  paymentQrSectionTitle: 'ऑनलाइन बुकिंग भुगतान QR',
+  paymentQrSectionHint: 'वैकल्पिक। ऐप या वेबसाइट से बुकिंग करने वाले ग्राहक इसे स्कैन करके सीधे आपकी दुकान को भुगतान कर सकते हैं। इसके बिना भी ऑनलाइन बुकिंग पक्की होती है और ग्राहक दुकान पर भुगतान करते हैं। दुकान पर बुकिंग या लाइव कतार में जुड़ने वाले ग्राहकों को QR की ज़रूरत नहीं। QR दिखाना भुगतान का प्रमाण नहीं है - जो रकम मिले उसे इनवॉइस पर दर्ज करें।',
   uploadPaymentQrAction: 'QR कोड अपलोड करें',
   linkPaymentQrAction: 'QR कोड इमेज लिंक करें',
   removePaymentQrAction: 'QR कोड हटाएं',
@@ -3205,9 +3404,11 @@ const enNotificationTypeLabels: NotificationTypeLabels = {
   'owner.booking.cancelled': 'Booking cancelled',
   'owner.booking.no_show': 'Customer no-show',
   'owner.booking.expired': 'Booking expired',
-  'owner.walk_in.joined': 'New walk-in',
+  'owner.walk_in.joined': 'New Live Queue customer',
   'staff.assigned': 'You were assigned a customer',
   'owner.booking.arrival_check': 'Appointment arrival check',
+  'booking.cancelled_by_shop': 'Appointment cancelled by the shop',
+  'booking.rescheduled_by_shop': 'Appointment time changed by the shop',
 };
 
 const hiNotificationTypeLabels: NotificationTypeLabels = {
@@ -3222,9 +3423,11 @@ const hiNotificationTypeLabels: NotificationTypeLabels = {
   'owner.booking.cancelled': 'बुकिंग रद्द हुई',
   'owner.booking.no_show': 'ग्राहक नो-शो',
   'owner.booking.expired': 'बुकिंग समाप्त हो गई',
-  'owner.walk_in.joined': 'नया वॉक-इन',
+  'owner.walk_in.joined': 'नया लाइव कतार ग्राहक',
   'staff.assigned': 'आपको एक ग्राहक सौंपा गया',
   'owner.booking.arrival_check': 'अपॉइंटमेंट आगमन जांच',
+  'booking.cancelled_by_shop': 'दुकान ने अपॉइंटमेंट रद्द की',
+  'booking.rescheduled_by_shop': 'दुकान ने अपॉइंटमेंट का समय बदला',
 };
 
 export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTypeLabels>> = {
@@ -3259,6 +3462,18 @@ export interface PushCopy {
   /** P0 arrival-alert mission — the one-shot T-5-minute push. Never a customer name (see
    * ArrivalAlertDto's own comment on why one is never invented). */
   arrivalCheck(serviceName: string | null): { title: string; body: string };
+  /** Owner-operations mission — CUSTOMER-facing push when the shop cancels their appointment.
+   * `whenText` is the already-formatted, salon-local date/time (or null when it cannot be
+   * resolved — the copy then simply omits it rather than guessing a timezone). */
+  shopCancelledBooking(input: { shopName: string; serviceName: string | null; whenText: string | null }): {
+    title: string;
+    body: string;
+  };
+  /** Same, for a shop-initiated reschedule. */
+  shopRescheduledBooking(input: { shopName: string; serviceName: string | null; whenText: string | null }): {
+    title: string;
+    body: string;
+  };
 }
 
 const enPush: PushCopy = {
@@ -3284,6 +3499,20 @@ const enPush: PushCopy = {
       ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.`
       : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
   }),
+  shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
+    title: 'Appointment cancelled by the shop',
+    body:
+      `Your appointment at ${shopName}${serviceName ? ` for ${serviceName}` : ''}` +
+      `${whenText ? ` on ${whenText}` : ''} has been cancelled by the shop. ` +
+      'Please open FastQue to view your booking details or contact the shop for assistance.',
+  }),
+  shopRescheduledBooking: ({ shopName, serviceName, whenText }) => ({
+    title: 'Appointment time changed by the shop',
+    body:
+      `Your appointment at ${shopName}${serviceName ? ` for ${serviceName}` : ''}` +
+      `${whenText ? ` has been moved to ${whenText}` : ' has been moved'} by the shop. ` +
+      'Open FastQue to review the new time or contact the shop if it does not work for you.',
+  }),
 };
 
 const hiPush: PushCopy = {
@@ -3308,6 +3537,20 @@ const hiPush: PushCopy = {
     body: serviceName
       ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।`
       : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
+  }),
+  shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
+    title: 'दुकान ने अपॉइंटमेंट रद्द की',
+    body:
+      `${shopName} पर ${serviceName ? `${serviceName} की ` : ''}आपकी अपॉइंटमेंट` +
+      `${whenText ? ` (${whenText})` : ''} दुकान द्वारा रद्द कर दी गई है। ` +
+      'विवरण देखने या दुकान से संपर्क करने के लिए FastQue खोलें।',
+  }),
+  shopRescheduledBooking: ({ shopName, serviceName, whenText }) => ({
+    title: 'दुकान ने अपॉइंटमेंट का समय बदला',
+    body:
+      `${shopName} पर ${serviceName ? `${serviceName} की ` : ''}आपकी अपॉइंटमेंट` +
+      `${whenText ? ` अब ${whenText} पर` : ''} दुकान द्वारा स्थानांतरित कर दी गई है। ` +
+      'नया समय देखने के लिए FastQue खोलें या असुविधा होने पर दुकान से संपर्क करें।',
   }),
 };
 

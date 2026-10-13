@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { QUEUE_ENTRIES_PATH, type QueueEntryDetailDto } from "@barbercue/shared";
+import { QUEUE_ENTRIES_PATH, queuePhaseOf, type QueueEntryDetailDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import styles from "./queue.module.css";
@@ -9,6 +9,8 @@ import styles from "./queue.module.css";
 const ACTIVE_STATUSES = new Set(["WAITING", "CALLED", "IN_SERVICE"]);
 
 function statusLabel(entry: QueueEntryDetailDto): string {
+  // ASSIGNED: a barber and chair are reserved for the customer but the service has not started.
+  if (queuePhaseOf(entry) === "ASSIGNED") return "Your barber is ready";
   if (entry.status === "CALLED") return "You're being called!";
   if (entry.status === "IN_SERVICE") return "In service";
   if (entry.status === "WAITING" && entry.position) return `Position ${entry.position}`;
@@ -138,6 +140,12 @@ export function QueueStatusPanel({
       )}
       {entry.status === "WAITING" && entry.turnApproaching && (
         <p className={styles.ticketDetail}>Please head over now — you&apos;re almost up.</p>
+      )}
+      {queuePhaseOf(entry) === "ASSIGNED" && (
+        <p className={styles.ticketDetail}>
+          {entry.assignedStaffName ? <><strong>{entry.assignedStaffName}</strong> will serve you</> : "A barber will serve you"}
+          {entry.assignedChairLabel ? ` at ${entry.assignedChairLabel}` : ""}. Please head over — your service starts when they begin.
+        </p>
       )}
       {entry.status === "IN_SERVICE" && (
         <p className={styles.ticketDetail}>

@@ -208,6 +208,9 @@ export default function AccountScreen() {
         <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('Notifications')}>
           <Text style={styles.shortcutTitle}>{t.notifications}</Text>
         </Pressable>
+        <Pressable testID="account-my-invoices" style={styles.shortcutCard} onPress={() => navigation.navigate('MyInvoices')}>
+          <Text style={styles.shortcutTitle}>My invoices</Text>
+        </Pressable>
         {/* Google Play release gate (see lib/feature-flags.ts) */}
         {isCreditsEnabled() && (
           <Pressable style={styles.shortcutCard} onPress={() => navigation.navigate('CreditsHistory')}>

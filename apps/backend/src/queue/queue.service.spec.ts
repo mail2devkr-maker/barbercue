@@ -82,6 +82,7 @@ interface PrismaMock {
     count: jest.Mock<Promise<number>, [unknown]>;
     findMany: jest.Mock<Promise<unknown[]>, [unknown]>;
     findUnique: jest.Mock<Promise<unknown>, [unknown]>;
+    findFirst: jest.Mock<Promise<unknown>, [unknown]>;
   };
   service: {
     aggregate: jest.Mock<Promise<unknown>, [unknown]>;
@@ -99,6 +100,9 @@ interface PrismaMock {
   };
   auditLog: {
     create: jest.Mock<Promise<unknown>, [unknown]>;
+  };
+  salon: {
+    findUnique: jest.Mock<Promise<unknown>, [unknown]>;
   };
   user: {
     findUnique: jest.Mock<Promise<unknown>, [unknown]>;
@@ -121,6 +125,7 @@ describe('QueueService', () => {
   };
   let salonAccess: {
     assertAccessOrAdminAccess: jest.Mock<Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
+    getActorKind: jest.Mock<Promise<'OWNER' | 'STAFF' | 'PLATFORM_ADMIN' | null>, [string, string]>;
   };
   let realtime: {
     emitQueueUpdated: jest.Mock;
@@ -178,6 +183,14 @@ describe('QueueService', () => {
         findUnique: jest
           .fn<Promise<unknown>, [unknown]>()
           .mockResolvedValue({ userId: 'staff-user-1' }),
+        // startService() re-validates the assigned barber: on duty, access intact.
+        findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
+          id: 'st1',
+          userId: 'staff-user-1',
+          status: 'ACTIVE',
+          accessRevokedAt: null,
+          displayName: 'Ramesh',
+        }),
       },
       service: {
         aggregate: jest
@@ -199,6 +212,12 @@ describe('QueueService', () => {
       },
       auditLog: {
         create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+      },
+      // getDashboardQueue reads the shop's opt-in flag for the additive `autoAssignEnabled` field.
+      salon: {
+        findUnique: jest
+          .fn<Promise<unknown>, [unknown]>()
+          .mockResolvedValue({ queueAutoAssignEnabled: true }),
       },
       // The customer's own account - has a phone by default so pre-existing join tests keep
       // exercising the unchanged happy path.
@@ -247,6 +266,10 @@ describe('QueueService', () => {
       assertAccessOrAdminAccess: jest
         .fn<Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'>, [string, string]>()
         .mockResolvedValue('STAFF_OR_OWNER'),
+      // Owner by default: the pre-existing completeSession tests complete as the shop owner.
+      getActorKind: jest
+        .fn<Promise<'OWNER' | 'STAFF' | 'PLATFORM_ADMIN' | null>, [string, string]>()
+        .mockResolvedValue('OWNER'),
     };
     realtime = {
       emitQueueUpdated: jest.fn(),
@@ -759,6 +782,336 @@ describe('QueueService', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------------------------
+  // Owner-operations corrective mission: ASSIGNED is not IN SERVICE.
+  //   WAITING -> ASSIGNED (CALLED + barber + chair, no session) -> IN_SERVICE (explicit start)
+  // ---------------------------------------------------------------------------------------------
+  describe('assignment is separate from the start of service', () => {
+    const input = { staffId: 'st1', chairId: 'ch1' };
+
+    beforeEach(() => {
+      prisma.chair.findFirst.mockResolvedValue({ id: 'ch1', salonId: 's1', status: 'ACTIVE' });
+    });
+
+    function claimOf(index = 0) {
+      return prisma.queueEntry.updateMany.mock.calls[index][0] as {
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
+      };
+    }
+
+    it('assign with startService:false reserves the barber and chair but does NOT start the service', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ arrivedAt: null }));
+      await service.assign('staff1', 'q1', { ...input, startService: false });
+      const claim = claimOf();
+      expect(claim.data.status).toBe('CALLED');
+      expect(claim.data.assignedStaffId).toBe('st1');
+      expect(claim.data.assignedChairId).toBe('ch1');
+      expect(claim.data.assignedAt).toBeInstanceOf(Date);
+      expect(claim.data).not.toHaveProperty('serviceStartedAt');
+      // Being assigned says nothing about arrival.
+      expect(claim.data).not.toHaveProperty('arrivedAt');
+      expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+    });
+
+    it('tells the customer\'s device they were called when a WAITING customer is assigned', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      await service.assign('staff1', 'q1', { ...input, startService: false });
+      expect(realtime.emitEntryCalled).toHaveBeenCalledWith('s1', 'q1', 'c1');
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+
+    it('keeps an earlier calledAt when an already CALLED customer is assigned', async () => {
+      const earlier = new Date('2026-10-13T05:00:00Z');
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(
+        makeRawEntry({ status: QueueEntryStatus.CALLED, calledAt: earlier }),
+      );
+      await service.assign('staff1', 'q1', { ...input, startService: false });
+      expect(claimOf().data.calledAt).toBe(earlier);
+      expect(realtime.emitEntryCalled).not.toHaveBeenCalled();
+    });
+
+    it('assignAsSystem (the automatic allocator) never starts the service', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ arrivedAt: new Date() }));
+      await service.assignAsSystem('q1', input);
+      expect(claimOf().data.status).toBe('CALLED');
+      expect(claimOf().data).not.toHaveProperty('serviceStartedAt');
+      expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      const audit = lastCallData(prisma.auditLog.create);
+      expect(audit).toMatchObject({ action: 'QUEUE_ENTRY_AUTO_ASSIGNED' });
+      expect((audit.metadata as Record<string, unknown>).serviceStarted).toBe(false);
+    });
+
+    it('without the flag, assign keeps the pre-existing seat-and-start behaviour for already-installed clients', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      await service.assign('staff1', 'q1', input);
+      expect(claimOf().data.status).toBe('IN_SERVICE');
+      expect(claimOf().data.serviceStartedAt).toBeInstanceOf(Date);
+      expect(prisma.serviceSession.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a barber who is already assigned to another customer', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      prisma.queueEntry.findFirst.mockImplementation(((args: { where: { assignedStaffId?: string } }) =>
+        Promise.resolve(args.where.assignedStaffId === 'st1' ? { assignedAt: new Date(), calledAt: null, service: { durationMinutes: 30 } } : null)) as never);
+      await expect(
+        service.assign('staff1', 'q1', { ...input, startService: false }),
+      ).rejects.toMatchObject({ code: 'STAFF_ALREADY_OCCUPIED' });
+      expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses a chair that is already reserved for another assigned customer', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      prisma.queueEntry.findFirst.mockImplementation(((args: { where: { assignedChairId?: string } }) =>
+        Promise.resolve(args.where.assignedChairId === 'ch1' ? { id: 'q-other' } : null)) as never);
+      await expect(
+        service.assign('staff1', 'q1', { ...input, startService: false }),
+      ).rejects.toMatchObject({ code: 'CHAIR_ALREADY_OCCUPIED' });
+      expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('maps the database backstop (partial unique index on the held barber) to STAFF_ALREADY_OCCUPIED', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      prisma.queueEntry.updateMany.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+          meta: { target: 'queue_entries_assigned_staff_hold_key' },
+        }),
+      );
+      await expect(
+        service.assign('staff1', 'q1', { ...input, startService: false }),
+      ).rejects.toMatchObject({ code: 'STAFF_ALREADY_OCCUPIED' });
+    });
+
+    it('maps the database backstop (partial unique index on the held chair) to CHAIR_ALREADY_OCCUPIED', async () => {
+      prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+      prisma.queueEntry.updateMany.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+          meta: { target: 'queue_entries_assigned_chair_hold_key' },
+        }),
+      );
+      await expect(
+        service.assign('staff1', 'q1', { ...input, startService: false }),
+      ).rejects.toMatchObject({ code: 'CHAIR_ALREADY_OCCUPIED' });
+    });
+
+    describe('startService', () => {
+      const assigned = () =>
+        makeRawEntry({
+          status: QueueEntryStatus.CALLED,
+          assignedStaffId: 'st1',
+          assignedChairId: 'ch1',
+          assignedAt: new Date(),
+          calledAt: new Date(),
+          arrivedAt: new Date(),
+        });
+
+      it('refuses a customer nobody has been assigned to (WAITING)', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry());
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'NOT_ASSIGNED' });
+        expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      });
+
+      it('refuses a CALLED customer that has no barber yet', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.CALLED }));
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'NOT_ASSIGNED' });
+      });
+
+      it('is idempotent for a double tap: an entry already IN_SERVICE is returned unchanged', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ status: QueueEntryStatus.IN_SERVICE }));
+        await service.startService('owner1', 'q1');
+        expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+        expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      });
+
+      it('starts the service: claims the exact assignment, stamps serviceStartedAt and opens the ACTIVE session', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await service.startService('owner1', 'q1');
+        const claim = claimOf();
+        expect(claim.where).toMatchObject({ id: 'q1', status: 'CALLED', assignedStaffId: 'st1', assignedChairId: 'ch1' });
+        expect(claim.data.status).toBe('IN_SERVICE');
+        expect(claim.data.serviceStartedAt).toBeInstanceOf(Date);
+        expect(lastCallData(prisma.serviceSession.create)).toMatchObject({
+          queueEntryId: 'q1',
+          staffId: 'st1',
+          chairId: 'ch1',
+          serviceId: 'sv1',
+          status: 'ACTIVE',
+        });
+        expect(lastCallData(prisma.auditLog.create)).toMatchObject({ action: 'QUEUE_ENTRY_SERVICE_STARTED', actorUserId: 'owner1' });
+        expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+      });
+
+      it('re-validates qualification, not just the stored assignment', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await service.startService('owner1', 'q1');
+        expect(availability.assertStaffQualified).toHaveBeenCalledWith('s1', 'sv1', 'st1');
+      });
+
+      it('takes the per-salon and per-chair advisory locks before claiming', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await service.startService('owner1', 'q1');
+        expect(prisma.$executeRaw.mock.calls.length).toBeGreaterThanOrEqual(2);
+      });
+
+      it('a barber can start only THEIR OWN assigned customer', async () => {
+        salonAccess.getActorKind.mockResolvedValueOnce('STAFF');
+        prisma.salonStaff.findFirst.mockResolvedValueOnce({
+          id: 'st1',
+          userId: 'someone-else',
+          status: 'ACTIVE',
+          accessRevokedAt: null,
+          displayName: 'Ramesh',
+        });
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await expect(service.startService('staff-user-2', 'q1')).rejects.toMatchObject({ code: 'NOT_YOUR_ASSIGNMENT' });
+        expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      });
+
+      it('the assigned barber starts their own customer', async () => {
+        salonAccess.getActorKind.mockResolvedValueOnce('STAFF');
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await service.startService('staff-user-1', 'q1');
+        expect(prisma.serviceSession.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('refuses when the assigned barber has since gone off duty', async () => {
+        prisma.salonStaff.findFirst.mockResolvedValueOnce({
+          id: 'st1',
+          userId: 'staff-user-1',
+          status: 'INACTIVE',
+          accessRevokedAt: null,
+          displayName: 'Ramesh',
+        });
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'ASSIGNMENT_NOT_STARTABLE' });
+        expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      });
+
+      it('refuses when the assigned barber\'s access was removed', async () => {
+        prisma.salonStaff.findFirst.mockResolvedValueOnce({
+          id: 'st1',
+          userId: 'staff-user-1',
+          status: 'ACTIVE',
+          accessRevokedAt: new Date(),
+          displayName: 'Ramesh',
+        });
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'ASSIGNMENT_NOT_STARTABLE' });
+      });
+
+      it('refuses when the assigned chair is no longer active', async () => {
+        prisma.chair.findFirst.mockResolvedValue({ id: 'ch1', salonId: 's1', status: 'MAINTENANCE' });
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'ASSIGNMENT_NOT_STARTABLE' });
+        expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      });
+
+      it('refuses when a local customer now occupies the chair', async () => {
+        prisma.manualChairOccupancy.findFirst.mockResolvedValueOnce({ id: 'm1' });
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'CHAIR_ALREADY_OCCUPIED' });
+        expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('refuses when the barber has since been booked for an appointment in the way', async () => {
+        prisma.booking.count.mockResolvedValue(1);
+        prisma.booking.findFirst.mockResolvedValue({ slotEnd: new Date(Date.now() + 20 * 60_000) });
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'STAFF_RESERVED_FOR_APPOINTMENT' });
+        expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      });
+
+      it('loses cleanly when the assignment changed underneath (cancelled, reassigned or released)', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        prisma.queueEntry.updateMany.mockResolvedValueOnce({ count: 0 });
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'INVALID_QUEUE_TRANSITION' });
+        expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      });
+
+      it('maps a barber who is already serving someone (session unique index) to STAFF_ALREADY_OCCUPIED', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce(assigned());
+        prisma.serviceSession.create.mockRejectedValueOnce(
+          new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+            code: 'P2002',
+            clientVersion: '5.0.0',
+            meta: { target: ['service_session_staff_active_uq'] },
+          }),
+        );
+        await expect(service.startService('owner1', 'q1')).rejects.toMatchObject({ code: 'STAFF_ALREADY_OCCUPIED' });
+      });
+
+      it('implicitly acknowledges arrival if staff start someone who was never marked arrived', async () => {
+        prisma.queueEntry.findUnique.mockResolvedValueOnce({ ...assigned(), arrivedAt: null });
+        await service.startService('owner1', 'q1');
+        expect(claimOf().data.arrivedAt).toBeInstanceOf(Date);
+      });
+    });
+
+    describe('the live board keeps Waiting, Assigned and In service apart', () => {
+      it('puts an assigned customer in `assigned`, not in `waiting`, `called` or `inService`, with exact counts', async () => {
+        prisma.queueEntry.findMany.mockResolvedValueOnce([]); // recomputeEtas
+        prisma.queueEntry.findMany.mockResolvedValueOnce([
+          makeDetailEntry({ id: 'q1', status: QueueEntryStatus.WAITING }),
+          makeDetailEntry({ id: 'q2', status: QueueEntryStatus.CALLED }),
+          makeDetailEntry({
+            id: 'q3',
+            tokenNumber: 3,
+            status: QueueEntryStatus.CALLED,
+            assignedStaffId: 'st1',
+            assignedChairId: 'ch1',
+            assignedAt: new Date(),
+            assignedStaff: { displayName: 'Ramesh' },
+            assignedChair: { label: 'Chair 1' },
+          }),
+          makeDetailEntry({ id: 'q4', status: QueueEntryStatus.IN_SERVICE, assignedStaffId: 'st2', serviceStartedAt: new Date() }),
+        ]);
+        prisma.chair.findMany.mockResolvedValueOnce([{ id: 'ch1', label: 'Chair 1' }]);
+        const board = await service.getDashboardQueue('owner1', 's1');
+        const ids = (rows: { id: string }[] | undefined) => (rows ?? []).map((e) => e.id);
+        expect(ids(board.sections?.waiting)).toEqual(['q1']);
+        expect(ids(board.sections?.called)).toEqual(['q2']);
+        expect(ids(board.sections?.assigned)).toEqual(['q3']);
+        expect(ids(board.sections?.inService)).toEqual(['q4']);
+        expect(board.counts).toMatchObject({ waiting: 1, called: 1, assigned: 1, inService: 1 });
+        // The flat list is unchanged for clients that predate sections.
+        expect(ids(board.entries)).toEqual(['q1', 'q2', 'q3', 'q4']);
+      });
+
+      it('reports each customer\'s phase and a null serviceStartedAt until the service really starts', async () => {
+        prisma.queueEntry.findMany.mockResolvedValueOnce([]);
+        prisma.queueEntry.findMany.mockResolvedValueOnce([
+          makeDetailEntry({ id: 'q3', status: QueueEntryStatus.CALLED, assignedStaffId: 'st1', assignedChairId: 'ch1', assignedAt: new Date() }),
+          makeDetailEntry({ id: 'q4', status: QueueEntryStatus.IN_SERVICE, assignedStaffId: 'st2', serviceStartedAt: new Date() }),
+        ]);
+        const board = await service.getDashboardQueue('owner1', 's1');
+        const byId = Object.fromEntries(board.entries.map((e) => [e.id, e]));
+        expect(byId.q3.phase).toBe('ASSIGNED');
+        expect(byId.q3.serviceStartedAt).toBeNull();
+        expect(byId.q3.assignedAt).not.toBeNull();
+        expect(byId.q4.phase).toBe('IN_SERVICE');
+        expect(byId.q4.serviceStartedAt).not.toBeNull();
+      });
+
+      it('marks the chair held by an assigned customer as reserved (and not free to another)', async () => {
+        prisma.queueEntry.findMany.mockResolvedValueOnce([]);
+        prisma.queueEntry.findMany.mockResolvedValueOnce([
+          makeDetailEntry({ id: 'q3', tokenNumber: 7, status: QueueEntryStatus.CALLED, assignedStaffId: 'st1', assignedChairId: 'ch1' }),
+        ]);
+        prisma.chair.findMany.mockResolvedValueOnce([
+          { id: 'ch1', label: 'Chair 1' },
+          { id: 'ch2', label: 'Chair 2' },
+        ]);
+        const board = await service.getDashboardQueue('owner1', 's1');
+        expect(board.chairs.find((c) => c.id === 'ch1')).toMatchObject({ reservedForEntryId: 'q3', reservedForTokenNumber: 7 });
+        expect(board.chairs.find((c) => c.id === 'ch2')).toMatchObject({ reservedForEntryId: null });
+      });
+    });
+  });
+
   describe('reassign', () => {
     const activeEntry = makeRawEntry({
       status: QueueEntryStatus.IN_SERVICE,
@@ -898,6 +1251,49 @@ describe('QueueService', () => {
         service.reassign('owner1', 'q1', { staffId: 'st2' }),
       ).rejects.toMatchObject({ code: 'STAFF_ALREADY_OCCUPIED' });
       expect(realtime.emitQueueEntryReassigned).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('completeSession - a barber may only complete their own service (owner-operations mission)', () => {
+    const session = () => ({
+      id: 'sess1',
+      queueEntryId: 'q1',
+      staffId: 'staff-row-1',
+      queueEntry: makeRawEntry({ bookingId: null }),
+    });
+
+    it('lets the barber who is performing the service complete it', async () => {
+      salonAccess.getActorKind.mockResolvedValueOnce('STAFF');
+      prisma.salonStaff.findUnique.mockResolvedValueOnce({ userId: 'barber-user' });
+      prisma.serviceSession.findUnique.mockResolvedValueOnce(session());
+      await service.completeSession('barber-user', 'sess1');
+      expect(prisma.serviceSession.updateMany).toHaveBeenCalled();
+    });
+
+    it("rejects a colleague completing someone else's service with NOT_YOUR_SERVICE_SESSION and changes nothing", async () => {
+      salonAccess.getActorKind.mockResolvedValueOnce('STAFF');
+      prisma.salonStaff.findUnique.mockResolvedValueOnce({ userId: 'someone-else' });
+      prisma.serviceSession.findUnique.mockResolvedValueOnce(session());
+      await expect(service.completeSession('barber-user', 'sess1')).rejects.toMatchObject({
+        code: 'NOT_YOUR_SERVICE_SESSION',
+      });
+      expect(prisma.serviceSession.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('lets the owner complete any service without a roster lookup', async () => {
+      salonAccess.getActorKind.mockResolvedValueOnce('OWNER');
+      prisma.serviceSession.findUnique.mockResolvedValueOnce(session());
+      await service.completeSession('owner-user', 'sess1');
+      expect(prisma.salonStaff.findUnique).not.toHaveBeenCalled();
+      expect(prisma.serviceSession.updateMany).toHaveBeenCalled();
+    });
+
+    it('lets a delegated platform admin complete any service', async () => {
+      salonAccess.assertAccessOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      prisma.serviceSession.findUnique.mockResolvedValueOnce(session());
+      await service.completeSession('admin-user', 'sess1');
+      expect(salonAccess.getActorKind).not.toHaveBeenCalled();
+      expect(prisma.serviceSession.updateMany).toHaveBeenCalled();
     });
   });
 

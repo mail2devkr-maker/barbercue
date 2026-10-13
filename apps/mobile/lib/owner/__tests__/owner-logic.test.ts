@@ -229,9 +229,9 @@ describe('QR layout', () => {
 });
 
 describe('owner section registry', () => {
-  it('has exactly the website\'s 13 sections, in the website\'s order, each with a label and hint in both languages', () => {
+  it('has exactly the website\'s owner sections (now including in-shop appointments, cancellations and billing), in the website\'s order, each with a label and hint in both languages', () => {
     expect(OWNER_SECTIONS.map((s) => s.id)).toEqual([...WEBSITE_SECTION_IDS]);
-    expect(OWNER_SECTIONS).toHaveLength(13);
+    expect(OWNER_SECTIONS).toHaveLength(16);
     for (const language of ['EN', 'HI'] as const) {
       const t = uiStringsFor(language);
       for (const section of OWNER_SECTIONS) {
@@ -245,7 +245,7 @@ describe('owner section registry', () => {
     const byId = Object.fromEntries(OWNER_SECTIONS.map((s) => [s.id, s.target]));
     expect(byId.queue).toEqual({ kind: 'tab', tab: 'OwnerQueueTab' });
     expect(byId.bookings).toEqual({ kind: 'tab', tab: 'OwnerBookingsTab' });
-    for (const id of ['settings', 'schedule', 'customers', 'analytics', 'reviews', 'verification', 'services', 'hours', 'photos', 'chairs', 'staff']) {
+    for (const id of ['settings', 'newAppointment', 'schedule', 'customers', 'analytics', 'cancellations', 'invoices', 'reviews', 'verification', 'services', 'hours', 'photos', 'chairs', 'staff']) {
       expect(byId[id].kind).toBe('screen');
     }
     const screens = OWNER_SECTIONS.flatMap((s) => (s.target.kind === 'screen' ? [s.target.screen] : []));

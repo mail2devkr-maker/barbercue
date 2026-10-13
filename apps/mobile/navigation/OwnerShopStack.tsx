@@ -7,6 +7,11 @@ import OwnerSettingsScreen from '../screens/owner/OwnerSettingsScreen';
 import OwnerReviewsScreen from '../screens/owner/OwnerReviewsScreen';
 import OwnerScheduleScreen from '../screens/owner/OwnerScheduleScreen';
 import OwnerVerificationScreen from '../screens/owner/OwnerVerificationScreen';
+import OwnerInShopAppointmentScreen from '../screens/owner/OwnerInShopAppointmentScreen';
+import OwnerInvoicesScreen from '../screens/owner/OwnerInvoicesScreen';
+import OwnerInvoiceDetailScreen from '../screens/owner/OwnerInvoiceDetailScreen';
+import OwnerCancellationsScreen from '../screens/owner/OwnerCancellationsScreen';
+import OwnerRescheduleBookingScreen from '../screens/owner/OwnerRescheduleBookingScreen';
 import {
   OwnerChairsScreen,
   OwnerHoursScreen,
@@ -25,6 +30,11 @@ export type OwnerShopStackParamList = {
   OwnerCustomers: undefined;
   OwnerCustomerDetail: { customerId: string };
   OwnerAnalytics: undefined;
+  OwnerCancellations: undefined;
+  OwnerInvoices: undefined;
+  OwnerInvoiceDetail: { invoiceId: string };
+  OwnerInShopAppointment: undefined;
+  OwnerRescheduleBooking: { salonId: string; bookingId: string; serviceIds: string[]; staffId: string | null; label: string };
   OwnerReviews: undefined;
   OwnerVerification: undefined;
   OwnerServices: undefined;
@@ -50,6 +60,11 @@ export default function OwnerShopStack() {
       <Stack.Screen name="OwnerCustomers" component={OwnerCustomersScreen} options={titled(t.customersLabel)} />
       <Stack.Screen name="OwnerCustomerDetail" component={OwnerCustomerDetailScreen} options={titled(t.customerLabel)} />
       <Stack.Screen name="OwnerAnalytics" component={OwnerAnalyticsScreen} options={titled(t.ownerSectionAnalytics)} />
+      <Stack.Screen name="OwnerCancellations" component={OwnerCancellationsScreen} options={titled(t.ownerSectionCancellations)} />
+      <Stack.Screen name="OwnerInvoices" component={OwnerInvoicesScreen} options={titled(t.ownerSectionInvoices)} />
+      <Stack.Screen name="OwnerInvoiceDetail" component={OwnerInvoiceDetailScreen} options={titled(t.ownerSectionInvoices)} />
+      <Stack.Screen name="OwnerRescheduleBooking" component={OwnerRescheduleBookingScreen} options={titled('Reschedule')} />
+      <Stack.Screen name="OwnerInShopAppointment" component={OwnerInShopAppointmentScreen} options={titled(t.ownerSectionNewAppointment)} />
       <Stack.Screen name="OwnerReviews" component={OwnerReviewsScreen} options={titled(t.ownerSectionReviews)} />
       <Stack.Screen name="OwnerVerification" component={OwnerVerificationScreen} options={titled(t.ownerSectionVerification)} />
       <Stack.Screen name="OwnerServices" component={OwnerServicesScreen} options={titled(t.ownerSectionServices)} />

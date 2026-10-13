@@ -18,6 +18,8 @@ import { CloseIcon, LocationIcon, MenuIcon } from "../landing/icons";
 import styles from "../landing/landing.module.css";
 
 const SALON_SCOPED_PATH = /^\/dashboard\/salons\/([^/]+)(\/.*)?$/;
+// The owner/staff shell (components/owner/OwnerShell) supplies its own header on these routes.
+const OWNER_SHELL_PATH = SALON_SCOPED_PATH;
 
 const PRIMARY_LINKS: ReadonlyArray<{
   href: string;
@@ -81,6 +83,9 @@ export function SiteHeader() {
     ? workspaceNavigationLabel(authenticatedUser)
     : "Sign In";
   const showListShop = !workspaceUser;
+
+  // Inside the owner/staff dashboard the shell renders its own header (after all hooks above ran).
+  if (OWNER_SHELL_PATH.test(pathname)) return null;
 
   function ShopSwitcher({ mobile = false }: { mobile?: boolean }) {
     if (!showShopSwitcher) return null;

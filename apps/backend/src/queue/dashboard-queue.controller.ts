@@ -100,6 +100,14 @@ export class DashboardQueueController {
     return this.queueService.assign(user.id, id, body);
   }
 
+  // Owner-operations corrective mission: assigning a barber and starting the service are separate. The
+  // assigned barber (or the owner) starts an ASSIGNED customer here; it re-validates the assignment.
+  @Post(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.startService}`)
+  @Idempotent()
+  startService(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.queueService.startService(user.id, id);
+  }
+
   @Patch(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.reassign}`)
   reassign(
     @CurrentUser() user: AuthenticatedUser,

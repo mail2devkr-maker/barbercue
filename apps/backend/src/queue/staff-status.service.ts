@@ -1,12 +1,16 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import {
   BookingErrorCode,
+  OwnerOpsErrorCode,
   QueueErrorCode,
   Role,
+  StaffMemberStatus as StaffMemberStatusValue,
   type AuthenticatedUser,
   type StaffMemberStatus,
   type StaffStatusDto,
 } from '@barbercue/shared';
+import { QueueAutoAssignTrigger } from './queue-auto-assign.trigger';
+import { QueueAssignmentReleaseService } from './queue-assignment-release.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
@@ -24,6 +28,8 @@ export class StaffStatusService {
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
+    @Optional() private readonly autoAssignTrigger?: QueueAutoAssignTrigger,
+    @Optional() private readonly assignmentRelease?: QueueAssignmentReleaseService,
   ) {}
 
   async updateStatus(
@@ -65,11 +71,24 @@ export class StaffStatusService {
       );
     }
 
+    // Owner-operations mission: a barber whose access the owner revoked cannot put themselves back
+    // on duty (clocking OUT is always allowed).
+    if (status === StaffMemberStatusValue.ACTIVE && staff.accessRevokedAt) {
+      throw new AppException(
+        OwnerOpsErrorCode.STAFF_ACCESS_REVOKED,
+        'Your access to this shop has been removed. Please contact the owner.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
     const updated = await this.prisma.salonStaff.update({
       where: { id: staffId },
       data: { status },
     });
     this.realtime.emitStaffStatusChanged(staff.salonId, staffId);
+    // Someone coming on duty may be able to take the next waiting customer.
+    if (status === StaffMemberStatusValue.ACTIVE) this.autoAssignTrigger?.trigger(staff.salonId);
+    // Going off duty hands any customer who was assigned to them (but not started) back to waiting.
+    else await this.assignmentRelease?.releaseForStaff(staff.salonId, staffId, 'STAFF_OFF_DUTY', actor.id);
     return {
       id: updated.id,
       displayName: updated.displayName,

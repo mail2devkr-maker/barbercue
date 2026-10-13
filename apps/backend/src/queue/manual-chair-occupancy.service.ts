@@ -25,11 +25,13 @@ export class ManualChairOccupancyService {
       if (chair.status !== ChairStatus.ACTIVE) {
         throw new AppException(QueueErrorCode.CHAIR_INACTIVE, 'This chair is not active.', HttpStatus.CONFLICT);
       }
-      const [session, existing] = await Promise.all([
+      const [session, existing, held] = await Promise.all([
         tx.serviceSession.findFirst({ where: { chairId, status: 'ACTIVE' }, select: { id: true } }),
         tx.manualChairOccupancy.findFirst({ where: { chairId, endedAt: null }, select: { id: true } }),
+        // A chair reserved for an assigned (not yet started) customer is not free for a local customer.
+        tx.queueEntry.findFirst({ where: { assignedChairId: chairId, status: 'CALLED' }, select: { id: true } }),
       ]);
-      if (session || existing) {
+      if (session || existing || held) {
         throw new AppException(QueueErrorCode.CHAIR_ALREADY_OCCUPIED, 'This chair is already occupied.', HttpStatus.CONFLICT);
       }
       const created = await tx.manualChairOccupancy.create({

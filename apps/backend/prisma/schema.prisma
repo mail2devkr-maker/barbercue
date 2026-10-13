@@ -173,6 +173,23 @@ enum BookingSource {
   APP
   WEB
   WALK_IN
+  // Owner-operations mission: an appointment a shop operator creates for someone who contacted the
+  // shop directly (in person / by phone). Such a booking has no FastQue customer account
+  // (customerId NULL, guestName set) — enforced by a CHECK constraint in the migration.
+  IN_SHOP
+}
+
+// Who actually cancelled a booking, recorded at cancellation time from the authenticated actor —
+// never inferred afterwards from the booking's status. NULL on a row means "not recorded": every
+// cancellation written before this column existed, which analytics reports as UNKNOWN (or, for the
+// one code path that provably only ever wrote the customer's own id, CUSTOMER — see
+// DashboardCancellationAnalyticsService.resolveActor).
+enum CancellationActor {
+  CUSTOMER
+  OWNER
+  STAFF
+  SYSTEM
+  ADMIN
 }
 
 enum QueueEntrySource {
@@ -775,6 +792,16 @@ model Salon {
   // Percentage discount applied by FastQue only to APP/WEB bookings for this salon. The Service
   // rows remain the owner's original list prices; 0 means no platform-booking offer is active.
   onlineBookingDiscountPercent Int @default(0)
+  // Owner-operations mission. showPhoneToCustomers: the owner's opt-in to publish `phone` to
+  // customers (public profile + "Call shop" on their own booking). Defaults to true because the
+  // phone was already public before this column existed — the migration changes no behavior; an
+  // owner can now switch it off. queueAutoAssignEnabled: automatic barber/chair allocation for
+  // customers who are physically present. Default ON for every new shop (owner decision, 13 Oct
+  // 2026); the owner can switch it off and on again. Automatic allocation only ASSIGNS - a barber
+  // still starts the service explicitly. Migration 20261014000000 moved the default from OFF to ON
+  // without overwriting any shop with a recorded owner choice (see docs/OWNER_OPERATIONS.md).
+  showPhoneToCustomers   Boolean @default(true)
+  queueAutoAssignEnabled Boolean @default(true)
 
   // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
   planId                String?
@@ -807,6 +834,8 @@ model Salon {
   manualChairOccupancies ManualChairOccupancy[]
   // FastQue internal field CRM attribution — at most one employee lead may claim a registered shop.
   crmLeadAttribution    EmployeeCrmLead? @relation("CrmLeadOnboardedSalon")
+  billingProfile        SalonBillingProfile?
+  invoices              Invoice[]
 
   @@unique([cityId, slug])
   @@map("salons")
@@ -915,6 +944,12 @@ model SalonStaff {
   bio             String?
   photoUrl        String?
   yearsExperience Int?
+  // Owner-operations mission — login access, distinct from `status`. `status` is the barber's
+  // clock-in/out duty flag (a barber toggles it themselves all day); revoking access is an owner
+  // decision that removes the SALON_STAFF UserRole and the barber's staff sessions, and is
+  // recorded here so re-activation is explicit and auditable. NULL = access intact.
+  accessRevokedAt   DateTime?
+  accessRevokedById String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -1032,8 +1067,12 @@ model Booking {
   id                       String        @id @default(uuid())
   salonId                  String
   salon                    Salon         @relation(fields: [salonId], references: [id])
-  customerId               String
-  customer                 User          @relation("BookingCustomer", fields: [customerId], references: [id])
+  // Owner-operations mission: nullable ONLY for BookingSource.IN_SHOP appointments created by a
+  // shop operator for someone without a FastQue account (a CHECK constraint in the migration ties
+  // `customerId IS NULL` to `source = 'IN_SHOP'`, so every APP/WEB booking still has a customer
+  // exactly as before). No placeholder/fake User row is ever created for such a guest.
+  customerId               String?
+  customer                 User?         @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
   // Multi-service booking core mission: kept exactly as it was — the FIRST service the customer
   // selected (ordering preserved via BookingService.sortOrder), never removed or made nullable, so
   // every consumer that predates multi-service bookings (QueueEntry/ServiceSession linkage at
@@ -1073,6 +1112,20 @@ model Booking {
   cancelledById            String?
   cancelledBy              User?         @relation("BookingCancelledBy", fields: [cancelledById], references: [id])
   cancellationChargeAmount Decimal?      @db.Decimal(10, 2)
+  // Owner-operations mission — trusted cancellation attribution, written in the same transaction
+  // as the status change from the authenticated actor. See the CancellationActor enum.
+  cancelledByActor         CancellationActor?
+  cancellationReason       String?       @db.VarChar(300)
+  // Owner-operations mission — IN_SHOP appointment provenance. guestName/guestPhone are the
+  // contact the shop typed in; guestContactConsent records that the customer agreed to be
+  // contacted/stored (phone is only ever kept when this is true). createdByUserId is the operator
+  // who created it (plain column, no relation: keeps the User model untouched). internalNote is
+  // staff-only and never returned by any customer-facing API.
+  guestName                String?       @db.VarChar(120)
+  guestPhone               String?       @db.VarChar(32)
+  guestContactConsent      Boolean       @default(false)
+  createdByUserId          String?
+  internalNote             String?       @db.VarChar(500)
   createdAt                DateTime      @default(now())
   updatedAt                DateTime      @updatedAt
   // Phase 12 (Appointment Reminders) — set once the reminder sweep has notified this booking's
@@ -1116,8 +1169,10 @@ model Booking {
   ledgerEntries      CustomerLedgerEntry[]
   creditTransactions CustomerCreditTransaction[]
   subsidyEntry       PlatformShopSubsidyEntry?
+  invoices           Invoice[]
 
   @@index([salonId, slotStart, slotEnd])
+  @@index([salonId, status, cancelledAt])
   @@map("bookings")
 }
 
@@ -1337,12 +1392,24 @@ model QueueEntry {
   // own customer; never by the public queue status APIs, realtime payloads or logs.
   contactName          String?
   contactPhone         String?
+  // Owner-operations mission — an operator-created Live Queue entry for someone at the shop who
+  // has no FastQue account (customerId stays NULL; contactName/contactPhone hold what the shop
+  // typed in). createdByUserId is the operator; preferredStaffId is an optional soft request that
+  // the automatic allocator honors (plain columns, no relations).
+  createdByUserId      String?
+  preferredStaffId     String?
   // Authoritative arrival acknowledgement, instead of widening the status enum: an appointment
   // check-in sets it at creation (arrival was already confirmed), a remote/QR join starts null and
   // staff mark it, and assigning an entry to a chair implicitly sets it (the person is in the shop).
   arrivedAt            DateTime?
   joinedAt             DateTime  @default(now())
   calledAt             DateTime?
+  // Owner-operations corrective mission: when a barber + chair were reserved for this customer.
+  // An ASSIGNED customer is status CALLED with assignedStaffId/assignedChairId set and NO
+  // serviceStartedAt and NO ServiceSession; the barber's explicit start moves it to IN_SERVICE.
+  // Two partial unique indexes (migration 20261014000000) stop one barber or one chair being held
+  // by two assigned customers at once.
+  assignedAt           DateTime?
   serviceStartedAt     DateTime?
   serviceCompletedAt   DateTime?
   estimatedWaitMinutes Int?
@@ -1713,4 +1780,181 @@ model SiteVisitor {
   firstSeenAt DateTime @default(now())
 
   @@map("site_visitors")
+}
+
+// ---------- Owner operations: invoicing & notification delivery ----------
+//
+// Everything below is additive. Money is Decimal(12,2) like the rest of the schema; tax uses an
+// integer basis-point rate (1800 = 18.00%) so no calculation ever touches a float.
+
+enum InvoiceStatus {
+  ISSUED
+  VOID
+}
+
+enum InvoiceSourceType {
+  BOOKING
+  QUEUE_ENTRY
+}
+
+enum InvoiceTaxMode {
+  EXCLUSIVE
+  INCLUSIVE
+}
+
+enum InvoicePaymentKind {
+  PAYMENT
+  REFUND
+}
+
+// How the SHOP says it received the money. FastQue does not observe cash/UPI settlement, so every
+// InvoicePayment row is a shop-recorded fact (who recorded it and when is stored), never an
+// automatically inferred one — displaying a payment QR is not proof of payment.
+enum InvoicePaymentMethod {
+  CASH
+  UPI
+  CARD
+  OTHER
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  GAVE_UP
+  SKIPPED
+}
+
+// Per-salon invoice identity. Only configured values are ever printed: no GSTIN is invented, and
+// tax is applied only when the owner has enabled it AND supplied a rate. gstin is format-checked
+// at write time but NOT verified against the GST portal.
+model SalonBillingProfile {
+  salonId             String         @id
+  salon               Salon          @relation(fields: [salonId], references: [id])
+  legalName           String?        @db.VarChar(160)
+  billingAddress      String?        @db.VarChar(300)
+  contactPhone        String?        @db.VarChar(32)
+  contactEmail        String?        @db.VarChar(160)
+  gstin               String?        @db.VarChar(15)
+  taxEnabled          Boolean        @default(false)
+  taxLabel            String         @default("GST") @db.VarChar(20)
+  taxRateBps          Int?
+  taxMode             InvoiceTaxMode @default(EXCLUSIVE)
+  invoicePrefix       String         @default("INV") @db.VarChar(8)
+  // Next per-salon sequence number. Claimed with one atomic UPDATE ... RETURNING inside the
+  // issuing transaction, so two concurrent issuances can never receive the same number.
+  nextInvoiceSequence Int            @default(1)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@map("salon_billing_profiles")
+}
+
+model Invoice {
+  id              String            @id @default(uuid())
+  salonId         String
+  salon           Salon             @relation(fields: [salonId], references: [id])
+  sequence        Int
+  number          String            @db.VarChar(32)
+  sourceType      InvoiceSourceType
+  bookingId       String?
+  booking         Booking?          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  // Plain ids (no relation): the queue visit and the customer account are authorization/lookup
+  // keys here, and keeping them relation-free leaves the QueueEntry and User models untouched.
+  queueEntryId    String?
+  customerId      String?
+  customerName    String?           @db.VarChar(120)
+  customerPhone   String?           @db.VarChar(32)
+  staffName       String?           @db.VarChar(120)
+  currency        String            @db.VarChar(3)
+  subtotal        Decimal           @db.Decimal(12, 2)
+  discountTotal   Decimal           @default(0) @db.Decimal(12, 2)
+  taxTotal        Decimal           @default(0) @db.Decimal(12, 2)
+  total           Decimal           @db.Decimal(12, 2)
+  // Snapshots of the configuration in force when issued — later profile edits never rewrite an
+  // issued invoice.
+  taxLabel        String?           @db.VarChar(20)
+  taxRateBps      Int?
+  taxMode         InvoiceTaxMode?
+  sellerLegalName String            @db.VarChar(160)
+  sellerGstin     String?           @db.VarChar(15)
+  sellerAddress   String?           @db.VarChar(300)
+  sellerPhone     String?           @db.VarChar(32)
+  sellerEmail     String?           @db.VarChar(160)
+  serviceDate     DateTime
+  status          InvoiceStatus     @default(ISSUED)
+  issuedAt        DateTime          @default(now())
+  issuedByUserId  String
+  idempotencyKey  String?           @unique
+  voidedAt        DateTime?
+  voidedByUserId  String?
+  voidReason      String?           @db.VarChar(300)
+
+  lines    InvoiceLine[]
+  payments InvoicePayment[]
+
+  @@unique([salonId, sequence])
+  @@unique([salonId, number])
+  @@index([salonId, issuedAt])
+  @@index([customerId, issuedAt])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id          String  @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  serviceId   String?
+  description String  @db.VarChar(200)
+  quantity    Int     @default(1)
+  unitPrice   Decimal @db.Decimal(12, 2)
+  discount    Decimal @default(0) @db.Decimal(12, 2)
+  lineTotal   Decimal @db.Decimal(12, 2)
+  sortOrder   Int
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+model InvoicePayment {
+  id               String               @id @default(uuid())
+  invoiceId        String
+  invoice          Invoice              @relation(fields: [invoiceId], references: [id])
+  salonId          String
+  kind             InvoicePaymentKind
+  method           InvoicePaymentMethod
+  amount           Decimal              @db.Decimal(12, 2)
+  reference        String?              @db.VarChar(80)
+  note             String?              @db.VarChar(200)
+  recordedByUserId String
+  recordedAt       DateTime             @default(now())
+  idempotencyKey   String?              @unique
+
+  @@index([invoiceId])
+  @@index([salonId, recordedAt])
+  @@map("invoice_payments")
+}
+
+// One row per (event, channel, recipient): the delivery ledger for notifications whose delivery
+// must be idempotent and observable (shop-initiated booking cancellation first). `dedupeKey` is
+// UNIQUE, so a retried request or double-click can never create a second notification. PUSH
+// attempts that fail transiently are retried by NotificationDeliveryService.sweep with
+// exponential backoff, then marked GAVE_UP — the booking itself is never rolled back for it.
+model NotificationDelivery {
+  id            String                     @id @default(uuid())
+  dedupeKey     String                     @unique
+  userId        String
+  type          String
+  channel       NotificationChannel
+  status        NotificationDeliveryStatus @default(PENDING)
+  attempts      Int                        @default(0)
+  lastError     String?                    @db.VarChar(300)
+  nextAttemptAt DateTime?
+  payload       Json?
+  deepLink      String?
+  createdAt     DateTime                   @default(now())
+  sentAt        DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@map("notification_deliveries")
 }

@@ -79,6 +79,8 @@ export class RemindersService {
         },
         reminderSentAt: null,
         slotStart: { gt: now, lte: windowEnd },
+        // An IN_SHOP guest appointment has no account to remind (and FastQue sends no SMS).
+        customerId: { not: null },
       },
       select: {
         id: true,
@@ -128,6 +130,7 @@ export class RemindersService {
         // IN_APP preference gating is intentionally independent from the durable reminder claim.
         // The native PUSH preference is evaluated after commit by PushDispatchService, so an
         // in-app opt-out must not suppress an enabled native push.
+        if (!booking.customerId) return false;
         await this.notifications.notifyInTransaction(
           tx,
           booking.customerId,
@@ -142,7 +145,7 @@ export class RemindersService {
         );
         return true;
       });
-      if (sent) {
+      if (sent && booking.customerId) {
         sentCount += 1;
         // Push delivery is deliberately after commit. PushDispatchService is best-effort and
         // catches provider failures; reminderSentAt + the in-app notification remain durable.
