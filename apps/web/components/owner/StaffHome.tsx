@@ -93,7 +93,8 @@ export function StaffHome({ salonId }: { salonId: string }) {
   }
 
   const onDuty = work.status === StaffMemberStatus.ACTIVE;
-  const a = AVAILABILITY[work.availabilityState];
+  // A barber who has been given a customer (not started) is spoken for: say that, not "Booked soon".
+  const a = work.assigned && !work.current ? { label: "Customer assigned", tone: "info" as const } : AVAILABILITY[work.availabilityState];
   const current = work.current;
   // A customer the shop (or the automatic allocator) assigned to this barber: not started yet.
   const assignedToMe = current ? null : (work.assigned ?? null);

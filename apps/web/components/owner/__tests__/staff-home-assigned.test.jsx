@@ -77,6 +77,9 @@ describe("barber's day: assigned vs current service", () => {
     expect(text).toContain("Assigned Asha");
     expect(text).toContain("Assigned · not started");
     expect(text).toContain("The service has not started");
+    // the barber's own status chip says a customer is assigned, not "Booked soon"
+    expect(text).toContain("Customer assigned");
+    expect(text).not.toContain("Booked soon");
     expect(text).not.toContain("Complete Service");
     expect(text).not.toContain("In service");
   });
