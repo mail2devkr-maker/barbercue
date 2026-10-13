@@ -21,10 +21,10 @@ INSERT INTO "employee_crm_leads" ("id", "employeeProfileId")
 VALUES ('lead-a', 'employee-a'), ('lead-b', 'employee-b');
 
 INSERT INTO "employee_voice_visit_logs"
-  ("id", "employeeProfileId", "leadId", "transcript", "structuredDraft", "submissionKey")
+  ("id", "employeeProfileId", "leadId", "transcript", "structuredDraft", "submissionKey", "updatedAt")
 VALUES
   ('log-a', 'employee-a', 'lead-a', 'Salon. Haircut 100.', '{}'::jsonb,
-   'e7d76876-8133-4760-957d-2d7d720b99c6');
+   'e7d76876-8133-4760-957d-2d7d720b99c6', CURRENT_TIMESTAMP);
 
 DO $$
 BEGIN
@@ -42,9 +42,9 @@ BEGIN
 
   BEGIN
     INSERT INTO "employee_voice_visit_logs"
-      ("id", "employeeProfileId", "leadId", "transcript", "structuredDraft", "submissionKey")
+      ("id", "employeeProfileId", "leadId", "transcript", "structuredDraft", "submissionKey", "updatedAt")
     VALUES ('log-duplicate', 'employee-a', 'lead-a', 'duplicate', '{}'::jsonb,
-      'e7d76876-8133-4760-957d-2d7d720b99c6');
+      'e7d76876-8133-4760-957d-2d7d720b99c6', CURRENT_TIMESTAMP);
     RAISE EXCEPTION 'Duplicate submission key unexpectedly succeeded';
   EXCEPTION WHEN unique_violation THEN
     NULL;
@@ -52,8 +52,8 @@ BEGIN
 
   BEGIN
     INSERT INTO "employee_voice_visit_logs"
-      ("id", "employeeProfileId", "leadId", "transcript", "structuredDraft")
-    VALUES ('log-cross-owner', 'employee-a', 'lead-b', 'cross owner', '{}'::jsonb);
+      ("id", "employeeProfileId", "leadId", "transcript", "structuredDraft", "updatedAt")
+    VALUES ('log-cross-owner', 'employee-a', 'lead-b', 'cross owner', '{}'::jsonb, CURRENT_TIMESTAMP);
     RAISE EXCEPTION 'Cross-employee lead association unexpectedly succeeded';
   EXCEPTION WHEN foreign_key_violation THEN
     NULL;
@@ -61,8 +61,8 @@ BEGIN
 
   BEGIN
     INSERT INTO "employee_voice_visit_logs"
-      ("id", "employeeProfileId", "leadId", "transcript", "structuredDraft", "status")
-    VALUES ('log-invalid-status', 'employee-a', 'lead-a', 'invalid', '{}'::jsonb, 'PUBLISHED');
+      ("id", "employeeProfileId", "leadId", "transcript", "structuredDraft", "status", "updatedAt")
+    VALUES ('log-invalid-status', 'employee-a', 'lead-a', 'invalid', '{}'::jsonb, 'PUBLISHED', CURRENT_TIMESTAMP);
     RAISE EXCEPTION 'Invalid lifecycle status unexpectedly succeeded';
   EXCEPTION WHEN check_violation THEN
     NULL;
