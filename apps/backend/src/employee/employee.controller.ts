@@ -5,6 +5,7 @@ import {
   createCrmFollowUpSchema,
   createCrmLeadSchema,
   createCrmVisitSchema,
+  createEmployeeVoiceLogSchema,
   onboardCrmLeadSchema,
   updateCrmFollowUpSchema,
   updateCrmLeadSchema,
@@ -12,6 +13,7 @@ import {
   type CreateCrmFollowUpInput,
   type CreateCrmLeadInput,
   type CreateCrmVisitInput,
+  type CreateEmployeeVoiceLogInput,
   type OnboardCrmLeadInput,
   type UpdateCrmFollowUpInput,
   type UpdateCrmLeadInput,
@@ -20,11 +22,16 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { EmployeeService } from './employee.service';
+import { EmployeeVoiceLogsService } from './employee-voice-logs.service';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller(EMPLOYEE_PATHS.employee)
 @Roles(Role.FIELD_EXECUTIVE)
 export class EmployeeController {
-  constructor(private readonly employees: EmployeeService) {}
+  constructor(
+    private readonly employees: EmployeeService,
+    private readonly voiceLogs: EmployeeVoiceLogsService,
+  ) {}
 
   @Get(EMPLOYEE_PATHS.me)
   me(@CurrentUser() user: AuthenticatedUser) {
@@ -81,6 +88,22 @@ export class EmployeeController {
     @Body(new ZodValidationPipe(createCrmVisitSchema)) body: CreateCrmVisitInput,
   ) {
     return this.employees.createVisit(user.id, body);
+  }
+
+  // Employee-audience + FIELD_EXECUTIVE guard is inherited from this controller.
+  // Private records are further scoped to the current employee's profile.
+  @Get(EMPLOYEE_PATHS.voiceLogs)
+  listVoiceLogs(@CurrentUser() user: AuthenticatedUser) {
+    return this.voiceLogs.list(user.id);
+  }
+
+  @Post(EMPLOYEE_PATHS.voiceLogs)
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
+  saveVoiceLog(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createEmployeeVoiceLogSchema)) body: CreateEmployeeVoiceLogInput,
+  ) {
+    return this.voiceLogs.create(user.id, body);
   }
 
   @Get(EMPLOYEE_PATHS.followUps)
