@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { normalizeServiceIdentity } from "@barbercue/shared";
 import type { SalonServiceDto } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../lib/api";
@@ -56,8 +56,18 @@ export function CatalogImportPanel(props: {
   const [saving, setSaving] = useState(false);
   const [messages, setMessages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [ocrAvailable, setOcrAvailable] = useState<boolean | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const idCounter = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    setOcrAvailable(null);
+    void apiFetch<{ pdfPhotoOcrAvailable: boolean }>(basePath + "/import-capabilities")
+      .then((result) => { if (active) setOcrAvailable(result.pdfPhotoOcrAvailable); })
+      .catch(() => { /* Older backend versions may not have the status endpoint. */ });
+    return () => { active = false; };
+  }, [basePath]);
 
   function addFiles(more: FileList | File[]) {
     const additions = Array.from(more);
@@ -67,6 +77,10 @@ export function CatalogImportPanel(props: {
       for (const file of additions) {
         if (!supported.split(",").some((extension) => file.name.toLowerCase().endsWith(extension))) {
           setError("Unsupported file: " + file.name + ". Save old .xls spreadsheets as .xlsx.");
+          continue;
+        }
+        if (external.test(file.name) && ocrAvailable === false) {
+          setError("PDF/photo extraction is not configured yet. Use CSV/XLSX or add services manually; no file was sent.");
           continue;
         }
         if (!file.size || file.size > fileLimit) {
@@ -102,6 +116,7 @@ export function CatalogImportPanel(props: {
     setError(null);
     const notices: string[] = [];
     const collected: ReviewRow[] = [];
+    const failed: File[] = [];
     for (const file of files) {
       const body = new FormData();
       body.append("file", file);
@@ -114,16 +129,24 @@ export function CatalogImportPanel(props: {
         const extracted = result.services.map((row) => ({
           ...row, key: ++idCounter.current, selected: true,
         }));
+        if (extracted.length === 0) {
+          failed.push(file);
+          notices.push(file.name + ": No services detected. Check the file content and try again.");
+          continue;
+        }
         collected.push(...extracted);
         notices.push(file.name + ": " + extracted.length + " candidates extracted.");
       } catch (cause) {
+        failed.push(file);
         notices.push(file.name + ": " + (cause instanceof ApiError ? cause.message : "Could not extract."));
       }
     }
     setRows((current) => [...current, ...collected]);
-    setFiles([]);
+    // Keep failed uploads for retry without duplicating successful previews.
+    setFiles(failed);
     if (fileInput.current) fileInput.current.value = "";
     setMessages(notices);
+    if (failed.length) setError(failed.length + " file(s) failed. See the reasons below; failed files are kept for retry.");
     setWorking(false);
   }
 
@@ -166,7 +189,12 @@ export function CatalogImportPanel(props: {
         result.createdCount + " services added; " + result.skippedCount + " already existed.",
         ...(result.skipped.length ? ["Skipped: " + result.skipped.join(", ")] : []),
       ]);
-      await onImported();
+      try {
+        await onImported();
+      } catch {
+        // POST succeeded; do not invite a retry that could duplicate created services.
+        setError("Services were saved, but the list could not refresh. Reload to see them.");
+      }
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Import failed; no confirmation of saved services.");
     } finally { setSaving(false); }
@@ -175,6 +203,12 @@ export function CatalogImportPanel(props: {
   return (
     <section aria-labelledby="catalog-import-heading" style={styles.shell}>
       <h2 id="catalog-import-heading" style={{ marginTop: 0 }}>📁 Import services from catalogs</h2>
+      {ocrAvailable === false && (
+        <p role="status" style={{ ...styles.help, padding: 12, border: "1px solid #b45309", borderRadius: 9 }}>
+          PDF/photo extraction is unavailable because the server-side AI provider is not configured.
+          CSV, TSV and XLSX imports do not need AI. You can also add services manually.
+        </p>
+      )}
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => { event.preventDefault(); if (!working && !saving) addFiles(event.dataTransfer.files); }}
@@ -212,10 +246,17 @@ export function CatalogImportPanel(props: {
         <div style={{ marginTop: 20 }}>
           <h3>Review extracted services ({rows.length})</h3>
           <p style={styles.help}>All extracted values are drafts. Edit every uncertain entry. Existing services are never overwritten.</p>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
             <button type="button" style={styles.secondary} onClick={selectAll}>Select all</button>
             <button type="button" style={styles.secondary} onClick={selectNone}>Select none</button>
             <button type="button" style={styles.secondary} onClick={() => setRows([])}>Discard all previews</button>
+            {rows.some((row) => row.selected && row.durationMinutes === null) && (
+              <button type="button" style={styles.secondary} onClick={() => setRows((current) => current.map((row) =>
+                row.selected && row.durationMinutes === null ? { ...row, durationMinutes: 30 } : row
+              ))}>
+                Set missing durations to 30 min (review before saving)
+              </button>
+            )}
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", minWidth: 790, borderCollapse: "separate", borderSpacing: "0 8px" }}>
