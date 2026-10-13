@@ -178,8 +178,17 @@ export function CatalogImportPanel(props: {
     else if (!valid(row)) flagged.set(row.key, "Missing or invalid price/duration — review");
     seen.add(identity);
   }
-  const importable = rows.filter((row) => row.selected && !flagged.has(row.key));
-  const needsAttention = rows.filter((row) => row.selected && flagged.has(row.key));
+  const selectedRows = rows.filter((row) => row.selected);
+  const importable = selectedRows.filter((row) => !flagged.has(row.key));
+  const needsAttention = selectedRows.filter((row) => flagged.has(row.key));
+  const missingDuration = selectedRows.filter((row) =>
+    row.durationMinutes === null || !Number.isInteger(row.durationMinutes) ||
+    row.durationMinutes < 5 || row.durationMinutes > 480
+  ).length;
+  const missingPrice = selectedRows.filter((row) =>
+    row.price === null || !Number.isFinite(row.price) ||
+    row.price < 0 || row.price > 1_000_000
+  ).length;
   const selectAll = () => setRows((current) => current.map((row) => ({ ...row, selected: true })));
   const selectNone = () => setRows((current) => current.map((row) => ({ ...row, selected: false })));
 
@@ -260,8 +269,12 @@ export function CatalogImportPanel(props: {
           </ul>
         )}
       </div>
+      {files.length > 0 && <p role="status" style={styles.help}>
+        {files.length} file(s) selected. Next: click <strong>Extract &amp; preview</strong> below.
+        Selecting a file does not add services; you will review names, prices and durations first.
+      </p>}
       <button type="button" style={styles.button} disabled={working || saving || !files.length} onClick={() => void extract()}>
-        {working ? "Extracting files…" : "Extract & preview (" + files.length + ")"}
+        {working ? "Extracting files…" : "Step 1: Extract & preview (" + files.length + ")"}
       </button>
       {!!ocrProgress && <p role="status" aria-live="polite" style={styles.help}>{ocrProgress}</p>}
       {error && <p role="alert" style={{ color: "#b42318", fontWeight: 600 }}>{error}</p>}
@@ -287,17 +300,45 @@ export function CatalogImportPanel(props: {
       )}
       {rows.length > 0 && (
         <div style={{ marginTop: 20 }}>
-          <h3>Review extracted services ({rows.length})</h3>
+          <h3>Step 2: Review extracted services ({rows.length})</h3>
           <p style={styles.help}>All extracted values are drafts. Edit every uncertain entry. Existing services are never overwritten.</p>
+          <div role="status" aria-live="polite" style={{
+            ...styles.help, padding: 14, margin: "12px 0",
+            border: "1px solid var(--bc-border)", borderRadius: 10,
+          }}>
+            <strong>{importable.length} ready to add out of {selectedRows.length} selected.</strong>
+            {missingDuration > 0 && <p style={{ margin: "6px 0" }}>
+              {missingDuration} selected row(s) need a valid duration (5–480 minutes).
+              The catalog does not state most treatment times; please enter the salon-approved duration.
+            </p>}
+            {missingPrice > 0 && <p style={{ margin: "6px 0" }}>
+              {missingPrice} selected row(s) need one exact approved price.
+              Catalog price ranges cannot be automatically converted to a single price.
+            </p>}
+            {needsAttention.length > 0 && <p style={{ margin: "6px 0" }}>
+              Review red row messages below for missing values, duplicates and existing services.
+            </p>}
+            <p style={{ margin: "6px 0 0" }}>
+              Next: complete or deselect blocked rows, then choose <strong>Add reviewed services</strong>.
+              Previewing does not save anything to the shop.
+            </p>
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
             <button type="button" style={styles.secondary} onClick={selectAll}>Select all</button>
             <button type="button" style={styles.secondary} onClick={selectNone}>Select none</button>
             <button type="button" style={styles.secondary} onClick={() => setRows([])}>Discard all previews</button>
             {rows.some((row) => row.selected && row.durationMinutes === null) && (
-              <button type="button" style={styles.secondary} onClick={() => setRows((current) => current.map((row) =>
-                row.selected && row.durationMinutes === null ? { ...row, durationMinutes: 30 } : row
-              ))}>
-                Set missing durations to 30 min (review before saving)
+              <button type="button" style={styles.secondary} onClick={() => {
+                if (!window.confirm(
+                  "Use 30 minutes for ALL selected services with missing durations? " +
+                  "This is NOT taken from the catalog. Apply only if Glow & Gaze's owner approves " +
+                  "30 minutes for each affected service, including longer treatments."
+                )) return;
+                setRows((current) => current.map((row) =>
+                  row.selected && row.durationMinutes === null ? { ...row, durationMinutes: 30 } : row
+                ));
+              }}>
+                Set blank durations to 30 min (requires owner approval)
               </button>
             )}
           </div>
@@ -323,8 +364,12 @@ export function CatalogImportPanel(props: {
           </div>
           {needsAttention.length > 0 && <p style={styles.help}>{needsAttention.length} selected entries need correction, are duplicates, or already exist. They will not be imported.</p>}
           <button type="button" style={styles.button} disabled={saving || working || importable.length === 0 || importable.length > 200} onClick={() => void save()}>
-            {saving ? "Importing…" : "Import " + importable.length + " reviewed services"}
+            {saving ? "Adding services…" : "Step 3: Add " + importable.length + " reviewed services to this shop"}
           </button>
+          {importable.length === 0 && <p role="status" style={styles.help}>
+            Add services is disabled because no selected row has an approved name, exact price,
+            and duration yet. Edit the fields above (or select eligible rows) to enable it.
+          </p>
           {importable.length > 200 && <p role="alert">Import up to 200 rows at a time. Deselect some rows and import in batches.</p>}
         </div>
       )}
