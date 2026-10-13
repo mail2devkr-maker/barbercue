@@ -125,4 +125,28 @@ describe('ServiceCatalogImportService', () => {
   it('rejects malformed XLSX safely', () => {
     expect(() => parseXlsxTables(Buffer.from('PK fake archive'))).toThrow();
   });
+
+  it('checks per-salon access and reports OCR availability without exposing credentials', async () => {
+    const previous = process.env.GEMINI_API_KEY;
+    try {
+      delete process.env.GEMINI_API_KEY;
+      await expect(subject.capabilities('actor', 'salon')).resolves.toEqual({
+        pdfPhotoOcrAvailable: false,
+      });
+      process.env.GEMINI_API_KEY = 'synthetic-key-not-real';
+      await expect(subject.capabilities('actor', 'salon')).resolves.toEqual({
+        pdfPhotoOcrAvailable: true,
+      });
+      expect(access.assertOwnerOrAdminAccess).toHaveBeenCalledWith('actor', 'salon');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = previous;
+    }
+  });
+
+  it('does not disclose OCR status to unauthorized salon users', async () => {
+    access.assertOwnerOrAdminAccess.mockRejectedValueOnce(new Error('Access denied'));
+    await expect(subject.capabilities('outsider', 'salon')).rejects.toThrow('Access denied');
+  });
 });
