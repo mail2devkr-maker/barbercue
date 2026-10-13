@@ -8,6 +8,7 @@ function decimal(value: string) {
 describe('SalonServicesService', () => {
   let service: SalonServicesService;
   let prisma: {
+    $transaction: jest.Mock;
     salon: { findUnique: jest.Mock; update: jest.Mock };
     service: {
       findMany: jest.Mock;
@@ -22,6 +23,7 @@ describe('SalonServicesService', () => {
 
   beforeEach(() => {
     prisma = {
+      $transaction: jest.fn(),
       // toDto now reads the owning salon's currency so prices can be formatted per-country.
       salon: {
         findUnique: jest.fn().mockResolvedValue({ currency: 'INR', salonType: SalonType.UNISEX }),
@@ -399,4 +401,96 @@ describe('SalonServicesService', () => {
       }),
     });
   });
+  describe('Remove All Services (non-destructive bulk turn-off)', () => {
+    const intent = { confirmation: 'REMOVE ALL', expectedActiveCount: 3 };
+    let tx: {
+      $executeRawUnsafe: jest.Mock;
+      service: { count: jest.Mock; updateMany: jest.Mock };
+      auditLog: { create: jest.Mock };
+    };
+
+    beforeEach(() => {
+      tx = {
+        $executeRawUnsafe: jest.fn().mockResolvedValue(1),
+        service: {
+          count: jest.fn().mockResolvedValue(3),
+          updateMany: jest.fn().mockResolvedValue({ count: 3 }),
+        },
+        auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
+      };
+      prisma.$transaction.mockImplementation((fn: (txn: typeof tx) => Promise<unknown>) => fn(tx));
+    });
+
+    it('refuses unauthorized owners, and never enters a write transaction', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(service.removeAll('intruder', 'another-salon', intent))
+        .rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      null, {}, { confirmation: 'remove all', expectedActiveCount: 3 },
+      { confirmation: 'REMOVE ALL', expectedActiveCount: 0 },
+      { confirmation: 'REMOVE ALL', expectedActiveCount: -1 },
+      { confirmation: 'REMOVE ALL', expectedActiveCount: '3' },
+      { confirmation: 'REMOVE ALL', expectedActiveCount: 3.5 },
+      { confirmation: 'REMOVE ALL', expectedActiveCount: Infinity },
+    ])('rejects invalid destructive-operation intent %p', async (body) => {
+      await expect(service.removeAll('owner-1', 'salon-1', body))
+        .rejects.toMatchObject({ code: 'SERVICE_BULK_CONFIRMATION_REQUIRED' });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects stale counts with 409 and does not turn off any service', async () => {
+      tx.service.count.mockResolvedValueOnce(2);
+      await expect(service.removeAll('owner-1', 'salon-1', intent))
+        .rejects.toMatchObject({ code: 'SERVICE_CATALOG_CHANGED' });
+      expect(tx.service.updateMany).not.toHaveBeenCalled();
+      expect(tx.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('turns off only this shop active services and audits the real owner', async () => {
+      const result = await service.removeAll('owner-1', 'salon-1', intent);
+      expect(result).toEqual({ removedCount: 3, remainingActive: 0 });
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
+      expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
+        'SELECT pg_advisory_xact_lock(hashtext($1))', 'salon-1',
+      );
+      expect(tx.service.count).toHaveBeenCalledWith({
+        where: { salonId: 'salon-1', isActive: true },
+      });
+      expect(tx.service.updateMany).toHaveBeenCalledWith({
+        where: { salonId: 'salon-1', isActive: true },
+        data: { isActive: false },
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: {
+          actorUserId: 'owner-1', action: 'OWNER_SERVICES_BULK_DEACTIVATED',
+          entityType: 'Salon', entityId: 'salon-1',
+          metadata: { salonId: 'salon-1', removedCount: 3, method: 'SOFT_DEACTIVATE' },
+        },
+      });
+      expect(prisma.service.update).not.toHaveBeenCalled();
+    });
+
+    it('audits a delegated admin separately', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      await service.removeAll('admin-1', 'salon-1', intent);
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          actorUserId: 'admin-1', action: 'ADMIN_SERVICES_BULK_DEACTIVATED',
+        }),
+      });
+    });
+
+    it('rejects a concurrent change and transaction rolls back rather than reporting success', async () => {
+      tx.service.updateMany.mockResolvedValueOnce({ count: 2 });
+      await expect(service.removeAll('owner-1', 'salon-1', intent))
+        .rejects.toMatchObject({ code: 'SERVICE_CATALOG_CHANGED' });
+      expect(tx.auditLog.create).not.toHaveBeenCalled();
+    });
+  });
+
 });
