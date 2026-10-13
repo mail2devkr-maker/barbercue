@@ -483,7 +483,8 @@ const styles = StyleSheet.create({
   warningBanner: { backgroundColor: color.accentSoft, borderColor: 'rgba(179, 107, 0, 0.32)' },
   noticeTitle: { fontFamily: font.bodyBold, fontSize: fontSize.sm, color: color.ink },
   noticeBody: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: color.muted, marginTop: 2 },
-  filterScroll: { marginBottom: space[3] },
+  // A horizontal ScrollView grows to fill the column by default; without flexGrow 0 the chips become tall pills.
+  filterScroll: { marginBottom: space[3], flexGrow: 0 },
   filterRow: { gap: space[2], paddingRight: space[4], alignItems: 'stretch' },
   filterChip: {
     minHeight: 40,

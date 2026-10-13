@@ -16,7 +16,7 @@ import { apiFetch, ApiError } from '../../lib/api';
 import { useSalon } from '../../lib/salon-context';
 import { useLanguage } from '../../lib/language-context';
 import { computeReadiness, statusLabel } from '../../lib/owner/settings';
-import { fastQue, font, fontSize, space } from '../../lib/theme';
+import { color, fastQue, font, fontSize, space } from '../../lib/theme';
 import { EmptyState, InlineError, PremiumCard, PremiumScreen, PremiumSectionHeader, Skeleton } from '../../components/ui';
 import { PaymentQrSection, scope } from '../../components/owner/ShopSetupSections';
 import { OwnerVoiceSettingsCard } from '../../components/owner/OwnerVoiceSettingsCard';
@@ -104,7 +104,10 @@ export default function OwnerSettingsScreen() {
           </PremiumCard>
 
           <ProfileSection salonId={selectedSalonId} onSaved={() => reload()} />
-          <PaymentQrSection salonId={selectedSalonId} paymentQr={paymentQr} onChanged={() => void load(selectedSalonId, false)} />
+          {/* This section is built for the light surface; on the dark Settings screen its dark text was unreadable. */}
+          <View style={styles.lightSurface} testID="settings-payment-qr-surface">
+            <PaymentQrSection salonId={selectedSalonId} paymentQr={paymentQr} onChanged={() => void load(selectedSalonId, false)} />
+          </View>
           <AutoAssignmentCard salonId={selectedSalonId} />
           <ShopContactVisibilityCard salonId={selectedSalonId} />
           <BillingProfileCard salonId={selectedSalonId} />
@@ -140,6 +143,7 @@ function Row({ label, value, mono, testID }: { label: string; value: string; mon
 }
 
 const styles = StyleSheet.create({
+  lightSurface: { backgroundColor: color.surface, borderRadius: 16, padding: space[4], marginBottom: space[4] },
   skeleton: { height: 120, borderRadius: 16 },
   identity: { marginBottom: space[4], gap: space[2] },
   row: { marginBottom: space[1] },
