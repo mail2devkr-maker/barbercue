@@ -154,10 +154,21 @@ disposable database. Nothing is mocked: every figure comes from the running back
 | File | What it shows |
 | --- | --- |
 | `screenshots/web-owner-overview-1440.jpg` | Overview, desktop |
-| `screenshots/web-owner-live-queue-1440.jpg` | Live Queue with the four separate places |
+| `screenshots/web-owner-live-queue-1440.jpg` | Live Queue with the separate places (Waiting, Assigned, In service, Completed, Cancelled & expired) |
 | `screenshots/web-owner-invoices-1440.jpg`, `web-owner-cancellations-1440.jpg` | Billing and cancellation analytics |
 | `screenshots/web-owner-overview-tablet-820.jpg`, `web-owner-overview-mobile-390.jpg` | Responsive layouts |
 | `screenshots/web-barber-my-day-1440.jpg` | A barber's own "My day" |
+| `screenshots/web-owner-assigned-not-started-1440.jpg`, `-1100`, `-820`, `-390` | Corrective mission: an **assigned** customer - barber and chair reserved, "Service not started", Start service - at four widths, no overflow |
+| `screenshots/web-owner-shop-picker-1440.jpg` | Shop picker for an owner with several shops (`/dashboard/salons?select=1`) |
+| `screenshots/web-owner-auto-assignment-setting-1440.jpg` | Automatic staff assignment switch in Shop Settings (server value, ON by default) |
+| `screenshots/web-barber-assigned-start-service-1440.jpg` | Barber "My day": status "Customer assigned", Assigned-to-you card with Start service |
+| `screenshots/android-owner-assigned-not-started.jpg` | Android Live Queue: Assigned section, Start service, no wrapped buttons |
+| `screenshots/android-owner-dashboard-after-login.jpg` | Android: after owner sign-in the app lands on the shop's Dashboard |
+| `screenshots/android-barber-assigned-hindi.jpg` | Android barber "My day" in Hindi with an assigned customer |
+| `screenshots/android-settings-automatic-assignment.jpg` | Android Shop Settings: Automatic assignment switch (and the payment QR card, now readable) |
+| `screenshots/android-owner-bookings-reschedule-cancel.jpg` | Android Bookings: Reschedule / Cancel appointment, with side padding and normal filter chips |
+
+All Android images above were taken from a build of the final mobile source (the APK was rebuilt from the commit that was pushed). Android Jest, the JS export and the emulator run are different kinds of evidence and are reported separately.
 | `screenshots/android-owner-dashboard*.jpg` | Android overview |
 | `screenshots/android-new-live-queue-customer.jpg` | New Live Queue customer (database-verified: a WALK_IN-source entry created by the operator) |
 | `screenshots/android-in-shop-appointment-created.jpg` | In-shop appointment (database-verified: `IN_SHOP`, no account) |
@@ -211,7 +222,7 @@ Approved workflow: **WAITING -> ASSIGNED -> IN SERVICE -> COMPLETED.**
 * The shell's logo, the Dashboard entry and the phone bottom bar open the **selected** shop's home. The public header's "Owner dashboard" link opens the last shop's home. A shop the user cannot operate sends them to the picker; nothing of it is shown.
 * **Removed:** the rail's public "Site" link; the menu link to `/account/profile` (the customer area is gated to customer accounts and bounced an owner to the **customer login**); Help now opens in a **new tab** so the dashboard session and page stay where they were.
 * Session restoration is the existing httpOnly-cookie refresh (unchanged, STAFF audience): a refresh, a new tab, back/forward and a shop switch were driven in a real browser and never reached the public home page; logout ends the session and a dashboard URL asks for sign-in again.
-* Android: the selected shop is remembered per account (secure storage) and restored after a relaunch only if the server still lists it; the app shows its loading view while the session restores and routes by role, and Android back from a tab returns to Dashboard, never to a customer screen.
+* Android: the selected shop is remembered per account (secure storage) and restored after a relaunch only if the server still lists it; the app shows its loading view while the session restores and routes by role, and Android back from the Account tab returns to the first tab (Dashboard / Today) and from there leaves the app (emulator-checked); it never opens a customer screen.
 
 ### 12.4 Website and Android changes
 
@@ -226,7 +237,24 @@ Approved workflow: **WAITING -> ASSIGNED -> IN SERVICE -> COMPLETED.**
 
 ### 12.6 Results
 
-See the final report in the pull request descriptions for exact numbers and the run URLs.
+Final run (13 Oct 2026): fresh `npm ci` checkouts of both branches, a new disposable PostgreSQL database, then the same workflow on GitHub Actions (run URLs and SHAs are in the pull request descriptions, because a SHA written here would be stale as soon as this file is committed).
+
+| Area | Result |
+| --- | --- |
+| Prisma validate, the whole migration chain, checksums, drift | pass; no owner-operations drift (only the four pre-existing drift items that master has too) |
+| Populated-database migration proof (defaults, preserved owner choices, hold indexes) | pass, scenarios A and B |
+| Backend typecheck / production build | pass / pass |
+| Backend unit tests | 1420 pass, 3 fail - all 3 are baseline (fixed 2026 dates compared with the real clock) |
+| Owner-operations e2e (assignment, start of service, concurrency, release, billing, notifications) | **56 / 56 pass** |
+| Other backend e2e suites | 64 pass, 18 fail in 5 suites - **all baseline** (reproduced on master: two suites do not compile, three need data the empty database lacks) |
+| Shared package tests | 425 pass (dashboard branch), 459 pass (Android branch) |
+| Website typecheck / production build | pass / pass |
+| Website Jest | 211 / 225 pass on the dashboard branch, 217 / 231 on the Android branch; the 14 failures are the baseline (ServiceCatalogPicker, ArrivalAlertOverlay), **0 new** |
+| Android typecheck / Jest / Expo JS export | pass / **all pass (627 tests)** / pass |
+
+Classification of every red test: **Baseline** (fails identically on master `f2f2b2c6`; recorded with its cause in `docs/owner-operations/baseline`), **Newly introduced** (none), **Environmental** (two master mobile tests that only exceed Jest's 5 s limit on a busy local machine; they pass on the GitHub runner and are not recorded).
+
+Android, on an emulator, with a local test build of the branch (a disposable application id, never the installed FastQue app) against the local backend: owner sign-in lands on the Dashboard of the remembered shop; the Live Queue shows Waiting / Assigned / In service separately; an assigned customer reads "Assigned - not started" with Start service; Start service creates the service and Complete service ends it; the Automatic assignment switch is saved by the server and survives an app restart; the barber sees "Assigned to you" with Start service (in Hindi too); Android back leaves the app from the first tab and never opens a customer screen. **Not run:** a physical phone, and the Play-installed 1.0.3 build (not verified). The Expo JS export in CI proves the bundle builds, not native behaviour.
 
 ### 12.7 Decisions that still need the owner
 
@@ -234,3 +262,46 @@ See the final report in the pull request descriptions for exact numbers and the 
 2. Retire the omitted-`startService` compatibility behaviour of `assign` once old Android builds are gone.
 3. Whether "Take next customer" should also start the service in one tap (today it assigns, and the barber presses Start).
 4. Merge order and a migration rehearsal on a Neon copy; physical-device testing; any Play/OTA step - all unchanged and not done.
+
+### 12.8 Final emulator run (13 Oct 2026): what it found and what was fixed
+
+Run against the local disposable stack with a build of the final Android source. Everything below was driven in the app and checked against the server (not just the screen).
+
+| Check | Result |
+| --- | --- |
+| Owner sign-in lands on the shop Dashboard; multi-shop with none remembered shows a chooser; the chosen shop is restored after a cold restart | pass |
+| Automatic assignment is ON by default; the owner switches it OFF and back ON; the screen and the server always agree; OFF survives an app restart | pass |
+| Waiting -> Assigned (not started) -> Start service -> In service -> Complete service, as the owner and as the barber (also in Hindi); finishing frees the barber and the next customer is assigned | pass |
+| Cancel an appointment with a reason (server stores the reason and actor OWNER); reschedule to a new day and time (server time moved) | pass |
+| Invoice created from a completed visit; a UPI payment recorded; balance due 0 (ledger checked on the server) | pass |
+| Every owner section opens without an error (14 sections plus the Live Queue and Bookings tabs) | pass in English; Hindi checked on the Live Queue board, the Shop hub and the barber day |
+| App restart and sign-in again: owner and barber sessions restored; Android back never opens a customer screen | pass |
+| Physical phone, Play-installed 1.0.3 | **not run / not verified** |
+
+Defects found in this run and fixed on the Android branch (each with a test or a re-check on the emulator):
+
+1. **Blank-looking screen after sign-in.** A barber or owner with several shops and none remembered saw only a title and the shop chips. They now see a clear "Select a shop" message (English and Hindi). The reported *intermittent blank screen after barber login* could not be reproduced as a crash or an empty render in six timed sign-in cycles (content in 3-4 s, no JS error in logcat); this missing prompt is the only blank-looking path the code has, and it is closed.
+2. The Live Queue "No-show" label wrapped to "No-sho / w" next to two other buttons; the assigned card now has "Change barber & chair" on its own row.
+3. The barber's "Current service" block repeated the assigned card's hint; it now says nothing is being served.
+4. The owner's in-service button said "Complete"; it now reads "Complete service" (Hindi: "सेवा पूर्ण करें").
+5. The Bookings tab had no side padding (title and cards touched the screen edges) and its filter chips stretched into tall pills when the list was short (both are present on master and on the Android stack).
+6. The payment QR card on the dark Settings screen used dark text on a near-black background and was unreadable; it now sits on a light card.
+7. **Reschedule always said "The customer has been notified"**, even for an in-shop guest with no account. It now reports what the server says (like the cancellation message).
+
+Found and not changed (no production impact): the demo database's invoice counter was behind its seeded invoices, so the first new invoice failed with a unique-constraint error (a generic 500). Production counters only move inside the issue transaction, so this cannot occur there; the disposable database was repaired. Some older owner overview sentences ("Good evening...", "0 customers are waiting") are still English on a Hindi screen (first-iteration body text, as stated in section 7).
+
+### 12.9 Migration rollout verdict
+
+The three owner-operations migrations are additive and safe to roll out in this order, with the application deployed after them:
+
+* `20261013000000_owner_ops_enums`: new enum types and one enum value; nothing existing is touched. Its value is used only by the next migration.
+* `20261013000100_owner_ops_foundation`: new nullable columns and defaults that reproduce today's behaviour, new tables, and CHECK constraints added NOT VALID then validated (every existing booking has a customer, so validation passes). The one relaxation is `bookings.customerId` becoming nullable, and the CHECK allows that only for `IN_SHOP` rows. Prisma runs the file as one transaction, so table locks are held to its end; the tables involved are small and the file is quick, but run it outside peak hours.
+* `20261014000000_owner_ops_assignment_state_default_on`: the default flip is audited and never overrides a recorded owner choice; two partial unique indexes are the database backstop for assigned barbers and chairs (no existing row can violate them). Creating them takes a short write lock on `queue_entries`. **On a production database every existing shop ends with automatic assignment ON** (no owner has ever been able to choose, so there is no choice to preserve): tell owners first, because assigned customers will appear under "Assigned" until a barber presses Start service.
+* Rolling the application back leaves the schema valid, but an assigned (CALLED) customer is unknown to older code, which could treat that barber as free; the indexes still stop two assigned customers on one barber. Start or release assigned customers before a rollback.
+* The migrations do not conflict with the migrations in the other open pull requests (`20261012120000_reviews_for_live_queue_visits`, `20261013120000_salon_owner_invitations`); they are independent and apply in any order.
+* Rehearse on a Neon copy first, as listed in section 10. The backfill reads `audit_logs`, which has no supporting index; on a very large audit table that is one scan, so check the time on the copy.
+
+### 12.10 Compatibility with other work
+
+* Master has not moved (`f2f2b2c6`). PR #195 (owner e-mail mapping): no conflicts, even though it touches the same shared files. PR #192 (Android QA safety): no shared files. **PR #187 (unified live queue / history, on hold) conflicts with this work in nine files** (the Prisma schema, `bookings.module.ts`, `dashboard-reviews.service.ts`, the analytics and payment-QR pages, the public salon page, `OwnerBookingsView.tsx`, `SetupChecklist.tsx`, `NotificationBell.tsx`); whichever merges second must be rebased by hand. It was not touched.
+* The Android branch is version 1.0.7 with the app-version runtime policy, so it cannot be delivered as an OTA to 1.0.3; it needs a new native build and a Play release.
