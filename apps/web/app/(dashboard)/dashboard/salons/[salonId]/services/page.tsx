@@ -7,6 +7,7 @@ import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { ServiceCatalogPicker } from "../../../../../../components/dashboard/ServiceCatalogPicker";
 import { CatalogImportPanel } from "../../../../../../components/dashboard/CatalogImportPanel";
+import { RemoveAllServicesControl } from "../../../../../../components/dashboard/RemoveAllServicesControl";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { Button } from "../../../../../../components/ui/Button";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
@@ -87,7 +88,10 @@ export default function DashboardServicesPage({
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [showInactive, setShowInactive] = useState(false);
 
+  const activeCount = services?.filter((service) => service.isActive).length ?? 0;
+  const inactiveCount = services?.filter((service) => !service.isActive).length ?? 0;
   const salonCurrency = services?.find((service) => service.currency)?.currency ?? null;
   const currencyLabel = salonCurrency ? ` (${salonCurrency})` : "";
 
@@ -318,10 +322,33 @@ export default function DashboardServicesPage({
 
       <section aria-labelledby="existing-services-heading">
         <h2 id="existing-services-heading" className={styles.sectionHeading}>Your services</h2>
-        {services?.length === 0 && <p className={styles.emptyState}>No services yet. Choose presets or add a custom service above.</p>}
-        {services && services.length > 0 && (
+        {services && (
+          <RemoveAllServicesControl
+            key={salonId + ":" + activeCount}
+            basePath={base}
+            activeCount={activeCount}
+            onRemoved={async (removedCount) => {
+              const refreshed = await apiFetch<SalonServiceDto[]>(base);
+              setServices(refreshed);
+              setEditingId(null);
+              setShowInactive(false);
+              setNotice(removedCount + " services turned off. Historical records are preserved.");
+              setError(null);
+            }}
+          />
+        )}
+        {activeCount === 0 && services && <p className={styles.emptyState}>
+          No active services. Choose presets or add a custom service above.
+        </p>}
+        {inactiveCount > 0 && (
+          <Button type="button" variant="outline"
+            onClick={() => setShowInactive((current) => !current)}>
+            {showInactive ? "Hide" : "Show"} turned-off services ({inactiveCount})
+          </Button>
+        )}
+        {services && (activeCount > 0 || showInactive) && (
           <ul className={styles.rowList}>
-            {services.map((service) => editingId === service.id ? (
+            {services.filter((service) => service.isActive || showInactive).map((service) => editingId === service.id ? (
               <li key={service.id} className={styles.row} style={{ display: "block" }}>
                 <div className={styles.editGrid}>
                   <div className={styles.fieldWrap}>
