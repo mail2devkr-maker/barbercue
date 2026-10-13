@@ -59,12 +59,50 @@ it('selects private on-device OCR by default when server Gemini OCR is unconfigu
       Array.isArray(node.props.children) &&
       node.props.children.join('').includes('selected row(s) need a valid duration')
     )).toBe(true);
-    const addButtons = renderer.root.findAllByType('button').filter((node) =>
-      typeof node.props.children === 'string' &&
-      node.props.children.startsWith('Step 3: Add ')
+    const importButtons = renderer.root.findAllByType('button').filter((node) =>
+      node.props.children === 'Import 0 reviewed services'
     );
-    expect(addButtons.length).toBeGreaterThan(0);
-    expect(addButtons.every((node) => node.props.disabled)).toBe(true);
+    const addSelectedButtons = renderer.root.findAllByType('button').filter((node) =>
+      node.props.children === 'Add selected services (1)'
+    );
+    expect(importButtons).toHaveLength(2);
+    expect(importButtons.every((node) => node.props.disabled)).toBe(true);
+    expect(addSelectedButtons).toHaveLength(2);
+    expect(addSelectedButtons.every((node) => !node.props.disabled)).toBe(true);
+
+    // The new button must not bypass required price/duration validation.
+    await act(async () => addSelectedButtons[1].props.onClick());
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(renderer.toJSON())).toContain('Cannot add all 1 selected services');
+
+    // Once the employee enters an explicitly approved duration, the same button
+    // follows the existing authenticated and duplicate-safe import-reviewed API.
+    const minutes = renderer.root.findByProps({ 'aria-label': 'Minutes' });
+    await act(async () => minutes.props.onChange({ target: { value: '30' } }));
+    const eligible = renderer.root.findAllByType('button').find((node) =>
+      node.props.children === 'Add selected services (1)'
+    );
+    apiFetch.mockResolvedValueOnce({
+      createdCount: 1, skippedCount: 0, added: ['Haircut'], skipped: [],
+    });
+    // Jest uses the Node test environment. Provide only the confirm dialog used
+    // by this save path rather than requiring a DOM/browser or network.
+    const originalWindow = globalThis.window;
+    globalThis.window = { confirm: jest.fn().mockReturnValue(true) };
+    try {
+      await act(async () => eligible.props.onClick());
+      expect(globalThis.window.confirm).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalWindow === undefined) delete globalThis.window;
+      else globalThis.window = originalWindow;
+    }
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    const [endpoint, options] = apiFetch.mock.calls[1];
+    expect(endpoint).toBe('dashboard/salons/s1/services/import-reviewed');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(options.body).services).toEqual([
+      { name: 'Haircut', price: 100, durationMinutes: 30 },
+    ]);
   } finally {
     if (renderer) await act(async () => renderer.unmount());
   }
