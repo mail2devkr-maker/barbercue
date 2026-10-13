@@ -146,7 +146,7 @@ export function StaffMyDayCard({ salonId, onChanged }: { salonId: string; onChan
           <Button title={t.completeServiceAction} onPress={confirmComplete} loading={busy === 'complete'} style={styles.button} />
         </View>
       ) : (
-        <Text style={styles.sub}>{assigned ? t.serviceNotStartedHint : t.notServingNow}</Text>
+        <Text style={styles.sub}>{t.notServingNow}</Text>
       )}
 
       <Text style={styles.heading}>{t.waitingYouCanTakeHeading.replace('{count}', String(eligible.length))}</Text>
