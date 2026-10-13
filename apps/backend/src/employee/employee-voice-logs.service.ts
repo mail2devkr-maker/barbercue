@@ -24,7 +24,11 @@ export class EmployeeVoiceLogsService {
       select: { id: true },
     });
     if (!profile) {
-      throw new AppException(AuthErrorCode.FORBIDDEN_ROLE, 'Employee profile is not configured.', HttpStatus.FORBIDDEN);
+      throw new AppException(
+        AuthErrorCode.FORBIDDEN_ROLE,
+        'Employee profile is not configured.',
+        HttpStatus.FORBIDDEN,
+      );
     }
     return profile.id;
   }
@@ -39,7 +43,10 @@ export class EmployeeVoiceLogsService {
     return rows.map((row) => this.toDto(row));
   }
 
-  async create(userId: string, input: CreateEmployeeVoiceLogInput): Promise<EmployeeVoiceOnboardingLogDto> {
+  async create(
+    userId: string,
+    input: CreateEmployeeVoiceLogInput,
+  ): Promise<EmployeeVoiceOnboardingLogDto> {
     const employeeProfileId = await this.profileId(userId);
 
     // A lead can be linked ONLY if it belongs to the caller's employee profile.
@@ -51,14 +58,25 @@ export class EmployeeVoiceLogsService {
         select: { id: true, shopName: true },
       });
       if (!lead) {
-        throw new AppException(CrmErrorCode.LEAD_NOT_FOUND, 'This CRM lead is not assigned to you.', HttpStatus.NOT_FOUND);
+        throw new AppException(
+          CrmErrorCode.LEAD_NOT_FOUND,
+          'This CRM lead is not assigned to you.',
+          HttpStatus.NOT_FOUND,
+        );
       }
       shopName = lead.shopName;
     }
 
     // Client retry with the same idempotency key NEVER creates a duplicate log.
-    const key = { employeeProfileId_clientRequestId: { employeeProfileId, clientRequestId: input.clientRequestId } };
-    const previous = await this.prisma.employeeOnboardingVoiceLog.findUnique({ where: key });
+    const key = {
+      employeeProfileId_clientRequestId: {
+        employeeProfileId,
+        clientRequestId: input.clientRequestId,
+      },
+    };
+    const previous = await this.prisma.employeeOnboardingVoiceLog.findUnique({
+      where: key,
+    });
     if (previous) return this.toDto(previous);
 
     try {
@@ -92,7 +110,10 @@ export class EmployeeVoiceLogsService {
             entityType: 'EmployeeOnboardingVoiceLog',
             entityId: created.id,
             // No transcript, contacts, prices or precise coordinates in audit metadata.
-            metadata: { leadId: created.leadId, serviceCount: input.services.length },
+            metadata: {
+              leadId: created.leadId,
+              serviceCount: input.services.length,
+            },
           },
         });
         return created;
@@ -100,8 +121,13 @@ export class EmployeeVoiceLogsService {
       return this.toDto(row);
     } catch (error) {
       // A concurrent retry could win the unique insert race. Fetch only this employee's key.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const existing = await this.prisma.employeeOnboardingVoiceLog.findUnique({ where: key });
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.employeeOnboardingVoiceLog.findUnique({
+          where: key,
+        });
         if (existing) return this.toDto(existing);
       }
       throw error;
@@ -128,7 +154,9 @@ export class EmployeeVoiceLogsService {
     notes: string | null;
     createdAt: Date;
   }): EmployeeVoiceOnboardingLogDto {
-    const services = voiceOnboardingServiceSchema.array().safeParse(row.services);
+    const services = voiceOnboardingServiceSchema
+      .array()
+      .safeParse(row.services);
     return {
       id: row.id,
       leadId: row.leadId,
