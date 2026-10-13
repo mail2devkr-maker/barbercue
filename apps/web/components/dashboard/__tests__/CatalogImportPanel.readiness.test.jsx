@@ -146,13 +146,15 @@ it('Add Imported Services saves eligible rows and keeps unpriced services for re
     );
     expect(addImported).toHaveLength(2);
     expect(addImported.every((b) => !b.props.disabled)).toBe(true);
-    expect(JSON.stringify(renderer.toJSON())).toContain('2 selected');
+    expect(renderer.root.findAllByType('strong').some((node) =>
+      node.props.children.join('') === '1 ready to add out of 2 selected.'
+    )).toBe(true);
     await act(async () => addImported[0].props.onClick());
     const saves = apiFetch.mock.calls.filter(([path]) => path.endsWith('/import-reviewed'));
     expect(saves).toHaveLength(1);
     expect(saves[0][0]).toBe('dashboard/salons/shop123/services/import-reviewed');
     expect(JSON.parse(saves[0][1].body).services).toEqual([{
-      name: 'Hydra Facial', category: 'Facial', description: undefined,
+      name: 'Hydra Facial', category: 'Facial',
       price: 4999, durationMinutes: 90,
     }]);
     expect(globalThis.window.confirm).toHaveBeenCalledWith(
