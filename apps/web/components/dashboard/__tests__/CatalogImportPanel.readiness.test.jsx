@@ -52,8 +52,13 @@ it('selects private on-device OCR by default when server Gemini OCR is unconfigu
     expect(apiFetch).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(renderer.toJSON())).toContain('Haircut');
     expect(JSON.stringify(renderer.toJSON())).toContain('Recognized catalog text');
-    expect(JSON.stringify(renderer.toJSON())).toContain('0 ready to add out of 1 selected');
-    expect(JSON.stringify(renderer.toJSON())).toContain('1 selected row(s) need a valid duration');
+    expect(renderer.root.findAllByType('strong').some((node) =>
+      node.props.children.join('') === '0 ready to add out of 1 selected.'
+    )).toBe(true);
+    expect(renderer.root.findAllByType('p').some((node) =>
+      Array.isArray(node.props.children) &&
+      node.props.children.join('').includes('selected row(s) need a valid duration')
+    )).toBe(true);
     const addButtons = renderer.root.findAllByType('button').filter((node) =>
       typeof node.props.children === 'string' &&
       node.props.children.startsWith('Step 3: Add ')
