@@ -68,3 +68,48 @@ export function suggestOnboardingCounts(text: string): { chairCount?: number; st
   if (staff && Number(staff[1]) <= 10000) result.staffCount = Number(staff[1]);
   return result;
 }
+
+
+/**
+ * Only accept explicitly labelled, comma/newline-separated shop facts.
+ * Never fill a phone/address or a salon name from a free-form guess.
+ * The employee always sees and edits every extracted field before submission.
+ */
+export interface ShopDetailSuggestions {
+  shopName?: string;
+  contactName?: string;
+  phone?: string;
+  city?: string;
+  locality?: string;
+  addressLine?: string;
+}
+export function suggestShopDetails(text: string): ShopDetailSuggestions {
+  const facts: ShopDetailSuggestions = {};
+  const input = digitsToAscii(text);
+  const labels: Array<[keyof ShopDetailSuggestions, RegExp, number]> = [
+    ['shopName', /^(?:shop(?:\s+name)?|salon(?:\s+name)?|दुकान\s*का\s*नाम|सैलून\s*का\s*नाम)\s*(?:is|है|:|-)?\s*(.+)$/iu, 180],
+    ['contactName', /^(?:owner(?:\s+name)?|contact(?:\s+name)?|मालिक(?:\s+का\s*नाम)?)\s*(?:is|है|:|-)?\s*(.+)$/iu, 120],
+    ['city', /^(?:city|शहर)\s*(?:is|है|:|-)?\s*(.+)$/iu, 120],
+    ['locality', /^(?:area|locality|एरिया|मोहल्ला)\s*(?:is|है|:|-)?\s*(.+)$/iu, 160],
+    ['addressLine', /^(?:full\s+address|address|पता)\s*(?:is|है|:|-)?\s*(.+)$/iu, 300],
+  ];
+  for (const part of input.split(/[,;।\n]+/u)) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const phone = /^(?:mobile(?:\s+number)?|phone(?:\s+number)?|contact\s+number|मोबाइल(?:\s+नंबर)?|फोन\s*नंबर)\s*(?:is|है|:|-)?\s*([+0-9\s-]+)$/iu.exec(trimmed);
+    if (phone) {
+      const normalized = phone[1].replace(/[\s-]/g, '');
+      if (/^\+?[0-9]{10,15}$/.test(normalized)) facts.phone = normalized;
+      continue;
+    }
+    for (const [key, pattern, limit] of labels) {
+      const match = pattern.exec(trimmed);
+      if (match) {
+        const value = match[1].trim();
+        if (value.length >= 2 && value.length <= limit) facts[key] = value;
+        break;
+      }
+    }
+  }
+  return facts;
+}
