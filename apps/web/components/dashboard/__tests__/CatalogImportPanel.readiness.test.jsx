@@ -43,7 +43,7 @@ it('selects private on-device OCR by default when server Gemini OCR is unconfigu
     await act(async () => input.props.onChange({ target: { files: [file] } }));
     expect(renderer.root.findAllByType('li')).toHaveLength(1);
     const button = renderer.root.findAllByType('button').find((node) =>
-      node.props.children === 'Extract & preview (1)'
+      node.props.children === 'Step 1: Extract & preview (1)'
     );
     expect(button).toBeDefined();
     await act(async () => button.props.onClick());
@@ -52,6 +52,14 @@ it('selects private on-device OCR by default when server Gemini OCR is unconfigu
     expect(apiFetch).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(renderer.toJSON())).toContain('Haircut');
     expect(JSON.stringify(renderer.toJSON())).toContain('Recognized catalog text');
+    expect(JSON.stringify(renderer.toJSON())).toContain('0 ready to add out of 1 selected');
+    expect(JSON.stringify(renderer.toJSON())).toContain('1 selected row(s) need a valid duration');
+    const addButtons = renderer.root.findAllByType('button').filter((node) =>
+      typeof node.props.children === 'string' &&
+      node.props.children.startsWith('Step 3: Add ')
+    );
+    expect(addButtons.length).toBeGreaterThan(0);
+    expect(addButtons.every((node) => node.props.disabled)).toBe(true);
   } finally {
     if (renderer) await act(async () => renderer.unmount());
   }
