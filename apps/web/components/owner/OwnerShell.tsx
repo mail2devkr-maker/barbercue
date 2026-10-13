@@ -17,6 +17,7 @@ import { DASHBOARD_PATHS, DISCOVERY_PATHS, Role } from "@barbercue/shared";
 import type { CapacitySummaryDto, OwnerSearchResultDto, SalonWorkplaceDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import { rememberLastShop } from "../../lib/last-shop";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { AdminManagingBanner } from "../dashboard/AdminManagingBanner";
 import { Icon } from "./icons";
@@ -64,6 +65,8 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
   const search = searchParams.toString();
 
   const [workplaces, setWorkplaces] = useState<SalonWorkplaceDto[]>([]);
+  // True once the server's list of shops this user may operate has actually arrived.
+  const [workplacesLoaded, setWorkplacesLoaded] = useState(false);
   const [counts, setCounts] = useState({ waiting: 0, inService: 0, unread: 0 });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,7 +88,9 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
     let cancelled = false;
     apiFetch<SalonWorkplaceDto[]>(`${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.workplaces}`)
       .then((list) => {
-        if (!cancelled) setWorkplaces(list);
+        if (cancelled) return;
+        setWorkplaces(list);
+        setWorkplacesLoaded(true);
       })
       .catch(() => {
         /* the menu still works from the session roles */
@@ -94,6 +99,18 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
       cancelled = true;
     };
   }, [salonId]);
+
+  // Remember the shop being worked in - but only once the server confirms this user may operate it.
+  useEffect(() => {
+    if (user && workplace) rememberLastShop(user.id, salonId);
+  }, [user, workplace, salonId]);
+
+  // A shop this user no longer (or never) had access to: go to the shop picker rather than sit on a
+  // page full of refused requests. A platform admin managing on someone's behalf is exempt - the API
+  // authorises each of their actions.
+  useEffect(() => {
+    if (workplacesLoaded && !workplace && !isAdmin) router.replace("/dashboard/salons?select=1");
+  }, [workplacesLoaded, workplace, isAdmin, router]);
 
   const refreshCounts = useCallback(() => {
     const base = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}`;
@@ -193,10 +210,11 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
         <div className={ui.app}>
           {/* ---- narrow icon rail: jump between sections ---- */}
           <nav className={ui.rail} aria-label="Sections">
-            <Link href="/dashboard/salons" className={ui.railLogo} aria-label="All my shops">
+            <Link href={`/dashboard/salons/${salonId}`} className={ui.railLogo} aria-label="Dashboard home" title="Dashboard home">
               F
             </Link>
-            {visibleGroups.map((group) => {
+            {/* Only groups that live inside the dashboard: "More" holds Help, a public page that opens in a new tab. */}
+            {visibleGroups.filter((group) => group.id !== "OTHER").map((group) => {
               const first = items.find((i) => i.group === group.id)!;
               const active = currentGroup === group.id;
               return (
@@ -213,10 +231,6 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
               );
             })}
             <span className={ui.railSpacer} />
-            <Link href="/" className={ui.railBtn} title="Visit the public FastQue site">
-              <Icon name="eye" size={22} />
-              <span>Site</span>
-            </Link>
           </nav>
 
           {/* ---- expanded sidebar ---- */}
@@ -245,9 +259,13 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
                             href={hrefFor(item, salonId)}
                             className={`${ui.navLink} ${active ? ui.navLinkActive : ""}`}
                             aria-current={active ? "page" : undefined}
+                            {...(item.newTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
                           >
                             <Icon name={item.icon} />
-                            <span className={ui.navLabel}>{item.id === "overview" && kind === "staff" ? "My day" : item.label}</span>
+                            <span className={ui.navLabel}>
+                              {item.id === "overview" && kind === "staff" ? "My day" : item.label}
+                              {item.newTab && <span className={ui.srOnly}> (opens in a new tab)</span>}
+                            </span>
                             {badge !== null && (
                               <span className={`${ui.navBadge} ${item.badge === "inService" ? ui.navBadgeQuiet : ""}`} aria-label={`${badge} ${item.badge === "unread" ? "unread" : ""}`}>
                                 {badge > 99 ? "99+" : badge}
@@ -330,15 +348,19 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
                         <div className={ui.menuWhoName}>{displayName}</div>
                         <div className={ui.menuWhoSub}>{kind === "owner" ? "Shop owner" : "Barber"} · {workplace?.name ?? "this shop"}</div>
                       </div>
-                      <Link href="/account/profile" className={ui.menuItem} role="menuitem">
-                        <Icon name="user" /> Account settings
-                      </Link>
-                      <Link href="/contact-us" className={ui.menuItem} role="menuitem">
-                        <Icon name="help" /> Help &amp; support
-                      </Link>
-                      <Link href="/dashboard/salons" className={ui.menuItem} role="menuitem">
-                        <Icon name="store" /> All my shops
-                      </Link>
+                      {kind === "owner" && (
+                        <Link href={`/dashboard/salons/${salonId}/settings`} className={ui.menuItem} role="menuitem">
+                          <Icon name="settings" /> Shop settings
+                        </Link>
+                      )}
+                      <a href="/contact-us" className={ui.menuItem} role="menuitem" target="_blank" rel="noopener noreferrer">
+                        <Icon name="help" /> Help &amp; support<span className={ui.srOnly}> (opens in a new tab)</span>
+                      </a>
+                      {(ownedShops.length > 1 || workplaces.length > 1) && (
+                        <Link href="/dashboard/salons?select=1" className={ui.menuItem} role="menuitem">
+                          <Icon name="store" /> Switch shop
+                        </Link>
+                      )}
                       <button type="button" className={ui.menuItem} role="menuitem" onClick={() => void handleLogout()}>
                         <Icon name="logout" /> Log out
                       </button>

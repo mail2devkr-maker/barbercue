@@ -95,6 +95,8 @@ export function StaffHome({ salonId }: { salonId: string }) {
   const onDuty = work.status === StaffMemberStatus.ACTIVE;
   const a = AVAILABILITY[work.availabilityState];
   const current = work.current;
+  // A customer the shop (or the automatic allocator) assigned to this barber: not started yet.
+  const assignedToMe = current ? null : (work.assigned ?? null);
   const eligible = work.waiting.filter((w) => w.eligible);
 
   return (
@@ -140,7 +142,7 @@ export function StaffHome({ salonId }: { salonId: string }) {
 
       <div className={`${ui.grid} ${ui.twoCol} ${ui.mt16}`}>
         <div className={ui.sideStack}>
-          <Card title="Current service">
+          <Card title={current ? "Current service" : assignedToMe ? "Assigned to you" : "Current service"}>
             {current ? (
               <div className={`${ui.entry} ${ui.entryInService}`}>
                 <div className={ui.entryHead}>
@@ -166,6 +168,42 @@ export function StaffHome({ salonId }: { salonId: string }) {
                   </Btn>
                 </div>
               </div>
+            ) : assignedToMe ? (
+              <div className={`${ui.entry} ${ui.entryAssigned}`}>
+                <div className={ui.entryHead}>
+                  <div className={ui.token}>#{assignedToMe.tokenNumber}</div>
+                  <div className={ui.entryWho}>
+                    <div className={ui.entryName}>{assignedToMe.customerLabel}</div>
+                    <div className={ui.entryMeta}>
+                      {assignedToMe.serviceName ?? "Service"}
+                      {assignedToMe.chairLabel ? ` · ${assignedToMe.chairLabel}` : ""}
+                    </div>
+                    {assignedToMe.customerPhone && (
+                      <a className={`${ui.entryMeta} ${ui.entryPhone}`} href={`tel:${assignedToMe.customerPhone}`}>
+                        {assignedToMe.customerPhone}
+                      </a>
+                    )}
+                  </div>
+                  <Badge tone="info">Assigned · not started</Badge>
+                </div>
+                <div className={ui.entryReason}>The service has not started. Press Start service when the customer is in your chair.</div>
+                <div className={ui.entryActions}>
+                  <Btn
+                    variant="primary"
+                    icon="scissors"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      void act(
+                        "start",
+                        () => apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.queueEntries}/${assignedToMe.queueEntryId}/${DASHBOARD_PATHS.startService}`, { method: "POST", headers: { "Idempotency-Key": newIdempotencyKey() } }),
+                        `${assignedToMe.customerLabel} — service started.`,
+                      )
+                    }
+                  >
+                    {busy === "start" ? "Starting…" : "Start service"}
+                  </Btn>
+                </div>
+              </div>
             ) : (
               <EmptyState
                 title={onDuty ? "You are free" : "You are off duty"}
@@ -174,7 +212,7 @@ export function StaffHome({ salonId }: { salonId: string }) {
                     <Btn
                       variant="primary"
                       disabled={busy !== null || eligible.length === 0}
-                      onClick={() => void act("next", () => apiFetch(`${base}/queue/take-next`, { method: "POST" }), "Customer assigned to you.")}
+                      onClick={() => void act("next", () => apiFetch(`${base}/queue/take-next`, { method: "POST" }), "Customer assigned to you. Press Start service when they are in your chair.")}
                     >
                       {eligible.length === 0 ? "No one to take yet" : `Take next customer (${eligible.length} can be served by you)`}
                     </Btn>

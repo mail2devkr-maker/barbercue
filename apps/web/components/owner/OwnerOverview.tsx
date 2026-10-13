@@ -237,8 +237,8 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
       </section>
 
       <div className={ui.glanceStrip} role="list" aria-label="Today at a glance">
-        <GlanceCard label="Waiting in Live Queue" value={k.waitingInQueue} foot="Not yet seated" icon="queue" tone="warn" href={`/dashboard/salons/${salonId}/queue?view=waiting`} />
-        <GlanceCard label="In service now" value={k.inService} foot="Seated customers" icon="scissors" tone="ok" href={`/dashboard/salons/${salonId}/queue?view=in-service`} />
+        <GlanceCard label="Waiting in Live Queue" value={k.waitingInQueue} foot="Waiting for available staff" icon="queue" tone="warn" href={`/dashboard/salons/${salonId}/queue?view=waiting`} />
+        <GlanceCard label="In service now" value={k.inService} foot="Service started" icon="scissors" tone="ok" href={`/dashboard/salons/${salonId}/queue?view=in-service`} />
         <GlanceCard label="Revenue recorded today" value={revenue.hasRecordedPayments ? money(k.recordedRevenueToday) : "—"} foot={revenue.hasRecordedPayments ? `${k.recordedPaymentsToday} payment${k.recordedPaymentsToday === 1 ? "" : "s"} recorded` : "No payments recorded yet"} icon="rupee" tone="brand" href={`/dashboard/salons/${salonId}/revenue`} />
         <GlanceCard label="Barbers available" value={k.availableBarbers} foot="On duty and free" icon="team" tone="ok" />
         <GlanceCard label="Barbers busy" value={k.busyBarbers} foot="With a customer" icon="scissors" tone="warn" />
@@ -363,8 +363,9 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
             <Card title="Live Queue" action={<CardLinkIcon href={`/dashboard/salons/${salonId}/queue`} label="Open the Live Queue" />}>
               <div className={`${ui.statGrid} ${ui.statGridCompact}`}>
                 {[
-                  ["Waiting", qs.waiting],
-                  ["Called", qs.called],
+                  // Called-to-the-counter customers have no barber yet, so they are still waiting for staff.
+                  ["Waiting", qs.waiting + qs.called],
+                  ["Assigned", qs.assigned ?? 0],
                   ["In service", qs.inService],
                   ["Completed", qs.completedToday],
                   ["Cancelled", qs.cancelledToday + qs.expiredToday],
@@ -377,7 +378,7 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
                 ))}
               </div>
               <p className={ui.cardSub} style={{ marginTop: 10 }}>
-                Each person is counted once: seated customers are not also counted as waiting.
+                Each person is counted once: an assigned customer is not waiting and is not in service until the barber starts the service.
               </p>
               <div className={`${ui.rowWrap} ${ui.mt12}`}>
                 <Btn variant="primary" small icon="plus" onClick={() => setAddOpen(true)}>
@@ -590,7 +591,7 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
             <Link className={ui.quickTile} href={`/dashboard/salons/${salonId}/queue`}>
               <Icon name="settings" />
               <span>
-                Auto-assign<span className={ui.quickSub}>{data.settings.autoAssignEnabled ? "On" : "Off"}</span>
+                Automatic assignment<span className={ui.quickSub}>{data.settings.autoAssignEnabled ? "On" : "Off"}</span>
               </span>
             </Link>
           </div>

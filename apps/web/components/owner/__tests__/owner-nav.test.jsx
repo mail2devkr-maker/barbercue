@@ -45,11 +45,29 @@ describe("owner navigation", () => {
 
   it("gives a barber the operational menu only; billing, analytics and settings stay owner-only", () => {
     const staff = navItemsFor("staff").map((i) => i.id);
-    for (const id of ["overview", "queue", "in-service", "notifications", "help", "account"]) expect(staff).toContain(id);
+    for (const id of ["overview", "queue", "in-service", "notifications", "help"]) expect(staff).toContain(id);
     for (const id of ["bookings", "customers", "analytics", "revenue", "payments", "invoices", "settings", "staff", "payment-qr", "cancellations"]) {
       expect(staff).not.toContain(id);
     }
     expect(navItemsFor("owner").length).toBe(NAV_ITEMS.length);
+  });
+
+  // An owner who clicks a menu entry must stay in the signed-in owner area. /account/* is the CUSTOMER
+  // area (gated to customer accounts) and the public site would end up in front of an owner, so the
+  // dashboard menu never links to either in the same tab.
+  it("never sends an owner into the customer account area, and opens public pages in a new tab", () => {
+    for (const item of NAV_ITEMS.filter((i) => i.href)) {
+      expect({ id: item.id, intoCustomerArea: item.href.startsWith("/account") }).toEqual({ id: item.id, intoCustomerArea: false });
+      expect({ id: item.id, newTab: item.newTab === true }).toEqual({ id: item.id, newTab: true });
+    }
+    expect(NAV_ITEMS.find((i) => i.id === "account")).toBeUndefined();
+  });
+
+  it("the first entry is the dashboard home of the selected shop", () => {
+    const home = NAV_ITEMS[0];
+    expect(home).toMatchObject({ id: "overview", label: "Dashboard", group: "HOME", path: "" });
+    expect(hrefFor(home, "shop-7")).toBe("/dashboard/salons/shop-7");
+    expect(NAV_GROUPS[0]).toMatchObject({ id: "HOME", label: "Home" });
   });
 
   it("puts Analytics in the left navigation, once", () => {
