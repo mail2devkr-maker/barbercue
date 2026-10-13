@@ -29,11 +29,12 @@ export default function DashboardPaymentQrPage({
   return (
     <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/dashboard/salons">
     <main className={styles.page}>
-      <h1 className={styles.pageTitle}>Payment QR</h1>
+      <h1 className={styles.pageTitle}>Online Booking Payment QR</h1>
       <p className={styles.pageSubtitle}>
-        Required for online bookings — a customer paying through the app or website scans this to
-        pay you directly. Walk-ins never need it, and you can always add or change it later from
-        Settings.
+        Upload your shop&apos;s payment QR code so customers booking through the FastQue app or
+        website can scan it and pay your shop directly. Online bookings are still confirmed without
+        one, and those customers pay at the shop. Customers booking directly at your shop or joining
+        your in-shop Live Queue never need a payment QR.
       </p>
       <SetupNavigation salonId={salonId} currentStep="payment-qr" section="steps" />
 

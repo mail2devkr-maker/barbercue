@@ -5,6 +5,7 @@ function harness(overrides: Record<string, unknown> = {}) {
     $executeRaw: jest.fn().mockResolvedValue(0),
     chair: { findFirst: jest.fn().mockResolvedValue({ id: 'c1', status: 'ACTIVE' }) },
     serviceSession: { findFirst: jest.fn().mockResolvedValue(null) },
+    queueEntry: { findFirst: jest.fn().mockResolvedValue(null) },
     manualChairOccupancy: {
       findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
@@ -34,6 +35,16 @@ describe('ManualChairOccupancyService', () => {
     const h = harness();
     h.tx.serviceSession.findFirst.mockResolvedValue({ id: 'ss1' });
     await expect(h.service.occupyLocal('u1', 's1', 'c1')).rejects.toMatchObject({ response: expect.anything() });
+    expect(h.tx.manualChairOccupancy.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a chair that is reserved for an assigned (not yet started) customer', async () => {
+    const h = harness();
+    h.tx.queueEntry.findFirst.mockResolvedValue({ id: 'q-assigned' });
+    await expect(h.service.occupyLocal('u1', 's1', 'c1')).rejects.toBeDefined();
+    expect(h.tx.queueEntry.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { assignedChairId: 'c1', status: 'CALLED' } }),
+    );
     expect(h.tx.manualChairOccupancy.create).not.toHaveBeenCalled();
   });
 

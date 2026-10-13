@@ -1,0 +1,27 @@
+{
+  "_why": "Three tests pin fixed 2026 calendar dates (2026-09-24 and 2026-06-01) but compare them with the real clock, so they began failing once real time passed those dates. They are unrelated to owner operations.",
+  "generatedFrom": "master f2f2b2c6f9d979898f2d85e27ab412928c3ef03c (clean npm ci, Node v24.18.0)",
+  "totals": {
+    "passed": 1347,
+    "failed": 3,
+    "suites": 90,
+    "failedSuites": 2
+  },
+  "failures": [
+    {
+      "file": "apps/backend/src/dashboard-analytics/dashboard-analytics.service.spec.ts",
+      "name": "DashboardAnalyticsService buckets bookings into peak/slow hours by IST hour-of-day",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "file": "apps/backend/src/bookings/reservation.service.spec.ts",
+      "name": "ReservationService isStaffFreeForInterval CASE J/S — an ACTIVE walk-in session for this staff overlapping the candidate blocks it",
+      "reason": "Error: expect(received).toEqual(expected) // deep equality"
+    },
+    {
+      "file": "apps/backend/src/bookings/reservation.service.spec.ts",
+      "name": "ReservationService isStaffFreeForInterval an ACTIVE session that does not overlap the candidate interval does not block it",
+      "reason": "Error: expect(received).toBe(expected) // Object.is equality"
+    }
+  ]
+}

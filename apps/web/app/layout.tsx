@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "../lib/auth-context";
 import { SiteHeader } from "../components/layout/SiteHeader";
 import { SiteFooter } from "../components/layout/SiteFooter";
+import { HideOnOwnerShell } from "../components/layout/HideOnOwnerShell";
 import { UniqueVisitorTracker } from "../components/analytics/UniqueVisitorTracker";
 
 // next/font self-hosts these at build time (no runtime request to Google, no layout shift) and
@@ -63,7 +64,9 @@ export default function RootLayout({
         <AuthProvider>
           <SiteHeader />
           {children}
-          <SiteFooter />
+          <HideOnOwnerShell>
+            <SiteFooter />
+          </HideOnOwnerShell>
         </AuthProvider>
       </body>
     </html>

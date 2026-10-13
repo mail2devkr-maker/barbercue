@@ -101,8 +101,10 @@ export class QueueEntryExpiryService {
       if (candidate && (!earliest || candidate.getTime() < earliest.getTime())) earliest = candidate;
     };
 
+    // Only customers called to the counter with NO barber yet: an ASSIGNED customer (a barber and
+    // chair are reserved) is not "failing to respond to a call" and gets no minutes-based timeout.
     const called = await this.prisma.queueEntry.findMany({
-      where: { status: QueueEntryStatus.CALLED },
+      where: { status: QueueEntryStatus.CALLED, assignedStaffId: null },
       select: { salonId: true, calledAt: true },
     });
     const policyCache = new Map<string, CancellationPolicyDto>();
@@ -118,6 +120,20 @@ export class QueueEntryExpiryService {
           entry.calledAt.getTime() +
             policy.queueCallResponseGraceMinutes * 60_000,
         ),
+      );
+    }
+
+    // An assigned-but-never-started customer is released at the end of the salon-local day it was
+    // assigned on (see markStaleAssignedExpired) - the only automatic rule for assignments.
+    const assignedStale = await this.prisma.queueEntry.findMany({
+      where: { status: QueueEntryStatus.CALLED, assignedStaffId: { not: null } },
+      select: { salonId: true, joinedAt: true, calledAt: true, assignedAt: true },
+    });
+    for (const entry of assignedStale) {
+      const zone = await this.availability.getSalonTimeZone(entry.salonId);
+      if (!zone) continue;
+      consider(
+        zonedDayBounds(entry.assignedAt ?? entry.calledAt ?? entry.joinedAt, zone)?.end ?? null,
       );
     }
 
@@ -173,6 +189,84 @@ export class QueueEntryExpiryService {
     if (expiredCount > 0) {
       this.logger.log(`Marked ${expiredCount} queue entr(y/ies) as expired.`);
     }
+    const staleAssigned = await this.markStaleAssignedExpired();
+    if (staleAssigned > 0) {
+      this.logger.log(`Expired ${staleAssigned} assignment(s) left unstarted past the end of their day.`);
+    }
+  }
+
+  /**
+   * Owner-operations corrective mission: the ONLY automatic rule for an assigned customer.
+   *
+   * A customer who is ASSIGNED (CALLED with a reserved barber and chair) but whose service was never
+   * started holds that barber and chair. Left alone forever, a forgotten assignment from yesterday
+   * would silently block a barber and a chair today, so an assignment does not survive the salon-local
+   * day it was made on: past that day's end the entry becomes EXPIRED (never NO_SHOW - nobody
+   * decided the customer failed to arrive) and the barber and chair are free again. There is
+   * deliberately NO minutes-based timeout: how long an assigned customer may wait for a barber to
+   * press Start is a product decision the owner has not made, and the existing call-response grace
+   * period (queueCallResponseGraceMinutes) applies only to customers with no barber assigned.
+   * A salon with no trustworthy timezone is skipped rather than guessed at.
+   */
+  async markStaleAssignedExpired(): Promise<number> {
+    const now = Date.now();
+    const candidates = await this.prisma.queueEntry.findMany({
+      where: { status: QueueEntryStatus.CALLED, assignedStaffId: { not: null } },
+      select: { id: true, salonId: true, joinedAt: true, calledAt: true, assignedAt: true },
+    });
+    if (candidates.length === 0) return 0;
+
+    const timeZoneCache = new Map<string, string | null>();
+    let count = 0;
+    const affectedSalons = new Set<string>();
+    for (const entry of candidates) {
+      if (!timeZoneCache.has(entry.salonId)) {
+        timeZoneCache.set(entry.salonId, await this.availability.getSalonTimeZone(entry.salonId));
+      }
+      const zone = timeZoneCache.get(entry.salonId);
+      if (!zone) continue;
+      const assignedOn = entry.assignedAt ?? entry.calledAt ?? entry.joinedAt;
+      const boundary = zonedDayBounds(assignedOn, zone)?.end ?? null;
+      if (!boundary || now < boundary.getTime()) continue;
+
+      const done = await this.prisma.$transaction(async (tx) => {
+        const claim = await tx.queueEntry.updateMany({
+          where: {
+            id: entry.id,
+            status: QueueEntryStatus.CALLED,
+            assignedStaffId: { not: null },
+          },
+          data: { status: QueueEntryStatus.EXPIRED },
+        });
+        if (claim.count === 0) return false;
+        await tx.auditLog.create({
+          data: {
+            actorUserId: null,
+            action: 'QUEUE_ASSIGNMENT_EXPIRED',
+            entityType: 'QueueEntry',
+            entityId: entry.id,
+            metadata: {
+              rule: 'DAY_ROLLOVER',
+              assignedOn: assignedOn.toISOString(),
+              boundary: boundary.toISOString(),
+            },
+          },
+        });
+        return true;
+      });
+      if (done) {
+        count += 1;
+        affectedSalons.add(entry.salonId);
+        this.realtime.emitQueueEntryExpired(entry.salonId, entry.id);
+      }
+    }
+    for (const salonId of affectedSalons) {
+      await this.queueService.recomputeEtas(salonId);
+      this.realtime.emitQueueUpdated(salonId);
+      // The freed barber and chair may now take the next waiting customer.
+      this.queueService.onCapacityFreed(salonId);
+    }
+    return count;
   }
 
   async markOverdueNoShows(): Promise<number> {
@@ -182,7 +276,8 @@ export class QueueEntryExpiryService {
     // so this can't be null here. The salon-specific grace check happens per candidate below —
     // queueCallResponseGraceMinutes varies per salon.
     const candidates = await this.prisma.queueEntry.findMany({
-      where: { status: QueueEntryStatus.CALLED },
+      // Customers with a barber assigned are never auto-marked no-show (see markStaleAssignedExpired).
+      where: { status: QueueEntryStatus.CALLED, assignedStaffId: null },
       select: { id: true, salonId: true, calledAt: true },
     });
 
@@ -209,7 +304,8 @@ export class QueueEntryExpiryService {
 
       const result = await this.prisma.$transaction(async (tx) => {
         const claim = await tx.queueEntry.updateMany({
-          where: { id: entry.id, status: QueueEntryStatus.CALLED },
+          // Re-checked inside the claim: a barber assigned between the read and this write wins.
+          where: { id: entry.id, status: QueueEntryStatus.CALLED, assignedStaffId: null },
           data: { status: QueueEntryStatus.NO_SHOW },
         });
         if (claim.count === 0) return false;

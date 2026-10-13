@@ -117,8 +117,8 @@ export class DashboardReviewsService {
       ownerResponse: review.ownerResponse,
       createdAt: review.createdAt.toISOString(),
       updatedAt: review.updatedAt.toISOString(),
-      customerPhone: review.booking.customer.phone,
-      customerEmail: review.booking.customer.email,
+      customerPhone: review.booking.customer?.phone ?? null,
+      customerEmail: review.booking.customer?.email ?? null,
       serviceName: review.booking.service.name,
     };
   }

@@ -408,6 +408,7 @@ export default function DashboardAnalyticsPage({
           <button
             key={item}
             type="button"
+            aria-pressed={range === item}
             onClick={() => setRange(item)}
             style={{
               padding: "6px 14px",
@@ -474,7 +475,7 @@ export default function DashboardAnalyticsPage({
                 <StatTile label="Cancelled" value={data.cancelledCount} />
                 <StatTile label="No-show" value={data.noShowCount} />
                 <StatTile label="Expired" value={data.expiredCount} />
-                <StatTile label="Walk-ins joined" value={data.walkInCount} />
+                <StatTile label="Live Queue joins" value={data.walkInCount} />
                 <StatTile label="New customers acquired" value={data.newCustomerCount} />
                 <StatTile label="Returning customers served" value={data.repeatCustomerCount} />
                 <StatTile
@@ -488,7 +489,7 @@ export default function DashboardAnalyticsPage({
                 <StatTile
                   label="Estimated service value"
                   value={formatMoney(data.estimatedServiceValue, data.currency)}
-                  hint="Completed appointments + completed walk-ins"
+                  hint="Completed appointments + completed Live Queue visits"
                 />
               </div>
 
@@ -557,7 +558,7 @@ export default function DashboardAnalyticsPage({
             <div style={{ display: "grid", gap: 18 }}>
               <SectionCard
                 title="Service value trend"
-                subtitle="Daily listed-price value of completed appointments and walk-ins. This is not audited payment revenue."
+                subtitle="Daily listed-price value of completed appointments and Live Queue visits. This is not audited payment revenue."
               >
                 <LineChart rows={data.dailyServiceValue} currency={data.currency} />
               </SectionCard>
@@ -584,11 +585,11 @@ export default function DashboardAnalyticsPage({
                   gap: 18,
                 }}
               >
-                <SectionCard title="Bookings vs walk-ins" subtitle="Completed customer source mix.">
+                <SectionCard title="Bookings vs Live Queue" subtitle="Completed customer source mix.">
                   <SplitBar
                     leftLabel="Bookings"
                     leftValue={data.sourceMix.bookingCompletedCount}
-                    rightLabel="Walk-ins"
+                    rightLabel="Live Queue"
                     rightValue={data.sourceMix.walkInCompletedCount}
                   />
                 </SectionCard>

@@ -104,7 +104,7 @@ export default function DashboardHoursPage({
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Opening hours</h1>
       <p className={styles.pageSubtitle}>
-        When customers can book an appointment with you. Walk-ins can still join your queue at any
+        When customers can book an appointment with you. Customers can still join your Live Queue at any
         time — these hours only control online booking.
       </p>
       <SetupNavigation salonId={salonId} currentStep="hours" section="steps" />

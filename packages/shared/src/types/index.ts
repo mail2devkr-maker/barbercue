@@ -31,6 +31,7 @@ import type {
   VerificationStatus,
   VerificationSubjectType,
 } from '../enums';
+import type { QueueEntryPhase } from '../queue-phase';
 
 // DTO shapes only — no I/O, no ORM types leak here. These mirror DATABASE.md/API.md and are the
 // contract both apps/web and apps/mobile code against; the backend is the source of truth for
@@ -550,7 +551,10 @@ export interface PaginatedResult<T> {
 export interface BookingDto {
   id: string;
   salonId: string;
-  customerId: string;
+  // Null ONLY for an IN_SHOP appointment a shop operator created for someone without an account
+  // (see BookingSource.IN_SHOP). Every customer-facing endpoint only ever returns the caller's own
+  // bookings, so a customer's client always receives a value here.
+  customerId: string | null;
   // Multi-service booking core mission: the PRIMARY (first-selected) service only, kept for every
   // consumer that predates multi-service bookings and still needs exactly one id — QueueEntry/
   // ServiceSession linkage at check-in time, and any read-only display that hasn't been updated to
@@ -641,6 +645,10 @@ export interface BookingDetailDto extends BookingDto {
   // ISO-4217 of the salon this booking belongs to; null when unknown.
   currency: string | null;
   salonName: string;
+  // Owner-operations mission — the shop's public phone, present ONLY when the owner has chosen to
+  // publish it (Salon.showPhoneToCustomers). Drives the "Call shop" action for rescheduling,
+  // cancellation questions and penalty disputes. Optional so older clients keep working.
+  shopPhone?: string | null;
   salonSlug: string;
   citySlug: string;
   salonCountryCode: string;
@@ -718,6 +726,14 @@ export type OwnerBookingFilter = (typeof OWNER_BOOKING_FILTERS)[number];
 export interface OwnerBookingDetailDto extends BookingDetailDto {
   customerPhone: string | null;
   customerEmail: string | null;
+  // Owner-operations mission — in-shop appointment provenance and trusted cancellation
+  // attribution. All optional/nullable so an older client that predates them keeps working.
+  // guestName/guestPhone are set only on BookingSource.IN_SHOP rows; internalNote is staff-only.
+  guestName?: string | null;
+  guestPhone?: string | null;
+  internalNote?: string | null;
+  cancelledByActor?: 'CUSTOMER' | 'OWNER' | 'STAFF' | 'SYSTEM' | 'ADMIN' | null;
+  cancellationReason?: string | null;
   // The barber actually assigned at queue check-in (QueueEntry.assignedStaffId), distinct from
   // preferredStaffId/preferredStaffName above (the customer's soft preference at booking time).
   // Null until the booking reaches check-in.
@@ -944,6 +960,15 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
   activeServiceSessionId: string | null; // target id for POST .../service-sessions/:id/complete
   joinedAt: string; // ISO 8601
   calledAt: string | null;
+  // Owner-operations corrective mission - "assigned" and "service started" are different facts.
+  // assignedAt: when a barber + chair were reserved for this customer (null = never assigned).
+  // serviceStartedAt: when the barber actually STARTED the service (null until then - an assigned
+  // customer has NOT started). `phase` is the server's one-word answer to "where is this customer";
+  // clients that predate it derive the same value with queuePhaseOf() from status + assignedStaffId.
+  // All three are optional on the wire so every released client keeps parsing responses.
+  assignedAt?: string | null;
+  serviceStartedAt?: string | null;
+  phase?: QueueEntryPhase;
   // Smart Queue (Phase 5) — a realistic range around estimatedWaitMinutes ("arrive between X-Y")
   // rather than presenting queue timing as exact. Null exactly when estimatedWaitMinutes is null.
   estimatedWaitRangeMinutes: { min: number; max: number } | null;
@@ -958,6 +983,11 @@ export type ChairOccupancyKind = 'FREE' | 'LOCAL' | 'FASTQUE';
 export interface ChairOptionDto {
   id: string;
   label: string;
+  // Owner-operations corrective mission: set while an ASSIGNED (not yet started) customer holds this
+  // chair. `occupancy` stays 'FREE' for released clients, so they would still offer it; the server
+  // refuses a second assignment, and current clients grey it out using these fields.
+  reservedForEntryId?: string | null;
+  reservedForTokenNumber?: number | null;
   // Optional for wire/backward compatibility with older cached clients; current backend always
   // populates these fields. Missing occupancy is treated as FREE by clients.
   occupancy?: ChairOccupancyKind;
@@ -982,10 +1012,50 @@ export interface ServiceOptionDto {
 // inactive staff member invisible here and unable to clock themselves back in. The assign action
 // itself still separately re-validates ACTIVE + qualified via AvailabilityService.
 export interface DashboardQueueDto {
+  /** WAITING + CALLED + IN_SERVICE in join order — unchanged, for clients that predate `sections`. */
   entries: QueueEntryDetailDto[];
   staffRoster: StaffStatusDto[];
   chairs: ChairOptionDto[];
   services: ServiceOptionDto[];
+  // Owner-operations mission — additive and optional so every released client keeps working.
+  /**
+   * Monotonic revision (epoch ms the snapshot was generated at, server clock). A client applies a
+   * snapshot only if its revision is not older than the one it already shows, so a slow response can
+   * never overwrite newer state. Realtime `queue.updated` events carry the same kind of revision.
+   */
+  revision?: number;
+  serverTime?: string;
+  /** Server-authoritative sections: every entry appears in exactly ONE of these. */
+  sections?: DashboardQueueSectionsDto;
+  counts?: {
+    waiting: number;
+    /** Called to the counter but not yet given a barber. */
+    called: number;
+    /** A barber and chair are reserved, service NOT started. Optional: absent on older servers. */
+    assigned?: number;
+    inService: number;
+    completedToday: number;
+    historyToday: number;
+  };
+  autoAssignEnabled?: boolean;
+}
+
+export interface DashboardQueueSectionsDto {
+  /** Waiting for a barber, in queue order (position 1 = next). */
+  waiting: QueueEntryDetailDto[];
+  /** Called to the counter but not yet given a barber (no barber/chair reserved). */
+  called: QueueEntryDetailDto[];
+  /**
+   * Assigned: a barber and a chair are reserved for this customer and the barber has NOT started the
+   * service. Never counted as waiting and never as in service. Optional: absent on older servers.
+   */
+  assigned?: QueueEntryDetailDto[];
+  /** In service: the barber started it and an ACTIVE service session exists. */
+  inService: QueueEntryDetailDto[];
+  /** Completed today, newest first. */
+  completedToday: QueueEntryDetailDto[];
+  /** Cancelled / expired / no-show today, newest first. */
+  historyToday: QueueEntryDetailDto[];
 }
 
 // GET /dashboard/salons/:salonId/capacity (Phase 6 — Owner Capacity Dashboard). "Busy" means
@@ -1035,6 +1105,11 @@ export const NOTIFICATION_TYPES = [
   // 'owner.booking.no_show' (a terminal, financially-consequential state) and from
   // 'booking.reminder' (customer-facing, much larger lead window).
   'owner.booking.arrival_check',
+  // Owner-operations mission — told to a customer when THE SHOP cancels or moves their booking.
+  // Distinct from 'booking.cancelled' (the customer's own cancellation echoed back) so the copy,
+  // deep link and delivery ledger can never confuse who did what.
+  'booking.cancelled_by_shop',
+  'booking.rescheduled_by_shop',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -1275,6 +1350,9 @@ export interface SalonStaffDto {
   roleInSalon: SalonStaffRole;
   status: StaffMemberStatus;
   hasPassword: boolean;
+  // Owner-operations mission: true once the owner removed this barber's login access. Distinct
+  // from `status` (the barber's own clock-in/out duty flag). Optional for older clients.
+  accessRevoked?: boolean;
   // Phase 17 (Barber Professional Profile) — owner/staff-editable, shown to customers on the
   // salon's public profile ("Meet the team") and the booking flow's barber picker.
   bio: string | null;

@@ -38,6 +38,13 @@ describe('assignQueueEntrySchema', () => {
   it('rejects a non-UUID staffId', () => {
     expect(assignQueueEntrySchema.safeParse({ ...valid, staffId: 'nope' }).success).toBe(false);
   });
+
+  // Assigning a barber and starting the service are separate steps (owner decision).
+  it('accepts startService:false (assign only) and startService:true, and rejects a non-boolean', () => {
+    expect(assignQueueEntrySchema.safeParse({ ...valid, startService: false }).success).toBe(true);
+    expect(assignQueueEntrySchema.safeParse({ ...valid, startService: true }).success).toBe(true);
+    expect(assignQueueEntrySchema.safeParse({ ...valid, startService: 'no' }).success).toBe(false);
+  });
 });
 
 describe('staffStatusSchema', () => {

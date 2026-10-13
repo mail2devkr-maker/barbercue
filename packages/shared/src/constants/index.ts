@@ -296,6 +296,8 @@ export const DASHBOARD_PATHS = {
   staff: 'staff',
   call: 'call',
   assign: 'assign',
+  // Owner-operations corrective mission: assignment and the start of service are separate steps.
+  startService: 'start-service',
   reassign: 'reassign',
   noShow: 'no-show',
   cancel: 'cancel',

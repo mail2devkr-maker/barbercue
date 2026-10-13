@@ -17,6 +17,12 @@ function db(overrides: Partial<Record<string, unknown>> = {}) {
       findFirst: jest.fn().mockResolvedValue(null),
       ...(overrides.serviceSession as object),
     },
+    // Owner-operations corrective mission: an ASSIGNED (not yet started) customer holds a barber.
+    queueEntry: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
+      ...(overrides.queueEntry as object),
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
@@ -298,3 +304,78 @@ describe('ReservationService', () => {
 // (used implicitly via the shared enum in fixtures above) so a future refactor that drops it from
 // @barbercue/shared surfaces here as a type error, not a silent runtime drift.
 void ServiceSessionStatus.ACTIVE;
+
+// Owner-operations corrective mission: a customer who is ASSIGNED to a barber (CALLED + barber, service
+// not started) holds that barber. They are spoken for even though no ServiceSession exists yet.
+describe('ReservationService - assigned (not yet started) customers hold a barber', () => {
+  const service = new ReservationService();
+  const NOW = new Date();
+  const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60_000);
+  const minutesAhead = (m: number) => new Date(NOW.getTime() + m * 60_000);
+
+  it('a barber with an assigned customer is NOT free, and the reason says why', async () => {
+    const mockDb = db({
+      queueEntry: {
+        findFirst: jest.fn().mockResolvedValue({ assignedAt: minutesAgo(2), calledAt: minutesAgo(2), service: { durationMinutes: 30 } }),
+      },
+    });
+    const result = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, NOW, minutesAhead(30));
+    expect(result.free).toBe(false);
+    expect(result.reason).toBe('ASSIGNED_CUSTOMER');
+    expect(result.busyUntil).not.toBeNull();
+  });
+
+  it('looks only at THIS barber (a per-staff query) and ignores the entry being re-checked', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const mockDb = db({ queueEntry: { findFirst } });
+    const result = await service.isStaffFreeForInterval(mockDb, SALON, DINESH, NOW, minutesAhead(30), { excludeQueueEntryId: 'entry-1' });
+    expect(result.free).toBe(true);
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          salonId: SALON,
+          status: 'CALLED',
+          assignedStaffId: DINESH,
+          id: { not: 'entry-1' },
+        }),
+      }),
+    );
+  });
+
+  it('a hold that ended long ago does not block a later interval', async () => {
+    const mockDb = db({
+      queueEntry: { findFirst: jest.fn().mockResolvedValue({ assignedAt: minutesAgo(600), calledAt: null, service: { durationMinutes: 30 } }) },
+    });
+    // projectedActiveSessionEnd never sits in the past, so "now" is the earliest it can free: a
+    // candidate window entirely AFTER now+1h is free.
+    const result = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, minutesAhead(60), minutesAhead(90));
+    expect(result.free).toBe(true);
+  });
+
+  it('an appointment conflict is reported before an assigned hold (the more specific reason wins)', async () => {
+    const mockDb = db({
+      booking: { count: jest.fn().mockResolvedValue(1), findFirst: jest.fn().mockResolvedValue({ slotEnd: minutesAhead(20) }) },
+      queueEntry: { findFirst: jest.fn().mockResolvedValue({ assignedAt: minutesAgo(1), calledAt: null, service: { durationMinutes: 30 } }) },
+    });
+    const result = await service.isStaffFreeForInterval(mockDb, SALON, RAMESH, NOW, minutesAhead(30));
+    expect(result.reason).toBe('BOOKING_RESERVATION');
+  });
+
+  it('reads as RESERVED (not IN_SERVICE) on the availability state', async () => {
+    const mockDb = db({
+      queueEntry: { findFirst: jest.fn().mockResolvedValue({ assignedAt: minutesAgo(1), calledAt: null, service: { durationMinutes: 30 } }) },
+    });
+    const state = await service.getStaffAvailabilityState(mockDb, SALON, RAMESH, true);
+    expect(state.availabilityState).toBe('RESERVED');
+  });
+
+  it('an assigned walk-in consumes exactly one pool unit, like one in service', async () => {
+    const mockDb = db({
+      queueEntry: {
+        findMany: jest.fn().mockResolvedValue([{ assignedAt: minutesAgo(1), calledAt: null, service: { durationMinutes: 30 } }]),
+      },
+    });
+    const used = await service.countPoolReservations(mockDb, SALON, NOW, minutesAhead(30));
+    expect(used).toBe(1);
+  });
+});
