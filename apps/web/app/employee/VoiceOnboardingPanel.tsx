@@ -8,7 +8,7 @@ import {
   type EmployeeVoiceOnboardingLogDto,
 } from "@barbercue/shared";
 import { ApiError, apiFetch } from "../../lib/api";
-import { parseOnboardingServices, suggestOnboardingCounts } from "../../lib/employee-voice-parser";
+import { parseOnboardingServices, suggestOnboardingCounts, suggestShopDetails } from "../../lib/employee-voice-parser";
 import styles from "./voice-onboarding.module.css";
 
 type SpeechResult = { isFinal: boolean; 0: { transcript: string } };
@@ -176,6 +176,14 @@ export function VoiceOnboardingPanel({ leads }: { leads: EmployeeCrmLeadDto[] })
     if (listening) stopMic();
     const parsed = parseOnboardingServices(transcript);
     const counts = suggestOnboardingCounts(transcript);
+    const shop = suggestShopDetails(transcript);
+    // Never replace fields the executive has already entered or imported from a lead.
+    if (!leadId && !shopName.trim() && shop.shopName) setShopName(shop.shopName);
+    if (!contactName.trim() && shop.contactName) setContactName(shop.contactName);
+    if (!phone.trim() && shop.phone) setPhone(shop.phone);
+    if (!city.trim() && shop.city) setCity(shop.city);
+    if (!locality.trim() && shop.locality) setLocality(shop.locality);
+    if (!addressLine.trim() && shop.addressLine) setAddressLine(shop.addressLine);
     setServices((old) => [...old, ...parsed.map((item) => ({ id: newId(), name: item.name, price: String(item.priceInr) }))].slice(0, 200));
     if (counts.chairCount !== undefined) setChairCount(String(counts.chairCount));
     if (counts.staffCount !== undefined) setStaffCount(String(counts.staffCount));
@@ -313,13 +321,13 @@ export function VoiceOnboardingPanel({ leads }: { leads: EmployeeCrmLeadDto[] })
             </button>
             {!recognitionAvailable && <span className={styles.small}>Microphone transcription unavailable in this browser. Use the text field below.</span>}
           </div>
-          <p className={styles.hint}>Example: “Haircut 150 rupees, beard 80 rupees, head massage 200 rupees, chairs 4, staff 3.” Pause the microphone before editing the transcript.</p>
+          <p className={styles.hint}>Example: “Shop name Smart Salon, owner name Ravi, mobile number 9876543210, city Hajipur, area Cinema Road, address Near Clock Tower, haircut 150 rupees, beard 80 rupees, chairs 4, staff 3.” Separate facts with pauses/commas. Pause the microphone before editing the transcript.</p>
           <label>Transcript (editable, max 12,000 characters) *
             <textarea required rows={6} maxLength={12000} value={transcript}
               onChange={(e) => { setTranscript(e.target.value); requestIdRef.current = null; }} />
           </label>
           <button type="button" className={styles.secondary} onClick={extractSuggestions} disabled={!transcript.trim()}>
-            Extract service and staff suggestions
+            Extract shop details, services and staff suggestions
           </button>
           {unparsedNotice && <p className={styles.notice}>{unparsedNotice}</p>}
         </div>
