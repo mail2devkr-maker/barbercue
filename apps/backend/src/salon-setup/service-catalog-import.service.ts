@@ -180,6 +180,12 @@ function fromAi(raw: unknown, source: string): CatalogCandidate[] {
 export class ServiceCatalogImportService {
   constructor(private readonly prisma: PrismaService, private readonly access: SalonAccessService) {}
 
+  /** Safe status-only probe: do not expose AI keys or provider credentials to browsers. */
+  async capabilities(userId: string, salonId: string) {
+    await this.access.assertOwnerOrAdminAccess(userId, salonId);
+    return { pdfPhotoOcrAvailable: Boolean(process.env.GEMINI_API_KEY?.trim()) };
+  }
+
   async preview(userId: string, salonId: string, file: Express.Multer.File | undefined, consent: boolean) {
     await this.access.assertOwnerOrAdminAccess(userId, salonId);
     if (!file?.buffer?.length || file.size > MAX_BYTES) failure('CATALOG_FILE_LIMIT', 'Catalog must be 1 byte to 6 MB.');
