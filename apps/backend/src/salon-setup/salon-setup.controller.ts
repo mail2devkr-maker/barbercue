@@ -290,6 +290,16 @@ export class SalonSetupController {
     return this.catalogImports.saveReviewed(user.id, salonId, body);
   }
 
+  // Placed above dynamic /:serviceId routes; never physically deletes referenced rows.
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/remove-all`)
+  removeAllServices(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body() body: unknown,
+  ) {
+    return this.services.removeAll(user.id, salonId, body);
+  }
+
   @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}`)
   createService(
     @CurrentUser() user: AuthenticatedUser,
