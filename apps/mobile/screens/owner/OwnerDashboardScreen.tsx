@@ -138,6 +138,10 @@ export default function OwnerDashboardScreen() {
         </View>
       )}
 
+      {workplaces.length > 1 && !selectedSalonId && (
+        <EmptyState title={t.selectShopTitle} message={t.pickShopToContinueHint} />
+      )}
+
       {selectedSalon && (
         <PremiumCard strong style={styles.card}>
           <Text style={styles.salonName}>{selectedSalon.name}</Text>

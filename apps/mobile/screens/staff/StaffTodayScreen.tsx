@@ -160,6 +160,9 @@ export default function StaffTodayScreen() {
         </View>
       )}
 
+      {workplaces.length > 1 && !selectedSalonId && (
+        <EmptyState title={t.selectShopTitle} message={t.pickShopToContinueHint} />
+      )}
       {selectedSalonId && <SelfStatusCard salonId={selectedSalonId} onMe={setMyStaffId} />}
       {selectedSalonId && <StaffMyDayCard salonId={selectedSalonId} onChanged={() => void panelRef.current?.refresh()} />}
       {selectedSalonId && <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} role="staff" myStaffId={myStaffId} />}

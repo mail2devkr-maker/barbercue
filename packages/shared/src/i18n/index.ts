@@ -699,6 +699,7 @@ export interface UiStrings {
 
   // OwnerShopScreen (Manage Shop).
   selectShopTitle: string;
+  pickShopToContinueHint: string;
   chooseShopHint: string;
   shopSubtitle: string;
   noServicesYet: string;
@@ -1755,6 +1756,7 @@ const enUi: UiStrings = {
   preferredPrefix: 'Pref: ',
 
   selectShopTitle: 'Select a shop',
+  pickShopToContinueHint: 'You work at more than one shop. Choose the shop you want to open.',
   chooseShopHint: 'Choose a shop from the Dashboard tab first.',
   shopSubtitle: 'Services, chairs, staff, and hours',
   noServicesYet: 'No services yet.',
@@ -2750,6 +2752,7 @@ const hiUi: UiStrings = {
   preferredPrefix: 'पसंदीदा: ',
 
   selectShopTitle: 'एक दुकान चुनें',
+  pickShopToContinueHint: 'आप एक से अधिक दुकानों में काम करते हैं। जिस दुकान को खोलना है उसे चुनें।',
   chooseShopHint: 'पहले डैशबोर्ड टैब से एक दुकान चुनें।',
   shopSubtitle: 'सेवाएं, कुर्सियां, स्टाफ और समय',
   noServicesYet: 'अभी कोई सेवा नहीं है।',
