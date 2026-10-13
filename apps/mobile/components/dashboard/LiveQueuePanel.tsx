@@ -319,8 +319,8 @@ function EntryRow({
 
       {entry.status === 'IN_SERVICE' && (
         <Button
-          title={t.completeAction}
-          onPress={() => confirmThen(t.confirmCompleteServiceTitle, t.confirmCompleteServiceBody, t.completeAction, () => void complete())}
+          title={t.completeServiceAction}
+          onPress={() => confirmThen(t.confirmCompleteServiceTitle, t.confirmCompleteServiceBody, t.completeServiceAction, () => void complete())}
           loading={submitting === 'complete'}
           style={styles.fullButton}
         />
