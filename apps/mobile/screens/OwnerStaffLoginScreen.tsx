@@ -86,6 +86,21 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
 
       {error && <InlineError message={error} />}
 
+      {/* A new owner must never need Google to START: registration is email + password. This is the
+          first thing an owner sees here, above the (sign-in only) Google option. */}
+      {role === 'OWNER' && (
+        <Pressable
+          testID="owner-create-account"
+          style={styles.createAccountCard}
+          onPress={() => navigation.navigate(beginShopRegistrationAuthentication())}
+          accessibilityRole="button"
+          accessibilityLabel={t.newToFastQueRegisterShop}
+        >
+          <Text style={styles.createAccountTitle}>{t.newToFastQueRegisterShop}</Text>
+          <Text style={styles.createAccountHint}>{t.ownerCreateAccountHint}</Text>
+        </Pressable>
+      )}
+
       <>
         <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={googleSubmitting}>
           {googleSubmitting ? (
@@ -172,6 +187,17 @@ const styles = StyleSheet.create({
     fontSize: fontSize.base,
   },
   submitButton: { marginTop: space[2] },
+  createAccountCard: {
+    borderWidth: 1,
+    borderColor: fastQue.pink,
+    borderRadius: radius.md,
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    marginBottom: space[4],
+    backgroundColor: 'rgba(242,10,131,0.08)',
+  },
+  createAccountTitle: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: fastQue.pink },
+  createAccountHint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textSecondary, marginTop: space[1] },
   registerShopLink: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: space[4] },
   registerShopLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.pink },
   googleButton: {

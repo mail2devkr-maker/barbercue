@@ -21,7 +21,7 @@ export const LOCATION_FIX_TIMEOUT_MS = 10_000;
 export const LOCATION_LAST_KNOWN_TIMEOUT_MS = 3_000;
 export const LOCATION_GEOCODE_TIMEOUT_MS = 8_000;
 
-function settleWithin<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+export function settleWithin<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise<T>((resolve) => {
     const timer = setTimeout(() => resolve(fallback), ms);
     promise.then(

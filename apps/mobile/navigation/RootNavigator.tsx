@@ -11,6 +11,7 @@ import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
 import { resolvePostAuthCustomerNavigation, takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { navigationRef } from './navigation-ref';
+import { isShopRegistrationPending } from '../lib/shop-registration-resume';
 import { subscribeToCustomerBookingPushNavigation } from '../lib/push-navigation';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
@@ -56,7 +57,16 @@ function CustomerDestinationHandoffBridge() {
         return;
       }
       const intent = takePendingCustomerDestination();
-      if (!intent) return;
+      if (!intent) {
+        // No in-memory intent means this is a fresh process (the app was closed mid-registration).
+        // A persisted, recent marker puts a half-registered new owner back on the Register Shop step.
+        void isShopRegistrationPending().then((pending) => {
+          if (pending && !cancelled && navigationRef.isReady()) {
+            navigationRef.navigate('AccountTab', { screen: 'RegisterShop' });
+          }
+        });
+        return;
+      }
       // CreditsHistory isn't registered when its release gate is off, so the resolver returns null
       // for that intent. Register Shop always resolves to AccountTab → RegisterShop.
       const destination = resolvePostAuthCustomerNavigation(intent, isCreditsEnabled());

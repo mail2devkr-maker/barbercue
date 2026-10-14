@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import HomeScreen from '../screens/HomeScreen';
 import StyleAdvisorScreen from '../screens/StyleAdvisorScreen';
+import AllServicesScreen from '../screens/AllServicesScreen';
 import { styleAdvisorHeaderOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
@@ -19,6 +20,11 @@ export default function HomeStack() {
         name="StyleAdvisor"
         component={StyleAdvisorScreen}
         options={{ ...styleAdvisorHeaderOptions, title: t.aiStyleAdvisor, headerRight: () => <HomeHeaderButton /> }}
+      />
+      <Stack.Screen
+        name="AllServices"
+        component={AllServicesScreen}
+        options={{ ...styleAdvisorHeaderOptions, title: t.allServicesTitle, headerRight: () => <HomeHeaderButton /> }}
       />
     </Stack.Navigator>
   );

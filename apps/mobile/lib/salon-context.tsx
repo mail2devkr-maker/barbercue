@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { DISCOVERY_PATHS, type SalonWorkplaceDto } from '@barbercue/shared';
+import { DISCOVERY_PATHS, chooseShopHome, type SalonWorkplaceDto } from '@barbercue/shared';
 import { apiFetch } from './api';
+import { useAuth } from './auth-context';
 import { useLanguage } from './language-context';
+import { readLastShop, rememberLastShop } from './owner/last-shop';
 
 interface SalonContextValue {
   workplaces: SalonWorkplaceDto[];
@@ -18,11 +20,17 @@ const SalonContext = createContext<SalonContextValue | null>(null);
 /**
  * Owner/staff salon context — GET salons/workplaces ("every salon this user may operate, for
  * owners AND staff", role-gated SALON_OWNER|SALON_STAFF on the backend). Mounted only inside the
- * Owner/Staff navigators (see App.tsx), never for customers. Auto-selects the only workplace when
- * there's exactly one — the common case — otherwise the Dashboard/Today screens render a picker.
+ * Owner/Staff navigators (see App.tsx), never for customers.
+ *
+ * Which shop is selected (the same rule as the website, chooseShopHome): the only workplace when there
+ * is exactly one; with several, the shop this account used last - restored after an app relaunch - but
+ * ONLY if the server still lists it for them; otherwise nothing is selected and the Dashboard/Today
+ * screens render a picker. The remembered id is a hint, never an authorisation.
  */
 export function SalonProvider({ children }: { children: React.ReactNode }) {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [workplaces, setWorkplaces] = useState<SalonWorkplaceDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,13 +40,23 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     return apiFetch<SalonWorkplaceDto[]>(`${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.workplaces}`)
-      .then((result) => {
+      .then(async (result) => {
+        // The last shop used on this phone by THIS account (never another account's).
+        const remembered = userId ? await readLastShop(userId) : null;
         setWorkplaces(result);
-        setSelectedSalonId((prev) => prev ?? (result.length === 1 ? result[0].id : null));
+        setSelectedSalonId((prev) => (prev && result.some((w) => w.id === prev) ? prev : chooseShopHome(result, remembered)));
       })
       .catch(() => setError(t.couldNotLoadSalons))
       .finally(() => setLoading(false));
-  }, [t]);
+  }, [t, userId]);
+
+  const selectSalon = useCallback(
+    (salonId: string) => {
+      setSelectedSalonId(salonId);
+      if (userId) void rememberLastShop(userId, salonId);
+    },
+    [userId],
+  );
 
   useEffect(() => {
     void load();
@@ -56,10 +74,10 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       error,
       selectedSalonId,
       selectedSalon,
-      selectSalon: setSelectedSalonId,
+      selectSalon,
       reload: () => void load(),
     }),
-    [workplaces, loading, error, selectedSalonId, selectedSalon, load],
+    [workplaces, loading, error, selectedSalonId, selectedSalon, selectSalon, load],
   );
 
   return <SalonContext.Provider value={value}>{children}</SalonContext.Provider>;
