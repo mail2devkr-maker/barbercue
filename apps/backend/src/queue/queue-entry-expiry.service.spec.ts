@@ -187,6 +187,16 @@ describe('QueueEntryExpiryService', () => {
   });
 
   describe('customers who have been ASSIGNED a barber (owner-operations corrective mission)', () => {
+    // These tests build timestamps relative to "now" and the service decides by the salon's own (IST) calendar day and posted
+    // close time. On a real clock they fail in the last hour before and the first minutes after IST midnight, so the
+    // clock is pinned to midday IST (06:30 UTC).
+    beforeEach(() => {
+      jest.useFakeTimers({ now: new Date('2026-10-14T06:30:00.000Z') });
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('are never read as no-show candidates: only CALLED entries with NO barber are', async () => {
       await service.markOverdueNoShows();
       const call = prisma.queueEntry.findMany.mock.calls[0][0] as { where: Record<string, unknown> };
@@ -343,6 +353,16 @@ describe('QueueEntryExpiryService', () => {
     // fully actionable all the way to midnight under the old calendar-day-end-only boundary. These
     // pin the shop's own posted close time as the real, earlier boundary when one is configured.
     describe('salon close-time boundary (Mission J)', () => {
+      // These tests build timestamps relative to "now" and the service decides by the salon's own (IST) calendar day and posted
+      // close time. On a real clock they fail in the last hour before and the first minutes after IST midnight, so the
+      // clock is pinned to midday IST (06:30 UTC).
+      beforeEach(() => {
+        jest.useFakeTimers({ now: new Date('2026-10-14T06:30:00.000Z') });
+      });
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
       it("does NOT expire a WAITING entry that joined earlier today when today's posted close time has not passed yet", async () => {
         const now = new Date();
         const joinedAt = new Date(now.getTime() - 60_000); // joined 1 minute ago
