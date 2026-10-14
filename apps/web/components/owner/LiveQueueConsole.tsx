@@ -20,7 +20,7 @@ import { formatShopTime } from "./format";
 import { InvoiceAction } from "./InvoiceActions";
 import { NewQueueCustomerDialog } from "./NewQueueCustomerDialog";
 import { useOwnerShell } from "./OwnerShell";
-import { Badge, Banner, Btn, BtnLink, Card, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
+import { Badge, Banner, Btn, BtnLink, Card, Dialog, EmptyState, Field, PageHead, Skeleton, Tabs } from "./parts";
 import ui from "./owner.module.css";
 
 type View = "waiting" | "assigned" | "in-service" | "completed" | "history";
@@ -78,6 +78,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
   const { user } = useAuth();
   const { kind, refreshCounts } = useOwnerShell();
   const voiceEnabled = useVoiceEnabled();
+  const [confirmVoiceOff, setConfirmVoiceOff] = useState(false);
 
   const requested = searchParams.get("view") as View | null;
   const view: View = requested && VIEWS.includes(requested) ? requested : "waiting";
@@ -305,12 +306,42 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
             <Btn icon="scissors" disabled={busy !== null || waiting.length + called.length === 0} onClick={() => void assignAutomatically()}>
               {busy === "auto-all" ? "Assigning…" : "Assign automatically"}
             </Btn>
-            <Btn variant="quiet" aria-pressed={voiceEnabled} onClick={() => setVoiceEnabled(!voiceEnabled)}>
+            <Btn
+              variant="quiet"
+              aria-pressed={voiceEnabled}
+              title="Voice announcement preference is saved on this browser"
+              onClick={() => {
+                if (voiceEnabled) setConfirmVoiceOff(true);
+                else setVoiceEnabled(true);
+              }}
+            >
               Voice: {voiceEnabled ? "on" : "off"}
             </Btn>
           </>
         }
       />
+      {confirmVoiceOff && (
+        <Dialog title="Turn off voice announcements?" onClose={() => setConfirmVoiceOff(false)}>
+          <Banner tone="warn">
+            Turning Voice off stops spoken announcements when new customers join the Live Queue.
+            Chime alerts will still play. Do you want to turn Voice off?
+          </Banner>
+          <div className={ui.actions}>
+            <Btn variant="secondary" onClick={() => setConfirmVoiceOff(false)}>
+              Keep voice on
+            </Btn>
+            <Btn
+              variant="danger"
+              onClick={() => {
+                setVoiceEnabled(false);
+                setConfirmVoiceOff(false);
+              }}
+            >
+              Yes, turn voice off
+            </Btn>
+          </div>
+        </Dialog>
+      )}
       {error && <Banner tone="error">{error}</Banner>}
       {notice && <Banner tone="ok">{notice}</Banner>}
 
