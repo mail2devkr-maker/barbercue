@@ -123,10 +123,10 @@ function subscribe(listener: () => void): () => void {
       emit();
     }
   };
-  if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
+  if (typeof window !== "undefined") window.addEventListener?.("storage", onStorage);
   return () => {
     listeners.delete(listener);
-    if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
+    if (typeof window !== "undefined") window.removeEventListener?.("storage", onStorage);
   };
 }
 
