@@ -21,6 +21,7 @@ import { rememberLastShop } from "../../lib/last-shop";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { AdminManagingBanner } from "../dashboard/AdminManagingBanner";
 import { Icon } from "./icons";
+import { BrandLockup } from "../ui/BrandLockup";
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, hrefFor, navItemsFor, type NavItem } from "./owner-nav";
 import { initialsOf, shortName } from "./format";
 import ui from "./owner.module.css";
@@ -210,8 +211,8 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
         <div className={ui.app}>
           {/* ---- narrow icon rail: jump between sections ---- */}
           <nav className={ui.rail} aria-label="Sections">
-            <Link href={`/dashboard/salons/${salonId}`} className={ui.railLogo} aria-label="Dashboard home" title="Dashboard home">
-              F
+            <Link href={`/dashboard/salons/${salonId}`} className={ui.railLogo} aria-label="FastQue dashboard home" title="Dashboard home">
+              <BrandLockup compact markOnly />
             </Link>
             {/* Only groups that live inside the dashboard: "More" holds Help, a public page that opens in a new tab. */}
             {visibleGroups.filter((group) => group.id !== "OTHER").map((group) => {
@@ -240,7 +241,9 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
             aria-label="Main navigation"
           >
             <div className={ui.sidebarHead}>
-              <div className={ui.brandRow}>FastQue</div>
+              <div className={ui.brandRow}>
+                <BrandLockup compact canonicalArtwork />
+              </div>
               <div className={ui.shopName}>{workplace?.name ?? "Your shop"}</div>
               <div className={ui.shopSub}>{kind === "owner" ? (isAdmin ? "Managing as admin" : "Shop owner") : "Barber"}</div>
             </div>
