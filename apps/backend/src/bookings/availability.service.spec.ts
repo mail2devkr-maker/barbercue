@@ -53,7 +53,8 @@ describe('AvailabilityService', () => {
         findUnique: jest.fn<Promise<unknown>, [unknown]>(),
       },
       booking: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
-      queueEntry: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
+      // Default: nobody is ASSIGNED-but-not-started, so every pre-existing test is unaffected.
+      queueEntry: { findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]) },
       serviceSession: { findMany: jest.fn<Promise<unknown[]>, [unknown]>() },
     };
     // Default: no active sessions, so every pre-existing test (written before Part 3/4 existed)

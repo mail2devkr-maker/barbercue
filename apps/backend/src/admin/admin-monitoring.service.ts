@@ -17,7 +17,6 @@ const LIVE_QUEUE_STATUSES = [
   QueueEntryStatus.IN_SERVICE,
 ];
 
-
 function maskEmail(value: string | null): string | null {
   if (!value) return value;
   const [local, domain] = value.split('@');
@@ -40,7 +39,9 @@ function maskPhone(value: string | null): string | null {
 export class AdminMonitoringService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOverview(options: { maskPii?: boolean } = {}): Promise<PlatformAdminOverviewDto> {
+  async getOverview(
+    options: { maskPii?: boolean } = {},
+  ): Promise<PlatformAdminOverviewDto> {
     const maskPii = options.maskPii === true;
     const now = new Date();
     const [
@@ -131,7 +132,9 @@ export class AdminMonitoringService {
         orderBy: { createdAt: 'desc' },
         include: {
           salon: { select: { name: true } },
-          service: { select: { name: true, durationMinutes: true, price: true } },
+          service: {
+            select: { name: true, durationMinutes: true, price: true },
+          },
           services: { orderBy: { sortOrder: 'asc' } },
           customer: { select: { email: true, phone: true } },
         },
@@ -159,7 +162,8 @@ export class AdminMonitoringService {
 
     return {
       generatedAt: now.toISOString(),
-      visitorTrackingStartedAt: visitorStats._min.firstSeenAt?.toISOString() ?? null,
+      visitorTrackingStartedAt:
+        visitorStats._min.firstSeenAt?.toISOString() ?? null,
       counts: {
         shops: shopCount,
         owners: ownerCount,
@@ -208,10 +212,18 @@ export class AdminMonitoringService {
         slotStart: booking.slotStart.toISOString(),
         salonName: booking.salon.name,
         serviceName: summarizeServiceNames(
-          resolveEffectiveBookingServices(booking).map((service) => service.serviceName),
+          resolveEffectiveBookingServices(booking).map(
+            (service) => service.serviceName,
+          ),
         ),
-        customerEmail: maskPii ? maskEmail(booking.customer.email) : booking.customer.email,
-        customerPhone: maskPii ? maskPhone(booking.customer.phone) : booking.customer.phone,
+        // An IN_SHOP appointment has no account (customer is null): the guest contact is shown
+        // only through the same masking rules and never invented.
+        customerEmail: maskPii
+          ? maskEmail(booking.customer?.email ?? null)
+          : (booking.customer?.email ?? null),
+        customerPhone: maskPii
+          ? maskPhone(booking.customer?.phone ?? booking.guestPhone ?? null)
+          : (booking.customer?.phone ?? booking.guestPhone ?? null),
       })),
       recentQueue: recentQueue.map((entry) => ({
         id: entry.id,
@@ -220,7 +232,9 @@ export class AdminMonitoringService {
         joinedAt: entry.joinedAt.toISOString(),
         salonName: entry.salon.name,
         serviceName: entry.service?.name ?? null,
-        customerPhone: maskPii ? maskPhone(entry.customer?.phone ?? null) : (entry.customer?.phone ?? null),
+        customerPhone: maskPii
+          ? maskPhone(entry.customer?.phone ?? null)
+          : (entry.customer?.phone ?? null),
         assignedStaffName: entry.assignedStaff?.displayName ?? null,
         assignedChairLabel: entry.assignedChair?.label ?? null,
       })),
@@ -229,8 +243,12 @@ export class AdminMonitoringService {
         status: subscription.status,
         planName: subscription.plan.name,
         periodEnd: subscription.periodEnd.toISOString(),
-        customerEmail: maskPii ? maskEmail(subscription.user.email) : subscription.user.email,
-        customerPhone: maskPii ? maskPhone(subscription.user.phone) : subscription.user.phone,
+        customerEmail: maskPii
+          ? maskEmail(subscription.user.email)
+          : subscription.user.email,
+        customerPhone: maskPii
+          ? maskPhone(subscription.user.phone)
+          : subscription.user.phone,
       })),
     };
   }

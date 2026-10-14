@@ -15,7 +15,11 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
-import { ledgerRowSelect, toLedgerEntryDto, type LedgerRow } from './ledger-entry';
+import {
+  ledgerRowSelect,
+  toLedgerEntryDto,
+  type LedgerRow,
+} from './ledger-entry';
 import { resolveEffectiveBookingServices } from '../bookings/effective-booking-services';
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -96,7 +100,8 @@ export class DashboardCustomersService {
     // the next offset encoded as a string, so clients page through it exactly the same way.
     const page = await this.prisma.booking.groupBy({
       by: ['customerId'],
-      where: { salonId },
+      // Customer management lists FastQue accounts; an IN_SHOP guest (customerId NULL) is not one.
+      where: { salonId, customerId: { not: null } },
       _max: { slotStart: true },
       orderBy: { _max: { slotStart: 'desc' } },
       skip: offset,
@@ -104,13 +109,15 @@ export class DashboardCustomersService {
     });
     const hasMore = page.length > limit;
     const rows = hasMore ? page.slice(0, limit) : page;
-    const customerIds = rows.map((r) => r.customerId);
+    const customerIds = rows
+      .map((r) => r.customerId)
+      .filter((id): id is string => id !== null);
     if (customerIds.length === 0) return { items: [], nextCursor: null };
 
     const summaries = await this.buildSummaries(salonId, customerIds);
     const byId = new Map(summaries.map((s) => [s.customerId, s]));
     const items = rows
-      .map((r) => byId.get(r.customerId))
+      .map((r) => (r.customerId ? byId.get(r.customerId) : undefined))
       .filter((s): s is OwnerCustomerSummaryDto => s !== undefined);
 
     return {
@@ -162,7 +169,10 @@ export class DashboardCustomersService {
       staffGrouped,
       ledgerRows,
     ] = await Promise.all([
-      this.prisma.salon.findUnique({ where: { id: salonId }, select: { currency: true } }),
+      this.prisma.salon.findUnique({
+        where: { id: salonId },
+        select: { currency: true },
+      }),
       this.prisma.user.findMany({
         where: { id: { in: customerIds } },
         select: { id: true, phone: true, email: true },
@@ -215,9 +225,16 @@ export class DashboardCustomersService {
         select: {
           customerId: true,
           serviceId: true,
-          service: { select: { name: true, durationMinutes: true, price: true } },
+          service: {
+            select: { name: true, durationMinutes: true, price: true },
+          },
           services: {
-            select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+            select: {
+              serviceId: true,
+              serviceName: true,
+              durationMinutes: true,
+              price: true,
+            },
           },
         },
       }),
@@ -259,11 +276,11 @@ export class DashboardCustomersService {
       });
     }
     for (const row of totalGrouped) {
-      const agg = aggregates.get(row.customerId);
+      const agg = row.customerId ? aggregates.get(row.customerId) : undefined;
       if (agg) agg.total = row._count._all;
     }
     for (const row of completedGrouped) {
-      const agg = aggregates.get(row.customerId);
+      const agg = row.customerId ? aggregates.get(row.customerId) : undefined;
       if (agg) {
         agg.completed = row._count._all;
         agg.firstVisitAt = row._min.slotStart;
@@ -271,16 +288,18 @@ export class DashboardCustomersService {
       }
     }
     for (const row of cancelledGrouped) {
-      const agg = aggregates.get(row.customerId);
+      const agg = row.customerId ? aggregates.get(row.customerId) : undefined;
       if (agg) agg.cancelled = row._count._all;
     }
     for (const row of noShowGrouped) {
-      const agg = aggregates.get(row.customerId);
+      const agg = row.customerId ? aggregates.get(row.customerId) : undefined;
       if (agg) agg.noShow = row._count._all;
     }
 
     const serviceCounts = new Map<string, Map<string, number>>();
     for (const row of serviceGrouped) {
+      // IN_SHOP guest appointments have no account and are not part of customer management.
+      if (!row.customerId) continue;
       const byService =
         serviceCounts.get(row.customerId) ?? new Map<string, number>();
       for (const svc of resolveEffectiveBookingServices(row)) {
@@ -380,7 +399,8 @@ export class DashboardCustomersService {
             ? (staffNameById.get(agg.preferredStaffId) ?? null)
             : null,
           segment: segmentFor(agg.completed),
-          newCustomerGraceEligible: agg.completed < NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT,
+          newCustomerGraceEligible:
+            agg.completed < NEW_CUSTOMER_GRACE_COMPLETED_VISIT_LIMIT,
           ledgerEntries,
           outstandingTotalAmount,
         };
@@ -402,7 +422,11 @@ export class DashboardCustomersService {
     ledgerEntryId: string,
   ): Promise<LedgerActionResultDto> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    const entry = await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId);
+    const entry = await this.getOwnedLedgerEntry(
+      salonId,
+      customerId,
+      ledgerEntryId,
+    );
 
     if (entry.reason !== LedgerReason.NO_SHOW_CHARGE) {
       throw new AppException(
@@ -472,13 +496,22 @@ export class DashboardCustomersService {
         },
       });
 
-      return tx.customerLedgerEntry.findUniqueOrThrow({ where: { id: ledgerEntryId }, select: ledgerRowSelect });
+      return tx.customerLedgerEntry.findUniqueOrThrow({
+        where: { id: ledgerEntryId },
+        select: ledgerRowSelect,
+      });
     });
 
     if (!result) {
       // Lost the race to a concurrent waive/restore between the read above and this transaction —
       // re-read and return the current state rather than a confusing generic error.
-      return { ledgerEntry: await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId) };
+      return {
+        ledgerEntry: await this.getOwnedLedgerEntry(
+          salonId,
+          customerId,
+          ledgerEntryId,
+        ),
+      };
     }
     return { ledgerEntry: toLedgerEntryDto(result as unknown as LedgerRow) };
   }
@@ -491,7 +524,11 @@ export class DashboardCustomersService {
     ledgerEntryId: string,
   ): Promise<LedgerActionResultDto> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
-    const entry = await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId);
+    const entry = await this.getOwnedLedgerEntry(
+      salonId,
+      customerId,
+      ledgerEntryId,
+    );
 
     if (entry.status === LedgerStatus.OUTSTANDING) {
       // Idempotent no-op — mirrors waiveNoShowDue's own retry handling.
@@ -524,7 +561,12 @@ export class DashboardCustomersService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       const claim = await tx.customerLedgerEntry.updateMany({
-        where: { id: ledgerEntryId, salonId, customerId, status: LedgerStatus.WAIVED },
+        where: {
+          id: ledgerEntryId,
+          salonId,
+          customerId,
+          status: LedgerStatus.WAIVED,
+        },
         data: { status: LedgerStatus.OUTSTANDING },
       });
       if (claim.count === 0) return null;
@@ -548,11 +590,20 @@ export class DashboardCustomersService {
         },
       });
 
-      return tx.customerLedgerEntry.findUniqueOrThrow({ where: { id: ledgerEntryId }, select: ledgerRowSelect });
+      return tx.customerLedgerEntry.findUniqueOrThrow({
+        where: { id: ledgerEntryId },
+        select: ledgerRowSelect,
+      });
     });
 
     if (!result) {
-      return { ledgerEntry: await this.getOwnedLedgerEntry(salonId, customerId, ledgerEntryId) };
+      return {
+        ledgerEntry: await this.getOwnedLedgerEntry(
+          salonId,
+          customerId,
+          ledgerEntryId,
+        ),
+      };
     }
     return { ledgerEntry: toLedgerEntryDto(result as unknown as LedgerRow) };
   }

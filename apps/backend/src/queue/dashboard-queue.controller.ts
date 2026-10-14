@@ -66,7 +66,10 @@ export class DashboardQueueController {
   // (`queue-entries/:id/no-show`) — the two operate on different domain objects and never collide.
   @Post(`${DASHBOARD_PATHS.bookings}/:id/${DASHBOARD_PATHS.noShow}`)
   @Idempotent()
-  bookingNoShow(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+  bookingNoShow(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     return this.bookingNoShowService.markNoShow(user.id, id);
   }
 
@@ -74,7 +77,10 @@ export class DashboardQueueController {
   // wrongly marked no-show.
   @Post(`${DASHBOARD_PATHS.bookings}/:id/${DASHBOARD_PATHS.correctNoShow}`)
   @Idempotent()
-  correctNoShow(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+  correctNoShow(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
     return this.bookingNoShowService.correctToCompleted(user.id, id);
   }
 
@@ -98,6 +104,17 @@ export class DashboardQueueController {
     body: AssignQueueEntryInput,
   ) {
     return this.queueService.assign(user.id, id, body);
+  }
+
+  // Owner-operations corrective mission: assigning a barber and starting the service are separate. The
+  // assigned barber (or the owner) starts an ASSIGNED customer here; it re-validates the assignment.
+  @Post(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.startService}`)
+  @Idempotent()
+  startService(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.queueService.startService(user.id, id);
   }
 
   @Patch(`${DASHBOARD_PATHS.queueEntries}/:id/${DASHBOARD_PATHS.reassign}`)
@@ -134,7 +151,9 @@ export class DashboardQueueController {
     return this.staffStatusService.updateStatus(user, id, body.status);
   }
 
-  @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.staff}/${DASHBOARD_PATHS.me}`)
+  @Get(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.staff}/${DASHBOARD_PATHS.me}`,
+  )
   getMyStaffProfile(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,

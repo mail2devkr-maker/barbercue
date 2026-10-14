@@ -57,21 +57,22 @@ export class BookingExpiryService {
       select: { createdAt: true },
     });
     return next
-      ? new Date(next.createdAt.getTime() + PAYMENT_HOLD_TIMEOUT_MINUTES * 60_000)
+      ? new Date(
+          next.createdAt.getTime() + PAYMENT_HOLD_TIMEOUT_MINUTES * 60_000,
+        )
       : null;
   }
 
   async sweep(): Promise<void> {
     const count = await this.expireOverdueBookings();
-    if (count > 0) this.logger.log(`Expired ${count} abandoned payment hold(s).`);
+    if (count > 0)
+      this.logger.log(`Expired ${count} abandoned payment hold(s).`);
   }
 
   /** The actual sweep logic, separated from the @Cron wrapper so it's directly unit-testable
    * without simulating cron timing. Returns how many bookings were expired. */
   async expireOverdueBookings(): Promise<number> {
-    const cutoff = new Date(
-      Date.now() - PAYMENT_HOLD_TIMEOUT_MINUTES * 60_000,
-    );
+    const cutoff = new Date(Date.now() - PAYMENT_HOLD_TIMEOUT_MINUTES * 60_000);
 
     const overdue = await this.prisma.booking.findMany({
       where: {
@@ -105,17 +106,23 @@ export class BookingExpiryService {
             action: 'BOOKING_EXPIRED',
             entityType: 'Booking',
             entityId: booking.id,
-            metadata: { paymentHoldTimeoutMinutes: PAYMENT_HOLD_TIMEOUT_MINUTES },
+            metadata: {
+              paymentHoldTimeoutMinutes: PAYMENT_HOLD_TIMEOUT_MINUTES,
+            },
           },
         });
 
-        await this.notifications.notifyInTransaction(
-          tx,
-          booking.customerId,
-          'booking.expired',
-          { salonId: booking.salonId },
-          'account/bookings',
-        );
+        // Only a PENDING_PAYMENT online booking can expire, and those always have an account; the
+        // guard keeps the types honest for IN_SHOP rows (no customer to notify).
+        if (booking.customerId) {
+          await this.notifications.notifyInTransaction(
+            tx,
+            booking.customerId,
+            'booking.expired',
+            { salonId: booking.salonId },
+            'account/bookings',
+          );
+        }
         await this.notifications.notifyInTransaction(
           tx,
           booking.salon.ownerUserId,

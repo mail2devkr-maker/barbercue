@@ -99,7 +99,9 @@ export class BookingNoShowService {
       );
     }
 
-    const policy = await this.cancellationPolicy.getEffectivePolicy(booking.salonId);
+    const policy = await this.cancellationPolicy.getEffectivePolicy(
+      booking.salonId,
+    );
     const graceMs = policy.appointmentArrivalGraceMinutes * 60_000;
     if (booking.slotStart.getTime() + graceMs > Date.now()) {
       throw new AppException(
@@ -109,7 +111,11 @@ export class BookingNoShowService {
       );
     }
 
-    const chargeAmount = this.computeNoShowCharge(booking, policy);
+    // A guest (IN_SHOP) appointment has no account to bill: it is recorded as a no-show but never
+    // carries a charge that could not be collected.
+    const chargeAmount = booking.customerId
+      ? this.computeNoShowCharge(booking, policy)
+      : 0;
 
     const claimed = await this.prisma.$transaction(async (tx) => {
       // Claim-based re-check, exactly as the removed automatic sweep did: a concurrent check-in
@@ -128,7 +134,8 @@ export class BookingNoShowService {
       });
       if (claim.count === 0) return false;
 
-      if (chargeAmount > 0) {
+      // A guest (IN_SHOP) booking has no account to bill, so it never creates a ledger due.
+      if (chargeAmount > 0 && booking.customerId) {
         await tx.customerLedgerEntry.create({
           data: {
             customerId: booking.customerId,
@@ -149,19 +156,22 @@ export class BookingNoShowService {
           entityId: booking.id,
           metadata: {
             chargeAmount,
-            appointmentArrivalGraceMinutes: policy.appointmentArrivalGraceMinutes,
+            appointmentArrivalGraceMinutes:
+              policy.appointmentArrivalGraceMinutes,
             mode: 'manual',
           },
         },
       });
 
-      await this.notifications.notifyInTransaction(
-        tx,
-        booking.customerId,
-        'booking.no_show',
-        { salonId: booking.salonId },
-        'account/bookings',
-      );
+      if (booking.customerId) {
+        await this.notifications.notifyInTransaction(
+          tx,
+          booking.customerId,
+          'booking.no_show',
+          { salonId: booking.salonId },
+          'account/bookings',
+        );
+      }
       await this.notifications.notifyInTransaction(
         tx,
         booking.salon.ownerUserId,
@@ -196,7 +206,11 @@ export class BookingNoShowService {
   async correctToCompleted(
     userId: string,
     bookingId: string,
-  ): Promise<{ id: string; status: BookingStatus; waivedLedgerEntryIds: string[] }> {
+  ): Promise<{
+    id: string;
+    status: BookingStatus;
+    waivedLedgerEntryIds: string[];
+  }> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       select: {
@@ -233,7 +247,10 @@ export class BookingNoShowService {
         // COMPLETED, served booking as carrying a charge even though the ledger due is WAIVED — so
         // it is reset here, in the same transaction, and the original figure is preserved in the
         // AuditLog metadata below rather than lost.
-        data: { status: BookingStatus.COMPLETED, cancellationChargeAmount: null },
+        data: {
+          status: BookingStatus.COMPLETED,
+          cancellationChargeAmount: null,
+        },
       });
       if (claim.count === 0) {
         throw new AppException(
@@ -284,19 +301,29 @@ export class BookingNoShowService {
         },
       });
 
-      await this.notifications.notifyInTransaction(
-        tx,
-        booking.customerId,
-        'booking.corrected',
-        { salonId: booking.salonId, bookingId: booking.id },
-        'account/bookings',
-      );
+      if (booking.customerId) {
+        await this.notifications.notifyInTransaction(
+          tx,
+          booking.customerId,
+          'booking.corrected',
+          { salonId: booking.salonId, bookingId: booking.id },
+          'account/bookings',
+        );
+      }
 
       return outstanding.map((e) => e.id);
     });
 
-    this.realtime.emitBookingCorrected(booking.salonId, booking.id, booking.customerId);
-    return { id: booking.id, status: BookingStatus.COMPLETED, waivedLedgerEntryIds };
+    this.realtime.emitBookingCorrected(
+      booking.salonId,
+      booking.id,
+      booking.customerId,
+    );
+    return {
+      id: booking.id,
+      status: BookingStatus.COMPLETED,
+      waivedLedgerEntryIds,
+    };
   }
 
   private computeNoShowCharge(
@@ -326,7 +353,9 @@ export class BookingNoShowService {
         0,
         originalSubtotalPaise -
           (booking.onlineBookingDiscountAmount
-            ? decimalStringToPaise(booking.onlineBookingDiscountAmount.toString())
+            ? decimalStringToPaise(
+                booking.onlineBookingDiscountAmount.toString(),
+              )
             : 0),
       ),
     );

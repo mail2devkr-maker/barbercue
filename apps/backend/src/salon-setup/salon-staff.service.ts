@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import {
   BookingErrorCode,
@@ -15,6 +15,7 @@ import {
 import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { QueueAssignmentReleaseService } from '../queue/queue-assignment-release.service';
 import { EMAIL_SENDER, type EmailSender } from '../auth/services/email-sender';
 import {
   buildPasswordLink,
@@ -50,6 +51,8 @@ export class SalonStaffService {
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
     @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
+    @Optional()
+    private readonly assignmentRelease?: QueueAssignmentReleaseService,
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonStaffDto[]> {
@@ -76,7 +79,10 @@ export class SalonStaffService {
     salonId: string,
     input: CreateSalonStaffInput,
   ): Promise<StaffInviteResultDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
 
     const phone = input.phone?.trim() || null;
     const email = input.email?.trim().toLowerCase() || null;
@@ -234,7 +240,11 @@ export class SalonStaffService {
           action: 'ADMIN_STAFF_CREATED',
           entityType: 'SalonStaff',
           entityId: staff.id,
-          metadata: { salonId, displayName: staff.displayName, invitationSent: Boolean(email && inviteUrl) },
+          metadata: {
+            salonId,
+            displayName: staff.displayName,
+            invitationSent: Boolean(email && inviteUrl),
+          },
         },
       });
     }
@@ -250,7 +260,10 @@ export class SalonStaffService {
     salonId: string,
     staffId: string,
   ): Promise<StaffInviteResultDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     const staff = await this.prisma.salonStaff.findFirst({
       where: { id: staffId, salonId },
       include: { user: { select: { id: true, email: true } } },
@@ -317,7 +330,10 @@ export class SalonStaffService {
     staffId: string,
     input: UpdateSalonStaffInput,
   ): Promise<SalonStaffDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     const existing = await this.prisma.salonStaff.findFirst({
       where: { id: staffId, salonId },
     });
@@ -348,6 +364,15 @@ export class SalonStaffService {
       },
     });
     const updated = await this.getDtoOrThrow(salonId, staffId);
+    // A barber taken off duty hands any customer assigned to them (service not started) back to waiting.
+    if (input.status === StaffMemberStatus.INACTIVE) {
+      await this.assignmentRelease?.releaseForStaff(
+        salonId,
+        staffId,
+        'STAFF_OFF_DUTY',
+        userId,
+      );
+    }
     // Part 2 — every delegated admin mutation gets an AuditLog row with the real admin actor. A
     // status-only (or status-plus-other-fields) change gets its own, more specific action name so
     // "activated/deactivated a barber" is distinguishable from a routine profile edit in the log.
@@ -355,13 +380,26 @@ export class SalonStaffService {
       await this.prisma.auditLog.create({
         data: {
           actorUserId: userId,
-          action: input.status !== undefined ? 'ADMIN_STAFF_STATUS_CHANGED' : 'ADMIN_STAFF_UPDATED',
+          action:
+            input.status !== undefined
+              ? 'ADMIN_STAFF_STATUS_CHANGED'
+              : 'ADMIN_STAFF_UPDATED',
           entityType: 'SalonStaff',
           entityId: staffId,
           metadata: {
             salonId,
-            before: { displayName: existing.displayName, status: existing.status, bio: existing.bio, yearsExperience: existing.yearsExperience },
-            after: { displayName: updated.displayName, status: updated.status, bio: updated.bio, yearsExperience: updated.yearsExperience },
+            before: {
+              displayName: existing.displayName,
+              status: existing.status,
+              bio: existing.bio,
+              yearsExperience: existing.yearsExperience,
+            },
+            after: {
+              displayName: updated.displayName,
+              status: updated.status,
+              bio: updated.bio,
+              yearsExperience: updated.yearsExperience,
+            },
           },
         },
       });
@@ -394,6 +432,7 @@ export class SalonStaffService {
     displayName: string;
     roleInSalon: SalonStaffRole;
     status: StaffMemberStatus;
+    accessRevokedAt?: Date | null;
     bio: string | null;
     photoUrl: string | null;
     yearsExperience: number | null;
@@ -413,6 +452,7 @@ export class SalonStaffService {
       // Never leaks the hash itself — only whether the invitation has been redeemed, so the UI
       // can show an "invite pending" state.
       hasPassword: staff.user.passwordHash !== null,
+      accessRevoked: Boolean(staff.accessRevokedAt),
       bio: staff.bio,
       photoUrl: staff.photoUrl,
       yearsExperience: staff.yearsExperience,

@@ -137,7 +137,8 @@ describe('QueueEntryExpiryService', () => {
     const count = await service.markOverdueNoShows();
     expect(count).toBe(1);
     expect(tx.queueEntry.updateMany).toHaveBeenCalledWith({
-      where: { id: 'q1', status: 'CALLED' },
+      // Re-checked in the claim: a customer who has been ASSIGNED a barber is never auto-no-showed.
+      where: { id: 'q1', status: 'CALLED', assignedStaffId: null },
       data: { status: 'NO_SHOW' },
     });
     expect(tx.auditLog.create).toHaveBeenCalledWith({
@@ -183,6 +184,76 @@ describe('QueueEntryExpiryService', () => {
     expect(count).toBe(0);
     expect(tx.queueEntry.updateMany).not.toHaveBeenCalled();
     expect(queueService.recomputeEtas).not.toHaveBeenCalled();
+  });
+
+  describe('customers who have been ASSIGNED a barber (owner-operations corrective mission)', () => {
+    // These tests build timestamps relative to "now" and the service decides by the salon's own (IST) calendar day and posted
+    // close time. On a real clock they fail in the last hour before and the first minutes after IST midnight, so the
+    // clock is pinned to midday IST (06:30 UTC).
+    beforeEach(() => {
+      jest.useFakeTimers({ now: new Date('2026-10-14T06:30:00.000Z') });
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('are never read as no-show candidates: only CALLED entries with NO barber are', async () => {
+      await service.markOverdueNoShows();
+      const call = prisma.queueEntry.findMany.mock.calls[0][0] as { where: Record<string, unknown> };
+      expect(call.where).toEqual({ status: 'CALLED', assignedStaffId: null });
+    });
+
+    function assignedCandidate(overrides: Partial<Record<string, unknown>> = {}) {
+      return {
+        id: 'qa1',
+        salonId: 's1',
+        joinedAt: new Date(Date.now() - 3 * 24 * 3_600_000),
+        calledAt: new Date(Date.now() - 3 * 24 * 3_600_000),
+        assignedAt: new Date(Date.now() - 3 * 24 * 3_600_000),
+        ...overrides,
+      };
+    }
+
+    it('an assignment from a previous salon day is expired (never NO_SHOW), audited, and frees capacity', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([assignedCandidate()]);
+      const queueWithFree = queueService as unknown as { onCapacityFreed: jest.Mock };
+      queueWithFree.onCapacityFreed = jest.fn();
+      const count = await service.markStaleAssignedExpired();
+      expect(count).toBe(1);
+      expect(tx.queueEntry.updateMany).toHaveBeenCalledWith({
+        where: { id: 'qa1', status: 'CALLED', assignedStaffId: { not: null } },
+        data: { status: 'EXPIRED' },
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'QUEUE_ASSIGNMENT_EXPIRED', entityId: 'qa1', metadata: expect.objectContaining({ rule: 'DAY_ROLLOVER' }) }),
+        }),
+      );
+      expect(realtime.emitQueueEntryExpired).toHaveBeenCalledWith('s1', 'qa1');
+      expect(queueWithFree.onCapacityFreed).toHaveBeenCalledWith('s1');
+    });
+
+    it('an assignment made today is left alone: there is no minutes-based timeout', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([
+        assignedCandidate({ joinedAt: new Date(), calledAt: new Date(Date.now() - 20 * 60_000), assignedAt: new Date(Date.now() - 20 * 60_000) }),
+      ]);
+      const count = await service.markStaleAssignedExpired();
+      expect(count).toBe(0);
+      expect(tx.queueEntry.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('a salon with no trustworthy timezone is skipped rather than guessed at', async () => {
+      availability.getSalonTimeZone.mockResolvedValue(null);
+      prisma.queueEntry.findMany.mockResolvedValue([assignedCandidate()]);
+      expect(await service.markStaleAssignedExpired()).toBe(0);
+    });
+
+    it('re-checks the claim, so a service the barber started a moment ago is never expired', async () => {
+      prisma.queueEntry.findMany.mockResolvedValue([assignedCandidate()]);
+      tx.queueEntry.updateMany.mockResolvedValueOnce({ count: 0 });
+      expect(await service.markStaleAssignedExpired()).toBe(0);
+      expect(realtime.emitQueueEntryExpired).not.toHaveBeenCalled();
+    });
   });
 
   describe('markStaleWaitingExpired', () => {
@@ -282,6 +353,16 @@ describe('QueueEntryExpiryService', () => {
     // fully actionable all the way to midnight under the old calendar-day-end-only boundary. These
     // pin the shop's own posted close time as the real, earlier boundary when one is configured.
     describe('salon close-time boundary (Mission J)', () => {
+      // These tests build timestamps relative to "now" and the service decides by the salon's own (IST) calendar day and posted
+      // close time. On a real clock they fail in the last hour before and the first minutes after IST midnight, so the
+      // clock is pinned to midday IST (06:30 UTC).
+      beforeEach(() => {
+        jest.useFakeTimers({ now: new Date('2026-10-14T06:30:00.000Z') });
+      });
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
       it("does NOT expire a WAITING entry that joined earlier today when today's posted close time has not passed yet", async () => {
         const now = new Date();
         const joinedAt = new Date(now.getTime() - 60_000); // joined 1 minute ago

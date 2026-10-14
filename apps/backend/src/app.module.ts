@@ -34,6 +34,7 @@ import { CustomerCreditsModule } from './credits/customer-credits.module';
 import { EmployeeModule } from './employee/employee.module';
 import { DbDeadlineSchedulerModule } from './common/db-deadline-scheduler/db-deadline-scheduler.module';
 import { SiteMetricsModule } from './site-metrics/site-metrics.module';
+import { OwnerOpsModule } from './owner-ops/owner-ops.module';
 
 @Module({
   imports: [
@@ -60,6 +61,9 @@ import { SiteMetricsModule } from './site-metrics/site-metrics.module';
     CustomerCreditsModule,
     BookingsModule,
     QueueModule,
+    // Owner-operations routes (dashboard/..., invoices/mine) — registered before SalonsModule like
+    // the other salon-scoped controllers above.
+    OwnerOpsModule,
     SalonsModule,
     RealtimeModule,
     PremiumModule,

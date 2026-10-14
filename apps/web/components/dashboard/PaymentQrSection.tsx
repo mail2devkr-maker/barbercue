@@ -116,11 +116,13 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
 
   return (
     <section className={styles.dividerSection}>
-      <h2 className={styles.sectionHeading}>Payment QR</h2>
+      <h2 className={styles.sectionHeading}>Online Booking Payment QR</h2>
       <p style={{ color: "var(--bc-muted)", fontSize: 14, marginBottom: 12 }}>
-        Shown to a customer paying for a booking made through the app or website, so they can scan
-        and pay you directly. Required before a customer can book online at all — a booking made in
-        person at your shop never needs this.
+        Upload your shop&apos;s payment QR code so customers booking through the FastQue app or
+        website can scan it and pay your shop directly. A payment QR is optional: without one,
+        online bookings are still confirmed and customers pay at the shop. Customers booking
+        directly at your shop or joining your in-shop Live Queue never need a payment QR. Showing a
+        QR is not proof of payment — record what you receive on the invoice.
       </p>
       {error && <p className={`${styles.banner} ${styles.bannerError}`} role="alert">{error}</p>}
       {current === undefined && !error && <p className={styles.loadingText}>Loading…</p>}
@@ -144,8 +146,8 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
             </div>
           ) : (
             <p style={{ color: "#B36B00", fontSize: 14, marginBottom: 12 }}>
-              No payment QR configured yet — online bookings are blocked at this shop until you add
-              one.
+              No payment QR added yet. Online bookings are still accepted and customers pay at the
+              shop. Add a QR if you want them to be able to pay you directly when they book.
             </p>
           )}
 

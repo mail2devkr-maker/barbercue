@@ -184,6 +184,12 @@ export const assignQueueEntrySchema = z.object({
   staffId: z.string().uuid(),
   chairId: z.string().uuid(),
   serviceId: z.string().uuid().optional(),
+  // Owner-operations corrective mission: assigning a barber and STARTING the service are separate
+  // steps. `false` (what every current first-party client sends) only reserves the barber and chair
+  // - the customer becomes "Assigned" and the barber explicitly starts the service later. Omitted =
+  // the pre-existing behaviour (seat and start in one step), kept ONLY so already-installed
+  // clients that predate the Start Service action are not left with customers they can never start.
+  startService: z.boolean().optional(),
 });
 export type AssignQueueEntryInput = z.infer<typeof assignQueueEntrySchema>;
 

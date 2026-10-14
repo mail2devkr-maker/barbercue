@@ -82,7 +82,11 @@ export class DashboardAnalyticsService {
 
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { currency: true, timezone: true, city: { select: { countryCode: true } } },
+      select: {
+        currency: true,
+        timezone: true,
+        city: { select: { countryCode: true } },
+      },
     });
     if (!salon) {
       throw new AppException(
@@ -136,9 +140,16 @@ export class DashboardAnalyticsService {
           customerId: true,
           slotStart: true,
           serviceId: true,
-          service: { select: { name: true, durationMinutes: true, price: true } },
+          service: {
+            select: { name: true, durationMinutes: true, price: true },
+          },
           services: {
-            select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+            select: {
+              serviceId: true,
+              serviceName: true,
+              durationMinutes: true,
+              price: true,
+            },
           },
         },
       }),
@@ -151,9 +162,16 @@ export class DashboardAnalyticsService {
         select: {
           status: true,
           serviceId: true,
-          service: { select: { name: true, durationMinutes: true, price: true } },
+          service: {
+            select: { name: true, durationMinutes: true, price: true },
+          },
           services: {
-            select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+            select: {
+              serviceId: true,
+              serviceName: true,
+              durationMinutes: true,
+              price: true,
+            },
           },
         },
       }),
@@ -197,9 +215,16 @@ export class DashboardAnalyticsService {
               booking: {
                 select: {
                   serviceId: true,
-                  service: { select: { name: true, durationMinutes: true, price: true } },
+                  service: {
+                    select: { name: true, durationMinutes: true, price: true },
+                  },
                   services: {
-                    select: { serviceId: true, serviceName: true, durationMinutes: true, price: true },
+                    select: {
+                      serviceId: true,
+                      serviceName: true,
+                      durationMinutes: true,
+                      price: true,
+                    },
                   },
                 },
               },
@@ -209,7 +234,12 @@ export class DashboardAnalyticsService {
       }),
       this.prisma.operatingHours.findMany({
         where: { salonId },
-        select: { dayOfWeek: true, openTime: true, closeTime: true, isClosed: true },
+        select: {
+          dayOfWeek: true,
+          openTime: true,
+          closeTime: true,
+          isClosed: true,
+        },
       }),
       this.prisma.chair.count({
         where: { salonId, status: ChairStatus.ACTIVE },
@@ -233,7 +263,8 @@ export class DashboardAnalyticsService {
     ]);
 
     const countByStatus = new Map<string, number>();
-    for (const row of statusCounts) countByStatus.set(row.status, row._count._all);
+    for (const row of statusCounts)
+      countByStatus.set(row.status, row._count._all);
 
     const customerClassification = await this.classifyCustomers(
       salonId,
@@ -241,7 +272,8 @@ export class DashboardAnalyticsService {
       from,
     );
 
-    const completedSessionRows = completedSessions as unknown as AnalyticsSession[];
+    const completedSessionRows =
+      completedSessions as unknown as AnalyticsSession[];
     const valueFacts = this.valueFacts(completedBookings, completedSessionRows);
     const walkInCompletedSessions = completedSessionRows.filter(
       (session) => session.queueEntry?.source === QueueEntrySource.WALK_IN,
@@ -289,7 +321,8 @@ export class DashboardAnalyticsService {
       appointmentsBooked: allBookingsInRange.length,
       completedCount: countByStatus.get(BookingStatus.COMPLETED) ?? 0,
       confirmedCount: countByStatus.get(BookingStatus.CONFIRMED) ?? 0,
-      pendingPaymentCount: countByStatus.get(BookingStatus.PENDING_PAYMENT) ?? 0,
+      pendingPaymentCount:
+        countByStatus.get(BookingStatus.PENDING_PAYMENT) ?? 0,
       cancelledCount: countByStatus.get(BookingStatus.CANCELLED) ?? 0,
       noShowCount: countByStatus.get(BookingStatus.NO_SHOW) ?? 0,
       expiredCount: countByStatus.get(BookingStatus.EXPIRED) ?? 0,
@@ -297,7 +330,8 @@ export class DashboardAnalyticsService {
       newCustomerCount: customerClassification.newCustomerCount,
       repeatCustomerCount: customerClassification.repeatCustomerCount,
       averageWaitMinutes: this.averageWaitMinutes(queueWaitSamples),
-      averageServiceDurationMinutes: this.averageServiceDurationMinutes(completedSessionRows),
+      averageServiceDurationMinutes:
+        this.averageServiceDurationMinutes(completedSessionRows),
       barberUtilization: this.utilizationBy(
         completedSessionRows,
         (session) => session.staffId,
@@ -310,7 +344,10 @@ export class DashboardAnalyticsService {
       ),
       ...this.hourDistribution(allBookingsInRange, timeZone),
       servicePopularity: this.servicePopularity(valueFacts),
-      estimatedServiceValue: valueFacts.reduce((sum, fact) => sum + fact.value, 0),
+      estimatedServiceValue: valueFacts.reduce(
+        (sum, fact) => sum + fact.value,
+        0,
+      ),
       dailyServiceValue: this.dailyServiceValue(valueFacts, from, to, timeZone),
       serviceValue: this.serviceValue(valueFacts),
       barberValue: this.barberValue(completedSessionRows),
@@ -347,7 +384,11 @@ export class DashboardAnalyticsService {
     if (range === 'custom' && fromRaw && toRaw) {
       const from = new Date(fromRaw);
       const to = new Date(toRaw);
-      if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime()) && from < to) {
+      if (
+        !Number.isNaN(from.getTime()) &&
+        !Number.isNaN(to.getTime()) &&
+        from < to
+      ) {
         return { from, to };
       }
       throw new AppException(
@@ -376,7 +417,9 @@ export class DashboardAnalyticsService {
   private async classifyCustomers(
     salonId: string,
     completedBookings: Array<{
-      customerId: string;
+      // NULL for an IN_SHOP guest appointment: a guest has no account to recognise across visits,
+      // so such bookings are left out of the new/repeat customer split (never guessed).
+      customerId: string | null;
       slotStart?: Date;
     }>,
     from: Date,
@@ -385,7 +428,13 @@ export class DashboardAnalyticsService {
     repeatCustomerCount: number;
     newVisitBookings: Set<(typeof completedBookings)[number]>;
   }> {
-    const customerIds = [...new Set(completedBookings.map((booking) => booking.customerId))];
+    const customerIds = [
+      ...new Set(
+        completedBookings
+          .map((booking) => booking.customerId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
     if (customerIds.length === 0) {
       return {
         newCustomerCount: 0,
@@ -404,9 +453,17 @@ export class DashboardAnalyticsService {
       },
       _count: { _all: true },
     });
-    const priorCustomerIds = new Set(priorVisitors.map((row) => row.customerId));
-    const visitsByCustomer = new Map<string, (typeof completedBookings)[number][]>();
+    const priorCustomerIds = new Set(
+      priorVisitors
+        .map((row) => row.customerId)
+        .filter((id): id is string => id !== null),
+    );
+    const visitsByCustomer = new Map<
+      string,
+      (typeof completedBookings)[number][]
+    >();
     for (const booking of completedBookings) {
+      if (!booking.customerId) continue;
       const visits = visitsByCustomer.get(booking.customerId) ?? [];
       visits.push(booking);
       visitsByCustomer.set(booking.customerId, visits);
@@ -418,8 +475,7 @@ export class DashboardAnalyticsService {
 
     for (const [customerId, visits] of visitsByCustomer) {
       visits.sort(
-        (a, b) =>
-          (a.slotStart?.getTime() ?? 0) - (b.slotStart?.getTime() ?? 0),
+        (a, b) => (a.slotStart?.getTime() ?? 0) - (b.slotStart?.getTime() ?? 0),
       );
       if (priorCustomerIds.has(customerId)) {
         repeatCustomerCount += 1;
@@ -491,7 +547,11 @@ export class DashboardAnalyticsService {
         existing.completedCount += 1;
         existing.estimatedServiceValue += fact.value;
       } else {
-        byDate.set(date, { date, completedCount: 1, estimatedServiceValue: fact.value });
+        byDate.set(date, {
+          date,
+          completedCount: 1,
+          estimatedServiceValue: fact.value,
+        });
       }
     }
 
@@ -500,7 +560,11 @@ export class DashboardAnalyticsService {
     const finalDate = utcToZonedDateStr(new Date(to.getTime() - 1), timeZone);
     while (date <= finalDate) {
       result.push(
-        byDate.get(date) ?? { date, completedCount: 0, estimatedServiceValue: 0 },
+        byDate.get(date) ?? {
+          date,
+          completedCount: 0,
+          estimatedServiceValue: 0,
+        },
       );
       date = addZonedCalendarDays(date, 1);
     }
@@ -589,13 +653,15 @@ export class DashboardAnalyticsService {
       const row = byDay.get(dayOfWeek);
       if (row && !row.isClosed) {
         const open = zonedWallTimeToUtc(date, row.openTime, timeZone);
-        const overnight = this.timeToMinutes(row.closeTime) <= this.timeToMinutes(row.openTime);
+        const overnight =
+          this.timeToMinutes(row.closeTime) <= this.timeToMinutes(row.openTime);
         const closeDate = overnight ? addZonedCalendarDays(date, 1) : date;
         const close = zonedWallTimeToUtc(closeDate, row.closeTime, timeZone);
         if (open && close) {
           const overlapStart = Math.max(open.getTime(), from.getTime());
           const overlapEnd = Math.min(close.getTime(), to.getTime());
-          if (overlapEnd > overlapStart) total += (overlapEnd - overlapStart) / 60_000;
+          if (overlapEnd > overlapStart)
+            total += (overlapEnd - overlapStart) / 60_000;
         }
       }
       date = addZonedCalendarDays(date, 1);
@@ -616,19 +682,31 @@ export class DashboardAnalyticsService {
         (sample): sample is { joinedAt: Date; calledAt: Date } =>
           sample.calledAt !== null && sample.calledAt >= sample.joinedAt,
       )
-      .map((sample) => (sample.calledAt.getTime() - sample.joinedAt.getTime()) / 60_000);
+      .map(
+        (sample) =>
+          (sample.calledAt.getTime() - sample.joinedAt.getTime()) / 60_000,
+      );
     if (waits.length === 0) return null;
-    return Math.round(waits.reduce((sum, minutes) => sum + minutes, 0) / waits.length);
+    return Math.round(
+      waits.reduce((sum, minutes) => sum + minutes, 0) / waits.length,
+    );
   }
 
   private averageServiceDurationMinutes(
     sessions: { startedAt: Date; endedAt: Date | null }[],
   ): number | null {
     const durations = sessions
-      .filter((session): session is { startedAt: Date; endedAt: Date } => session.endedAt !== null)
-      .map((session) => (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000);
+      .filter(
+        (session): session is { startedAt: Date; endedAt: Date } =>
+          session.endedAt !== null,
+      )
+      .map(
+        (session) =>
+          (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000,
+      );
     if (durations.length === 0) return null;
-    const average = durations.reduce((sum, minutes) => sum + minutes, 0) / durations.length;
+    const average =
+      durations.reduce((sum, minutes) => sum + minutes, 0) / durations.length;
     return Math.round(average * 10) / 10;
   }
 
@@ -639,13 +717,21 @@ export class DashboardAnalyticsService {
   ): UtilizationEntryDto[] {
     const raw = new Map<
       string,
-      { id: string; displayName: string; completedSessions: number; totalServiceMinutes: number }
+      {
+        id: string;
+        displayName: string;
+        completedSessions: number;
+        totalServiceMinutes: number;
+      }
     >();
     for (const session of sessions) {
       const id = keyOf(session);
       const name = nameOf(session) ?? 'Unknown';
       const minutes = session.endedAt
-        ? Math.max(0, (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000)
+        ? Math.max(
+            0,
+            (session.endedAt.getTime() - session.startedAt.getTime()) / 60_000,
+          )
         : 0;
       const existing = raw.get(id);
       if (existing) {
@@ -703,7 +789,9 @@ export class DashboardAnalyticsService {
         });
       }
     }
-    return [...byService.values()].sort((a, b) => b.completedCount - a.completedCount);
+    return [...byService.values()].sort(
+      (a, b) => b.completedCount - a.completedCount,
+    );
   }
 
   private occupiedMinutesInRange(
@@ -718,5 +806,4 @@ export class DashboardAnalyticsService {
       return sum + (end > start ? (end - start) / 60_000 : 0);
     }, 0);
   }
-
 }

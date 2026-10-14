@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { BookingStatus, ServiceSessionStatus, type StaffAvailabilityState } from '@barbercue/shared';
+import {
+  BookingStatus,
+  QueueEntryStatus,
+  ServiceSessionStatus,
+  type StaffAvailabilityState,
+} from '@barbercue/shared';
 import type { Db } from './availability.service';
 
 /**
@@ -42,9 +47,19 @@ const RESERVING_BOOKING_STATUSES: readonly BookingStatus[] = [
   BookingStatus.COMPLETED,
 ];
 
+// Used only to project how long an ASSIGNED (not yet started) customer holds a barber when their
+// service has no duration on record.
+const ASSIGNED_HOLD_FALLBACK_MINUTES = 30;
+
 export interface StaffReservationCheck {
   free: boolean;
-  reason: 'BOOKING_RESERVATION' | 'ACTIVE_SESSION' | null;
+  /**
+   * BOOKING_RESERVATION - an appointment window; ACTIVE_SESSION - serving someone right now;
+   * ASSIGNED_CUSTOMER - a customer has been assigned to this barber and the barber has not started
+   * the service yet (owner-operations corrective mission: assigned is NOT in service, but the barber
+   * is spoken for and must not be handed a second customer).
+   */
+  reason: 'BOOKING_RESERVATION' | 'ACTIVE_SESSION' | 'ASSIGNED_CUSTOMER' | null;
   /** ISO end of the specific conflicting reservation/session, when free is false. */
   busyUntil: Date | null;
 }
@@ -61,7 +76,12 @@ export class ReservationService {
 
   /** Half-open interval overlap: [aStart, aEnd) intersects [bStart, bEnd). Exact boundary contact
    * (aEnd === bStart or bEnd === aStart) is NOT an overlap. */
-  intervalsOverlap(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
+  intervalsOverlap(
+    aStart: Date,
+    aEnd: Date,
+    bStart: Date,
+    bEnd: Date,
+  ): boolean {
     return aStart < bEnd && aEnd > bStart;
   }
 
@@ -74,7 +94,11 @@ export class ReservationService {
    * pretend the barber is free while the session is still ACTIVE"). This is a documented
    * heuristic for projected/future availability, not a prediction of the real finish time.
    */
-  projectedActiveSessionEnd(startedAt: Date, durationMinutes: number, now: Date = new Date()): Date {
+  projectedActiveSessionEnd(
+    startedAt: Date,
+    durationMinutes: number,
+    now: Date = new Date(),
+  ): Date {
     const nominalEnd = new Date(startedAt.getTime() + durationMinutes * 60_000);
     return nominalEnd > now ? nominalEnd : now;
   }
@@ -98,35 +122,73 @@ export class ReservationService {
     end: Date,
     options?: { excludeBookingId?: string },
   ): Promise<number> {
-    const [bookingCount, activeWalkInSessions] = await Promise.all([
-      db.booking.count({
-        where: {
-          salonId,
-          ...(options?.excludeBookingId ? { id: { not: options.excludeBookingId } } : {}),
-          ...this.reservingBookingWhere(),
-          slotStart: { lt: end },
-          slotEnd: { gt: start },
-        },
-      }),
-      db.serviceSession.findMany({
-        where: {
-          status: ServiceSessionStatus.ACTIVE,
-          chair: { salonId },
-          queueEntry: { bookingId: null },
-        },
-        select: { startedAt: true, service: { select: { durationMinutes: true } } },
-      }),
-    ]);
+    const [bookingCount, activeWalkInSessions, assignedWalkIns] =
+      await Promise.all([
+        db.booking.count({
+          where: {
+            salonId,
+            ...(options?.excludeBookingId
+              ? { id: { not: options.excludeBookingId } }
+              : {}),
+            ...this.reservingBookingWhere(),
+            slotStart: { lt: end },
+            slotEnd: { gt: start },
+          },
+        }),
+        db.serviceSession.findMany({
+          where: {
+            status: ServiceSessionStatus.ACTIVE,
+            chair: { salonId },
+            queueEntry: { bookingId: null },
+          },
+          select: {
+            startedAt: true,
+            service: { select: { durationMinutes: true } },
+          },
+        }),
+        // A walk-in who has been ASSIGNED a barber and chair but not started consumes a pool unit
+        // exactly like one who is in service: the barber and the chair are spoken for.
+        db.queueEntry.findMany({
+          where: {
+            salonId,
+            status: QueueEntryStatus.CALLED,
+            assignedStaffId: { not: null },
+            bookingId: null,
+          },
+          select: {
+            assignedAt: true,
+            calledAt: true,
+            service: { select: { durationMinutes: true } },
+          },
+        }),
+      ]);
     const now = new Date();
     const overlappingWalkIns = activeWalkInSessions.filter((s) =>
       this.intervalsOverlap(
         s.startedAt,
-        this.projectedActiveSessionEnd(s.startedAt, s.service.durationMinutes, now),
+        this.projectedActiveSessionEnd(
+          s.startedAt,
+          s.service.durationMinutes,
+          now,
+        ),
         start,
         end,
       ),
     ).length;
-    return bookingCount + overlappingWalkIns;
+    const overlappingAssigned = assignedWalkIns.filter((e) => {
+      const from = e.assignedAt ?? e.calledAt ?? now;
+      return this.intervalsOverlap(
+        from,
+        this.projectedActiveSessionEnd(
+          from,
+          e.service?.durationMinutes ?? ASSIGNED_HOLD_FALLBACK_MINUTES,
+          now,
+        ),
+        start,
+        end,
+      );
+    }).length;
+    return bookingCount + overlappingWalkIns + overlappingAssigned;
   }
 
   /**
@@ -148,40 +210,90 @@ export class ReservationService {
     const bookingConflictWhere: Prisma.BookingWhereInput = {
       salonId,
       preferredStaffId: staffId,
-      ...(options?.excludeBookingId ? { id: { not: options.excludeBookingId } } : {}),
+      ...(options?.excludeBookingId
+        ? { id: { not: options.excludeBookingId } }
+        : {}),
       ...this.reservingBookingWhere(),
       slotStart: { lt: end },
       slotEnd: { gt: start },
     };
-    const [conflictingBookingCount, activeSession] = await Promise.all([
-      // A plain count first, matching the same query shape create()/reschedule() always used —
-      // the (rare) conflict path below pays one extra query only when there actually IS one, to
-      // learn its slotEnd for `busyUntil`.
-      db.booking.count({ where: bookingConflictWhere }),
-      db.serviceSession.findFirst({
-        where: {
-          staffId,
-          status: ServiceSessionStatus.ACTIVE,
-          ...(options?.excludeQueueEntryId ? { queueEntryId: { not: options.excludeQueueEntryId } } : {}),
-        },
-        select: { startedAt: true, service: { select: { durationMinutes: true } } },
-      }),
-    ]);
+    const [conflictingBookingCount, activeSession, assignedHold] =
+      await Promise.all([
+        // A plain count first, matching the same query shape create()/reschedule() always used —
+        // the (rare) conflict path below pays one extra query only when there actually IS one, to
+        // learn its slotEnd for `busyUntil`.
+        db.booking.count({ where: bookingConflictWhere }),
+        db.serviceSession.findFirst({
+          where: {
+            staffId,
+            status: ServiceSessionStatus.ACTIVE,
+            ...(options?.excludeQueueEntryId
+              ? { queueEntryId: { not: options.excludeQueueEntryId } }
+              : {}),
+          },
+          select: {
+            startedAt: true,
+            service: { select: { durationMinutes: true } },
+          },
+        }),
+        // An ASSIGNED, not-yet-started customer holds this barber. The entry being (re)checked is
+        // excluded so an assignment never conflicts with itself.
+        db.queueEntry.findFirst({
+          where: {
+            salonId,
+            status: QueueEntryStatus.CALLED,
+            assignedStaffId: staffId,
+            ...(options?.excludeQueueEntryId
+              ? { id: { not: options.excludeQueueEntryId } }
+              : {}),
+          },
+          select: {
+            assignedAt: true,
+            calledAt: true,
+            service: { select: { durationMinutes: true } },
+          },
+        }),
+      ]);
     if (conflictingBookingCount > 0) {
       const conflictingBooking = await db.booking.findFirst({
         where: bookingConflictWhere,
         select: { slotEnd: true },
         orderBy: { slotEnd: 'asc' },
       });
-      return { free: false, reason: 'BOOKING_RESERVATION', busyUntil: conflictingBooking?.slotEnd ?? null };
+      return {
+        free: false,
+        reason: 'BOOKING_RESERVATION',
+        busyUntil: conflictingBooking?.slotEnd ?? null,
+      };
     }
     if (activeSession) {
       const projectedEnd = this.projectedActiveSessionEnd(
         activeSession.startedAt,
         activeSession.service.durationMinutes,
       );
-      if (this.intervalsOverlap(activeSession.startedAt, projectedEnd, start, end)) {
-        return { free: false, reason: 'ACTIVE_SESSION', busyUntil: projectedEnd };
+      if (
+        this.intervalsOverlap(activeSession.startedAt, projectedEnd, start, end)
+      ) {
+        return {
+          free: false,
+          reason: 'ACTIVE_SESSION',
+          busyUntil: projectedEnd,
+        };
+      }
+    }
+    if (assignedHold) {
+      const from =
+        assignedHold.assignedAt ?? assignedHold.calledAt ?? new Date();
+      const projectedEnd = this.projectedActiveSessionEnd(
+        from,
+        assignedHold.service?.durationMinutes ?? ASSIGNED_HOLD_FALLBACK_MINUTES,
+      );
+      if (this.intervalsOverlap(from, projectedEnd, start, end)) {
+        return {
+          free: false,
+          reason: 'ASSIGNED_CUSTOMER',
+          busyUntil: projectedEnd,
+        };
       }
     }
     return { free: true, reason: null, busyUntil: null };
@@ -221,23 +333,47 @@ export class ReservationService {
     staffId: string,
     isWorking: boolean,
     now: Date = new Date(),
-  ): Promise<{ availabilityState: StaffAvailabilityState; busyUntil: Date | null; nextBookingStart: Date | null }> {
+  ): Promise<{
+    availabilityState: StaffAvailabilityState;
+    busyUntil: Date | null;
+    nextBookingStart: Date | null;
+  }> {
     if (!isWorking) {
-      return { availabilityState: 'OFF_DUTY', busyUntil: null, nextBookingStart: null };
+      return {
+        availabilityState: 'OFF_DUTY',
+        busyUntil: null,
+        nextBookingStart: null,
+      };
     }
     // A zero-width probe at `now` — free the instant AFTER a reservation exactly ends.
-    const check = await this.isStaffFreeForInterval(db, salonId, staffId, now, new Date(now.getTime() + 1));
+    const check = await this.isStaffFreeForInterval(
+      db,
+      salonId,
+      staffId,
+      now,
+      new Date(now.getTime() + 1),
+    );
     // Sequenced deliberately, not run in parallel with the check above: "next" must mean the next
     // reservation AFTER whatever is currently blocking this instant (busyUntil), never the current
     // one's own (already-past-or-present) slotStart reported back as if it were upcoming.
-    const next = await this.nextReservationForStaff(db, salonId, staffId, check.free ? now : (check.busyUntil ?? now));
+    const next = await this.nextReservationForStaff(
+      db,
+      salonId,
+      staffId,
+      check.free ? now : (check.busyUntil ?? now),
+    );
     if (!check.free) {
       return {
-        availabilityState: check.reason === 'ACTIVE_SESSION' ? 'IN_SERVICE' : 'RESERVED',
+        availabilityState:
+          check.reason === 'ACTIVE_SESSION' ? 'IN_SERVICE' : 'RESERVED',
         busyUntil: check.busyUntil,
         nextBookingStart: next?.slotStart ?? null,
       };
     }
-    return { availabilityState: 'AVAILABLE', busyUntil: null, nextBookingStart: next?.slotStart ?? null };
+    return {
+      availabilityState: 'AVAILABLE',
+      busyUntil: null,
+      nextBookingStart: next?.slotStart ?? null,
+    };
   }
 }
