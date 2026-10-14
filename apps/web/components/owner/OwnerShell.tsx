@@ -211,7 +211,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
         <div className={ui.app}>
           {/* ---- narrow icon rail: jump between sections ---- */}
           <nav className={ui.rail} aria-label="Sections">
-            <Link href={`/dashboard/salons/${salonId}`} className={ui.railLogo} aria-label="FastQue dashboard home" title="Dashboard home">
+            <Link href={`/dashboard/salons/${salonId}`} className={ui.railLogo} aria-label="Dashboard home" title="Dashboard home">
               <BrandLockup compact markOnly />
             </Link>
             {/* Only groups that live inside the dashboard: "More" holds Help, a public page that opens in a new tab. */}
