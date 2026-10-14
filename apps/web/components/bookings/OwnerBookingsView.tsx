@@ -21,6 +21,7 @@ import {
 } from "../../lib/voice-preference";
 import { Button } from "../ui/Button";
 import { ShopBookingActions } from "../owner/ShopBookingActions";
+import { OwnerQueueVisits } from "./OwnerQueueVisits";
 import styles from "./bookings.module.css";
 
 const PAGE_SIZE = 20;
@@ -445,6 +446,12 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
         ))}
       </div>
 
+      {/* Standalone Live Queue customers live in queue_entries, not bookings: show them here
+          as a separate source rather than silently hiding them from Completed and All / History. */}
+      {filter !== "upcoming" && <OwnerQueueVisits salonId={salonId} filter={filter} />}
+      <section aria-label="Appointments" className={styles.recordSection}>
+        <h2 className={styles.recordHeading}>Appointments</h2>
+        <p className={styles.recordDescription}>Online and in-shop appointments, including those checked in through the Live Queue.</p>
       {error && <p className={styles.errorText}>{error}</p>}
       {loading ? (
         <p>Loading…</p>
@@ -476,7 +483,8 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
           >
             {loadingMore ? "Loading…" : "Load more"}
           </Button>
-        </div>
+          </section>
+    </div>
       )}
     </div>
   );
