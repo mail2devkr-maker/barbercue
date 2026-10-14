@@ -73,10 +73,14 @@ async function bootstrap() {
   app.enableCors({ origin: corsOrigins, credentials: true });
 
   const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  // Keep the existing host behavior by default, but allow isolated local certification and
+  // private deployment environments to bind explicitly to loopback/private interfaces.
+  const host = process.env.FASTQUE_LISTEN_HOST?.trim();
+  if (host) await app.listen(port, host);
+  else await app.listen(port);
 
   console.log(
-    `@barbercue/backend listening on http://localhost:${port}/api/v1`,
+    `@barbercue/backend listening on http://${host || 'localhost'}:${port}/api/v1`,
   );
 }
 void bootstrap();

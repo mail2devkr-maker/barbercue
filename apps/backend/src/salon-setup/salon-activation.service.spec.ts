@@ -8,27 +8,42 @@ describe('SalonActivationService', () => {
     chair: { count: jest.Mock };
     salonStaff: { count: jest.Mock };
     auditLog: { create: jest.Mock };
+    $queryRaw: jest.Mock;
     $transaction: jest.Mock;
   };
-  let salonAccess: { assertOwnerAccess: jest.Mock; assertPlatformAdminAccess: jest.Mock };
+  let salonAccess: {
+    assertOwnerAccess: jest.Mock;
+    assertPlatformAdminAccess: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
       salon: {
         findUnique: jest
           .fn()
-          .mockResolvedValue({ id: 'salon-1', status: 'PENDING', isClosedForToday: false }),
+          .mockResolvedValue({
+            id: 'salon-1',
+            status: 'PENDING',
+            isClosedForToday: false,
+          }),
         update: jest
           .fn()
-          .mockResolvedValue({ id: 'salon-1', status: 'ACTIVE', isClosedForToday: false }),
+          .mockResolvedValue({
+            id: 'salon-1',
+            status: 'ACTIVE',
+            isClosedForToday: false,
+          }),
       },
       // Default to a fully set-up shop, so each readiness test states only the one thing it
       // removes rather than restating the whole fixture.
       service: { count: jest.fn().mockResolvedValue(1) },
       chair: { count: jest.fn().mockResolvedValue(1) },
-    salonStaff: { count: jest.fn().mockResolvedValue(1) },
-    $transaction: jest.fn(async (callback: (tx: unknown) => unknown) => callback(prisma)),
-    auditLog: { create: jest.fn() },
+      salonStaff: { count: jest.fn().mockResolvedValue(1) },
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'salon-1' }]),
+      $transaction: jest.fn(async (callback: (tx: unknown) => unknown) =>
+        callback(prisma),
+      ),
+      auditLog: { create: jest.fn() },
     };
     salonAccess = {
       assertOwnerAccess: jest.fn().mockResolvedValue(undefined),
@@ -45,7 +60,11 @@ describe('SalonActivationService', () => {
       where: { id: 'salon-1' },
       data: { status: 'ACTIVE', isClosedForToday: false },
     });
-    expect(result).toEqual({ id: 'salon-1', status: 'ACTIVE', isClosedForToday: false });
+    expect(result).toEqual({
+      id: 'salon-1',
+      status: 'ACTIVE',
+      isClosedForToday: false,
+    });
   });
 
   it('closes an ACTIVE owner shop for today without changing its discoverable lifecycle status', async () => {
@@ -161,7 +180,11 @@ describe('SalonActivationService', () => {
       const result = await service.updateStatus('owner-1', 'salon-1', {
         status: 'ACTIVE' as never,
       });
-      expect(result).toEqual({ id: 'salon-1', status: 'ACTIVE', isClosedForToday: false });
+      expect(result).toEqual({
+        id: 'salon-1',
+        status: 'ACTIVE',
+        isClosedForToday: false,
+      });
       expect(prisma.salon.update).toHaveBeenCalled();
     });
 
@@ -280,34 +303,75 @@ describe('SalonActivationService', () => {
     });
 
     it('opens a ready pending salon and records the admin actor', async () => {
-      const result = await service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'ACTIVE' as never });
+      const result = await service.updateStatusAsAdmin('admin-1', 'salon-1', {
+        status: 'ACTIVE' as never,
+      });
       expect(result.status).toBe('ACTIVE');
-      expect(salonAccess.assertPlatformAdminAccess).toHaveBeenCalledWith('admin-1', 'salon-1');
+      expect(salonAccess.assertPlatformAdminAccess).toHaveBeenCalledWith(
+        'admin-1',
+        'salon-1',
+      );
       expect(prisma.auditLog.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ actorUserId: 'admin-1', action: 'ADMIN_SALON_OPENED', entityId: 'salon-1' }),
+        data: expect.objectContaining({
+          actorUserId: 'admin-1',
+          action: 'ADMIN_SALON_OPENED',
+          entityId: 'salon-1',
+        }),
       });
     });
 
     it('rejects an incomplete pending salon with readiness details', async () => {
       prisma.service.count.mockResolvedValue(0);
-      await expect(service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'ACTIVE' as never }))
-        .rejects.toMatchObject({ code: 'SALON_SETUP_INCOMPLETE', details: { hasActiveService: false } });
+      await expect(
+        service.updateStatusAsAdmin('admin-1', 'salon-1', {
+          status: 'ACTIVE' as never,
+        }),
+      ).rejects.toMatchObject({
+        code: 'SALON_SETUP_INCOMPLETE',
+        details: { hasActiveService: false },
+      });
       expect(prisma.salon.update).not.toHaveBeenCalled();
     });
 
     it('suspends active and reopens suspended shops with valid transitions only', async () => {
-      prisma.salon.findUnique.mockResolvedValueOnce({ id: 'salon-1', status: 'ACTIVE' });
-      prisma.salon.update.mockResolvedValueOnce({ id: 'salon-1', status: 'SUSPENDED' });
-      await expect(service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'SUSPENDED' as never })).resolves.toEqual({ id: 'salon-1', status: 'SUSPENDED' });
-      prisma.salon.findUnique.mockResolvedValueOnce({ id: 'salon-1', status: 'SUSPENDED' });
-      prisma.salon.update.mockResolvedValueOnce({ id: 'salon-1', status: 'ACTIVE' });
-      await expect(service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'ACTIVE' as never })).resolves.toEqual({ id: 'salon-1', status: 'ACTIVE' });
+      prisma.salon.findUnique.mockResolvedValueOnce({
+        id: 'salon-1',
+        status: 'ACTIVE',
+      });
+      prisma.salon.update.mockResolvedValueOnce({
+        id: 'salon-1',
+        status: 'SUSPENDED',
+      });
+      await expect(
+        service.updateStatusAsAdmin('admin-1', 'salon-1', {
+          status: 'SUSPENDED' as never,
+        }),
+      ).resolves.toEqual({ id: 'salon-1', status: 'SUSPENDED' });
+      prisma.salon.findUnique.mockResolvedValueOnce({
+        id: 'salon-1',
+        status: 'SUSPENDED',
+      });
+      prisma.salon.update.mockResolvedValueOnce({
+        id: 'salon-1',
+        status: 'ACTIVE',
+      });
+      await expect(
+        service.updateStatusAsAdmin('admin-1', 'salon-1', {
+          status: 'ACTIVE' as never,
+        }),
+      ).resolves.toEqual({ id: 'salon-1', status: 'ACTIVE' });
     });
 
     it('rejects invalid transitions without writing', async () => {
-      prisma.salon.findUnique.mockResolvedValue({ id: 'salon-1', status: 'ACTIVE' });
-      await expect(service.updateStatusAsAdmin('admin-1', 'salon-1', { status: 'ACTIVE' as never }))
-        .rejects.toMatchObject({ code: 'SALON_STATUS_TRANSITION_INVALID' });
+      prisma.salon.findUnique.mockResolvedValue({
+        id: 'salon-1',
+        status: 'ACTIVE',
+      });
+      await expect(
+        service.updateStatusAsAdmin('admin-1', 'salon-1', {
+          status: 'ACTIVE' as never,
+        }),
+      ).rejects.toMatchObject({ code: 'SALON_STATUS_TRANSITION_INVALID' });
       expect(prisma.salon.update).not.toHaveBeenCalled();
     });
   });

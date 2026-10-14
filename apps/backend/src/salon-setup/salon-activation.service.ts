@@ -41,51 +41,54 @@ export class SalonActivationService {
     input: UpdateSalonStatusInput,
   ): Promise<SalonStatusResultDto> {
     await this.salonAccess.assertOwnerAccess(userId, salonId);
-    const salon = await this.prisma.salon.findUnique({
-      where: { id: salonId },
-    });
-    if (!salon) {
-      throw new AppException(
-        BookingErrorCode.SALON_NOT_FOUND,
-        'Salon not found.',
-        HttpStatus.NOT_FOUND,
-      );
-    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "salons" WHERE "id" = ${salonId} FOR UPDATE`;
+      const salon = await tx.salon.findUnique({ where: { id: salonId } });
+      if (!salon) {
+        throw new AppException(
+          BookingErrorCode.SALON_NOT_FOUND,
+          'Salon not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (salon.softDeletedAt) throw shopQuarantinedException();
 
-    // Readiness is checked ONLY on the first opening (PENDING -> ACTIVE). Deliberately not on
-    // SUSPENDED -> ACTIVE: a shop that has traded before is reopening after a pause, and blocking
-    // that because a chair is temporarily under repair would lock an owner out of their own
-    // business. Equally, nothing here ever demotes a salon — an already-ACTIVE shop whose last
-    // barber goes inactive stays ACTIVE, and the queue engine's own capacity rule
-    // (min(active staff, active chairs)) is what stops customers being seated meanwhile.
-    if (
-      input.status === SalonStatus.ACTIVE &&
-      salon.status === SalonStatus.PENDING
-    ) {
-      await this.assertReadyToOpen(salonId);
-    }
+      // Readiness is checked ONLY on the first opening (PENDING -> ACTIVE). Deliberately not on
+      // SUSPENDED -> ACTIVE: a shop that has traded before is reopening after a pause, and blocking
+      // that because a chair is temporarily under repair would lock an owner out of their own
+      // business. Equally, nothing here ever demotes a salon — an already-ACTIVE shop whose last
+      // barber goes inactive stays ACTIVE, and the queue engine's own capacity rule
+      // (min(active staff, active chairs)) is what stops customers being seated meanwhile.
+      if (
+        input.status === SalonStatus.ACTIVE &&
+        salon.status === SalonStatus.PENDING
+      ) {
+        await this.assertReadyToOpen(salonId);
+      }
 
-    // Owner "Close my shop" is a temporary same-day pause, not a moderation suspension.
-    // Keep the real lifecycle status ACTIVE so the shop remains discoverable; customer booking
-    // and queue entry read isClosedForToday and are blocked until the owner reopens it.
-    const closingForToday = input.status === SalonStatus.SUSPENDED;
-    const updated = await this.prisma.salon.update({
-      where: { id: salonId },
-      data: closingForToday
-        ? { isClosedForToday: true }
-        : {
-            status:
-              salon.status === SalonStatus.PENDING || salon.status === SalonStatus.SUSPENDED
-                ? SalonStatus.ACTIVE
-                : salon.status,
-            isClosedForToday: false,
-          },
+      // Owner "Close my shop" is a temporary same-day pause, not a moderation suspension.
+      // Keep the real lifecycle status ACTIVE so the shop remains discoverable; customer booking
+      // and queue entry are blocked until the owner reopens it.
+      const closingForToday = input.status === SalonStatus.SUSPENDED;
+      const updated = await tx.salon.update({
+        where: { id: salonId },
+        data: closingForToday
+          ? { isClosedForToday: true }
+          : {
+              status:
+                salon.status === SalonStatus.PENDING ||
+                salon.status === SalonStatus.SUSPENDED
+                  ? SalonStatus.ACTIVE
+                  : salon.status,
+              isClosedForToday: false,
+            },
+      });
+      return {
+        id: updated.id,
+        status: updated.status,
+        isClosedForToday: updated.isClosedForToday,
+      };
     });
-    return {
-      id: updated.id,
-      status: updated.status,
-      isClosedForToday: updated.isClosedForToday,
-    };
   }
 
   /** Platform-admin lifecycle control. The admin actor is never treated as the shop owner. */
@@ -95,41 +98,43 @@ export class SalonActivationService {
     input: UpdateSalonStatusInput,
   ): Promise<SalonStatusResultDto> {
     await this.salonAccess.assertPlatformAdminAccess(adminUserId, salonId);
-    const salon = await this.prisma.salon.findUnique({
-      where: { id: salonId },
-      select: { id: true, status: true },
-    });
-    if (!salon) {
-      throw new AppException(
-        BookingErrorCode.SALON_NOT_FOUND,
-        'Salon not found.',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
-    const allowed =
-      (salon.status === SalonStatus.PENDING && input.status === SalonStatus.ACTIVE) ||
-      (salon.status === SalonStatus.ACTIVE && input.status === SalonStatus.SUSPENDED) ||
-      (salon.status === SalonStatus.SUSPENDED && input.status === SalonStatus.ACTIVE);
-    if (!allowed) {
-      throw new AppException(
-        'SALON_STATUS_TRANSITION_INVALID',
-        `Cannot change shop status from ${salon.status} to ${input.status}.`,
-        HttpStatus.CONFLICT,
-      );
-    }
-
-    if (input.status === SalonStatus.ACTIVE) {
-      await this.assertReadyToOpen(salonId);
-    }
-
-    const action =
-      salon.status === SalonStatus.PENDING
-        ? 'ADMIN_SALON_OPENED'
-        : salon.status === SalonStatus.SUSPENDED
-          ? 'ADMIN_SALON_REOPENED'
-          : 'ADMIN_SALON_SUSPENDED';
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "salons" WHERE "id" = ${salonId} FOR UPDATE`;
+      const salon = await tx.salon.findUnique({
+        where: { id: salonId },
+        select: { id: true, status: true, softDeletedAt: true },
+      });
+      if (!salon) {
+        throw new AppException(
+          BookingErrorCode.SALON_NOT_FOUND,
+          'Salon not found.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      if (salon.softDeletedAt) throw shopQuarantinedException();
+      const allowed =
+        (salon.status === SalonStatus.PENDING &&
+          input.status === SalonStatus.ACTIVE) ||
+        (salon.status === SalonStatus.ACTIVE &&
+          input.status === SalonStatus.SUSPENDED) ||
+        (salon.status === SalonStatus.SUSPENDED &&
+          input.status === SalonStatus.ACTIVE);
+      if (!allowed) {
+        throw new AppException(
+          'SALON_STATUS_TRANSITION_INVALID',
+          `Cannot change shop status from ${salon.status} to ${input.status}.`,
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (input.status === SalonStatus.ACTIVE)
+        await this.assertReadyToOpen(salonId);
+
+      const action =
+        salon.status === SalonStatus.PENDING
+          ? 'ADMIN_SALON_OPENED'
+          : salon.status === SalonStatus.SUSPENDED
+            ? 'ADMIN_SALON_REOPENED'
+            : 'ADMIN_SALON_SUSPENDED';
       const updated = await tx.salon.update({
         where: { id: salonId },
         // Admin lifecycle decisions are authoritative and separate from an owner's daily pause.
@@ -194,6 +199,14 @@ export class SalonActivationService {
       { ...readiness },
     );
   }
+}
+
+function shopQuarantinedException(): AppException {
+  return new AppException(
+    'SHOP_QUARANTINED',
+    'This shop is in recovery Trash. Only a Super Admin can restore it.',
+    HttpStatus.CONFLICT,
+  );
 }
 
 /** "one chair" | "one chair and one barber" | "one service, one chair and one barber" */

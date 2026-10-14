@@ -140,7 +140,7 @@ export class SalonsService {
     const rows = await this.prisma.service.findMany({
       where: {
         isActive: true,
-        salon: { status: SalonStatus.ACTIVE },
+        salon: { status: SalonStatus.ACTIVE, softDeletedAt: null },
         OR: [
           { name: { contains: q, mode: 'insensitive' } },
           { category: { contains: q, mode: 'insensitive' } },
@@ -159,7 +159,10 @@ export class SalonsService {
   ): Promise<PaginatedResult<SalonListItemDto>> {
     const limit = query.limit ?? DEFAULT_PAGE_SIZE;
 
-    const where: Prisma.SalonWhereInput = { status: SalonStatus.ACTIVE };
+    const where: Prisma.SalonWhereInput = {
+      status: SalonStatus.ACTIVE,
+      softDeletedAt: null,
+    };
     // City.slug is unique only per country (@@unique([countryCode, slug])), so a bare slug filter
     // can match a same-named city in a different country. countryCode is optional here because
     // not every caller has one in hand (free-text search, the landing page's featured shops) —
@@ -195,8 +198,12 @@ export class SalonsService {
       };
     }
 
-    function withPrice(relevance: Prisma.ServiceWhereInput): Prisma.ServiceWhereInput {
-      return priceCondition ? { AND: [relevance, { price: priceCondition }] } : relevance;
+    function withPrice(
+      relevance: Prisma.ServiceWhereInput,
+    ): Prisma.ServiceWhereInput {
+      return priceCondition
+        ? { AND: [relevance, { price: priceCondition }] }
+        : relevance;
     }
 
     if (query.service) {
@@ -237,7 +244,10 @@ export class SalonsService {
         services: { some: { isActive: true, price: priceCondition } },
       };
       where.AND = where.AND
-        ? [...(Array.isArray(where.AND) ? where.AND : [where.AND]), broadPriceCondition]
+        ? [
+            ...(Array.isArray(where.AND) ? where.AND : [where.AND]),
+            broadPriceCondition,
+          ]
         : [broadPriceCondition];
     }
 
@@ -266,7 +276,8 @@ export class SalonsService {
       // "find me enough results" hint — widening past it (the way the no-radius path below
       // deliberately does) would silently return salons farther away than requested. So this tries
       // exactly one box, sized to the requested radius, instead of walking NEAR_ME_RADII_KM.
-      const radiiToTry = query.radiusKm !== undefined ? [query.radiusKm] : NEAR_ME_RADII_KM;
+      const radiiToTry =
+        query.radiusKm !== undefined ? [query.radiusKm] : NEAR_ME_RADII_KM;
       // A salon with no lat/lng can never get a distance and is always dropped by the
       // distanceKm-not-null filter below — fetching it into the capped candidate set would only
       // ever waste one of the NEAR_ME_CANDIDATE_CAP slots. Filtering coordinates at the DB level
@@ -310,14 +321,19 @@ export class SalonsService {
         // hard cutoff a caller-supplied radiusKm promises, checked against the real, unrounded
         // Haversine distance, never just "was it inside the prefilter box" or the rounded display
         // value.
-        .filter((w) => query.radiusKm === undefined || w.rawDistanceKm! <= query.radiusKm)
+        .filter(
+          (w) =>
+            query.radiusKm === undefined || w.rawDistanceKm! <= query.radiusKm,
+        )
         // Tie-broken by id: the candidate query has no explicit orderBy, so two salons at an
         // identical distance would otherwise sort in whatever incidental row order Postgres
         // happened to return them in — never guaranteed, and not something a client can rely on
         // page-to-page. Sorting is stable (ES2019+), so this tiebreaker makes the full order
         // deterministic rather than merely "probably consistent."
         .sort(
-          (a, b) => a.rawDistanceKm! - b.rawDistanceKm! || a.item.id.localeCompare(b.item.id),
+          (a, b) =>
+            a.rawDistanceKm! - b.rawDistanceKm! ||
+            a.item.id.localeCompare(b.item.id),
         )
         .map((w) => w.item)
         .slice(0, limit);
@@ -350,7 +366,12 @@ export class SalonsService {
     );
 
     const salon = await this.prisma.salon.findFirst({
-      where: { slug: salonSlug, cityId: city.id, status: SalonStatus.ACTIVE },
+      where: {
+        slug: salonSlug,
+        cityId: city.id,
+        status: SalonStatus.ACTIVE,
+        softDeletedAt: null,
+      },
       include: {
         city: true,
         locality: true,
@@ -405,7 +426,9 @@ export class SalonsService {
       // No lat/lng of the viewer to compare against on the profile page (unlike search results)
       // — the customer already navigated here, distance is no longer the decision being made.
       distanceKm: null,
-      isOpenNow: salon.isClosedForToday ? false : isOpenNow(salon.operatingHours, salon),
+      isOpenNow: salon.isClosedForToday
+        ? false
+        : isOpenNow(salon.operatingHours, salon),
       isClosedForToday: salon.isClosedForToday,
       // Pre-confirmation timezone fix: the salon's resolved IANA zone, so the booking flow (date
       // picker, slot times, pre-confirm summary) can render in the SALON's local time instead of
@@ -491,6 +514,7 @@ export class SalonsService {
         cityId: city.id,
         status: SalonStatus.ACTIVE,
         isClosedForToday: false,
+        softDeletedAt: null,
       },
       select: {
         chairs: {
@@ -899,7 +923,9 @@ export class SalonsService {
       priceMin,
       priceMax,
       distanceKm,
-      isOpenNow: salon.isClosedForToday ? false : isOpenNow(salon.operatingHours, salon),
+      isOpenNow: salon.isClosedForToday
+        ? false
+        : isOpenNow(salon.operatingHours, salon),
       isClosedForToday: salon.isClosedForToday,
       verified: salon.verification?.status === VerificationStatus.APPROVED,
       waitingCount,

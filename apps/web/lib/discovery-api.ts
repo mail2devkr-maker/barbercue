@@ -1,3 +1,5 @@
+import { DISCOVERY_PATHS } from "@barbercue/shared";
+
 // Server-only (RSC data fetching, including Next's build-time static generation, which has no
 // request/browser context to resolve a relative URL against). Browser API calls intentionally use
 // the web app's same-origin /api/v1 proxy, but Server Components must always talk to an absolute
@@ -34,15 +36,32 @@ export class DiscoveryApiError extends Error {
   }
 }
 
+function isSalonVisibilityPath(path: string): boolean {
+  const normalizedPath = path.replace(/^\/+/, "").split(/[?#]/, 1)[0];
+  return (
+    normalizedPath === DISCOVERY_PATHS.salons ||
+    normalizedPath.startsWith(`${DISCOVERY_PATHS.salons}/`)
+  );
+}
+
 /**
  * Server-safe fetch for the public discovery API (cities/localities/salons) — no auth, no
  * cookies, safe to call from Server Components, which is where every public SEO page fetches its
- * data. `revalidateSeconds` maps directly to Next's fetch cache / ISR window (PROJECT_STRUCTURE.md
- * "SEO details": time-based ISR for now, on-demand revalidation once the owner dashboard can edit
- * salon data).
+ * data. `revalidateSeconds` maps directly to Next's fetch cache / ISR window for city/locality
+ * metadata. Salon profile/list paths are visibility-sensitive and bypass that cache so a
+ * quarantine takes effect immediately rather than waiting for the SEO ISR window.
  */
-export async function fetchDiscovery<T>(path: string, revalidateSeconds: number): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}/${path}`, { next: { revalidate: revalidateSeconds } });
+export async function fetchDiscovery<T>(
+  path: string,
+  revalidateSeconds: number,
+): Promise<T> {
+  // Salon visibility can change immediately when an administrator quarantines a shop. Do not
+  // serve cached public profiles or discovery results after that state transition; keep the
+  // existing ISR policy for city/locality/editorial data that is not a shop-visibility decision.
+  const cacheOptions = isSalonVisibilityPath(path)
+    ? { cache: "no-store" as const }
+    : { next: { revalidate: revalidateSeconds } };
+  const res = await fetch(`${API_BASE_URL}/${path}`, cacheOptions);
   const body: unknown = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new DiscoveryApiError(res.status, body as DiscoveryApiErrorBody);
@@ -54,7 +73,10 @@ export async function fetchDiscovery<T>(path: string, revalidateSeconds: number)
  * Same as fetchDiscovery, but a 404 resolves to `null` instead of throwing — for pages that
  * should render Next's notFound() rather than an error boundary when the slug doesn't exist.
  */
-export async function fetchDiscoveryOrNull<T>(path: string, revalidateSeconds: number): Promise<T | null> {
+export async function fetchDiscoveryOrNull<T>(
+  path: string,
+  revalidateSeconds: number,
+): Promise<T | null> {
   try {
     return await fetchDiscovery<T>(path, revalidateSeconds);
   } catch (err) {

@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+import { AdminActivityAuditInterceptor } from './common/interceptors/admin-activity-audit.interceptor';
 import { SalonsModule } from './salons/salons.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { SalonAccessModule } from './common/salon-access/salon-access.module';
@@ -89,6 +90,7 @@ import { SiteMetricsModule } from './site-metrics/site-metrics.module';
     { provide: APP_GUARD, useClass: RolesGuard },
     // No-ops on any route not marked @Idempotent() — see IdempotencyInterceptor's own docs.
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: AdminActivityAuditInterceptor },
   ],
 })
 export class AppModule {}

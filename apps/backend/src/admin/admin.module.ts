@@ -8,10 +8,13 @@ import { AuthModule } from '../auth/auth.module';
 import { AdminEmployeeManagementService } from './admin-employee-management.service';
 import { AdminCrmService } from './admin-crm.service';
 import { AdminAccessManagementService } from './admin-access-management.service';
+import { AdminSecurityController } from './admin-security.controller';
+import { AdminShopDeletionRequestsService } from './admin-shop-deletion-requests.service';
+import { AdminSecurityAuditService } from './admin-security-audit.service';
 
 @Module({
   imports: [SalonSetupModule, AuthModule],
-  controllers: [AdminController],
+  controllers: [AdminController, AdminSecurityController],
   providers: [
     AdminMonitoringService,
     AdminVerificationService,
@@ -19,6 +22,8 @@ import { AdminAccessManagementService } from './admin-access-management.service'
     AdminEmployeeManagementService,
     AdminCrmService,
     AdminAccessManagementService,
+    AdminShopDeletionRequestsService,
+    AdminSecurityAuditService,
   ],
 })
 export class AdminModule {}

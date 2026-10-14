@@ -23,7 +23,11 @@ describe('CitiesService', () => {
 
   beforeEach(async () => {
     prisma = {
-      city: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
+      city: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        findFirst: jest.fn(),
+      },
       locality: { findMany: jest.fn(), findUnique: jest.fn() },
       $queryRaw: jest.fn(),
     };
@@ -63,7 +67,9 @@ describe('CitiesService', () => {
       const result = await service.listCities();
       expect(prisma.city.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { salons: { some: { status: 'ACTIVE' } } },
+          where: {
+            salons: { some: { status: 'ACTIVE', softDeletedAt: null } },
+          },
         }),
       );
       expect(result).toEqual([bengaluru]);
@@ -128,7 +134,9 @@ describe('CitiesService', () => {
         where: { countryCode_slug: { countryCode: 'IN', slug: 'bengaluru' } },
       });
       expect(prisma.locality.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ cityId: 'c1' }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({ cityId: 'c1' }),
+        }),
       );
     });
   });
@@ -182,26 +190,38 @@ describe('CitiesService', () => {
     };
 
     it('returns [] without querying the database when q is empty', async () => {
-      const result = await service.searchCities({ countryId: 'country-1', q: '' });
+      const result = await service.searchCities({
+        countryId: 'country-1',
+        q: '',
+      });
       expect(result).toEqual([]);
       expect(prisma.$queryRaw).not.toHaveBeenCalled();
     });
 
     it('returns [] without querying the database when q is shorter than the minimum length', async () => {
-      const result = await service.searchCities({ countryId: 'country-1', q: 'b' });
+      const result = await service.searchCities({
+        countryId: 'country-1',
+        q: 'b',
+      });
       expect(result).toEqual([]);
       expect(prisma.$queryRaw).not.toHaveBeenCalled();
     });
 
     it('returns [] without querying the database when q is only whitespace', async () => {
-      const result = await service.searchCities({ countryId: 'country-1', q: '   ' });
+      const result = await service.searchCities({
+        countryId: 'country-1',
+        q: '   ',
+      });
       expect(result).toEqual([]);
       expect(prisma.$queryRaw).not.toHaveBeenCalled();
     });
 
     it('queries with the country filter and maps a lean result including its region', async () => {
       prisma.$queryRaw.mockResolvedValue([bengaluruRow]);
-      const result = await service.searchCities({ countryId: 'country-1', q: 'ben' });
+      const result = await service.searchCities({
+        countryId: 'country-1',
+        q: 'ben',
+      });
       expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
       expect(sqlFragment.values).toContain('country-1');
@@ -249,7 +269,11 @@ describe('CitiesService', () => {
       expect(sqlText).toContain('c."countryId" IS NULL');
       expect(sqlText).toContain('FROM "Country" country');
       expect(sqlText).toContain('c."countryCode"');
-      expect(sqlFragment.values.filter((value: unknown) => value === 'india-country-id')).toHaveLength(2);
+      expect(
+        sqlFragment.values.filter(
+          (value: unknown) => value === 'india-country-id',
+        ),
+      ).toHaveLength(2);
       expect(result).toEqual([
         {
           id: 'jharsuguda-city',
@@ -263,7 +287,11 @@ describe('CitiesService', () => {
 
     it('includes the region filter in the query parameters when regionId is provided', async () => {
       prisma.$queryRaw.mockResolvedValue([]);
-      await service.searchCities({ countryId: 'country-1', regionId: 'region-1', q: 'mum' });
+      await service.searchCities({
+        countryId: 'country-1',
+        regionId: 'region-1',
+        q: 'mum',
+      });
       const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
       expect(sqlFragment.values).toContain('country-1');
       expect(sqlFragment.values).toContain('region-1');
@@ -327,7 +355,10 @@ describe('CitiesService', () => {
       prisma.$queryRaw.mockResolvedValue([
         { ...bengaluruRow, regionId: null, regionName: null, regionCode: null },
       ]);
-      const result = await service.searchCities({ countryId: 'country-1', q: 'ben' });
+      const result = await service.searchCities({
+        countryId: 'country-1',
+        q: 'ben',
+      });
       expect(result[0].region).toBeNull();
     });
 
@@ -335,7 +366,11 @@ describe('CitiesService', () => {
       prisma.$queryRaw.mockResolvedValue([]);
       // Simulates a caller bypassing the schema's own max(50) validation (e.g. a direct service
       // call) -- the service itself must clamp defensively too.
-      await service.searchCities({ countryId: 'country-1', q: 'ben', limit: 5000 });
+      await service.searchCities({
+        countryId: 'country-1',
+        q: 'ben',
+        limit: 5000,
+      });
       const sqlFragment = prisma.$queryRaw.mock.calls[0][0];
       expect(sqlFragment.values).toContain(50);
       expect(sqlFragment.values).not.toContain(5000);

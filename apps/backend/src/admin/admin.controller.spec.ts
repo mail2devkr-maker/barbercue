@@ -43,10 +43,7 @@ describe('AdminController authorization', () => {
       Role.PLATFORM_ADMIN,
       Role.CO_FOUNDER,
     ]);
-    expect(routeRoles('deleteShop')).toEqual([
-      Role.PLATFORM_ADMIN,
-      Role.CO_FOUNDER,
-    ]);
+    expect(routeRoles('deleteShop')).toEqual([Role.PLATFORM_ADMIN]);
     expect(routeRoles('listAdminAccess')).toEqual([Role.PLATFORM_ADMIN]);
     expect(routeRoles('grantAdminAccess')).toEqual([Role.PLATFORM_ADMIN]);
     expect(routeRoles('revokeAdminAccess')).toEqual([Role.PLATFORM_ADMIN]);

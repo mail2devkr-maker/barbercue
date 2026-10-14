@@ -65,8 +65,14 @@ describe('SalonsService', () => {
     findCityBySlugOrThrow: jest.Mock;
     findCityByCountryAndSlugOrThrow: jest.Mock;
   };
-  let salonAccess: { assertAccess: jest.Mock; assertOwnerOrAdminAccess: jest.Mock };
-  let tokenService: { scopeRolesToAudience: jest.Mock; issueTokenPair: jest.Mock };
+  let salonAccess: {
+    assertAccess: jest.Mock;
+    assertOwnerOrAdminAccess: jest.Mock;
+  };
+  let tokenService: {
+    scopeRolesToAudience: jest.Mock;
+    issueTokenPair: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -129,7 +135,11 @@ describe('SalonsService', () => {
       ),
       issueTokenPair: jest
         .fn()
-        .mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh', expiresIn: 900 }),
+        .mockResolvedValue({
+          accessToken: 'access',
+          refreshToken: 'refresh',
+          expiresIn: 900,
+        }),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -170,7 +180,9 @@ describe('SalonsService', () => {
         { name: 'Hair Spa', category: 'Hair' },
       ]);
 
-      await expect(service.searchServiceSuggestions('hair', 8)).resolves.toEqual([
+      await expect(
+        service.searchServiceSuggestions('hair', 8),
+      ).resolves.toEqual([
         { name: 'Haircut', category: 'Hair' },
         { name: 'Hair Spa', category: 'Hair' },
       ]);
@@ -178,7 +190,7 @@ describe('SalonsService', () => {
       expect(prisma.service.findMany).toHaveBeenCalledWith({
         where: {
           isActive: true,
-          salon: { status: 'ACTIVE' },
+          salon: { status: 'ACTIVE', softDeletedAt: null },
           OR: [
             { name: { contains: 'hair', mode: 'insensitive' } },
             { category: { contains: 'hair', mode: 'insensitive' } },
@@ -217,7 +229,9 @@ describe('SalonsService', () => {
         isClosedForToday: true,
         isOpenNow: false,
       });
-      expect(prisma.salon.findMany.mock.calls[0][0].where.status).toBe('ACTIVE');
+      expect(prisma.salon.findMany.mock.calls[0][0].where.status).toBe(
+        'ACTIVE',
+      );
     });
 
     it('filters by city and locality slug when provided', async () => {
@@ -304,7 +318,11 @@ describe('SalonsService', () => {
           where: { AND?: Record<string, unknown>[] };
         };
         expect(where.AND).toEqual([
-          { services: { some: { isActive: true, price: { gte: 200, lte: 800 } } } },
+          {
+            services: {
+              some: { isActive: true, price: { gte: 200, lte: 800 } },
+            },
+          },
         ]);
       });
 
@@ -326,7 +344,11 @@ describe('SalonsService', () => {
       describe('same-service requirement when combined with a service/text query', () => {
         it('folds the price condition into where.services as an AND with the relevance predicate, for the `service` param', async () => {
           prisma.salon.findMany.mockResolvedValue([]);
-          await service.search({ service: 'Haircut', priceMin: 200, priceMax: 800 });
+          await service.search({
+            service: 'Haircut',
+            priceMin: 200,
+            priceMax: 800,
+          });
           const { where } = prisma.salon.findMany.mock.calls[0][0] as {
             where: { services?: unknown; AND?: unknown };
           };
@@ -349,7 +371,7 @@ describe('SalonsService', () => {
           expect(where.AND).toBeUndefined();
         });
 
-        it('applies the identical same-service treatment to `q`\'s own service sub-clause (the field the real search UI actually sends free text through)', async () => {
+        it("applies the identical same-service treatment to `q`'s own service sub-clause (the field the real search UI actually sends free text through)", async () => {
           prisma.salon.findMany.mockResolvedValue([]);
           await service.search({ q: 'Haircut', priceMax: 300 });
           const { where } = prisma.salon.findMany.mock.calls[0][0] as {
@@ -364,8 +386,15 @@ describe('SalonsService', () => {
                     AND: [
                       {
                         OR: [
-                          { name: { contains: 'Haircut', mode: 'insensitive' } },
-                          { category: { contains: 'Haircut', mode: 'insensitive' } },
+                          {
+                            name: { contains: 'Haircut', mode: 'insensitive' },
+                          },
+                          {
+                            category: {
+                              contains: 'Haircut',
+                              mode: 'insensitive',
+                            },
+                          },
                         ],
                       },
                       { price: { lte: 300 } },
@@ -400,16 +429,25 @@ describe('SalonsService', () => {
           services: FakeService[];
         }
 
-        function evalServiceCond(cond: Record<string, unknown>, s: FakeService): boolean {
+        function evalServiceCond(
+          cond: Record<string, unknown>,
+          s: FakeService,
+        ): boolean {
           if (cond.OR) {
-            return (cond.OR as Record<string, unknown>[]).some((c) => evalServiceCond(c, s));
+            return (cond.OR as Record<string, unknown>[]).some((c) =>
+              evalServiceCond(c, s),
+            );
           }
           if (cond.name) {
-            const term = String((cond.name as { contains: string }).contains).toLowerCase();
+            const term = String(
+              (cond.name as { contains: string }).contains,
+            ).toLowerCase();
             return s.name.toLowerCase().includes(term);
           }
           if (cond.category) {
-            const term = String((cond.category as { contains: string }).contains).toLowerCase();
+            const term = String(
+              (cond.category as { contains: string }).contains,
+            ).toLowerCase();
             return (s.category ?? '').toLowerCase().includes(term);
           }
           if (cond.price) {
@@ -421,15 +459,26 @@ describe('SalonsService', () => {
           return true;
         }
 
-        function evalServicesSome(someClause: Record<string, unknown>, services: FakeService[]): boolean {
+        function evalServicesSome(
+          someClause: Record<string, unknown>,
+          services: FakeService[],
+        ): boolean {
           return services.some((s) => {
-            if (someClause.isActive !== undefined && s.isActive !== someClause.isActive) return false;
-            const conditions = (someClause.AND as Record<string, unknown>[] | undefined) ?? [someClause];
+            if (
+              someClause.isActive !== undefined &&
+              s.isActive !== someClause.isActive
+            )
+              return false;
+            const conditions = (someClause.AND as
+              Record<string, unknown>[] | undefined) ?? [someClause];
             return conditions.every((c) => evalServiceCond(c, s));
           });
         }
 
-        function salonMatchesWhere(where: Record<string, unknown>, salon: FakeSalon): boolean {
+        function salonMatchesWhere(
+          where: Record<string, unknown>,
+          salon: FakeSalon,
+        ): boolean {
           return Object.entries(where).every(([key, value]) => {
             if (key === 'services') {
               return evalServicesSome(
@@ -439,7 +488,9 @@ describe('SalonsService', () => {
             }
             if (key === 'AND') {
               const clauses = Array.isArray(value) ? value : [value];
-              return (clauses as Record<string, unknown>[]).every((c) => salonMatchesWhere(c, salon));
+              return (clauses as Record<string, unknown>[]).every((c) =>
+                salonMatchesWhere(c, salon),
+              );
             }
             if (key === 'OR') {
               return (value as Record<string, unknown>[]).some((c) => {
@@ -456,10 +507,16 @@ describe('SalonsService', () => {
           });
         }
 
-        async function searchAgainst(salon: FakeSalon, query: Parameters<typeof service.search>[0]) {
+        async function searchAgainst(
+          salon: FakeSalon,
+          query: Parameters<typeof service.search>[0],
+        ) {
           prisma.salon.findMany.mockImplementation((args: SalonFindManyArgs) =>
             Promise.resolve(
-              salonMatchesWhere(args.where as unknown as Record<string, unknown>, salon)
+              salonMatchesWhere(
+                args.where as unknown as Record<string, unknown>,
+                salon,
+              )
                 ? [makeSalon({ id: salon.id })]
                 : [],
             ),
@@ -475,7 +532,10 @@ describe('SalonsService', () => {
               { name: 'Shave', price: 500, isActive: true },
             ],
           };
-          const result = await searchAgainst(salonA, { service: 'Haircut', priceMax: 300 });
+          const result = await searchAgainst(salonA, {
+            service: 'Haircut',
+            priceMax: 300,
+          });
           expect(result.items.map((i) => i.id)).toEqual(['salon-a']);
         });
 
@@ -487,7 +547,10 @@ describe('SalonsService', () => {
               { name: 'Shave', price: 200, isActive: true },
             ],
           };
-          const result = await searchAgainst(salonB, { service: 'Haircut', priceMax: 300 });
+          const result = await searchAgainst(salonB, {
+            service: 'Haircut',
+            priceMax: 300,
+          });
           expect(result.items).toHaveLength(0);
         });
 
@@ -512,7 +575,10 @@ describe('SalonsService', () => {
               { name: 'Haircut', price: 700, isActive: true },
             ],
           };
-          const result = await searchAgainst(salonD, { service: 'Haircut', priceMax: 300 });
+          const result = await searchAgainst(salonD, {
+            service: 'Haircut',
+            priceMax: 300,
+          });
           expect(result.items).toHaveLength(0);
         });
 
@@ -763,7 +829,11 @@ describe('SalonsService', () => {
           const near = makeSalon({ id: 'near', lat: 12.98, lng: 77.65 }); // ~1.5km from query point
           const justOutside = makeSalon({ id: 'far', lat: 13.1, lng: 77.8 }); // tens of km away
           prisma.salon.findMany.mockResolvedValue([near, justOutside]);
-          const result = await service.search({ lat: 12.9716, lng: 77.6412, radiusKm: 5 });
+          const result = await service.search({
+            lat: 12.9716,
+            lng: 77.6412,
+            radiusKm: 5,
+          });
           expect(result.items.map((i) => i.id)).toEqual(['near']);
         });
 
@@ -771,7 +841,12 @@ describe('SalonsService', () => {
           // Fewer than `limit` candidates would normally trigger NEAR_ME_RADII_KM's widening
           // retry loop — an explicit radiusKm must not widen past the caller's own hard cap.
           prisma.salon.findMany.mockResolvedValue([]);
-          await service.search({ lat: 12.9716, lng: 77.6412, radiusKm: 5, limit: 20 });
+          await service.search({
+            lat: 12.9716,
+            lng: 77.6412,
+            radiusKm: 5,
+            limit: 20,
+          });
           expect(prisma.salon.findMany).toHaveBeenCalledTimes(1);
         });
 
@@ -812,8 +887,15 @@ describe('SalonsService', () => {
             '6': 13.0255593,
           };
 
-          async function searchAtDistance(distanceKey: keyof typeof latAt, radiusKm: number) {
-            const salon = makeSalon({ id: `at-${distanceKey}km`, lat: latAt[distanceKey], lng: QUERY_LNG });
+          async function searchAtDistance(
+            distanceKey: keyof typeof latAt,
+            radiusKm: number,
+          ) {
+            const salon = makeSalon({
+              id: `at-${distanceKey}km`,
+              lat: latAt[distanceKey],
+              lng: QUERY_LNG,
+            });
             prisma.salon.findMany.mockResolvedValue([salon]);
             return service.search({ lat: QUERY_LAT, lng: QUERY_LNG, radiusKm });
           }
@@ -885,6 +967,7 @@ describe('SalonsService', () => {
         cityId: 'city-1',
         status: 'ACTIVE',
         isClosedForToday: false,
+        softDeletedAt: null,
       });
       expect(query.select.staff.select).not.toHaveProperty('user');
       expect(query.select.staff.select).not.toHaveProperty(
@@ -1220,7 +1303,11 @@ describe('SalonsService', () => {
             reviews: [],
           }),
         );
-        const profile = await service.getProfile('US', 'dallas', 'barbercue-demo');
+        const profile = await service.getProfile(
+          'US',
+          'dallas',
+          'barbercue-demo',
+        );
         expect(profile.salonTimezone).toBe('America/Chicago');
       });
 
@@ -1233,7 +1320,11 @@ describe('SalonsService', () => {
         prisma.salon.findFirst.mockResolvedValue(
           makeSalon({ services: [], operatingHours: [], reviews: [] }),
         );
-        const profile = await service.getProfile('IN', 'bengaluru', 'barbercue-demo');
+        const profile = await service.getProfile(
+          'IN',
+          'bengaluru',
+          'barbercue-demo',
+        );
         expect(profile.salonTimezone).toBe('Asia/Kolkata');
       });
 
@@ -1252,7 +1343,11 @@ describe('SalonsService', () => {
             reviews: [],
           }),
         );
-        const profile = await service.getProfile('US', 'newyork', 'barbercue-demo');
+        const profile = await service.getProfile(
+          'US',
+          'newyork',
+          'barbercue-demo',
+        );
         expect(profile.salonTimezone).toBeNull();
       });
     });
@@ -1371,7 +1466,7 @@ describe('SalonsService', () => {
         });
       });
 
-      it('re-reads the caller\'s roles AFTER the SALON_OWNER grant, not the pre-registration set', async () => {
+      it("re-reads the caller's roles AFTER the SALON_OWNER grant, not the pre-registration set", async () => {
         await service.registerSalon('owner-1', input);
         expect(prisma.user.findUniqueOrThrow).toHaveBeenCalledWith({
           where: { id: 'owner-1' },
@@ -1393,7 +1488,7 @@ describe('SalonsService', () => {
         );
       });
 
-      it('returns a MeResponse-shaped user with STAFF audience and the tokens from TokenService — never the old session\'s shape', async () => {
+      it("returns a MeResponse-shaped user with STAFF audience and the tokens from TokenService — never the old session's shape", async () => {
         const result = await service.registerSalon('owner-1', input);
         expect(result.user).toEqual({
           id: 'owner-1',
@@ -1718,7 +1813,9 @@ describe('SalonsService', () => {
 
     it('propagates the access-denied error without reaching the DB lookup, when neither the owner/staff nor the admin fallback check passes', async () => {
       const denied = new Error('denied');
-      salonAccess.assertAccess.mockRejectedValueOnce(new Error('not owner/staff'));
+      salonAccess.assertAccess.mockRejectedValueOnce(
+        new Error('not owner/staff'),
+      );
       salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(denied);
       await expect(service.getOwnedSalon('user-1', 's1')).rejects.toBe(denied);
       expect(prisma.salon.findUnique).not.toHaveBeenCalled();
@@ -1746,10 +1843,17 @@ describe('SalonsService', () => {
         name: 'A',
         status: 'ACTIVE',
       });
-      salonAccess.assertAccess.mockRejectedValueOnce(new Error('not owner/staff'));
-      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce('PLATFORM_ADMIN');
+      salonAccess.assertAccess.mockRejectedValueOnce(
+        new Error('not owner/staff'),
+      );
+      salonAccess.assertOwnerOrAdminAccess.mockResolvedValueOnce(
+        'PLATFORM_ADMIN',
+      );
       const result = await service.getOwnedSalon('admin-1', 's1');
-      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('admin-1', 's1');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith(
+        'admin-1',
+        's1',
+      );
       expect(result.publicId).toBe('BC-SHOP-000001');
     });
   });

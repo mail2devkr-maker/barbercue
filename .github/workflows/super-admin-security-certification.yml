@@ -1,0 +1,527 @@
+name: Super Admin Security Certification
+
+on:
+  push:
+    branches:
+      - chatgpt/super-admin-approval-audit-control
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: postgresql://ci@127.0.0.1:55432/fastque_ci
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install exact lockfile
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Syntax-check certification harnesses
+        run: |
+          node --check apps/backend/prisma/certify-pr168-migration-chain.cjs
+          node --check apps/backend/prisma/certify-pr168-recovery-http.cjs
+          node --check apps/backend/prisma/pr168-controlled-clock.cjs
+          node --check apps/backend/prisma/verify-pr168-restored-backup.cjs
+          node --check apps/backend/prisma/verify-pr168-browser-state.cjs
+      - name: Build shared package
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Validate Prisma schema
+        run: npm run prisma:validate --workspace=@barbercue/backend
+      - name: Start and verify isolated PostgreSQL 17.11 container
+        run: |
+          db_password="$(openssl rand -hex 32)"
+          totp_encryption_key="$(openssl rand -hex 64)"
+          echo "::add-mask::$db_password"
+          echo "::add-mask::$totp_encryption_key"
+          container_name="pr168-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          container_id="$(docker run --detach --rm --name "$container_name" \
+            --publish 127.0.0.1:55432:5432 \
+            --env POSTGRES_USER=ci \
+            --env POSTGRES_PASSWORD="$db_password" \
+            --env POSTGRES_DB=fastque_ci \
+            postgres:17.11-bookworm)"
+          {
+            echo "POSTGRES_CONTAINER_ID=$container_id"
+            echo "PGPASSWORD=$db_password"
+            echo "DATABASE_URL=postgresql://ci:${db_password}@127.0.0.1:55432/fastque_ci"
+            echo "TOTP_ENCRYPTION_KEY=$totp_encryption_key"
+          } >> "$GITHUB_ENV"
+          export PGPASSWORD="$db_password"
+          ready=false
+          for attempt in {1..60}; do
+            if pg_isready --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+          pg_isready --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci
+          test "$(psql --no-psqlrc --tuples-only --no-align --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci --command='SELECT current_database()')" = fastque_ci
+          psql --no-psqlrc --tuples-only --no-align --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci --command="SELECT CASE WHEN current_setting('server_version') LIKE '17.11%' THEN 'PASS PostgreSQL 17.11' ELSE 'Unexpected PostgreSQL version: ' || current_setting('server_version') END" | tee "$RUNNER_TEMP/pr168-postgres-version.txt"
+          grep -q '^PASS PostgreSQL 17.11$' "$RUNNER_TEMP/pr168-postgres-version.txt"
+      - name: Apply complete committed migration chain from a fresh database
+        run: node apps/backend/prisma/certify-pr168-migration-chain.cjs
+      - name: Verify recovery migration checksum, constraints and enabled triggers
+        run: node apps/backend/prisma/verify-recoverable-shop-deletion-migration.cjs
+      - name: Focused approval, audit and authorization tests
+        run: >
+          npm run test --workspace=@barbercue/backend --
+          --runInBand
+          --runTestsByPath
+          src/admin/admin-shop-deletion-requests.service.spec.ts
+          src/admin/admin-salon-management.service.spec.ts
+          src/admin/admin-security-audit.service.spec.ts
+          src/admin/admin.controller.spec.ts
+          src/admin/admin-security.controller.spec.ts
+          src/common/interceptors/admin-activity-audit.interceptor.spec.ts
+          src/bookings/availability.service.spec.ts
+          src/common/salon-access/salon-access.service.spec.ts
+          src/public-queue/public-queue-token.service.spec.ts
+          src/salon-setup/salon-activation.service.spec.ts
+          src/salons/salons.service.spec.ts
+      - name: Build backend for authenticated runtime certification
+        run: npm run build --workspace=@barbercue/backend
+      - name: Run real authenticated recovery HTTP certification
+        run: |
+          mkdir -m 700 -p "$RUNNER_TEMP/pr168-cert"
+          printf '%s' '1791547200000' > "$RUNNER_TEMP/pr168-cert/clock"
+          chmod 600 "$RUNNER_TEMP/pr168-cert/clock"
+          export PR168_TEST_CLOCK_FILE="$RUNNER_TEMP/pr168-cert/clock"
+          export PR168_FIXTURE_MANIFEST="$RUNNER_TEMP/pr168-cert/fixtures.json"
+          export PR168_BROWSER_FIXTURE_FILE="$RUNNER_TEMP/pr168-cert/browser-fixtures.json"
+          export PR168_HTTP_PORT=39168
+          echo "PR168_TEST_CLOCK_FILE=$RUNNER_TEMP/pr168-cert/clock" >> "$GITHUB_ENV"
+          echo "PR168_FIXTURE_MANIFEST=$RUNNER_TEMP/pr168-cert/fixtures.json" >> "$GITHUB_ENV"
+          echo "PR168_BROWSER_FIXTURE_FILE=$RUNNER_TEMP/pr168-cert/browser-fixtures.json" >> "$GITHUB_ENV"
+          echo "PR168_BROWSER_RESULT_FILE=$RUNNER_TEMP/pr168-cert/browser-result.json" >> "$GITHUB_ENV"
+          echo 'PR168_HTTP_PORT=39168' >> "$GITHUB_ENV"
+          node apps/backend/prisma/certify-pr168-recovery-http.cjs
+      - name: Disposable PostgreSQL backup and restore drill
+        run: |
+          test -n "$POSTGRES_CONTAINER_ID"
+          # Use the exact PostgreSQL 17.11 service image's client tools; host-installed tools
+          # can lag the server major version. The dump streams only to the disposable runner.
+          docker exec -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER_ID" pg_dump --format=custom --no-owner --username=ci --dbname=fastque_ci > "$RUNNER_TEMP/pr168-cert/fastque_ci.dump"
+          docker exec -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER_ID" createdb --username=ci fastque_ci_restore
+          docker exec -i -e PGPASSWORD="$PGPASSWORD" "$POSTGRES_CONTAINER_ID" pg_restore --exit-on-error --no-owner --username=ci --dbname=fastque_ci_restore < "$RUNNER_TEMP/pr168-cert/fastque_ci.dump"
+          DATABASE_URL="postgresql://ci:${PGPASSWORD}@127.0.0.1:55432/fastque_ci_restore" node apps/backend/prisma/verify-pr168-restored-backup.cjs
+          DATABASE_URL="postgresql://ci:${PGPASSWORD}@127.0.0.1:55432/fastque_ci_restore" node apps/backend/prisma/verify-recoverable-shop-deletion-migration.cjs
+      - name: Shared full test suite
+        run: npm run test --workspace=@barbercue/shared -- --runInBand
+      - name: Typecheck every workspace
+        run: npm run typecheck --workspaces --if-present
+      - name: Scoped backend lint (no auto-fix)
+        working-directory: apps/backend
+        run: >
+          npx eslint
+          src/admin/admin-salon-management.service.ts
+          src/admin/admin-security-audit.service.ts
+          src/admin/admin-security.controller.ts
+          src/admin/admin-shop-deletion-requests.service.ts
+          src/admin/admin.controller.ts
+          src/admin/admin.module.ts
+          src/app.module.ts
+          src/common/interceptors/admin-activity-audit.interceptor.ts
+          src/main.ts
+      - name: Scoped web lint (no auto-fix)
+        working-directory: apps/web
+        run: >
+          npx eslint
+          'app/(dashboard)/dashboard/admin/page.tsx'
+          'app/(dashboard)/dashboard/admin/security/page.tsx'
+      - name: Web production build (no deploy)
+        env:
+          BACKEND_INTERNAL_URL: http://127.0.0.1:39168
+        run: npm run build --workspace=@barbercue/web
+      - name: Install isolated Chromium runtime
+        run: npx playwright install --with-deps chromium
+      - name: Start isolated backend and web runtime for browser certification
+        run: |
+          set -euo pipefail
+          mkdir -m 700 -p "$RUNNER_TEMP/pr168-cert"
+          jwt_access_secret="$(openssl rand -hex 64)"
+          echo "::add-mask::$jwt_access_secret"
+          FASTQUE_LISTEN_HOST=127.0.0.1 \
+            PORT=39168 \
+            NODE_ENV=test \
+            JWT_ACCESS_SECRET="$jwt_access_secret" \
+            TOTP_ENCRYPTION_KEY="$TOTP_ENCRYPTION_KEY" \
+            FASTQUE_TEST_CLOCK_FILE="$PR168_TEST_CLOCK_FILE" \
+            nohup node -r ./apps/backend/prisma/pr168-controlled-clock.cjs apps/backend/dist/main.js \
+            > "$RUNNER_TEMP/pr168-cert/browser-backend.log" 2>&1 &
+          backend_pid=$!
+          printf '%s' "$backend_pid" > "$RUNNER_TEMP/pr168-cert/backend.pid"
+          chmod 600 "$RUNNER_TEMP/pr168-cert/backend.pid"
+          backend_ready=false
+          for attempt in {1..60}; do
+            if curl --silent --fail http://127.0.0.1:39168/api/v1/health >/dev/null; then
+              backend_ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$backend_ready" != true ]; then
+            if kill -0 "$backend_pid" 2>/dev/null; then
+              echo 'Backend process remained alive but its loopback health endpoint never became ready.'
+            else
+              echo 'Backend process exited before its loopback health endpoint became ready.'
+            fi
+            if [ -s "$RUNNER_TEMP/pr168-cert/browser-backend.log" ]; then
+              sed -E \
+                -e 's/(OTP[^:]*: )[0-9]{6}/\1[REDACTED]/gI' \
+                -e 's/(Bearer )[A-Za-z0-9._-]+/\1[REDACTED]/gI' \
+                -e 's#(postgres(ql)?://)[^:/@]+:[^@]+@#\1[REDACTED]@#gI' \
+                -e 's/((password|secret|token|credential|authorization|DATABASE_URL|JWT_[A-Z_]+)[=: ]+)[^ ,;]+/\1[REDACTED]/gI' \
+                "$RUNNER_TEMP/pr168-cert/browser-backend.log" | tail -n 80
+            else
+              echo 'Backend startup log was empty.'
+            fi
+            exit 1
+          fi
+          (
+            cd apps/web
+            BACKEND_INTERNAL_URL=http://127.0.0.1:39168 \
+              NEXT_TELEMETRY_DISABLED=1 \
+              NODE_ENV=test \
+              nohup node ../../node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 30168 \
+              > "$RUNNER_TEMP/pr168-cert/browser-web.log" 2>&1 &
+            printf '%s' "$!" > "$RUNNER_TEMP/pr168-cert/web.pid"
+            chmod 600 "$RUNNER_TEMP/pr168-cert/web.pid"
+          )
+          web_ready=false
+          for attempt in {1..60}; do
+            if curl --silent --fail http://127.0.0.1:30168/admin/login >/dev/null; then
+              web_ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$web_ready" = true
+          # Prove the built web service reaches the same disposable backend via its /api/v1 proxy.
+          curl --silent --fail http://127.0.0.1:30168/api/v1/health >/dev/null
+          echo 'PASS: loopback backend and production Next.js server are healthy; same-origin /api/v1 proxy reaches the isolated backend.'
+      - name: Run real Chromium recovery and RBAC browser certification
+        run: npm run test:e2e:pr168 --workspace=@barbercue/web
+      - name: Cross-check browser results against disposable PostgreSQL
+        run: node apps/backend/prisma/verify-pr168-browser-state.cjs
+      - name: Stop isolated browser services and remove private fixtures
+        if: always()
+        run: |
+          set +e
+          for name in backend web; do
+            pid_file="$RUNNER_TEMP/pr168-cert/${name}.pid"
+            if [ -f "$pid_file" ]; then
+              pid="$(cat "$pid_file")"
+              if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+                kill -TERM "$pid" 2>/dev/null
+                for attempt in {1..20}; do
+                  kill -0 "$pid" 2>/dev/null || break
+                  sleep 1
+                done
+                if kill -0 "$pid" 2>/dev/null; then
+                  kill -KILL "$pid" 2>/dev/null
+                fi
+              fi
+            fi
+          done
+          rm -rf "$RUNNER_TEMP/pr168-cert"
+      - name: Whitespace check
+        run: git diff --check origin/master...HEAD
+      - name: Stop disposable PostgreSQL container
+        if: always()
+        run: |
+          if [ -n "${POSTGRES_CONTAINER_ID:-}" ]; then
+            docker stop "$POSTGRES_CONTAINER_ID"
+          fi
+
+  pr-full-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      backend_failures: ${{ steps.regression_signatures.outputs.backend_failures }}
+      web_failures: ${{ steps.regression_signatures.outputs.web_failures }}
+    env:
+      DATABASE_URL: postgresql://ci@127.0.0.1:55432/fastque_ci
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact PR lockfile
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared package
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate and validate PR Prisma client/schema
+        run: |
+          npm run prisma:generate --workspace=@barbercue/backend
+          npm run prisma:validate --workspace=@barbercue/backend
+      - name: Start isolated PostgreSQL 17.11 container
+        run: |
+          db_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$db_password"
+          container_name="pr168-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          container_id="$(docker run --detach --rm --name "$container_name" \
+            --publish 127.0.0.1:55432:5432 \
+            --env POSTGRES_USER=ci \
+            --env POSTGRES_PASSWORD="$db_password" \
+            --env POSTGRES_DB=fastque_ci \
+            postgres:17.11-bookworm)"
+          {
+            echo "POSTGRES_CONTAINER_ID=$container_id"
+            echo "PGPASSWORD=$db_password"
+            echo "DATABASE_URL=postgresql://ci:${db_password}@127.0.0.1:55432/fastque_ci"
+          } >> "$GITHUB_ENV"
+          export PGPASSWORD="$db_password"
+          ready=false
+          for attempt in {1..60}; do
+            if pg_isready --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+      - name: Apply full PR migration chain to fresh PostgreSQL
+        run: node apps/backend/prisma/certify-pr168-migration-chain.cjs
+      - name: Backend full test suite
+        id: backend_full
+        continue-on-error: true
+        run: npm run test --workspace=@barbercue/backend -- --runInBand --json --outputFile="$RUNNER_TEMP/pr168-backend.json"
+      - name: Web full test suite
+        id: web_full
+        continue-on-error: true
+        run: npm run test --workspace=@barbercue/web -- --runInBand --json --outputFile="$RUNNER_TEMP/pr168-web.json"
+      - name: Capture exact PR full-suite failure signatures
+        id: regression_signatures
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const read = (file, label) => {
+            if (!fs.existsSync(file)) throw new Error(`Missing ${label} Jest JSON report`);
+            const result = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const failures = result.testResults.flatMap((suite) => {
+              const failedAssertions = suite.assertionResults
+                .filter((test) => test.status === 'failed')
+                .map((test) => `${path.basename(suite.name)} :: ${test.fullName}`);
+              return failedAssertions.length || suite.status !== 'failed'
+                ? failedAssertions
+                : [`${path.basename(suite.name)} :: [suite setup/teardown failure]`];
+            }).sort();
+            return { failures, passed: result.numPassedTests, failed: result.numFailedTests, suites: result.numTotalTestSuites };
+          };
+          const backend = read(`${process.env.RUNNER_TEMP}/pr168-backend.json`, 'PR backend');
+          const web = read(`${process.env.RUNNER_TEMP}/pr168-web.json`, 'PR web');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `backend_failures=${JSON.stringify(backend.failures)}\nweb_failures=${JSON.stringify(web.failures)}\n`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            `PR full suites: backend ${backend.passed} passed / ${backend.failed} failed across ${backend.suites} suites; web ${web.passed} passed / ${web.failed} failed across ${web.suites} suites. Exact failure signatures are compared with current master below.\n`);
+          console.log(`PR_BACKEND=${JSON.stringify({ passed: backend.passed, failed: backend.failed, suites: backend.suites, failures: backend.failures })}`);
+          console.log(`PR_WEB=${JSON.stringify({ passed: web.passed, failed: web.failed, suites: web.suites, failures: web.failures })}`);
+          NODE
+      - name: Stop disposable PostgreSQL container
+        if: always()
+        run: |
+          if [ -n "${POSTGRES_CONTAINER_ID:-}" ]; then
+            docker stop "$POSTGRES_CONTAINER_ID"
+          fi
+
+  current-master-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      backend_failures: ${{ steps.regression_signatures.outputs.backend_failures }}
+      web_failures: ${{ steps.regression_signatures.outputs.web_failures }}
+    env:
+      DATABASE_URL: postgresql://ci@127.0.0.1:55432/fastque_ci
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout current master baseline
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact master lockfile
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared package
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate and validate master Prisma client/schema
+        run: |
+          npm run prisma:generate --workspace=@barbercue/backend
+          npm run prisma:validate --workspace=@barbercue/backend
+      - name: Start isolated PostgreSQL 17.11 container
+        run: |
+          db_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$db_password"
+          container_name="pr168-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          container_id="$(docker run --detach --rm --name "$container_name" \
+            --publish 127.0.0.1:55432:5432 \
+            --env POSTGRES_USER=ci \
+            --env POSTGRES_PASSWORD="$db_password" \
+            --env POSTGRES_DB=fastque_ci \
+            postgres:17.11-bookworm)"
+          {
+            echo "POSTGRES_CONTAINER_ID=$container_id"
+            echo "PGPASSWORD=$db_password"
+            echo "DATABASE_URL=postgresql://ci:${db_password}@127.0.0.1:55432/fastque_ci"
+          } >> "$GITHUB_ENV"
+          export PGPASSWORD="$db_password"
+          ready=false
+          for attempt in {1..60}; do
+            if pg_isready --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+      - name: Apply full current-master migrations to fresh PostgreSQL
+        run: |
+          set +e
+          npx prisma migrate deploy --schema=apps/backend/prisma/schema.prisma > "$RUNNER_TEMP/master-migrate.log" 2>&1
+          migrate_status=$?
+          set -e
+          cat "$RUNNER_TEMP/master-migrate.log"
+          if [ "$migrate_status" -ne 0 ]; then
+            grep -Fq 'PRIMARY_PLATFORM_ADMIN_USER_MISSING' "$RUNNER_TEMP/master-migrate.log"
+            migration_row_count="$(psql --no-psqlrc --tuples-only --no-align --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci <<'SQL'
+          SELECT count(*) FROM "_prisma_migrations"
+          WHERE migration_name = '20260830215000_ensure_primary_platform_admin'
+            AND finished_at IS NULL AND rolled_back_at IS NULL;
+          SQL
+          )"
+            test "$migration_row_count" = 1
+            bootstrap_user_count="$(psql --no-psqlrc --tuples-only --no-align --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci <<'SQL'
+          SELECT count(*) FROM "users" WHERE lower("email") = lower('mail2dev.kr@gmail.com');
+          SQL
+          )"
+            test "$bootstrap_user_count" = 0
+            npx prisma migrate resolve --rolled-back 20260830215000_ensure_primary_platform_admin --schema=apps/backend/prisma/schema.prisma
+            psql --no-psqlrc --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci <<'SQL'
+          INSERT INTO "users" ("id", "email", "status", "updatedAt")
+          VALUES ('pr168-master-bootstrap', 'mail2dev.kr@gmail.com', 'ACTIVE', CURRENT_TIMESTAMP);
+          SQL
+            location_row_count="$(psql --no-psqlrc --tuples-only --no-align --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci <<'SQL'
+          SELECT
+            (SELECT count(*) FROM "Country" WHERE "isoCode2" = 'IN') +
+            (SELECT count(*) FROM "Region" WHERE "code" IN ('IN-OR', 'IN-UP'));
+          SQL
+          )"
+            test "$location_row_count" = 0
+            psql --no-psqlrc --host=127.0.0.1 --port=55432 --username=ci --dbname=fastque_ci <<'SQL'
+          INSERT INTO "Country" ("id", "isoCode2", "isoCode3", "name", "slug")
+          VALUES ('00000000-0000-4000-8000-000000168000', 'IN', 'IND', 'India', 'india');
+          INSERT INTO "Region" ("id", "countryId", "code", "name", "slug")
+          VALUES
+            ('00000000-0000-4000-8000-000000168001', '00000000-0000-4000-8000-000000168000', 'IN-OR', 'Odisha', 'odisha'),
+            ('00000000-0000-4000-8000-000000168002', '00000000-0000-4000-8000-000000168000', 'IN-UP', 'Uttar Pradesh', 'uttar-pradesh');
+          SQL
+            npx prisma migrate deploy --schema=apps/backend/prisma/schema.prisma
+            echo 'PASS: current-master migration chain completed after the no-credential admin and minimal location master rows were seeded only in this disposable database.'
+          else
+            echo 'PASS: current-master migration chain completed without bootstrap.'
+          fi
+      - name: Backend full test suite on master
+        id: backend_full
+        continue-on-error: true
+        run: npm run test --workspace=@barbercue/backend -- --runInBand --json --outputFile="$RUNNER_TEMP/master-backend.json"
+      - name: Web full test suite on master
+        id: web_full
+        continue-on-error: true
+        run: npm run test --workspace=@barbercue/web -- --runInBand --json --outputFile="$RUNNER_TEMP/master-web.json"
+      - name: Capture exact master full-suite failure signatures
+        id: regression_signatures
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const read = (file, label) => {
+            if (!fs.existsSync(file)) throw new Error(`Missing ${label} Jest JSON report`);
+            const result = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const failures = result.testResults.flatMap((suite) => {
+              const failedAssertions = suite.assertionResults
+                .filter((test) => test.status === 'failed')
+                .map((test) => `${path.basename(suite.name)} :: ${test.fullName}`);
+              return failedAssertions.length || suite.status !== 'failed'
+                ? failedAssertions
+                : [`${path.basename(suite.name)} :: [suite setup/teardown failure]`];
+            }).sort();
+            return { failures, passed: result.numPassedTests, failed: result.numFailedTests, suites: result.numTotalTestSuites };
+          };
+          const backend = read(`${process.env.RUNNER_TEMP}/master-backend.json`, 'master backend');
+          const web = read(`${process.env.RUNNER_TEMP}/master-web.json`, 'master web');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `backend_failures=${JSON.stringify(backend.failures)}\nweb_failures=${JSON.stringify(web.failures)}\n`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            `Current master full suites: backend ${backend.passed} passed / ${backend.failed} failed across ${backend.suites} suites; web ${web.passed} passed / ${web.failed} failed across ${web.suites} suites.\n`);
+          console.log(`MASTER_BACKEND=${JSON.stringify({ passed: backend.passed, failed: backend.failed, suites: backend.suites, failures: backend.failures })}`);
+          console.log(`MASTER_WEB=${JSON.stringify({ passed: web.passed, failed: web.failed, suites: web.suites, failures: web.failures })}`);
+          NODE
+      - name: Stop disposable PostgreSQL container
+        if: always()
+        run: |
+          if [ -n "${POSTGRES_CONTAINER_ID:-}" ]; then
+            docker stop "$POSTGRES_CONTAINER_ID"
+          fi
+
+  compare-full-regressions:
+    runs-on: ubuntu-latest
+    needs:
+      [security-certification, pr-full-regression, current-master-regression]
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require exact PR/master full-suite failure parity
+        env:
+          PR_BACKEND_FAILURES: ${{ needs.pr-full-regression.outputs.backend_failures }}
+          MASTER_BACKEND_FAILURES: ${{ needs.current-master-regression.outputs.backend_failures }}
+          PR_WEB_FAILURES: ${{ needs.pr-full-regression.outputs.web_failures }}
+          MASTER_WEB_FAILURES: ${{ needs.current-master-regression.outputs.web_failures }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pairs = [
+            ['backend', process.env.PR_BACKEND_FAILURES, process.env.MASTER_BACKEND_FAILURES],
+            ['web', process.env.PR_WEB_FAILURES, process.env.MASTER_WEB_FAILURES],
+          ];
+          let failed = false;
+          for (const [name, prRaw, masterRaw] of pairs) {
+            const pr = JSON.parse(prRaw || 'null');
+            const master = JSON.parse(masterRaw || 'null');
+            if (!Array.isArray(pr) || !Array.isArray(master)) {
+              console.error(`${name}: missing PR or master failure signatures.`);
+              failed = true;
+            } else if (JSON.stringify(pr) !== JSON.stringify(master)) {
+              console.error(`${name}: PR failures differ from current master.`);
+              console.error(`PR: ${JSON.stringify(pr)}`);
+              console.error(`MASTER: ${JSON.stringify(master)}`);
+              failed = true;
+            } else {
+              console.log(`${name}: exact full-suite failure signatures match current master (${pr.length} failures).`);
+              fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${name}: exact full-suite failures match current master (${pr.length}).\n`);
+            }
+          }
+          if (failed) process.exit(1);
+          NODE
