@@ -1771,7 +1771,7 @@ describe('QueueService', () => {
       prisma.queueEntry.findMany.mockResolvedValueOnce([completed]);
       const result = await service.getStandaloneQueueVisits('owner1', 's1', 'completed');
       expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner1', 's1');
-      const options = prisma.queueEntry.findMany.mock.calls.at(-1)?.[0] as {
+      const options = prisma.queueEntry.findMany.mock.calls.slice(-1)[0]?.[0] as {
         where: { salonId: string; bookingId: null; status: QueueEntryStatus };
         orderBy: unknown[];
       };
@@ -1790,7 +1790,7 @@ describe('QueueService', () => {
       const result = await service.getStandaloneQueueVisits('owner1', 's1', 'all', undefined, '2');
       expect(result.items.map((item) => item.id)).toEqual(['visit-1', 'visit-2']);
       expect(result.nextCursor).toBe('visit-2');
-      const options = prisma.queueEntry.findMany.mock.calls.at(-1)?.[0] as { take: number; where: { bookingId: null } };
+      const options = prisma.queueEntry.findMany.mock.calls.slice(-1)[0]?.[0] as { take: number; where: { bookingId: null } };
       expect(options.take).toBe(3);
       expect(options.where.bookingId).toBeNull();
     });
@@ -1805,7 +1805,7 @@ describe('QueueService', () => {
       expect(await service.getStandaloneQueueVisits('owner1', 's1', 'upcoming')).toEqual({ items: [], nextCursor: null });
       await service.getStandaloneQueueVisits('owner1', 's1', 'today');
       expect(availability.getSalonTimeZone).toHaveBeenCalledWith('s1');
-      const options = prisma.queueEntry.findMany.mock.calls.at(-1)?.[0] as { where: { OR: unknown[]; salonId: string; bookingId: null } };
+      const options = prisma.queueEntry.findMany.mock.calls.slice(-1)[0]?.[0] as { where: { OR: unknown[]; salonId: string; bookingId: null } };
       expect(options.where.salonId).toBe('s1');
       expect(options.where.bookingId).toBeNull();
       expect(options.where.OR).toHaveLength(3);
