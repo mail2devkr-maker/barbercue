@@ -443,9 +443,8 @@ export class QueueService {
     if (filter === 'no_show') where.status = QueueEntryStatus.NO_SHOW;
     if (filter === 'today') {
       const zone = await this.availability.getSalonTimeZone(salonId);
-      const start = zone
-        ? zonedDayBounds(new Date(), zone).start
-        : new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const start = (zone ? zonedDayBounds(new Date(), zone)?.start : null)
+        ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
       where.OR = [
         { joinedAt: { gte: start } },
         { status: QueueEntryStatus.COMPLETED, serviceCompletedAt: { gte: start } },
