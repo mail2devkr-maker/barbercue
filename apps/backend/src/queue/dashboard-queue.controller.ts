@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   DASHBOARD_PATHS,
   Role,
@@ -39,6 +39,20 @@ export class DashboardQueueController {
     @Param('salonId') salonId: string,
   ) {
     return this.queueService.getDashboardQueue(user.id, salonId);
+  }
+
+
+  // Bookings combines appointment records with standalone Live Queue visits. The queue's normal
+  // dashboard endpoint is a *today-only* snapshot, so historical visits require this read-only list.
+  @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.queue}/visits`)
+  getQueueVisits(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Query('filter') filter?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.queueService.getStandaloneQueueVisits(user.id, salonId, filter, cursor, limit);
   }
 
   // P0 arrival-alert mission — requirement 15's "reconstruct eligibility from backend truth" read,

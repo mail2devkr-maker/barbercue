@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   BookingErrorCode,
@@ -403,6 +403,69 @@ export class QueueService {
       waitingCount,
       estimatedWaitMinutes,
       estimatedWaitRangeMinutes: estimateWaitRangeMinutes(estimatedWaitMinutes),
+    };
+  }
+
+
+  /**
+   * Salon-scoped history for the Bookings screen. Standalone Live Queue visits are persisted as
+   * queue_entries, NOT bookings: listing Booking alone hides them (including completed visits).
+   * Exclude booking-linked check-ins to avoid rendering the same visit twice. No writes and no
+   * dependence on the live dashboard's today-only snapshot or its ETA recomputation.
+   */
+  async getStandaloneQueueVisits(
+    userId: string,
+    salonId: string,
+    filterRaw?: string,
+    cursor?: string,
+    limitRaw?: string,
+  ): Promise<{ items: QueueEntryDetailDto[]; nextCursor: string | null }> {
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const filter = filterRaw ?? 'all';
+    if (!['today', 'upcoming', 'completed', 'cancelled', 'no_show', 'all'].includes(filter)) {
+      throw new BadRequestException('Unknown queue visit filter.');
+    }
+    const parsedLimit = limitRaw === undefined ? 20 : Number(limitRaw);
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 50) {
+      throw new BadRequestException('limit must be an integer between 1 and 50.');
+    }
+    if (cursor && !/^[0-9a-fA-F-]{36}$/.test(cursor)) {
+      throw new BadRequestException('Invalid queue visit cursor.');
+    }
+    // Queue visits have no future appointment slot; future bookings come from the Booking list.
+    if (filter === 'upcoming') return { items: [], nextCursor: null };
+
+    const where: Prisma.QueueEntryWhereInput = { salonId, bookingId: null };
+    if (filter === 'completed') where.status = QueueEntryStatus.COMPLETED;
+    if (filter === 'cancelled') {
+      where.status = { in: [QueueEntryStatus.CANCELLED, QueueEntryStatus.EXPIRED] };
+    }
+    if (filter === 'no_show') where.status = QueueEntryStatus.NO_SHOW;
+    if (filter === 'today') {
+      const zone = await this.availability.getSalonTimeZone(salonId);
+      const start = (zone ? zonedDayBounds(new Date(), zone)?.start : null)
+        ?? new Date(Date.now() - 24 * 60 * 60 * 1000);
+      where.OR = [
+        { joinedAt: { gte: start } },
+        { status: QueueEntryStatus.COMPLETED, serviceCompletedAt: { gte: start } },
+        {
+          status: { in: [QueueEntryStatus.CANCELLED, QueueEntryStatus.EXPIRED, QueueEntryStatus.NO_SHOW] },
+          updatedAt: { gte: start },
+        },
+      ];
+    }
+    const rows = await this.prisma.queueEntry.findMany({
+      where,
+      include: queueEntryDetailInclude,
+      orderBy: [{ joinedAt: 'desc' }, { id: 'desc' }],
+      take: parsedLimit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    const hasMore = rows.length > parsedLimit;
+    const page = hasMore ? rows.slice(0, parsedLimit) : rows;
+    return {
+      items: page.map((row) => this.toDetailDto(row, null)),
+      nextCursor: hasMore ? page[page.length - 1].id : null,
     };
   }
 

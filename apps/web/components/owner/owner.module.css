@@ -10,19 +10,19 @@
  * still read them render correctly on the light shell instead of being unreadable. */
 
 .root {
-  --os-bg: #f1f3f7;
-  --os-surface: #ffffff;
-  --os-surface-2: #f7f8fc;
-  --os-border: #e4e8f1;
-  --os-border-strong: #cfd6e4;
-  --os-ink: #141a2e;
-  --os-ink-2: #3a4359;
-  --os-muted: #5b667d;
-  --os-brand: #c8104d;
+  --os-bg: #fff9f2;
+  --os-surface: #fffdf9;
+  --os-surface-2: #fff5eb;
+  --os-border: #e7e0d3;
+  --os-border-strong: #c9bba6;
+  --os-ink: #1c1a17;
+  --os-ink-2: #39322b;
+  --os-muted: #605647;
+  --os-brand: #b0413e;
   --os-brand-ink: #ffffff;
-  --os-brand-hover: #a80d40;
-  --os-brand-soft: #fde7ef;
-  --os-brand-soft-ink: #8e0c37;
+  --os-brand-hover: #92302d;
+  --os-brand-soft: #feeae4;
+  --os-brand-soft-ink: #842b28;
   --os-navy: #1a1533;
   --os-navy-ink: #f4f1ff;
   --os-navy-muted: #b9b4d6;
@@ -35,20 +35,20 @@
   --os-info-ink: #1b46b8;
   --os-info-bg: #e5edff;
   /* Reference palette: a deep plum for the active navigation state and the account chip. */
-  --os-plum: #4b2037;
+  --os-plum: #1a1533;
   --os-plum-ink: #ffffff;
-  --os-plum-soft: #f6ecf1;
-  --os-plum-soft-ink: #4b2037;
+  --os-plum-soft: #f2eff7;
+  --os-plum-soft-ink: #1a1533;
   --os-radius: 20px;
   --os-radius-sm: 10px;
   --os-shadow: 0 1px 2px rgba(20, 26, 46, 0.03), 0 10px 30px rgba(20, 26, 46, 0.05);
-  --os-focus: 0 0 0 3px rgba(200, 16, 77, 0.35);
+  --os-focus: 0 0 0 3px rgba(176, 65, 62, 0.35);
 
   /* legacy tokens -> light palette */
   --bc-ink: var(--os-ink);
   --bc-muted: var(--os-muted);
   --bc-border: var(--os-border);
-  --bc-surface: #ffffff;
+  --bc-surface: var(--os-surface);
   --bc-surface-tint: var(--os-surface-2);
   --bc-success: var(--os-ok-ink);
   --bc-warn: var(--os-warn-ink);
@@ -129,8 +129,8 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--os-plum);
-  color: #fff;
+  background: transparent;
+  color: var(--os-ink);
   font-weight: 800;
   font-size: 18px;
   margin-bottom: 10px;
@@ -191,6 +191,10 @@
   font-weight: 600;
   font-size: 19px;
   color: var(--os-ink);
+  min-height: 45px;
+}
+.brandRow :global(img) {
+  max-width: 100%;
 }
 .shopName {
   margin-top: 6px;
@@ -282,7 +286,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  background: rgba(241, 243, 247, 0.92);
+  background: rgba(255, 253, 249, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--os-border);
 }

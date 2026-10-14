@@ -124,6 +124,7 @@ describe('QueueService', () => {
     resolveTimeZoneOrThrow: jest.Mock<Promise<string>, [string]>;
   };
   let salonAccess: {
+    assertOwnerOrAdminAccess: jest.Mock<Promise<unknown>, [string, string]>;
     assertAccessOrAdminAccess: jest.Mock<Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'>, [string, string]>;
     getActorKind: jest.Mock<Promise<'OWNER' | 'STAFF' | 'PLATFORM_ADMIN' | null>, [string, string]>;
   };
@@ -263,6 +264,7 @@ describe('QueueService', () => {
         .mockResolvedValue('Asia/Kolkata'),
     };
     salonAccess = {
+      assertOwnerOrAdminAccess: jest.fn<Promise<unknown>, [string, string]>().mockResolvedValue('OWNER'),
       assertAccessOrAdminAccess: jest
         .fn<Promise<'STAFF_OR_OWNER' | 'PLATFORM_ADMIN'>, [string, string]>()
         .mockResolvedValue('STAFF_OR_OWNER'),
@@ -1760,6 +1762,53 @@ describe('QueueService', () => {
       const result = await service.getCapacitySummary('owner1', 's1');
 
       expect(result.currentServices).toBe(2);
+    });
+  });
+
+  describe('standalone Live Queue visit history for the Bookings screen', () => {
+    it('scopes records to the selected salon and excludes booking-linked check-ins', async () => {
+      const completed = makeDetailEntry({ id: 'queue-visit-1', bookingId: null, status: QueueEntryStatus.COMPLETED, estimatedWaitMinutes: null });
+      prisma.queueEntry.findMany.mockResolvedValueOnce([completed]);
+      const result = await service.getStandaloneQueueVisits('owner1', 's1', 'completed');
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner1', 's1');
+      const options = prisma.queueEntry.findMany.mock.calls.slice(-1)[0]?.[0] as {
+        where: { salonId: string; bookingId: null; status: QueueEntryStatus };
+        orderBy: unknown[];
+      };
+      expect(options.where).toMatchObject({ salonId: 's1', bookingId: null, status: QueueEntryStatus.COMPLETED });
+      expect(options.orderBy).toEqual([{ joinedAt: 'desc' }, { id: 'desc' }]);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('queue-visit-1');
+    });
+
+    it('paginates historical standalone queue visits without an arbitrary today-only limit', async () => {
+      prisma.queueEntry.findMany.mockResolvedValueOnce([
+        makeDetailEntry({ id: 'visit-1', bookingId: null, estimatedWaitMinutes: null }),
+        makeDetailEntry({ id: 'visit-2', bookingId: null, estimatedWaitMinutes: null }),
+        makeDetailEntry({ id: 'visit-3', bookingId: null, estimatedWaitMinutes: null }),
+      ]);
+      const result = await service.getStandaloneQueueVisits('owner1', 's1', 'all', undefined, '2');
+      expect(result.items.map((item) => item.id)).toEqual(['visit-1', 'visit-2']);
+      expect(result.nextCursor).toBe('visit-2');
+      const options = prisma.queueEntry.findMany.mock.calls.slice(-1)[0]?.[0] as { take: number; where: { bookingId: null } };
+      expect(options.take).toBe(3);
+      expect(options.where.bookingId).toBeNull();
+    });
+
+    it('refuses invalid filters before querying queue data', async () => {
+      await expect(service.getStandaloneQueueVisits('owner1', 's1', 'not-a-filter')).rejects.toThrow();
+      await expect(service.getStandaloneQueueVisits('owner1', 's1', 'all', undefined, '500')).rejects.toThrow();
+      expect(prisma.queueEntry.findMany).not.toHaveBeenCalled();
+    });
+
+    it('treats queued visits as non-upcoming and restricts today to the salon-local day', async () => {
+      expect(await service.getStandaloneQueueVisits('owner1', 's1', 'upcoming')).toEqual({ items: [], nextCursor: null });
+      await service.getStandaloneQueueVisits('owner1', 's1', 'today');
+      expect(availability.getSalonTimeZone).toHaveBeenCalledWith('s1');
+      const options = prisma.queueEntry.findMany.mock.calls.slice(-1)[0]?.[0] as { where: { OR: unknown[]; salonId: string; bookingId: null } };
+      expect(options.where.salonId).toBe('s1');
+      expect(options.where.bookingId).toBeNull();
+      expect(options.where.OR).toHaveLength(3);
     });
   });
 });

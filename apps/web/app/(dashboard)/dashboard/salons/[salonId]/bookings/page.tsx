@@ -2,7 +2,8 @@ import { OwnerBookingsView } from "../../../../../../components/bookings/OwnerBo
 import { ArrivalAlertOverlay } from "../../../../../../components/bookings/ArrivalAlertOverlay";
 import { BtnLink, PageHead } from "../../../../../../components/owner/parts";
 
-// Owner-only salon bookings dashboard: today/upcoming/completed/cancelled/no-show/history, with
+// Owner-only salon bookings dashboard: appointments + standalone Live Queue visits (never
+// duplicates booking-linked queue check-ins). Today/completed/cancelled/no-show/history, with
 // realtime "new booking"/"booking cancelled" alerts over the same /realtime socket the Live Queue
 // uses. Appointments (online and in-shop) live here; people standing in the shop who want the next
 // free barber are added to the Live Queue instead.

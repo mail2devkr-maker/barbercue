@@ -190,3 +190,31 @@
 .errorText {
   color: var(--bc-accent);
 }
+
+/* Booking is the appointment source of truth; standalone queue_entries get a distinct,
+   equally visible history section without pretending they are booking rows. */
+.recordSection {
+  margin: var(--bc-space-4) 0 var(--bc-space-5);
+}
+.recordHeading {
+  font-size: var(--bc-text-lg);
+  color: var(--bc-ink);
+  margin: 0 0 5px;
+}
+.recordDescription {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm);
+  margin-bottom: var(--bc-space-3);
+}
+.queueVisitHead {
+  display: flex;
+  gap: var(--bc-space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.queueVisitHead > div {
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .queueVisitHead { flex-wrap: wrap; }
+}

@@ -114,6 +114,6 @@ describe("owner dashboard colour contrast", () => {
 
   it("the legacy --bc-* tokens are remapped to dark-on-light so older pages stay readable in the shell", () => {
     for (const token of ["bc-ink", "bc-muted"]) expect(ratio(resolve("var(--" + token + ")"), SURFACE)).toBeGreaterThanOrEqual(4.5);
-    expect(resolve("var(--bc-surface)").toLowerCase()).toBe("#ffffff");
+    expect(resolve("var(--bc-surface)").toLowerCase()).toBe(SURFACE.toLowerCase());
   });
 });
