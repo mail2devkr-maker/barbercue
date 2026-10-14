@@ -326,7 +326,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
             Turning Voice off stops spoken announcements when new customers join the Live Queue.
             Chime alerts will still play. Do you want to turn Voice off?
           </Banner>
-          <div className={ui.actions}>
+          <div className={ui.dialogActions}>
             <Btn variant="secondary" onClick={() => setConfirmVoiceOff(false)}>
               Keep voice on
             </Btn>
