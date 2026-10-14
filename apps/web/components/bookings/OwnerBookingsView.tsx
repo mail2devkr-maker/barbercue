@@ -483,9 +483,9 @@ export function OwnerBookingsView({ salonId }: { salonId: string }) {
           >
             {loadingMore ? "Loading…" : "Load more"}
           </Button>
-          </section>
-    </div>
+        </div>
       )}
+      </section>
     </div>
   );
 }
