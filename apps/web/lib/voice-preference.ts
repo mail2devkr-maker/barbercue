@@ -11,10 +11,22 @@ import {
   type VoiceAnnouncements,
 } from "@barbercue/shared";
 
-// Speech itself remains opt-in per page session because browsers require a user gesture before
-// reliable audio. The *profile* below persists because language/tone/voice are safe preferences
-// and owners should not have to re-select them after every refresh.
+// Persist the owner's explicit Voice on/off choice on this browser. Previously only the profile
+// persisted: this flag always reset to false when the page reloaded or the bundle was re-created.
+// Browser speech may still require a fresh user gesture before audible playback after reload.
+const VOICE_ENABLED_STORAGE_KEY = "fastque-owner-voice-enabled-v1";
 let voiceEnabled = false;
+let voiceEnabledHydrated = false;
+
+function hydrateVoiceEnabled(): void {
+  if (voiceEnabledHydrated || typeof window === "undefined") return;
+  voiceEnabledHydrated = true;
+  try {
+    voiceEnabled = window.localStorage.getItem(VOICE_ENABLED_STORAGE_KEY) === "on";
+  } catch {
+    // Restricted storage: honor the owner's choice for the current tab's lifetime.
+  }
+}
 const listeners = new Set<() => void>();
 
 export interface OwnerVoiceProfile {
@@ -63,13 +75,22 @@ function emit(): void {
 }
 
 export function getVoiceEnabled(): boolean {
+  hydrateVoiceEnabled();
   return voiceEnabled;
 }
 
 export function setVoiceEnabled(next: boolean): void {
-  if (voiceEnabled === next) return;
+  hydrateVoiceEnabled();
+  const changed = voiceEnabled !== next;
   voiceEnabled = next;
-  emit();
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(VOICE_ENABLED_STORAGE_KEY, next ? "on" : "off");
+    } catch {
+      // Private/restricted storage: keep the in-memory choice for this browser tab.
+    }
+  }
+  if (changed) emit();
 }
 
 export function getOwnerVoiceProfile(): OwnerVoiceProfile {
@@ -92,7 +113,21 @@ export function setOwnerVoiceProfile(next: OwnerVoiceProfile): void {
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  // Keep simultaneously open owner tabs in sync. 'storage' fires only in other tabs.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== VOICE_ENABLED_STORAGE_KEY) return;
+    const next = event.newValue === "on";
+    if (voiceEnabled !== next) {
+      voiceEnabled = next;
+      voiceEnabledHydrated = true;
+      emit();
+    }
+  };
+  if (typeof window !== "undefined") window.addEventListener?.("storage", onStorage);
+  return () => {
+    listeners.delete(listener);
+    if (typeof window !== "undefined") window.removeEventListener?.("storage", onStorage);
+  };
 }
 
 export function useVoiceEnabled(): boolean {
