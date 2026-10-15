@@ -56,7 +56,7 @@ const evaluate = async (expression) => {
 };
 const navigate = async (pathname) => {
   await cmd('Page.navigate', { url: base + pathname });
-  await wait(async () => evaluate('location.pathname') === pathname.split('?')[0], 'navigated to ' + pathname);
+  await wait(async () => (await evaluate('location.pathname')) === pathname.split('?')[0], 'navigated to ' + pathname);
   await wait(async () => evaluate("!!document.querySelector('#owner-sidebar')"), 'Owner sidebar on ' + pathname);
   await delay(350);
 };
