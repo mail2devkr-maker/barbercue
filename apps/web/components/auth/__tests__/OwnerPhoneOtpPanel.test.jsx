@@ -4,7 +4,11 @@ import { OwnerPhoneOtpPanel } from "../OwnerPhoneOtpPanel";
 import { apiFetch } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth-context";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const originalActEnvironment = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "IS_REACT_ACT_ENVIRONMENT",
+);
+const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 
 jest.mock("../../../lib/api", () => ({
   apiFetch: jest.fn(),
@@ -49,7 +53,25 @@ async function fillAndSubmit(renderer, inputId, value) {
 }
 
 describe("OwnerPhoneOtpPanel", () => {
+  afterEach(() => {
+    if (originalWindow) {
+      Object.defineProperty(globalThis, "window", originalWindow);
+    } else {
+      delete globalThis.window;
+    }
+    if (originalActEnvironment) {
+      Object.defineProperty(
+        globalThis,
+        "IS_REACT_ACT_ENVIRONMENT",
+        originalActEnvironment,
+      );
+    } else {
+      delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+    }
+  });
+
   beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     apiFetch.mockReset();
     useAuth.mockReset();
   });
