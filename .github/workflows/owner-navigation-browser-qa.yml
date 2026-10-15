@@ -1,0 +1,93 @@
+name: Owner Navigation Browser QA
+
+# Authenticated, disposable, real Chromium acceptance. No external credentials, production
+# services or persistent databases. This workflow is for the Owner layout release gate.
+on:
+  pull_request:
+    paths:
+      - 'apps/web/components/owner/**'
+      - 'scripts/ci/owner-navigation-browser-qa.mjs'
+      - '.github/workflows/owner-navigation-browser-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  owner-navigation-browser:
+    name: Authenticated Owner Chrome layout
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/owner_nav_qa?schema=public
+      BACKEND_INTERNAL_URL: http://127.0.0.1:3000
+      WEB_BASE_URL: http://127.0.0.1:3001
+      NODE_ENV: development
+      AGENT_LLM_PROVIDER: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies and build services
+        run: |
+          npm ci
+          npm run build:shared
+          npm run prisma:generate --workspace=@barbercue/backend
+          npm run build --workspace=@barbercue/backend
+      - name: Disposable schema and synthetic shop
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE owner_nav_qa'
+          # The real migration chain contains two data prerequisites: use the repo's
+          # certified staged migration runner instead of a naive empty-DB deploy.
+          (cd apps/backend && bash scripts/verify-migration-chain.sh)
+          node <<'NODE'
+          const { PrismaClient } = require('@prisma/client');
+          const p = new PrismaClient();
+          p.city.upsert({
+            where: { countryCode_slug: { countryCode: 'IN', slug: 'jharsuguda' } },
+            update: {},
+            create: { name: 'Jharsuguda', slug: 'jharsuguda', countryCode: 'IN', regionCode: 'IN-OR', state: 'Odisha', country: 'India' },
+          }).finally(() => p.$disconnect()).catch(e => { console.error(e); process.exitCode = 1; });
+          NODE
+          (cd apps/backend && npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed-owner-ops-demo.ts "$RUNNER_TEMP/owner-qa-login.json")
+          chmod 600 "$RUNNER_TEMP/owner-qa-login.json"
+      - name: Start disposable backend and build web
+        run: |
+          echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          NODE_ENV=production npm run build --workspace=@barbercue/web
+      - name: Run actual Next.js and Nest applications in isolation
+        run: |
+          nohup npm run start:prod --workspace=@barbercue/backend >"$RUNNER_TEMP/owner-qa-backend.log" 2>&1 &
+          NODE_ENV=production nohup npm run start --workspace=@barbercue/web >"$RUNNER_TEMP/owner-qa-web.log" 2>&1 &
+          for i in $(seq 1 70); do
+            if curl -fsS http://127.0.0.1:3000/api/v1/health >/dev/null && curl -fsS http://127.0.0.1:3001/owner/login >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'Local app did not become healthy'; tail -n 80 "$RUNNER_TEMP/owner-qa-backend.log"; tail -n 80 "$RUNNER_TEMP/owner-qa-web.log"; exit 1
+      - name: Authenticated real-Chromium layout and scrolling checks
+        run: node scripts/ci/owner-navigation-browser-qa.mjs "$RUNNER_TEMP/owner-qa-login.json" "$RUNNER_TEMP/owner-nav-screens"
+      - name: Upload redacted synthetic screenshots and geometry
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-navigation-browser-qa
+          path: ${{ runner.temp }}/owner-nav-screens/
+          if-no-files-found: ignore
+          retention-days: 7
