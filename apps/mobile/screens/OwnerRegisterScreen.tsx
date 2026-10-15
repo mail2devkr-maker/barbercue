@@ -35,9 +35,10 @@ export default function OwnerRegisterScreen({ navigation }: Props) {
       // account. Preserve the destination so the authenticated customer shell immediately opens
       // the existing RegisterShop -> owner-onboarding flow.
       stashPendingShopRegistrationIntent();
-      await ownerSignup(parsed.data);
-      // Survives an app restart before the shop exists (cleared by RegisterShopScreen on success).
-      await markShopRegistrationPending();
+      const created = await ownerSignup(parsed.data);
+      // Survives an app restart before the shop exists (cleared by RegisterShopScreen on success),
+      // and is bound to this account so no other account is ever redirected by it.
+      await markShopRegistrationPending(Date.now(), created.id);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create your account. Please try again.');
     } finally {

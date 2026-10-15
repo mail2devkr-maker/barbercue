@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import HomeStack from './HomeStack';
@@ -11,7 +11,10 @@ import { useLanguage } from '../lib/language-context';
 import { takePendingGuestIntent } from '../lib/guest-booking-handoff';
 import { resolvePostAuthCustomerNavigation, takePendingCustomerDestination } from '../lib/customer-navigation-intent';
 import { navigationRef } from './navigation-ref';
-import { isShopRegistrationPending } from '../lib/shop-registration-resume';
+import { resolveShopRegistrationResume } from '../lib/shop-registration-resume';
+import { useAuth } from '../lib/auth-context';
+import { apiFetch } from '../lib/api';
+import { DISCOVERY_PATHS, type SalonWorkplaceDto } from '@barbercue/shared';
 import { subscribeToCustomerBookingPushNavigation } from '../lib/push-navigation';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { fastQue, font } from '../lib/theme';
@@ -43,6 +46,9 @@ function GuestBookingHandoffBridge() {
 
 /** Replays the one signed-out customer CTA that was most recently selected after auth. */
 function CustomerDestinationHandoffBridge() {
+  const { user } = useAuth();
+  // Read once per mount: this bridge only ever mounts right after authentication (see App.tsx).
+  const userIdRef = useRef<string | null>(user?.id ?? null);
   useEffect(() => {
     let retry: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
@@ -60,7 +66,14 @@ function CustomerDestinationHandoffBridge() {
       if (!intent) {
         // No in-memory intent means this is a fresh process (the app was closed mid-registration).
         // A persisted, recent marker puts a half-registered new owner back on the Register Shop step.
-        void isShopRegistrationPending().then((pending) => {
+        // The marker is verified first: an account that already owns a shop clears it instead of
+        // being sent back to Register Shop on every cold start.
+        const userId = userIdRef.current;
+        if (!userId) return;
+        void resolveShopRegistrationResume({
+          userId,
+          fetchWorkplaces: () => apiFetch<SalonWorkplaceDto[]>(`${DISCOVERY_PATHS.salons}/${DISCOVERY_PATHS.workplaces}`),
+        }).then((pending) => {
           if (pending && !cancelled && navigationRef.isReady()) {
             navigationRef.navigate('AccountTab', { screen: 'RegisterShop' });
           }

@@ -853,6 +853,8 @@ export interface UiStrings {
   couldNotCheckIn: string;
   couldNotCreateBooking: string;
   bookingConfirmedTitle: string;
+  payAtShopTitle: string;
+  payAtShopHint: string;
   confirmBookingTitle: string;
   viewMyBookings: string;
   freeCancellationUpTo: string;
@@ -1901,6 +1903,8 @@ const enUi: UiStrings = {
   couldNotCheckIn: 'Could not check in. Please try again.',
   couldNotCreateBooking: 'Could not create the booking. Please try again.',
   bookingConfirmedTitle: 'Booking confirmed',
+  payAtShopTitle: 'Pay at shop',
+  payAtShopHint: 'Pay at the shop when you visit. FastQue does not mark this booking as paid.',
   confirmBookingTitle: 'Confirm booking',
   viewMyBookings: 'View my bookings',
   freeCancellationUpTo: 'Free cancellation up to ',
@@ -2897,6 +2901,8 @@ const hiUi: UiStrings = {
   couldNotCheckIn: 'चेक इन नहीं हो सका। कृपया फिर कोशिश करें।',
   couldNotCreateBooking: 'बुकिंग नहीं बन सकी। कृपया फिर कोशिश करें।',
   bookingConfirmedTitle: 'बुकिंग की पुष्टि हो गई',
+  payAtShopTitle: 'दुकान पर भुगतान करें',
+  payAtShopHint: 'दुकान पर जाने पर भुगतान करें। FastQue इस बुकिंग को अपने-आप भुगतान किया हुआ नहीं मानता।',
   confirmBookingTitle: 'बुकिंग की पुष्टि करें',
   viewMyBookings: 'मेरी बुकिंग्स देखें',
   freeCancellationUpTo: 'मुफ़्त रद्दीकरण अपॉइंटमेंट से ',
