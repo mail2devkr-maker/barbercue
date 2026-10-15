@@ -163,6 +163,7 @@ export function QueueQrSection({ salonId, salonName }: { salonId: string; salonN
               Scan to join the queue
             </p>
             <QRCodeSVG
+              aria-label={`Join ${salonName} Live Queue QR code`}
               value={qr.publicQueueUrl}
               size={200}
               level="H"

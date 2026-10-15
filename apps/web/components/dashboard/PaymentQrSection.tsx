@@ -170,6 +170,7 @@ export function PaymentQrSection({ salonId }: { salonId: string }) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <input
               type="file"
+              aria-label="Upload payment QR code image"
               accept="image/jpeg,image/png,image/webp"
               onChange={(e) => {
                 setFile(e.target.files?.[0] ?? null);
