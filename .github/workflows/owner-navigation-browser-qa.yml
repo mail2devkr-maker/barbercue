@@ -69,11 +69,11 @@ jobs:
         run: |
           echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          npm run build --workspace=@barbercue/web
+          NODE_ENV=production npm run build --workspace=@barbercue/web
       - name: Run actual Next.js and Nest applications in isolation
         run: |
           nohup npm run start:prod --workspace=@barbercue/backend >"$RUNNER_TEMP/owner-qa-backend.log" 2>&1 &
-          nohup npm run start --workspace=@barbercue/web >"$RUNNER_TEMP/owner-qa-web.log" 2>&1 &
+          NODE_ENV=production nohup npm run start --workspace=@barbercue/web >"$RUNNER_TEMP/owner-qa-web.log" 2>&1 &
           for i in $(seq 1 70); do
             if curl -fsS http://127.0.0.1:3000/api/v1/health >/dev/null && curl -fsS http://127.0.0.1:3001/owner/login >/dev/null; then
               exit 0
