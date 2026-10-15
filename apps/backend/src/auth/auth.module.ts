@@ -11,8 +11,9 @@ import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
 import { GoogleAuthService } from './services/google-auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { OTP_SENDER, ConsoleOtpSender } from './services/otp-sender';
+import { OTP_SENDER, UnavailableOtpSender } from './services/otp-sender';
 import { TwoFactorOtpSender } from './services/two-factor-otp-sender';
+import { isPhoneOtpConfigured } from './services/otp-config';
 import {
   EMAIL_SENDER,
   ConsoleEmailSender,
@@ -39,21 +40,18 @@ import { ResendEmailSender } from './services/resend-email-sender';
     CryptoService,
     GoogleAuthService,
     JwtStrategy,
-    // Both concrete senders are always registered so Nest's DI container can construct either
-    // one; the factory below is the single, obvious place that decides which one is actually
-    // wired to OTP_SENDER. Same process.env.NODE_ENV === 'production' check already used
-    // elsewhere in this module (auth.controller.ts's cookie `secure` flag), not a new
-    // configuration mechanism.
-    ConsoleOtpSender,
+    // No development console OTP: OTP values and phone numbers must never be written to logs.
+    // Production dispatch is enabled only when key, DLT template, keyed-hash secret and country
+    // allowlist are all present; otherwise the transport fails closed.
+    UnavailableOtpSender,
     TwoFactorOtpSender,
     {
       provide: OTP_SENDER,
       useFactory: (
-        consoleSender: ConsoleOtpSender,
+        unavailableSender: UnavailableOtpSender,
         twoFactorSender: TwoFactorOtpSender,
-      ) =>
-        process.env.NODE_ENV === 'production' ? twoFactorSender : consoleSender,
-      inject: [ConsoleOtpSender, TwoFactorOtpSender],
+      ) => (isPhoneOtpConfigured() ? twoFactorSender : unavailableSender),
+      inject: [UnavailableOtpSender, TwoFactorOtpSender],
     },
     ConsoleEmailSender,
     UnavailableProductionEmailSender,
@@ -84,6 +82,12 @@ import { ResendEmailSender } from './services/resend-email-sender';
   // EMAIL_SENDER is exported (Phase 11) so SalonSetupModule can deliver barber invitations
   // through the same transport the forgot-password flow already uses, rather than binding a
   // second EmailSender of its own. No auth behavior changes — this is an export-list addition.
-  exports: [TokenService, PasswordService, TotpService, CryptoService, EMAIL_SENDER],
+  exports: [
+    TokenService,
+    PasswordService,
+    TotpService,
+    CryptoService,
+    EMAIL_SENDER,
+  ],
 })
 export class AuthModule {}

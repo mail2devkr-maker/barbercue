@@ -13,6 +13,7 @@ import { apiFetch, ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
 import { Button } from "../../../../components/ui/Button";
 import { Card } from "../../../../components/ui/Card";
+import { CustomerPhoneLinkPanel } from "../../../../components/auth/CustomerPhoneLinkPanel";
 import styles from "./profile.module.css";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -164,6 +165,18 @@ export default function ProfilePage() {
           </dl>
         </Card>
       </section>
+
+      {user?.audience === "CUSTOMER" && (
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>Mobile sign-in</h2>
+            <p>Verify a mobile number while signed in to your existing account.</p>
+          </div>
+          <Card className={styles.securityCard}>
+            <CustomerPhoneLinkPanel />
+          </Card>
+        </section>
+      )}
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>

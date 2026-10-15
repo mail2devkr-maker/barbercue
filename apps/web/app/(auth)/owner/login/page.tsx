@@ -7,6 +7,8 @@ import { useAuth } from "../../../../lib/auth-context";
 import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard";
 import { EmailPasswordLoginForm } from "../../../../components/auth/EmailPasswordLoginForm";
 import { WorkspaceGoogleLogin } from "../../../../components/auth/WorkspaceGoogleLogin";
+import { OwnerPhoneOtpPanel } from "../../../../components/auth/OwnerPhoneOtpPanel";
+import authStyles from "../../../../components/auth/customer-auth.module.css";
 import { safeNextPath } from "../../../../lib/safe-next-path";
 import { isWorkspaceUser, workspaceLandingPath } from "../../../../lib/workspace-route";
 
@@ -50,6 +52,13 @@ function OwnerLoginForm() {
           const user = await staffLogin(input);
           router.replace(safeNextPath(searchParams.get("next")) ?? workspaceLandingPath(user));
         }}
+      />
+      <div className={authStyles.divider} aria-hidden="true">OR</div>
+      <OwnerPhoneOtpPanel
+        mode="existing-owner"
+        onSuccess={(owner) => router.replace(
+          safeNextPath(searchParams.get("next")) ?? workspaceLandingPath(owner),
+        )}
       />
       <p style={{ margin: "18px 0 0", textAlign: "center" }}>
         New to FastQue? <Link href="/owner/register">Create your account &amp; register your shop</Link>

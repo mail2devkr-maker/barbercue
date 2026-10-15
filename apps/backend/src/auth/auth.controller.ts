@@ -34,6 +34,8 @@ import {
   staffLoginSchema,
   ownerSignupSchema,
   employeeLoginSchema,
+  ownerPhoneLinkRequestSchema,
+  ownerPhoneLinkVerifySchema,
   type AdminGoogleLoginInput,
   type AdminLoginInput,
   type AuthenticatedUser,
@@ -50,6 +52,8 @@ import {
   type StaffLoginInput,
   type OwnerSignupInput,
   type EmployeeLoginInput,
+  type OwnerPhoneLinkRequestInput,
+  type OwnerPhoneLinkVerifyInput,
 } from '@barbercue/shared';
 import { AuthService } from './auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -57,6 +61,7 @@ import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { setRefreshCookie, clearRefreshCookie } from '../common/refresh-cookie';
+import { isPhoneOtpConfigured } from './services/otp-config';
 
 // Auth endpoints are deliberately rate-limited tighter than the app-wide default (see
 // AppModule's ThrottlerModule config) — brute-force/OTP-spam surface, not ordinary traffic.
@@ -82,9 +87,8 @@ export class AuthController {
    * design — it is the first thing a login screen needs, and it returns only booleans, never the
    * presence-checked values themselves.
    *
-   * Phone OTP is reported available when a real SMS provider is configured, or outside production
-   * where ConsoleOtpSender logs the code instead of sending it (the same NODE_ENV condition
-   * AuthModule's OTP_SENDER factory uses to pick the sender — kept in step with it deliberately).
+   * Phone OTP is available only when the production provider, DLT template, HMAC secret and
+   * destination-country allowlist are configured together. Development never logs codes.
    */
   @Public()
   @Get(AUTH_PATHS.methods)
@@ -94,9 +98,8 @@ export class AuthController {
         process.env.GOOGLE_WEB_CLIENT_ID ??
         process.env.GOOGLE_ANDROID_CLIENT_ID,
       ),
-      phoneOtp:
-        process.env.NODE_ENV !== 'production' ||
-        Boolean(process.env.OTP_PROVIDER_API_KEY),
+      phoneOtp: isPhoneOtpConfigured(),
+      ownerPhoneOtp: isPhoneOtpConfigured(),
     };
   }
 
@@ -118,6 +121,108 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.verifyCustomerOtp(
+      body.phone,
+      body.code,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.ownerOtpRequest)
+  @UsePipes(new ZodValidationPipe(otpRequestSchema))
+  ownerOtpRequest(@Body() body: OtpRequestInput) {
+    return this.authService.requestOwnerOtp(body.phone);
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.ownerOtpVerify)
+  @UsePipes(new ZodValidationPipe(otpVerifySchema))
+  async ownerOtpVerify(
+    @Body() body: OtpVerifyInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyOwnerOtp(
+      body.phone,
+      body.code,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.ownerPhoneLinkRequest)
+  @Roles(Role.SALON_OWNER)
+  @UsePipes(new ZodValidationPipe(ownerPhoneLinkRequestSchema))
+  ownerPhoneLinkRequest(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: OwnerPhoneLinkRequestInput,
+  ) {
+    return this.authService.requestOwnerPhoneLinkOtp(
+      user.id,
+      user.audience,
+      user.roles,
+      body.phone,
+    );
+  }
+
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.ownerPhoneLinkVerify)
+  @Roles(Role.SALON_OWNER)
+  @UsePipes(new ZodValidationPipe(ownerPhoneLinkVerifySchema))
+  async ownerPhoneLinkVerify(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: OwnerPhoneLinkVerifyInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyOwnerPhoneLink(
+      user.id,
+      user.audience,
+      user.roles,
+      body.phone,
+      body.code,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.customerPhoneLinkRequest)
+  @Roles(Role.CUSTOMER)
+  @UsePipes(new ZodValidationPipe(otpRequestSchema))
+  customerPhoneLinkRequest(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: OtpRequestInput,
+  ) {
+    return this.authService.requestCustomerPhoneLinkOtp(
+      user.id,
+      user.audience,
+      user.roles,
+      body.phone,
+    );
+  }
+
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.customerPhoneLinkVerify)
+  @Roles(Role.CUSTOMER)
+  @UsePipes(new ZodValidationPipe(otpVerifySchema))
+  async customerPhoneLinkVerify(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: OtpVerifyInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyCustomerPhoneLink(
+      user.id,
+      user.audience,
+      user.roles,
       body.phone,
       body.code,
       req.headers['user-agent'],

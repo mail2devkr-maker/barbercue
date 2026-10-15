@@ -5,6 +5,8 @@ import {
   initialPasswordSchema,
   otpRequestSchema,
   otpVerifySchema,
+  ownerPhoneLinkRequestSchema,
+  ownerPhoneLinkVerifySchema,
   resetPasswordSchema,
   staffLoginSchema,
 } from '../schemas';
@@ -17,6 +19,12 @@ describe('otpRequestSchema', () => {
   it('rejects a phone number without a country code', () => {
     expect(otpRequestSchema.safeParse({ phone: '9876543210' }).success).toBe(false);
   });
+
+  it('requires normalized international E.164 form and enforces its maximum length', () => {
+    expect(otpRequestSchema.safeParse({ phone: ' +919876543210' }).success).toBe(false);
+    expect(otpRequestSchema.safeParse({ phone: '+1234567' }).success).toBe(false);
+    expect(otpRequestSchema.safeParse({ phone: `+1${'2'.repeat(15)}` }).success).toBe(false);
+  });
 });
 
 describe('otpVerifySchema', () => {
@@ -26,6 +34,20 @@ describe('otpVerifySchema', () => {
 
   it('accepts a 6-character code', () => {
     expect(otpVerifySchema.safeParse({ phone: '+919876543210', code: '123456' }).success).toBe(true);
+  });
+
+  it('accepts only six ASCII decimal digits', () => {
+    expect(otpVerifySchema.safeParse({ phone: '+919876543210', code: '１２３４５６' }).success).toBe(false);
+    expect(otpVerifySchema.safeParse({ phone: '+919876543210', code: '12345a' }).success).toBe(false);
+  });
+});
+
+describe('owner phone-link schemas', () => {
+  it('reuses the strict phone and OTP contract for authenticated owner linking', () => {
+    expect(ownerPhoneLinkRequestSchema.safeParse({ phone: '+919876543210' }).success).toBe(true);
+    expect(ownerPhoneLinkVerifySchema.safeParse({ phone: '+919876543210', code: '123456' }).success).toBe(true);
+    expect(ownerPhoneLinkVerifySchema.safeParse({ phone: '9876543210', code: '123456' }).success).toBe(false);
+    expect(ownerPhoneLinkVerifySchema.safeParse({ phone: '+919876543210', code: '12345' }).success).toBe(false);
   });
 });
 

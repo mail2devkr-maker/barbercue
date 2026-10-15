@@ -330,10 +330,15 @@ export const otpRequestSchema = z.object({
 export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 
 export const otpVerifySchema = z.object({
-  phone: z.string(),
-  code: z.string().length(6),
+  phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'phone must be in E.164 format, e.g. +919876543210'),
+  code: z.string().regex(/^\d{6}$/, 'code must be a 6-digit OTP'),
 });
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
+
+export const ownerPhoneLinkRequestSchema = otpRequestSchema;
+export const ownerPhoneLinkVerifySchema = otpVerifySchema;
+export type OwnerPhoneLinkRequestInput = z.infer<typeof ownerPhoneLinkRequestSchema>;
+export type OwnerPhoneLinkVerifyInput = z.infer<typeof ownerPhoneLinkVerifySchema>;
 
 // POST /auth/google — the client only ever sends the ID token it got directly from Google's own
 // sign-in SDK (Google Identity Services on web, expo-auth-session on mobile); the backend is what

@@ -103,6 +103,19 @@ jobs:
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/owner-ops.e2e-spec.ts
+      - name: Customer and shop-owner OTP HTTP E2E - synthetic sender only
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: test
+          AGENT_LLM_PROVIDER: none
+          OTP_TEST_SENDER_ENABLED: 'true'
+          OTP_ALLOWED_COUNTRY_CALLING_CODES: '91'
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          export OTP_HASH_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/auth-phone-otp.e2e-spec.ts
       - name: Remaining backend E2E suites (regressions vs the recorded baseline)
         working-directory: apps/backend
         env:
