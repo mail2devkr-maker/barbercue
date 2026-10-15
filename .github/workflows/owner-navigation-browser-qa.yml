@@ -51,7 +51,7 @@ jobs:
       - name: Disposable schema and synthetic shop
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE owner_nav_qa'
-          (cd apps/backend && npx prisma migrate deploy)
+          # The real migration chain contains two data prerequisites: use the repo's\n          # certified staged migration runner instead of a naive empty-DB deploy.\n          (cd apps/backend && bash scripts/verify-migration-chain.sh)
           node <<'NODE'
           const { PrismaClient } = require('@prisma/client');
           const p = new PrismaClient();
