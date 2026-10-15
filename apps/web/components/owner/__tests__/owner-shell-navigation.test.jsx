@@ -2,6 +2,7 @@ import React, { act } from "react";
 import TestRenderer from "react-test-renderer";
 import { Role } from "@barbercue/shared";
 import { OwnerShell } from "../OwnerShell";
+import { BrandLockup } from "../../ui/BrandLockup";
 import { useAuth } from "../../../lib/auth-context";
 import { apiFetch } from "../../../lib/api";
 
@@ -98,9 +99,9 @@ afterEach(() => {
 describe("owner shell navigation", () => {
   it("keeps the approved FastQue artwork in both navigation levels", async () => {
     const tree = await renderShell({ workplaces: [shop("s1", "Alpha")] });
-    const sources = tree.root.findAllByType("img").map((img) => img.props.src);
-    expect(sources).toContain("/brand/fastque-premium-3d-mark.png");
-    expect(sources).toContain("/brand/fastque-clean-lockup-transparent.png");
+    const lockups = tree.root.findAllByType(BrandLockup);
+    expect(lockups.some((lockup) => lockup.props.markOnly)).toBe(true);
+    expect(lockups.some((lockup) => lockup.props.canonicalArtwork)).toBe(true);
   });
 
   it("the logo is the Dashboard home of the SELECTED shop, not the shop list", async () => {
