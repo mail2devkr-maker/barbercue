@@ -2,6 +2,7 @@ import React, { act } from "react";
 import TestRenderer from "react-test-renderer";
 import { LiveQueueConsole } from "../LiveQueueConsole";
 import { apiFetch } from "../../../lib/api";
+import { setVoiceEnabled, useVoiceEnabled } from "../../../lib/voice-preference";
 
 // Owner-approved workflow: WAITING -> ASSIGNED -> IN_SERVICE -> COMPLETED. An assigned customer is shown
 // in their own place with a Start service action; they are never counted or listed as waiting, and never
@@ -18,7 +19,7 @@ jest.mock("../../../lib/voice-preference", () => ({
   ownerVoiceAnnouncements: () => ({ newCustomerJoined: () => "" }),
   setVoiceEnabled: jest.fn(),
   speakOwnerVoice: jest.fn(),
-  useVoiceEnabled: () => false,
+  useVoiceEnabled: jest.fn(() => false),
 }));
 jest.mock("../OwnerShell", () => ({ useOwnerShell: () => ({ kind: "owner", refreshCounts: jest.fn() }) }));
 jest.mock("../NewQueueCustomerDialog", () => ({ NewQueueCustomerDialog: () => null }));
@@ -146,11 +147,14 @@ beforeEach(() => {
     removeEventListener: () => {},
   };
   apiFetch.mockReset();
+  useVoiceEnabled.mockReturnValue(false);
+  setVoiceEnabled.mockClear();
   replace.mockClear();
   search = "view=assigned";
 });
 afterEach(() => {
   delete globalThis.window;
+  delete globalThis.document;
 });
 
 describe("Live Queue: Waiting, Assigned and In service are separate places", () => {
@@ -251,5 +255,47 @@ describe("Live Queue: Waiting, Assigned and In service are separate places", () 
     expect(options).toContain("Chair 3");
     expect(options).not.toContain("Chair 1");
     expect(options).not.toContain("Chair 2");
+  });
+});
+
+
+describe("Live Queue voice controls", () => {
+  beforeEach(() => {
+    // The real Dialog traps keyboard focus. The node test renderer has no DOM: mock only the
+    // document event targets needed to confirm the modal's real render/cancel/confirm behavior.
+    globalThis.document = {
+      activeElement: null,
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    };
+  });
+
+  it("turns voice on immediately, without an unnecessary confirmation", async () => {
+    const tree = await render();
+    const voice = tree.root.findAllByType("button").find((b) => textOf(b) === "Voice: off");
+    expect(voice).toBeTruthy();
+    await act(async () => voice.props.onClick());
+    expect(setVoiceEnabled).toHaveBeenCalledWith(true);
+    expect(allText(tree)).not.toContain("Turn off voice announcements?");
+  });
+
+  it("never turns voice off without a separate explicit warning confirmation", async () => {
+    useVoiceEnabled.mockReturnValue(true);
+    const tree = await render();
+    const voice = tree.root.findAllByType("button").find((b) => textOf(b) === "Voice: on");
+    expect(voice.props["aria-pressed"]).toBe(true);
+    await act(async () => voice.props.onClick());
+    expect(setVoiceEnabled).not.toHaveBeenCalled();
+    expect(allText(tree)).toContain("Turn off voice announcements?");
+    expect(allText(tree)).toContain("Chime alerts will still play.");
+    const cancel = tree.root.findAllByType("button").find((b) => textOf(b) === "Keep voice on");
+    await act(async () => cancel.props.onClick());
+    expect(setVoiceEnabled).not.toHaveBeenCalled();
+    expect(allText(tree)).not.toContain("Turn off voice announcements?");
+    await act(async () => voice.props.onClick());
+    const confirm = tree.root.findAllByType("button").find((b) => textOf(b) === "Yes, turn voice off");
+    await act(async () => confirm.props.onClick());
+    expect(setVoiceEnabled).toHaveBeenCalledTimes(1);
+    expect(setVoiceEnabled).toHaveBeenCalledWith(false);
   });
 });
