@@ -242,6 +242,7 @@ function TimezoneSection({ salonId }: { salonId: string }) {
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <select
+              aria-label="Shop time zone"
               value={selected}
               onChange={(e) => {
                 setSelected(e.target.value);

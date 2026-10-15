@@ -1,6 +1,5 @@
-/* Shared visual language for the owner/staff dashboard — salon list, settings, services, staff,
-   chairs, hours, photos, setup checklist, queue QR. Same tokens and card language as
-   booking.module.css / queue.module.css, applied to CRUD-list and form shapes. */
+/* Shared owner/staff shop-management surfaces. The Owner shell provides dark --bc-* tokens;
+   the standalone salon picker uses .darkScope. Keep both routes visually consistent. */
 
 /* Issue #2/#7 (admin dark-UI parity) — every page under salons/[salonId] (settings, services,
    chairs, staff, hours, etc.) reads its colors through the --bc-* custom properties above, so
@@ -18,6 +17,7 @@
   --bc-success: #6fcf87;
   --bc-warn: #ffb648;
   --bc-accent: #f20a83;
+  --bc-accent-soft: #3a2131;
   --bc-gold: #ff9d5c;
   --bc-gold-soft: rgba(255, 157, 92, 0.16);
   --bc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -466,7 +466,7 @@
   padding: 14px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--bc-surface-tint);
   overflow: hidden;
 }
 
@@ -543,7 +543,7 @@
   justify-content: space-between;
   gap: 12px;
   border-top: 1px solid var(--bc-border);
-  background: linear-gradient(180deg, rgba(255, 253, 249, 0.5), var(--bc-surface) 24%);
+  background: linear-gradient(180deg, rgba(33, 30, 41, 0.65), var(--bc-surface) 24%);
 }
 
 .setupOverviewLink {
@@ -761,7 +761,7 @@
   padding: 12px;
   border: 1px solid var(--bc-border);
   border-radius: var(--bc-radius-md);
-  background: rgba(255, 253, 249, 0.96);
+  background: var(--bc-surface);
   box-shadow: var(--bc-shadow-sm);
   font-size: var(--bc-text-sm);
   font-weight: 650;

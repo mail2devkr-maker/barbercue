@@ -53,6 +53,10 @@
 .actions > * {
   flex: 1 1 160px;
 }
+.actions button:first-child {
+  /* The canonical pink/coral/orange action is bright: dark ink preserves AA contrast. */
+  color: #09090c;
+}
 
 .snooze {
   display: block;
@@ -68,5 +72,10 @@
 @media (max-width: 480px) {
   .actions {
     flex-direction: column;
+  }
+  .actions > * {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 44px;
   }
 }

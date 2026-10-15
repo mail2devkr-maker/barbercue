@@ -1,13 +1,15 @@
 import fs from "fs";
 import path from "path";
 
-// Regression guard for the defect that made Live Queue customer names unreadable: a card hard-coded
-// a white background while its text colour came from a dark-theme token (near-white), giving white on
-// white. Every text/background pair the owner dashboard uses is resolved from the real stylesheet and
-// must meet WCAG AA (4.5:1 for normal text).
+// Verify the complete Owner workspace, not just its chrome: dark canvas, layered cards and readable
+// data/controls. Resolve actual token pairs from the stylesheet and enforce WCAG AA (4.5:1).
 const CSS = fs.readFileSync(path.join(__dirname, "../owner.module.css"), "utf8");
 const GLOBAL_CSS = fs.readFileSync(path.join(__dirname, "../../../app/globals.css"), "utf8");
 const LEGACY_CSS = fs.readFileSync(path.join(__dirname, "../../dashboard/dashboard.module.css"), "utf8");
+const BOOKINGS_CSS = fs.readFileSync(path.join(__dirname, "../../bookings/bookings.module.css"), "utf8");
+const ARRIVAL_CSS = fs.readFileSync(path.join(__dirname, "../../bookings/arrival-alert-overlay.module.css"), "utf8");
+const ANALYTICS = fs.readFileSync(path.join(__dirname, "../../../app/(dashboard)/dashboard/salons/[salonId]/analytics/page.tsx"), "utf8");
+const CATALOG_IMPORT = fs.readFileSync(path.join(__dirname, "../../dashboard/CatalogImportPanel.tsx"), "utf8");
 
 function tokensFrom(source, selector) {
   const block = new RegExp("\\" + selector + "\\s*\\{([\\s\\S]*?)\\n\\}").exec(source)?.[1];
@@ -55,13 +57,17 @@ const SURFACE = resolve("var(--os-surface)");
 const PAGE_BG = resolve("var(--os-bg)");
 
 describe("owner dashboard colour contrast", () => {
-  it("the page and card surfaces are light and the base ink on them is dark", () => {
+  it("uses distinct near-black page and tinted card surfaces with readable light ink", () => {
+    expect(luminance(hexToRgb(PAGE_BG))).toBeLessThan(0.02);
+    expect(luminance(hexToRgb(SURFACE))).toBeLessThan(0.05);
+    expect(SURFACE).not.toBe(PAGE_BG);
+    expect(luminance(hexToRgb(resolve("var(--os-ink)")))).toBeGreaterThan(0.8);
     expect(ratio(resolve("var(--os-ink)"), SURFACE)).toBeGreaterThanOrEqual(7);
     expect(ratio(resolve("var(--os-ink)"), PAGE_BG)).toBeGreaterThanOrEqual(7);
   });
 
   const TEXT_ON_SURFACE = ["os-ink", "os-ink-2", "os-muted", "os-brand", "os-ok-ink", "os-warn-ink", "os-bad-ink", "os-info-ink"];
-  it.each(TEXT_ON_SURFACE)("%s is readable on a white card", (token) => {
+  it.each(TEXT_ON_SURFACE)("%s is readable on a tinted card", (token) => {
     expect(ratio(resolve("var(--" + token + ")"), SURFACE)).toBeGreaterThanOrEqual(4.5);
   });
   it.each(["os-ink-2", "os-muted"])("%s is readable on the page background and on a tinted panel", (token) => {
@@ -80,8 +86,7 @@ describe("owner dashboard colour contrast", () => {
     for (const cls of ["entryName", "entryMeta"]) {
       expect({ cls, ok: ratio(declared(cls, "color"), cardBg) >= 4.5 }).toEqual({ cls, ok: true });
     }
-    // The customer name must be dark ink - never the near-white a dark theme would supply.
-    expect(luminance(hexToRgb(declared("entryName", "color")))).toBeLessThan(0.1);
+    expect(luminance(hexToRgb(declared("entryName", "color")))).toBeGreaterThan(0.8);
   });
 
   it("queue token chip, buttons, tabs and navigation states are readable", () => {
@@ -103,7 +108,7 @@ describe("owner dashboard colour contrast", () => {
     }
   });
 
-  it("uses readable charcoal chrome on desktop and mobile without darkening work cards", () => {
+  it("uses readable charcoal chrome on desktop and mobile beside dark work cards", () => {
     const chrome = resolve("var(--os-chrome)");
     for (const selector of ["rail", "sidebar", "topbar", "bottomBar"]) {
       expect(declared(selector, "background")).toBe(chrome);
@@ -114,6 +119,10 @@ describe("owner dashboard colour contrast", () => {
     expect(ratio(declared("iconBtn", "color"), declared("iconBtn", "background"))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(declared("searchInput", "color"), declared("searchInput", "background"))).toBeGreaterThanOrEqual(4.5);
     expect(declared("card", "background")).toBe(SURFACE);
+    expect(declared("headlineCard", "background")).not.toBe("#ffffff");
+    expect(CSS).toMatch(/\.main\s*\{[^}]*radial-gradient/s);
+    expect(CSS).toMatch(/\.ovTop\s*\{[^}]*linear-gradient\(120deg, #231824/s);
+    expect(CSS).toMatch(/\.table tbody tr:hover\s*\{[^}]*rgba\(242, 41, 92/s);
   });
 
   it("uses the canonical FastQue gradient only for brand actions, with accessible ink at every stop", () => {
@@ -136,7 +145,7 @@ describe("owner dashboard colour contrast", () => {
     }
   });
 
-  it("keeps keyboard focus visible on both the light workspace and dark chrome", () => {
+  it("keeps keyboard focus visible on the workspace and chrome", () => {
     expect(ratio(resolve("var(--os-focus-ink)"), SURFACE)).toBeGreaterThanOrEqual(3);
     expect(ratio(resolve("var(--bc-brand-orange)"), resolve("var(--os-chrome)"))).toBeGreaterThanOrEqual(3);
     expect(CSS).toMatch(/\.root \*:focus-visible\s*\{[^}]*outline: 2px solid var\(--os-focus-ink\)/);
@@ -155,8 +164,26 @@ describe("owner dashboard colour contrast", () => {
     }
   });
 
-  it("the legacy --bc-* tokens are remapped to dark-on-light so older pages stay readable in the shell", () => {
+  it("maps older shop-management pages to the same readable dark surface tokens", () => {
     for (const token of ["bc-ink", "bc-muted"]) expect(ratio(resolve("var(--" + token + ")"), SURFACE)).toBeGreaterThanOrEqual(4.5);
     expect(resolve("var(--bc-surface)").toLowerCase()).toBe(SURFACE.toLowerCase());
+    expect(LEGACY_CSS).toMatch(/\.setupNav\s*\{[^}]*background: var\(--bc-surface-tint\)/s);
+    expect(LEGACY_CSS).toMatch(/\.catalogAddBar\s*\{[^}]*background: var\(--bc-surface\)/s);
+  });
+
+  it("keeps the Owner booking badge and arrival dialog readable at mobile width", () => {
+    expect(ratio("#ffffff", "#17613b")).toBeGreaterThanOrEqual(4.5);
+    expect(BOOKINGS_CSS).toMatch(/\.newBadge\s*\{[^}]*background: #17613b/s);
+    const stops = ["bc-brand-pink", "bc-brand-coral", "bc-brand-orange"].map((name) => resolve("var(--" + name + ")"));
+    for (const stop of stops) expect(ratio("#09090c", stop)).toBeGreaterThanOrEqual(4.5);
+    expect(ARRIVAL_CSS).toMatch(/\.actions button:first-child\s*\{[^}]*color: #09090c/s);
+    expect(ARRIVAL_CSS).toMatch(/@media \(max-width: 480px\)[\s\S]*\.actions > \*\s*\{[^}]*flex: 0 0 auto/s);
+  });
+
+  it("uses dark ink on bright analytics and catalog actions, with a defined selected-service tint", () => {
+    expect(resolve("var(--bc-accent-soft)")).toBe("#3a2131");
+    expect(ANALYTICS).toContain('color: view === id ? "#09090c" : "var(--bc-ink)"');
+    expect(CATALOG_IMPORT).toContain('background: "var(--bc-accent)", color: "#09090c"');
+    expect(ratio("#09090c", resolve("var(--bc-accent)"))).toBeGreaterThanOrEqual(4.5);
   });
 });

@@ -450,7 +450,7 @@ export default function DashboardAnalyticsPage({
               borderRadius: 10,
               border: "1px solid var(--bc-border)",
               background: view === id ? "var(--bc-accent)" : "var(--bc-surface)",
-              color: view === id ? "white" : "var(--bc-ink)",
+              color: view === id ? "#09090c" : "var(--bc-ink)",
               cursor: "pointer",
               fontWeight: 650,
             }}

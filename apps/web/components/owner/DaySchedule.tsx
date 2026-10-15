@@ -53,16 +53,16 @@ export function DaySchedule({ items, timeZone, staffNames }: { items: OwnerSched
         ))}
       </div>
       <div className={ui.dayScroll} ref={scrollRef} style={{ maxHeight: VIEW_HEIGHT }} tabIndex={0} role="region" aria-label="Today's appointments by barber (scrollable)">
-        <div className={ui.dayGrid} style={{ gridTemplateColumns: template }} role="table">
-          <div className={ui.dayHours} style={{ height }} role="rowgroup">
+        <div className={ui.dayGrid} style={{ gridTemplateColumns: template }}>
+          <div className={ui.dayHours} style={{ height }}>
             {layout.hours.map((h) => (
-              <div key={h} className={ui.dayHour} style={{ height: PX_PER_HOUR }} role="row">
+              <div key={h} className={ui.dayHour} style={{ height: PX_PER_HOUR }}>
                 {String(h).padStart(2, "0")}:00
               </div>
             ))}
           </div>
           {layout.columns.map((name) => (
-            <div key={name} className={ui.dayColumn} style={{ height }} role="rowgroup" aria-label={name}>
+            <div key={name} className={ui.dayColumn} style={{ height }}>
               {layout.hours.map((h) => (
                 <div key={h} className={ui.dayCell} style={{ height: PX_PER_HOUR }} aria-hidden="true" />
               ))}
@@ -74,7 +74,6 @@ export function DaySchedule({ items, timeZone, staffNames }: { items: OwnerSched
                   return (
                     <div
                       key={b.id}
-                      role="row"
                       className={ui.dayBlock}
                       style={{ top: (b.top / 60) * PX_PER_HOUR + 2, height: (b.height / 60) * PX_PER_HOUR - 4, background: color.bg, color: color.ink }}
                       title={`${formatShopTime(b.item.slotStart, timeZone)} - ${formatShopTime(b.item.slotEnd, timeZone)} · ${b.item.customerLabel} · ${b.item.serviceNames.join(" + ")}`}

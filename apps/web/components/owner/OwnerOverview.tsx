@@ -229,14 +229,14 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
             </BtnLink>
           </div>
         </div>
-        <div className={ui.headline3} role="list" aria-label="Today">
+        <div className={ui.headline3}>
           <HeadlineCard label="Appointments today" value={k.appointmentsToday} foot="Booked for today" icon="calendar" href={`/dashboard/salons/${salonId}/schedule`} />
           <HeadlineCard label="Customers served" value={k.customersServedToday} foot="Finished today" icon="users" />
           <HeadlineCard label="Active staff" value={k.activeStaff} foot="Clocked in" icon="team" href={`/dashboard/salons/${salonId}/staff`} />
         </div>
       </section>
 
-      <div className={ui.glanceStrip} role="list" aria-label="Today at a glance">
+      <div className={ui.glanceStrip}>
         <GlanceCard label="Waiting in Live Queue" value={k.waitingInQueue} foot="Waiting for available staff" icon="queue" tone="warn" href={`/dashboard/salons/${salonId}/queue?view=waiting`} />
         <GlanceCard label="In service now" value={k.inService} foot="Service started" icon="scissors" tone="ok" href={`/dashboard/salons/${salonId}/queue?view=in-service`} />
         <GlanceCard label="Revenue recorded today" value={revenue.hasRecordedPayments ? money(k.recordedRevenueToday) : "—"} foot={revenue.hasRecordedPayments ? `${k.recordedPaymentsToday} payment${k.recordedPaymentsToday === 1 ? "" : "s"} recorded` : "No payments recorded yet"} icon="rupee" tone="brand" href={`/dashboard/salons/${salonId}/revenue`} />
@@ -324,7 +324,7 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
             {data.topServices.length === 0 ? (
               <EmptyState title="No completed services yet">Completed services will appear here with their popularity and recorded revenue.</EmptyState>
             ) : (
-              <div className={ui.tableWrap}>
+              <div className={ui.tableWrap} role="region" aria-label="Top services table" tabIndex={0}>
                 <table className={ui.table}>
                   <thead>
                     <tr>
@@ -520,7 +520,7 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
           {data.staffPerformance.length === 0 ? (
             <EmptyState title="No barbers yet" action={<BtnLink small href={`/dashboard/salons/${salonId}/staff`} icon="plus">Add a barber</BtnLink>} />
           ) : (
-            <div className={ui.tableWrap}>
+            <div className={ui.tableWrap} role="region" aria-label="Staff performance table" tabIndex={0}>
               <table className={ui.table}>
                 <thead>
                   <tr>
