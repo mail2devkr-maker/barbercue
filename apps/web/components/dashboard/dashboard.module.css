@@ -352,14 +352,16 @@
    wall of equally-weighted actions. */
 .shopCardLinks a:first-child {
   border-color: transparent;
-  background: var(--bc-brand-gradient);
-  color: #ffffff;
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
+  color: #09090c;
 }
 
 .shopCardLinks a:first-child:hover {
   border-color: transparent;
-  background: var(--bc-brand-gradient);
-  color: #ffffff;
+  background: var(--bc-brand-coral);
+  background-image: linear-gradient(105deg, var(--bc-brand-coral), var(--bc-brand-orange));
+  color: #09090c;
 }
 
 /* ---------- Setup checklist ---------- */
@@ -425,8 +427,9 @@
 }
 
 .toggleActive {
-  background: var(--bc-brand-gradient);
-  color: #ffffff;
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
+  color: #09090c;
   border-color: transparent;
   font-weight: 600;
 }
@@ -519,8 +522,9 @@
 
 .setupStepCurrent {
   border-color: transparent;
-  background: var(--bc-brand-gradient);
-  color: #ffffff;
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
+  color: #09090c;
 }
 
 .setupStepCurrent span {
@@ -596,8 +600,9 @@
 
 .shopNavItemCurrent {
   border-color: transparent;
-  background: var(--bc-brand-gradient);
-  color: #ffffff;
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
+  color: #09090c;
 }
 
 @media (max-width: 520px) {

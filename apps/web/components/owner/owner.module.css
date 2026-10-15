@@ -1,31 +1,37 @@
 /* FastQue Owner Dashboard - design system.
  *
- * Light, bright and compact. Every colour pair used for text is defined here as a token and is
- * verified by owner-contrast.test.jsx (WCAG AA, 4.5:1 for normal text) - this file exists partly
+ * Charcoal navigation with light, compact work surfaces. Text/surface pairs are defined here as
+ * tokens and verified by owner-contrast.test.jsx (WCAG AA, 4.5:1 for normal text). This file exists partly
  * because the previous dashboard put near-white text on a white card (the card hard-coded #fff
  * while the text colour came from a dark-theme token). Never hard-code a text colour on a surface:
  * use a --os-* token pair.
  *
- * The legacy --bc-* tokens are remapped to this palette inside .root so older dashboard pages that
- * still read them render correctly on the light shell instead of being unreadable. */
+ * The legacy --bc-* tokens are remapped only inside .root so older dashboard pages stay readable
+ * on light work surfaces. The global FastQue brand tokens supply the pink/coral/orange gradient. */
 
 .root {
-  --os-bg: #fff9f2;
-  --os-surface: #fffdf9;
-  --os-surface-2: #fff5eb;
-  --os-border: #e7e0d3;
-  --os-border-strong: #c9bba6;
-  --os-ink: #1c1a17;
-  --os-ink-2: #39322b;
-  --os-muted: #605647;
-  --os-brand: #b0413e;
-  --os-brand-ink: #ffffff;
-  --os-brand-hover: #92302d;
-  --os-brand-soft: #feeae4;
-  --os-brand-soft-ink: #842b28;
-  --os-navy: #1a1533;
-  --os-navy-ink: #f4f1ff;
-  --os-navy-muted: #b9b4d6;
+  --os-bg: #f5f6f8;
+  --os-surface: #ffffff;
+  --os-surface-2: #f3f4f7;
+  --os-border: #dfe3ea;
+  --os-border-strong: #aeb6c4;
+  --os-ink: #16171c;
+  --os-ink-2: #30333c;
+  --os-muted: #555b66;
+  /* Text accent is intentionally darker than the vivid brand gradient for 4.5:1 on white. */
+  --os-brand: #b41d49;
+  --os-brand-ink: #09090c;
+  --os-brand-hover: #a51c42;
+  --os-brand-soft: #fff0f4;
+  --os-brand-soft-ink: #92213d;
+  --os-navy: #171314;
+  --os-navy-ink: #ffffff;
+  --os-navy-muted: #ded4db;
+  --os-chrome: #09090c;
+  --os-chrome-surface: #242126;
+  --os-chrome-ink: #f7f5f4;
+  --os-chrome-muted: #d1cbd0;
+  --os-chrome-border: #747078;
   --os-ok-ink: #0b6b38;
   --os-ok-bg: #e3f5ec;
   --os-warn-ink: #7a4a00;
@@ -34,17 +40,18 @@
   --os-bad-bg: #fde8e6;
   --os-info-ink: #1b46b8;
   --os-info-bg: #e5edff;
-  /* Reference palette: a deep plum for the active navigation state and the account chip. */
-  --os-plum: #1a1533;
+  /* Deep neutral for non-brand chips and queue tokens; semantic status colours stay separate. */
+  --os-plum: #242126;
   --os-plum-ink: #ffffff;
-  --os-plum-soft: #f2eff7;
-  --os-plum-soft-ink: #1a1533;
+  --os-plum-soft: #fff0f4;
+  --os-plum-soft-ink: #92213d;
   --os-radius: 20px;
   --os-radius-sm: 10px;
   --os-shadow: 0 1px 2px rgba(20, 26, 46, 0.03), 0 10px 30px rgba(20, 26, 46, 0.05);
-  --os-focus: 0 0 0 3px rgba(176, 65, 62, 0.35);
+  --os-focus: 0 0 0 3px rgba(242, 41, 92, 0.22);
+  --os-focus-ink: #a51c42;
 
-  /* legacy tokens -> light palette */
+  /* Legacy tokens -> readable light page surfaces, never dark shell chrome. */
   --bc-ink: var(--os-ink);
   --bc-muted: var(--os-muted);
   --bc-border: var(--os-border);
@@ -68,9 +75,22 @@
 }
 
 .root *:focus-visible {
-  outline: none;
+  outline: 2px solid var(--os-focus-ink);
+  outline-offset: 2px;
   box-shadow: var(--os-focus);
   border-radius: 8px;
+}
+.rail :focus-visible,
+.sidebar :focus-visible,
+.topbar .iconBtn:focus-visible,
+.topbar .avatarBtn:focus-visible,
+.bottomBar :focus-visible {
+  outline-color: var(--bc-brand-orange);
+}
+.rail .railBtnActive:focus-visible,
+.sidebar .navLinkActive:focus-visible,
+.bottomBar .bottomLinkActive:focus-visible {
+  outline-color: #ffffff;
 }
 
 .srOnly {
@@ -109,9 +129,9 @@
   position: sticky;
   top: 0;
   height: 100vh;
-  background: var(--os-surface);
-  color: var(--os-ink-2);
-  border-right: 1px solid var(--os-border);
+  background: var(--os-chrome);
+  color: var(--os-chrome-ink);
+  border-right: 1px solid var(--os-chrome-border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -130,7 +150,7 @@
   display: grid;
   place-items: center;
   background: transparent;
-  color: var(--os-ink);
+  color: var(--os-chrome-ink);
   font-weight: 800;
   font-size: 18px;
   margin-bottom: 10px;
@@ -142,7 +162,7 @@
   border: 0;
   border-radius: 14px;
   background: transparent;
-  color: var(--os-muted);
+  color: var(--os-chrome-muted);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -153,16 +173,18 @@
   text-decoration: none;
 }
 .railBtn:hover {
-  background: var(--os-surface-2);
-  color: var(--os-ink);
+  background: var(--os-chrome-surface);
+  color: var(--os-chrome-ink);
 }
 .railBtnActive {
-  background: var(--os-plum);
-  color: var(--os-plum-ink);
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
+  color: var(--os-brand-ink);
 }
 .railBtnActive:hover {
-  background: var(--os-plum);
-  color: var(--os-plum-ink);
+  background: var(--bc-brand-coral);
+  background-image: linear-gradient(105deg, var(--bc-brand-coral), var(--bc-brand-orange));
+  color: var(--os-brand-ink);
 }
 .railSpacer {
   flex: 1;
@@ -173,8 +195,9 @@
   top: 0;
   height: 100vh;
   overflow-y: auto;
-  background: var(--os-surface);
-  border-right: 1px solid var(--os-border);
+  background: var(--os-chrome);
+  color: var(--os-chrome-ink);
+  border-right: 1px solid var(--os-chrome-border);
   padding: 18px 12px 24px;
   display: flex;
   flex-direction: column;
@@ -190,7 +213,7 @@
   font-family: var(--font-display), Georgia, serif;
   font-weight: 600;
   font-size: 19px;
-  color: var(--os-ink);
+  color: var(--os-chrome-ink);
   min-height: 45px;
 }
 .brandRow :global(img) {
@@ -200,14 +223,14 @@
   margin-top: 6px;
   font-weight: 700;
   font-size: 13px;
-  color: var(--os-ink-2);
+  color: var(--os-chrome-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .shopSub {
   font-size: 12px;
-  color: var(--os-muted);
+  color: var(--os-chrome-muted);
 }
 .navGroupLabel {
   margin: 14px 10px 4px;
@@ -215,7 +238,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--os-muted);
+  color: var(--os-chrome-muted);
 }
 .navList {
   list-style: none;
@@ -231,7 +254,7 @@
   gap: 11px;
   padding: 9px 10px;
   border-radius: 12px;
-  color: var(--os-ink-2);
+  color: var(--os-chrome-ink);
   font-weight: 600;
   font-size: 13.5px;
   text-decoration: none;
@@ -242,16 +265,23 @@
   text-align: left;
 }
 .navLink:hover {
-  background: var(--os-surface-2);
-  color: var(--os-ink);
+  background: var(--os-chrome-surface);
+  color: var(--os-chrome-ink);
 }
 .navLinkActive {
-  background: var(--os-plum);
-  color: var(--os-plum-ink);
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
+  color: var(--os-brand-ink);
 }
 .navLinkActive:hover {
-  background: var(--os-plum);
-  color: var(--os-plum-ink);
+  background: var(--bc-brand-coral);
+  background-image: linear-gradient(105deg, var(--bc-brand-coral), var(--bc-brand-orange));
+  color: var(--os-brand-ink);
+}
+.navLinkActive .navBadge {
+  background: var(--os-chrome);
+  background-image: none;
+  color: var(--os-chrome-ink);
 }
 .navLabel {
   flex: 1;
@@ -261,7 +291,8 @@
   min-width: 22px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: var(--os-brand);
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
   color: var(--os-brand-ink);
   font-size: 11.5px;
   font-weight: 800;
@@ -269,6 +300,7 @@
 }
 .navBadgeQuiet {
   background: var(--os-surface-2);
+  background-image: none;
   color: var(--os-ink-2);
   border: 1px solid var(--os-border);
 }
@@ -286,26 +318,26 @@
   align-items: center;
   gap: 12px;
   padding: 12px 24px;
-  background: rgba(255, 253, 249, 0.92);
+  background: var(--os-chrome);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--os-border);
+  border-bottom: 1px solid var(--os-chrome-border);
 }
 .iconBtn {
   position: relative;
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid var(--os-border);
-  background: var(--os-surface);
-  color: var(--os-ink-2);
+  border: 1px solid var(--os-chrome-border);
+  background: var(--os-chrome-surface);
+  color: var(--os-chrome-ink);
   display: inline-grid;
   place-items: center;
   cursor: pointer;
   text-decoration: none;
 }
 .iconBtn:hover {
-  background: var(--os-surface-2);
-  color: var(--os-ink);
+  background: #383139;
+  color: var(--os-chrome-ink);
 }
 .menuBtn {
   display: none;
@@ -395,8 +427,9 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--os-plum);
-  color: var(--os-plum-ink);
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
+  color: var(--os-brand-ink);
   font-weight: 800;
   display: grid;
   place-items: center;
@@ -543,8 +576,8 @@
     right: 0;
     bottom: 0;
     z-index: 45;
-    background: var(--os-surface);
-    border-top: 1px solid var(--os-border);
+    background: var(--os-chrome);
+    border-top: 1px solid var(--os-chrome-border);
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
   }
   .bottomLink {
@@ -557,7 +590,7 @@
     border: 0;
     background: transparent;
     border-radius: 12px;
-    color: var(--os-muted);
+    color: var(--os-chrome-muted);
     font-size: 11px;
     font-weight: 700;
     text-decoration: none;
@@ -565,8 +598,16 @@
     cursor: pointer;
   }
   .bottomLinkActive {
-    color: var(--os-brand-soft-ink);
-    background: var(--os-brand-soft);
+    color: var(--os-brand-ink);
+    background: var(--bc-brand-pink);
+    background-image: var(--bc-brand-gradient);
+  }
+  .bottomLinkActive:hover {
+    background-image: linear-gradient(105deg, var(--bc-brand-coral), var(--bc-brand-orange));
+  }
+  .bottomLink:not(.bottomLinkActive):hover {
+    background: var(--os-chrome-surface);
+    color: var(--os-chrome-ink);
   }
   .bottomBadge {
     position: absolute;
@@ -575,11 +616,17 @@
     min-width: 18px;
     padding: 0 5px;
     border-radius: 999px;
-    background: var(--os-brand);
+    background: var(--bc-brand-pink);
+    background-image: var(--bc-brand-gradient);
     color: var(--os-brand-ink);
     font-size: 10.5px;
     font-weight: 800;
     text-align: center;
+  }
+  .bottomLinkActive .bottomBadge {
+    background: var(--os-chrome);
+    background-image: none;
+    color: var(--os-chrome-ink);
   }
 }
 
@@ -775,11 +822,16 @@
   cursor: not-allowed;
 }
 .btnPrimary {
-  background: var(--os-brand);
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
   color: var(--os-brand-ink);
 }
 .btnPrimary:hover:not(:disabled) {
-  background: var(--os-brand-hover);
+  background: var(--bc-brand-coral);
+  background-image: linear-gradient(105deg, var(--bc-brand-coral), var(--bc-brand-orange));
+}
+.btnPrimary:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .btnSecondary {
   background: var(--os-surface);
@@ -894,11 +946,13 @@
   background: var(--os-surface-2);
 }
 .tabActive {
-  background: var(--os-navy);
-  color: var(--os-navy-ink);
+  background: var(--bc-brand-pink);
+  background-image: var(--bc-brand-gradient);
+  color: var(--os-brand-ink);
 }
 .tabActive:hover {
-  background: var(--os-navy);
+  background: var(--bc-brand-coral);
+  background-image: linear-gradient(105deg, var(--bc-brand-coral), var(--bc-brand-orange));
 }
 .tabCount {
   min-width: 22px;
@@ -911,8 +965,8 @@
   text-align: center;
 }
 .tabActive .tabCount {
-  background: rgba(255, 255, 255, 0.2);
-  color: var(--os-navy-ink);
+  background: rgba(9, 9, 12, 0.12);
+  color: var(--os-brand-ink);
 }
 
 /* ---------- tables ---------- */
@@ -1196,6 +1250,15 @@
     transition: none;
   }
 }
+@media (forced-colors: active) {
+  .railBtnActive,
+  .navLinkActive,
+  .bottomLinkActive,
+  .tabActive,
+  .btnPrimary {
+    border: 2px solid Highlight;
+  }
+}
 
 /* ---------- charts ---------- */
 
@@ -1257,7 +1320,7 @@
   gap: 18px;
   padding: 20px 22px;
   border-radius: var(--os-radius);
-  background: linear-gradient(120deg, #1a1533 0%, #3a1450 55%, #6c1747 100%);
+  background: linear-gradient(120deg, #09090c 0%, #211722 55%, #592039 100%);
   color: var(--os-navy-ink);
   margin-bottom: 16px;
   overflow: hidden;
@@ -1284,7 +1347,7 @@
   color: var(--os-navy);
 }
 .welcomeBtn:hover:not(:disabled) {
-  background: #f1eefc;
+  background: #f3f4f7;
 }
 .welcomeBtnGhost {
   background: rgba(255, 255, 255, 0.12);
@@ -1659,7 +1722,11 @@
   background: transparent;
   padding: 0;
   cursor: pointer;
-  color: var(--os-ink);
+  color: var(--os-chrome-ink);
+}
+.avatarBtn:hover .avatarName {
+  text-decoration: underline;
+  text-decoration-color: var(--bc-brand-orange);
 }
 .avatarName {
   font-weight: 700;
