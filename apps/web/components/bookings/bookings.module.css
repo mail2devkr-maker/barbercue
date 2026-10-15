@@ -116,7 +116,7 @@
 }
 
 .newBadge {
-  background: var(--bc-success);
+  background: #17613b;
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;

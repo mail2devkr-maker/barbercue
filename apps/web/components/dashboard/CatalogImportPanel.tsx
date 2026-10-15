@@ -33,7 +33,7 @@ const fileLimit = 6 * 1024 * 1024;
 const styles = {
   shell: { border: "1px solid var(--bc-border)", background: "var(--bc-surface)", borderRadius: 16, padding: 20, margin: "22px 0" } as const,
   help: { color: "var(--bc-muted)", fontSize: 14, lineHeight: 1.6 } as const,
-  button: { padding: "10px 16px", borderRadius: 10, border: "1px solid var(--bc-border)", background: "var(--bc-accent)", color: "#fff", cursor: "pointer", fontWeight: 600 } as const,
+  button: { padding: "10px 16px", borderRadius: 10, border: "1px solid var(--bc-border)", background: "var(--bc-accent)", color: "#09090c", cursor: "pointer", fontWeight: 600 } as const,
   secondary: { padding: "7px 10px", borderRadius: 9, border: "1px solid var(--bc-border)", background: "var(--bc-surface)", color: "var(--bc-ink)", cursor: "pointer" } as const,
   input: { width: "100%", minWidth: 72, padding: "8px", color: "var(--bc-ink)", border: "1px solid var(--bc-border)", borderRadius: 8, background: "var(--bc-surface)" } as const,
 };

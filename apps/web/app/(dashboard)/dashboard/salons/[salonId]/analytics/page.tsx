@@ -395,7 +395,7 @@ export default function DashboardAnalyticsPage({
   );
 
   return (
-    <main className={styles.page}>
+    <main className={`${styles.page} ${styles.analyticsPage}`}>
       <h1 className={styles.pageTitle}>Analytics</h1>
       <p className={styles.pageSubtitle}>
         Real operational activity from your bookings and queue. Service-value charts use listed
@@ -450,7 +450,7 @@ export default function DashboardAnalyticsPage({
               borderRadius: 10,
               border: "1px solid var(--bc-border)",
               background: view === id ? "var(--bc-accent)" : "var(--bc-surface)",
-              color: view === id ? "white" : "var(--bc-ink)",
+              color: view === id ? "#09090c" : "var(--bc-ink)",
               cursor: "pointer",
               fontWeight: 650,
             }}

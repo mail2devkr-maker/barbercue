@@ -150,7 +150,7 @@ export function ShareBar({ parts, ariaLabel }: { parts: { label: string; value: 
       <div
         role="img"
         aria-label={`${ariaLabel}: ${parts.map((p) => `${p.label} ${p.value}`).join(", ")}`}
-        style={{ display: "flex", height: 10, borderRadius: 999, overflow: "hidden", background: "#eceff6" }}
+        style={{ display: "flex", height: 10, borderRadius: 999, overflow: "hidden", background: "var(--os-surface-2)" }}
       >
         {parts
           .filter((p) => p.value > 0)
