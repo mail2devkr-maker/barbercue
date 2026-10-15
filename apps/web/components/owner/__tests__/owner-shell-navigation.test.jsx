@@ -96,6 +96,13 @@ afterEach(() => {
 });
 
 describe("owner shell navigation", () => {
+  it("keeps the approved FastQue artwork in both navigation levels", async () => {
+    const tree = await renderShell({ workplaces: [shop("s1", "Alpha")] });
+    const sources = tree.root.findAllByType("img").map((img) => img.props.src);
+    expect(sources).toContain("/brand/fastque-premium-3d-mark.png");
+    expect(sources).toContain("/brand/fastque-clean-lockup-transparent.png");
+  });
+
   it("the logo is the Dashboard home of the SELECTED shop, not the shop list", async () => {
     const tree = await renderShell({ workplaces: [shop("s1", "Alpha"), shop("s2", "Beta")] });
     const logo = anchors(tree).find((a) => a.props["aria-label"] === "Dashboard home");

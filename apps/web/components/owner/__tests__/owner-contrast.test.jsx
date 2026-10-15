@@ -6,14 +6,17 @@ import path from "path";
 // white. Every text/background pair the owner dashboard uses is resolved from the real stylesheet and
 // must meet WCAG AA (4.5:1 for normal text).
 const CSS = fs.readFileSync(path.join(__dirname, "../owner.module.css"), "utf8");
+const GLOBAL_CSS = fs.readFileSync(path.join(__dirname, "../../../app/globals.css"), "utf8");
+const LEGACY_CSS = fs.readFileSync(path.join(__dirname, "../../dashboard/dashboard.module.css"), "utf8");
 
-function rootTokens() {
-  const block = /\.root\s*\{([\s\S]*?)\n\}/.exec(CSS)[1];
+function tokensFrom(source, selector) {
+  const block = new RegExp("\\" + selector + "\\s*\\{([\\s\\S]*?)\\n\\}").exec(source)?.[1];
+  if (!block) throw new Error("missing token block " + selector);
   const tokens = {};
   for (const m of block.matchAll(/--([a-z0-9-]+):\s*([^;]+);/gi)) tokens[m[1]] = m[2].trim();
   return tokens;
 }
-const TOKENS = rootTokens();
+const TOKENS = { ...tokensFrom(GLOBAL_CSS, ":root"), ...tokensFrom(CSS, ".root") };
 
 function resolve(value, depth = 0) {
   const v = value.trim();
@@ -38,14 +41,14 @@ function ratio(fg, bg) {
   const b = luminance(hexToRgb(bg));
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
-/** The value of `prop` in the first rule whose selector is exactly `.name`. */
+/** The value of `prop` in the first rule for exactly `.name` that declares it. */
 function declared(selector, prop) {
-  const re = new RegExp("(^|\\n)\\." + selector + "\\s*\\{([^}]*)\\}");
-  const body = re.exec(CSS)?.[2];
-  if (!body) throw new Error("no rule ." + selector);
-  const m = new RegExp("(^|[;\\s])" + prop + ":\\s*([^;]+);").exec(body);
-  if (!m) throw new Error("." + selector + " has no " + prop);
-  return resolve(m[2]);
+  const re = new RegExp("(^|\\n)\\s*\\." + selector + "\\s*\\{([^}]*)\\}", "g");
+  for (const match of CSS.matchAll(re)) {
+    const m = new RegExp("(^|[;\\s])" + prop + ":\\s*([^;]+);").exec(match[2]);
+    if (m) return resolve(m[2]);
+  }
+  throw new Error("." + selector + " has no " + prop);
 }
 
 const SURFACE = resolve("var(--os-surface)");
@@ -87,17 +90,57 @@ describe("owner dashboard colour contrast", () => {
     expect(ratio(declared("btnDanger", "color"), declared("btnDanger", "background"))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(declared("btnSecondary", "color"), declared("btnSecondary", "background"))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(declared("navLinkActive", "color"), declared("navLinkActive", "background"))).toBeGreaterThanOrEqual(4.5);
-    expect(ratio(declared("navLink", "color"), SURFACE)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(declared("navLink", "color"), declared("sidebar", "background"))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(declared("tabActive", "color"), declared("tabActive", "background"))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(declared("tab", "color"), SURFACE)).toBeGreaterThanOrEqual(4.5);
     expect(ratio(declared("navBadge", "color"), declared("navBadge", "background"))).toBeGreaterThanOrEqual(4.5);
   });
 
   it("the welcome banner text is readable on every stop of its gradient", () => {
-    for (const stop of ["#1a1533", "#3a1450", "#6c1747"]) {
+    for (const stop of ["#09090c", "#211722", "#592039"]) {
       expect(ratio("#ffffff", stop)).toBeGreaterThanOrEqual(7);
       expect(ratio(resolve("var(--os-navy-muted)"), stop)).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it("uses readable charcoal chrome on desktop and mobile without darkening work cards", () => {
+    const chrome = resolve("var(--os-chrome)");
+    for (const selector of ["rail", "sidebar", "topbar", "bottomBar"]) {
+      expect(declared(selector, "background")).toBe(chrome);
+    }
+    for (const selector of ["railBtn", "navLink", "shopName", "navGroupLabel", "bottomLink", "avatarBtn"]) {
+      expect(ratio(declared(selector, "color"), chrome)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(ratio(declared("iconBtn", "color"), declared("iconBtn", "background"))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(declared("searchInput", "color"), declared("searchInput", "background"))).toBeGreaterThanOrEqual(4.5);
+    expect(declared("card", "background")).toBe(SURFACE);
+  });
+
+  it("uses the canonical FastQue gradient only for brand actions, with accessible ink at every stop", () => {
+    const stops = ["bc-brand-pink", "bc-brand-coral", "bc-brand-orange"].map((name) => resolve("var(--" + name + ")"));
+    for (const selector of ["railBtnActive", "navLinkActive", "bottomLinkActive", "btnPrimary", "tabActive"]) {
+      expect(declared(selector, "background-image")).toBe(resolve("var(--bc-brand-gradient)"));
+      for (const stop of stops) expect(ratio(declared(selector, "color"), stop)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(CSS).not.toMatch(/\.badge(?:Ok|Warn|Bad|Info)\s*\{[^}]*background-image:/);
+  });
+
+  it("keeps legacy shop-management gradient controls readable too", () => {
+    const stops = ["bc-brand-pink", "bc-brand-coral", "bc-brand-orange"].map((name) => resolve("var(--" + name + ")"));
+    const brandedRules = [...LEGACY_CSS.matchAll(/\{([^{}]*background-image:\s*var\(--bc-brand-gradient\);[^{}]*)\}/g)];
+    expect(brandedRules.length).toBeGreaterThanOrEqual(4);
+    for (const [, body] of brandedRules) {
+      const ink = /(?:^|;)\s*color:\s*(#[0-9a-f]{6});/i.exec(body)?.[1];
+      expect(ink).toBeDefined();
+      for (const stop of stops) expect(ratio(ink, stop)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps keyboard focus visible on both the light workspace and dark chrome", () => {
+    expect(ratio(resolve("var(--os-focus-ink)"), SURFACE)).toBeGreaterThanOrEqual(3);
+    expect(ratio(resolve("var(--bc-brand-orange)"), resolve("var(--os-chrome)"))).toBeGreaterThanOrEqual(3);
+    expect(CSS).toMatch(/\.root \*:focus-visible\s*\{[^}]*outline: 2px solid var\(--os-focus-ink\)/);
+    expect(CSS).toMatch(/\.rail :focus-visible,[\s\S]*?outline-color: var\(--bc-brand-orange\)/);
   });
 
   it("never sets low-contrast text on a hard-coded white surface anywhere in the stylesheet", () => {
