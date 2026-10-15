@@ -198,7 +198,7 @@ maybe(
           code: firstCode,
         });
         expect(stale.status).toBe(400);
-        expect(stale.body.code).toBe(AuthErrorCode.OTP_INVALID);
+        expect(stale.body.error.code).toBe(AuthErrorCode.OTP_INVALID);
       }
 
       const valid = await post(`auth/${AUTH_PATHS.otpVerify}`).send({
@@ -223,7 +223,7 @@ maybe(
         code: currentCode,
       });
       expect(replay.status).toBe(400);
-      expect(replay.body.code).toBe(AuthErrorCode.OTP_INVALID);
+      expect(replay.body.error.code).toBe(AuthErrorCode.OTP_INVALID);
 
       const nextCode = await requestCode(
         `auth/${AUTH_PATHS.otpRequest}`,
@@ -268,7 +268,7 @@ maybe(
         { phone: destination, code },
       );
       expect(ownerAttempt.status).toBe(400);
-      expect(ownerAttempt.body.code).toBe(AuthErrorCode.OTP_INVALID);
+      expect(ownerAttempt.body.error.code).toBe(AuthErrorCode.OTP_INVALID);
 
       const registered = await post(
         DISCOVERY_PATHS.salons,
@@ -332,7 +332,7 @@ maybe(
         code,
       });
       expect(takeover.status).toBe(400);
-      expect(takeover.body.code).toBe(AuthErrorCode.OTP_INVALID);
+      expect(takeover.body.error.code).toBe(AuthErrorCode.OTP_INVALID);
       const after = await prisma.user.findUnique({
         where: { id: legacyOwner.id },
         select: { phoneVerifiedAt: true, refreshTokens: true },
