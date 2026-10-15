@@ -119,9 +119,15 @@
 }
 
 .rail {
-  position: sticky;
+  /* Keep the navigation pinned even while long shop pages scroll. */
+  position: fixed;
   top: 0;
+  left: 0;
+  width: 84px;
   height: 100vh;
+  height: 100dvh;
+  box-sizing: border-box;
+  z-index: 40;
   background: var(--os-chrome);
   color: var(--os-chrome-ink);
   border-right: 1px solid var(--os-chrome-border);
@@ -184,9 +190,15 @@
 }
 
 .sidebar {
-  position: sticky;
+  /* Use the whole viewport before menu content needs its own scrollbar. */
+  position: fixed;
   top: 0;
+  left: 84px;
+  width: 268px;
   height: 100vh;
+  height: 100dvh;
+  box-sizing: border-box;
+  z-index: 40;
   overflow-y: auto;
   background: var(--os-chrome);
   color: var(--os-chrome-ink);
@@ -299,6 +311,8 @@
 }
 
 .main {
+  /* Fixed nav stays in tracks 1-2; the working area occupies track 3. */
+  grid-column: 3;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -516,6 +530,9 @@
   .app {
     grid-template-columns: 84px minmax(0, 1fr);
   }
+  .main {
+    grid-column: 2;
+  }
   .sidebar {
     position: fixed;
     left: 84px;
@@ -550,6 +567,9 @@
 @media (max-width: 767px) {
   .app {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .main {
+    grid-column: 1;
   }
   .rail {
     display: none;
