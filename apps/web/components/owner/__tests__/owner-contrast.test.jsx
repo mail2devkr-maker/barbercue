@@ -186,4 +186,10 @@ describe("owner dashboard colour contrast", () => {
     expect(CATALOG_IMPORT).toContain('background: "var(--bc-accent)", color: "#09090c"');
     expect(ratio("#09090c", resolve("var(--bc-accent)"))).toBeGreaterThanOrEqual(4.5);
   });
+
+  it("keeps desktop welcome actions in one available row and gives Analytics a restrained wider canvas", () => {
+    expect(CSS).toMatch(/@media \(max-width: 1600px\)[\s\S]*?\.ovTop\s*\{\s*grid-template-columns: minmax\(0, 1fr\)/);
+    expect(LEGACY_CSS).toMatch(/\.analyticsPage\s*\{\s*max-width: 1080px/);
+    expect(ANALYTICS).toContain('className={`${styles.page} ${styles.analyticsPage}`}');
+  });
 });

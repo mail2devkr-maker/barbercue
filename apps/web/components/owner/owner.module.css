@@ -2275,7 +2275,7 @@
   color: var(--os-muted);
 }
 
-@media (max-width: 1360px) {
+@media (max-width: 1600px) {
   .glanceStrip {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

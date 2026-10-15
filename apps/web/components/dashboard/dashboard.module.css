@@ -38,6 +38,10 @@
   margin: 0 auto;
 }
 
+.analyticsPage {
+  max-width: 1080px;
+}
+
 .pageWide {
   padding: 2.5rem 1.25rem 3rem;
   max-width: 780px;
