@@ -2,7 +2,9 @@ import {
   allowedOtpCallingCodes,
   isOtpPhoneAllowed,
   isPhoneOtpConfigured,
+  otpDeliveryLimits,
   otpHashSecret,
+  otpPhoneCallingCode,
 } from './otp-config';
 
 describe('OTP configuration', () => {
@@ -12,6 +14,9 @@ describe('OTP configuration', () => {
     template: process.env.OTP_PROVIDER_TEMPLATE_NAME,
     hashSecret: process.env.OTP_HASH_SECRET,
     callingCodes: process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES,
+    globalDaily: process.env.OTP_MAX_DAILY_GLOBAL_SENDS,
+    globalRolling: process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS,
+    countryDaily: process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS,
     testSender: process.env.OTP_TEST_SENDER_ENABLED,
   };
 
@@ -21,6 +26,9 @@ describe('OTP configuration', () => {
     delete process.env.OTP_PROVIDER_TEMPLATE_NAME;
     delete process.env.OTP_HASH_SECRET;
     delete process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES;
+    delete process.env.OTP_MAX_DAILY_GLOBAL_SENDS;
+    delete process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS;
+    delete process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS;
     delete process.env.OTP_TEST_SENDER_ENABLED;
   });
 
@@ -37,6 +45,15 @@ describe('OTP configuration', () => {
     if (original.callingCodes === undefined)
       delete process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES;
     else process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = original.callingCodes;
+    if (original.globalDaily === undefined)
+      delete process.env.OTP_MAX_DAILY_GLOBAL_SENDS;
+    else process.env.OTP_MAX_DAILY_GLOBAL_SENDS = original.globalDaily;
+    if (original.globalRolling === undefined)
+      delete process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS;
+    else process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = original.globalRolling;
+    if (original.countryDaily === undefined)
+      delete process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS;
+    else process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = original.countryDaily;
     if (original.testSender === undefined)
       delete process.env.OTP_TEST_SENDER_ENABLED;
     else process.env.OTP_TEST_SENDER_ENABLED = original.testSender;
@@ -49,6 +66,9 @@ describe('OTP configuration', () => {
     process.env.OTP_HASH_SECRET =
       'synthetic-secret-at-least-thirty-two-bytes-long';
     process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = '91';
+    process.env.OTP_MAX_DAILY_GLOBAL_SENDS = '100';
+    process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = '50';
+    process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = '100';
     expect(isPhoneOtpConfigured()).toBe(true);
   });
 
@@ -57,6 +77,9 @@ describe('OTP configuration', () => {
     process.env.OTP_PROVIDER_TEMPLATE_NAME = 'template name with spaces';
     process.env.OTP_HASH_SECRET = 'short';
     process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = '91';
+    process.env.OTP_MAX_DAILY_GLOBAL_SENDS = '10';
+    process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = '10';
+    process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = '10';
     expect(otpHashSecret()).toBeNull();
     expect(isPhoneOtpConfigured()).toBe(false);
   });
@@ -65,6 +88,9 @@ describe('OTP configuration', () => {
     process.env.OTP_HASH_SECRET =
       'synthetic-secret-at-least-thirty-two-bytes-long';
     process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = '91';
+    process.env.OTP_MAX_DAILY_GLOBAL_SENDS = '10';
+    process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = '10';
+    process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = '10';
     process.env.OTP_TEST_SENDER_ENABLED = 'true';
     expect(isPhoneOtpConfigured()).toBe(false);
     process.env.NODE_ENV = 'test';
@@ -77,5 +103,28 @@ describe('OTP configuration', () => {
     expect(isOtpPhoneAllowed('+919876543210')).toBe(true);
     expect(isOtpPhoneAllowed('+14155552671')).toBe(true);
     expect(isOtpPhoneAllowed('+81312345678')).toBe(false);
+    expect(otpPhoneCallingCode('+919876543210')).toBe('91');
+    expect(otpPhoneCallingCode('+14155552671')).toBe('1');
+  });
+
+  it('keeps SMS disabled when any global or per-country hard ceiling is missing or invalid', () => {
+    process.env.OTP_PROVIDER_API_KEY = 'synthetic-test-key';
+    process.env.OTP_PROVIDER_TEMPLATE_NAME = 'FASTQUE_LOGIN';
+    process.env.OTP_HASH_SECRET =
+      'synthetic-secret-at-least-thirty-two-bytes-long';
+    process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = '91';
+    process.env.OTP_MAX_DAILY_GLOBAL_SENDS = '10';
+    process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = '10';
+    expect(isPhoneOtpConfigured()).toBe(false);
+    process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = '0';
+    expect(otpDeliveryLimits()).toBeNull();
+    expect(isPhoneOtpConfigured()).toBe(false);
+    process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = '5';
+    expect(otpDeliveryLimits()).toEqual({
+      globalDaily: 10,
+      globalRolling24Hours: 10,
+      perCountryDaily: 5,
+    });
+    expect(isPhoneOtpConfigured()).toBe(true);
   });
 });

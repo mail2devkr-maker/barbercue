@@ -36,6 +36,7 @@ describe('TwoFactorOtpSender', () => {
     if (originalTemplate === undefined)
       delete process.env.OTP_PROVIDER_TEMPLATE_NAME;
     else process.env.OTP_PROVIDER_TEMPLATE_NAME = originalTemplate;
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -92,7 +93,7 @@ describe('TwoFactorOtpSender', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('rejects non-2xx, non-sent, malformed, timeout and network errors with a generic error', async () => {
+  it('rejects non-2xx, non-sent, malformed and network errors with a generic error', async () => {
     fetchSpy.mockResolvedValueOnce(
       jsonResponse(401, {
         status: 'error',
@@ -126,5 +127,79 @@ describe('TwoFactorOtpSender', () => {
     expect(logs).not.toContain('123456');
     expect(logs).not.toContain('private provider detail');
     expect(logs).not.toContain('synthetic network error');
+  });
+
+  it('aborts a stalled provider request at the configured eight-second timeout without leaking request data', async () => {
+    jest.useFakeTimers();
+    fetchSpy.mockImplementation((_input, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () =>
+            reject(new DOMException('synthetic abort detail', 'AbortError')),
+          { once: true },
+        );
+      });
+    });
+
+    const pending = service.sendOtp('+919876543210', '123456');
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+      message:
+        'Could not send the verification code. Please try again in a moment.',
+    });
+    const signal = fetchSpy.mock.calls[0][1]?.signal;
+    expect(signal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(7_999);
+    expect(signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await rejected;
+    expect(signal?.aborted).toBe(true);
+
+    const logs = loggerErrorSpy.mock.calls
+      .map((call) => String(call[0]))
+      .join('\n');
+    expect(logs).toContain('timed out');
+    expect(logs).not.toContain('synthetic-test-provider-key');
+    expect(logs).not.toContain('+919876543210');
+    expect(logs).not.toContain('123456');
+    expect(logs).not.toContain('synthetic abort detail');
+  });
+
+  it('keeps the timeout active while reading provider response body', async () => {
+    jest.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    fetchSpy.mockImplementation((_input, init) => {
+      signal = init?.signal as AbortSignal | undefined;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener(
+              'abort',
+              () =>
+                reject(
+                  new DOMException('synthetic abort detail', 'AbortError'),
+                ),
+              { once: true },
+            );
+          }),
+      } as Response);
+    });
+
+    const pending = service.sendOtp('+919876543210', '123456');
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+    });
+    await Promise.resolve();
+    expect(signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(8_000);
+    await rejected;
+    expect(signal?.aborted).toBe(true);
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      '2Factor OTP request timed out.',
+    );
   });
 });

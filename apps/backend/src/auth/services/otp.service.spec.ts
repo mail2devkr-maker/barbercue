@@ -43,15 +43,32 @@ describe('OtpService', () => {
       findUnique: jest.Mock;
       updateMany: jest.Mock;
     };
+    otpDeliveryAttempt: {
+      count: jest.Mock;
+      create: jest.Mock;
+      deleteMany: jest.Mock;
+      update: jest.Mock;
+    };
+    $queryRaw: jest.Mock;
     $transaction: jest.Mock;
   };
   let otpSender: { sendOtp: jest.Mock };
   const originalHashSecret = process.env.OTP_HASH_SECRET;
   const originalAllowedCodes = process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES;
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalTestSender = process.env.OTP_TEST_SENDER_ENABLED;
+  const originalDailyLimit = process.env.OTP_MAX_DAILY_GLOBAL_SENDS;
+  const originalRollingLimit = process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS;
+  const originalCountryLimit = process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS;
 
   beforeEach(async () => {
+    process.env.NODE_ENV = 'test';
+    process.env.OTP_TEST_SENDER_ENABLED = 'true';
     process.env.OTP_HASH_SECRET = TEST_HASH_SECRET;
     process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = '91';
+    process.env.OTP_MAX_DAILY_GLOBAL_SENDS = '100';
+    process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = '100';
+    process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = '100';
     prisma = {
       otpRequest: {
         count: jest.fn().mockResolvedValue(0),
@@ -60,6 +77,13 @@ describe('OtpService', () => {
         findUnique: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      otpDeliveryAttempt: {
+        count: jest.fn().mockResolvedValue(0),
+        create: jest.fn().mockResolvedValue({ id: 'attempt-1' }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        update: jest.fn().mockResolvedValue({ id: 'attempt-1' }),
+      },
+      $queryRaw: jest.fn().mockResolvedValue([{ pg_advisory_xact_lock: null }]),
       $transaction: jest.fn((work: (tx: unknown) => Promise<unknown>) =>
         work(prisma),
       ),
@@ -77,11 +101,25 @@ describe('OtpService', () => {
   });
 
   afterEach(() => {
+    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv;
+    if (originalTestSender === undefined)
+      delete process.env.OTP_TEST_SENDER_ENABLED;
+    else process.env.OTP_TEST_SENDER_ENABLED = originalTestSender;
     if (originalHashSecret === undefined) delete process.env.OTP_HASH_SECRET;
     else process.env.OTP_HASH_SECRET = originalHashSecret;
     if (originalAllowedCodes === undefined)
       delete process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES;
     else process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = originalAllowedCodes;
+    if (originalDailyLimit === undefined)
+      delete process.env.OTP_MAX_DAILY_GLOBAL_SENDS;
+    else process.env.OTP_MAX_DAILY_GLOBAL_SENDS = originalDailyLimit;
+    if (originalRollingLimit === undefined)
+      delete process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS;
+    else process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = originalRollingLimit;
+    if (originalCountryLimit === undefined)
+      delete process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS;
+    else process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = originalCountryLimit;
   });
 
   describe('requestOtp', () => {
@@ -91,7 +129,20 @@ describe('OtpService', () => {
       });
 
       expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+      });
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(prisma.otpDeliveryAttempt.create).toHaveBeenCalledWith({
+        data: {
+          countryCallingCode: '91',
+          status: 'RESERVED',
+          createdAt: expect.any(Date),
+        },
+        select: { id: true },
+      });
+      expect(prisma.otpDeliveryAttempt.update).toHaveBeenCalledWith({
+        where: { id: 'attempt-1' },
+        data: { status: 'ACCEPTED', finishedAt: expect.any(Date) },
       });
       expect(otpSender.sendOtp).toHaveBeenCalledWith(
         PHONE,
@@ -149,12 +200,54 @@ describe('OtpService', () => {
       expect(otpSender.sendOtp).not.toHaveBeenCalled();
     });
 
+    it('fails closed at the global daily ceiling before creating a challenge or dispatching', async () => {
+      prisma.otpDeliveryAttempt.count.mockResolvedValueOnce(100);
+
+      await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
+        code: AuthErrorCode.OTP_RATE_LIMITED,
+      });
+      expect(prisma.otpRequest.create).not.toHaveBeenCalled();
+      expect(prisma.otpDeliveryAttempt.create).not.toHaveBeenCalled();
+      expect(otpSender.sendOtp).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['global rolling-24-hour', 0, 100, 0],
+      ['per-country daily', 0, 0, 100],
+    ])(
+      'fails closed at the %s ceiling before dispatching',
+      async (_label, daily, rolling, country) => {
+        prisma.otpDeliveryAttempt.count
+          .mockResolvedValueOnce(daily)
+          .mockResolvedValueOnce(rolling)
+          .mockResolvedValueOnce(country);
+
+        await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
+          code: AuthErrorCode.OTP_RATE_LIMITED,
+        });
+        expect(prisma.otpRequest.create).not.toHaveBeenCalled();
+        expect(prisma.otpDeliveryAttempt.create).not.toHaveBeenCalled();
+        expect(otpSender.sendOtp).not.toHaveBeenCalled();
+      },
+    );
+
     it('fails closed if the HMAC secret is missing or weak', async () => {
       process.env.OTP_HASH_SECRET = 'short';
 
       await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
         code: AuthErrorCode.OTP_DELIVERY_FAILED,
       });
+      expect(prisma.otpRequest.create).not.toHaveBeenCalled();
+      expect(otpSender.sendOtp).not.toHaveBeenCalled();
+    });
+
+    it('fails closed if the owner-selected budgets are missing', async () => {
+      delete process.env.OTP_MAX_DAILY_GLOBAL_SENDS;
+
+      await expect(service.requestOtp(PHONE)).rejects.toMatchObject({
+        code: AuthErrorCode.OTP_DELIVERY_FAILED,
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(prisma.otpRequest.create).not.toHaveBeenCalled();
       expect(otpSender.sendOtp).not.toHaveBeenCalled();
     });
@@ -177,6 +270,10 @@ describe('OtpService', () => {
       expect(prisma.otpRequest.updateMany).toHaveBeenLastCalledWith({
         where: { id: 'created-request', verifiedAt: null },
         data: { verifiedAt: expect.any(Date) },
+      });
+      expect(prisma.otpDeliveryAttempt.update).toHaveBeenCalledWith({
+        where: { id: 'attempt-1' },
+        data: { status: 'UNKNOWN', finishedAt: expect.any(Date) },
       });
     });
   });

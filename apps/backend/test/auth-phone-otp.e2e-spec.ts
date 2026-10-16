@@ -17,6 +17,7 @@ import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TokenService } from '../src/auth/services/token.service';
+import { OtpService } from '../src/auth/services/otp.service';
 import { OTP_SENDER } from '../src/auth/services/otp-sender';
 
 /**
@@ -80,6 +81,9 @@ maybe(
       process.env.OTP_TEST_SENDER_ENABLED = 'true';
       process.env.OTP_HASH_SECRET = randomUUID() + randomUUID();
       process.env.OTP_ALLOWED_COUNTRY_CALLING_CODES = '91';
+      process.env.OTP_MAX_DAILY_GLOBAL_SENDS = '1000';
+      process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = '1000';
+      process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = '1000';
 
       const moduleFixture: TestingModule = await Test.createTestingModule({
         imports: [AppModule],
@@ -469,5 +473,181 @@ maybe(
       expect(methods.body.ownerPhoneOtp).toBe(true);
       expect(methods.body).not.toHaveProperty('providerKey');
     });
+
+    it('atomically caps parallel admissions across independent Prisma clients and never refunds an unknown timeout', async () => {
+      const otpService = app.get(OtpService);
+      const secondPrisma = new PrismaService();
+      await secondPrisma.$connect();
+      const secondReplicaService = new OtpService(secondPrisma, fakeOtpSender);
+      const originalLimits = {
+        daily: process.env.OTP_MAX_DAILY_GLOBAL_SENDS,
+        rolling: process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS,
+        country: process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS,
+      };
+      const setLimits = (daily: number, rolling: number, country: number) => {
+        process.env.OTP_MAX_DAILY_GLOBAL_SENDS = String(daily);
+        process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = String(rolling);
+        process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = String(country);
+      };
+      const budgetCounts = async () => {
+        const now = new Date();
+        const utcDayStart = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+        );
+        const rollingStart = new Date(now.getTime() - 24 * 60 * 60_000);
+        const [daily, rolling, country] = await Promise.all([
+          prisma.otpDeliveryAttempt.count({
+            where: { createdAt: { gte: utcDayStart } },
+          }),
+          prisma.otpDeliveryAttempt.count({
+            where: { createdAt: { gte: rollingStart } },
+          }),
+          prisma.otpDeliveryAttempt.count({
+            where: {
+              countryCallingCode: '91',
+              createdAt: { gte: utcDayStart },
+            },
+          }),
+        ]);
+        return { daily, rolling, country };
+      };
+      let nextSyntheticPhone = 70;
+      const requestParallel = (count: number) =>
+        Promise.allSettled(
+          Array.from({ length: count }, (_, index) => {
+            const destination = phone(nextSyntheticPhone++);
+            fixturePhones.add(destination);
+            const service = index % 2 === 0 ? otpService : secondReplicaService;
+            return service.requestOtp(destination);
+          }),
+        );
+      const expectAdmissions = (
+        results: PromiseSettledResult<unknown>[],
+        allowed: number,
+      ) => {
+        expect(
+          results.filter((result) => result.status === 'fulfilled'),
+        ).toHaveLength(allowed);
+        const rejected = results.filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === 'rejected',
+        );
+        expect(rejected).toHaveLength(results.length - allowed);
+        expect(
+          rejected.every(
+            (result) => result.reason?.code === AuthErrorCode.OTP_RATE_LIMITED,
+          ),
+        ).toBe(true);
+      };
+
+      try {
+        const baseline = await budgetCounts();
+        setLimits(
+          baseline.daily + 3,
+          baseline.rolling + 3,
+          baseline.country + 3,
+        );
+        const senderCallsBefore = fakeOtpSender.sendOtp.mock.calls.length;
+        const concurrent = await Promise.allSettled(
+          Array.from({ length: 8 }, (_, index) => {
+            const destination = phone(40 + index);
+            fixturePhones.add(destination);
+            const service = index % 2 === 0 ? otpService : secondReplicaService;
+            return service.requestOtp(destination);
+          }),
+        );
+        expect(
+          concurrent.filter((result) => result.status === 'fulfilled'),
+        ).toHaveLength(3);
+        const rejected = concurrent.filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === 'rejected',
+        );
+        expect(rejected).toHaveLength(5);
+        expect(
+          rejected.every(
+            (result) => result.reason?.code === AuthErrorCode.OTP_RATE_LIMITED,
+          ),
+        ).toBe(true);
+        expect(fakeOtpSender.sendOtp).toHaveBeenCalledTimes(
+          senderCallsBefore + 3,
+        );
+        const admittedRows = await prisma.otpDeliveryAttempt.findMany({
+          where: { createdAt: { gte: new Date(Date.now() - 60_000) } },
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+        });
+        expect(admittedRows).toHaveLength(3);
+        expect(admittedRows.every((row) => row.status === 'ACCEPTED')).toBe(
+          true,
+        );
+        expect(admittedRows.every((row) => !('phone' in row))).toBe(true);
+
+        const afterConcurrent = await budgetCounts();
+        // Independently exercise the per-country day cap and global rolling window, rather than
+        // relying only on the combined cap used by the concurrency assertion above.
+        setLimits(
+          afterConcurrent.daily + 20,
+          afterConcurrent.rolling + 20,
+          afterConcurrent.country + 2,
+        );
+        expectAdmissions(await requestParallel(4), 2);
+
+        const afterCountryCap = await budgetCounts();
+        setLimits(
+          afterCountryCap.daily + 20,
+          afterCountryCap.rolling + 2,
+          afterCountryCap.country + 20,
+        );
+        expectAdmissions(await requestParallel(4), 2);
+
+        const beforeTimeout = await budgetCounts();
+        setLimits(
+          beforeTimeout.daily + 1,
+          beforeTimeout.rolling + 1,
+          beforeTimeout.country + 1,
+        );
+        const timedOutPhone = phone(60);
+        fixturePhones.add(timedOutPhone);
+        const timeoutStartedAt = new Date();
+        fakeOtpSender.sendOtp.mockRejectedValueOnce(
+          new Error('synthetic provider timeout'),
+        );
+        await expect(
+          otpService.requestOtp(timedOutPhone),
+        ).rejects.toMatchObject({ code: AuthErrorCode.OTP_DELIVERY_FAILED });
+        const unknownAttempt = await prisma.otpDeliveryAttempt.findFirst({
+          where: {
+            countryCallingCode: '91',
+            status: 'UNKNOWN',
+            createdAt: { gte: timeoutStartedAt },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(unknownAttempt).toMatchObject({ status: 'UNKNOWN' });
+        const blockedRetryPhone = phone(61);
+        fixturePhones.add(blockedRetryPhone);
+        const senderCallsAfterTimeout = fakeOtpSender.sendOtp.mock.calls.length;
+        await expect(
+          otpService.requestOtp(blockedRetryPhone),
+        ).rejects.toMatchObject({ code: AuthErrorCode.OTP_RATE_LIMITED });
+        expect(fakeOtpSender.sendOtp).toHaveBeenCalledTimes(
+          senderCallsAfterTimeout,
+        );
+      } finally {
+        await secondPrisma.$disconnect();
+        if (originalLimits.daily === undefined)
+          delete process.env.OTP_MAX_DAILY_GLOBAL_SENDS;
+        else process.env.OTP_MAX_DAILY_GLOBAL_SENDS = originalLimits.daily;
+        if (originalLimits.rolling === undefined)
+          delete process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS;
+        else
+          process.env.OTP_MAX_ROLLING_24H_GLOBAL_SENDS = originalLimits.rolling;
+        if (originalLimits.country === undefined)
+          delete process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS;
+        else
+          process.env.OTP_MAX_DAILY_PER_COUNTRY_SENDS = originalLimits.country;
+      }
+    }, 60_000);
   },
 );

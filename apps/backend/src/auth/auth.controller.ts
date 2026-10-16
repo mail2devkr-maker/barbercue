@@ -87,8 +87,9 @@ export class AuthController {
    * design — it is the first thing a login screen needs, and it returns only booleans, never the
    * presence-checked values themselves.
    *
-   * Phone OTP is available only when the production provider, DLT template, HMAC secret and
-   * destination-country allowlist are configured together. Development never logs codes.
+   * Phone OTP is available only when the production provider/template, HMAC secret, explicit
+   * destination-country allowlist, and all hard send ceilings are configured together. Development
+   * never logs codes.
    */
   @Public()
   @Get(AUTH_PATHS.methods)

@@ -33,6 +33,12 @@ export class TwoFactorOtpSender implements OtpSender {
     }
 
     let response: Response;
+    let body: TwoFactorSendResponse | null = null;
+    const timeoutController = new AbortController();
+    const timeout = setTimeout(
+      () => timeoutController.abort(),
+      PROVIDER_TIMEOUT_MS,
+    );
     try {
       response = await fetch(TWO_FACTOR_SEND_URL, {
         method: 'POST',
@@ -45,19 +51,20 @@ export class TwoFactorOtpSender implements OtpSender {
           template_name: templateName,
           var1: code,
         }),
-        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+        signal: timeoutController.signal,
       });
-    } catch {
-      // Do not include error messages: fetch errors can include request details and provider data.
-      this.logger.error('2Factor OTP request failed before an HTTP response.');
-      throw this.deliveryFailed();
-    }
-
-    let body: TwoFactorSendResponse | null = null;
-    try {
       body = (await response.json()) as TwoFactorSendResponse;
     } catch {
-      // The provider response body is deliberately not logged or returned to the caller.
+      // Cover both waiting for response headers and reading the response body. Do not include
+      // error messages: fetch errors can include request details and provider data.
+      this.logger.error(
+        timeoutController.signal.aborted
+          ? '2Factor OTP request timed out.'
+          : '2Factor OTP request failed before a valid response.',
+      );
+      throw this.deliveryFailed();
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!response.ok || body?.status?.toLowerCase() !== 'sent') {

@@ -41,8 +41,8 @@ import { ResendEmailSender } from './services/resend-email-sender';
     GoogleAuthService,
     JwtStrategy,
     // No development console OTP: OTP values and phone numbers must never be written to logs.
-    // Production dispatch is enabled only when key, DLT template, keyed-hash secret and country
-    // allowlist are all present; otherwise the transport fails closed.
+    // Production dispatch is enabled only when provider/template, keyed-hash secret, explicit
+    // country allowlist, and all hard send ceilings are valid; otherwise it fails closed.
     UnavailableOtpSender,
     TwoFactorOtpSender,
     {

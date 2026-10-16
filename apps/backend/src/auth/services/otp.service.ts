@@ -8,7 +8,13 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppException } from '../../common/exceptions/app.exception';
 import { OTP_SENDER, type OtpSender } from './otp-sender';
-import { isOtpPhoneAllowed, otpHashSecret } from './otp-config';
+import {
+  isPhoneOtpConfigured,
+  isOtpPhoneAllowed,
+  otpDeliveryLimits,
+  otpHashSecret,
+  otpPhoneCallingCode,
+} from './otp-config';
 
 const OTP_LENGTH = 6;
 const OTP_TTL_MINUTES = 5;
@@ -18,6 +24,7 @@ const REQUEST_WINDOW_MINUTES = 10;
 const MAX_REQUESTS_PER_DAY = 10;
 const HMAC_HASH_VERSION = 'HMAC_SHA256_V1';
 const LEGACY_HASH_VERSION = 'LEGACY_SHA256';
+const OTP_DELIVERY_BUDGET_LOCK = 'fastque:otp-delivery-budget:v1';
 
 function legacyHash(code: string): Buffer {
   return createHash('sha256').update(code).digest();
@@ -62,7 +69,10 @@ export class OtpService {
     subjectUserId?: string,
   ): Promise<{ expiresInSeconds: number }> {
     const secret = otpHashSecret();
-    if (!secret) throw this.deliveryUnavailable();
+    const limits = otpDeliveryLimits();
+    if (!secret || !limits || !isPhoneOtpConfigured()) {
+      throw this.deliveryUnavailable();
+    }
     if (!isOtpPhoneAllowed(phone)) {
       throw new AppException(
         AuthErrorCode.OTP_DELIVERY_FAILED,
@@ -71,79 +81,125 @@ export class OtpService {
       );
     }
 
-    const now = new Date();
-    const windowStart = new Date(
-      now.getTime() - REQUEST_WINDOW_MINUTES * 60_000,
-    );
-    const dayStart = new Date(now.getTime() - 24 * 60 * 60_000);
+    const countryCallingCode = otpPhoneCallingCode(phone);
+    if (!countryCallingCode) throw this.deliveryUnavailable();
     const code = randomInt(0, 1_000_000).toString().padStart(OTP_LENGTH, '0');
-    const expiresAt = new Date(now.getTime() + OTP_TTL_MINUTES * 60_000);
 
-    let row: { id: string };
-    try {
-      row = await this.prisma.$transaction(
-        async (tx) => {
-          const [recentCount, dayCount] = await Promise.all([
-            tx.otpRequest.count({
-              where: { phone, createdAt: { gte: windowStart } },
-            }),
-            tx.otpRequest.count({
-              where: { phone, createdAt: { gte: dayStart } },
-            }),
-          ]);
-          if (
-            recentCount >= MAX_REQUESTS_PER_WINDOW ||
-            dayCount >= MAX_REQUESTS_PER_DAY
-          ) {
-            throw this.rateLimited();
-          }
-          // A resend supersedes every still-pending challenge in this authentication scope. Mark
-          // them consumed in the same serializable transaction as the new insert, so consuming
-          // the newest code can never make an older code valid again.
-          await tx.otpRequest.updateMany({
-            where: {
-              phone,
-              purpose,
-              subjectUserId: subjectUserId ?? null,
-              verifiedAt: null,
-            },
-            data: { verifiedAt: now },
-          });
-          return tx.otpRequest.create({
+    const admitted = await this.prisma.$transaction(
+      async (tx) => {
+        // All backend replicas acquire this transaction-scoped PostgreSQL lock before reading
+        // shared counters. READ COMMITTED makes reads after lock acquisition see earlier commits.
+        await tx.$queryRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${OTP_DELIVERY_BUDGET_LOCK}))`,
+        );
+        const now = new Date();
+        const phoneWindowStart = new Date(
+          now.getTime() - REQUEST_WINDOW_MINUTES * 60_000,
+        );
+        const phoneDayStart = new Date(now.getTime() - 24 * 60 * 60_000);
+        const rollingStart = new Date(now.getTime() - 24 * 60 * 60_000);
+        const utcDayStart = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+        );
+        const retentionStart =
+          rollingStart < utcDayStart ? rollingStart : utcDayStart;
+        await tx.otpDeliveryAttempt.deleteMany({
+          where: { createdAt: { lt: retentionStart } },
+        });
+
+        const [
+          globalDailyCount,
+          globalRollingCount,
+          countryDailyCount,
+          recentPhoneCount,
+          phoneDayCount,
+        ] = await Promise.all([
+          tx.otpDeliveryAttempt.count({
+            where: { createdAt: { gte: utcDayStart } },
+          }),
+          tx.otpDeliveryAttempt.count({
+            where: { createdAt: { gte: rollingStart } },
+          }),
+          tx.otpDeliveryAttempt.count({
+            where: { countryCallingCode, createdAt: { gte: utcDayStart } },
+          }),
+          tx.otpRequest.count({
+            where: { phone, createdAt: { gte: phoneWindowStart } },
+          }),
+          tx.otpRequest.count({
+            where: { phone, createdAt: { gte: phoneDayStart } },
+          }),
+        ]);
+        if (
+          globalDailyCount >= limits.globalDaily ||
+          globalRollingCount >= limits.globalRolling24Hours ||
+          countryDailyCount >= limits.perCountryDaily ||
+          recentPhoneCount >= MAX_REQUESTS_PER_WINDOW ||
+          phoneDayCount >= MAX_REQUESTS_PER_DAY
+        ) {
+          throw this.rateLimited();
+        }
+
+        // Reserve before external I/O and persist the challenge in the same transaction. If a
+        // process crashes after commit, the RESERVED row remains charged through its windows.
+        await tx.otpRequest.updateMany({
+          where: {
+            phone,
+            purpose,
+            subjectUserId: subjectUserId ?? null,
+            verifiedAt: null,
+          },
+          data: { verifiedAt: now },
+        });
+        const [requestRow, attempt] = await Promise.all([
+          tx.otpRequest.create({
             data: {
               phone,
               codeHash: hmacHash(code, secret).toString('hex'),
               hashVersion: HMAC_HASH_VERSION,
               purpose,
               subjectUserId: subjectUserId ?? null,
-              expiresAt,
+              expiresAt: new Date(now.getTime() + OTP_TTL_MINUTES * 60_000),
+              createdAt: now,
             },
             select: { id: true },
-          });
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    } catch (error) {
-      // Concurrent count/create transactions can conflict under SERIALIZABLE isolation. Fail
-      // closed as a rate-limit response rather than retrying and sending duplicate SMS messages.
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2034'
-      ) {
-        throw this.rateLimited();
-      }
-      throw error;
-    }
+          }),
+          tx.otpDeliveryAttempt.create({
+            data: { countryCallingCode, status: 'RESERVED', createdAt: now },
+            select: { id: true },
+          }),
+        ]);
+        return { requestId: requestRow.id, attemptId: attempt.id };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+    );
 
     try {
       await this.otpSender.sendOtp(phone, code);
     } catch {
-      // A provider failure must not leave a valid challenge whose code was never accepted by the
-      // transport. The row remains as a rate-limit/audit fact but is no longer verifiable.
-      await this.prisma.otpRequest.updateMany({
-        where: { id: row.id, verifiedAt: null },
-        data: { verifiedAt: new Date() },
+      // A timeout may mean the provider accepted the request but its response was lost. Never
+      // refund this reservation or auto-retry; atomically record the ambiguous outcome.
+      await this.prisma.$transaction(async (tx) => {
+        await tx.otpRequest.updateMany({
+          where: { id: admitted.requestId, verifiedAt: null },
+          data: { verifiedAt: new Date() },
+        });
+        await tx.otpDeliveryAttempt.update({
+          where: { id: admitted.attemptId },
+          data: { status: 'UNKNOWN', finishedAt: new Date() },
+        });
       });
+      throw this.deliveryUnavailable();
+    }
+
+    try {
+      await this.prisma.otpDeliveryAttempt.update({
+        where: { id: admitted.attemptId },
+        data: { status: 'ACCEPTED', finishedAt: new Date() },
+      });
+    } catch {
+      // The reservation remains counted. Leave the challenge usable in case delivery succeeded,
+      // but fail rather than claim the durable send ledger was reconciled.
       throw this.deliveryUnavailable();
     }
 

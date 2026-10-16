@@ -11,11 +11,49 @@ export function allowedOtpCallingCodes(): string[] {
     .filter((value) => /^[1-9]\d{0,2}$/.test(value));
 }
 
-export function isOtpPhoneAllowed(phone: string): boolean {
-  const digits = phone.startsWith('+') ? phone.slice(1) : phone;
-  return allowedOtpCallingCodes().some((callingCode) =>
-    digits.startsWith(callingCode),
+export interface OtpDeliveryLimits {
+  globalDaily: number;
+  globalRolling24Hours: number;
+  perCountryDaily: number;
+}
+
+function positiveIntegerSetting(name: string): number | null {
+  const raw = process.env[name]?.trim();
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+/** OTP is fail-closed unless the owner supplies explicit hard message ceilings. */
+export function otpDeliveryLimits(): OtpDeliveryLimits | null {
+  const globalDaily = positiveIntegerSetting('OTP_MAX_DAILY_GLOBAL_SENDS');
+  const globalRolling24Hours = positiveIntegerSetting(
+    'OTP_MAX_ROLLING_24H_GLOBAL_SENDS',
   );
+  const perCountryDaily = positiveIntegerSetting(
+    'OTP_MAX_DAILY_PER_COUNTRY_SENDS',
+  );
+  if (
+    globalDaily === null ||
+    globalRolling24Hours === null ||
+    perCountryDaily === null
+  ) {
+    return null;
+  }
+  return { globalDaily, globalRolling24Hours, perCountryDaily };
+}
+
+export function otpPhoneCallingCode(phone: string): string | null {
+  const digits = phone.startsWith('+') ? phone.slice(1) : phone;
+  return (
+    [...allowedOtpCallingCodes()]
+      .sort((left, right) => right.length - left.length)
+      .find((callingCode) => digits.startsWith(callingCode)) ?? null
+  );
+}
+
+export function isOtpPhoneAllowed(phone: string): boolean {
+  return otpPhoneCallingCode(phone) !== null;
 }
 
 export function isPhoneOtpConfigured(): boolean {
@@ -35,6 +73,7 @@ export function isPhoneOtpConfigured(): boolean {
   return Boolean(
     (providerConfigured || testSenderEnabled) &&
     otpHashSecret() &&
-    allowedOtpCallingCodes().length > 0,
+    allowedOtpCallingCodes().length > 0 &&
+    otpDeliveryLimits() !== null,
   );
 }
