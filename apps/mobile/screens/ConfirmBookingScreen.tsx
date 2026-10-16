@@ -25,6 +25,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import { dateLocaleFor } from '../lib/date-locale';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useAuth } from '../lib/auth-context';
+import { requestCustomerPushAfterBooking } from '../lib/push-notifications';
 import { useLanguage } from '../lib/language-context';
 import { stashPendingGuestIntent } from '../lib/guest-booking-handoff';
 import { GoogleSignInGate } from '../components/auth/GoogleSignInGate';
@@ -81,7 +82,7 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
   const [paymentInfo, setPaymentInfo] = useState<BookingPaymentInfoDto | null>(null);
   const [paymentInfoError, setPaymentInfoError] = useState(false);
   const { t, language } = useLanguage();
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
   // FastQue Credits / Wallet V1 — only fetched once signed in; an anonymous guest has no wallet.
   // maxRedeemable is a pure client-side preview (packages/shared's computeMaxRedeemableCredits,
@@ -148,6 +149,9 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
       });
       setBooking(result);
       setCreditsToRedeem(0);
+      // First booking is the natural moment to ask for notification permission (once per account,
+      // never when already granted); best effort and never part of the booking result.
+      void requestCustomerPushAfterBooking(user);
       // Redemption never fails/rejects — the server always clamps to whatever is actually
       // redeemable (see BookingsService.create) — so re-fetch the real balance rather than
       // locally subtracting: result.creditsRedeemedAmount is the server's actual applied amount,
@@ -227,6 +231,12 @@ export default function ConfirmBookingScreen({ route, navigation }: Props) {
               <BookingUpiAction booking={booking} paymentInfo={paymentInfo} />
               {paymentInfo.paymentQrImageUrl && <Image source={{ uri: paymentInfo.paymentQrImageUrl }} style={styles.paymentQr} resizeMode="contain" />}
               <Text style={styles.hint}>Scan this shop QR with your UPI app. FastQue does not automatically mark the payment as paid just because the QR was opened or scanned.</Text>
+            </View>
+          )}
+          {!paymentInfo?.onlinePaymentAvailable && (paymentInfo || paymentInfoError) && (
+            <View style={styles.paymentBox} testID="pay-at-shop">
+              <Text style={styles.paymentTitle}>{t.payAtShopTitle}</Text>
+              <Text style={styles.hint}>{t.payAtShopHint}</Text>
             </View>
           )}
           {/* Google Play release gate (see lib/feature-flags.ts) — redemption can't be requested

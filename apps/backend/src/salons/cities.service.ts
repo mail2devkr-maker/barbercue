@@ -24,6 +24,10 @@ interface CitySearchRow {
   regionId: string | null;
   regionName: string | null;
   regionCode: string | null;
+  state: string | null;
+  countryName: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 @Injectable()
@@ -45,6 +49,8 @@ export class CitiesService {
       regionCode: c.regionCode,
       state: c.state,
       country: c.country,
+      latitude: c.latitude,
+      longitude: c.longitude,
     }));
   }
 
@@ -68,6 +74,8 @@ export class CitiesService {
       regionCode: c.regionCode,
       state: c.state,
       country: c.country,
+      latitude: c.latitude,
+      longitude: c.longitude,
     }));
   }
 
@@ -90,6 +98,8 @@ export class CitiesService {
       regionCode: city.regionCode,
       state: city.state,
       country: city.country,
+      latitude: city.latitude,
+      longitude: city.longitude,
     };
   }
 
@@ -234,20 +244,25 @@ export class CitiesService {
       50,
     );
 
-    // Prisma stores every String/id field as Postgres `text`, never a native `uuid` column
-    // (confirmed via \d cities) -- comparing against the zod-validated UUID string directly, no
-    // ::uuid cast (which would fail with "operator does not exist: text = uuid").
-    // Prefer the normalized Country/Region foreign keys, but keep registration/search usable
-    // for legacy/manual City rows that still only have countryCode/regionCode populated. Those
-    // rows are valid enough for the existing registration contract (which already re-checks the
-    // chosen countryCode) and must not disappear merely because the global-location enrichment
-    // has not linked their nullable countryId/regionId yet. This is exactly the failure mode that
-    // can make an existing business city such as Jharsuguda invisible to the live typeahead.
-    //
-    // The fallback remains scoped by the caller's selected Country/Region rows; it never becomes
-    // an unscoped global name search.
-    const conditions: Prisma.Sql[] = [
-      Prisma.sql`(
+    // Scope: either one Country (the registration flow's Country -> Region -> City picker) or, for
+    // the customer location selector (`hasShops`), only cities that already contain an ACTIVE shop.
+    // The second scope is small and bounded by real business activity, so it can span countries
+    // without becoming the unscoped ~100K-row scan this endpoint refuses to run.
+    const conditions: Prisma.Sql[] = [];
+    if (query.countryId) {
+      // Prisma stores every String/id field as Postgres `text`, never a native `uuid` column
+      // (confirmed via \d cities) -- comparing against the zod-validated UUID string directly, no
+      // ::uuid cast (which would fail with "operator does not exist: text = uuid").
+      // Prefer the normalized Country/Region foreign keys, but keep registration/search usable
+      // for legacy/manual City rows that still only have countryCode/regionCode populated. Those
+      // rows are valid enough for the existing registration contract (which already re-checks the
+      // chosen countryCode) and must not disappear merely because the global-location enrichment
+      // has not linked their nullable countryId/regionId yet. This is exactly the failure mode that
+      // can make an existing business city such as Jharsuguda invisible to the live typeahead.
+      //
+      // The fallback remains scoped by the caller's selected Country/Region rows; it never becomes
+      // an unscoped global name search.
+      conditions.push(Prisma.sql`(
         c."countryId" = ${query.countryId}
         OR (
           c."countryId" IS NULL
@@ -257,9 +272,17 @@ export class CitiesService {
             WHERE country.id = ${query.countryId}
           )
         )
-      )`,
-      Prisma.sql`c.name ILIKE ${containsPattern}`,
-    ];
+      )`);
+    }
+    if (query.hasShops) {
+      conditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM salons s WHERE s."cityId" = c.id AND s.status = 'ACTIVE'
+      )`);
+    }
+    // Defence in depth: the zod schema already rejects a request with neither scope, but this
+    // method is also callable directly, and an unscoped search must never reach the database.
+    if (conditions.length === 0) return [];
+    conditions.push(Prisma.sql`c.name ILIKE ${containsPattern}`);
     if (query.regionId) {
       conditions.push(Prisma.sql`(
         c."regionId" = ${query.regionId}
@@ -283,9 +306,14 @@ export class CitiesService {
         c."countryCode"  AS "countryCode",
         r.id             AS "regionId",
         r.name           AS "regionName",
-        r.code           AS "regionCode"
+        r.code           AS "regionCode",
+        c.state          AS "state",
+        COALESCE(co.name, c.country) AS "countryName",
+        c.latitude       AS "latitude",
+        c.longitude      AS "longitude"
       FROM cities c
       LEFT JOIN "Region" r ON r.id = c."regionId"
+      LEFT JOIN "Country" co ON co.id = c."countryId"
       WHERE ${Prisma.join(conditions, ' AND ')}
       ORDER BY
         (c.name ILIKE ${prefixPattern}) DESC,
@@ -303,6 +331,10 @@ export class CitiesService {
       region: r.regionId
         ? { id: r.regionId, name: r.regionName!, code: r.regionCode }
         : null,
+      countryName: r.countryName,
+      state: r.state,
+      latitude: r.latitude,
+      longitude: r.longitude,
     }));
   }
 }

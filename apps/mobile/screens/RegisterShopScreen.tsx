@@ -15,6 +15,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import { newIdempotencyKey } from '../lib/idempotency';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
+import { clearShopRegistrationPending } from '../lib/shop-registration-resume';
 import { color, font, fontSize, radius, space } from '../lib/theme';
 import { Screen, SectionHeader, Button, InlineError } from '../components/ui';
 
@@ -263,6 +264,8 @@ export default function RegisterShopScreen({ onRegistered }: { onRegistered?: ()
         body: JSON.stringify(parsed.data),
       });
       await applySession(result);
+      // The shop exists now, so there is nothing left to resume.
+      await clearShopRegistrationPending();
       onRegistered?.();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.couldNotRegisterShop);

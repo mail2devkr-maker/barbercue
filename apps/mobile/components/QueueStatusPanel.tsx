@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import * as Speech from 'expo-speech';
-import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, voiceAnnouncementsFor, type QueueEntryDetailDto, type UiStrings } from '@barbercue/shared';
+import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, queuePhaseOf, voiceAnnouncementsFor, type QueueEntryDetailDto, type UiStrings } from '@barbercue/shared';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
@@ -11,6 +11,8 @@ import { fastQue, font, fontSize, premiumShadow, radius, space } from '../lib/th
 const ACTIVE_STATUSES = new Set(['WAITING', 'CALLED', 'IN_SERVICE']);
 
 function statusLabel(t: UiStrings, entry: QueueEntryDetailDto): string {
+  // ASSIGNED: a barber and chair are reserved for the customer but the service has not started.
+  if (queuePhaseOf(entry) === 'ASSIGNED') return t.customerAssignedMessage;
   if (entry.status === 'CALLED') return t.calledMessage;
   if (entry.status === 'IN_SERVICE') return t.inService;
   if (entry.status === 'WAITING' && entry.position) return `${t.positionPrefix}${entry.position}${t.positionSuffix}`;
@@ -107,6 +109,15 @@ export function QueueStatusPanel({
       )}
       {entry.status === 'WAITING' && entry.turnApproaching && (
         <Text style={styles.detail}>{t.headOverNowMessage}</Text>
+      )}
+      {queuePhaseOf(entry) === 'ASSIGNED' && (
+        <Text style={styles.detail}>
+          {entry.assignedStaffName
+            ? entry.assignedChairLabel
+              ? t.customerAssignedDetail.replace('{barber}', entry.assignedStaffName).replace('{chair}', entry.assignedChairLabel)
+              : t.customerAssignedDetailNoChair.replace('{barber}', entry.assignedStaffName)
+            : t.customerAssignedMessage}
+        </Text>
       )}
       {entry.status === 'IN_SERVICE' && (
         <Text style={styles.detail}>

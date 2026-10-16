@@ -1,4 +1,4 @@
-import { salonSearchQuerySchema } from '../schemas';
+import { citySearchQuerySchema, salonSearchQuerySchema } from '../schemas';
 
 describe('salonSearchQuerySchema', () => {
   it('accepts an empty query (browse-all)', () => {
@@ -72,5 +72,65 @@ describe('salonSearchQuerySchema', () => {
     it('accepts radiusKm without lat/lng at the schema level (SalonsService ignores it without a query point)', () => {
       expect(salonSearchQuerySchema.safeParse({ radiusKm: '5' }).success).toBe(true);
     });
+  });
+});
+
+describe('salonSearchQuerySchema — reference origin', () => {
+  it('accepts originLat/originLng/sort from a query string (coerced from strings)', () => {
+    const parsed = salonSearchQuerySchema.parse({ originLat: '25.6863', originLng: '85.2095', sort: 'nearest' });
+    expect(parsed).toMatchObject({ originLat: 25.6863, originLng: 85.2095, sort: 'nearest' });
+  });
+
+  it('is entirely optional, so every existing client request still validates unchanged', () => {
+    expect(salonSearchQuerySchema.parse({ city: 'hajipur', countryCode: 'IN', limit: '20' })).toEqual({
+      city: 'hajipur',
+      countryCode: 'IN',
+      limit: 20,
+    });
+  });
+
+  it('rejects out-of-range coordinates and unknown sort modes (only implemented orderings are accepted)', () => {
+    expect(salonSearchQuerySchema.safeParse({ originLat: '91', originLng: '0' }).success).toBe(false);
+    expect(salonSearchQuerySchema.safeParse({ originLat: '0', originLng: '181' }).success).toBe(false);
+    expect(salonSearchQuerySchema.safeParse({ sort: 'rating' }).success).toBe(false);
+  });
+
+  it('keeps lat/lng (legacy Near Me) and originLat/originLng independent', () => {
+    const parsed = salonSearchQuerySchema.parse({ lat: '12.9', lng: '77.6' });
+    expect(parsed.originLat).toBeUndefined();
+    expect(parsed.lat).toBe(12.9);
+  });
+});
+
+describe('citySearchQuerySchema', () => {
+  const COUNTRY = '6f1c3a52-8d3e-4b7a-9d2a-1f2e3c4b5a69';
+
+  it('still accepts the registration flow shape: countryId (+ regionId, q, limit)', () => {
+    const parsed = citySearchQuerySchema.parse({ countryId: COUNTRY, q: 'ben', limit: '10' });
+    expect(parsed).toMatchObject({ countryId: COUNTRY, q: 'ben', limit: 10 });
+    expect(parsed.hasShops).toBeUndefined();
+  });
+
+  it('accepts a shop-bearing search with no countryId (customer location selector)', () => {
+    const parsed = citySearchQuerySchema.parse({ q: 'haj', hasShops: 'true' });
+    expect(parsed.hasShops).toBe(true);
+    expect(parsed.countryId).toBeUndefined();
+  });
+
+  it('parses hasShops=false as false', () => {
+    expect(citySearchQuerySchema.parse({ countryId: COUNTRY, hasShops: 'false' }).hasShops).toBe(false);
+  });
+
+  it('refuses an unscoped search: no countryId and no hasShops', () => {
+    const result = citySearchQuerySchema.safeParse({ q: 'haj' });
+    expect(result.success).toBe(false);
+  });
+
+  it('refuses hasShops=false without a countryId', () => {
+    expect(citySearchQuerySchema.safeParse({ q: 'haj', hasShops: 'false' }).success).toBe(false);
+  });
+
+  it('rejects anything but the literal strings true/false for hasShops', () => {
+    expect(citySearchQuerySchema.safeParse({ q: 'haj', hasShops: '1' }).success).toBe(false);
   });
 });

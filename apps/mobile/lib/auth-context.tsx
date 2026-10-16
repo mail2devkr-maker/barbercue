@@ -16,6 +16,7 @@ import {
   setAccessToken,
 } from './api';
 import { unregisterCurrentPushDevice } from './push-notifications';
+import { clearShopRegistrationPending } from './shop-registration-resume';
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
@@ -173,6 +174,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setAccessToken(null);
       await clearPersistedRefreshToken();
+      // A different person signing in next must never be sent into someone else's half-done registration.
+      await clearShopRegistrationPending();
       setUser(null);
       setStatus('unauthenticated');
     }

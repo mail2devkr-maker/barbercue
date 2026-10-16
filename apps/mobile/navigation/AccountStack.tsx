@@ -4,6 +4,7 @@ import StyleAdvisorScreen from '../screens/StyleAdvisorScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import CreditsHistoryScreen from '../screens/CreditsHistoryScreen';
 import RegisterShopScreen from '../screens/RegisterShopScreen';
+import MyInvoicesScreen from '../screens/MyInvoicesScreen';
 import { lightStackOptions, styleAdvisorHeaderOptions } from './screenOptions';
 import { HomeHeaderButton } from './HomeHeaderButton';
 import { useLanguage } from '../lib/language-context';
@@ -23,6 +24,7 @@ export default function AccountStack() {
         options={{ ...styleAdvisorHeaderOptions, title: t.aiStyleAdvisor, headerRight: () => <HomeHeaderButton /> }}
       />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: t.notifications }} />
+      <Stack.Screen name="MyInvoices" component={MyInvoicesScreen} options={{ title: 'My invoices' }} />
       {/* Google Play release gate (see lib/feature-flags.ts): the route itself is unregistered in
           the production build, not just hidden from menus — navigation.navigate('CreditsHistory')
           from anywhere (a stray link, a queued notification replay) has nowhere to go.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   BOOKING_PATHS,
@@ -11,6 +11,7 @@ import {
   formatZonedDateTime,
   isCustomerBookingActionable,
   isBookingSlotInFuture,
+  telHrefFor,
 } from '@barbercue/shared';
 import type {
   BookingDetailDto,
@@ -288,6 +289,12 @@ export default function BookingDetailScreen({ route }: Props) {
         <Button title={t.getDirections} variant="outline" onPress={() => void openDirections(booking)} style={styles.linkButton} />
         <Button title={t.shareAction} variant="outline" onPress={() => void handleShare()} style={styles.linkButton} />
       </View>
+      {/* Present only when the shop owner chose to publish their number (Shop settings -> Customer contact). */}
+      {telHrefFor(booking.shopPhone) && (
+        <View style={styles.linkRow}>
+          <Button title="Call shop" variant="outline" onPress={() => void Linking.openURL(telHrefFor(booking.shopPhone)!)} style={styles.linkButton} />
+        </View>
+      )}
       <View style={styles.linkRow}>
         <Button
           title={t.shareOnWhatsApp}

@@ -31,7 +31,7 @@ import { UpiRoutingStatus } from './UpiRoutingStatus';
  * extracted here (Mobile Shop Owner Onboarding mission) so the new setup wizard
  * (OwnerOnboardingScreen) reuses the EXACT same forms/validation/API calls a returning owner
  * already uses to edit an established shop, rather than a second, drifting implementation.
- * OwnerShopScreen imports from here unchanged in behavior — this file only moved code, it did not
+ * the owner section screens import from here unchanged in behavior — this file only moved code, it did not
  * rewrite any of it.
  */
 

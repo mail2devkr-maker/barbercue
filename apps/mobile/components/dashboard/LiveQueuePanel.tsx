@@ -1,12 +1,15 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import {
   DASHBOARD_PATHS,
   Language,
+  queuePhaseOf,
   telHrefFor,
+  type AutoAssignResultDto,
   type ChairOptionDto,
   type DashboardQueueDto,
+  type InvoiceDetailDto,
   type QueueEntryDetailDto,
   type StaffStatusDto,
 } from '@barbercue/shared';
@@ -15,24 +18,35 @@ import { newIdempotencyKey } from '../../lib/idempotency';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../../lib/realtime';
 import { friendlyQueueActionError, liveQueuePaths, type LiveQueueAction } from '../../lib/live-queue-actions';
 import { useLanguage } from '../../lib/language-context';
+import { ownerOpsPaths } from '../../lib/owner/ops';
+import { applySnapshot, describeAutoAssign, notYetAssigned, sectionsOf } from '../../lib/owner/queue-sections';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Card, Button, EmptyState, Skeleton, InlineError } from '../ui';
+import { NewQueueCustomerSheet } from './NewQueueCustomerSheet';
 import type { UiStrings } from '@barbercue/shared';
 
 function dashboardBase(salonId: string): string {
-  return `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.queue}`;
+  return ownerOpsPaths.queue(salonId);
 }
 
-function statusLabel(t: UiStrings, status: string): string {
+/** While the realtime socket is down the board re-reads itself on this interval. */
+const POLL_FALLBACK_MS = 15_000;
+
+// Keyed by PHASE so an assigned customer (a CALLED entry that holds a barber) never reads as waiting for
+// a barber or as already in service.
+function statusLabel(t: UiStrings, entry: Pick<QueueEntryDetailDto, 'status' | 'assignedStaffId' | 'phase'>): string {
   const labels: Record<string, string> = {
     WAITING: t.waiting,
     CALLED: t.statusCalledShort,
+    ASSIGNED: t.assignedNotStartedBadge,
     IN_SERVICE: t.inService,
     COMPLETED: t.statusCompleted,
     NO_SHOW: t.statusNoShow,
     CANCELLED: t.statusCancelled,
+    EXPIRED: 'Expired',
   };
-  return labels[status] ?? status;
+  const phase = queuePhaseOf(entry);
+  return labels[phase] ?? phase;
 }
 
 // Booking/queue resource-reservation mission (Part 19) — the same derived, non-PII operational
@@ -52,12 +66,19 @@ function EntryRow({
   entry,
   chairs,
   activeStaff,
+  autoAssignEnabled,
+  canStart,
   onAction,
+  onNotice,
 }: {
   entry: QueueEntryDetailDto;
   chairs: ChairOptionDto[];
   activeStaff: StaffStatusDto[];
+  autoAssignEnabled?: boolean;
+  /** The owner may start anyone's customer; a barber only their own (the server enforces it too). */
+  canStart: boolean;
   onAction: () => void;
+  onNotice: (message: string) => void;
 }) {
   const { t, language } = useLanguage();
   const [assigning, setAssigning] = useState(false);
@@ -117,9 +138,24 @@ function EntryRow({
       apiFetch(liveQueuePaths.assign(entry.id), {
         method: 'POST',
         headers: { 'Idempotency-Key': newIdempotencyKey() },
-        body: JSON.stringify({ staffId, chairId, ...(entry.serviceId ? { serviceId: entry.serviceId } : {}) }),
+        // Assigning never starts the service: the barber (or the owner) presses Start service.
+        body: JSON.stringify({ staffId, chairId, startService: false, ...(entry.serviceId ? { serviceId: entry.serviceId } : {}) }),
       }),
     );
+  }
+  // Reuses the server's one allocation engine (same locks, same checks as the manual assign above).
+  function assignAutomatically() {
+    return run('assign', async () => {
+      await apiFetch(ownerOpsPaths.entryAutoAssign(entry.id), { method: 'POST' });
+      onNotice(t.autoAssignedNotice.replace('{token}', String(entry.tokenNumber)));
+    });
+  }
+  // The explicit start of service for an ASSIGNED customer.
+  function startService() {
+    return run('startService', async () => {
+      await apiFetch(liveQueuePaths.startService(entry.id), { method: 'POST', headers: { 'Idempotency-Key': newIdempotencyKey() } });
+      onNotice(t.serviceStartedNotice);
+    });
   }
   function complete() {
     const sessionId = entry.activeServiceSessionId;
@@ -138,12 +174,15 @@ function EntryRow({
   }
 
   const active = entry.status === 'WAITING' || entry.status === 'CALLED';
+  const phase = queuePhaseOf(entry);
+  const assignedNotStarted = phase === 'ASSIGNED';
+  const staffChoiceBusy = (s: StaffStatusDto) => (s.availabilityState === 'RESERVED' || s.availabilityState === 'IN_SERVICE') && s.id !== entry.assignedStaffId;
 
   return (
     <Card style={styles.entryCard}>
       <View style={styles.entryHeaderRow}>
         <Text style={styles.token}>#{entry.tokenNumber}</Text>
-        <Text style={styles.statusBadge}>{statusLabel(t, entry.status)}</Text>
+        <Text style={styles.statusBadge} testID={`entry-status-${entry.tokenNumber}`}>{statusLabel(t, entry)}</Text>
       </View>
 
       <Text style={[styles.customerName, !entry.customerName && styles.customerMissing]}>
@@ -159,19 +198,35 @@ function EntryRow({
       </View>
 
       {entry.serviceName && <Text style={styles.meta}>{entry.serviceName}</Text>}
+      {active && entry.status === 'WAITING' && entry.position ? (
+        <Text style={styles.meta}>
+          Position {entry.position} in line
+          {entry.estimatedWaitMinutes !== null && entry.estimatedWaitMinutes !== undefined ? ` · about ${entry.estimatedWaitMinutes} min` : ''}
+        </Text>
+      ) : null}
       <Text style={[styles.arrivalState, arrived ? styles.arrivalYes : styles.arrivalNo]}>
         {arrived ? t.arrivedStatus : t.notYetArrivedStatus}
       </Text>
       {entry.assignedStaffName && (
         <Text style={styles.meta}>
-          {entry.assignedStaffName}
-          {entry.assignedChairLabel ? ` - ${entry.assignedChairLabel}` : ''}
+          {`${assignedNotStarted ? `${t.assignedToLabel}: ` : ''}${entry.assignedStaffName}${entry.assignedChairLabel ? ` - ${entry.assignedChairLabel}` : ''}`}
         </Text>
       )}
+      {assignedNotStarted && <Text style={styles.meta} testID={`service-not-started-${entry.tokenNumber}`}>{t.serviceNotStartedHint}</Text>}
+      {entry.status === 'WAITING' && arrived && (
+        <Text style={styles.meta} testID={`waiting-for-staff-${entry.tokenNumber}`}>
+          {autoAssignEnabled === false ? t.waitingToBeAssigned : t.waitingForAvailableStaff}
+        </Text>
+      )}
+      {entry.preferredStaffName && active ? <Text style={styles.meta}>Wants {entry.preferredStaffName}</Text> : null}
       {error && <InlineError message={error} />}
 
       {active && !arrived && (
         <Button title={t.markArrivedAction} onPress={() => void markArrived()} loading={submitting === 'arrive'} style={styles.fullButton} />
+      )}
+
+      {active && arrived && !assigning && !assignedNotStarted && (
+        <Button title={t.assignAutomaticallyAction} onPress={() => void assignAutomatically()} loading={submitting === 'assign'} style={styles.fullButton} />
       )}
 
       {entry.status === 'WAITING' && (
@@ -187,9 +242,16 @@ function EntryRow({
         </View>
       )}
 
+      {assignedNotStarted && !assigning && canStart && (
+        <Button title={t.startServiceAction} onPress={() => void startService()} loading={submitting === 'startService'} style={styles.fullButton} />
+      )}
+
+      {entry.status === 'CALLED' && !assigning && (arrived || assignedNotStarted) && (
+        <Button title={assignedNotStarted ? t.changeBarberChairAction : t.assignAction} variant={assignedNotStarted ? 'outline' : 'primary'} onPress={() => setAssigning(true)} style={styles.fullButton} />
+      )}
+
       {entry.status === 'CALLED' && !assigning && (
         <View style={styles.actionRow}>
-          {arrived && <Button title={t.assignAction} onPress={() => setAssigning(true)} style={styles.actionButton} />}
           <Button
             title={t.noShowAction}
             variant="outline"
@@ -217,8 +279,8 @@ function EntryRow({
           )}
           <View style={styles.chipRow}>
             {staffOptions.map((s) => {
-              const busy = s.availabilityState === 'RESERVED' || s.availabilityState === 'IN_SERVICE';
-              const label = staffAvailabilityLabel(s, language);
+              const busy = staffChoiceBusy(s);
+              const label = s.id === entry.assignedStaffId ? null : staffAvailabilityLabel(s, language);
               return (
                 <Pressable
                   key={s.id}
@@ -236,7 +298,7 @@ function EntryRow({
           </View>
           <Text style={styles.assignLabel}>{t.chairLabel}</Text>
           <View style={styles.chipRow}>
-            {chairs.filter((c) => (c.occupancy ?? 'FREE') === 'FREE').map((c) => (
+            {chairs.filter((c) => (c.occupancy ?? 'FREE') === 'FREE' && (!c.reservedForEntryId || c.reservedForEntryId === entry.id)).map((c) => (
               <Pressable key={c.id} style={[styles.chip, chairId === c.id && styles.chipActive]} onPress={() => setChairId(c.id)}>
                 <Text style={[styles.chipText, chairId === c.id && styles.chipTextActive]}>{c.label}</Text>
               </Pressable>
@@ -257,12 +319,74 @@ function EntryRow({
 
       {entry.status === 'IN_SERVICE' && (
         <Button
-          title={t.completeAction}
-          onPress={() => confirmThen(t.confirmCompleteServiceTitle, t.confirmCompleteServiceBody, t.completeAction, () => void complete())}
+          title={t.completeServiceAction}
+          onPress={() => confirmThen(t.confirmCompleteServiceTitle, t.confirmCompleteServiceBody, t.completeServiceAction, () => void complete())}
           loading={submitting === 'complete'}
           style={styles.fullButton}
         />
       )}
+    </Card>
+  );
+}
+
+/** A finished or ended visit: read-only, with the invoice action for completed ones. */
+function PastRow({
+  entry,
+  salonId,
+  invoiceable,
+  onOpenInvoice,
+}: {
+  entry: QueueEntryDetailDto;
+  salonId: string;
+  invoiceable: boolean;
+  onOpenInvoice?: (invoiceId: string) => void;
+}) {
+  const { t } = useLanguage();
+  const [invoice, setInvoice] = useState<{ id: string; number: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function createInvoice() {
+    setBusy(true);
+    setError(null);
+    try {
+      // One ISSUED invoice per visit: creating again simply returns the existing one.
+      const made = await apiFetch<InvoiceDetailDto>(ownerOpsPaths.invoices(salonId), {
+        method: 'POST',
+        headers: { 'Idempotency-Key': newIdempotencyKey() },
+        body: JSON.stringify({ queueEntryId: entry.id }),
+      });
+      setInvoice({ id: made.id, number: made.number });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not create the invoice.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card style={styles.pastCard}>
+      <View style={styles.entryHeaderRow}>
+        <Text style={styles.pastToken}>#{entry.tokenNumber}</Text>
+        <Text style={styles.statusBadge}>{statusLabel(t, entry)}</Text>
+      </View>
+      <Text style={[styles.customerName, !entry.customerName && styles.customerMissing]}>{entry.customerName ?? `Customer #${entry.tokenNumber}`}</Text>
+      <Text style={styles.meta}>
+        {entry.serviceName ?? 'Service not chosen'}
+        {entry.assignedStaffName ? ` · ${entry.assignedStaffName}` : ''}
+        {entry.assignedChairLabel ? ` · ${entry.assignedChairLabel}` : ''}
+      </Text>
+      {error && <InlineError message={error} />}
+      {invoiceable &&
+        (invoice ? (
+          onOpenInvoice ? (
+            <Button title={`View invoice ${invoice.number}`} variant="outline" onPress={() => onOpenInvoice(invoice.id)} style={styles.fullButton} />
+          ) : (
+            <Text style={styles.meta}>Invoice {invoice.number} created.</Text>
+          )
+        ) : (
+          <Button title="Create invoice" variant="outline" onPress={() => void createInvoice()} loading={busy} style={styles.fullButton} />
+        ))}
     </Card>
   );
 }
@@ -274,25 +398,44 @@ export interface LiveQueuePanelHandle {
   refresh: () => Promise<void>;
 }
 
+export interface LiveQueuePanelProps {
+  salonId: string;
+  /** Owners also get the automatic-assignment switch; barbers share every other control. */
+  role?: 'owner' | 'staff';
+  /** Opens the "New Live Queue customer" sheet on first render (Dashboard quick action). */
+  autoOpenNewCustomer?: boolean;
+  onNewAppointment?: () => void;
+  onOpenInvoice?: (invoiceId: string) => void;
+  /** The signed-in barber's own staff id (staff role): they may start only the customer assigned to them. */
+  myStaffId?: string | null;
+}
+
 /**
- * The live-queue list + operational actions (call/assign/no-show/complete), shared by Owner's
- * Queue tab and Staff's Today tab — the backend permits both roles identically
- * (@Roles(SALON_STAFF, SALON_OWNER) on DashboardQueueController), so there is no authorization
- * reason to give them different queue UIs. What differs between the two roles is which *other*
- * tabs exist around this one (Owner also gets Dashboard/Shop; Staff does not) — enforced by each
- * navigator's own tab set, not by anything in this component.
+ * The live-queue board + operational actions, shared by Owner's Queue tab and Staff's Today tab — the
+ * backend permits both roles identically (@Roles(SALON_STAFF, SALON_OWNER) on DashboardQueueController),
+ * so there is no authorization reason to give them different queue UIs. What differs between the two
+ * roles is which *other* tabs exist around this one — enforced by each navigator's own tab set.
+ *
+ * The board keeps four places a visit can be - Waiting, In service, Completed today, and the ended
+ * history - and every visit is in exactly one of them.
  */
-export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string }>(function LiveQueuePanel(
-  { salonId },
+export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, LiveQueuePanelProps>(function LiveQueuePanel(
+  { salonId, role = 'owner', autoOpenNewCustomer = false, onNewAppointment, onOpenInvoice, myStaffId = null },
   ref,
 ) {
   const { t } = useLanguage();
   const [data, setData] = useState<DashboardQueueDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [chairBusyId, setChairBusyId] = useState<string | null>(null);
+  const [autoBusy, setAutoBusy] = useState<string | null>(null);
+  const [showNewCustomer, setShowNewCustomer] = useState(autoOpenNewCustomer);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const hasDataRef = useRef(false);
+  const dataRef = useRef<DashboardQueueDto | null>(null);
 
   // `silent` refreshes (after an operator action, on a realtime event, after a reconnect) keep the
   // list mounted. A non-silent load swaps the whole panel for skeletons, which remounts every card
@@ -306,7 +449,9 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
       return apiFetch<DashboardQueueDto>(dashboardBase(salonId))
         .then((next) => {
           hasDataRef.current = true;
-          setData(next);
+          const applied = applySnapshot(dataRef.current, next);
+          dataRef.current = applied;
+          setData(applied);
           setError(null);
         })
         .catch((err: unknown) => {
@@ -330,27 +475,38 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
   );
 
   useEffect(() => {
+    if (autoOpenNewCustomer) setShowNewCustomer(true);
+  }, [autoOpenNewCustomer]);
+
+  useEffect(() => {
     const socket = getRealtimeSocket();
     joinSalonRoom(salonId);
     function onUpdate(payload: { salonId: string }) {
       if (payload.salonId === salonId) void load(true);
     }
-    socket.on('queue.updated', onUpdate);
-    socket.on('queue.entry.called', onUpdate);
+    // Every event that can move a customer between Waiting / Assigned / In service, or change who is
+    // on duty, refreshes the board.
+    const events = ['queue.updated', 'queue.entry.called', 'queue.entry.reassigned', 'queue.entry.no_show', 'queue.entry.expired', 'staff.status.changed'];
+    events.forEach((name) => socket.on(name, onUpdate));
     const unsubscribeReconnect = onReconnect(() => void load(true)); // Phase 15: resync after reconnect
+    // Polling fallback: if the socket is down the board still refreshes itself.
+    const poll = setInterval(() => {
+      if (!(socket as { connected?: boolean }).connected) void load(true);
+    }, POLL_FALLBACK_MS);
     return () => {
-      socket.off('queue.updated', onUpdate);
-      socket.off('queue.entry.called', onUpdate);
+      events.forEach((name) => socket.off(name, onUpdate));
       unsubscribeReconnect();
+      clearInterval(poll);
     };
   }, [salonId, load]);
 
-  async function updateLocalChair(chair: ChairOptionDto, occupy: boolean) {
+  // Legacy manual chair occupancy (set before the Live Queue replaced it) can still be released; new
+  // "local customer" occupancy can no longer be created - a customer at the shop is a queue entry.
+  async function freeLegacyChair(chair: ChairOptionDto) {
     setChairBusyId(chair.id);
     setError(null);
     try {
-      const action = occupy ? DASHBOARD_PATHS.occupyLocal : DASHBOARD_PATHS.freeLocal;
-      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairOccupancy}/${chair.id}/${action}`, { method: 'POST' });
+      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairOccupancy}/${chair.id}/${DASHBOARD_PATHS.freeLocal}`, { method: 'POST' });
       await load(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
@@ -359,16 +515,31 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
     }
   }
 
-  async function freeAllLocalChairs() {
-    setChairBusyId('all-local');
+  async function autoAssignAll() {
+    setAutoBusy('all');
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await apiFetch<AutoAssignResultDto>(ownerOpsPaths.queueAutoAssign(salonId), { method: 'POST' });
+      setNotice(describeAutoAssign(result));
+      await load(true);
+    } catch (err) {
+      setError(friendlyQueueActionError(err, t, 'assign'));
+    } finally {
+      setAutoBusy(null);
+    }
+  }
+
+  async function setAutomatic(next: boolean) {
+    setAutoBusy('setting');
     setError(null);
     try {
-      await apiFetch(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.chairOccupancy}/${DASHBOARD_PATHS.freeAllLocal}`, { method: 'POST' });
-      await load();
+      await apiFetch(ownerOpsPaths.queueSettings(salonId), { method: 'PATCH', body: JSON.stringify({ autoAssignEnabled: next }) });
+      await load(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t.couldNotCompleteAction);
     } finally {
-      setChairBusyId(null);
+      setAutoBusy(null);
     }
   }
 
@@ -380,37 +551,119 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
       </>
     );
   }
-  if (error || !data) {
-    return <InlineError message={error ?? t.couldNotLoadQueue} />;
+  if (error && !data) {
+    return <InlineError message={error} />;
+  }
+  if (!data) {
+    return <InlineError message={t.couldNotLoadQueue} />;
   }
 
   const activeStaff = data.staffRoster.filter((s) => s.status === 'ACTIVE');
-  const activeEntries = data.entries.filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED' && e.status !== 'NO_SHOW');
+  const sections = sectionsOf(data);
+  const waiting = notYetAssigned(sections);
+  const anyoneInShop = waiting.some((e) => e.arrivedAt !== null && e.arrivedAt !== undefined);
+  // The owner starts anyone's customer; a barber only the one assigned to them.
+  const canStartEntry = (entry: QueueEntryDetailDto) => role === 'owner' || (myStaffId !== null && entry.assignedStaffId === myStaffId);
+
+  const toolbar = (
+    <View style={styles.toolbar}>
+      <Button title={t.newLiveQueueCustomerAction} onPress={() => setShowNewCustomer(true)} style={styles.toolbarButton} />
+      {onNewAppointment && <Button title={t.newInShopAppointmentAction} variant="outline" onPress={onNewAppointment} style={styles.toolbarButton} />}
+      {anyoneInShop && <Button title={t.assignAllAutomaticallyAction} variant="outline" onPress={() => void autoAssignAll()} loading={autoBusy === 'all'} style={styles.toolbarButton} />}
+    </View>
+  );
 
   const chairStatus = (
     <Card style={styles.entryCard}>
-      <View style={styles.entryHeaderRow}><Text style={styles.token}>Chair status</Text>{data.chairs.some((c) => c.occupancy === 'LOCAL') && <Button title="Free all local" variant="outline" onPress={() => void freeAllLocalChairs()} loading={chairBusyId === 'all-local'} />}</View>
+      <View style={styles.entryHeaderRow}><Text style={styles.token}>{t.chairStatusTitle}</Text></View>
+      {data.chairs.length === 0 ? <Text style={styles.meta}>No chairs are set up yet.</Text> : null}
       {data.chairs.map((chair) => {
         const occupancy = chair.occupancy ?? 'FREE';
         return <View key={chair.id} style={styles.chairRow}>
-          <View style={styles.chairText}><Text style={styles.assignLabel}>{chair.label}</Text><Text style={styles.meta}>{occupancy === 'FREE' ? 'FREE' : occupancy === 'LOCAL' ? 'OCCUPIED — Local customer' : `OCCUPIED — Token #${chair.tokenNumber ?? '?'}`}</Text></View>
-          {occupancy === 'FREE' && <Button title="Seat local" variant="outline" onPress={() => void updateLocalChair(chair, true)} loading={chairBusyId === chair.id} />}
-          {occupancy === 'LOCAL' && <Button title="Mark free" variant="outline" onPress={() => void updateLocalChair(chair, false)} loading={chairBusyId === chair.id} />}
+          <View style={styles.chairText}>
+            <Text style={styles.assignLabel}>{chair.label}</Text>
+            <Text style={styles.meta}>
+              {occupancy === 'FREE' && chair.reservedForEntryId
+                ? `${t.chairReservedLabel} · #${chair.reservedForTokenNumber ?? '?'}`
+                : occupancy === 'FREE'
+                  ? t.chairFreeLabel
+                  : occupancy === 'LOCAL'
+                    ? t.chairOccupiedNotQueue
+                    : t.chairOccupiedToken.replace('{token}', String(chair.tokenNumber ?? '?'))}
+            </Text>
+          </View>
+          {occupancy === 'LOCAL' && <Button title="Free chair" variant="outline" onPress={() => void freeLegacyChair(chair)} loading={chairBusyId === chair.id} />}
         </View>;
       })}
     </Card>
   );
 
-  if (activeEntries.length === 0) {
-    return <>{chairStatus}<EmptyState title={t.queueIsEmptyTitle} message={t.queueIsEmptyHint} /></>;
-  }
+  const automatic = role === 'owner' && data.autoAssignEnabled !== undefined ? (
+    <Card style={styles.entryCard}>
+      <View style={styles.switchRow}>
+        <View style={styles.chairText}>
+          <Text style={styles.assignLabel}>{t.automaticAssignmentLabel}</Text>
+          <Text style={styles.meta}>{t.automaticAssignmentHint}</Text>
+        </View>
+        <Switch testID="auto-assign-switch" value={data.autoAssignEnabled === true} onValueChange={(next) => void setAutomatic(next)} disabled={autoBusy === 'setting'} accessibilityLabel={t.automaticAssignmentLabel} />
+      </View>
+    </Card>
+  ) : null;
+
+  const nothingActive = waiting.length === 0 && sections.assigned.length === 0 && sections.inService.length === 0;
+  const reload = () => void load(true);
 
   return (
     <>
-      {chairStatus}
-      {activeEntries.map((entry) => (
-        <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} onAction={() => void load(true)} />
+      {toolbar}
+      {notice && <Text style={styles.notice} testID="queue-notice">{notice}</Text>}
+      {error && <InlineError message={error} />}
+      {showNewCustomer && (
+        <NewQueueCustomerSheet
+          salonId={salonId}
+          services={data.services}
+          staff={activeStaff}
+          onClose={() => setShowNewCustomer(false)}
+          onCreated={(created) => {
+            setShowNewCustomer(false);
+            setNotice(`${created.customerName ?? 'Customer'} was added to the Live Queue as #${created.tokenNumber}.`);
+            reload();
+          }}
+        />
+      )}
+
+      <Text style={styles.sectionTitle} testID="section-waiting">{t.queueSectionWaiting.replace('{count}', String(waiting.length))}</Text>
+      {waiting.length === 0 ? <Text style={styles.empty}>{t.nobodyWaitingNote}</Text> : null}
+      {waiting.map((entry) => (
+        <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} autoAssignEnabled={data.autoAssignEnabled} canStart={false} onAction={reload} onNotice={setNotice} />
       ))}
+
+      <Text style={styles.sectionTitle} testID="section-assigned">{t.queueSectionAssigned.replace('{count}', String(sections.assigned.length))}</Text>
+      {sections.assigned.length === 0 ? <Text style={styles.empty}>{t.assignedSectionEmpty}</Text> : null}
+      {sections.assigned.map((entry) => (
+        <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} canStart={canStartEntry(entry)} onAction={reload} onNotice={setNotice} />
+      ))}
+
+      <Text style={styles.sectionTitle} testID="section-in-service">{t.queueSectionInService.replace('{count}', String(sections.inService.length))}</Text>
+      {sections.inService.length === 0 ? <Text style={styles.empty}>{t.nobodyBeingServedNote}</Text> : null}
+      {sections.inService.map((entry) => (
+        <EntryRow key={entry.id} entry={entry} chairs={data.chairs} activeStaff={activeStaff} canStart={false} onAction={reload} onNotice={setNotice} />
+      ))}
+
+      {nothingActive && <EmptyState title={t.queueIsEmptyTitle} message={t.queueIsEmptyHint} />}
+
+      {chairStatus}
+      {automatic}
+
+      <Pressable accessibilityRole="button" testID="toggle-completed" onPress={() => setShowCompleted((v) => !v)} style={styles.sectionToggle}>
+        <Text style={styles.sectionTitle}>{`${t.queueSectionCompleted.replace('{count}', String(sections.completedToday.length))} ${showCompleted ? '▲' : '▼'}`}</Text>
+      </Pressable>
+      {showCompleted && (sections.completedToday.length === 0 ? <Text style={styles.empty}>No visits completed yet today.</Text> : sections.completedToday.map((entry) => <PastRow key={entry.id} entry={entry} salonId={salonId} invoiceable onOpenInvoice={onOpenInvoice} />))}
+
+      <Pressable accessibilityRole="button" testID="toggle-history" onPress={() => setShowHistory((v) => !v)} style={styles.sectionToggle}>
+        <Text style={styles.sectionTitle}>{`${t.queueSectionHistory.replace('{count}', String(sections.historyToday.length))} ${showHistory ? '▲' : '▼'}`}</Text>
+      </Pressable>
+      {showHistory && (sections.historyToday.length === 0 ? <Text style={styles.empty}>Nothing ended early today.</Text> : sections.historyToday.map((entry) => <PastRow key={entry.id} entry={entry} salonId={salonId} invoiceable={false} />))}
     </>
   );
 });
@@ -418,8 +671,10 @@ export const LiveQueuePanel = forwardRef<LiveQueuePanelHandle, { salonId: string
 const styles = StyleSheet.create({
   skeleton: { height: 100, borderRadius: radius.lg, marginBottom: space[3] },
   entryCard: { marginBottom: space[3] },
+  pastCard: { marginBottom: space[2] },
   entryHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   token: { fontFamily: font.displaySemiBold, fontSize: fontSize.lg, lineHeight: lineHeightFor(fontSize.lg), color: color.ink },
+  pastToken: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, color: color.ink },
   statusBadge: {
     fontFamily: font.bodyBold,
     fontSize: 11,
@@ -443,6 +698,13 @@ const styles = StyleSheet.create({
   assignPanel: { marginTop: space[3] },
   chairRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], paddingVertical: space[2], borderTopWidth: 1, borderTopColor: color.border },
   chairText: { flex: 1 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: space[3] },
+  toolbar: { gap: space[2], marginBottom: space[3] },
+  toolbarButton: { alignSelf: 'stretch' },
+  notice: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, lineHeight: lineHeightFor(fontSize.sm), color: color.ink, marginBottom: space[3] },
+  sectionTitle: { fontFamily: font.displaySemiBold, fontSize: fontSize.base, lineHeight: lineHeightFor(fontSize.base), color: color.ink, marginTop: space[3], marginBottom: space[2] },
+  sectionToggle: { minHeight: 44, justifyContent: 'center' },
+  empty: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginBottom: space[2] },
   assignLabel: {
     fontFamily: font.bodySemiBold,
     fontSize: fontSize.xs,
