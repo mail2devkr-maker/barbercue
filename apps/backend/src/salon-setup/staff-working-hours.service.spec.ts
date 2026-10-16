@@ -19,6 +19,7 @@ describe('StaffWorkingHoursService', () => {
     $transaction: jest.Mock;
   };
   let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
+  let trigger: { trigger: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -35,9 +36,11 @@ describe('StaffWorkingHoursService', () => {
       auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
     salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
+    trigger = { trigger: jest.fn() };
     service = new StaffWorkingHoursService(
       prisma as never,
       salonAccess as never,
+      trigger as never,
     );
   });
 
@@ -117,6 +120,7 @@ describe('StaffWorkingHoursService', () => {
       await service.set('owner-1', 'salon-1', 'staff-1', { days: week() });
 
       expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(trigger.trigger).toHaveBeenCalledWith('salon-1');
       expect(prisma.staffWorkingHours.upsert).toHaveBeenCalledTimes(7);
       const first = prisma.staffWorkingHours.upsert.mock.calls[0][0] as {
         where: { staffId_dayOfWeek: { staffId: string; dayOfWeek: number } };
@@ -137,6 +141,7 @@ describe('StaffWorkingHoursService', () => {
         }),
       ).rejects.toMatchObject({ code: 'STAFF_NOT_FOUND' });
       expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(trigger.trigger).not.toHaveBeenCalled();
     });
 
     it('checks access before writing anything', async () => {
