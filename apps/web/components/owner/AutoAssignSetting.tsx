@@ -60,7 +60,7 @@ export function AutoAssignSetting({ salonId }: { salonId: string }) {
             Assign staff automatically
           </div>
           <div className={ui.cardSub}>
-            On by default. A customer who is in the shop is assigned a free, qualified barber and a free chair as soon as one is available. Assigning does not start the service: the barber presses Start service. Turn it off to choose a barber and chair yourself.
+            On by default. A customer confirmed physically in the shop automatically enters In service with an active service session when a qualified barber and chair become free. Turn it off if the barber should start services manually.
           </div>
         </div>
         <button
