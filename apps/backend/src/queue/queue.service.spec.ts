@@ -833,15 +833,15 @@ describe('QueueService', () => {
       expect(realtime.emitEntryCalled).not.toHaveBeenCalled();
     });
 
-    it('assignAsSystem (the automatic allocator) never starts the service', async () => {
+    it('assignAsSystem atomically opens one ACTIVE session and moves an arrived guest straight IN_SERVICE', async () => {
       prisma.queueEntry.findUnique.mockResolvedValueOnce(makeRawEntry({ arrivedAt: new Date() }));
       await service.assignAsSystem('q1', input);
-      expect(claimOf().data.status).toBe('CALLED');
-      expect(claimOf().data).not.toHaveProperty('serviceStartedAt');
-      expect(prisma.serviceSession.create).not.toHaveBeenCalled();
+      expect(claimOf().data.status).toBe('IN_SERVICE');
+      expect(claimOf().data.serviceStartedAt).toBeInstanceOf(Date);
+      expect(prisma.serviceSession.create).toHaveBeenCalledTimes(1);
       const audit = lastCallData(prisma.auditLog.create);
       expect(audit).toMatchObject({ action: 'QUEUE_ENTRY_AUTO_ASSIGNED' });
-      expect((audit.metadata as Record<string, unknown>).serviceStarted).toBe(false);
+      expect((audit.metadata as Record<string, unknown>).serviceStarted).toBe(true);
     });
 
     it('without the flag, assign keeps the pre-existing seat-and-start behaviour for already-installed clients', async () => {
