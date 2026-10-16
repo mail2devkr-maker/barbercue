@@ -38,6 +38,7 @@ describe('SalonStaffService', () => {
     sendPasswordReset: jest.Mock;
     sendStaffInvitation: jest.Mock;
   };
+  let trigger: { trigger: jest.Mock };
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
@@ -84,10 +85,13 @@ describe('SalonStaffService', () => {
     };
     process.env.NODE_ENV = 'test';
     process.env.WEB_BASE_URL = 'https://web.example.com';
+    trigger = { trigger: jest.fn() };
     service = new SalonStaffService(
       prisma as never,
       salonAccess as never,
       emailSender as never,
+      undefined,
+      trigger as never,
     );
   });
 
@@ -142,6 +146,7 @@ describe('SalonStaffService', () => {
       staff: { phone: '+919876543210' },
     });
     expect(result.inviteUrl).toBeUndefined();
+    expect(trigger.trigger).toHaveBeenCalledWith('salon-1');
   });
 
   it('creates contact-optional staff with only a display name', async () => {
@@ -371,6 +376,21 @@ describe('SalonStaffService', () => {
       result.inviteUrl,
       7,
     );
+  });
+
+  it('wakes auto-assign when owner marks an off-duty barber working', async () => {
+    prisma.salonStaff.findFirst.mockResolvedValueOnce({ ...STAFF_ROW, status: 'INACTIVE' })
+      .mockResolvedValueOnce(STAFF_ROW);
+    await service.update('owner-1', 'salon-1', 'staff-1', { status: 'ACTIVE' as never });
+    expect(trigger.trigger).toHaveBeenCalledTimes(1);
+    expect(trigger.trigger).toHaveBeenCalledWith('salon-1');
+  });
+
+  it('does not wake the allocator for unchanged working status, profile edit or clock-out', async () => {
+    await service.update('owner-1', 'salon-1', 'staff-1', { status: 'ACTIVE' as never });
+    await service.update('owner-1', 'salon-1', 'staff-1', { yearsExperience: 4 } as never);
+    await service.update('owner-1', 'salon-1', 'staff-1', { status: 'INACTIVE' as never });
+    expect(trigger.trigger).not.toHaveBeenCalled();
   });
 
   it('deactivates a staff member rather than deleting them', async () => {
