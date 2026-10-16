@@ -188,8 +188,8 @@ type Seater = (
  *  - the automatic pass (a per-shop setting, ON by default, which the owner can switch off) only ever
  *    considers customers who are physically present (`arrivedAt` set) - never a remote QR joiner who
  *    is still on the way;
- *  - the manual buttons ("Assign automatically", a barber's "Take next customer") are explicit human
- *    decisions, so they do not need the setting.
+ *  - the manual buttons ("Start next service", a barber's "Take next customer")
+ *    do not need the setting, but require physical arrival before starting service.
  * Every automatic assignment leaves a QUEUE_ENTRY_AUTO_ASSIGNED audit row including
  * serviceStarted:true. Automatic start is a system state transition, not physical proof.
  */
@@ -267,7 +267,7 @@ export class QueueAutoAssignService implements OnModuleInit {
 
   // ---------- Manual, authorized entry points ----------
 
-  /** "Assign automatically": one pass over everyone waiting, regardless of the opt-in. */
+  /** "Start next service": start arrived waiting visitors regardless of the opt-in. */
   async assignAllWaiting(
     userId: string,
     salonId: string,
@@ -275,13 +275,13 @@ export class QueueAutoAssignService implements OnModuleInit {
     await this.salonAccess.assertAccessOrAdminAccess(userId, salonId);
     return this.runForSalon(salonId, {
       requireEnabled: false,
-      includeNotArrived: true,
+      // Starting service implies actual shop presence; manual bulk cannot start a remote visitor.
       seat: (id, i) =>
         this.queue.assign(userId, id, { ...i, startService: true }),
     });
   }
 
-  /** "Assign automatically" on ONE customer: picks the best free barber + chair and seats them. */
+  /** Start one arrived customer immediately with the best free barber and chair. */
   async assignOne(
     userId: string,
     entryId: string,
@@ -300,7 +300,7 @@ export class QueueAutoAssignService implements OnModuleInit {
     await this.salonAccess.assertAccessOrAdminAccess(userId, entry.salonId);
     const result = await this.runForSalon(entry.salonId, {
       requireEnabled: false,
-      includeNotArrived: true,
+      // Manual selection must not silently mark an unarrived visitor in service.
       onlyEntryId: entryId,
       seat: (id, i) =>
         this.queue.assign(userId, id, { ...i, startService: true }),
