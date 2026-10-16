@@ -142,4 +142,34 @@ describe('planAllocation', () => {
     expect(plan.assignments).toEqual([]);
     expect(plan.skipped[0].reason).toMatch(/not on duty/i);
   });
+
+  it('treats a service with zero StaffService rows as open to every on-duty barber', async () => {
+    const plan = await planAllocation({
+      entries: [entry('unmapped', { serviceIds: ['svc-new'] })],
+      staff: [staff('new-barber', { qualifiedServiceIds: new Set() })],
+      chairs: chairs(1),
+      unrestrictedServiceIds: new Set(['svc-new']),
+      isStaffFree: alwaysFree,
+    });
+    expect(plan.assignments).toEqual([{ entryId: 'unmapped', staffId: 'new-barber', chairId: 'ch1' }]);
+  });
+
+  it('never treats a specifically restricted service as unrestricted, including mixed bookings', async () => {
+    const plan = await planAllocation({
+      entries: [entry('restricted', { serviceIds: ['svc-new', BEARD] })],
+      staff: [staff('cut-only', { qualifiedServiceIds: new Set([CUT]) }), staff('beard', { qualifiedServiceIds: new Set([BEARD]) })],
+      chairs: chairs(1),
+      unrestrictedServiceIds: new Set(['svc-new']),
+      isStaffFree: alwaysFree,
+    });
+    expect(plan.assignments).toEqual([{ entryId: 'restricted', staffId: 'beard', chairId: 'ch1' }]);
+    const rejected = await planAllocation({
+      entries: [entry('restricted', { serviceIds: [BEARD] })],
+      staff: [staff('cut-only', { qualifiedServiceIds: new Set([CUT]) })],
+      chairs: chairs(1),
+      unrestrictedServiceIds: new Set(),
+      isStaffFree: alwaysFree,
+    });
+    expect(rejected.assignments).toEqual([]);
+  });
 });

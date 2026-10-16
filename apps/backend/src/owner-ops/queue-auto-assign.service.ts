@@ -82,6 +82,8 @@ export async function planAllocation(input: {
   entries: PlannerEntry[];
   staff: PlannerStaff[];
   chairs: PlannerChair[];
+  /** DATABASE.md: when no staff-service mapping exists for a service, every on-duty barber qualifies. */
+  unrestrictedServiceIds?: ReadonlySet<string>;
   isStaffFree: (staffId: string, entry: PlannerEntry) => Promise<boolean>;
 }): Promise<PlanOutcome> {
   const assignments: PlanOutcome['assignments'] = [];
@@ -121,7 +123,9 @@ export async function planAllocation(input: {
     const qualified = pool.filter(
       (s) =>
         !usedStaff.has(s.id) &&
-        entry.serviceIds.every((id) => s.qualifiedServiceIds.has(id)),
+        entry.serviceIds.every(
+          (id) => input.unrestrictedServiceIds?.has(id) === true || s.qualifiedServiceIds.has(id),
+        ),
     );
     if (qualified.length === 0) {
       skipped.push({
@@ -441,6 +445,21 @@ export class QueueAutoAssignService implements OnModuleInit {
     });
     if (waiting.length === 0) return empty;
 
+    // Mirror AvailabilityService. A service is restricted only when ANY StaffService row exists
+    // for it (even one belonging to an off-duty barber); otherwise all active barbers qualify.
+    // Counting only the on-duty staff's own mappings would silently broaden restricted services.
+    const serviceIdsForEligibility = Array.from(
+      new Set(
+        waiting.flatMap((entry) =>
+          entry.booking
+            ? resolveEffectiveBookingServices(entry.booking).map((service) => service.serviceId)
+            : entry.serviceId
+              ? [entry.serviceId]
+              : [],
+        ),
+      ),
+    );
+
     const timeZone = await this.availability.getSalonTimeZone(salonId);
     const dayStart =
       (timeZone ? zonedDayBounds(new Date(), timeZone)?.start : null) ??
@@ -453,6 +472,7 @@ export class QueueAutoAssignService implements OnModuleInit {
       manualOccupancies,
       todaySessions,
       assignedHolds,
+      qualificationRows,
     ] = await Promise.all([
       this.prisma.salonStaff.findMany({
         where: {
@@ -497,7 +517,16 @@ export class QueueAutoAssignService implements OnModuleInit {
         },
         select: { assignedStaffId: true, assignedChairId: true },
       }),
+      this.prisma.staffService.findMany({
+        where: { serviceId: { in: serviceIdsForEligibility } },
+        select: { serviceId: true },
+      }),
     ]);
+
+    const restrictedServiceIds = new Set(qualificationRows.map((row) => row.serviceId));
+    const unrestrictedServiceIds = new Set(
+      serviceIdsForEligibility.filter((id) => !restrictedServiceIds.has(id)),
+    );
 
     const busyStaff = new Set([
       ...activeSessions.map((s) => s.staffId),
@@ -559,6 +588,7 @@ export class QueueAutoAssignService implements OnModuleInit {
       entries,
       staff,
       chairs,
+      unrestrictedServiceIds,
       isStaffFree: async (staffId, entry) => {
         const end = new Date(now.getTime() + entry.durationMinutes * 60_000);
         const check = await this.reservations.isStaffFreeForInterval(

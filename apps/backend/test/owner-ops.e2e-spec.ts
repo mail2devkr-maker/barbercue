@@ -714,6 +714,23 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect(done.serviceCompletedAt).not.toBeNull();
     });
 
+    it('auto-assigns a remote arrival immediately after the owner marks them in the shop', async () => {
+      await setAuto(true);
+      const remote = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1)
+        .send({ serviceId: ids.haircut, contactName: 'Remote Arrival', contactPhone: '9876500009' }).expect(201);
+      await settle();
+      expect(await assignedHolds()).toHaveLength(0);
+      const before = await prisma.queueEntry.findUniqueOrThrow({ where: { id: remote.body.id } });
+      expect(before.arrivedAt).toBeNull();
+
+      await api('post', `dashboard/queue-entries/${remote.body.id}/arrive`, tok.owner).expect(201);
+      await settle();
+      const after = await prisma.queueEntry.findUniqueOrThrow({ where: { id: remote.body.id } });
+      expect(after.arrivedAt).not.toBeNull();
+      expect(after).toMatchObject({ status: 'CALLED', assignedStaffId: expect.any(String), assignedChairId: expect.any(String), serviceStartedAt: null });
+      expect(await prisma.serviceSession.count({ where: { queueEntryId: remote.body.id } })).toBe(0);
+    });
+
     it('never assigns someone who has not arrived, a barber who is busy or holding a customer, or a barber lacking the skill', async () => {
       await setAuto(true);
       // remote customer: joined through the app, not yet in the shop => never auto-assigned
@@ -955,8 +972,12 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const barberUser = await makeUser('freshBarber', Role.SALON_STAFF, fresh.id);
       const barberTok = tokens.signAccessToken(barberUser.id, [Role.SALON_STAFF], SessionAudience.STAFF);
       const barber = await prisma.salonStaff.create({
-        data: { salonId: fresh.id, userId: barberUser.id, displayName: 'Fresh Barber', roleInSalon: 'BARBER', status: 'ACTIVE', services: { create: [{ serviceId: service.id }] } },
+        // Deliberately no StaffService mapping: zero mappings means any on-duty barber can serve this service.
+        // Previously bookings permitted this but Live Queue auto-assignment rejected everyone.
+        data: { salonId: fresh.id, userId: barberUser.id, displayName: 'Fresh Barber', roleInSalon: 'BARBER', status: 'ACTIVE' },
       });
+
+      expect(await prisma.staffService.count({ where: { serviceId: service.id } })).toBe(0);
 
       // every surface reports the server's value
       expect((await request(app.getHttpServer()).get(`/api/v1/dashboard/salons/${fresh.id}/queue/settings`).set('Authorization', `Bearer ${ownerTok}`).expect(200)).body).toEqual({ autoAssignEnabled: true });

@@ -210,6 +210,18 @@ describe("Live Queue: Waiting, Assigned and In service are separate places", () 
     expect(allText(await render(board({ autoAssignEnabled: false })))).toContain("Waiting to be assigned");
   });
 
+  it("explains that background auto-assignment waits until the customer physically arrives", async () => {
+    search = "view=waiting";
+    const remote = entry({ id: "remote", tokenNumber: 8, customerName: "Remote Customer", arrivedAt: null });
+    const snapshot = board({
+      entries: [remote],
+      sections: { waiting: [remote], called: [], assigned: [], inService: [], completedToday: [], historyToday: [] },
+    });
+    const tree = await render(snapshot);
+    expect(allText(tree)).toContain("Background auto-assignment waits for arrival.");
+    expect(allText(tree)).toContain("Mark as in the shop");
+  });
+
   it("the chair held by an assigned customer is shown as reserved, and the barber as assigned", async () => {
     const tree = await render();
     const text = allText(tree);
