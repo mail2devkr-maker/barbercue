@@ -397,6 +397,11 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                   ) : (
                     <div className={ui.entryReason}>{data.autoAssignEnabled === false ? "Waiting to be assigned" : "Waiting for available staff"}</div>
                   )}
+                  {entry.arrivedAt === null && (
+                    <div className={ui.entryReason}>
+                      Background auto-assignment waits for arrival. When the customer is physically here, press Mark as in the shop; the system will then assign an eligible free barber and chair.
+                    </div>
+                  )}
                   <div className={ui.entryActions}>
                     <Btn variant="primary" small disabled={busy !== null} onClick={() => void assignAutomatically(entry)}>
                       {busy === `auto-${entry.id}` ? "Assigning…" : "Assign automatically"}
