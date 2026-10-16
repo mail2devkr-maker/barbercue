@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import {
   BookingErrorCode,
   type SetStaffWorkingHoursInput,
@@ -7,6 +7,7 @@ import {
 import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { QueueAutoAssignTrigger } from '../queue/queue-auto-assign.trigger';
 
 const DAYS_OF_WEEK = [0, 1, 2, 3, 4, 5, 6] as const;
 
@@ -33,6 +34,7 @@ export class StaffWorkingHoursService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
+    @Optional() private readonly autoAssignTrigger?: QueueAutoAssignTrigger,
   ) {}
 
   private async assertStaffInSalon(
@@ -119,6 +121,9 @@ export class StaffWorkingHoursService {
       });
     }
 
+    // A newly opened shift can immediately make an already-arrived customer eligible.
+    // Do not await the allocator: this cannot turn a successful hours save into a failure.
+    this.autoAssignTrigger?.trigger(salonId);
     return this.list(userId, salonId, staffId);
   }
 }
