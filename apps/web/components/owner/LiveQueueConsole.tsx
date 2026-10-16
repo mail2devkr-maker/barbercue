@@ -389,7 +389,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
               {called.map((entry) => (
                 <EntryCard key={entry.id} entry={entry} tone="called">
                   <div className={ui.entryActions}>
-                    <Btn variant="primary" small disabled={busy !== null} onClick={() => void assignAutomatically(entry)}>
+                    <Btn variant="primary" small disabled={busy !== null || entry.arrivedAt === null} onClick={() => void assignAutomatically(entry)}>
                       Start service automatically
                     </Btn>
                     <Btn small onClick={() => setAssignFor(assignFor === entry.id ? null : entry.id)}>
@@ -418,7 +418,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                     </div>
                   )}
                   <div className={ui.entryActions}>
-                    <Btn variant="primary" small disabled={busy !== null} onClick={() => void assignAutomatically(entry)}>
+                    <Btn variant="primary" small disabled={busy !== null || entry.arrivedAt === null} onClick={() => void assignAutomatically(entry)}>
                       {busy === `auto-${entry.id}` ? "Starting…" : "Start service automatically"}
                     </Btn>
                     <Btn small onClick={() => setAssignFor(assignFor === entry.id ? null : entry.id)}>
@@ -789,9 +789,10 @@ function AssignForm({ entry, data, onDone }: { entry: QueueEntryDetailDto; data:
           ))}
         </select>
       </Field>
-      <Btn variant="primary" disabled={busy || !staffId || !chairId || (needsService && !serviceId)} onClick={() => void submit()}>
-        {busy ? "Assigning…" : "Assign customer"}
+      <Btn variant="primary" disabled={busy || entry.arrivedAt === null || !staffId || !chairId || (needsService && !serviceId)} onClick={() => void submit()}>
+        {busy ? "Starting…" : "Start service"}
       </Btn>
+      {entry.arrivedAt === null && <Banner tone="warn">Mark as in the shop before starting service.</Banner>}
       {error && (
         <div style={{ gridColumn: "1 / -1" }}>
           <Banner tone="error">{error}</Banner>
