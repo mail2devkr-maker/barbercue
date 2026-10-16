@@ -440,7 +440,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
                       small
                       icon="scissors"
                       disabled={busy !== null}
-                      onClick={() => void run(`start-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.startService), { method: "POST" }), `${whoLabel(entry)} — service started.`)}
+                      onClick={() => void run(`start-${entry.id}`, () => apiFetch(entryPath(entry.id, DASHBOARD_PATHS.startService), { method: "POST", headers: { "Idempotency-Key": newIdempotencyKey() } }), `${whoLabel(entry)} — service started.`)}
                     >
                       {busy === `start-${entry.id}` ? "Starting…" : "Start service"}
                     </Btn>
