@@ -344,6 +344,20 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
       )}
       {error && <Banner tone="error">{error}</Banner>}
       {notice && <Banner tone="ok">{notice}</Banner>}
+      {data.autoAssignEnabled === false && (
+        <Banner tone="warn">
+          Automatic assignment is OFF for this shop. The manual Assign automatically button still works,
+          but free barbers will not automatically receive waiting customers.
+          {kind === "owner" && (
+            <>{" "}<Btn small variant="secondary" disabled={busy !== null}
+              onClick={() => void run("enable-auto", () => apiFetch(`${base}/queue/settings`, {
+                method: "PATCH", body: JSON.stringify({ autoAssignEnabled: true }),
+              }), "Automatic assignment enabled. Arrived waiting customers will be assigned whenever a qualified barber and chair are available.")}>
+              {busy === "enable-auto" ? "Enabling…" : "Enable automatic assignment"}
+            </Btn></>
+          )}
+        </Banner>
+      )}
 
       <div className={ui.queueTop}>
         <Tabs
@@ -510,6 +524,12 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
 
           {view === "history" && (
             <div className={ui.entryGrid}>
+              {history.length > 0 && (
+                <div className={ui.entryReason}>
+                  These visits are cancelled, expired or no-show records, not active assignments.
+                  Any barber and chair shown below are historical details and no longer reserved.
+                </div>
+              )}
               {history.length === 0 && (
                 <Card>
                   <EmptyState title="No cancelled, expired or no-show visits today">These stay here for the day and are counted in Analytics.</EmptyState>
@@ -673,7 +693,7 @@ function EntryCard({
           )}
           {entry.assignedStaffName && (
             <div className={ui.entryMeta}>
-              {phase === "ASSIGNED" ? "Assigned to " : ""}
+              {phase === "ASSIGNED" ? "Assigned to " : entry.status === "CANCELLED" || entry.status === "EXPIRED" || entry.status === "NO_SHOW" ? "Previously assigned to " : ""}
               {entry.assignedStaffName}
               {entry.assignedChairLabel ? ` · ${entry.assignedChairLabel}` : ""}
             </div>

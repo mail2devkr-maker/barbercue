@@ -243,6 +243,37 @@ describe("Live Queue: Waiting, Assigned and In service are separate places", () 
     expect(toggle.props["aria-checked"]).toBe(false);
   });
 
+  it("shows a prominent, opt-in fix when the shop's server setting is OFF; never switches it silently", async () => {
+    search = "view=waiting";
+    const tree = await render(board({ autoAssignEnabled: false }));
+    expect(allText(tree)).toContain("Automatic assignment is OFF for this shop.");
+    const button = tree.root.findAllByType("button").find((b) => textOf(b).includes("Enable automatic assignment"));
+    expect(button).toBeTruthy();
+    expect(apiFetch.mock.calls.some(([_, init]) => init?.method === "PATCH")).toBe(false);
+    await act(async () => button.props.onClick());
+    const patch = apiFetch.mock.calls.find(([path, init]) => init?.method === "PATCH" && String(path).endsWith("/queue/settings"));
+    expect(JSON.parse(patch[1].body)).toEqual({ autoAssignEnabled: true });
+  });
+
+  it("labels cancelled visits as history, without counting former assigned barbers as actively assigned", async () => {
+    search = "view=history";
+    const cancelled = entry({
+      id: "historical-1", status: "CANCELLED", phase: "CANCELLED", customerName: "Previous Customer",
+      assignedStaffId: "st1", assignedStaffName: "Ravi", assignedChairId: "ch1", assignedChairLabel: "Chair 1",
+    });
+    const snapshot = board({
+      entries: [cancelled],
+      sections: { waiting: [], called: [], assigned: [], inService: [], completedToday: [], historyToday: [cancelled] },
+      counts: { waiting: 0, assigned: 0, inService: 0, completedToday: 0, historyToday: 1 },
+    });
+    const tree = await render(snapshot);
+    expect(allText(tree)).toContain("Previously assigned to Ravi · Chair 1");
+    expect(allText(tree)).toContain("not active assignments");
+    const tabs = tree.root.findAllByProps({ role: "tab" }).map((t) => textOf(t));
+    expect(tabs.find((t) => t.startsWith("Assigned"))).toMatch(/0/);
+    expect(tabs.find((t) => t.startsWith("Cancelled"))).toMatch(/1/);
+  });
+
   it("choosing a barber and chair by hand ASSIGNS (startService:false); it does not start the service", async () => {
     search = "view=waiting";
     const tree = await render();

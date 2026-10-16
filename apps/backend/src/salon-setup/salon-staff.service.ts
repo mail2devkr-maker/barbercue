@@ -16,6 +16,7 @@ import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { QueueAssignmentReleaseService } from '../queue/queue-assignment-release.service';
+import { QueueAutoAssignTrigger } from '../queue/queue-auto-assign.trigger';
 import { EMAIL_SENDER, type EmailSender } from '../auth/services/email-sender';
 import {
   buildPasswordLink,
@@ -53,6 +54,7 @@ export class SalonStaffService {
     @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
     @Optional()
     private readonly assignmentRelease?: QueueAssignmentReleaseService,
+    @Optional() private readonly autoAssignTrigger?: QueueAutoAssignTrigger,
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonStaffDto[]> {
@@ -248,6 +250,9 @@ export class SalonStaffService {
         },
       });
     }
+    // Newly on-duty roster capacity can immediately seat an already-arrived waiting customer.
+    // The trigger is fire-and-forget and respects the shop's persisted auto-assign setting.
+    this.autoAssignTrigger?.trigger(salonId);
     if (!email || !inviteUrl) return { staff, invitationSent: false };
     return process.env.NODE_ENV === 'production'
       ? { staff, invitationSent: true }
@@ -403,6 +408,12 @@ export class SalonStaffService {
           },
         },
       });
+    }
+    // This owner/admin roster PATCH is distinct from a barber's clock-in endpoint. Both must
+    // announce the INACTIVE -> ACTIVE transition; otherwise only a manual Assign click wakes
+    // the waiting queue after the owner presses "Mark working".
+    if (input.status === StaffMemberStatus.ACTIVE && existing.status !== StaffMemberStatus.ACTIVE) {
+      this.autoAssignTrigger?.trigger(salonId);
     }
     return updated;
   }

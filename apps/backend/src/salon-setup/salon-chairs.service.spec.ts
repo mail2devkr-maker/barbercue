@@ -12,6 +12,7 @@ describe('SalonChairsService', () => {
     auditLog: { create: jest.Mock };
   };
   let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
+  let trigger: { trigger: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -24,7 +25,8 @@ describe('SalonChairsService', () => {
       auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
     salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
-    service = new SalonChairsService(prisma as never, salonAccess as never);
+    trigger = { trigger: jest.fn() };
+    service = new SalonChairsService(prisma as never, salonAccess as never, undefined, trigger as never);
   });
 
   it('checks salon access before listing', async () => {
@@ -60,6 +62,7 @@ describe('SalonChairsService', () => {
       data: { salonId: 'salon-1', label: 'Chair 1', status: 'ACTIVE' },
     });
     expect(result).toEqual({ id: 'c1', label: 'Chair 1', status: 'ACTIVE' });
+    expect(trigger.trigger).toHaveBeenCalledWith('salon-1');
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 
@@ -97,6 +100,23 @@ describe('SalonChairsService', () => {
       (service as unknown as Record<string, unknown>).delete,
     ).toBeUndefined();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rechecks arrived customers as soon as a chair becomes ACTIVE again', async () => {
+    prisma.chair.findFirst.mockResolvedValue({ id: 'c1', salonId: 'salon-1', label: 'Chair 1', status: 'MAINTENANCE' });
+    prisma.chair.update.mockResolvedValue({ id: 'c1', label: 'Chair 1', status: 'ACTIVE' });
+    await service.update('owner-1', 'salon-1', 'c1', { status: 'ACTIVE' as never });
+    expect(trigger.trigger).toHaveBeenCalledTimes(1);
+    expect(trigger.trigger).toHaveBeenCalledWith('salon-1');
+  });
+
+  it('does not wake auto-assign for a label edit or a chair taken out of use', async () => {
+    prisma.chair.findFirst.mockResolvedValue({ id: 'c1', salonId: 'salon-1', label: 'Chair 1', status: 'ACTIVE' });
+    prisma.chair.update.mockResolvedValue({ id: 'c1', label: 'Renamed', status: 'ACTIVE' });
+    await service.update('owner-1', 'salon-1', 'c1', { label: 'Renamed' });
+    prisma.chair.update.mockResolvedValue({ id: 'c1', label: 'Renamed', status: 'INACTIVE' });
+    await service.update('owner-1', 'salon-1', 'c1', { status: 'INACTIVE' as never });
+    expect(trigger.trigger).not.toHaveBeenCalled();
   });
 
   it('supports MAINTENANCE as a non-bookable state distinct from INACTIVE', async () => {
