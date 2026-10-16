@@ -943,6 +943,9 @@ export class QueueService {
           },
         );
         this.realtime.emitQueueUpdated(entry.salonId);
+        // Becoming physically present is the eligibility transition for automatic assignment.
+        // Trigger only after the successful DB claim; never assign a remote/unarrived customer.
+        this.triggerAutoAssign(entry.salonId);
       } else {
         // Lost a race: either another operator acknowledged it first (fine — idempotent) or the
         // entry left the active states underneath us (a real conflict).
