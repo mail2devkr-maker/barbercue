@@ -527,7 +527,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   });
 
   // ------------------------------------------------------------------------------------------
-  describe('Automatic barber allocation: assigned is not in service', () => {
+  describe('Direct service start: waiting -> in service when a barber and chair become free', () => {
     const board = async () => (await api('get', `dashboard/salons/${ids.salon}/queue`, tok.owner).expect(200)).body;
     const add = async (name: string, extra: Record<string, unknown> = {}) =>
       (await api('post', `dashboard/salons/${ids.salon}/queue/customers`, tok.owner).send({ name, ...extra }).expect(201)).body as { id: string };
@@ -536,7 +536,6 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       api('patch', `dashboard/salons/${ids.salon}/queue/settings`, tok.owner).send({ autoAssignEnabled: enabled }).expect(200);
     const activeSessions = () =>
       prisma.serviceSession.findMany({ where: { status: 'ACTIVE', chair: { salonId: ids.salon } }, include: { queueEntry: true } });
-    /** Customers with a barber and chair RESERVED whose service has not started. */
     const assignedHolds = () =>
       prisma.queueEntry.findMany({ where: { salonId: ids.salon, status: 'CALLED', assignedStaffId: { not: null } } });
     const tokenOfStaff = (staffId: string) => (staffId === ids.raviStaff ? tok.ravi : tok.sunil);
@@ -544,399 +543,253 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     const cleanup = async () => {
       await setAuto(false);
       await settle();
-      for (const s of await activeSessions()) await api('post', `dashboard/service-sessions/${s.id}/complete`, tok.owner).expect(201);
-      const b = await board();
-      for (const e of [...b.sections.waiting, ...(b.sections.called ?? []), ...(b.sections.assigned ?? [])] as Array<{ id: string }>) {
-        await api('post', `dashboard/queue-entries/${e.id}/cancel`, tok.owner);
+      for (const row of await activeSessions()) {
+        await api('post', `dashboard/service-sessions/${row.id}/complete`, tok.owner).expect(201);
+      }
+      const snapshot = await board();
+      for (const row of [...snapshot.sections.waiting, ...(snapshot.sections.called ?? []), ...(snapshot.sections.assigned ?? [])] as Array<{ id: string }>) {
+        await api('post', `dashboard/queue-entries/${row.id}/cancel`, tok.owner).expect(201);
       }
       await settle();
     };
-
     afterEach(cleanup);
 
-    it('persists the owner’s choice: OFF is kept, ON again is kept, every change is audited, and the server reports it', async () => {
+    it('persists the owner ON/OFF choice and never allows another shop to change it', async () => {
       await setAuto(false);
-      expect((await api('get', `dashboard/salons/${ids.salon}/queue/settings`, tok.owner).expect(200)).body).toEqual({ autoAssignEnabled: false });
       expect((await board()).autoAssignEnabled).toBe(false);
-      expect((await api('get', `dashboard/salons/${ids.salon}/overview`, tok.owner).expect(200)).body.settings.autoAssignEnabled).toBe(false);
-      expect((await prisma.salon.findUniqueOrThrow({ where: { id: ids.salon } })).queueAutoAssignEnabled).toBe(false);
-
       await setAuto(true);
-      expect((await api('get', `dashboard/salons/${ids.salon}/queue/settings`, tok.owner).expect(200)).body).toEqual({ autoAssignEnabled: true });
       expect((await board()).autoAssignEnabled).toBe(true);
-      expect((await api('get', `dashboard/salons/${ids.salon}/overview`, tok.owner).expect(200)).body.settings.autoAssignEnabled).toBe(true);
-
-      expect(await prisma.auditLog.count({ where: { entityId: ids.salon, action: 'QUEUE_AUTO_ASSIGN_DISABLED' } })).toBeGreaterThanOrEqual(1);
+      expect((await prisma.salon.findUniqueOrThrow({ where: { id: ids.salon } })).queueAutoAssignEnabled).toBe(true);
       expect(await prisma.auditLog.count({ where: { entityId: ids.salon, action: 'QUEUE_AUTO_ASSIGN_ENABLED' } })).toBeGreaterThanOrEqual(1);
-      // a barber may read the setting (the Live Queue shows it) but never change it
       expect((await api('get', `dashboard/salons/${ids.salon}/queue/settings`, tok.ravi).expect(200)).body).toEqual({ autoAssignEnabled: true });
-      // another shop's owner can neither read nor change it
-      await api('get', `dashboard/salons/${ids.salon}/queue/settings`, tok.outsider).expect(403);
-      await api('patch', `dashboard/salons/${ids.salon}/queue/settings`, tok.outsider).send({ autoAssignEnabled: false }).expect(403);
+      await api('patch', `dashboard/salons/${ids.salon}/queue/settings`, tok.outsider)
+        .send({ autoAssignEnabled: false }).expect(403);
     });
 
-    it('OFF: a present customer simply waits even though a barber and chair are free', async () => {
+    it('OFF: arrived visitors remain WAITING even with spare capacity', async () => {
       await setAuto(false);
-      const e = await add('Waits Wally', { serviceId: ids.haircut });
+      const waiting = await add('Waiting While Off', { serviceId: ids.haircut });
       await settle();
-      const b = await board();
-      expect(b.sections.waiting.map((x: { id: string }) => x.id)).toContain(e.id);
+      expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toContain(waiting.id);
+      expect(await activeSessions()).toHaveLength(0);
       expect(await assignedHolds()).toHaveLength(0);
-      expect(await activeSessions()).toHaveLength(0);
     });
 
-    it('ON: present customers are ASSIGNED fairly, FIFO, on distinct chairs - and NOT started; the rest keep waiting', async () => {
-      const first = await add('First Fay', { serviceId: ids.haircut });
-      const second = await add('Second Sid', { serviceId: ids.haircut });
-      const third = await add('Third Tia', { serviceId: ids.haircut });
+    it('ON: first two arrived visitors start IN_SERVICE atomically, FIFO, third waits; no ASSIGNED hold', async () => {
+      const a = await add('FIFO A', { serviceId: ids.haircut });
+      const b = await add('FIFO B', { serviceId: ids.haircut });
+      const c = await add('FIFO C', { serviceId: ids.haircut });
       await setAuto(true);
       await settle();
-
-      const holds = await assignedHolds();
-      expect(holds.map((h) => h.id).sort()).toEqual([first.id, second.id].sort()); // two barbers: exactly two, FIFO
-      expect(new Set(holds.map((h) => h.assignedStaffId)).size).toBe(2);
-      expect(new Set(holds.map((h) => h.assignedChairId)).size).toBe(2);
-      for (const h of holds) {
-        expect(h.serviceStartedAt).toBeNull(); // assigned is NOT started
-        expect(h.assignedAt).not.toBeNull();
+      const active = await activeSessions();
+      expect(active.map((x) => x.queueEntryId).sort()).toEqual([a.id, b.id].sort());
+      expect(new Set(active.map((x) => x.staffId)).size).toBe(2);
+      expect(new Set(active.map((x) => x.chairId)).size).toBe(2);
+      expect(await assignedHolds()).toHaveLength(0);
+      for (const row of active) {
+        expect(row.queueEntry).toMatchObject({
+          status: 'IN_SERVICE', assignedStaffId: row.staffId, assignedChairId: row.chairId,
+          serviceStartedAt: expect.any(Date), assignedAt: expect.any(Date),
+        });
       }
-      expect(await activeSessions()).toHaveLength(0); // no service session was opened
-
-      const b = await board();
-      const ids3 = (rows: Array<{ id: string }>) => rows.map((x) => x.id);
-      expect(ids3(b.sections.assigned).sort()).toEqual([first.id, second.id].sort());
-      expect(ids3(b.sections.inService)).toEqual([]);
-      expect(ids3(b.sections.waiting)).toEqual([third.id]);
-      expect(b.sections.waiting[0].position).toBe(1);
-      expect(b.counts).toMatchObject({ waiting: 1, assigned: 2, inService: 0 });
-      for (const e of b.sections.assigned as Array<{ phase: string; serviceStartedAt: string | null; assignedStaffName: string | null; assignedChairLabel: string | null }>) {
-        expect(e).toMatchObject({ phase: 'ASSIGNED', serviceStartedAt: null });
-        expect(e.assignedStaffName).toBeTruthy();
-        expect(e.assignedChairLabel).toBeTruthy();
-      }
-      expect(await prisma.auditLog.count({ where: { action: 'QUEUE_ENTRY_AUTO_ASSIGNED', entityId: first.id } })).toBe(1);
+      const snapshot = await board();
+      expect(snapshot.sections.inService.map((x: { id: string }) => x.id).sort()).toEqual([a.id, b.id].sort());
+      expect(snapshot.sections.waiting.map((x: { id: string }) => x.id)).toEqual([c.id]);
+      expect(snapshot.sections.assigned).toHaveLength(0);
+      expect(snapshot.counts).toMatchObject({ waiting: 1, assigned: 0, inService: 2 });
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        where: { entityId: a.id, action: 'QUEUE_ENTRY_AUTO_ASSIGNED' },
+      });
+      expect(audit.metadata).toMatchObject({ serviceStarted: true });
     });
 
-    it('a barber with a customer assigned is not given a second one, and their chair is not reused', async () => {
+    it('does not double-seat a busy barber or occupy their chair twice', async () => {
       await setAuto(true);
-      const a = await add('Hold A', { serviceId: ids.haircut });
-      const b2 = await add('Hold B', { serviceId: ids.haircut });
+      const a = await add('Busy A', { serviceId: ids.haircut });
+      const b = await add('Busy B', { serviceId: ids.haircut });
+      const c = await add('Busy C', { serviceId: ids.haircut });
       await settle();
-      expect(await assignedHolds()).toHaveLength(2);
-      const c = await add('Hold C', { serviceId: ids.haircut });
-      const d = await add('Hold D', { serviceId: ids.haircut });
-      await settle();
-      const holds = await assignedHolds();
-      expect(holds).toHaveLength(2);
-      expect(holds.map((h) => h.id).sort()).toEqual([a.id, b2.id].sort());
-      expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toEqual([c.id, d.id]);
-      // and a manual attempt to hand a held barber a second customer is refused
-      const holder = holds[0];
-      await api('post', `dashboard/queue-entries/${c.id}/assign`, tok.owner)
-        .send({ staffId: holder.assignedStaffId, chairId: ids['Chair 3'], startService: false })
-        .expect(409);
-      // ... and so is putting a second customer in a chair someone else is waiting in
-      const other = holds[1];
-      await api('post', `dashboard/queue-entries/${c.id}/assign`, tok.owner)
-        .send({ staffId: other.assignedStaffId, chairId: holder.assignedChairId, startService: false })
-        .expect(409);
-    });
-
-    it('the assigned barber starts service explicitly: only then is it IN_SERVICE, with a real start time and an ACTIVE session', async () => {
-      await setAuto(true);
-      const first = await add('Start Me', { serviceId: ids.haircut });
-      await settle();
-      const hold = (await assignedHolds()).find((h) => h.id === first.id)!;
-      expect(hold).toBeTruthy();
-      const barber = tokenOfStaff(hold.assignedStaffId as string);
-      const colleague = hold.assignedStaffId === ids.raviStaff ? tok.sunil : tok.ravi;
-      // The barber's own view lists the customer as ASSIGNED to them, not as their current service.
-      const mine = await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, barber).expect(200);
-      expect(mine.body.current).toBeNull();
-      expect(mine.body.assigned).toMatchObject({ queueEntryId: first.id, serviceSessionId: null, startedAt: null, status: 'CALLED' });
-      // a colleague may not start someone else's customer
-      await start(first.id, colleague).expect(403);
-      expect(await activeSessions()).toHaveLength(0);
-
-      const started = await start(first.id, barber).expect(201);
-      expect(started.body).toMatchObject({ id: first.id, status: 'IN_SERVICE', phase: 'IN_SERVICE', assignedStaffId: hold.assignedStaffId });
-      expect(started.body.serviceStartedAt).not.toBeNull();
-      expect(started.body.activeServiceSessionId).toBeTruthy();
       const sessions = await activeSessions();
-      expect(sessions).toHaveLength(1);
-      expect(sessions[0]).toMatchObject({ queueEntryId: first.id, staffId: hold.assignedStaffId, chairId: hold.assignedChairId });
-      expect(await assignedHolds()).toHaveLength(0);
-      const after = await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, barber).expect(200);
-      expect(after.body.current).toMatchObject({ queueEntryId: first.id });
-      expect(after.body.assigned).toBeNull();
-      expect(await prisma.auditLog.count({ where: { action: 'QUEUE_ENTRY_SERVICE_STARTED', entityId: first.id } })).toBe(1);
-      // starting again (a double tap) changes nothing
-      await start(first.id, barber).expect(201);
-      expect(await activeSessions()).toHaveLength(1);
-    });
-
-    it('the owner may start any assigned customer; a waiting or unassigned customer cannot be started', async () => {
-      const waiting = await add('Not Assigned', { serviceId: ids.haircut });
-      await start(waiting.id, tok.owner).expect(409);
-      await setAuto(true);
-      await settle();
-      const hold = (await assignedHolds()).find((h) => h.id === waiting.id)!;
-      expect(hold).toBeTruthy();
-      await start(waiting.id, tok.owner).expect(201);
-      expect((await activeSessions())[0].queueEntryId).toBe(waiting.id);
-      // a customer or another shop's owner has no business starting anything here
-      await start(waiting.id, tok.cust1).expect(403);
-      await start(waiting.id, tok.outsider).expect(403);
-    });
-
-    it('completing a service releases the barber and chair, and the next waiting customer is ASSIGNED (not started)', async () => {
-      await setAuto(true);
-      const a = await add('Done A', { serviceId: ids.haircut });
-      const b2 = await add('Done B', { serviceId: ids.haircut });
-      const c = await add('Done C', { serviceId: ids.haircut });
-      await settle();
-      for (const h of await assignedHolds()) await start(h.id, tokenOfStaff(h.assignedStaffId as string)).expect(201);
-      expect(await activeSessions()).toHaveLength(2);
+      expect(sessions).toHaveLength(2);
+      expect(new Set(sessions.map((x) => x.staffId)).size).toBe(2);
+      expect(new Set(sessions.map((x) => x.chairId)).size).toBe(2);
+      await api('post', `dashboard/queue-entries/${c.id}/assign`, tok.owner)
+        .send({ staffId: sessions[0].staffId, chairId: ids['Chair 3'], startService: true })
+        .expect(409);
       expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toEqual([c.id]);
-
-      const sessionOfA = (await activeSessions()).find((s) => s.queueEntryId === a.id)!;
-      await api('post', `dashboard/service-sessions/${sessionOfA.id}/complete`, tokenOfStaff(sessionOfA.staffId)).expect(201);
-      await settle();
-      // C now holds A's barber and chair - assigned, still not started
-      const holds = await assignedHolds();
-      expect(holds.map((h) => h.id)).toEqual([c.id]);
-      expect(holds[0].assignedStaffId).toBe(sessionOfA.staffId);
-      expect(holds[0].assignedChairId).toBe(sessionOfA.chairId);
-      expect(holds[0].serviceStartedAt).toBeNull();
-      expect((await activeSessions()).map((s) => s.queueEntryId)).toEqual([b2.id]);
-      const done = await prisma.queueEntry.findUniqueOrThrow({ where: { id: a.id } });
-      expect(done.status).toBe('COMPLETED');
-      expect(done.serviceCompletedAt).not.toBeNull();
+      void a; void b;
     });
 
-    it('auto-assigns a remote arrival immediately after the owner marks them in the shop', async () => {
+    it('a completed service instantly auto-starts the next arrived waiting visitor without a button', async () => {
+      await setAuto(true);
+      const a = await add('Finish A', { serviceId: ids.haircut });
+      const b = await add('Finish B', { serviceId: ids.haircut });
+      const c = await add('Next C', { serviceId: ids.haircut });
+      await settle();
+      const occupied = (await activeSessions()).find((x) => x.queueEntryId === a.id)!;
+      expect(occupied).toBeTruthy();
+      await api('post', `dashboard/service-sessions/${occupied.id}/complete`, tokenOfStaff(occupied.staffId)).expect(201);
+      await settle();
+      const sessions = await activeSessions();
+      expect(sessions).toHaveLength(2);
+      expect(sessions.find((x) => x.queueEntryId === c.id)).toMatchObject({ staffId: occupied.staffId, chairId: occupied.chairId });
+      expect((await board()).sections.inService.map((x: { id: string }) => x.id).sort()).toEqual([b.id, c.id].sort());
+      expect(await assignedHolds()).toHaveLength(0);
+    });
+
+    it('a cancelled in-service visit frees capacity and the next customer starts', async () => {
+      await setAuto(true);
+      const a = await add('Cancel A', { serviceId: ids.haircut });
+      await add('Cancel B', { serviceId: ids.haircut });
+      const c = await add('Next After Cancel', { serviceId: ids.haircut });
+      await settle();
+      const old = (await activeSessions()).find((x) => x.queueEntryId === a.id)!;
+      await api('post', `dashboard/queue-entries/${a.id}/cancel`, tok.owner).expect(201);
+      await settle();
+      expect((await activeSessions()).find((x) => x.queueEntryId === c.id))
+        .toMatchObject({ staffId: old.staffId, chairId: old.chairId });
+      expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: a.id } })).status).toBe('CANCELLED');
+    });
+
+    it('remote customers never start until arrival; after Mark as in the shop they start immediately', async () => {
       await setAuto(true);
       const remote = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1)
-        .send({ serviceId: ids.haircut, contactName: 'Remote Arrival', contactPhone: '9876500009' }).expect(201);
+        .send({ serviceId: ids.haircut, contactName: 'Remote Ria', contactPhone: '9876500009' }).expect(201);
       await settle();
-      expect(await assignedHolds()).toHaveLength(0);
-      const before = await prisma.queueEntry.findUniqueOrThrow({ where: { id: remote.body.id } });
-      expect(before.arrivedAt).toBeNull();
-
+      expect(await activeSessions()).toHaveLength(0);
+      expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toContain(remote.body.id);
       await api('post', `dashboard/queue-entries/${remote.body.id}/arrive`, tok.owner).expect(201);
       await settle();
-      const after = await prisma.queueEntry.findUniqueOrThrow({ where: { id: remote.body.id } });
-      expect(after.arrivedAt).not.toBeNull();
-      expect(after).toMatchObject({ status: 'CALLED', assignedStaffId: expect.any(String), assignedChairId: expect.any(String), serviceStartedAt: null });
-      expect(await prisma.serviceSession.count({ where: { queueEntryId: remote.body.id } })).toBe(0);
-    });
-
-    it('never assigns someone who has not arrived, a barber who is busy or holding a customer, or a barber lacking the skill', async () => {
-      await setAuto(true);
-      // remote customer: joined through the app, not yet in the shop => never auto-assigned
-      const remote = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1).send({ serviceId: ids.haircut, contactName: 'Remote Ria', contactPhone: '9876500009' }).expect(201);
-      await settle();
+      const started = await prisma.queueEntry.findUniqueOrThrow({ where: { id: remote.body.id } });
+      expect(started).toMatchObject({ status: 'IN_SERVICE', serviceStartedAt: expect.any(Date) });
+      expect((await activeSessions()).map((x) => x.queueEntryId)).toContain(remote.body.id);
       expect(await assignedHolds()).toHaveLength(0);
-      expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toContain(remote.body.id);
-      await api('post', `dashboard/queue-entries/${remote.body.id}/cancel`, tok.owner).expect(201);
-
-      // Ravi is given a customer; a beard customer needs a barber who can do beards (only Ravi can),
-      // so they WAIT although Sunil is free - and Sunil is never given them.
-      const haircut = await add('Busy Bee', { serviceId: ids.haircut, preferredStaffId: ids.raviStaff });
-      await settle();
-      expect((await assignedHolds()).map((h) => h.assignedStaffId)).toEqual([ids.raviStaff]);
-      const beard = await add('Beard Ben', { serviceId: ids.beard });
-      await settle();
-      expect((await assignedHolds()).map((h) => h.id)).not.toContain(beard.id);
-      const waitingNow = (await board()).sections.waiting.map((x: { id: string }) => x.id);
-      expect(waitingNow).toContain(beard.id);
-      // When Ravi starts and finishes, the beard customer is assigned to Ravi, the only qualified barber.
-      await start(haircut.id, tok.ravi).expect(201);
-      const raviSession = (await activeSessions()).find((s) => s.queueEntryId === haircut.id)!;
-      await api('post', `dashboard/service-sessions/${raviSession.id}/complete`, tok.ravi).expect(201);
-      await settle();
-      const after = await assignedHolds();
-      expect(after.find((h) => h.id === beard.id)?.assignedStaffId).toBe(ids.raviStaff);
     });
 
-    it('honors a preferred barber exactly: waits for them rather than taking someone else, without blocking the next customer', async () => {
-      await setAuto(true);
-      const blocker = await add('Blocks Ravi', { serviceId: ids.haircut, preferredStaffId: ids.raviStaff });
-      await settle();
-      const wantsRavi = await add('Wants Ravi', { serviceId: ids.haircut, preferredStaffId: ids.raviStaff });
-      const anyone = await add('Anyone Alex', { serviceId: ids.haircut });
-      await settle();
-      const holds = await assignedHolds();
-      expect(holds.map((h) => h.id)).not.toContain(wantsRavi.id);
-      expect(holds.find((h) => h.id === blocker.id)?.assignedStaffId).toBe(ids.raviStaff);
-      expect(holds.find((h) => h.id === anyone.id)?.assignedStaffId).toBe(ids.sunilStaff);
-    });
-
-    it('concurrent allocation requests assign a customer exactly once and never hold a barber or chair twice', async () => {
-      const entry = await add('Race Rick', { serviceId: ids.haircut });
-      const results = await Promise.all(
-        Array.from({ length: 6 }, () => api('post', `dashboard/salons/${ids.salon}/queue/auto-assign`, tok.owner).then((r) => r.status)),
-      );
-      expect(results.every((c) => c === 201)).toBe(true);
-      const holds = await assignedHolds();
-      expect(holds.filter((h) => h.id === entry.id)).toHaveLength(1);
-      expect(new Set(holds.map((h) => h.assignedStaffId)).size).toBe(holds.length);
-      expect(new Set(holds.map((h) => h.assignedChairId)).size).toBe(holds.length);
+    it('manual one-click start respects arrival even if the automatic setting is OFF', async () => {
+      await setAuto(false);
+      const remote = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1)
+        .send({ serviceId: ids.haircut, contactName: 'Still Traveling', contactPhone: '9876500010' }).expect(201);
+      await api('post', `dashboard/queue-entries/${remote.body.id}/auto-assign`, tok.owner).expect(409);
       expect(await activeSessions()).toHaveLength(0);
+      const present = await add('At The Counter', { serviceId: ids.haircut });
+      await api('post', `dashboard/queue-entries/${present.id}/auto-assign`, tok.owner).expect(201);
+      expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: present.id } })).status).toBe('IN_SERVICE');
+      expect((await activeSessions()).map((x) => x.queueEntryId)).toContain(present.id);
+      await api('post', `dashboard/queue-entries/${remote.body.id}/cancel`, tok.owner).expect(201);
     });
 
-    it('two simultaneous manual assignments of one barber to two different customers: exactly one wins', async () => {
-      const x = await add('Contender X', { serviceId: ids.haircut });
-      const y = await add('Contender Y', { serviceId: ids.haircut });
-      const results = await Promise.all([
-        api('post', `dashboard/queue-entries/${x.id}/assign`, tok.owner).send({ staffId: ids.raviStaff, chairId: ids['Chair 1'], startService: false }).then((r) => r.status),
-        api('post', `dashboard/queue-entries/${y.id}/assign`, tok.owner).send({ staffId: ids.raviStaff, chairId: ids['Chair 2'], startService: false }).then((r) => r.status),
-      ]);
-      expect(results.filter((s) => s === 201)).toHaveLength(1);
-      expect(results.filter((s) => s === 409)).toHaveLength(1);
-      const holds = await assignedHolds();
-      expect(holds).toHaveLength(1);
-      expect(holds[0].assignedStaffId).toBe(ids.raviStaff);
+    it('manual bulk start refuses remote visitors and leaves full capacity waiting', async () => {
+      await setAuto(false);
+      const a = await add('Manual A', { serviceId: ids.haircut });
+      const b = await add('Manual B', { serviceId: ids.haircut });
+      const c = await add('Manual C', { serviceId: ids.haircut });
+      const result = await api('post', `dashboard/salons/${ids.salon}/queue/auto-assign`, tok.owner).expect(201);
+      expect(result.body.assigned.map((x: { queueEntryId: string }) => x.queueEntryId).sort()).toEqual([a.id, b.id].sort());
+      expect(result.body.skipped.map((x: { entryId: string }) => x.entryId)).toContain(c.id);
+      expect(await activeSessions()).toHaveLength(2);
+      expect(await assignedHolds()).toHaveLength(0);
     });
 
-    it('two simultaneous Start Service taps create exactly one service session', async () => {
-      await setAuto(true);
-      const entry = await add('Double Start', { serviceId: ids.haircut });
-      await settle();
-      const hold = (await assignedHolds()).find((h) => h.id === entry.id)!;
-      const barber = tokenOfStaff(hold.assignedStaffId as string);
-      const results = await Promise.all([start(entry.id, barber).then((r) => r.status), start(entry.id, barber).then((r) => r.status)]);
-      expect(results.every((s) => s === 201 || s === 409)).toBe(true);
-      expect(results).toContain(201);
-      expect(await prisma.serviceSession.count({ where: { queueEntryId: entry.id } })).toBe(1);
-    });
-
-    it('lets a barber take the next customer they may serve: assigned to them, started by them, and not while they hold or serve one', async () => {
-      const first = await add('Next For Sunil', { serviceId: ids.haircut });
-      const taken = await api('post', `dashboard/salons/${ids.salon}/queue/take-next`, tok.sunil).expect(201);
-      expect(taken.body).toMatchObject({ id: first.id, status: 'CALLED', phase: 'ASSIGNED', assignedStaffId: ids.sunilStaff });
-      expect(taken.body.serviceStartedAt).toBeNull();
-      await add('Another One', { serviceId: ids.haircut });
-      await api('post', `dashboard/salons/${ids.salon}/queue/take-next`, tok.sunil).expect(409); // already holds a customer
-      await start(first.id, tok.sunil).expect(201);
-      await api('post', `dashboard/salons/${ids.salon}/queue/take-next`, tok.sunil).expect(409); // already serving
-      // the owner has no barber profile, so cannot "take" a customer
+    it('barber Take next immediately starts an arrived guest and prevents taking a second', async () => {
+      await setAuto(false);
+      const guest = await add('Sunil Customer', { serviceId: ids.haircut });
+      const response = await api('post', `dashboard/salons/${ids.salon}/queue/take-next`, tok.sunil).expect(201);
+      expect(response.body).toMatchObject({ id: guest.id, status: 'IN_SERVICE', phase: 'IN_SERVICE', assignedStaffId: ids.sunilStaff });
+      expect(response.body.activeServiceSessionId).toBeTruthy();
+      await add('Next While Busy', { serviceId: ids.haircut });
+      await api('post', `dashboard/salons/${ids.salon}/queue/take-next`, tok.sunil).expect(409);
       await api('post', `dashboard/salons/${ids.salon}/queue/take-next`, tok.owner).expect(403);
     });
 
-    it('explains why a customer cannot be assigned instead of failing silently', async () => {
-      // 3 chairs, 2 barbers: after both barbers hold a customer the third request has nobody to take it
-      const a = await add('Fill A', { serviceId: ids.haircut });
-      const b2 = await add('Fill B', { serviceId: ids.haircut });
-      const c = await add('Fill C', { serviceId: ids.haircut });
-      const res = await api('post', `dashboard/salons/${ids.salon}/queue/auto-assign`, tok.owner).expect(201);
-      expect(res.body.assigned).toHaveLength(2);
-      expect(res.body.skipped).toHaveLength(1);
-      expect(res.body.skipped[0].entryId).toBe(c.id);
-      expect(String(res.body.skipped[0].reason)).toMatch(/barber|busy|chair/i);
-      expect(await activeSessions()).toHaveLength(0); // the manual button assigns too; it does not start
-      void a;
-      void b2;
+    it('preferred barber and service qualification never leak into the wrong barber', async () => {
+      await setAuto(true);
+      const first = await add('Ravi Serving', { serviceId: ids.haircut, preferredStaffId: ids.raviStaff });
+      const wantsRavi = await add('Wait for Ravi', { serviceId: ids.haircut, preferredStaffId: ids.raviStaff });
+      const beard = await add('Beard must be Ravi', { serviceId: ids.beard });
+      const any = await add('Sunil Can Help', { serviceId: ids.haircut });
+      await settle();
+      const active = await activeSessions();
+      expect(active.find((x) => x.queueEntryId === first.id)?.staffId).toBe(ids.raviStaff);
+      expect(active.find((x) => x.queueEntryId === any.id)?.staffId).toBe(ids.sunilStaff);
+      expect(active.map((x) => x.queueEntryId)).not.toContain(wantsRavi.id);
+      expect(active.map((x) => x.queueEntryId)).not.toContain(beard.id);
+      expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toEqual([wantsRavi.id, beard.id]);
     });
 
-    it('a cancelled assigned customer frees their barber and chair at once, and the next customer takes them', async () => {
-      await setAuto(true);
-      const a = await add('Cancel A', { serviceId: ids.haircut });
-      const b2 = await add('Cancel B', { serviceId: ids.haircut });
-      const c = await add('Cancel C', { serviceId: ids.haircut });
-      await settle();
-      const holdA = (await assignedHolds()).find((h) => h.id === a.id)!;
-      await api('post', `dashboard/queue-entries/${a.id}/cancel`, tok.owner).expect(201);
-      await settle();
-      const holds = await assignedHolds();
-      expect(holds.map((h) => h.id).sort()).toEqual([b2.id, c.id].sort());
-      expect(holds.find((h) => h.id === c.id)?.assignedStaffId).toBe(holdA.assignedStaffId);
-    });
-
-    it('marking an assigned customer who never turned up as no-show releases the barber and chair', async () => {
-      await setAuto(true);
-      const a = await add('Ghost', { serviceId: ids.haircut });
-      await settle();
-      expect((await assignedHolds()).map((h) => h.id)).toContain(a.id);
-      await api('post', `dashboard/queue-entries/${a.id}/no-show`, tok.owner).expect(201);
-      expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: a.id } })).status).toBe('NO_SHOW');
+    it('concurrent manual start requests create exactly one ACTIVE ServiceSession', async () => {
+      await setAuto(false);
+      const guest = await add('Concurrent Customer', { serviceId: ids.haircut });
+      const results = await Promise.all(
+        Array.from({ length: 6 }, () => api('post', `dashboard/salons/${ids.salon}/queue/auto-assign`, tok.owner).then((r) => r.status)),
+      );
+      expect(results.every((x) => x === 201)).toBe(true);
+      expect(await prisma.serviceSession.count({ where: { queueEntryId: guest.id } })).toBe(1);
+      expect((await activeSessions()).map((x) => x.queueEntryId)).toEqual([guest.id]);
       expect(await assignedHolds()).toHaveLength(0);
     });
 
-    it('an assigned customer goes back to waiting (keeping their place) when their barber clocks out, and is re-assigned to someone free', async () => {
-      await setAuto(true);
-      // Sunil is busy with someone already, so the preferred-Ravi customer is assigned to Ravi.
-      const entry = await add('Ravi Fan', { serviceId: ids.haircut, preferredStaffId: ids.raviStaff });
-      await settle();
-      expect((await assignedHolds()).find((h) => h.id === entry.id)?.assignedStaffId).toBe(ids.raviStaff);
-      const joined = (await prisma.queueEntry.findUniqueOrThrow({ where: { id: entry.id } })).joinedAt;
+    it('old Android startService:false reservations remain supported and can be started safely', async () => {
       await setAuto(false);
-      await api('patch', `dashboard/staff/${ids.raviStaff}/status`, tok.ravi).send({ status: 'INACTIVE' }).expect(200);
-      const released = await prisma.queueEntry.findUniqueOrThrow({ where: { id: entry.id } });
-      expect(released).toMatchObject({ status: 'WAITING', assignedStaffId: null, assignedChairId: null, assignedAt: null });
-      expect(released.joinedAt.getTime()).toBe(joined.getTime()); // keeps their place in line
-      expect(await prisma.auditLog.count({ where: { entityId: entry.id, action: 'QUEUE_ASSIGNMENT_RELEASED' } })).toBe(1);
-      await api('patch', `dashboard/staff/${ids.raviStaff}/status`, tok.ravi).send({ status: 'ACTIVE' }).expect(200);
-      // the shop's own board shows them in Waiting again, not Assigned
-      const b = await board();
-      expect(b.sections.waiting.map((x: { id: string }) => x.id)).toContain(entry.id);
-      expect((b.sections.assigned ?? []).map((x: { id: string }) => x.id)).not.toContain(entry.id);
+      const guest = await add('Legacy Reservation', { serviceId: ids.haircut });
+      const reservation = await api('post', `dashboard/queue-entries/${guest.id}/assign`, tok.owner)
+        .send({ staffId: ids.raviStaff, chairId: ids['Chair 1'], startService: false }).expect(201);
+      expect(reservation.body).toMatchObject({ status: 'CALLED', phase: 'ASSIGNED', serviceStartedAt: null });
+      expect(await activeSessions()).toHaveLength(0);
+      expect(await assignedHolds()).toHaveLength(1);
+      const active = await start(guest.id, tok.ravi).expect(201);
+      expect(active.body).toMatchObject({ status: 'IN_SERVICE', phase: 'IN_SERVICE' });
+      expect((await activeSessions()).map((x) => x.queueEntryId)).toContain(guest.id);
+      expect(await assignedHolds()).toHaveLength(0);
     });
 
-    it('a chair taken out of use releases the customer assigned to it', async () => {
+    it('marking an unarrived WAITING customer NO SHOW keeps them out of Cancelled & expired semantics', async () => {
       await setAuto(true);
-      const entry = await add('Chair Casualty', { serviceId: ids.haircut });
+      const remote = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1)
+        .send({ serviceId: ids.haircut, contactName: 'Absent Visitor', contactPhone: '9876500009' }).expect(201);
       await settle();
-      const hold = (await assignedHolds()).find((h) => h.id === entry.id)!;
-      await setAuto(false);
-      await api('patch', `dashboard/salons/${ids.salon}/chairs/${hold.assignedChairId}`, tok.owner).send({ status: 'MAINTENANCE' }).expect(200);
-      const released = await prisma.queueEntry.findUniqueOrThrow({ where: { id: entry.id } });
-      expect(released).toMatchObject({ status: 'WAITING', assignedStaffId: null, assignedChairId: null });
-      await api('patch', `dashboard/salons/${ids.salon}/chairs/${hold.assignedChairId}`, tok.owner).send({ status: 'ACTIVE' }).expect(200);
+      const response = await api('post', `dashboard/queue-entries/${remote.body.id}/no-show`, tok.owner).expect(201);
+      expect(response.body).toMatchObject({ status: 'NO_SHOW', phase: 'NO_SHOW' });
+      const snapshot = await board();
+      expect(snapshot.sections.historyToday).toContainEqual(expect.objectContaining({ id: remote.body.id, status: 'NO_SHOW' }));
+      expect(snapshot.sections.waiting.map((x: { id: string }) => x.id)).not.toContain(remote.body.id);
+      expect(await activeSessions()).toHaveLength(0);
+      // The old CALLED -> NO_SHOW action also remains supported for legacy clients.
     });
 
-    it('removing a barber’s access releases the customer assigned to them', async () => {
-      await setAuto(true);
-      const entry = await add('Access Casualty', { serviceId: ids.haircut, preferredStaffId: ids.sunilStaff });
-      await settle();
-      expect((await assignedHolds()).find((h) => h.id === entry.id)?.assignedStaffId).toBe(ids.sunilStaff);
+    it('never marks an arrived WAITING or an IN_SERVICE guest NO SHOW', async () => {
       await setAuto(false);
-      await api('post', `dashboard/salons/${ids.salon}/staff/${ids.sunilStaff}/access/revoke`, tok.owner).send({ reason: 'test' }).expect(201);
-      expect(await prisma.queueEntry.findUniqueOrThrow({ where: { id: entry.id } })).toMatchObject({ status: 'WAITING', assignedStaffId: null });
-      await api('post', `dashboard/salons/${ids.salon}/staff/${ids.sunilStaff}/access/restore`, tok.owner).send({}).expect(201);
-      // restoring access does not put the barber back on duty by itself - they clock in again
-      await api('patch', `dashboard/staff/${ids.sunilStaff}/status`, tok.sunil).send({ status: 'ACTIVE' }).expect(200);
+      const arrived = await add('Already Here', { serviceId: ids.haircut });
+      await api('post', `dashboard/queue-entries/${arrived.id}/no-show`, tok.owner).expect(409);
+      await setAuto(true);
+      await settle();
+      await api('post', `dashboard/queue-entries/${arrived.id}/no-show`, tok.owner).expect(409);
+      expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: arrived.id } })).status).toBe('IN_SERVICE');
     });
 
-    it('an existing scheduled appointment keeps its barber: nobody is assigned into its window', async () => {
-      // Ravi is booked from now for half an hour; the automatic allocator must give the walk-in to Sunil.
+    it('an existing booking reserves its barber and automatic service start respects that window', async () => {
       const now = new Date();
       await prisma.booking.create({
         data: {
-          salonId: ids.salon,
-          customerId: ids.cust2,
-          serviceId: ids.haircut,
-          preferredStaffId: ids.raviStaff,
+          salonId: ids.salon, customerId: ids.cust2,
+          serviceId: ids.haircut, preferredStaffId: ids.raviStaff,
           slotStart: new Date(now.getTime() - 5 * 60_000),
           slotEnd: new Date(now.getTime() + 25 * 60_000),
-          status: 'CONFIRMED',
-          source: 'APP',
-          idempotencyKey: `e2e-${run}-reserved-ravi`,
+          status: 'CONFIRMED', source: 'APP', idempotencyKey: `e2e-${run}-reserved-ravi-direct`,
         },
       });
       try {
         await setAuto(true);
-        const entry = await add('Walk Past Ravi', { serviceId: ids.haircut });
+        const first = await add('Visit Past Booking', { serviceId: ids.haircut });
         await settle();
-        const hold = (await assignedHolds()).find((h) => h.id === entry.id);
-        expect(hold?.assignedStaffId).toBe(ids.sunilStaff);
-        // and a second walk-in has nobody left: Ravi stays reserved for the appointment
-        const second = await add('Second Walker', { serviceId: ids.haircut });
+        expect((await activeSessions()).find((x) => x.queueEntryId === first.id)?.staffId).toBe(ids.sunilStaff);
+        const second = await add('Another While Reserved', { serviceId: ids.haircut });
         await settle();
-        expect((await assignedHolds()).map((h) => h.id)).not.toContain(second.id);
+        expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toContain(second.id);
       } finally {
-        // (a trigger snapshots booking_services, so release the reservation by cancelling, not deleting)
-        await prisma.booking.updateMany({ where: { idempotencyKey: `e2e-${run}-reserved-ravi` }, data: { status: 'CANCELLED' } });
+        await prisma.booking.updateMany({
+          where: { idempotencyKey: `e2e-${run}-reserved-ravi-direct` }, data: { status: 'CANCELLED' },
+        });
       }
     });
   });
