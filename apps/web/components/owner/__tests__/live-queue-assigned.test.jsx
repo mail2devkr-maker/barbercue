@@ -4,9 +4,8 @@ import { LiveQueueConsole } from "../LiveQueueConsole";
 import { apiFetch } from "../../../lib/api";
 import { setVoiceEnabled, useVoiceEnabled } from "../../../lib/voice-preference";
 
-// Owner-approved workflow: WAITING -> ASSIGNED -> IN_SERVICE -> COMPLETED. An assigned customer is shown
-// in their own place with a Start service action; they are never counted or listed as waiting, and never
-// shown as in service until the barber actually starts.
+// Owner-approved workflow: arrived WAITING -> IN_SERVICE -> COMPLETED. Historical
+// CALLED/ASSIGNED reservations from older apps remain visible under Waiting, never mislabeled as started.
 
 jest.mock("../../../lib/api", () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {} }));
 jest.mock("../../../lib/auth-context", () => ({ useAuth: () => ({ user: { id: "u1", preferredLanguage: "en" } }) }));
@@ -31,7 +30,7 @@ jest.mock("next/link", () => ({
     </a>
   ),
 }));
-let search = "view=assigned";
+let search = "view=waiting";
 const replace = jest.fn();
 jest.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/salons/s1/queue",
@@ -150,103 +149,126 @@ beforeEach(() => {
   useVoiceEnabled.mockReturnValue(false);
   setVoiceEnabled.mockClear();
   replace.mockClear();
-  search = "view=assigned";
+  search = "view=waiting";
 });
 afterEach(() => {
   delete globalThis.window;
   delete globalThis.document;
 });
 
-describe("Live Queue: Waiting, Assigned and In service are separate places", () => {
-  it("shows exact counts on separate tabs", async () => {
+describe("Live Queue: direct service start and a separate NO SHOW tab", () => {
+  it("has Waiting, In service, Completed, NO SHOW, Cancelled & expired — never Assigned", async () => {
+    search = "view=waiting";
     const tree = await render();
     const tabs = tree.root.findAllByProps({ role: "tab" });
     const labels = tabs.map((t) => textOf(t).replace(/\s+/g, " ").trim());
-    expect(labels.join("|")).toMatch(/Waiting.*1/);
-    expect(labels.join("|")).toMatch(/Assigned.*1/);
+    expect(labels.join("|")).toMatch(/Waiting.*2/); // one genuine waiting + one legacy reservation
     expect(labels.join("|")).toMatch(/In service.*1/);
+    expect(labels.join("|")).toMatch(/NO SHOW.*0/);
     expect(labels.some((l) => l.startsWith("Completed today"))).toBe(true);
+    expect(labels.some((l) => l.startsWith("Cancelled & expired"))).toBe(true);
+    expect(labels.some((l) => l.startsWith("Assigned"))).toBe(false);
   });
 
-  it("the Assigned tab lists the assigned customer as 'Assigned · not started', with their barber and chair - and not the others", async () => {
-    const tree = await render();
-    const text = allText(tree);
-    expect(text).toContain("Assigned Asha");
-    expect(text).toContain("Assigned · not started");
-    expect(text).toContain("Assigned to Ravi · Chair 1");
-    expect(text).toContain("Service not started");
-    expect(text).not.toContain("Waiting Wendy");
-    expect(text).not.toContain("Serviced Sam");
-  });
-
-  it("Start service starts the assigned customer through the explicit start-service action, then refreshes", async () => {
-    const tree = await render();
-    const start = tree.root.findAllByType("button").find((b) => textOf(b).includes("Start service"));
-    expect(start).toBeTruthy();
-    await act(async () => start.props.onClick());
-    const post = apiFetch.mock.calls.find(([path, init]) => init?.method === "POST" && String(path).endsWith("/queue-entries/a1/start-service"));
-    expect(post).toBeTruthy();
-    // The production Start service endpoint uses @Idempotent(): without this header it returns HTTP 400.
-    expect(post[1].headers?.["Idempotency-Key"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-    const refreshed = apiFetch.mock.calls.filter(([path, init]) => String(path).endsWith("/queue") && !init?.method);
-    expect(refreshed.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it("an assigned customer is neither listed as waiting nor as in service", async () => {
+  it("keeps legacy reserved visits under Waiting until the barber starts, never falsifies In service", async () => {
     search = "view=waiting";
-    const waitingTree = await render();
-    expect(allText(waitingTree)).toContain("Waiting Wendy");
-    expect(allText(waitingTree)).not.toContain("Assigned Asha");
+    const tree = await render();
+    const t = allText(tree);
+    expect(t).toContain("Waiting Wendy");
+    expect(t).toContain("Assigned Asha");
+    expect(t).toContain("Ready to start · legacy reservation");
+    expect(t).toContain("Reserved for Ravi · Chair 1");
+    expect(t).toContain("Existing reservation from an older app");
+    expect(t).not.toContain("Serviced Sam");
 
     search = "view=in-service";
-    const serviceTree = await render();
-    expect(allText(serviceTree)).toContain("Serviced Sam");
-    expect(allText(serviceTree)).not.toContain("Assigned Asha");
+    const active = await render();
+    expect(allText(active)).toContain("Serviced Sam");
+    expect(allText(active)).not.toContain("Assigned Asha");
+    expect(allText(active)).not.toContain("Waiting Wendy");
   });
 
-  it("a waiting customer is told they are waiting for available staff (or to be assigned when automatic assignment is off)", async () => {
+  it("legacy Start service posts an idempotency key and refreshes", async () => {
     search = "view=waiting";
-    expect(allText(await render())).toContain("Waiting for available staff");
-    expect(allText(await render(board({ autoAssignEnabled: false })))).toContain("Waiting to be assigned");
+    const tree = await render();
+    const startButton = tree.root.findAllByType("button").find((b) => textOf(b) === "Start service");
+    expect(startButton).toBeTruthy();
+    await act(async () => startButton.props.onClick());
+    const post = apiFetch.mock.calls.find(([path, init]) => init?.method === "POST" && String(path).endsWith("/queue-entries/a1/start-service"));
+    expect(post).toBeTruthy();
+    expect(post[1].headers?.["Idempotency-Key"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(apiFetch.mock.calls.filter(([path, init]) => String(path).endsWith("/queue") && !init?.method).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("explains that background auto-assignment waits until the customer physically arrives", async () => {
+  it("only NO_SHOW records appear in NO SHOW, not in Cancelled & expired", async () => {
+    const absent = entry({ id: "absent", status: "NO_SHOW", phase: "NO_SHOW", customerName: "Absent Anna" });
+    const expired = entry({ id: "expired", status: "EXPIRED", phase: "EXPIRED", customerName: "Expired Eric" });
+    const cancelled = entry({ id: "cancelled", status: "CANCELLED", phase: "CANCELLED", customerName: "Cancelled Chris" });
+    const snapshot = board({ entries: [], sections: {
+      waiting: [], called: [], assigned: [], inService: [], completedToday: [], historyToday: [absent, expired, cancelled],
+    } });
+
+    search = "view=no-show";
+    const noShowTree = await render(snapshot);
+    expect(allText(noShowTree)).toContain("Absent Anna");
+    expect(allText(noShowTree)).toContain("NO SHOW");
+    expect(allText(noShowTree)).not.toContain("Expired Eric");
+    expect(allText(noShowTree)).not.toContain("Cancelled Chris");
+    const tabs = noShowTree.root.findAllByProps({ role: "tab" }).map((t) => textOf(t));
+    expect(tabs.find((t) => t.startsWith("NO SHOW"))).toMatch(/1/);
+    expect(tabs.find((t) => t.startsWith("Cancelled"))).toMatch(/2/);
+
+    search = "view=history";
+    const historyTree = await render(snapshot);
+    expect(allText(historyTree)).not.toContain("Absent Anna");
+    expect(allText(historyTree)).toContain("Expired Eric");
+    expect(allText(historyTree)).toContain("Cancelled Chris");
+  });
+
+  it("a remote unarrived customer can be marked NO SHOW but not automatically started", async () => {
     search = "view=waiting";
-    const remote = entry({ id: "remote", tokenNumber: 8, customerName: "Remote Customer", arrivedAt: null });
-    const snapshot = board({
-      entries: [remote],
-      sections: { waiting: [remote], called: [], assigned: [], inService: [], completedToday: [], historyToday: [] },
-    });
+    const absent = entry({ id: "remote", tokenNumber: 8, customerName: "Remote Ria", arrivedAt: null });
+    const snapshot = board({ entries: [absent], sections: {
+      waiting: [absent], called: [], assigned: [], inService: [], completedToday: [], historyToday: [],
+    } });
     const tree = await render(snapshot);
     expect(allText(tree)).toContain("Background auto-assignment waits for arrival.");
     expect(allText(tree)).toContain("Mark as in the shop");
+    const start = tree.root.findAllByType("button").find((b) => textOf(b) === "Start service automatically");
+    expect(start).toBeTruthy();
+    expect(start.props.disabled).toBe(true);
+    const noShow = tree.root.findAllByType("button").find((b) => textOf(b) === "Mark NO SHOW");
+    expect(noShow).toBeTruthy();
+    await act(async () => noShow.props.onClick());
+    expect(apiFetch.mock.calls).toContainEqual([expect.stringMatching(/queue-entries\/remote\/no-show$/), expect.objectContaining({ method: "POST" })]);
   });
 
-  it("the chair held by an assigned customer is shown as reserved, and the barber as assigned", async () => {
+  it("the chair reserved by an older client is not offered to another guest", async () => {
+    search = "view=waiting";
     const tree = await render();
-    const text = allText(tree);
-    expect(text).toContain("Reserved · token #7 · not started");
-    expect(text).toContain("Assigned to #7 · not started");
-    expect(text).toContain("1 of 3 free"); // only Chair 3 is free: Chair 1 is reserved, Chair 2 is in service
+    const t = allText(tree);
+    expect(t).toContain("Reserved · token #7 · not started");
+    expect(t).toContain("Reserved for #7 · not started");
+    expect(t).toContain("1 of 3 free");
   });
 
-  it("the automatic assignment switch shows what the SERVER says, and changing it PATCHes the opposite", async () => {
+  it("the server-side automatic assignment setting controls its own switch", async () => {
+    search = "view=waiting";
     const on = await render(board({ autoAssignEnabled: true }));
-    let toggle = on.root.findAllByProps({ role: "switch" }).find((n) => n.props["aria-label"] === "Automatic assignment");
+    const toggle = on.root.findAllByProps({ role: "switch" }).find((n) => n.props["aria-label"] === "Automatic assignment");
     expect(toggle.props["aria-checked"]).toBe(true);
     await act(async () => toggle.props.onClick());
     const patch = apiFetch.mock.calls.find(([path, init]) => init?.method === "PATCH" && String(path).endsWith("/queue/settings"));
     expect(JSON.parse(patch[1].body)).toEqual({ autoAssignEnabled: false });
-
     const off = await render(board({ autoAssignEnabled: false }));
-    toggle = off.root.findAllByProps({ role: "switch" }).find((n) => n.props["aria-label"] === "Automatic assignment");
-    expect(toggle.props["aria-checked"]).toBe(false);
+    const offToggle = off.root.findAllByProps({ role: "switch" }).find((n) => n.props["aria-label"] === "Automatic assignment");
+    expect(offToggle.props["aria-checked"]).toBe(false);
+    expect(allText(off)).toContain("Automatic assignment is OFF for this shop");
   });
 
-  it("shows a prominent, opt-in fix when the shop's server setting is OFF; never switches it silently", async () => {
+  it("the OFF warning has an explicit opt-in, not a silent switch", async () => {
     search = "view=waiting";
     const tree = await render(board({ autoAssignEnabled: false }));
-    expect(allText(tree)).toContain("Automatic assignment is OFF for this shop.");
     const button = tree.root.findAllByType("button").find((b) => textOf(b).includes("Enable automatic assignment"));
     expect(button).toBeTruthy();
     expect(apiFetch.mock.calls.some(([_, init]) => init?.method === "PATCH")).toBe(false);
@@ -255,54 +277,40 @@ describe("Live Queue: Waiting, Assigned and In service are separate places", () 
     expect(JSON.parse(patch[1].body)).toEqual({ autoAssignEnabled: true });
   });
 
-  it("labels cancelled visits as history, without counting former assigned barbers as actively assigned", async () => {
-    search = "view=history";
-    const cancelled = entry({
-      id: "historical-1", status: "CANCELLED", phase: "CANCELLED", customerName: "Previous Customer",
-      assignedStaffId: "st1", assignedStaffName: "Ravi", assignedChairId: "ch1", assignedChairLabel: "Chair 1",
-    });
-    const snapshot = board({
-      entries: [cancelled],
-      sections: { waiting: [], called: [], assigned: [], inService: [], completedToday: [], historyToday: [cancelled] },
-      counts: { waiting: 0, assigned: 0, inService: 0, completedToday: 0, historyToday: 1 },
-    });
-    const tree = await render(snapshot);
-    expect(allText(tree)).toContain("Previously assigned to Ravi · Chair 1");
-    expect(allText(tree)).toContain("not active assignments");
-    const tabs = tree.root.findAllByProps({ role: "tab" }).map((t) => textOf(t));
-    expect(tabs.find((t) => t.startsWith("Assigned"))).toMatch(/0/);
-    expect(tabs.find((t) => t.startsWith("Cancelled"))).toMatch(/1/);
-  });
-
-  it("choosing a barber and chair by hand ASSIGNS (startService:false); it does not start the service", async () => {
+  it("explicit barber/chair selection starts service directly and does not steal a reserved chair", async () => {
     search = "view=waiting";
     const tree = await render();
     const open = tree.root.findAllByType("button").find((b) => textOf(b).includes("Choose barber"));
     await act(async () => open.props.onClick());
     const staff = tree.root.findAll((n) => n.type === "select" && String(n.props.id).startsWith("as-staff-"))[0];
     const chair = tree.root.findAll((n) => n.type === "select" && String(n.props.id).startsWith("as-chair-"))[0];
-    await act(async () => staff.props.onChange({ target: { value: "st3" } }));
-    await act(async () => chair.props.onChange({ target: { value: "ch3" } }));
-    const submit = tree.root.findAllByType("button").find((b) => textOf(b).includes("Assign customer"));
-    await act(async () => submit.props.onClick());
-    const post = apiFetch.mock.calls.find(([path, init]) => init?.method === "POST" && String(path).endsWith("/queue-entries/w1/assign"));
-    expect(post).toBeTruthy();
-    expect(JSON.parse(post[1].body)).toMatchObject({ staffId: "st3", chairId: "ch3", startService: false });
-  });
-
-  it("does not offer the reserved chair to a different customer, only free ones", async () => {
-    search = "view=waiting";
-    const tree = await render();
-    const open = tree.root.findAllByType("button").find((b) => textOf(b).includes("Choose barber"));
-    await act(async () => open.props.onClick());
-    const chairSelect = tree.root.findAll((n) => n.type === "select" && String(n.props.id).startsWith("as-chair-"))[0];
-    const options = chairSelect.findAllByType("option").map((o) => textOf(o));
+    const options = chair.findAllByType("option").map((o) => textOf(o));
     expect(options).toContain("Chair 3");
     expect(options).not.toContain("Chair 1");
     expect(options).not.toContain("Chair 2");
+    await act(async () => staff.props.onChange({ target: { value: "st3" } }));
+    await act(async () => chair.props.onChange({ target: { value: "ch3" } }));
+    const startButton = tree.root.findAllByType("button").find((b) => textOf(b) === "Start service");
+    await act(async () => startButton.props.onClick());
+    const post = apiFetch.mock.calls.find(([path, init]) => init?.method === "POST" && String(path).endsWith("/queue-entries/w1/assign"));
+    expect(post).toBeTruthy();
+    expect(JSON.parse(post[1].body)).toMatchObject({ staffId: "st3", chairId: "ch3", startService: true });
+  });
+
+  it("cancelled visit shows former staff metadata only in Cancelled & expired", async () => {
+    search = "view=history";
+    const old = entry({ id: "past", status: "CANCELLED", phase: "CANCELLED", customerName: "Previous Customer",
+      assignedStaffId: "st1", assignedStaffName: "Ravi", assignedChairId: "ch1", assignedChairLabel: "Chair 1" });
+    const snapshot = board({ entries: [old], sections: {
+      waiting: [], called: [], assigned: [], inService: [], completedToday: [], historyToday: [old],
+    } });
+    const tree = await render(snapshot);
+    expect(allText(tree)).toContain("Previously assigned to Ravi · Chair 1");
+    const tabs = tree.root.findAllByProps({ role: "tab" }).map((t) => textOf(t));
+    expect(tabs.some((t) => t.startsWith("Assigned"))).toBe(false);
+    expect(tabs.find((t) => t.startsWith("Cancelled"))).toMatch(/1/);
   });
 });
-
 
 describe("Live Queue voice controls", () => {
   beforeEach(() => {
