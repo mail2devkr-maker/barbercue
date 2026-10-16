@@ -89,8 +89,10 @@ export class OtpService {
       async (tx) => {
         // All backend replicas acquire this transaction-scoped PostgreSQL lock before reading
         // shared counters. READ COMMITTED makes reads after lock acquisition see earlier commits.
+        // Prisma cannot decode PostgreSQL's `void` return value. The boolean expression keeps
+        // the lock side effect while returning a normal scalar through `$queryRaw`.
         await tx.$queryRaw(
-          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${OTP_DELIVERY_BUDGET_LOCK}))`,
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${OTP_DELIVERY_BUDGET_LOCK})) IS NOT NULL AS locked`,
         );
         const now = new Date();
         const phoneWindowStart = new Date(
