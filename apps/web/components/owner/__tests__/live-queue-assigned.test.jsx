@@ -186,6 +186,8 @@ describe("Live Queue: Waiting, Assigned and In service are separate places", () 
     await act(async () => start.props.onClick());
     const post = apiFetch.mock.calls.find(([path, init]) => init?.method === "POST" && String(path).endsWith("/queue-entries/a1/start-service"));
     expect(post).toBeTruthy();
+    // The production Start service endpoint uses @Idempotent(): without this header it returns HTTP 400.
+    expect(post[1].headers?.["Idempotency-Key"]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     const refreshed = apiFetch.mock.calls.filter(([path, init]) => String(path).endsWith("/queue") && !init?.method);
     expect(refreshed.length).toBeGreaterThanOrEqual(2);
   });
