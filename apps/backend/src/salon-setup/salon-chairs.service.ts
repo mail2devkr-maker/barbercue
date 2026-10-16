@@ -10,6 +10,7 @@ import { AppException } from '../common/exceptions/app.exception';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { QueueAssignmentReleaseService } from '../queue/queue-assignment-release.service';
+import { QueueAutoAssignTrigger } from '../queue/queue-auto-assign.trigger';
 
 /**
  * Owner-side Chair CRUD, same assertOwnerAccess-first shape as SalonServicesService.
@@ -27,6 +28,7 @@ export class SalonChairsService {
     private readonly salonAccess: SalonAccessService,
     @Optional()
     private readonly assignmentRelease?: QueueAssignmentReleaseService,
+    @Optional() private readonly autoAssignTrigger?: QueueAutoAssignTrigger,
   ) {}
 
   async list(userId: string, salonId: string): Promise<SalonChairDto[]> {
@@ -61,6 +63,8 @@ export class SalonChairsService {
         },
       });
     }
+    // A new ACTIVE chair makes a previously blocked waiting visitor seatable.
+    this.autoAssignTrigger?.trigger(salonId);
     return this.toDto(created);
   }
 
@@ -121,6 +125,10 @@ export class SalonChairsService {
           },
         },
       });
+    }
+    // Restoring a chair to ACTIVE releases new capacity even if no queue mutation occurs.
+    if (existing.status !== ChairStatus.ACTIVE && updated.status === ChairStatus.ACTIVE) {
+      this.autoAssignTrigger?.trigger(salonId);
     }
     return this.toDto(updated);
   }
