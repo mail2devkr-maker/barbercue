@@ -998,9 +998,10 @@ export class QueueService {
     input: AssignQueueEntryInput,
   ): Promise<QueueEntryDetailDto> {
     const entry = await this.getEntryOrThrow(entryId);
-    // The allocator never starts a service: it only reserves a barber and chair. The barber (or the
-    // owner) starts the service explicitly with startService().
-    return this.assignLoaded(entry, input, null, { startService: false });
+    // Owner-approved direct transition: a physically arrived waiting guest goes straight
+    // to IN_SERVICE. The shared transaction atomically claims the queue entry and opens its
+    // ACTIVE ServiceSession; there is no intermediate CALLED/ASSIGNED hold for this path.
+    return this.assignLoaded(entry, input, null, { startService: true });
   }
 
   private async assignLoaded(
@@ -1229,7 +1230,7 @@ export class QueueService {
             staffId: input.staffId,
             chairId: input.chairId,
             serviceId,
-            serviceStarted: false,
+            serviceStarted: options.startService,
           },
         },
       });
@@ -1961,13 +1962,19 @@ export class QueueService {
     );
 
     const claim = await this.prisma.queueEntry.updateMany({
-      where: { id: entryId, status: QueueEntryStatus.CALLED },
+      where: {
+        id: entryId,
+        status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+        // A waiting visitor already checked in at the shop is not a no-show. Preserve the
+        // historical CALLED no-show behavior for previously assigned (unstarted) visitors.
+        ...(entry.status === QueueEntryStatus.WAITING ? { arrivedAt: null } : {}),
+      },
       data: { status: QueueEntryStatus.NO_SHOW },
     });
     if (claim.count === 0) {
       throw new AppException(
         QueueErrorCode.INVALID_QUEUE_TRANSITION,
-        'Only a called entry can be marked no-show.',
+        'Only an unarrived waiting or a called customer can be marked no-show.',
         HttpStatus.CONFLICT,
       );
     }
