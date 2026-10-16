@@ -1,13 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Location from 'expo-location';
 import {
   DISCOVERY_PATHS,
   PRICE_FILTER_PRESETS,
   SHOP_CLOSED_TODAY_MESSAGE,
   SALON_DISCOVERY_CATEGORIES,
-  formatDistance,
   formatMoney,
   validatePriceRange,
   type PriceRangeValidationError,
@@ -31,6 +29,16 @@ import {
   type FilterDropdownOption,
 } from '../components/ui';
 import { useLanguage } from '../lib/language-context';
+import { useLocationSelection } from '../lib/location/location-context';
+import { distanceOrigin, fullLocationLabel, shopDistanceLabel, type SelectedLocation } from '../lib/location/selection';
+import {
+  buildSalonSearchParams,
+  locationKey,
+  mergePage,
+  applyLoadedDistanceFallback,
+  type SearchFilters,
+  type SortChoice,
+} from '../lib/location/search-params';
 import type { SearchStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SalonSearch'>;
@@ -258,67 +266,102 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const stackSearchRow = windowWidth < NARROW_SEARCH_ROW_WIDTH;
   const selectedStyleName = route.params?.selectedStyleName;
-  const { initialQuery, initialLat, initialLng } = route.params ?? {};
+  const { initialQuery } = route.params ?? {};
+  // The one shared location model. This screen never starts GPS itself any more: the customer picks
+  // a city or taps "Use my current location" in the selector, and this screen simply reads the result.
+  const { hydrated, selection, openSelector } = useLocationSelection();
+  const origin = distanceOrigin(selection);
+  const selectionKey = locationKey(selection);
   const [q, setQ] = useState(initialQuery ?? '');
   const [serviceSuggestions, setServiceSuggestions] = useState<ServiceSuggestionDto[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [results, setResults] = useState<SalonListItemDto[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
-  const [nearMe, setNearMe] = useState<{ lat: number; lng: number } | null>(
-    initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null,
-  );
-  const [locating, setLocating] = useState(false);
-  // Part 8/9 (distance + price + service filters).
+
+  // Part 8/9 (distance + price + service filters) and the ordering.
   const [radiusKm, setRadiusKm] = useState<number | null>(null);
   const [priceMin, setPriceMin] = useState<number | null>(null);
   const [priceMax, setPriceMax] = useState<number | null>(null);
   const [service, setService] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortChoice>('nearest');
+
+  // Every search takes a new sequence number; a response is applied only if it still matches, so a
+  // slow answer for an old city can never replace the results for the city picked since.
+  const requestSequence = useRef(0);
+  // The exact request the visible list was loaded with, so "load more" continues THAT query even if
+  // the customer has edited a filter or the text box since.
+  const activeRequest = useRef<{ selection: SelectedLocation | null; filters: SearchFilters; queryText: string } | null>(null);
+
+  const currentFilters = (overrides: Partial<SearchFilters> = {}): SearchFilters => ({
+    radiusKm,
+    priceMin,
+    priceMax,
+    service,
+    sort,
+    ...overrides,
+  });
 
   async function runSearch(
     isRefresh: boolean,
-    coords: { lat: number; lng: number } | null,
-    filters: { radiusKm: number | null; priceMin: number | null; priceMax: number | null; service: string | null } = {
-      radiusKm,
-      priceMin,
-      priceMax,
-      service,
-    },
-    queryOverride?: string,
+    overrides: Partial<SearchFilters> & { queryText?: string; selection?: SelectedLocation | null } = {},
   ) {
+    const { queryText: queryOverride, selection: selectionOverride, ...filterOverrides } = overrides;
+    const request = {
+      selection: selectionOverride === undefined ? selection : selectionOverride,
+      filters: currentFilters(filterOverrides),
+      queryText: queryOverride ?? q,
+    };
+    const sequence = ++requestSequence.current;
+    activeRequest.current = request;
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
+    setLoadMoreFailed(false);
     setSearched(true);
     try {
-      const params = new URLSearchParams();
-      const typedService = (queryOverride ?? q).trim();
-      if (typedService) params.set('service', typedService);
-      else if (filters.service) params.set('service', filters.service);
-      if (coords) {
-        params.set('lat', String(coords.lat));
-        params.set('lng', String(coords.lng));
-        // radiusKm is meaningless without a query point, so it only ever gets sent alongside one.
-        if (filters.radiusKm !== null) params.set('radiusKm', String(filters.radiusKm));
-      }
-      if (filters.priceMin !== null) params.set('priceMin', String(filters.priceMin));
-      if (filters.priceMax !== null) params.set('priceMax', String(filters.priceMax));
-      const result = await apiFetch<PaginatedResult<SalonListItemDto>>(
-        `${DISCOVERY_PATHS.salons}?${params.toString()}`,
-      );
+      const params = buildSalonSearchParams(request);
+      const result = await apiFetch<PaginatedResult<SalonListItemDto>>(`${DISCOVERY_PATHS.salons}?${params.toString()}`);
+      if (sequence !== requestSequence.current) return;
       setResults(result.items);
+      setNextCursor(result.nextCursor);
     } catch (err) {
+      if (sequence !== requestSequence.current) return;
       setError(err instanceof ApiError ? err.message : t.couldNotSearchSalons);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (sequence === requestSequence.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }
+  }
+
+  async function loadMore() {
+    const request = activeRequest.current;
+    if (!request || !nextCursor || loading || refreshing || loadingMore) return;
+    const sequence = requestSequence.current;
+    setLoadingMore(true);
+    setLoadMoreFailed(false);
+    try {
+      const params = buildSalonSearchParams({ ...request, cursor: nextCursor });
+      const result = await apiFetch<PaginatedResult<SalonListItemDto>>(`${DISCOVERY_PATHS.salons}?${params.toString()}`);
+      if (sequence !== requestSequence.current) return;
+      setResults((existing) => mergePage(existing, result.items));
+      setNextCursor(result.nextCursor);
+    } catch {
+      if (sequence === requestSequence.current) setLoadMoreFailed(true);
+    } finally {
+      if (sequence === requestSequence.current) setLoadingMore(false);
     }
   }
 
   function handleSearch(isRefresh = false) {
     if (!isRefresh) setSuggestionsOpen(false);
-    return runSearch(isRefresh, nearMe);
+    return runSearch(isRefresh);
   }
 
   useEffect(() => {
@@ -348,78 +391,48 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
     };
   }, [q]);
 
-  // Owner-reported discoverability fix: Distance is visible before "Near me" has ever been used —
-  // picking an actual radius here is itself a location request, applied to the same search in one
-  // step, rather than requiring a separate prior tap on "Near me" first.
-  async function selectRadius(value: number | null) {
-    if (!nearMe && value !== null) {
-      setLocating(true);
-      setError(null);
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setError(t.locationDenied);
-          return;
-        }
-        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
-        setNearMe(coords);
-        setRadiusKm(value);
-        await runSearch(false, coords, { radiusKm: value, priceMin, priceMax, service });
-      } catch {
-        setError(t.couldNotGetLocation);
-      } finally {
-        setLocating(false);
-      }
+  // Load shops for the chosen location as soon as there is one — and again whenever the customer
+  // changes it (a different city, or switching to/from "current location"). Waits for the stored
+  // selection to be read so a restart doesn't flash an empty search first. A radius only makes sense
+  // against a reference point, so it is cleared if the new selection has none.
+  useEffect(() => {
+    if (!hydrated) return;
+    const hasOrigin = origin !== null;
+    if (!hasOrigin && radiusKm !== null) setRadiusKm(null);
+    if (selection || initialQuery) {
+      void runSearch(false, { selection, radiusKm: hasOrigin ? radiusKm : null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, selectionKey]);
+
+  // Distance is relative to a reference point (a city centre or the customer's GPS fix), so with none
+  // the customer is sent to choose one instead of a silent permission request.
+  function selectRadius(value: number | null) {
+    if (value !== null && !origin) {
+      // A chosen city may simply have no stored centre: say that, instead of asking for a city again.
+      setError(selection ? t.distanceFilterNeedsCityCentre : t.distanceFilterNeedsLocation);
+      openSelector();
       return;
     }
+    setError(null);
     setRadiusKm(value);
-    void runSearch(false, nearMe, { radiusKm: value, priceMin, priceMax, service });
+    void runSearch(false, { radiusKm: value });
   }
 
   function selectPrice(min: number | null, max: number | null) {
     setPriceMin(min);
     setPriceMax(max);
-    void runSearch(false, nearMe, { radiusKm, priceMin: min, priceMax: max, service });
+    void runSearch(false, { priceMin: min, priceMax: max });
   }
 
   function selectService(value: string | null) {
     setService(value);
-    void runSearch(false, nearMe, { radiusKm, priceMin, priceMax, service: value });
+    void runSearch(false, { service: value });
   }
 
-  // Home's search card / Popular Services chips hand off a query (and, when already known,
-  // coordinates) via route params rather than this screen re-deriving them — runs once per mount,
-  // not on every param change, so returning to this same screen instance later doesn't re-fire a
-  // stale search.
-  useEffect(() => {
-    if (initialQuery || (initialLat !== undefined && initialLng !== undefined)) {
-      void runSearch(false, initialLat !== undefined && initialLng !== undefined ? { lat: initialLat, lng: initialLng } : null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // "Near Me" (Phase 4) — expo-location's foreground permission flow, no paid Maps/geocoding SDK.
-  // Denial/unavailability degrades gracefully to the existing text search rather than blocking the
-  // screen (see the caught branches below).
-  async function handleNearMe() {
-    setLocating(true);
-    setError(null);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError(t.locationDenied);
-        return;
-      }
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coords = { lat: position.coords.latitude, lng: position.coords.longitude };
-      setNearMe(coords);
-      await runSearch(false, coords);
-    } catch {
-      setError(t.couldNotGetLocation);
-    } finally {
-      setLocating(false);
-    }
+  function selectSort(value: SortChoice) {
+    setSort(value);
+    void runSearch(false, { sort: value });
   }
 
   const distanceOptions: FilterDropdownOption[] = DISTANCE_OPTIONS.map((option) => ({
@@ -440,6 +453,14 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
   const serviceValueLabel = activeServiceCategory
     ? t[SERVICE_CATEGORY_LABEL_KEYS[activeServiceCategory.id]] ?? activeServiceCategory.label
     : t.serviceFilterAll;
+  // An older backend ignores the origin and the radius. Then (and only then) the shops downloaded so
+  // far are ordered/filtered here, which is NOT a global nearest-first list — `approximateOrder` makes
+  // the screen say so instead of implying otherwise.
+  const { items: displayedResults, approximate: approximateOrder } = applyLoadedDistanceFallback(results, origin, {
+    sort,
+    radiusKm,
+  });
+  const locationBarLabel = selection ? fullLocationLabel(selection, t) : t.searchChooseLocationAction;
 
   return (
     <PremiumScreen scroll={false} contentStyle={styles.screenContent}>
@@ -449,6 +470,21 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           {t.bookingForTheLookPrefix}<Text style={styles.styleNoteBold}>{selectedStyleName}</Text>{t.bookingForTheLookSuffix}
         </Text>
       )}
+
+      {/* Same selector as Home: opening it never starts GPS. */}
+      <Pressable
+        testID="search-location-bar"
+        onPress={openSelector}
+        accessibilityRole="button"
+        accessibilityLabel={`${t.locationSelectorTitle}: ${locationBarLabel}`}
+        style={styles.locationBar}
+      >
+        <Text style={styles.locationBarPin}>📍</Text>
+        <Text style={[styles.locationBarText, !selection && styles.locationBarPlaceholder]} numberOfLines={1}>
+          {locationBarLabel}
+        </Text>
+        <Text style={styles.locationBarChange}>{selection ? t.searchChangeLocationAction : '›'}</Text>
+      </Pressable>
 
       <View style={[styles.searchRow, stackSearchRow && styles.searchRowStacked]}>
         <PremiumTextField
@@ -488,12 +524,7 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                 setQ(suggestion.name);
                 setService(null);
                 setSuggestionsOpen(false);
-                void runSearch(
-                  false,
-                  nearMe,
-                  { radiusKm, priceMin, priceMax, service: null },
-                  suggestion.name,
-                );
+                void runSearch(false, { service: null, queryText: suggestion.name });
               }}
               accessibilityRole="button"
               accessibilityLabel={suggestion.name}
@@ -507,28 +538,15 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
         </ScrollView>
       )}
 
-      <PremiumButton
-        title={locating ? t.locatingAction : nearMe ? t.nearMeFound : t.nearMe}
-        variant="quiet"
-        onPress={() => void handleNearMe()}
-        loading={locating}
-        style={styles.nearMeButton}
-      />
-
-      {/* Owner-reported discoverability fix: always visible, not gated behind "Near me" already
-          being set — selectRadius itself requests location the moment a real radius is picked, so
-          the filter is reachable from the very first visit to this screen. Owner-reported cropping
-          fix: these were horizontally-scrolling chip rows that clipped off the right edge on
-          narrow phones — now three compact dropdown triggers that wrap onto a second row instead
-          of overflowing (each has flexBasis/minWidth via FilterDropdown's own style). */}
+      {/* Distance is always reachable. With no reference point yet, picking a radius sends the
+          customer to the selector instead of silently asking for GPS permission. */}
       <View style={styles.filterRow}>
         <FilterDropdown
           label={t.distanceFilterLabel}
           valueLabel={distanceValueLabel}
           options={distanceOptions}
           selectedId={distanceIdFor(radiusKm)}
-          onSelect={(id) => void selectRadius(distanceValueFor(id))}
-          disabled={locating}
+          onSelect={(id) => selectRadius(distanceValueFor(id))}
           closeLabel={t.closeFilterMenu}
         />
         <PriceFilterDropdown activeMin={priceMin} activeMax={priceMax} onApply={selectPrice} />
@@ -548,7 +566,37 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           closeLabel={t.closeFilterMenu}
         />
       </View>
-      {!nearMe && <Text style={styles.filterHint}>{t.distanceFilterLocationHint}</Text>}
+      {!origin && (
+        <Text testID="distance-hint" style={styles.filterHint}>
+          {selection ? t.distanceFilterNeedsCityCentre : t.distanceFilterNeedsLocation}
+        </Text>
+      )}
+
+      {origin && (
+        <View style={styles.sortRow}>
+          <Text style={styles.sortLabel}>{t.sortLabel}</Text>
+          {(['nearest', 'name'] as const).map((choice) => (
+            <Pressable
+              key={choice}
+              testID={`sort-${choice}`}
+              onPress={() => selectSort(choice)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sort === choice }}
+              style={[styles.sortChip, sort === choice && styles.sortChipActive]}
+            >
+              <Text style={[styles.sortChipText, sort === choice && styles.sortChipTextActive]}>
+                {choice === 'nearest' ? t.sortNearestFirst : t.sortNameAZ}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      {origin?.kind === 'city' && <Text style={styles.cityNote}>{t.distanceFromCityCentreNote}</Text>}
+      {approximateOrder && (
+        <Text testID="approximate-order-note" style={styles.cityNote}>
+          {t.searchOrderLoadedOnlyNote}
+        </Text>
+      )}
 
       {error && <InlineError message={error} />}
 
@@ -558,14 +606,32 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
           <Skeleton style={styles.skeletonCard} />
           <Skeleton style={styles.skeletonCard} />
         </View>
-      ) : searched && !error && results.length === 0 ? (
+      ) : !searched && !selection ? (
+        <EmptyState
+          title={t.searchChooseLocationTitle}
+          message={t.searchChooseLocationHint}
+          actionLabel={t.searchChooseLocationAction}
+          onAction={openSelector}
+        />
+      ) : searched && !error && displayedResults.length === 0 ? (
         <EmptyState title={t.noSalonsFoundTitle} message={t.noSalonsFoundHint} />
       ) : (
         <FlatList
-          data={results}
+          data={displayedResults}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleSearch(true)} tintColor={color.accent} />}
+          onEndReached={() => void loadMore()}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore ? (
+              <Text style={styles.footerNote}>{t.searchLoadingMore}</Text>
+            ) : loadMoreFailed ? (
+              <Pressable onPress={() => void loadMore()} accessibilityRole="button">
+                <Text style={styles.footerNote}>{t.searchLoadMoreFailed}</Text>
+              </Pressable>
+            ) : null
+          }
           renderItem={({ item }) => (
             <Pressable
               style={styles.card}
@@ -598,11 +664,14 @@ export default function SalonSearchScreen({ navigation, route }: Props) {
                 {item.isClosedForToday && (
                   <Text style={styles.closedToday}>{SHOP_CLOSED_TODAY_MESSAGE}</Text>
                 )}
-                {(item.isOpenNow !== null || item.distanceKm !== null) && (
-                  <Text style={styles.cardMeta}>
-                    {item.isOpenNow !== null ? (item.isOpenNow ? t.openNowLabel : t.closedNowLabel) : ''}
-                    {item.isOpenNow !== null && item.distanceKm !== null ? ' · ' : ''}
-                    {item.distanceKm !== null ? `${formatDistance(item.distanceKm, item.countryCode)}${t.awaySuffix}` : ''}
+                {item.isOpenNow !== null && (
+                  <Text style={styles.cardMeta}>{item.isOpenNow ? t.openNowLabel : t.closedNowLabel}</Text>
+                )}
+                {/* The wording follows the ORIGIN: "from <city> centre" for a chosen city, "from you"
+                    for a real GPS fix, "Distance unavailable" when either end has no coordinates. */}
+                {selection && (
+                  <Text testID={`distance-${item.id}`} style={styles.cardDistance}>
+                    📍 {shopDistanceLabel(item, origin, t)}
                   </Text>
                 )}
               </View>
@@ -654,6 +723,31 @@ const dropdownStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   screenContent: { padding: space[5] },
+  locationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[2],
+    minHeight: 48,
+    paddingHorizontal: space[4],
+    marginBottom: space[3],
+    borderWidth: 1,
+    borderColor: fastQue.borderStrong,
+    borderRadius: radius.md,
+    backgroundColor: fastQue.card,
+  },
+  locationBarPin: { fontSize: 16 },
+  locationBarText: { flex: 1, minWidth: 0, fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
+  locationBarPlaceholder: { color: fastQue.textSecondary },
+  locationBarChange: { fontFamily: font.bodyBold, fontSize: fontSize.xs, color: fastQue.pink },
+  sortRow: { flexDirection: 'row', alignItems: 'center', gap: space[2], marginBottom: space[2] },
+  sortLabel: { fontFamily: font.bodyBold, fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', color: fastQue.textMuted },
+  sortChip: { paddingHorizontal: space[3], minHeight: 34, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: fastQue.border },
+  sortChipActive: { borderColor: fastQue.pink, backgroundColor: 'rgba(242,10,131,0.12)' },
+  sortChipText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.textSecondary },
+  sortChipTextActive: { color: fastQue.pink },
+  cityNote: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textMuted, marginBottom: space[2] },
+  cardDistance: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.orange, marginTop: space[1] },
+  footerNote: { textAlign: 'center', fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, paddingVertical: space[4] },
   styleNote: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: fastQue.textSecondary, marginTop: -space[2], marginBottom: space[3] },
   styleNoteBold: { fontFamily: font.bodySemiBold, color: fastQue.text },
   // Owner-reported cropping fix: `minWidth: 0` lets the field shrink below its own content's
