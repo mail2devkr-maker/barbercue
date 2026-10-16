@@ -12,7 +12,7 @@ Three: `development` (local), `staging`, `production`. Each has its own Postgres
 DATABASE_URL
 JWT_ACCESS_SECRET / JWT_REFRESH_SECRET
 OTP_PROVIDER_API_KEY
-GOOGLE_WEB_CLIENT_ID / GOOGLE_ANDROID_CLIENT_ID   # OAuth client IDs, not secrets — see apps/backend/.env.example
+GOOGLE_WEB_CLIENT_ID / GOOGLE_ANDROID_CLIENT_ID / GOOGLE_IOS_CLIENT_ID   # OAuth client IDs, not secrets — see apps/backend/.env.example
 GEMINI_API_KEY                  # AI Style Advisor image generation; unset = feature disabled, not broken
 PAYMENT_PROVIDER_KEY_ID / PAYMENT_PROVIDER_KEY_SECRET / PAYMENT_WEBHOOK_SECRET
 OBJECT_STORAGE_BUCKET / OBJECT_STORAGE_KEY
@@ -71,6 +71,36 @@ APK still reports the SHA-1 above.
 
 Do not delete the old Firebase Android app or the old OAuth client until the renamed build is
 verified on a device.
+
+### iOS physical-device build gate
+
+FastQue iOS uses the same Google Cloud/Firebase project and web OAuth client as Android/web, plus
+one native **iOS OAuth client** whose bundle ID is `com.dcw.fastque`. The iOS client ID is public
+metadata, not a secret. Configure it in both places below before creating the physical build:
+
+- EAS `preview` environment: `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<ios-client-id>.apps.googleusercontent.com`
+- Backend environment (Railway): `GOOGLE_IOS_CLIENT_ID=<same-ios-client-id>.apps.googleusercontent.com`
+
+`apps/mobile/app.config.js` converts that client ID into Google's required reversed URL scheme
+only when `FASTQUE_IOS_BUILD=true`. The dedicated `ios-physical`, `ios-simulator`, and
+`ios-production` EAS profiles set that gate; Android profiles do not, so Android's existing
+`google-services.json` integration remains unchanged. The mobile Google Sign-In service also
+passes the native iOS client ID explicitly to the Google SDK, while retaining the web client ID as
+its server/audience client.
+
+For a directly installable physical test build:
+
+1. Create the Google **iOS OAuth client** for bundle ID `com.dcw.fastque` in the existing project.
+2. Set the EAS/Backend variables above.
+3. Register the test iPhone with `eas device:create` (ad hoc provisioning requires the device).
+4. From `apps/mobile`, run `eas build --platform ios --profile ios-physical`.
+5. Let EAS manage the Apple distribution certificate/provisioning profile, or select existing
+   credentials if the Apple Developer team already has them.
+6. Install the resulting ad hoc `.ipa` from the EAS build URL and physically verify Google Sign-In,
+   booking/owner flows, notifications, background/relaunch, and OTA update behavior.
+
+Expo SDK 57 / React Native 0.86 requires **iOS 16.4+**, so older devices below that OS baseline are
+not valid FastQue SDK-57 physical-test targets.
 
 Note for testers: the renamed app installs **alongside** the old one rather than upgrading it. The
 previous `com.dcw.barbercue` install must be removed manually, and because `expo-secure-store` data
