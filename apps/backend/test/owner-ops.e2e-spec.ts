@@ -796,7 +796,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
   // ------------------------------------------------------------------------------------------
   describe('A brand-new shop: automatic assignment is ON by default, backed by the database', () => {
-    it('defaults ON, assigns an arrived customer without starting them, and the whole workflow completes', async () => {
+    it('defaults ON, automatically STARTS a service for an arrived customer, and completes it', async () => {
       const owner = await makeUser('freshOwner', null, null);
       const city = await prisma.city.findFirstOrThrow({ where: { slug: 'jharsuguda' } });
       // NOTE: the setting is deliberately NOT supplied - the database default decides.
@@ -845,15 +845,8 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         .expect(201);
       await trigger.idle(fresh.id);
       const assigned = await prisma.queueEntry.findUniqueOrThrow({ where: { id: added.body.id } });
-      expect(assigned).toMatchObject({ status: 'CALLED', assignedStaffId: barber.id, assignedChairId: chair.id, serviceStartedAt: null });
-      expect(await prisma.serviceSession.count({ where: { queueEntryId: assigned.id } })).toBe(0);
-
-      const started = await request(app.getHttpServer())
-        .post(`/api/v1/dashboard/queue-entries/${assigned.id}/start-service`)
-        .set('Authorization', `Bearer ${barberTok}`)
-        .set('Idempotency-Key', randomUUID())
-        .expect(201);
-      expect(started.body).toMatchObject({ status: 'IN_SERVICE', phase: 'IN_SERVICE' });
+      expect(assigned).toMatchObject({ status: 'IN_SERVICE', assignedStaffId: barber.id, assignedChairId: chair.id, serviceStartedAt: expect.any(Date) });
+      expect(await prisma.serviceSession.count({ where: { queueEntryId: assigned.id, status: 'ACTIVE' } })).toBe(1);
       const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: assigned.id, status: 'ACTIVE' } });
       await request(app.getHttpServer())
         .post(`/api/v1/dashboard/service-sessions/${session.id}/complete`)
