@@ -1,11 +1,22 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { DASHBOARD_PATHS } from "@barbercue/shared";
+import { DASHBOARD_PATHS, formatMoney } from "@barbercue/shared";
 import type { OwnerCustomerSummaryDto, PaginatedResult } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { Button } from "../../../../../../components/ui/Button";
+import { CustomerFilterBar } from "../../../../../../components/dashboard/CustomerFilterBar";
+import {
+  filterCustomers,
+  loadCustomerPages,
+  repeatVisits,
+  segmentCounts,
+  sortCustomers,
+  CUSTOMER_PAGE_SIZE,
+  type CustomerSegmentFilter,
+  type CustomerSort,
+} from "../../../../../../lib/customer-directory";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -25,9 +36,10 @@ function customersPath(salonId: string): string {
 
 /**
  * Owner customer history/CRM (Phase 8) — derived entirely from this salon's own Booking/QueueEntry
- * rows (no separate "customer" record exists). Offset-paginated (see the backend's own comment on
- * why groupBy results can't use the usual cursor convention) but the response shape and "Load
- * more" UX are identical to every other dashboard list.
+ * rows (no separate "customer" record exists). The server pages by offset (see the backend's own comment on
+ * why groupBy results can't use the usual cursor convention). This page loads batches of up to 1,000 customers,
+ * then searches, filters and sorts those loaded rows; it always says how many are loaded and offers the next
+ * batch. Names and total spend are not available from the API yet, so none are shown.
  */
 export default function DashboardCustomersPage({
   params,
@@ -40,34 +52,57 @@ export default function DashboardCustomersPage({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [segment, setSegment] = useState<CustomerSegmentFilter>("all");
+  const [sort, setSort] = useState<CustomerSort>("lastVisit");
 
-  const loadPage = useCallback(
-    (offset: string | undefined, append: boolean) => {
-      if (append) setLoadingMore(true);
-      else {
-        setLoading(true);
-        setError(null);
-      }
-      const params2 = new URLSearchParams({ limit: "20" });
-      if (offset) params2.set("offset", offset);
-      return apiFetch<PaginatedResult<OwnerCustomerSummaryDto>>(`${customersPath(salonId)}?${params2}`)
-        .then((result) => {
-          setItems((prev) => (append ? [...prev, ...result.items] : result.items));
-          setNextCursor(result.nextCursor);
-        })
-        .catch((err: unknown) => setError(err instanceof ApiError ? err.message : "Could not load customers."))
-        .finally(() => {
-          setLoading(false);
-          setLoadingMore(false);
-        });
+  const fetchPage = useCallback(
+    (cursor: string | undefined) => {
+      const query = new URLSearchParams({ limit: String(CUSTOMER_PAGE_SIZE) });
+      if (cursor) query.set("offset", cursor);
+      return apiFetch<PaginatedResult<OwnerCustomerSummaryDto>>(`${customersPath(salonId)}?${query}`);
     },
     [salonId],
   );
 
   useEffect(() => {
+    let cancelled = false;
     // Deferred a tick so this effect body never calls setState synchronously.
-    void Promise.resolve().then(() => loadPage(undefined, false));
-  }, [loadPage]);
+    void Promise.resolve()
+      .then(() => loadCustomerPages(fetchPage))
+      .then((result) => {
+        if (cancelled) return;
+        setItems(result.items);
+        setNextCursor(result.nextCursor);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Could not load customers.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchPage]);
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const result = await loadCustomerPages(fetchPage, nextCursor);
+      setItems((prev) => [...prev, ...result.items]);
+      setNextCursor(result.nextCursor);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not load more customers.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const counts = useMemo(() => segmentCounts(items, search), [items, search]);
+  const visible = useMemo(() => sortCustomers(filterCustomers(items, { search, segment }), sort), [items, search, segment, sort]);
 
   return (
     <main className={styles.page}>
@@ -77,15 +112,33 @@ export default function DashboardCustomersPage({
         on completed visits here — never inferred from anything else about them.
       </p>
 
-      {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
+      {error && <p className={`${styles.banner} ${styles.bannerError}`} role="alert">{error}</p>}
       {loading && <p className={styles.loadingText}>Loading…</p>}
-      {!loading && items.length === 0 && (
+      {!loading && items.length === 0 && !error && (
         <p className={styles.emptyState}>No one has booked at your shop yet.</p>
       )}
 
       {items.length > 0 && (
+        <CustomerFilterBar
+          search={search}
+          onSearchChange={setSearch}
+          segment={segment}
+          onSegmentChange={setSegment}
+          counts={counts}
+          sort={sort}
+          onSortChange={setSort}
+          shown={visible.length}
+          loaded={items.length}
+        />
+      )}
+
+      {items.length > 0 && visible.length === 0 && (
+        <p className={styles.emptyState}>No loaded customer matches this search.{nextCursor ? " Load more customers to search further." : ""}</p>
+      )}
+
+      {visible.length > 0 && (
         <ul className={styles.rowList} style={{ margin: "16px 0" }}>
-          {items.map((c) => (
+          {visible.map((c) => (
             <li key={c.customerId} className={styles.row}>
               <Link
                 href={`/${customersPath(salonId)}/${c.customerId}`}
@@ -93,10 +146,10 @@ export default function DashboardCustomersPage({
               >
                 <span className={styles.rowTitle}>{c.phone ?? c.email ?? "No contact on file"}</span>
                 <div className={styles.rowMeta}>
-                  {c.completedCount} completed · {c.cancelledCount} cancelled · {c.noShowCount} no-show
+                  {c.completedCount} completed · {repeatVisits(c)} repeat visit{repeatVisits(c) === 1 ? "" : "s"} · {c.cancelledCount} cancelled · {c.noShowCount} no-show
                   {c.preferredServiceName && ` · Usually books ${c.preferredServiceName}`}
                   {c.preferredStaffName && ` · With ${c.preferredStaffName}`}
-                  {c.outstandingTotalAmount > 0 && ` · ${c.outstandingTotalAmount} outstanding`}
+                  {c.outstandingTotalAmount > 0 && ` · ${formatMoney(c.outstandingTotalAmount, c.currency)} outstanding`}
                 </div>
                 <div className={styles.rowMeta}>
                   First visit {formatDate(c.firstVisitAt)} · Last visit {formatDate(c.lastVisitAt)}
@@ -126,9 +179,12 @@ export default function DashboardCustomersPage({
       )}
 
       {nextCursor && (
-        <Button type="button" variant="outline" onClick={() => void loadPage(nextCursor, true)} disabled={loadingMore}>
-          {loadingMore ? "Loading…" : "Load more"}
-        </Button>
+        <div>
+          <p className={styles.rowMeta}>More customers are available. Search and filters cover the {items.length} loaded so far.</p>
+          <Button type="button" variant="outline" onClick={() => void loadMore()} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load more customers"}
+          </Button>
+        </div>
       )}
     </main>
   );
