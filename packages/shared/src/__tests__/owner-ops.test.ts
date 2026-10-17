@@ -4,8 +4,10 @@ import {
   InvoiceTaxMode,
   billingProfileSchema,
   cancellationAnalyticsQuerySchema,
+  bookingAttributionSummaryQuerySchema,
   computeInvoiceTotals,
   createInShopBookingSchema,
+  createBookingAttributionCampaignSchema,
   createInvoiceSchema,
   createQueueCustomerSchema,
   deriveInvoicePaymentStatus,
@@ -229,11 +231,108 @@ describe('ownerRevenueReportQuerySchema', () => {
       groupBy: 'day',
       source: 'WEB',
     });
-    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2026-02-30', to: '2026-03-01' }).success).toBe(false);
-    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2026-10-02', to: '2026-10-01' }).success).toBe(false);
-    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2025-01-01', to: '2026-01-02' }).success).toBe(false);
-    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2026-10-01', to: '2026-10-31', source: 'FACEBOOK' }).success).toBe(false);
-    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2026-10-01', to: '2026-10-31', groupBy: 'quarter' }).success).toBe(false);
+    expect(
+      ownerRevenueReportQuerySchema.safeParse({
+        from: '2026-02-30',
+        to: '2026-03-01',
+      }).success,
+    ).toBe(false);
+    expect(
+      ownerRevenueReportQuerySchema.safeParse({
+        from: '2026-10-02',
+        to: '2026-10-01',
+      }).success,
+    ).toBe(false);
+    expect(
+      ownerRevenueReportQuerySchema.safeParse({
+        from: '2025-01-01',
+        to: '2026-01-02',
+      }).success,
+    ).toBe(false);
+    expect(
+      ownerRevenueReportQuerySchema.safeParse({
+        from: '2026-10-01',
+        to: '2026-10-31',
+        source: 'FACEBOOK',
+      }).success,
+    ).toBe(true);
+    expect(
+      ownerRevenueReportQuerySchema.safeParse({
+        from: '2026-10-01',
+        to: '2026-10-31',
+        source: 'WEB',
+      }).success,
+    ).toBe(true);
+    expect(
+      ownerRevenueReportQuerySchema.safeParse({
+        from: '2026-10-01',
+        to: '2026-10-31',
+        source: 'UNVERIFIED_SOCIAL_GUESS',
+      }).success,
+    ).toBe(false);
+    expect(
+      ownerRevenueReportQuerySchema.safeParse({
+        from: '2026-10-01',
+        to: '2026-10-31',
+        groupBy: 'quarter',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('booking attribution schemas', () => {
+  it('only accepts owner-supported campaign sources and valid campaign windows', () => {
+    expect(
+      createBookingAttributionCampaignSchema.safeParse({
+        source: 'FACEBOOK',
+        label: 'Salon campaign',
+        startsAt: '2026-10-01T00:00:00.000Z',
+        endsAt: '2026-11-01T00:00:00.000Z',
+      }).success,
+    ).toBe(true);
+    expect(
+      createBookingAttributionCampaignSchema.safeParse({
+        source: 'CHATGPT',
+        label: '  ',
+      }).success,
+    ).toBe(false);
+    expect(
+      createBookingAttributionCampaignSchema.safeParse({
+        source: 'WEB',
+        label: 'Pretend direct source',
+      }).success,
+    ).toBe(false);
+    expect(
+      createBookingAttributionCampaignSchema.safeParse({
+        source: 'INSTAGRAM',
+        label: 'Bad interval',
+        startsAt: '2026-11-01T00:00:00.000Z',
+        endsAt: '2026-10-01T00:00:00.000Z',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates salon-local summary filters and caps their range', () => {
+    expect(
+      bookingAttributionSummaryQuerySchema.safeParse({
+        from: '2026-10-01',
+        to: '2026-10-31',
+        source: 'CHATGPT',
+      }).success,
+    ).toBe(true);
+    expect(
+      bookingAttributionSummaryQuerySchema.safeParse({
+        from: '2026-10-01',
+        to: '2026-10-31',
+        source: 'UNVERIFIED_SOCIAL_GUESS',
+      }).success,
+    ).toBe(false);
+    expect(
+      bookingAttributionSummaryQuerySchema.safeParse({
+        from: '2025-01-01',
+        to: '2026-01-02',
+      }).success,
+    ).toBe(false);
   });
 });
 

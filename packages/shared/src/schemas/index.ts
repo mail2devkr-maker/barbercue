@@ -96,6 +96,8 @@ export const createBookingSchema = z
     // AI Style Advisor hand-off (major-upgrade phase) — set when booking arrives via "Try This
     // Look" -> "Book This Style"; omitted for every ordinary booking.
     selectedStyleName: z.string().min(1).max(100).optional(),
+    // Opaque, server-issued campaign token. This never accepts a source label from a client.
+    attributionToken: z.string().min(40).max(128).optional(),
     // FastQue Credits / Wallet V1: how much of the customer's own wallet balance to apply against
     // this booking's price, reducing what they pay online. Omitted or 0 = redeem nothing. The
     // backend re-validates this against both the live balance and the COMBINED price of every

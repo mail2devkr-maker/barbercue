@@ -179,6 +179,15 @@ enum BookingSource {
   IN_SHOP
 }
 
+// External channels are only attached through a server-issued salon campaign token; clients may
+// never write arbitrary social/chat attribution into the operational BookingSource field.
+enum BookingAttributionCampaignSource {
+  FACEBOOK
+  INSTAGRAM
+  CHATGPT
+  OTHER
+}
+
 // Who actually cancelled a booking, recorded at cancellation time from the authenticated actor —
 // never inferred afterwards from the booking's status. NULL on a row means "not recorded": every
 // cancellation written before this column existed, which analytics reports as UNKNOWN (or, for the
@@ -819,6 +828,7 @@ model Salon {
   chairs                Chair[]
   services              Service[]
   bookings              Booking[]
+  bookingAttributionCampaigns BookingAttributionCampaign[]
   queueEntries          QueueEntry[]
   cancellationPolicies  CancellationPolicy[]
   paymentPolicy         SalonPaymentPolicy?
@@ -1094,6 +1104,11 @@ model Booking {
   slotEnd                  DateTime
   status                   BookingStatus @default(CONFIRMED)
   source                   BookingSource
+  // Optional, additive marketing provenance. Booking.source remains the operational source used
+  // by older Android/web clients; this relation only records an external campaign token that the
+  // server validated for this exact salon at creation time.
+  attributionCampaignId   String?
+  attributionCampaign     BookingAttributionCampaign? @relation(fields: [salonId, attributionCampaignId], references: [salonId, id], onDelete: Restrict, map: "bookings_attributionCampaignId_fkey")
   idempotencyKey           String        @unique
   // Snapshot of SalonPaymentPolicy x Service.price at creation time — see DATABASE.md.
   prepaymentRequiredAmount Decimal?      @db.Decimal(10, 2)
@@ -1173,7 +1188,32 @@ model Booking {
 
   @@index([salonId, slotStart, slotEnd])
   @@index([salonId, status, cancelledAt])
+  @@index([salonId, createdAt])
+  @@index([salonId, attributionCampaignId, createdAt])
   @@map("bookings")
+}
+
+// Owner-generated, salon-scoped referral campaigns. Only a SHA-256 digest is stored; the
+// high-entropy token is returned once on creation and is not an authentication credential.
+model BookingAttributionCampaign {
+  id          String                            @id @default(uuid())
+  salonId     String
+  salon       Salon                             @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  source      BookingAttributionCampaignSource
+  label       String                            @db.VarChar(120)
+  tokenHash   String                            @unique @db.Char(64)
+  createdByUserId String
+  startsAt    DateTime?
+  endsAt      DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime                          @default(now())
+  updatedAt   DateTime                          @updatedAt
+  bookings    Booking[]
+
+  @@index([salonId, createdAt])
+  @@index([salonId, source, revokedAt])
+  @@unique([salonId, id])
+  @@map("booking_attribution_campaigns")
 }
 
 // Multi-service booking core mission — one row per service actually selected on a Booking, in

@@ -231,6 +231,28 @@ export const BookingSource = {
 } as const;
 export type BookingSource = (typeof BookingSource)[keyof typeof BookingSource];
 
+/**
+ * Owner-reporting attribution projection. The persisted BookingSource enum remains unchanged;
+ * social/chat values are derived only from a server-issued, salon-scoped campaign token.
+ */
+export const BookingAttributionSource = {
+  FASTQUE_WEB: 'FASTQUE_WEB',
+  FASTQUE_APP: 'FASTQUE_APP',
+  WALK_IN: 'WALK_IN',
+  IN_SHOP: 'IN_SHOP',
+  FACEBOOK: 'FACEBOOK',
+  INSTAGRAM: 'INSTAGRAM',
+  CHATGPT: 'CHATGPT',
+  OTHER: 'OTHER',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type BookingAttributionSource =
+  (typeof BookingAttributionSource)[keyof typeof BookingAttributionSource];
+
+export const BOOKING_ATTRIBUTION_SOURCES = Object.values(
+  BookingAttributionSource,
+) as BookingAttributionSource[];
+
 export const QueueEntrySource = {
   WALK_IN: 'WALK_IN',
   APPOINTMENT: 'APPOINTMENT',

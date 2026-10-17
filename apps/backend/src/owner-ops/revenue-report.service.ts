@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   BookingErrorCode,
+  BookingAttributionSource,
   BookingSource,
   BookingStatus,
   InvoiceStatus,
@@ -16,6 +17,7 @@ import {
   type OwnerRevenueReportQuery,
   type OwnerRevenueReportServiceDto,
   type OwnerRevenueReportStaffDto,
+  type BookingAttributionSource as BookingAttributionSourceType,
 } from '@barbercue/shared';
 import { Prisma } from '@prisma/client';
 import { AppException } from '../common/exceptions/app.exception';
@@ -34,7 +36,7 @@ import {
   localRange,
 } from './local-time';
 
-type Source = (typeof BookingSource)[keyof typeof BookingSource] | 'UNKNOWN';
+type Source = BookingAttributionSourceType;
 
 type MetricAccumulator = {
   completedVisits: number;
@@ -58,7 +60,12 @@ type GroupAccumulator = MetricAccumulator & {
 type InvoiceRecord = Prisma.InvoiceGetPayload<{
   include: {
     lines: true;
-    booking: { select: { source: true } };
+    booking: {
+      select: {
+        source: true;
+        attributionCampaign: { select: { source: true } };
+      };
+    };
   };
 }>;
 
@@ -170,11 +177,77 @@ function sourceOfInvoice(
   invoice: InvoiceRecord,
   queueSources: Map<string, string>,
 ): Source {
-  if (invoice.booking?.source) return invoice.booking.source;
+  if (invoice.booking?.attributionCampaign?.source) {
+    return invoice.booking.attributionCampaign.source;
+  }
+  if (invoice.booking?.source) {
+    switch (invoice.booking.source) {
+      case BookingSource.WEB:
+        return BookingAttributionSource.FASTQUE_WEB;
+      case BookingSource.APP:
+        return BookingAttributionSource.FASTQUE_APP;
+      case BookingSource.WALK_IN:
+        return BookingAttributionSource.WALK_IN;
+      case BookingSource.IN_SHOP:
+        return BookingAttributionSource.IN_SHOP;
+      default:
+        return BookingAttributionSource.UNKNOWN;
+    }
+  }
   if (!invoice.queueEntryId) return 'UNKNOWN';
   return queueSources.get(invoice.queueEntryId) === QueueEntrySource.WALK_IN
-    ? BookingSource.WALK_IN
-    : 'UNKNOWN';
+    ? BookingAttributionSource.WALK_IN
+    : BookingAttributionSource.UNKNOWN;
+}
+
+function bookingSourceWhere(
+  source?: OwnerRevenueReportQuery['source'],
+): Prisma.BookingWhereInput {
+  if (!source) return {};
+  switch (normalizeRequestedSource(source)) {
+    case BookingAttributionSource.FASTQUE_WEB:
+      return { source: BookingSource.WEB, attributionCampaignId: null };
+    case BookingAttributionSource.FASTQUE_APP:
+      return { source: BookingSource.APP, attributionCampaignId: null };
+    case BookingAttributionSource.WALK_IN:
+      return { source: BookingSource.WALK_IN, attributionCampaignId: null };
+    case BookingAttributionSource.IN_SHOP:
+      return { source: BookingSource.IN_SHOP, attributionCampaignId: null };
+    case BookingAttributionSource.FACEBOOK:
+    case BookingAttributionSource.INSTAGRAM:
+    case BookingAttributionSource.CHATGPT:
+    case BookingAttributionSource.OTHER:
+      return {
+        attributionCampaign: {
+          is: {
+            source: source as 'FACEBOOK' | 'INSTAGRAM' | 'CHATGPT' | 'OTHER',
+          },
+        },
+      };
+    case BookingAttributionSource.UNKNOWN:
+      return {
+        attributionCampaignId: null,
+        source: {
+          notIn: [
+            BookingSource.APP,
+            BookingSource.WEB,
+            BookingSource.WALK_IN,
+            BookingSource.IN_SHOP,
+          ],
+        },
+      };
+    default:
+      return {};
+  }
+}
+
+function normalizeRequestedSource(
+  source: OwnerRevenueReportQuery['source'],
+): Source | undefined {
+  if (!source) return undefined;
+  if (source === BookingSource.WEB) return BookingAttributionSource.FASTQUE_WEB;
+  if (source === BookingSource.APP) return BookingAttributionSource.FASTQUE_APP;
+  return source;
 }
 
 function includedBySource(
@@ -275,7 +348,7 @@ export class RevenueReportService {
                   },
                 },
               ],
-              ...(query.source ? { source: query.source } : {}),
+              ...bookingSourceWhere(query.source),
             },
             select: {
               id: true,
@@ -283,6 +356,7 @@ export class RevenueReportService {
               guestName: true,
               slotStart: true,
               source: true,
+              attributionCampaign: { select: { source: true } },
               service: { select: { id: true, name: true, price: true } },
               services: {
                 orderBy: { sortOrder: 'asc' },
@@ -315,7 +389,8 @@ export class RevenueReportService {
               salonId,
               bookingId: null,
               source:
-                query.source && query.source !== BookingSource.WALK_IN
+                query.source &&
+                query.source !== BookingAttributionSource.WALK_IN
                   ? { in: [] }
                   : QueueEntrySource.WALK_IN,
               status: QueueEntryStatus.COMPLETED,
@@ -369,7 +444,12 @@ export class RevenueReportService {
             },
             include: {
               lines: { orderBy: { sortOrder: 'asc' } },
-              booking: { select: { source: true } },
+              booking: {
+                select: {
+                  source: true,
+                  attributionCampaign: { select: { source: true } },
+                },
+              },
             },
             orderBy: [{ serviceDate: 'asc' }, { id: 'asc' }],
             take: MAX_REPORT_SOURCE_ROWS + 1,
@@ -657,7 +737,7 @@ export class RevenueReportService {
         const sourceInvoices = invoices.filter((invoice) =>
           includedBySource(
             sourceOfInvoice(invoice, queueSources),
-            query.source,
+            normalizeRequestedSource(query.source),
           ),
         );
         for (const invoice of sourceInvoices) {
@@ -866,7 +946,8 @@ export class RevenueReportService {
               'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE',
             cashSource: 'SHOP_RECORDED_INVOICE_PAYMENT_LEDGER',
             serviceCashAllocation: 'PRO_RATA_BY_INVOICE_LINE_TOTAL',
-            externalAttribution: 'NOT_CAPTURED_BY_EXISTING_SOURCE_FIELDS',
+            externalAttribution:
+              'CAMPAIGN_TOKEN_WHEN_PRESENT_LEGACY_SOURCE_PROJECTION_OTHERWISE',
           },
         };
       },
