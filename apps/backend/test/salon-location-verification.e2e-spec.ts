@@ -297,11 +297,19 @@ describeDisposable(
         where: { entityType: 'SalonLocationProposal', entityId: proposalId },
         select: { action: true, actorUserId: true, metadata: true },
       });
-      expect(audit).toHaveLength(1);
-      expect(audit[0]).toMatchObject({
-        action: 'SALON_LOCATION_APPROVED',
-        actorUserId: ids.reviewerA,
-      });
+      expect(audit).toHaveLength(2);
+      expect(audit).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            action: 'SALON_LOCATION_PROPOSED',
+            actorUserId: ids.sameActor,
+          }),
+          expect.objectContaining({
+            action: 'SALON_LOCATION_APPROVED',
+            actorUserId: ids.reviewerA,
+          }),
+        ]),
+      );
 
       const current = await api('get', path, auth.owner).expect(200);
       expect(current.body.current).toMatchObject({
