@@ -135,6 +135,20 @@ Authorization: Bearer <access-token>
 
 Each service/staff/customer row contains `completedVisits`, `estimatedServiceValue`, `discounts`, `invoiced`, `recordedCollections`, `refunds`, and `netRecordedCollections` as `Money`; it does not equate service completion or invoice issuance with money collection. The same report filter schema is used by CSV export.
 
+### Booking acquisition attribution
+
+The existing persisted `Booking.source` enum remains APP, WEB, WALK_IN, and IN_SHOP for backward compatibility. The reporting projection maps those values to FASTQUE_APP, FASTQUE_WEB, WALK_IN, and IN_SHOP respectively. External channels are never accepted as a client-selected source.
+
+Owners or platform admins manage salon-scoped campaigns:
+- `POST /dashboard/salons/:salonId/booking-attribution/campaigns` creates a campaign for FACEBOOK, INSTAGRAM, CHATGPT, or OTHER with a bounded display label and optional active window. The server generates a high-entropy opaque token; only a SHA-256 token hash is stored. The clear token is returned only in the creation response so the authorized owner can add it to a campaign URL.
+- `GET /dashboard/salons/:salonId/booking-attribution/campaigns` lists safe campaign metadata and aggregate usage without tokens or customer PII.
+- `POST /dashboard/salons/:salonId/booking-attribution/campaigns/:campaignId/revoke` revokes a token without deleting attribution history.
+- Existing `POST /bookings` accepts an optional opaque `attributionToken`. The backend matches its hash to an active campaign for the same salon at booking creation and records the campaign relation. Invalid, expired, revoked, or wrong-salon tokens are ignored for attribution; they do not block a valid booking or change its operational source.
+- Owner booking history gains an optional validated `source` filter and the shared revenue report uses the same source vocabulary. Revenue source filtering applies to booking, queue-linked invoice, and payment/refund rows through the exact source-linked record; it does not duplicate estimates or collections.
+- `GET /dashboard/salons/:salonId/booking-attribution?from&to&source` returns salon-local booking counts by projected source and campaign with no customer-identifying fields.
+
+Campaign assignment is evidence of a campaign-link click, not proof that a customer came from the social platform itself. It must be described as campaign attribution, not verified platform identity. Direct APP/WEB values preserve the existing source capture behavior; the backend does not infer an external source from referrer text, campaign label, user-agent, or client-supplied source. Historical source columns are not rewritten. Legacy rows with no campaign use only the source already stored on the booking; unsupported values map to UNKNOWN. Item-level lists are bounded; aggregate output is bounded by salon/date filters.
+
 ### Demo status/import
 
 ```json
@@ -205,6 +219,7 @@ The following implementation is certified only on an open Draft PR and is not ye
 | 2 | `cfb4052521b91806c3db5767f40872e5edb72b7d` (Draft PR #226) | Day/week/month report buckets; no production runtime claim. |
 | 4 | `cfb4052521b91806c3db5767f40872e5edb72b7d` (Draft PR #226) | Service/staff/customer breakdowns and formula-safe CSV; XLSX is not implemented. |
 | 17 | `cfb4052521b91806c3db5767f40872e5edb72b7d` (Draft PR #226, partial) | Shop-recorded invoice ledger and refund presentation covered; provider settlement reconciliation, unmatched external records and a finance-approved accounting close remain open. |
+| 3 | In progress — Draft PR #231 stacked on Draft PR #226 | Opaque salon campaign tokens for Facebook, Instagram, ChatGPT, and Other; additive attribution relation; server-derived source filters in owner booking history and the same revenue report. Existing booking source enum remains unchanged. Exact-head certification pending. |
 | 27 | `204fcd18637ad7aac346f11916d53c2402c56c00` (Draft PR #229) | Salon-scoped bulk chair deactivation preview/apply; PostgreSQL HTTP E2E exposed advisory-lock `void` deserialization and stale Serializable snapshots after lock waits. Corrected using `$executeRaw` and default READ COMMITTED with advisory + row locks; exact-head CI PASS on 2026-10-17: [Owner Operations Certification](https://github.com/mail2devkr-maker/barbercue/actions/runs/39014980223) and [Service Catalog Import Certification](https://github.com/mail2devkr-maker/barbercue/actions/runs/39014980207). No chair is permanently deleted. |
 | 3, 5–16, 18–26, 28–30 | Pending | No completion is claimed by the current candidates; dependencies and external activation gates remain as described above. |
 
