@@ -257,6 +257,10 @@ maybe('Salon photo activation requirement (disposable PostgreSQL e2e)', () => {
           grandfathered: true,
         }),
       );
+    const targetBeforeDeniedAccess = await prisma.salon.findUniqueOrThrow({
+      where: { id: ids.salon },
+      select: { status: true, shopPhotoRequirementGrandfathered: true },
+    });
     await api(
       'get',
       `dashboard/salons/${ids.salon}/photo-readiness`,
@@ -273,8 +277,10 @@ maybe('Salon photo activation requirement (disposable PostgreSQL e2e)', () => {
     await api('patch', `dashboard/salons/${ids.salon}/status`, customerToken)
       .send({ status: 'ACTIVE' })
       .expect(403);
-    await expect(
-      prisma.salon.findUniqueOrThrow({ where: { id: ids.salon } }),
-    ).resolves.toMatchObject({ status: 'PENDING' });
+    const targetAfterDeniedAccess = await prisma.salon.findUniqueOrThrow({
+      where: { id: ids.salon },
+      select: { status: true, shopPhotoRequirementGrandfathered: true },
+    });
+    expect(targetAfterDeniedAccess).toEqual(targetBeforeDeniedAccess);
   });
 });
