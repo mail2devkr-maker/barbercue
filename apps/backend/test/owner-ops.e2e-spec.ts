@@ -197,6 +197,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       for (const path of [
         `dashboard/salons/${ids.salon}/overview`,
         `dashboard/salons/${ids.salon}/revenue`,
+        `dashboard/salons/${ids.salon}/share-links`,
         `dashboard/salons/${ids.salon}/analytics/cancellations`,
         `dashboard/salons/${ids.salon}/billing-profile`,
         `dashboard/salons/${ids.salon}/invoices`,
@@ -211,6 +212,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       for (const path of [
         `dashboard/salons/${ids.salon}/overview`,
         `dashboard/salons/${ids.salon}/revenue`,
+        `dashboard/salons/${ids.salon}/share-links`,
         `dashboard/salons/${ids.salon}/analytics/cancellations`,
         `dashboard/salons/${ids.salon}/billing-profile`,
         `dashboard/salons/${ids.salon}/invoices`,
@@ -224,8 +226,30 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
     it("rejects another shop's owner everywhere, and the owner has no barber profile to work from", async () => {
       await api('get', `dashboard/salons/${ids.salon}/overview`, tok.outsider).expect(403);
+      await api('get', `dashboard/salons/${ids.salon}/share-links`, tok.outsider).expect(403);
       await api('post', `dashboard/salons/${ids.salon}/queue/customers`, tok.outsider).send({ name: 'Sneaky' }).expect(403);
       await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, tok.owner).expect(403);
+    });
+
+    it('returns a canonical, private share link only to the authorized salon owner', async () => {
+      const originalWebBaseUrl = process.env.WEB_BASE_URL;
+      process.env.WEB_BASE_URL = 'https://fastque.example';
+      try {
+        const response = await api('get', `dashboard/salons/${ids.salon}/share-links`, tok.owner).expect(200);
+        expect(response.headers['cache-control']).toContain('private');
+        expect(response.headers['cache-control']).toContain('no-store');
+        expect(response.body.salonId).toBe(ids.salon);
+        expect(response.body.status).toBe(SalonStatus.ACTIVE);
+        expect(response.body.publicPath).toBe(`/in/jharsuguda/owner-ops-${run}`);
+        expect(response.body.publicUrl).toBe(`https://fastque.example/in/jharsuguda/owner-ops-${run}`);
+        expect(response.body.readiness).toEqual({ ready: true, reasons: [] });
+        expect(response.body.metadata.title).toBe(`Owner Ops Salon ${run}`);
+        expect(response.body).not.toHaveProperty('phone');
+        expect(response.body).not.toHaveProperty('email');
+      } finally {
+        if (originalWebBaseUrl === undefined) delete process.env.WEB_BASE_URL;
+        else process.env.WEB_BASE_URL = originalWebBaseUrl;
+      }
     });
 
     it('does not let a barber change owner-only settings', async () => {

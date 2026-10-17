@@ -37,6 +37,7 @@ import {
   type CreateInvoiceInput,
   type CreateQueueCustomerInput,
   type InvoicePaymentStatus,
+  type SalonShareLinksDto,
   type QueueSettingsInput,
   type RecordInvoicePaymentInput,
   type ShopCancelBookingInput,
@@ -60,6 +61,7 @@ import { QueueAutoAssignService } from './queue-auto-assign.service';
 import { ShopBookingActionsService } from './shop-booking-actions.service';
 import { StaffAccessService } from './staff-access.service';
 import { StaffWorkService } from './staff-work.service';
+import { SalonShareLinksService } from './salon-share-links.service';
 
 const SALON = 'dashboard/salons/:salonId';
 
@@ -84,9 +86,20 @@ export class OwnerOpsController {
     private readonly prisma: PrismaService,
     private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
+    private readonly salonShareLinks: SalonShareLinksService,
   ) {}
 
   // ---------- Overview / search / analytics ----------
+
+  @Get(`${SALON}/share-links`)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Header('Cache-Control', 'private, no-store')
+  getSalonShareLinks(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+  ): Promise<SalonShareLinksDto> {
+    return this.salonShareLinks.getForSalon(user.id, salonId);
+  }
 
   @Get(`${SALON}/overview`)
   @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
