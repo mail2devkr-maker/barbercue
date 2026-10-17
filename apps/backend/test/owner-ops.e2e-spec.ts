@@ -52,10 +52,17 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   const ids: Record<string, string> = {};
   const tok: Record<string, string> = {};
 
-  const api = (method: 'get' | 'post' | 'put' | 'patch', path: string, token?: string) => {
+  const api = (
+    method: 'get' | 'post' | 'put' | 'patch',
+    path: string,
+    token?: string,
+    idempotencyKey?: string,
+  ) => {
     const req = request(app.getHttpServer())[method](`/api/v1/${path}`);
     if (token) req.set('Authorization', `Bearer ${token}`);
-    if (method === 'post' || method === 'put' || method === 'patch') req.set('Idempotency-Key', randomUUID());
+    if (method === 'post' || method === 'put' || method === 'patch') {
+      req.set('Idempotency-Key', idempotencyKey ?? randomUUID());
+    }
     return req;
   };
 
@@ -107,9 +114,15 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       serviceIds?: string[];
       staffId?: string;
       attributionToken?: string;
+      idempotencyKey?: string;
     } = {},
   ) {
-    const res = await api('post', 'bookings', tok[customerLabel]).send({
+    const res = await api(
+      'post',
+      'bookings',
+      tok[customerLabel],
+      opts.idempotencyKey,
+    ).send({
       salonId: ids.salon,
       serviceIds: opts.serviceIds ?? [ids.haircut],
       slotStart: startIso,
@@ -371,6 +384,60 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
   // ------------------------------------------------------------------------------------------
   describe('booking acquisition attribution', () => {
+    it(
+      'replays a signed-in customer campaign booking exactly once and binds the retry key to its request',
+      async () => {
+        const campaignPath = `dashboard/salons/${ids.salon}/booking-attribution/campaigns`;
+        const campaign = await api('post', campaignPath, tok.owner)
+          .send({ source: 'CHATGPT', label: `Retry-safe campaign ${run}` })
+          .expect(201);
+        const idempotencyKey = randomUUID();
+        const startIso = slot('15:00', 5);
+        const input = {
+          serviceIds: [ids.haircut],
+          attributionToken: campaign.body.token as string,
+          idempotencyKey,
+        };
+
+        const first = await createBookingAs('cust1', startIso, input);
+        const retry = await createBookingAs('cust1', startIso, input);
+        expect(retry.id).toBe(first.id);
+
+        const persisted = await prisma.booking.findMany({
+          where: { idempotencyKey },
+          select: {
+            id: true,
+            salonId: true,
+            customerId: true,
+            attributionCampaignId: true,
+            source: true,
+          },
+        });
+        expect(persisted).toEqual([
+          {
+            id: first.id,
+            salonId: ids.salon,
+            customerId: ids.cust1,
+            attributionCampaignId: campaign.body.id,
+            source: 'WEB',
+          },
+        ]);
+
+        await api('post', 'bookings', tok.cust1, idempotencyKey)
+          .send({
+            salonId: ids.salon,
+            serviceIds: [ids.beard],
+            slotStart: slot('16:00', 5),
+            attributionToken: campaign.body.token,
+          })
+          .expect(409)
+          .then((response) => {
+            expect(response.body.error.code).toBe('IDEMPOTENCY_KEY_REUSED');
+          });
+        expect(await prisma.booking.count({ where: { idempotencyKey } })).toBe(1);
+      },
+    );
+
     it('attributes only valid salon-scoped campaign tokens while preserving operational source', async () => {
       const campaignPath = `dashboard/salons/${ids.salon}/booking-attribution/campaigns`;
       const createdCampaign = await api('post', campaignPath, tok.owner)
