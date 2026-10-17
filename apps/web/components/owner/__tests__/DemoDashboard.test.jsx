@@ -108,6 +108,10 @@ describe("DemoDashboard", () => {
     for (const name of ["Overview", "Revenue", "Customers", "Bookings", "Live Queue", "Services", "Staff and chairs", "Invoices", "Reviews"]) {
       await act(async () => { tab(r, name).props.onClick(); });
       expect(text(r)).toContain("DEMO DATA — NOT REAL BUSINESS RECORDS");
+      // The persistent pill is fixed to the viewport (see owner.module.css), so it is still visible deep inside a long tab.
+      const pills = r.root.findAll((n) => n.props?.["data-testid"] === "demo-pill" && typeof n.type === "string");
+      expect(pills).toHaveLength(1);
+      expect(collect(pills[0].children)).toContain("DEMO DATA — NOT REAL BUSINESS RECORDS");
     }
   });
 

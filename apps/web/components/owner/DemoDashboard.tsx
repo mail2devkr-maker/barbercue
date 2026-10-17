@@ -125,6 +125,10 @@ export function DemoDashboard({ salonId }: { salonId: string }) {
       <div data-testid="demo-banner">
         <Banner tone="warn">{bannerText}</Banner>
       </div>
+      {/* Stays on screen while a long tab scrolls; the full explanation is the banner above. */}
+      <div className={ui.demoPill} data-testid="demo-pill" role="note" aria-label={DEMO_BANNER}>
+        {DEMO_BANNER}
+      </div>
       <div className={`${ui.rowWrap} ${ui.mt12}`}>
         {back}
         <BtnLink variant="quiet" href={`${shopHome}/demo`}>
