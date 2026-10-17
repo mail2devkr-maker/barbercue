@@ -14,6 +14,7 @@ import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { SalonImage } from "../../../../../../components/ui/SalonImage";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
+import { PhotoReadinessCard } from "../../../../../../components/dashboard/PhotoReadinessCard";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 /** Which of the two routes to the cover photo the owner is using. Never both at once. */
@@ -395,6 +396,7 @@ export default function DashboardPhotosPage({
         during setup.
       </p>
       <SetupNavigation salonId={salonId} currentStep="photos" section="steps" />
+      <PhotoReadinessCard salonId={salonId} photoCount={photos?.length ?? 0} />
 
       {error && <p className={`${styles.banner} ${styles.bannerError}`} role="alert">{error}</p>}
       {success && <p className={`${styles.banner} ${styles.bannerNotice}`} role="status">{success}</p>}
