@@ -16,9 +16,15 @@ function fakeStore() {
 let store;
 const mounted = [];
 
-function setUrl(path, search) {
+let replaced;
+function setUrl(path, search, hash = "") {
   mockPath = path;
-  globalThis.window = { location: { search }, sessionStorage: store };
+  replaced = [];
+  globalThis.window = {
+    location: { pathname: path, search, hash },
+    history: { state: { marker: 1 }, replaceState: (...args) => { replaced.push(args); } },
+    sessionStorage: store,
+  };
 }
 
 // The effect is synchronous, so a synchronous act() flushes it deterministically (no timers or microtask races).
@@ -46,6 +52,38 @@ afterEach(() => {
 describe("CampaignCapture", () => {
   it("remembers the code from a public shop link for that shop", () => {
     setUrl("/in/patna/fade-house", `?fq_campaign=${TOKEN}`);
+    mount();
+    expect(recallCampaign(store, "in/patna/fade-house")).toBe(TOKEN);
+  });
+
+  it("removes the code from the address once it is remembered, keeping other parameters and the hash", () => {
+    setUrl("/in/patna/fade-house", `?utm=a&fq_campaign=${TOKEN}`, "#reviews");
+    mount();
+    expect(replaced).toEqual([[{ marker: 1 }, "", "/in/patna/fade-house?utm=a#reviews"]]);
+  });
+
+  it("leaves a plain address plain when the code was the only parameter", () => {
+    setUrl("/in/patna/fade-house", `?fq_campaign=${TOKEN}`);
+    mount();
+    expect(replaced[0][2]).toBe("/in/patna/fade-house");
+  });
+
+  it("leaves the address alone when the code could not be remembered", () => {
+    setUrl("/in/patna/fade-house", `?fq_campaign=${TOKEN}`);
+    globalThis.window.sessionStorage = { getItem: () => null, setItem() { throw new Error("full"); }, removeItem() {} };
+    mount();
+    expect(replaced).toEqual([]);
+  });
+
+  it("does not touch the address for a badly shaped code", () => {
+    setUrl("/in/patna/fade-house", "?fq_campaign=short");
+    mount();
+    expect(replaced).toEqual([]);
+  });
+
+  it("still remembers the code if the browser refuses to change the address", () => {
+    setUrl("/in/patna/fade-house", `?fq_campaign=${TOKEN}`);
+    globalThis.window.history.replaceState = () => { throw new Error("blocked"); };
     mount();
     expect(recallCampaign(store, "in/patna/fade-house")).toBe(TOKEN);
   });
