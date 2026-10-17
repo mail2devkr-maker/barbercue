@@ -512,6 +512,16 @@ export const StyleAdvisorErrorCode = {
 } as const;
 export type StyleAdvisorErrorCode = (typeof StyleAdvisorErrorCode)[keyof typeof StyleAdvisorErrorCode];
 
+// Owner-generated salon description drafts remain unavailable until an approved provider is wired.
+export const SalonDescriptionErrorCode = {
+  PROVIDER_NOT_CONFIGURED: 'SALON_DESCRIPTION_PROVIDER_NOT_CONFIGURED',
+  PROVIDER_TIMEOUT: 'SALON_DESCRIPTION_PROVIDER_TIMEOUT',
+  GENERATION_FAILED: 'SALON_DESCRIPTION_GENERATION_FAILED',
+  INVALID_PROVIDER_RESPONSE: 'SALON_DESCRIPTION_INVALID_PROVIDER_RESPONSE',
+  INPUT_TOO_LARGE: 'SALON_DESCRIPTION_INPUT_TOO_LARGE',
+} as const;
+export type SalonDescriptionErrorCode = (typeof SalonDescriptionErrorCode)[keyof typeof SalonDescriptionErrorCode];
+
 // Stable machine-readable error codes for the Premium plans/subscription module — same convention
 // as StyleAdvisorErrorCode.
 // Stable machine-readable error codes for owner-side salon setup (Phase 11) — services, chairs,

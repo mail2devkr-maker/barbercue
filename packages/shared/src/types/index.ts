@@ -1561,3 +1561,12 @@ export interface HealthCheckResponse {
   service: string;
   timestamp: string;
 }
+
+/** Draft only: the owner must review every statement and save through the existing profile API. */
+export interface SalonDescriptionSuggestionDto {
+  draft: string;
+  language: 'en' | 'hi';
+  persisted: false;
+  requiresOwnerReview: true;
+  notice: string;
+}

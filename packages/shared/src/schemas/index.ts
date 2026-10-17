@@ -26,7 +26,11 @@ import {
   UserStatus,
   VerificationStatus,
 } from '../enums';
-import { MAX_SERVICES_PER_BOOKING, PREMIUM_PLAN_IDS } from '../constants';
+import {
+  MAX_SERVICES_PER_BOOKING,
+  PREMIUM_PLAN_IDS,
+  SALON_DESCRIPTION_SUGGESTION_LIMITS,
+} from '../constants';
 import { isValidPostalCode, postalCodeRuleFor } from '../locale';
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
@@ -960,3 +964,17 @@ export const siteVisitSchema = z.object({
   visitorId: z.string().uuid(),
 });
 export type SiteVisitInput = z.infer<typeof siteVisitSchema>;
+
+// POST dashboard/salons/:salonId/description/suggestions. Salon identity and catalog facts are
+// loaded by the backend after authorization; caller-supplied highlights are owner attestations.
+export const salonDescriptionSuggestionSchema = z
+  .object({
+    language: z.enum(['en', 'hi']).default('en'),
+    tone: z.enum(['professional', 'friendly', 'premium']).default('professional'),
+    ownerAttestedHighlights: z
+      .array(z.string().trim().min(1).max(SALON_DESCRIPTION_SUGGESTION_LIMITS.maxHighlightLength))
+      .max(SALON_DESCRIPTION_SUGGESTION_LIMITS.maxHighlights)
+      .default([]),
+  })
+  .strict();
+export type SalonDescriptionSuggestionInput = z.infer<typeof salonDescriptionSuggestionSchema>;

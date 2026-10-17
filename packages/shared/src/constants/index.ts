@@ -392,6 +392,23 @@ export const DASHBOARD_PATHS = {
 // magic number repeated in both the backend sweep and the frontend eligibility display.
 export const ARRIVAL_ALERT_LEAD_MINUTES = 5;
 
+// Requirement #10 — conservative bounds for a future approved description-generation provider.
+export const SALON_DESCRIPTION_SUGGESTION_LIMITS = {
+  maxRequests: 3,
+  throttleWindowMs: 600_000,
+  providerTimeoutMs: 8_000,
+  maxServices: 20,
+  maxHighlights: 5,
+  maxHighlightLength: 120,
+  maxCurrentDescriptionLength: 600,
+  maxPromptCharacters: 4_000,
+  maxSalonNameLength: 120,
+  maxCityNameLength: 120,
+  maxServiceNameLength: 80,
+  minDraftLength: 80,
+  maxDraftLength: 600,
+} as const;
+
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).
 // `:token` is Salon.publicQueueToken, never the internal Salon.id.
 export const PUBLIC_QUEUE_PATHS = {
