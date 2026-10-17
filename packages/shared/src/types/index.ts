@@ -1552,6 +1552,15 @@ export interface SalonSetupReadinessDto {
   hasActiveStaff: boolean;
 }
 
+/** Counts distinct existing HTTPS/no-credentials photo URL origin/paths; remote content is not fetched. */
+export interface SalonPhotoActivationReadinessDto {
+  required: 3;
+  current: number;
+  ready: boolean;
+  grandfathered: boolean;
+  reasons: Array<'THREE_VALID_PHOTOS_REQUIRED'>;
+}
+
 // ---------- Platform admin monitoring ----------
 
 export interface PlatformAdminOverviewDto {

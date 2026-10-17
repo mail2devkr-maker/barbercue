@@ -379,6 +379,8 @@ export const DASHBOARD_PATHS = {
   profile: 'profile',
   // Authenticated canonical public shop URL and share-safe metadata.
   shareLinks: 'share-links',
+  // Owner/admin readiness checklist for the three-photo first-activation requirement.
+  photoReadiness: 'photo-readiness',
   // P0 arrival-alert mission — POST dashboard/bookings/:id/arrive|no-show|correct-no-show (staff/
   // owner-triggered booking-lifecycle actions, mounted alongside the existing queue mutations in
   // DashboardQueueController) and GET dashboard/salons/:salonId/arrival-alerts (the "reconstruct

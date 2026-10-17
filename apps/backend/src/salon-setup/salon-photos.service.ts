@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
+import sharp from 'sharp';
 import { PhotoType, SALON_PHOTO_UPLOAD } from '@barbercue/shared';
 import type {
   CreateSalonPhotoInput,
@@ -18,6 +19,9 @@ import {
 // A shop needs a handful of good photos, not an album. Capping keeps the profile page fast and
 // stops one salon filling discovery with fifty near-identical shots.
 const MAX_PHOTOS_PER_SALON = 12;
+// Bound decoded image work as well as the compressed upload size: a tiny compressed file can
+// otherwise expand into a very large pixel buffer (decompression bomb).
+const MAX_PHOTO_INPUT_PIXELS = 25_000_000;
 
 /**
  * Owner-side salon photos, same assertOwnerAccess-first shape as the rest of salon-setup.
@@ -38,10 +42,10 @@ const MAX_PHOTOS_PER_SALON = 12;
  * type, and are capped at SALON_PHOTO_UPLOAD.maxBytes by multer before a byte reaches this
  * service.
  *
- * WHAT STILL REMAINS for a fully hardened pipeline: re-encoding through an image library to strip
- * EXIF (phone cameras embed GPS coordinates, and a shop owner photographing their own shop is
- * publishing their workplace's location), pixel-dimension limits to blunt decompression bombs, and
- * a virus scan. None of that is stubbed or faked here.
+ * Uploaded images are decoded and re-encoded through Sharp with a pixel limit. Sharp strips EXIF,
+ * GPS, ICC, XMP, and other metadata by default because this pipeline does not call withMetadata().
+ * Linked third-party image URLs are not fetched or transformed; their remote host controls their
+ * metadata. Malware scanning is not available in the current deployment.
  *
  * Unlike Service and Chair, Photo has no inbound foreign keys anywhere in the schema, so removing
  * one is a genuine delete rather than a status flip; nothing can be orphaned by it.
@@ -69,10 +73,20 @@ export class SalonPhotosService {
     salonId: string,
     input: CreateSalonPhotoInput,
   ): Promise<PhotoDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     const count = await this.assertUnderLimit(salonId);
-    const photo = await this.insert(salonId, input.url, input.altText, input.type, count);
-    if (actor === 'PLATFORM_ADMIN') await this.logAdminAdd(userId, salonId, photo, 'link');
+    const photo = await this.insert(
+      salonId,
+      input.url,
+      input.altText,
+      input.type,
+      count,
+    );
+    if (actor === 'PLATFORM_ADMIN')
+      await this.logAdminAdd(userId, salonId, photo, 'link');
     return photo;
   }
 
@@ -89,7 +103,10 @@ export class SalonPhotosService {
     file: Express.Multer.File | undefined,
     meta: SalonPhotoUploadMetaInput,
   ): Promise<PhotoDto> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     const count = await this.assertUnderLimit(salonId);
 
     if (!file || file.size === 0) {
@@ -124,11 +141,80 @@ export class SalonPhotosService {
     // existing object, contain path separators, or leak whatever the owner happened to call the
     // file. Scoped by salon so a bucket listing stays readable.
     const key = `salons/${salonId}/photos/${randomUUID()}.${extensionForMimeType(detected)}`;
-    const url = await this.storage.putPublicObject(key, file.buffer, detected);
+    const sanitized = await this.reencodeUploadedImage(file.buffer, detected);
+    const url = await this.storage.putPublicObject(key, sanitized, detected);
 
-    const photo = await this.insert(salonId, url, meta.altText, meta.type, count);
-    if (actor === 'PLATFORM_ADMIN') await this.logAdminAdd(userId, salonId, photo, 'upload');
+    const photo = await this.insert(
+      salonId,
+      url,
+      meta.altText,
+      meta.type,
+      count,
+    );
+    if (actor === 'PLATFORM_ADMIN')
+      await this.logAdminAdd(userId, salonId, photo, 'upload');
     return photo;
+  }
+
+  /** Decode and re-encode uploads so stored bytes have safe orientation and no embedded metadata. */
+  private async reencodeUploadedImage(
+    buffer: Buffer,
+    detectedMime: string,
+  ): Promise<Buffer> {
+    try {
+      const pipeline = sharp(buffer, {
+        failOn: 'warning',
+        limitInputPixels: MAX_PHOTO_INPUT_PIXELS,
+      });
+      const metadata = await pipeline.metadata();
+      const expectedFormat =
+        detectedMime === 'image/jpeg'
+          ? 'jpeg'
+          : detectedMime.slice('image/'.length);
+      if (
+        metadata.format !== expectedFormat ||
+        !metadata.width ||
+        !metadata.height
+      ) {
+        throw new Error('Image signature and decoded format do not match');
+      }
+
+      let output: Buffer;
+      switch (detectedMime) {
+        case 'image/jpeg':
+          output = await pipeline
+            .rotate()
+            .jpeg({ quality: 88, mozjpeg: true })
+            .toBuffer();
+          break;
+        case 'image/png':
+          output = await pipeline
+            .rotate()
+            .png({ compressionLevel: 9 })
+            .toBuffer();
+          break;
+        case 'image/webp':
+          output = await pipeline.rotate().webp({ quality: 88 }).toBuffer();
+          break;
+        default:
+          throw new Error('Unsupported decoded image format');
+      }
+      if (output.length > SALON_PHOTO_UPLOAD.maxBytes) {
+        throw new AppException(
+          'PHOTO_TOO_LARGE',
+          'That photo is too large after safe image processing. Please choose a smaller photo.',
+          HttpStatus.PAYLOAD_TOO_LARGE,
+        );
+      }
+      return output;
+    } catch (error) {
+      if (error instanceof AppException) throw error;
+      throw new AppException(
+        'PHOTO_INVALID_IMAGE',
+        'That image could not be safely processed. Please choose a valid JPG, PNG or WebP photo.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
   }
 
   /** Current photo count, or a typed error when the salon is already at the cap. */
@@ -179,7 +265,10 @@ export class SalonPhotosService {
     salonId: string,
     photoId: string,
   ): Promise<void> {
-    const actor = await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const actor = await this.salonAccess.assertOwnerOrAdminAccess(
+      userId,
+      salonId,
+    );
     // deleteMany scoped by salonId, not delete-by-id: an id alone would let an owner of salon A
     // delete a photo belonging to salon B. url is selected out first (deleteMany itself cannot
     // return the row) so the storage-side cleanup below knows what to remove.

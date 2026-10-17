@@ -1,4 +1,5 @@
 import { createSalonPhotoSchema } from '@barbercue/shared';
+import sharp from 'sharp';
 import { SalonPhotosService } from './salon-photos.service';
 
 describe('SalonPhotosService', () => {
@@ -26,7 +27,9 @@ describe('SalonPhotosService', () => {
       photo: {
         findMany: jest
           .fn()
-          .mockResolvedValue([{ url: 'https://cdn.test/existing.jpg', type: 'GALLERY' }]),
+          .mockResolvedValue([
+            { url: 'https://cdn.test/existing.jpg', type: 'GALLERY' },
+          ]),
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue({
           id: 'p1',
@@ -42,7 +45,9 @@ describe('SalonPhotosService', () => {
       ),
       auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
-    salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
+    salonAccess = {
+      assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER'),
+    };
     storage = {
       isConfigured: true,
       putPublicObject: jest
@@ -168,29 +173,60 @@ describe('SalonPhotosService', () => {
   // ---------- Device upload (multipart) ----------
 
   describe('createFromUpload', () => {
-    // Real magic bytes, not a declared MIME type — the whole point of the check under test.
-    const jpeg = () =>
-      ({
-        buffer: Buffer.concat([
-          Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
-          Buffer.alloc(64),
-        ]),
-        size: 68,
-        mimetype: 'image/jpeg',
-        originalname: 'shop.jpg',
-      }) as never;
+    type TestImage = {
+      buffer: Buffer;
+      size: number;
+      mimetype: string;
+      originalname: string;
+    };
+
+    // Real decoded image bytes exercise the server's re-encode/metadata-stripping path.
+    const image = async (
+      format: 'jpeg' | 'png' | 'webp' = 'jpeg',
+      withExif = false,
+    ) => {
+      const pipeline = sharp({
+        create: {
+          width: 32,
+          height: 24,
+          channels: 3,
+          background: '#ab3f6a',
+        },
+      });
+      if (withExif) {
+        pipeline.withExif({ IFD0: { Artist: 'private-test-metadata' } });
+      }
+      const buffer = await pipeline.toFormat(format).toBuffer();
+      return {
+        buffer,
+        size: buffer.length,
+        mimetype: `image/${format}`,
+        originalname: `shop.${format}`,
+      } satisfies TestImage;
+    };
 
     const meta = { type: 'COVER' as never };
 
     it('stores the file and saves the returned URL as a normal photo row', async () => {
-      await service.createFromUpload('owner-1', 'salon-1', jpeg(), meta);
+      await service.createFromUpload(
+        'owner-1',
+        'salon-1',
+        (await image()) as never,
+        meta,
+      );
       expect(storage.putPublicObject).toHaveBeenCalledTimes(1);
-      const [key, , contentType] = storage.putPublicObject.mock.calls[0];
+      const [key, storedBytes, contentType] =
+        storage.putPublicObject.mock.calls[0];
       // Keyed by salon, never by the client-supplied filename.
       expect(key).toMatch(/^salons\/salon-1\/photos\/[0-9a-f-]{36}\.jpg$/);
       expect(key).not.toContain('shop.jpg');
       // Content-Type is the sniffed value.
       expect(contentType).toBe('image/jpeg');
+      await expect(sharp(storedBytes).metadata()).resolves.toMatchObject({
+        format: 'jpeg',
+        width: 32,
+        height: 24,
+      });
       expect(prisma.photo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -198,6 +234,54 @@ describe('SalonPhotosService', () => {
           }),
         }),
       );
+    });
+
+    it.each([
+      ['jpeg', 'image/jpeg'],
+      ['png', 'image/png'],
+      ['webp', 'image/webp'],
+    ] as const)(
+      're-encodes %s uploads without embedded EXIF metadata',
+      async (format, mime) => {
+        const original = await image(format, true);
+        await expect(sharp(original.buffer).metadata()).resolves.toMatchObject({
+          exif: expect.any(Buffer),
+        });
+
+        await service.createFromUpload(
+          'owner-1',
+          'salon-1',
+          original as never,
+          meta,
+        );
+
+        const [, storedBytes, contentType] =
+          storage.putPublicObject.mock.calls[0];
+        expect(contentType).toBe(mime);
+        const storedMetadata = await sharp(storedBytes).metadata();
+        expect(storedMetadata.exif).toBeUndefined();
+        expect(storedMetadata.xmp).toBeUndefined();
+        expect(storedMetadata.icc).toBeUndefined();
+      },
+    );
+
+    it('rejects a truncated image before writing it to storage', async () => {
+      const source = await image();
+      const truncated = {
+        ...source,
+        buffer: source.buffer.subarray(0, 16),
+        size: 16,
+      } satisfies TestImage;
+      await expect(
+        service.createFromUpload(
+          'owner-1',
+          'salon-1',
+          truncated as never,
+          meta,
+        ),
+      ).rejects.toMatchObject({ code: 'PHOTO_INVALID_IMAGE' });
+      expect(storage.putPublicObject).not.toHaveBeenCalled();
+      expect(prisma.photo.create).not.toHaveBeenCalled();
     });
 
     it('rejects a non-image whatever its declared type and filename claim', async () => {
@@ -246,7 +330,7 @@ describe('SalonPhotosService', () => {
         service.createFromUpload(
           'intruder',
           'someone-elses-salon',
-          jpeg(),
+          (await image()) as never,
           meta,
         ),
       ).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
@@ -257,13 +341,23 @@ describe('SalonPhotosService', () => {
     it('never uploads when the salon is already at the photo limit', async () => {
       prisma.photo.count.mockResolvedValue(12);
       await expect(
-        service.createFromUpload('owner-1', 'salon-1', jpeg(), meta),
+        service.createFromUpload(
+          'owner-1',
+          'salon-1',
+          (await image()) as never,
+          meta,
+        ),
       ).rejects.toMatchObject({ code: 'PHOTO_LIMIT_REACHED' });
       expect(storage.putPublicObject).not.toHaveBeenCalled();
     });
 
     it('demotes an existing cover when an uploaded photo becomes the cover', async () => {
-      await service.createFromUpload('owner-1', 'salon-1', jpeg(), meta);
+      await service.createFromUpload(
+        'owner-1',
+        'salon-1',
+        (await image()) as never,
+        meta,
+      );
       expect(prisma.photo.updateMany).toHaveBeenCalledWith({
         where: { salonId: 'salon-1', type: 'COVER' },
         data: { type: 'GALLERY' },
@@ -288,25 +382,43 @@ describe('SalonPhotosService', () => {
           action: 'ADMIN_SALON_PHOTO_ADDED',
           entityType: 'Photo',
           entityId: 'p1',
-          metadata: expect.objectContaining({ salonId: 'salon-1', via: 'link', url: 'https://cdn.test/a.jpg' }),
+          metadata: expect.objectContaining({
+            salonId: 'salon-1',
+            via: 'link',
+            url: 'https://cdn.test/a.jpg',
+          }),
         }),
       });
     });
 
     it('PLATFORM_ADMIN uploading a photo is recorded under the real admin actor, with no file bytes in metadata', async () => {
       salonAccess.assertOwnerOrAdminAccess.mockResolvedValue('PLATFORM_ADMIN');
-      const jpegFile = {
-        buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64)]),
-        size: 68,
-        mimetype: 'image/jpeg',
-        originalname: 'shop.jpg',
-      } as never;
-      await service.createFromUpload('admin-1', 'salon-1', jpegFile, { type: 'COVER' as never });
-      const call = prisma.auditLog.create.mock.calls.find((c) => c[0].data.action === 'ADMIN_SALON_PHOTO_ADDED');
+      const jpegFile = await sharp({
+        create: { width: 32, height: 24, channels: 3, background: '#ab3f6a' },
+      })
+        .jpeg()
+        .toBuffer();
+      await service.createFromUpload(
+        'admin-1',
+        'salon-1',
+        {
+          buffer: jpegFile,
+          size: jpegFile.length,
+          mimetype: 'image/jpeg',
+          originalname: 'shop.jpg',
+        } as never,
+        { type: 'COVER' as never },
+      );
+      const call = prisma.auditLog.create.mock.calls.find(
+        (c) => c[0].data.action === 'ADMIN_SALON_PHOTO_ADDED',
+      );
       expect(call).toBeDefined();
       // photo.create's mock always resolves the same static row regardless of input — this
       // asserts the actor/action/via triad, not the (mock-fixed) url value.
-      expect(call![0].data).toMatchObject({ actorUserId: 'admin-1', metadata: { salonId: 'salon-1', via: 'upload', type: 'COVER' } });
+      expect(call![0].data).toMatchObject({
+        actorUserId: 'admin-1',
+        metadata: { salonId: 'salon-1', via: 'upload', type: 'COVER' },
+      });
     });
 
     it('PLATFORM_ADMIN removing a photo is recorded under the real admin actor', async () => {
@@ -318,7 +430,10 @@ describe('SalonPhotosService', () => {
           action: 'ADMIN_SALON_PHOTO_REMOVED',
           entityType: 'Photo',
           entityId: 'p1',
-          metadata: expect.objectContaining({ salonId: 'salon-1', url: 'https://cdn.test/existing.jpg' }),
+          metadata: expect.objectContaining({
+            salonId: 'salon-1',
+            url: 'https://cdn.test/existing.jpg',
+          }),
         }),
       });
     });
@@ -327,7 +442,9 @@ describe('SalonPhotosService', () => {
       salonAccess.assertOwnerOrAdminAccess.mockRejectedValue(
         Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
       );
-      await expect(service.remove('customer-1', 'salon-1', 'p1')).rejects.toMatchObject({
+      await expect(
+        service.remove('customer-1', 'salon-1', 'p1'),
+      ).rejects.toMatchObject({
         code: 'SALON_ACCESS_DENIED',
       });
       expect(prisma.photo.deleteMany).not.toHaveBeenCalled();

@@ -662,6 +662,8 @@ export class SalonsService {
               phone: input.phone ?? null,
               email: input.email ?? null,
               status: SalonStatus.PENDING,
+              // Distinguish new registrations from legacy rows left NULL by the additive migration.
+              shopPhotoRequirementGrandfathered: false,
             },
           });
           await tx.userRole.upsert({
