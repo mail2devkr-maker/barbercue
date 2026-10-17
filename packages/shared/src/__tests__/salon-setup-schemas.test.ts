@@ -4,6 +4,7 @@ import {
   createSalonServiceSchema,
   createSalonStaffSchema,
   normalizeServiceIdentity,
+  salonContactImportPreviewSchema,
   updateSalonTimezoneSchema,
 } from '..';
 
@@ -73,5 +74,24 @@ describe('owner setup contracts', () => {
     expect(updateSalonTimezoneSchema.safeParse({ timezone: '' }).success).toBe(false);
     expect(updateSalonTimezoneSchema.safeParse({ timezone: 'UTC+5:30' }).success).toBe(false);
     expect(updateSalonTimezoneSchema.safeParse({ timezone: 'IST' }).success).toBe(false);
+  });
+
+  it('bounds contact preview input and rejects fields that could identify existing accounts', () => {
+    const valid = {
+      contacts: [{ phone: '+919876543210' }],
+    };
+    expect(salonContactImportPreviewSchema.safeParse(valid).success).toBe(true);
+    expect(salonContactImportPreviewSchema.safeParse({ contacts: [] }).success).toBe(false);
+    expect(salonContactImportPreviewSchema.safeParse({
+      contacts: Array.from({ length: 251 }, (_, index) => ({
+        phone: '+919876543210',
+      })),
+    }).success).toBe(false);
+    expect(salonContactImportPreviewSchema.safeParse({
+      contacts: [{ phone: '+919876543210', name: 'not accepted' }],
+    }).success).toBe(false);
+    expect(salonContactImportPreviewSchema.safeParse({
+      contacts: [{ phone: '+919876543210', clientReference: '+919876543210' }],
+    }).success).toBe(false);
   });
 });
