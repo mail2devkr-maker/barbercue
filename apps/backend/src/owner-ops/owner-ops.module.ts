@@ -5,6 +5,10 @@ import { PushNotificationsModule } from '../push-notifications/push-notification
 import { QueueModule } from '../queue/queue.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { CancellationAnalyticsService } from './cancellation-analytics.service';
+import { CapabilitiesController } from './capabilities.controller';
+import { SalonCapabilitiesService } from './capabilities.service';
+import { DemoWorkspaceController } from './demo-workspace.controller';
+import { DemoWorkspaceService } from './demo-workspace.service';
 import { InvoicesService } from './invoices.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import {
@@ -35,9 +39,16 @@ import { StaffWorkService } from './staff-work.service';
     NotificationDeliveryModule,
     PushNotificationsModule,
   ],
-  controllers: [OwnerOpsController, CustomerInvoicesController],
+  controllers: [
+    OwnerOpsController,
+    CustomerInvoicesController,
+    DemoWorkspaceController,
+    CapabilitiesController,
+  ],
   providers: [
     CancellationAnalyticsService,
+    SalonCapabilitiesService,
+    DemoWorkspaceService,
     InvoicesService,
     OwnerOverviewService,
     OwnerSearchService,
