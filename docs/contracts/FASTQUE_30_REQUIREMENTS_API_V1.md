@@ -205,7 +205,7 @@ The following implementation is certified only on an open Draft PR and is not ye
 | 2 | `cfb4052521b91806c3db5767f40872e5edb72b7d` (Draft PR #226) | Day/week/month report buckets; no production runtime claim. |
 | 4 | `cfb4052521b91806c3db5767f40872e5edb72b7d` (Draft PR #226) | Service/staff/customer breakdowns and formula-safe CSV; XLSX is not implemented. |
 | 17 | `cfb4052521b91806c3db5767f40872e5edb72b7d` (Draft PR #226, partial) | Shop-recorded invoice ledger and refund presentation covered; provider settlement reconciliation, unmatched external records and a finance-approved accounting close remain open. |
-| 27 | `1ff1a32f5606c80753cafa8402692684ffad634a` (Draft PR #229) | Salon-scoped bulk chair deactivation preview/apply; transaction/occupancy protections and PG HTTP E2E are in exact-head CI, currently running. No chair is permanently deleted. |
+| 27 | `61f568d0956c906c4c5c82c34086a4d64fddd5e9` (Draft PR #229) | Salon-scoped bulk chair deactivation preview/apply; first PostgreSQL HTTP E2E found Prisma cannot deserialize advisory-lock `void` through `$queryRaw`; corrected to the existing `$executeRaw` pattern, with fresh exact-head CI pending. No chair is permanently deleted. |
 | 3, 5–16, 18–26, 28–30 | Pending | No completion is claimed by the current candidates; dependencies and external activation gates remain as described above. |
 
 This contract and PR #226 authorize isolated development and disposable certification only. Production data, migration, secrets, provider delivery/spend, Railway changes, deployments, mobile OTA, and physical-device certification remain outside scope.
