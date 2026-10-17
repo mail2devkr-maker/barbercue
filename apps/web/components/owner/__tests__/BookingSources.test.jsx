@@ -3,6 +3,7 @@ import TestRenderer from "react-test-renderer";
 import { BookingSources } from "../BookingSources";
 import { apiFetch, ApiError } from "../../../lib/api";
 
+jest.mock("qrcode.react", () => ({ QRCodeSVG: ({ value, ...rest }) => <svg data-qr={value} {...rest} /> }));
 jest.mock("next/link", () => ({ __esModule: true, default: ({ children, href }) => <a href={href}>{children}</a> }));
 jest.mock("../../../lib/api", () => {
   class MockApiError extends Error {
@@ -36,17 +37,24 @@ const summary = (over = {}) => ({
 });
 
 let calls;
-function install({ timezone = "Asia/Kolkata", summaryResult = summary(), campaigns = [campaign()], nextCursor = null, onPost } = {}) {
+const TOKEN = "T".repeat(43);
+const SHARE_READY = { salonId: "s1", status: "ACTIVE", publicPath: "/in/patna/fade-house", publicUrl: "https://fastque.com/in/patna/fade-house", readiness: { ready: true, reasons: [] } };
+
+function install({ timezone = "Asia/Kolkata", summaryResult = summary(), campaigns = [campaign()], nextCursor = null, onPost, share = SHARE_READY } = {}) {
   calls = [];
   apiFetch.mockImplementation(async (path, opts) => {
     calls.push({ path, opts });
     if (path.endsWith("/timezone")) return { id: "s1", timezone, countryCode: "IN" };
+    if (path.endsWith("/share-links")) {
+      if (share instanceof Error) throw share;
+      return share;
+    }
     if (path.includes("/booking-attribution/summary")) {
       if (summaryResult instanceof Error) throw summaryResult;
       return summaryResult;
     }
     if (path.includes("/booking-attribution/campaigns/") && path.endsWith("/revoke")) return onPost ? onPost(path, opts) : campaign({ revokedAt: "2026-10-17T00:00:00.000Z" });
-    if (path.includes("/booking-attribution/campaigns") && opts?.method === "POST") return onPost ? onPost(path, opts) : { ...campaign({ id: "22222222-2222-4222-8222-222222222222", label: "Bio link" }), token: "T".repeat(43) };
+    if (path.includes("/booking-attribution/campaigns") && opts?.method === "POST") return onPost ? onPost(path, opts) : { ...campaign({ id: "22222222-2222-4222-8222-222222222222", label: "Bio link" }), token: TOKEN };
     if (path.includes("/booking-attribution/campaigns")) return { items: campaigns, nextCursor };
     throw new Error(`unexpected ${path}`);
   });
@@ -140,18 +148,76 @@ describe("BookingSources", () => {
     expect(post.path).toBe("dashboard/salons/s1/booking-attribution/campaigns");
     expect(JSON.parse(post.opts.body)).toEqual({ source: "INSTAGRAM", label: "Bio link", startsAt: "2026-10-11T18:30:00.000Z", endsAt: "2026-10-31T18:30:00.000Z" });
     expect(text(r)).toContain("shown only once");
-    expect(r.root.findByProps({ "data-testid": "campaign-code" }).props.children).toBe("T".repeat(43));
+    expect(r.root.findByProps({ "data-testid": "campaign-code" }).props.children).toBe(TOKEN);
     await act(async () => { button(r, "I have saved it").props.onClick(); });
     expect(text(r)).not.toContain("shown only once");
   });
 
-  it("is honest that booking pages do not read the code from a link yet", async () => {
-    install();
-    const r = await mount();
+  async function createCampaignThroughForm(r) {
     await act(async () => { r.root.findByProps({ id: "camp-label" }).props.onChange({ target: { value: "Bio link" } }); });
     await act(async () => { r.root.findByType("form").props.onSubmit({ preventDefault() {} }); });
     await flush();
-    expect(text(r)).toContain("do not read the code from a link yet");
+  }
+
+  it("builds the campaign link from the shop's canonical public URL plus the code, with a QR", async () => {
+    install();
+    const r = await mount();
+    await createCampaignThroughForm(r);
+    expect(calls.some((c) => c.path === "dashboard/salons/s1/share-links")).toBe(true);
+    const expected = `https://fastque.com/in/patna/fade-house?fq_campaign=${TOKEN}`;
+    expect(r.root.findByProps({ id: "campaign-link" }).props.value).toBe(expected);
+    expect(r.root.findAll((n) => n.type === "svg" && n.props["data-qr"])[0].props["data-qr"]).toBe(expected);
+  });
+
+  it("copies the link and confirms only after the clipboard accepted it", async () => {
+    install();
+    globalThis.navigator = { clipboard: { writeText: jest.fn(async () => {}) } };
+    try {
+      const r = await mount();
+      await createCampaignThroughForm(r);
+      await act(async () => { await button(r, "Copy link").props.onClick(); });
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`https://fastque.com/in/patna/fade-house?fq_campaign=${TOKEN}`);
+      expect(text(r)).toContain("Link copied.");
+      navigator.clipboard.writeText.mockRejectedValue(new Error("denied"));
+      await act(async () => { await button(r, "Copy link").props.onClick(); });
+      expect(text(r)).not.toContain("Link copied.");
+      expect(text(r)).toContain("Could not copy automatically");
+    } finally {
+      delete globalThis.navigator;
+    }
+  });
+
+  it("makes no link when the shop is not ready, and says why, while still showing the code once", async () => {
+    install({ share: { ...SHARE_READY, publicUrl: null, readiness: { ready: false, reasons: ["WEB_BASE_URL_NOT_CONFIGURED"] } } });
+    const r = await mount();
+    await createCampaignThroughForm(r);
+    expect(text(r)).toContain("could not build a link right now");
+    expect(r.root.findAllByProps({ id: "campaign-link" })).toHaveLength(0);
+    expect(r.root.findAllByProps({ "data-testid": "campaign-code" })).toHaveLength(1);
+  });
+
+  it("makes no link when the share-link request fails", async () => {
+    install({ share: new ApiError("Forbidden", 403) });
+    const r = await mount();
+    await createCampaignThroughForm(r);
+    expect(text(r)).toContain("could not build a link right now");
+    expect(r.root.findAllByProps({ id: "campaign-link" })).toHaveLength(0);
+  });
+
+  it("never builds a link from an address that is not http(s)", async () => {
+    install({ share: { ...SHARE_READY, publicUrl: "javascript:alert(1)" } });
+    const r = await mount();
+    await createCampaignThroughForm(r);
+    expect(r.root.findAllByProps({ id: "campaign-link" })).toHaveLength(0);
+  });
+
+  it("is honest about what a campaign link shows and that the Android app is not attributed yet", async () => {
+    install();
+    const r = await mount();
+    await createCampaignThroughForm(r);
+    const t = text(r);
+    expect(t).toContain("not where the customer really came from");
+    expect(t).toContain("Android app are not attributed");
   });
 
   it("shows the server's message when creating fails and keeps no code on screen", async () => {

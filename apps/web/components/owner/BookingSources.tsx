@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { DASHBOARD_PATHS, OWNER_OPS_PATHS } from "@barbercue/shared";
 import type {
   BookingAttributionCampaignDto,
@@ -14,6 +15,9 @@ import { apiFetch, ApiError } from "../../lib/api";
 import {
   CAMPAIGN_SOURCES,
   MAX_LABEL_LENGTH,
+  buildCampaignUrl,
+  canonicalBaseUrl,
+  type ShareLinksAnswer,
   STATUS_LABEL,
   campaignStatus,
   formatLastDay,
@@ -73,7 +77,9 @@ export function BookingSources({ salonId }: { salonId: string }) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreateBookingAttributionCampaignDto | null>(null);
-  const [copied, setCopied] = useState<"yes" | "no" | null>(null);
+  const [copied, setCopied] = useState<"code" | "link" | "no" | null>(null);
+  // The shareable link for the campaign just created: the shop's canonical public URL plus its code.
+  const [campaignLink, setCampaignLink] = useState<{ phase: "loading" | "ready" | "unavailable"; url: string | null }>({ phase: "loading", url: null });
 
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -182,6 +188,8 @@ export function BookingSources({ salonId }: { salonId: string }) {
       setCreated(result);
       setCopied(null);
       setForm(EMPTY_FORM);
+      setCampaignLink({ phase: "loading", url: null });
+      void prepareCampaignLink(result.token);
       await loadCampaigns(null);
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : "Could not create the campaign.");
@@ -190,10 +198,21 @@ export function BookingSources({ salonId }: { salonId: string }) {
     }
   }
 
-  async function copyCode(token: string) {
+  async function prepareCampaignLink(token: string) {
     try {
-      await navigator.clipboard.writeText(token);
-      setCopied("yes");
+      const answer = await apiFetch<ShareLinksAnswer>(`${base}/share-links`);
+      const baseUrl = canonicalBaseUrl(answer);
+      const url = baseUrl ? buildCampaignUrl(baseUrl, token) : null;
+      setCampaignLink(url ? { phase: "ready", url } : { phase: "unavailable", url: null });
+    } catch {
+      setCampaignLink({ phase: "unavailable", url: null });
+    }
+  }
+
+  async function copyText(value: string, what: "code" | "link") {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(what);
     } catch {
       setCopied("no");
     }
@@ -306,17 +325,40 @@ export function BookingSources({ salonId }: { salonId: string }) {
           </form>
 
           {created && (
-            <div className={ui.mt16} role="region" aria-label="New campaign code">
+            <div className={ui.mt16} role="region" aria-label="New campaign link">
               <Banner tone="ok">
-                <strong>{created.label}</strong> is ready. Copy this code now. It is shown only once and cannot be recovered; if you lose it, turn the campaign off and create a new one.
-                <div className={ui.mt12}><code data-testid="campaign-code">{created.token}</code></div>
+                <strong>{created.label}</strong> is ready. The code is shown only once and cannot be recovered. Copy the link now; if you lose it, turn the campaign off and create a new one.
+                {campaignLink.phase === "loading" && <p role="status">Preparing your link…</p>}
+                {campaignLink.phase === "ready" && campaignLink.url && (
+                  <>
+                    <div className={ui.mt12}>
+                      <Field label="Campaign link" htmlFor="campaign-link">
+                        <input id="campaign-link" className={ui.input} readOnly value={campaignLink.url} onFocus={(e) => e.currentTarget.select()} />
+                      </Field>
+                    </div>
+                    <div className={`${ui.rowWrap} ${ui.mt12}`}>
+                      <Btn small variant="primary" onClick={() => void copyText(campaignLink.url as string, "link")}>Copy link</Btn>
+                    </div>
+                    <div style={{ background: "#fff", padding: 12, borderRadius: 12, width: "fit-content", marginTop: 12 }}>
+                      <QRCodeSVG value={campaignLink.url} size={160} level="M" role="img" aria-label="QR code for this campaign link" />
+                    </div>
+                  </>
+                )}
+                {campaignLink.phase === "unavailable" && (
+                  <p role="status">FastQue could not build a link right now because your shop&apos;s public address is not available. You can still copy the code below, but it will not be attached to a link.</p>
+                )}
+                <div className={ui.mt12}>
+                  <span className={ui.cardSub}>Campaign code: </span>
+                  <code data-testid="campaign-code">{created.token}</code>
+                </div>
                 <div className={`${ui.rowWrap} ${ui.mt12}`}>
-                  <Btn small onClick={() => void copyCode(created.token)}>Copy code</Btn>
+                  <Btn small onClick={() => void copyText(created.token, "code")}>Copy code</Btn>
                   <Btn small variant="quiet" onClick={() => { setCreated(null); setCopied(null); }}>I have saved it</Btn>
                 </div>
-                {copied === "yes" && <p role="status">Code copied.</p>}
-                {copied === "no" && <p role="status">Could not copy automatically. Select the code and copy it.</p>}
-                <p className={ui.cardSub}>Bookings are linked to this campaign only when the booking is made with this code. FastQue&apos;s booking pages do not read the code from a link yet, so for now it works only where the code is sent along with the booking.</p>
+                {copied === "link" && <p role="status">Link copied.</p>}
+                {copied === "code" && <p role="status">Code copied.</p>}
+                {copied === "no" && <p role="status">Could not copy automatically. Select the text and copy it.</p>}
+                <p className={ui.cardSub}>Bookings made on the FastQue website from this link are counted for this campaign. Bookings made in the FastQue Android app are not attributed to campaigns yet. This shows that the link was used, not where the customer really came from.</p>
               </Banner>
             </div>
           )}
