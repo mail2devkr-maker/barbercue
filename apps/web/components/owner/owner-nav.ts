@@ -57,6 +57,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { id: "invoices", label: "Billing / Invoices", icon: "receipt", group: "BUSINESS", audience: "owner", path: "invoices", keywords: ["invoice", "gst", "pdf"] },
   { id: "cancellations", label: "Cancellations", icon: "alert", group: "BUSINESS", audience: "owner", path: "cancellations", keywords: ["cancelled", "reasons"] },
   { id: "reviews", label: "Reviews", icon: "star", group: "BUSINESS", audience: "owner", path: "reviews", keywords: ["ratings", "feedback"] },
+  { id: "marketing", label: "Marketing", icon: "arrowUpRight", group: "BUSINESS", audience: "owner", path: "marketing", keywords: ["share", "whatsapp", "qr", "link", "poster", "promote"] },
 
   { id: "services", label: "Services", icon: "tag", group: "SHOP", audience: "owner", path: "services", keywords: ["prices", "menu"] },
   { id: "settings", label: "Shop Settings", icon: "settings", group: "SHOP", audience: "owner", path: "settings", keywords: ["profile", "timezone"] },
