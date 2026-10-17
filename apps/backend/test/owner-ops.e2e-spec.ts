@@ -1139,6 +1139,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       attributionToken?: string,
       completionStaffId = ids.raviStaff,
       completionChairId = ids['Chair 3'],
+      completionActorToken = tok.ravi,
     ): Promise<string> {
       const start = new Date(Date.now() + 2 * 60_000); // inside the 15-minute check-in window
       const booking = await createBookingAs(
@@ -1148,19 +1149,25 @@ maybe('Owner operations (e2e, disposable local database)', () => {
           attributionToken,
         },
       );
-      return finishBooking(booking.id, completionStaffId, completionChairId);
+      return finishBooking(
+        booking.id,
+        completionStaffId,
+        completionChairId,
+        completionActorToken,
+      );
     }
     async function finishBooking(
       bookingId: string,
       staffId = ids.raviStaff,
       chairId = ids['Chair 3'],
+      completionActorToken = tok.ravi,
     ): Promise<string> {
       const arrived = await api('post', `dashboard/bookings/${bookingId}/arrive`, tok.owner).expect(201);
       await api('post', `dashboard/queue-entries/${arrived.body.id}/assign`, tok.owner)
         .send({ staffId, chairId })
         .expect(201);
       const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: arrived.body.id, status: 'ACTIVE' } });
-      await api('post', `dashboard/service-sessions/${session.id}/complete`, tok.ravi).expect(201);
+      await api('post', `dashboard/service-sessions/${session.id}/complete`, completionActorToken).expect(201);
       expect((await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } })).status).toBe('COMPLETED');
       return bookingId;
     }
@@ -1519,6 +1526,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         campaign.body.token,
         attributionStaff.id,
         attributionChair.id,
+        tok.owner,
       );
       const booking = await prisma.booking.findUniqueOrThrow({
         where: { id: bookingId },
