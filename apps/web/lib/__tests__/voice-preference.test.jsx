@@ -60,30 +60,30 @@ describe("Owner Live Queue voice-enabled preference", () => {
     expect(store.getVoiceEnabled()).toBe(false);
   });
 
-  it("notifies listeners of changes from another tab", () => {
+  it("notifies listeners of changes from another tab", async () => {
     const { handlers } = fakeBrowser({ [STORE_KEY]: "on" });
     const store = require("../voice-preference");
-    const listener = jest.fn();
-    const off = store.useVoiceEnabled; // exported subscription hook is tested through the external-store API below
-    expect(typeof off).toBe("function");
+    expect(typeof store.useVoiceEnabled).toBe("function"); // the exported subscription hook is exercised through the external-store API below
     const React = require("react");
     const renderer = require("react-test-renderer");
     let tree;
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-    return renderer.act(async () => {
+    // Awaited, so a failing assertion fails THIS test. The previous `return act(...).then(...)` form returned React's
+    // act thenable, which does not propagate a rejection from the callback: the failure surfaced later as an uncaught
+    // error and was blamed on whichever test happened to be running in the same worker.
+    await renderer.act(async () => {
       tree = renderer.create(React.createElement(() => {
         const enabled = store.useVoiceEnabled();
         return React.createElement("span", null, enabled ? "on" : "off");
       }));
-    }).then(async () => {
-      expect(tree.toJSON().children[0]).toBe("on");
-      expect(handlers.has("storage")).toBe(true);
-      await renderer.act(async () => {
-        handlers.get("storage")({ key: STORE_KEY, newValue: "off" });
-      });
-      expect(tree.toJSON().children[0]).toBe("off");
-      await renderer.act(async () => { tree.unmount(); });
-      expect(handlers.has("storage")).toBe(false);
     });
+    expect(tree.toJSON().children[0]).toBe("on");
+    expect(handlers.has("storage")).toBe(true);
+    await renderer.act(async () => {
+      handlers.get("storage")({ key: STORE_KEY, newValue: "off" });
+    });
+    expect(tree.toJSON().children[0]).toBe("off");
+    await renderer.act(async () => { tree.unmount(); });
+    expect(handlers.has("storage")).toBe(false);
   });
 });
