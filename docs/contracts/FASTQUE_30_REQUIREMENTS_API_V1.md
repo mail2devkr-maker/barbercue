@@ -150,11 +150,15 @@ The exact synthetic counts are returned by a deterministic preview/configured fi
 
 ### Bulk chair preview/apply
 
-```json
-{ "chairIds": ["uuid"], "expectedUpdatedAt": "2026-10-17T09:30:00.000Z" }
+```http
+POST /api/v1/dashboard/salons/{salonId}/chairs/bulk-deactivate/preview
+{ "chairIds": ["uuid"] }
+
+POST /api/v1/dashboard/salons/{salonId}/chairs/bulk-deactivate/apply
+{ "items": [{ "chairId": "uuid", "expectedUpdatedAt": "2026-10-17T09:30:00.000Z" }] }
 ```
 
-Preview returns per-chair conflicts and an opaque short-lived preview token bound to caller, salon, IDs and row versions. Apply consumes that preview once and rechecks every conflict in one transaction. No chair is permanently deleted.
+Preview returns per-chair `READY`, `CONFLICT`, or `NOT_FOUND`, an exact `expectedUpdatedAt` version for found chairs, and conflict reasons. Apply requires the caller to send the version for each selected chair; a stateful preview token is unnecessary because the server re-authorizes and rechecks every condition. Apply serializes with queue assignment/manual occupancy on the same per-chair PostgreSQL advisory lock, takes row locks in stable ID order, rechecks active service sessions, active manual occupancies, legacy unstarted queue assignments and the row version, then changes eligible rows to `INACTIVE` and writes per-chair audit records in one serializable transaction. Occupied/conflicting chairs remain unchanged; any database error rolls back the whole batch, and serialization aborts never return false success. No chair is permanently deleted. Client-side confirmation is a UX requirement, not an authorization boundary.
 
 ## Pagination and filtering semantics
 
