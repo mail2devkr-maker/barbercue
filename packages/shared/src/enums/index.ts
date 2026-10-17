@@ -75,6 +75,23 @@ export const SalonStatus = {
 } as const;
 export type SalonStatus = (typeof SalonStatus)[keyof typeof SalonStatus];
 
+export const SalonLocationSource = {
+  GPS: 'GPS',
+  MAP_PIN: 'MAP_PIN',
+  MANUAL: 'MANUAL',
+} as const;
+export type SalonLocationSource =
+  (typeof SalonLocationSource)[keyof typeof SalonLocationSource];
+
+export const SalonLocationProposalStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  SUPERSEDED: 'SUPERSEDED',
+} as const;
+export type SalonLocationProposalStatus =
+  (typeof SalonLocationProposalStatus)[keyof typeof SalonLocationProposalStatus];
+
 export const SalonType = {
   GENTS: 'GENTS',
   LADIES: 'LADIES',
@@ -230,6 +247,28 @@ export const BookingSource = {
   IN_SHOP: 'IN_SHOP',
 } as const;
 export type BookingSource = (typeof BookingSource)[keyof typeof BookingSource];
+
+/**
+ * Owner-reporting attribution projection. The persisted BookingSource enum remains unchanged;
+ * social/chat values are derived only from a server-issued, salon-scoped campaign token.
+ */
+export const BookingAttributionSource = {
+  FASTQUE_WEB: 'FASTQUE_WEB',
+  FASTQUE_APP: 'FASTQUE_APP',
+  WALK_IN: 'WALK_IN',
+  IN_SHOP: 'IN_SHOP',
+  FACEBOOK: 'FACEBOOK',
+  INSTAGRAM: 'INSTAGRAM',
+  CHATGPT: 'CHATGPT',
+  OTHER: 'OTHER',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type BookingAttributionSource =
+  (typeof BookingAttributionSource)[keyof typeof BookingAttributionSource];
+
+export const BOOKING_ATTRIBUTION_SOURCES = Object.values(
+  BookingAttributionSource,
+) as BookingAttributionSource[];
 
 export const QueueEntrySource = {
   WALK_IN: 'WALK_IN',
@@ -512,6 +551,16 @@ export const StyleAdvisorErrorCode = {
 } as const;
 export type StyleAdvisorErrorCode = (typeof StyleAdvisorErrorCode)[keyof typeof StyleAdvisorErrorCode];
 
+// Owner-generated salon description drafts remain unavailable until an approved provider is wired.
+export const SalonDescriptionErrorCode = {
+  PROVIDER_NOT_CONFIGURED: 'SALON_DESCRIPTION_PROVIDER_NOT_CONFIGURED',
+  PROVIDER_TIMEOUT: 'SALON_DESCRIPTION_PROVIDER_TIMEOUT',
+  GENERATION_FAILED: 'SALON_DESCRIPTION_GENERATION_FAILED',
+  INVALID_PROVIDER_RESPONSE: 'SALON_DESCRIPTION_INVALID_PROVIDER_RESPONSE',
+  INPUT_TOO_LARGE: 'SALON_DESCRIPTION_INPUT_TOO_LARGE',
+} as const;
+export type SalonDescriptionErrorCode = (typeof SalonDescriptionErrorCode)[keyof typeof SalonDescriptionErrorCode];
+
 // Stable machine-readable error codes for the Premium plans/subscription module — same convention
 // as StyleAdvisorErrorCode.
 // Stable machine-readable error codes for owner-side salon setup (Phase 11) — services, chairs,
@@ -531,6 +580,7 @@ export const SalonSetupErrorCode = {
   // a SalonSetupReadinessDto so the UI can tick off what's done and name what's missing, rather
   // than repeating a generic sentence.
   SALON_SETUP_INCOMPLETE: 'SALON_SETUP_INCOMPLETE',
+  SHOP_PHOTOS_REQUIRED: 'SHOP_PHOTOS_REQUIRED',
 } as const;
 export type SalonSetupErrorCode = (typeof SalonSetupErrorCode)[keyof typeof SalonSetupErrorCode];
 
@@ -558,6 +608,28 @@ export const VerificationSubjectType = {
 export type VerificationSubjectType =
   (typeof VerificationSubjectType)[keyof typeof VerificationSubjectType];
 
+// Contact-list import preview only. These attestations are not independently verified consent.
+export const ContactConsentSource = {
+  OWNER_ATTESTED: 'OWNER_ATTESTED',
+  IN_PERSON: 'IN_PERSON',
+  VERBAL: 'VERBAL',
+  WRITTEN: 'WRITTEN',
+  WEBSITE_FORM: 'WEBSITE_FORM',
+} as const;
+export type ContactConsentSource =
+  (typeof ContactConsentSource)[keyof typeof ContactConsentSource];
+
+export const ContactImportValidationStatus = {
+  VALIDATED_FOR_REVIEW: 'VALIDATED_FOR_REVIEW',
+  INVALID_PHONE: 'INVALID_PHONE',
+  CONSENT_REQUIRED: 'CONSENT_REQUIRED',
+  CONSENT_EVIDENCE_INCOMPLETE: 'CONSENT_EVIDENCE_INCOMPLETE',
+  CONSENT_TIMESTAMP_INVALID: 'CONSENT_TIMESTAMP_INVALID',
+  DUPLICATE_IN_BATCH: 'DUPLICATE_IN_BATCH',
+} as const;
+export type ContactImportValidationStatus =
+  (typeof ContactImportValidationStatus)[keyof typeof ContactImportValidationStatus];
+
 // NOT_SUBMITTED is never a stored value — see VerificationRequest's own doc comment: absence of a
 // row IS "not submitted," the same "no row = default" convention used elsewhere in this schema.
 export const VerificationStatus = {
@@ -582,6 +654,15 @@ export const VerificationErrorCode = {
 } as const;
 export type VerificationErrorCode =
   (typeof VerificationErrorCode)[keyof typeof VerificationErrorCode];
+
+export const LocationVerificationErrorCode = {
+  PROPOSAL_NOT_FOUND: 'LOCATION_PROPOSAL_NOT_FOUND',
+  PROPOSAL_CONFLICT: 'LOCATION_PROPOSAL_CONFLICT',
+  REVIEWER_MUST_DIFFER: 'LOCATION_REVIEWER_MUST_DIFFER',
+  CURSOR_INVALID: 'LOCATION_CURSOR_INVALID',
+} as const;
+export type LocationVerificationErrorCode =
+  (typeof LocationVerificationErrorCode)[keyof typeof LocationVerificationErrorCode];
 
 export const PremiumErrorCode = {
   PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',

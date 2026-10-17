@@ -81,6 +81,19 @@ enum SalonStatus {
   SUSPENDED
 }
 
+enum SalonLocationSource {
+  GPS
+  MAP_PIN
+  MANUAL
+}
+
+enum SalonLocationProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
 enum SalonType {
   GENTS
   LADIES
@@ -148,6 +161,24 @@ enum ChairStatus {
   MAINTENANCE
 }
 
+enum InventoryUnit {
+  EACH
+  GRAM
+  KILOGRAM
+  MILLILITER
+  LITER
+  PACK
+  BOX
+  OTHER
+}
+
+enum InventoryMovementKind {
+  OPENING
+  PURCHASE
+  CONSUMPTION
+  ADJUSTMENT
+}
+
 enum PhotoType {
   COVER
   GALLERY
@@ -177,6 +208,15 @@ enum BookingSource {
   // shop directly (in person / by phone). Such a booking has no FastQue customer account
   // (customerId NULL, guestName set) — enforced by a CHECK constraint in the migration.
   IN_SHOP
+}
+
+// External channels are only attached through a server-issued salon campaign token; clients may
+// never write arbitrary social/chat attribution into the operational BookingSource field.
+enum BookingAttributionCampaignSource {
+  FACEBOOK
+  INSTAGRAM
+  CHATGPT
+  OTHER
 }
 
 // Who actually cancelled a booking, recorded at cancellation time from the authenticated actor —
@@ -338,31 +378,35 @@ model User {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
-  roles                   UserRole[]
-  authIdentities          AuthIdentity[]
-  refreshTokens           RefreshToken[]
-  passwordResetTokens     PasswordResetToken[]
-  ownedSalons             Salon[]                  @relation("SalonOwner")
-  staffMemberships        SalonStaff[]
-  bookings                Booking[]                @relation("BookingCustomer")
-  cancelledBookings       Booking[]                @relation("BookingCancelledBy")
-  queueEntries            QueueEntry[]
-  reviews                 Review[]
-  notifications           Notification[]
-  notificationPreferences NotificationPreference[]
-  ledgerEntries           CustomerLedgerEntry[]
-  auditLogs               AuditLog[]
-  premiumSubscriptions    CustomerSubscription[]
+  roles                         UserRole[]
+  authIdentities                AuthIdentity[]
+  refreshTokens                 RefreshToken[]
+  passwordResetTokens           PasswordResetToken[]
+  ownedSalons                   Salon[]                  @relation("SalonOwner")
+  staffMemberships              SalonStaff[]
+  bookings                      Booking[]                @relation("BookingCustomer")
+  cancelledBookings             Booking[]                @relation("BookingCancelledBy")
+  queueEntries                  QueueEntry[]
+  reviews                       Review[]
+  notifications                 Notification[]
+  notificationPreferences       NotificationPreference[]
+  ledgerEntries                 CustomerLedgerEntry[]
+  auditLogs                     AuditLog[]
+  inventoryMovements            InventoryMovement[]
+  premiumSubscriptions          CustomerSubscription[]
   // Phase 18 (Shop / Barber Verification Foundation) — an owner submitting evidence, and a
   // PLATFORM_ADMIN reviewing it, are deliberately separate relations (never the same person in
   // practice, and keeping them distinct makes that impossible to blur by accident).
   submittedVerifications  VerificationRequest[]    @relation("VerificationSubmitter")
   reviewedVerifications   VerificationRequest[]    @relation("VerificationReviewer")
+  submittedLocationProposals SalonLocationProposal[] @relation("SalonLocationSubmitter")
+  reviewedLocationProposals  SalonLocationProposal[] @relation("SalonLocationReviewer")
   pushDevices             PushDevice[]
   creditAccount           CustomerCreditAccount?
   manualChairOccupanciesStarted ManualChairOccupancy[] @relation("ManualChairOccupancyStartedBy")
   manualChairOccupanciesEnded   ManualChairOccupancy[] @relation("ManualChairOccupancyEndedBy")
   employeeProfile               EmployeeProfile?
+  createdDemoWorkspaces         OwnerDemoWorkspace[]      @relation("OwnerDemoWorkspaceCreator")
 
   @@map("users")
 }
@@ -451,8 +495,8 @@ model EmployeeCrmLead {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  visits            EmployeeCrmVisit[]
-  followUps         EmployeeCrmFollowUp[]
+  visits    EmployeeCrmVisit[]
+  followUps EmployeeCrmFollowUp[]
 
   @@index([employeeProfileId, status])
   @@index([employeeProfileId, createdAt])
@@ -462,17 +506,17 @@ model EmployeeCrmLead {
 }
 
 model EmployeeCrmVisit {
-  id                String          @id @default(uuid())
+  id                String           @id @default(uuid())
   employeeProfileId String
-  employeeProfile   EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  employeeProfile   EmployeeProfile  @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
   leadId            String?
   lead              EmployeeCrmLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
   shopName          String
-  visitedAt         DateTime        @default(now())
+  visitedAt         DateTime         @default(now())
   outcome           CrmVisitOutcome
   notes             String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([employeeProfileId, visitedAt])
   @@index([leadId, visitedAt])
@@ -480,11 +524,11 @@ model EmployeeCrmVisit {
 }
 
 model EmployeeCrmFollowUp {
-  id                String            @id @default(uuid())
+  id                String             @id @default(uuid())
   employeeProfileId String
-  employeeProfile   EmployeeProfile   @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  employeeProfile   EmployeeProfile    @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
   leadId            String
-  lead              EmployeeCrmLead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead              EmployeeCrmLead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
   dueAt             DateTime
   channel           CrmFollowUpChannel
   status            CrmFollowUpStatus  @default(OPEN)
@@ -500,9 +544,9 @@ model EmployeeCrmFollowUp {
 }
 
 model RefreshToken {
-  id         String    @id @default(uuid())
+  id         String          @id @default(uuid())
   userId     String
-  user       User      @relation(fields: [userId], references: [id])
+  user       User            @relation(fields: [userId], references: [id])
   tokenHash  String
   // Auth security fix — the session audience this token was originally issued for (CUSTOMER/
   // STAFF/ADMIN), persisted so rotation can re-scope roles to it rather than re-deriving privilege
@@ -521,7 +565,7 @@ model RefreshToken {
   deviceInfo String?
   expiresAt  DateTime
   revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
+  createdAt  DateTime        @default(now())
 
   // Every login, refresh, revoke, and session-list call looks this table up by tokenHash
   // (TokenService) — the single hottest query in the whole auth system, and until this index it
@@ -710,7 +754,7 @@ model Locality {
 }
 
 model Salon {
-  id               String      @id @default(uuid())
+  id                           String      @id @default(uuid())
   // Permanent, human-shareable identifier — "BC-SHOP-000001" — distinct from `id` (the internal
   // UUID primary key, never shown to users). Assigned once at creation by a Postgres sequence (see
   // the add_salon_public_id migration's hand-written SQL default), so uniqueness/monotonicity are
@@ -720,7 +764,7 @@ model Salon {
   // Prisma Client the column has a DB-level default — the real default is the raw SQL in the
   // add_salon_public_id migration; this just makes `publicId` optional in create() calls instead
   // of forcing every caller to invent a value.
-  publicId         String      @unique @default(dbgenerated("('BC-SHOP-' || lpad(nextval('salon_public_id_seq'::regclass)::text, 6, '0'))"))
+  publicId                     String      @unique @default(dbgenerated("('BC-SHOP-' || lpad(nextval('salon_public_id_seq'::regclass)::text, 6, '0'))"))
   // Phase 9: the shop's permanent QR/public-queue-join identifier — deliberately NOT `publicId`
   // above (that's a sequential, enumerable counter; guessable, unsuitable for a link anyone can
   // join a queue through) and NOT `id` (the internal PK, never exposed publicly). Nullable +
@@ -729,69 +773,73 @@ model Salon {
   // since a cryptographically random value isn't a Postgres built-in without the pgcrypto
   // extension. Nullable-unique is safe: Postgres allows multiple NULLs under a unique index (same
   // pattern as CancellationPolicy.salonId).
-  publicQueueToken String?     @unique
-  ownerUserId      String
-  owner            User        @relation("SalonOwner", fields: [ownerUserId], references: [id])
-  name             String
-  slug             String
-  cityId           String
-  city             City        @relation(fields: [cityId], references: [id])
-  localityId       String?
-  locality         Locality?   @relation(fields: [localityId], references: [id])
+  publicQueueToken             String?     @unique
+  ownerUserId                  String
+  owner                        User        @relation("SalonOwner", fields: [ownerUserId], references: [id])
+  name                         String
+  slug                         String
+  cityId                       String
+  city                         City        @relation(fields: [cityId], references: [id])
+  localityId                   String?
+  locality                     Locality?   @relation(fields: [localityId], references: [id])
   // Owner-entered neighbourhood/area. Kept separately from localityId because the global master
   // dataset is advisory for onboarding; a real shop must be able to enter an area that is not yet
   // present in Locality. localityId is still populated when the text matches a known locality.
-  localityText     String?     @db.VarChar(160)
+  localityText                 String?     @db.VarChar(160)
   // Human navigation hint such as "Near Hanuman Mandir" or "Opposite City Mall".
-  landmark         String?     @db.VarChar(200)
-  addressLine      String
+  landmark                     String?     @db.VarChar(200)
+  addressLine                  String
   // IANA timezone (e.g. "Asia/Kolkata", "Europe/London"). Nullable for now: nothing can yet
   // derive a zone at registration — GPS is optional and no lookup service is wired — so
   // requiring it would break registerSalon. AvailabilityService still uses a fixed IST offset
   // and does NOT read this column yet; that switch is a separate, reviewed change.
-  timezone         String?
+  timezone                     String?
   // Part 4 (auto timezone selection) provenance flags — never used to gate behavior on their own,
   // only to decide whether a future auto-detect pass may safely replace the current value.
   // `timezoneAutoDetected`: true iff the current `timezone` value was set by resolveAutoTimezone
   // (coordinates/city/country), never by an explicit owner/admin PATCH.
   // `timezoneManuallyOverridden`: true once an owner/admin has ever explicitly PATCHed timezone —
   // once set, auto-detection must never silently overwrite the stored value again.
-  timezoneAutoDetected       Boolean @default(false)
-  timezoneManuallyOverridden Boolean @default(false)
+  timezoneAutoDetected         Boolean     @default(false)
+  timezoneManuallyOverridden   Boolean     @default(false)
   // ISO-4217 (e.g. "INR", "GBP"). Nullable for the same reason: no source populates it yet.
   // Money columns are already Decimal and currency-agnostic; this records which currency they
   // are denominated in.
-  currency         String?
+  currency                     String?
   // Indian 6-digit PIN code. Stored as text, never a number: PIN codes are identifiers, not
   // quantities, and several legitimately need a meaning-bearing shape a numeric type would
   // mangle. Nullable because every salon registered before this column existed has none, and
   // backfilling one would mean inventing an address detail nobody supplied.
-  postalCode       String?
+  postalCode                   String?
   // Nullable since Phase 11: coordinates now come from the device's GPS via the registration
   // form's "Use my current location" button, and an owner who denies that permission (or is on a
   // desktop) must still be able to register. Their only consumer is the schema.org `geo` block on
   // the public salon page — there is no distance search, map, or proximity sort in the product —
   // so a salon without them is fully functional, just slightly less rich to search engines.
-  lat              Float?
-  lng              Float?
-  phone            String?
+  lat                          Float?
+  lng                          Float?
+  phone                        String?
   // Business contact email, distinct from the owner User's own login email — same "optional
   // business-facing contact field" pattern as `phone` above. Added for shop registration
   // (Phase C); not required, since not every shop has a dedicated reception inbox.
-  email            String?
-  description      String?
-  status           SalonStatus @default(PENDING)
+  email                        String?
+  description                  String?
+  status                       SalonStatus @default(PENDING)
   // Owner-controlled same-day pause. Unlike SalonStatus.SUSPENDED (platform/admin moderation),
   // this never removes an otherwise ACTIVE shop from public discovery. Customer-facing surfaces
   // keep the shop visible with an explicit "This shop is closed for today." notice, while booking
   // and queue entry are blocked until the owner reopens it.
-  isClosedForToday Boolean     @default(false)
+  isClosedForToday             Boolean     @default(false)
   // Owner-selected service audience used to filter onboarding presets. Existing salons default to
   // UNISEX so the migration is backwards-compatible and never hides already-configured services.
-  salonType        SalonType   @default(UNISEX)
+  salonType                    SalonType   @default(UNISEX)
   // Percentage discount applied by FastQue only to APP/WEB bookings for this salon. The Service
   // rows remain the owner's original list prices; 0 means no platform-booking offer is active.
   onlineBookingDiscountPercent Int @default(0)
+  // Photo activation policy. NULL is the additive-migration marker for shops that existed before
+  // this requirement: ACTIVE/SUSPENDED lifecycle state identifies them as grandfathered without
+  // rewriting legacy rows. A newly activated shop is marked true after meeting the requirement.
+  shopPhotoRequirementGrandfathered Boolean?
   // Owner-operations mission. showPhoneToCustomers: the owner's opt-in to publish `phone` to
   // customers (public profile + "Call shop" on their own booking). Defaults to true because the
   // phone was already public before this column existed — the migration changes no behavior; an
@@ -800,8 +848,8 @@ model Salon {
   // 2026); the owner can switch it off and on again. Automatic allocation only ASSIGNS - a barber
   // still starts the service explicitly. Migration 20261014000000 moved the default from OFF to ON
   // without overwriting any shop with a recorded owner choice (see docs/OWNER_OPERATIONS.md).
-  showPhoneToCustomers   Boolean @default(true)
-  queueAutoAssignEnabled Boolean @default(true)
+  showPhoneToCustomers         Boolean     @default(true)
+  queueAutoAssignEnabled       Boolean     @default(true)
 
   // Subscription fields — inert in V1, see ARCHITECTURE.md §16.
   planId                String?
@@ -819,23 +867,30 @@ model Salon {
   chairs                Chair[]
   services              Service[]
   bookings              Booking[]
+  bookingAttributionCampaigns BookingAttributionCampaign[]
   queueEntries          QueueEntry[]
   cancellationPolicies  CancellationPolicy[]
   paymentPolicy         SalonPaymentPolicy?
   operatingHours        OperatingHours[]
   photos                Photo[]
+  locationProposals     SalonLocationProposal[]
   reviews               Review[]
   ledgerEntries         CustomerLedgerEntry[]
   staffChairAssignments StaffChairAssignment[]
   // Phase 18 — at most one row (VerificationRequest.salonId is @@unique; NULL salonId rows, i.e.
   // PROFESSIONAL-type requests, are unaffected by that constraint under Postgres NULLS DISTINCT).
-  verification          VerificationRequest?
-  subsidyEntries        PlatformShopSubsidyEntry[]
+  verification           VerificationRequest?
+  subsidyEntries         PlatformShopSubsidyEntry[]
   manualChairOccupancies ManualChairOccupancy[]
   // FastQue internal field CRM attribution — at most one employee lead may claim a registered shop.
-  crmLeadAttribution    EmployeeCrmLead? @relation("CrmLeadOnboardedSalon")
-  billingProfile        SalonBillingProfile?
-  invoices              Invoice[]
+  crmLeadAttribution     EmployeeCrmLead?           @relation("CrmLeadOnboardedSalon")
+  billingProfile         SalonBillingProfile?
+  invoices               Invoice[]
+  inventoryCategories    InventoryCategory[]
+  inventorySuppliers     InventorySupplier[]
+  inventoryProducts      InventoryProduct[]
+  inventoryMovements     InventoryMovement[]
+  demoWorkspace         OwnerDemoWorkspace?
 
   @@unique([cityId, slug])
   @@map("salons")
@@ -858,8 +913,8 @@ model SalonPaymentPolicy {
   // to fill it.
   paymentQrImageUrl     String?
   // Optional direct UPI routing. QR-only salons remain valid; no settlement verification.
-  upiVpa                String? @db.VarChar(255)
-  upiPayeeName          String? @db.VarChar(100)
+  upiVpa                String?               @db.VarChar(255)
+  upiPayeeName          String?               @db.VarChar(100)
 
   @@map("salon_payment_policies")
 }
@@ -928,30 +983,30 @@ model Photo {
 // ---------- Staff / chairs (approved concepts, unchanged) ----------
 
 model SalonStaff {
-  id              String            @id @default(uuid())
-  salonId         String
-  salon           Salon             @relation(fields: [salonId], references: [id])
-  userId          String
-  user            User              @relation(fields: [userId], references: [id])
-  displayName     String
-  roleInSalon     SalonStaffRole
-  status          StaffMemberStatus @default(ACTIVE)
+  id                String            @id @default(uuid())
+  salonId           String
+  salon             Salon             @relation(fields: [salonId], references: [id])
+  userId            String
+  user              User              @relation(fields: [userId], references: [id])
+  displayName       String
+  roleInSalon       SalonStaffRole
+  status            StaffMemberStatus @default(ACTIVE)
   // Phase 17 (Barber Professional Profile) — all optional/additive. Which services this barber is
   // actually qualified for already lives in StaffService, a real DB-backed relation; these are the
   // genuinely new fields (no existing model covered them). photoUrl follows the same "URL-based,
   // no object storage configured" convention as Salon photos — an owner/staff links an
   // already-hosted image rather than uploading a file.
-  bio             String?
-  photoUrl        String?
-  yearsExperience Int?
+  bio               String?
+  photoUrl          String?
+  yearsExperience   Int?
   // Owner-operations mission — login access, distinct from `status`. `status` is the barber's
   // clock-in/out duty flag (a barber toggles it themselves all day); revoking access is an owner
   // decision that removes the SALON_STAFF UserRole and the barber's staff sessions, and is
   // recorded here so re-activation is explicit and auditable. NULL = access intact.
   accessRevokedAt   DateTime?
   accessRevokedById String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   chairAssignments     StaffChairAssignment[]
   serviceSessions      ServiceSession[]
@@ -990,19 +1045,19 @@ model Chair {
 // ManualChairOccupancyService additionally share a per-chair Postgres advisory lock so an
 // ACTIVE ServiceSession and a manual occupancy cannot win a cross-table race simultaneously.
 model ManualChairOccupancy {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   salonId         String
-  salon           Salon    @relation(fields: [salonId], references: [id])
+  salon           Salon     @relation(fields: [salonId], references: [id])
   chairId         String
-  chair           Chair    @relation(fields: [chairId], references: [id])
+  chair           Chair     @relation(fields: [chairId], references: [id])
   startedByUserId String
-  startedBy       User     @relation("ManualChairOccupancyStartedBy", fields: [startedByUserId], references: [id])
+  startedBy       User      @relation("ManualChairOccupancyStartedBy", fields: [startedByUserId], references: [id])
   endedByUserId   String?
-  endedBy         User?    @relation("ManualChairOccupancyEndedBy", fields: [endedByUserId], references: [id])
-  startedAt       DateTime @default(now())
+  endedBy         User?     @relation("ManualChairOccupancyEndedBy", fields: [endedByUserId], references: [id])
+  startedAt       DateTime  @default(now())
   endedAt         DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([salonId, endedAt])
   @@index([chairId, endedAt])
@@ -1064,15 +1119,15 @@ model StaffService {
 // ---------- Booking & queue ----------
 
 model Booking {
-  id                       String        @id @default(uuid())
-  salonId                  String
-  salon                    Salon         @relation(fields: [salonId], references: [id])
+  id                           String             @id @default(uuid())
+  salonId                      String
+  salon                        Salon              @relation(fields: [salonId], references: [id])
   // Owner-operations mission: nullable ONLY for BookingSource.IN_SHOP appointments created by a
   // shop operator for someone without a FastQue account (a CHECK constraint in the migration ties
   // `customerId IS NULL` to `source = 'IN_SHOP'`, so every APP/WEB booking still has a customer
   // exactly as before). No placeholder/fake User row is ever created for such a guest.
-  customerId               String?
-  customer                 User?         @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  customerId                   String?
+  customer                     User?              @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
   // Multi-service booking core mission: kept exactly as it was — the FIRST service the customer
   // selected (ordering preserved via BookingService.sortOrder), never removed or made nullable, so
   // every consumer that predates multi-service bookings (QueueEntry/ServiceSession linkage at
@@ -1082,8 +1137,8 @@ model Booking {
   // column is a read compatibility view onto its first entry, not a second source of truth: both
   // are written together, once, inside the same create() transaction, and neither is ever updated
   // independently afterwards.
-  serviceId                String
-  service                  Service       @relation(fields: [serviceId], references: [id])
+  serviceId                    String
+  service                      Service            @relation(fields: [serviceId], references: [id])
   // Multi-service booking core mission — the complete, ordered set of services actually selected
   // for this appointment (see BookingService's own doc comment for why it snapshots rather than
   // joins live). Every booking has at least one row here, including every booking that existed
@@ -1094,51 +1149,56 @@ model Booking {
   slotEnd                  DateTime
   status                   BookingStatus @default(CONFIRMED)
   source                   BookingSource
+  // Optional, additive marketing provenance. Booking.source remains the operational source used
+  // by older Android/web clients; this relation only records an external campaign token that the
+  // server validated for this exact salon at creation time.
+  attributionCampaignId   String?
+  attributionCampaign     BookingAttributionCampaign? @relation(fields: [salonId, attributionCampaignId], references: [salonId, id], onDelete: Restrict, map: "bookings_attributionCampaignId_fkey")
   idempotencyKey           String        @unique
   // Snapshot of SalonPaymentPolicy x Service.price at creation time — see DATABASE.md.
-  prepaymentRequiredAmount Decimal?      @db.Decimal(10, 2)
+  prepaymentRequiredAmount     Decimal?           @db.Decimal(10, 2)
   // Phase 3B addition: a soft customer preference only, never a capacity constraint — the booking
   // capacity model above stays pool-based (min qualified staff, active chairs), unchanged. Real
   // staff/chair assignment still only happens at queue check-in/dashboard-assign time. Null means
   // "Any Staff". See DATABASE.md's Booking section for the full rationale.
-  preferredStaffId         String?
-  preferredStaff           SalonStaff?   @relation("BookingPreferredStaff", fields: [preferredStaffId], references: [id])
+  preferredStaffId             String?
+  preferredStaff               SalonStaff?        @relation("BookingPreferredStaff", fields: [preferredStaffId], references: [id])
   // AI Style Advisor phase: the style label the customer picked before booking (e.g. "Textured
   // Crop"), carried through so staff can see it on the dashboard queue view. A free-text snapshot
   // of a small fixed list in packages/shared, not a foreign key — no salon-configurable "style
   // catalog" table exists or is needed for a short, app-wide list of style names.
-  selectedStyleName        String?
-  cancelledAt              DateTime?
-  cancelledById            String?
-  cancelledBy              User?         @relation("BookingCancelledBy", fields: [cancelledById], references: [id])
-  cancellationChargeAmount Decimal?      @db.Decimal(10, 2)
+  selectedStyleName            String?
+  cancelledAt                  DateTime?
+  cancelledById                String?
+  cancelledBy                  User?              @relation("BookingCancelledBy", fields: [cancelledById], references: [id])
+  cancellationChargeAmount     Decimal?           @db.Decimal(10, 2)
   // Owner-operations mission — trusted cancellation attribution, written in the same transaction
   // as the status change from the authenticated actor. See the CancellationActor enum.
-  cancelledByActor         CancellationActor?
-  cancellationReason       String?       @db.VarChar(300)
+  cancelledByActor             CancellationActor?
+  cancellationReason           String?            @db.VarChar(300)
   // Owner-operations mission — IN_SHOP appointment provenance. guestName/guestPhone are the
   // contact the shop typed in; guestContactConsent records that the customer agreed to be
   // contacted/stored (phone is only ever kept when this is true). createdByUserId is the operator
   // who created it (plain column, no relation: keeps the User model untouched). internalNote is
   // staff-only and never returned by any customer-facing API.
-  guestName                String?       @db.VarChar(120)
-  guestPhone               String?       @db.VarChar(32)
-  guestContactConsent      Boolean       @default(false)
-  createdByUserId          String?
-  internalNote             String?       @db.VarChar(500)
-  createdAt                DateTime      @default(now())
-  updatedAt                DateTime      @updatedAt
+  guestName                    String?            @db.VarChar(120)
+  guestPhone                   String?            @db.VarChar(32)
+  guestContactConsent          Boolean            @default(false)
+  createdByUserId              String?
+  internalNote                 String?            @db.VarChar(500)
+  createdAt                    DateTime           @default(now())
+  updatedAt                    DateTime           @updatedAt
   // Phase 12 (Appointment Reminders) — set once the reminder sweep has notified this booking's
   // customer, so the periodic sweep never double-reminds. Null means "not sent yet", not "no
   // reminder wanted" — every eligible booking gets exactly one until it's sent.
-  reminderSentAt           DateTime?
+  reminderSentAt               DateTime?
   // P0 arrival-alert mission — set once the T-5-minute arrival-check sweep has notified this
   // salon's operators, so the periodic sweep never re-sends the same one-shot nudge (realtime +
   // durable Notification + mobile push) on every run. Null means "not sent yet". Unlike
   // reminderSentAt this never gates whether the FULL-SCREEN overlay itself shows — that eligibility
   // is always re-derived live (CONFIRMED, no QueueEntry, now >= slotStart - lead) so a reconnect or
   // hard refresh can never lose an unresolved alert; this column only dedupes the one-time push.
-  arrivalAlertSentAt       DateTime?
+  arrivalAlertSentAt           DateTime?
   // FastQue Credits / Wallet V1 — a snapshot, not a live-recomputed value, so a later change to
   // CREDIT_SLAB_AMOUNT_INR or the wallet balance can never retroactively change what a past
   // booking shows it redeemed. Set once, at creation, to the ACTUAL amount applied after the
@@ -1147,11 +1207,11 @@ model Booking {
   // "unknown". There is deliberately no "credits earned" snapshot: completing a service does not
   // automatically grant credits in this product (see CreditTransactionType.PROMO_GRANT) — credits
   // only ever enter a wallet through an authorized promotional grant or a redemption restoration.
-  creditsRedeemedAmount    Decimal?      @db.Decimal(10, 2)
+  creditsRedeemedAmount        Decimal?           @db.Decimal(10, 2)
   // Shop-funded promotional discount active when this booking was created. These are immutable
   // snapshots: later enabling/disabling/changing the salon offer never rewrites booking history.
-  onlineBookingDiscountPercent Int          @default(0)
-  onlineBookingDiscountAmount  Decimal      @default(0) @db.Decimal(10, 2)
+  onlineBookingDiscountPercent Int                @default(0)
+  onlineBookingDiscountAmount  Decimal            @default(0) @db.Decimal(10, 2)
   // Part 5 completion (arrival guidance) — same snapshot rationale as prepaymentRequiredAmount/
   // cancellationChargeAmount/creditsRedeemedAmount above: captured once, at creation time, from
   // whatever rule was actually in effect then, so a later change to the salon's
@@ -1160,8 +1220,8 @@ model Booking {
   // "please arrive by" / "check in from" guidance displays. Null on any booking created before
   // this column existed — such a booking shows no arrival guidance at all rather than guessing
   // from the CURRENT policy, which could be wrong for what the customer was actually told.
-  checkInOpensMinutesBefore Int?
-  checkInDueGraceMinutes    Int?
+  checkInOpensMinutesBefore    Int?
+  checkInDueGraceMinutes       Int?
 
   queueEntries       QueueEntry[]
   payments           Payment[]
@@ -1173,7 +1233,32 @@ model Booking {
 
   @@index([salonId, slotStart, slotEnd])
   @@index([salonId, status, cancelledAt])
+  @@index([salonId, createdAt])
+  @@index([salonId, attributionCampaignId, createdAt])
   @@map("bookings")
+}
+
+// Owner-generated, salon-scoped referral campaigns. Only a SHA-256 digest is stored; the
+// high-entropy token is returned once on creation and is not an authentication credential.
+model BookingAttributionCampaign {
+  id          String                            @id @default(uuid())
+  salonId     String
+  salon       Salon                             @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  source      BookingAttributionCampaignSource
+  label       String                            @db.VarChar(120)
+  tokenHash   String                            @unique @db.Char(64)
+  createdByUserId String
+  startsAt    DateTime?
+  endsAt      DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime                          @default(now())
+  updatedAt   DateTime                          @updatedAt
+  bookings    Booking[]
+
+  @@index([salonId, createdAt])
+  @@index([salonId, source, revokedAt])
+  @@unique([salonId, id])
+  @@map("booking_attribution_campaigns")
 }
 
 // Multi-service booking core mission — one row per service actually selected on a Booking, in
@@ -1590,6 +1675,35 @@ model VerificationRequest {
   @@map("verification_requests")
 }
 
+// Owner-submitted coordinates are proposals, not public location updates. Only a distinct global
+// platform admin may approve a proposal; approval then copies the coordinates to Salon.lat/lng.
+// Keeping proposals separately preserves review history and ensures EXIF or owner-provided GPS is
+// never treated as proof by itself.
+model SalonLocationProposal {
+  id                String                       @id @default(uuid())
+  salonId           String
+  salon             Salon                        @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  latitude          Float
+  longitude         Float
+  source            SalonLocationSource
+  status            SalonLocationProposalStatus  @default(PENDING)
+  // PostgreSQL NULLS DISTINCT plus this unique pair permits unlimited reviewed history while
+  // allowing only the value 1 to occupy the pending slot for one salon at a time.
+  pendingSlot       Int?
+  submittedByUserId String
+  submittedBy       User                         @relation("SalonLocationSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+  submittedAt       DateTime                     @default(now())
+  reviewedByAdminId String?
+  reviewedByAdmin   User?                        @relation("SalonLocationReviewer", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  reviewNote        String?                      @db.VarChar(500)
+
+  @@index([status, submittedAt, id])
+  @@index([salonId, submittedAt])
+  @@unique([salonId, pendingSlot])
+  @@map("salon_location_proposals")
+}
+
 // ---------- Notifications ----------
 
 model Notification {
@@ -1625,6 +1739,103 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   @@map("audit_logs")
+}
+
+// Salon-scoped operational stock. It is deliberately separate from invoices and the append-only
+// customer/invoice payment ledgers. Stock changes only through immutable movements; PostgreSQL
+// serializes concurrent changes on the product row and rejects any movement that would go negative.
+model InventoryCategory {
+  id             String   @id @default(uuid())
+  salonId        String
+  salon          Salon    @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  name           String   @db.VarChar(80)
+  normalizedName String   @db.VarChar(80)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  products InventoryProduct[]
+
+  @@unique([id, salonId])
+  @@unique([salonId, normalizedName])
+  @@map("inventory_categories")
+}
+
+model InventorySupplier {
+  id             String   @id @default(uuid())
+  salonId        String
+  salon          Salon    @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  name           String   @db.VarChar(120)
+  normalizedName String   @db.VarChar(120)
+  contactName    String?  @db.VarChar(120)
+  phone          String?  @db.VarChar(40)
+  email          String?  @db.VarChar(254)
+  notes          String?  @db.VarChar(500)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  products  InventoryProduct[]
+  movements InventoryMovement[]
+
+  @@unique([id, salonId])
+  @@unique([salonId, normalizedName])
+  @@map("inventory_suppliers")
+}
+
+model InventoryProduct {
+  id               String             @id @default(uuid())
+  salonId          String
+  salon            Salon              @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  categoryId       String?
+  category         InventoryCategory? @relation(fields: [categoryId, salonId], references: [id, salonId], onDelete: Restrict)
+  supplierId       String?
+  supplier         InventorySupplier? @relation(fields: [supplierId, salonId], references: [id, salonId], onDelete: Restrict)
+  name             String             @db.VarChar(120)
+  normalizedName   String             @db.VarChar(120)
+  sku              String?            @db.VarChar(80)
+  unit             InventoryUnit
+  stockOnHand      Decimal            @default(0) @db.Decimal(12, 3)
+  averageUnitCost  Decimal            @default(0) @db.Decimal(12, 2)
+  reorderThreshold Decimal            @default(0) @db.Decimal(12, 3)
+  isActive         Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  movements InventoryMovement[]
+
+  @@unique([id, salonId])
+  @@unique([salonId, sku])
+  @@index([salonId, isActive, normalizedName])
+  @@index([salonId, categoryId])
+  @@index([salonId, stockOnHand])
+  @@map("inventory_products")
+}
+
+model InventoryMovement {
+  id                   String                @id @default(uuid())
+  salonId              String
+  salon                Salon                 @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  productId            String
+  product              InventoryProduct      @relation(fields: [productId, salonId], references: [id, salonId], onDelete: Restrict)
+  supplierId           String?
+  supplier             InventorySupplier?    @relation(fields: [supplierId, salonId], references: [id, salonId], onDelete: Restrict)
+  actorUserId          String
+  actor                User                  @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  kind                 InventoryMovementKind
+  quantityDelta        Decimal               @db.Decimal(12, 3)
+  unitCost             Decimal?              @db.Decimal(12, 2)
+  stockAfter           Decimal               @default(0) @db.Decimal(12, 3)
+  averageUnitCostAfter Decimal               @default(0) @db.Decimal(12, 2)
+  reason               String?               @db.VarChar(300)
+  reference            String?               @db.VarChar(120)
+  idempotencyKey       String                @db.VarChar(128)
+  requestHash          String                @db.VarChar(64)
+  recordedAt           DateTime              @default(now())
+
+  @@unique([salonId, idempotencyKey])
+  @@index([salonId, recordedAt, id])
+  @@index([productId, recordedAt, id])
+  @@index([salonId, kind, recordedAt])
+  @@map("inventory_movements")
 }
 
 // ---------- Subscription (inactive in V1 — see ARCHITECTURE.md §16) ----------
@@ -1768,7 +1979,6 @@ model PushDevice {
   @@map("push_devices")
 }
 
-
 // ---------- First-party website visitor measurement ----------
 
 // One durable row per browser/device identity generated by FastQue web. visitorKey is a SHA-256
@@ -1823,6 +2033,13 @@ enum NotificationDeliveryStatus {
   FAILED
   GAVE_UP
   SKIPPED
+}
+
+// Synthetic operational examples stay in a private document, separate from real salon ledgers.
+enum OwnerDemoWorkspaceAuditAction {
+  IMPORTED
+  REUSED
+  DELETED
 }
 
 // Per-salon invoice identity. Only configured values are ever printed: no GSTIN is invented, and
@@ -1957,4 +2174,42 @@ model NotificationDelivery {
 
   @@index([status, nextAttemptAt])
   @@map("notification_deliveries")
+}
+
+// A private, per-shop synthetic dashboard dataset. It intentionally has no relations to
+// bookings, queue entries, customers, invoices, or payments: scheduled jobs, public discovery,
+// live booking/queue APIs and real financial reporting cannot consume demo records by accident.
+model OwnerDemoWorkspace {
+  id              String   @id @default(uuid())
+  salonId         String   @unique
+  salon           Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  schemaVersion   Int      @default(1)
+  payload         Json     @db.JsonB
+  createdByUserId String?
+  createdBy       User?    @relation("OwnerDemoWorkspaceCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("owner_demo_workspaces")
+}
+
+// Append-only lifecycle evidence. workspaceId intentionally has no FK so deletion of the
+// isolated synthetic payload retains a durable audit event; salon/actor FKs become NULL on delete.
+model OwnerDemoWorkspaceAudit {
+  id           String                         @id @default(uuid())
+  // Immutable identifiers, intentionally relation-free so deleting a shop/user cannot mutate or
+  // block the append-only audit record.
+  salonId      String
+  actorUserId  String
+  workspaceId  String
+  action       OwnerDemoWorkspaceAuditAction
+  recordCounts Json                           @db.JsonB
+  idempotencyKeyHash String?
+  requestHash        String?
+  createdAt    DateTime                       @default(now())
+
+  @@index([salonId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@unique([salonId, actorUserId, idempotencyKeyHash], map: "owner_demo_workspace_audit_import_idempotency_key")
+  @@map("owner_demo_workspace_audit")
 }

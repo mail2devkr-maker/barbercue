@@ -1,9 +1,11 @@
 import type {
+  BookingAttributionSource,
   BookingSource,
   BookingStatus,
   ChairStatus,
   ChargeType,
   CreditFundingSource,
+  ContactImportValidationStatus,
   CreditTransactionType,
   CrmFollowUpChannel,
   CrmFollowUpStatus,
@@ -20,6 +22,8 @@ import type {
   QueueEntrySource,
   QueueEntryStatus,
   Role,
+  SalonLocationProposalStatus,
+  SalonLocationSource,
   SalonStaffRole,
   SalonStatus,
   SalonType,
@@ -30,8 +34,8 @@ import type {
   UserStatus,
   VerificationStatus,
   VerificationSubjectType,
-} from '../enums';
-import type { QueueEntryPhase } from '../queue-phase';
+} from "../enums";
+import type { QueueEntryPhase } from "../queue-phase";
 
 // DTO shapes only — no I/O, no ORM types leak here. These mirror DATABASE.md/API.md and are the
 // contract both apps/web and apps/mobile code against; the backend is the source of truth for
@@ -173,15 +177,24 @@ export interface AdminCrmEmployeePerformanceDto {
 }
 
 export interface AdminCrmLeadDto extends EmployeeCrmLeadDto {
-  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+  employee: Pick<
+    EmployeeProfileDto,
+    "id" | "employeeCode" | "fullName" | "territory"
+  >;
 }
 
 export interface AdminCrmVisitDto extends EmployeeCrmVisitDto {
-  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+  employee: Pick<
+    EmployeeProfileDto,
+    "id" | "employeeCode" | "fullName" | "territory"
+  >;
 }
 
 export interface AdminCrmFollowUpDto extends EmployeeCrmFollowUpDto {
-  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+  employee: Pick<
+    EmployeeProfileDto,
+    "id" | "employeeCode" | "fullName" | "territory"
+  >;
 }
 
 export interface AdminCrmOverviewDto {
@@ -434,7 +447,7 @@ export interface SalonListItemDto extends SalonSummary {
 // been anyway, and still delivers the real "this shop is active" signal without fabricating
 // anything. serviceName is null for a walk-in queue join with no service chosen.
 export interface RecentActivityItemDto {
-  type: 'booking' | 'queue';
+  type: "booking" | "queue";
   serviceName: string | null;
   occurredAt: string; // ISO 8601
 }
@@ -623,7 +636,7 @@ export interface AvailabilitySlotDto {
   state: AvailabilitySlotState;
 }
 
-export type AvailabilitySlotState = 'AVAILABLE' | 'OCCUPIED';
+export type AvailabilitySlotState = "AVAILABLE" | "OCCUPIED";
 
 // Multi-service booking core mission — one ordered entry per service actually selected on this
 // appointment, snapshotted at booking-creation time (name/duration/price never drift if the
@@ -711,12 +724,12 @@ export interface CancelBookingResponseDto {
 // `no_show` are outcome views regardless of date; `all` is the unfiltered history feed. Kept as a
 // flat union (not derived from BookingStatus) since `today`/`upcoming`/`all` aren't statuses.
 export const OWNER_BOOKING_FILTERS = [
-  'today',
-  'upcoming',
-  'completed',
-  'cancelled',
-  'no_show',
-  'all',
+  "today",
+  "upcoming",
+  "completed",
+  "cancelled",
+  "no_show",
+  "all",
 ] as const;
 export type OwnerBookingFilter = (typeof OWNER_BOOKING_FILTERS)[number];
 
@@ -726,13 +739,15 @@ export type OwnerBookingFilter = (typeof OWNER_BOOKING_FILTERS)[number];
 export interface OwnerBookingDetailDto extends BookingDetailDto {
   customerPhone: string | null;
   customerEmail: string | null;
+  /** Server-derived marketing attribution; absent on older responses. */
+  attributionSource?: BookingAttributionSource;
   // Owner-operations mission — in-shop appointment provenance and trusted cancellation
   // attribution. All optional/nullable so an older client that predates them keeps working.
   // guestName/guestPhone are set only on BookingSource.IN_SHOP rows; internalNote is staff-only.
   guestName?: string | null;
   guestPhone?: string | null;
   internalNote?: string | null;
-  cancelledByActor?: 'CUSTOMER' | 'OWNER' | 'STAFF' | 'SYSTEM' | 'ADMIN' | null;
+  cancelledByActor?: "CUSTOMER" | "OWNER" | "STAFF" | "SYSTEM" | "ADMIN" | null;
   cancellationReason?: string | null;
   // The barber actually assigned at queue check-in (QueueEntry.assignedStaffId), distinct from
   // preferredStaffId/preferredStaffName above (the customer's soft preference at booking time).
@@ -779,7 +794,7 @@ export interface ArrivalAlertDto {
 // = 2+, `frequent` = FREQUENT_CUSTOMER_THRESHOLD+ (see the backend constant of the same name).
 // Someone with 0 completed visits (only cancelled/no-show so far) gets none of these — they're
 // just not segmented yet, not a 4th category invented to force a label onto them.
-export type CustomerSegment = 'new' | 'repeat' | 'frequent';
+export type CustomerSegment = "new" | "repeat" | "frequent";
 
 export interface OwnerCustomerSummaryDto {
   customerId: string;
@@ -807,6 +822,16 @@ export interface OwnerCustomerSummaryDto {
   // Sum of this customer's OUTSTANDING entries at this salon — 0 when none. Matches the total the
   // OUTSTANDING_BALANCE booking-block error reports to the customer (Part I).
   outstandingTotalAmount: number;
+  /** Additive visit roll-up; legacy booking-only fields above retain their original meanings. */
+  totalVisitCount?: number;
+  completedVisitCount?: number;
+  firstCompletedVisitAt?: string | null;
+  lastCompletedVisitAt?: string | null;
+  liveQueueVisitCount?: number;
+  completedLiveQueueVisitCount?: number;
+  cancelledLiveQueueVisitCount?: number;
+  expiredLiveQueueVisitCount?: number;
+  noShowLiveQueueVisitCount?: number;
 }
 
 // POST dashboard/.../ledger/:ledgerEntryId/waive|restore response.
@@ -824,7 +849,7 @@ export interface OutstandingBalanceDetailsDto {
 
 // ---------- Owner analytics & reporting (Phase 9) ----------
 
-export const OWNER_ANALYTICS_RANGES = ['today', '7d', '30d', 'custom'] as const;
+export const OWNER_ANALYTICS_RANGES = ["today", "7d", "30d", "custom"] as const;
 export type OwnerAnalyticsRange = (typeof OWNER_ANALYTICS_RANGES)[number];
 
 export interface UtilizationEntryDto {
@@ -978,7 +1003,7 @@ export interface QueueEntryDetailDto extends QueueEntryDto {
 }
 
 // GET /dashboard/salons/:salonId/booking/staff mirror for the live queue's chair dropdown.
-export type ChairOccupancyKind = 'FREE' | 'LOCAL' | 'FASTQUE';
+export type ChairOccupancyKind = "FREE" | "LOCAL" | "FASTQUE";
 
 export interface ChairOptionDto {
   id: string;
@@ -1086,30 +1111,30 @@ export interface CapacitySummaryDto {
 // producing code can't typo a type string, and consuming UI can exhaustively switch on it for
 // icons/copy. Grows as new event sources wire in; never a catch-all "misc" bucket.
 export const NOTIFICATION_TYPES = [
-  'booking.confirmed',
-  'booking.cancelled',
-  'booking.no_show',
-  'booking.expired',
-  'booking.reminder',
+  "booking.confirmed",
+  "booking.cancelled",
+  "booking.no_show",
+  "booking.expired",
+  "booking.reminder",
   // P0 follow-up: told to a customer whose booking was wrongly recorded as a no-show and has been
   // corrected to COMPLETED — deliberately NOT 'booking.confirmed', which would misstate the outcome.
-  'booking.corrected',
-  'queue.turn_approaching',
-  'owner.booking.created',
-  'owner.booking.cancelled',
-  'owner.booking.no_show',
-  'owner.booking.expired',
-  'owner.walk_in.joined',
-  'staff.assigned',
+  "booking.corrected",
+  "queue.turn_approaching",
+  "owner.booking.created",
+  "owner.booking.cancelled",
+  "owner.booking.no_show",
+  "owner.booking.expired",
+  "owner.walk_in.joined",
+  "staff.assigned",
   // P0 arrival-alert mission — the T-5-minute "has this customer arrived?" nudge, distinct from
   // 'owner.booking.no_show' (a terminal, financially-consequential state) and from
   // 'booking.reminder' (customer-facing, much larger lead window).
-  'owner.booking.arrival_check',
+  "owner.booking.arrival_check",
   // Owner-operations mission — told to a customer when THE SHOP cancels or moves their booking.
   // Distinct from 'booking.cancelled' (the customer's own cancellation echoed back) so the copy,
   // deep link and delivery ledger can never confuse who did what.
-  'booking.cancelled_by_shop',
-  'booking.rescheduled_by_shop',
+  "booking.cancelled_by_shop",
+  "booking.rescheduled_by_shop",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -1170,7 +1195,8 @@ export interface QueueStatusDto {
 // current) or IN_SERVICE (an ACTIVE ServiceSession, walk-in or appointment-check-in). OFF_DUTY
 // mirrors status === INACTIVE, surfaced here too so a UI can render every roster row from this one
 // field instead of combining it with `status` itself.
-export type StaffAvailabilityState = 'AVAILABLE' | 'RESERVED' | 'IN_SERVICE' | 'OFF_DUTY';
+export type StaffAvailabilityState =
+  "AVAILABLE" | "RESERVED" | "IN_SERVICE" | "OFF_DUTY";
 
 // PATCH /dashboard/staff/:id/status response, and the roster entries in DashboardQueueDto below.
 export interface StaffStatusDto {
@@ -1199,7 +1225,7 @@ export interface SalonPaymentPolicyDto {
 /** Public customer-booking payment capability. No provider secret or storage internals. */
 export interface BookingPaymentInfoDto {
   onlinePaymentAvailable: boolean;
-  paymentMethod: 'UPI_QR';
+  paymentMethod: "UPI_QR";
   paymentQrImageUrl: string | null;
   // Optional for older servers/QR-only clients; direct intent is disabled without these.
   upiVpa?: string | null;
@@ -1340,6 +1366,41 @@ export interface SalonChairDto {
   status: ChairStatus;
 }
 
+export type ChairDeactivationConflict =
+  | "ACTIVE_SERVICE_SESSION"
+  | "ACTIVE_MANUAL_OCCUPANCY"
+  | "ASSIGNED_QUEUE_ENTRY"
+  | "NOT_ACTIVE"
+  | "STALE_PREVIEW";
+
+export interface BulkChairDeactivationPreviewItemDto {
+  chairId: string;
+  label: string | null;
+  status: ChairStatus | null;
+  /** Exact optimistic-concurrency version to echo to the apply endpoint. */
+  expectedUpdatedAt: string | null;
+  disposition: "READY" | "CONFLICT" | "NOT_FOUND";
+  conflicts: ChairDeactivationConflict[];
+}
+
+export interface BulkChairDeactivationPreviewDto {
+  salonId: string;
+  items: BulkChairDeactivationPreviewItemDto[];
+}
+
+export interface BulkChairDeactivationResultItemDto {
+  chairId: string;
+  label: string | null;
+  result: "DEACTIVATED" | "CONFLICT" | "NOT_FOUND";
+  conflicts: ChairDeactivationConflict[];
+}
+
+export interface BulkChairDeactivationResultDto {
+  salonId: string;
+  deactivatedCount: number;
+  items: BulkChairDeactivationResultItemDto[];
+}
+
 // Owner-facing roster entry. Phone/email come from the linked User account (SalonStaff itself has
 // no duplicate contact columns). Legacy staff may have email but no phone; new rows require phone.
 export interface SalonStaffDto {
@@ -1394,8 +1455,8 @@ export interface SalonStatusResultDto {
 //     more precise suggestion without it ever being silently applied.
 export interface SalonTimezoneSuggestionDto {
   timezone: string;
-  confidence: 'EXACT' | 'HIGH' | 'AMBIGUOUS';
-  source: 'coordinates' | 'city' | 'country';
+  confidence: "EXACT" | "HIGH" | "AMBIGUOUS";
+  source: "coordinates" | "city" | "country";
 }
 
 export interface SalonTimezoneResultDto {
@@ -1419,6 +1480,60 @@ export interface SalonProfileDetailDto {
   addressLine: string;
   postalCode: string | null;
   description: string | null;
+}
+
+/** GET dashboard/salons/:salonId/share-links — canonical public URL and share-safe metadata. */
+export interface SalonShareLinksDto {
+  salonId: string;
+  status: SalonStatus;
+  publicPath: string;
+  publicUrl: string | null;
+  readiness: {
+    ready: boolean;
+    reasons: Array<'SALON_NOT_PUBLIC' | 'WEB_BASE_URL_NOT_CONFIGURED'>;
+  };
+  metadata: {
+    title: string;
+    description: string | null;
+    imageUrl: string | null;
+  };
+}
+
+export interface SalonLocationProposalDto {
+  id: string;
+  status: SalonLocationProposalStatus;
+  latitude: number;
+  longitude: number;
+  source: SalonLocationSource;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+}
+
+export interface SalonLocationDto {
+  salonId: string;
+  current: {
+    latitude: number | null;
+    longitude: number | null;
+    verification: 'VERIFIED' | 'UNVERIFIED';
+    verifiedAt: string | null;
+  };
+  pendingProposal: SalonLocationProposalDto | null;
+}
+
+export interface AdminSalonLocationProposalDto extends SalonLocationProposalDto {
+  submittedByUserId: string;
+  salon: {
+    id: string;
+    publicId: string;
+    name: string;
+    addressLine: string;
+    localityText: string | null;
+    postalCode: string | null;
+    cityName: string;
+    currentLatitude: number | null;
+    currentLongitude: number | null;
+  };
 }
 
 // GET/PUT dashboard/salons/:salonId/payment-qr response (FastQue Credits / Wallet V1) — the
@@ -1475,6 +1590,35 @@ export interface SalonSetupReadinessDto {
   hasActiveService: boolean;
   hasActiveChair: boolean;
   hasActiveStaff: boolean;
+}
+
+/** Counts distinct existing HTTPS/no-credentials photo URL origin/paths; remote content is not fetched. */
+export interface SalonPhotoActivationReadinessDto {
+  required: 3;
+  current: number;
+  ready: boolean;
+  grandfathered: boolean;
+  reasons: Array<'THREE_VALID_PHOTOS_REQUIRED'>;
+}
+
+export interface SalonContactImportPreviewDto {
+  previewOnly: true;
+  invitationEligibility: 'NOT_EVALUATED';
+  dispatchEnabled: false;
+  dispatchBlockedReason: 'CONSENT_SUPPRESSION_AND_PROVIDER_GATES_REQUIRED';
+  summary: {
+    total: number;
+    validatedForReview: number;
+    invalidPhone: number;
+    consentRequired: number;
+    consentEvidenceIncomplete: number;
+    consentTimestampInvalid: number;
+    duplicateInBatch: number;
+  };
+  items: Array<{
+    index: number;
+    status: ContactImportValidationStatus;
+  }>;
 }
 
 // ---------- Platform admin monitoring ----------
@@ -1557,7 +1701,16 @@ export interface PlatformAdminOverviewDto {
 }
 
 export interface HealthCheckResponse {
-  status: 'ok';
+  status: "ok";
   service: string;
   timestamp: string;
+}
+
+/** Draft only: the owner must review every statement and save through the existing profile API. */
+export interface SalonDescriptionSuggestionDto {
+  draft: string;
+  language: 'en' | 'hi';
+  persisted: false;
+  requiresOwnerReview: true;
+  notice: string;
 }

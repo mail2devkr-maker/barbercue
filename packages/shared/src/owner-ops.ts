@@ -9,7 +9,10 @@
 import { z } from 'zod';
 import { normalizeContactName, normalizeContactPhone } from './contact';
 import { MAX_SERVICES_PER_BOOKING } from './constants';
+import { BookingAttributionSource, BookingSource } from './enums';
 import type {
+  BookingAttributionSource as BookingAttributionSourceType,
+  BookingSource as BookingSourceType,
   BookingStatus,
   QueueEntryStatus,
   StaffMemberStatus,
@@ -106,6 +109,8 @@ export const OwnerOpsErrorCode = {
   INVOICE_REFUND_EXCEEDS_PAID: 'INVOICE_REFUND_EXCEEDS_PAID',
   BILLING_PROFILE_REQUIRED: 'BILLING_PROFILE_REQUIRED',
   BILLING_TAX_NOT_CONFIGURED: 'BILLING_TAX_NOT_CONFIGURED',
+  BOOKING_ATTRIBUTION_CAMPAIGN_NOT_FOUND:
+    'BOOKING_ATTRIBUTION_CAMPAIGN_NOT_FOUND',
 } as const;
 export type OwnerOpsErrorCode = (typeof OwnerOpsErrorCode)[keyof typeof OwnerOpsErrorCode];
 
@@ -120,6 +125,8 @@ export const OWNER_OPS_PATHS = {
   cancellationAnalytics: 'analytics/cancellations',
   bookingsInShop: 'bookings/in-shop',
   bookings: 'bookings',
+  bookingAttribution: 'booking-attribution',
+  attributionCampaigns: 'campaigns',
   cancel: 'cancel',
   reschedule: 'reschedule',
   queueCustomers: 'queue/customers',
@@ -439,6 +446,228 @@ export const cancellationAnalyticsQuerySchema = z.object({
 });
 export type CancellationAnalyticsQuery = z.infer<typeof cancellationAnalyticsQuerySchema>;
 
+const salonLocalDateSchema = z.string().refine((value) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, 'Use a valid salon-local date in YYYY-MM-DD format.');
+
+/** GET dashboard/salons/:salonId/revenue/report. `to` is inclusive in the salon's timezone. */
+export const ownerRevenueReportQuerySchema = z
+  .object({
+    from: salonLocalDateSchema,
+    to: salonLocalDateSchema,
+    groupBy: z.enum(['day', 'week', 'month']).default('day'),
+    /** Direct source is projected from the legacy booking source; external channels require a valid campaign token. */
+    // Keep legacy APP/WEB filters accepted for already-shipped clients while exposing the
+    // normalized FASTQUE_APP/FASTQUE_WEB attribution vocabulary to new consumers.
+    source: z
+      .enum([
+        'FASTQUE_WEB',
+        'FASTQUE_APP',
+        'WALK_IN',
+        'IN_SHOP',
+        'FACEBOOK',
+        'INSTAGRAM',
+        'CHATGPT',
+        'OTHER',
+        'UNKNOWN',
+        'APP',
+        'WEB',
+      ])
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.from > value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'The end date must be on or after the start date.',
+      });
+      return;
+    }
+    const from = Date.parse(`${value.from}T00:00:00.000Z`);
+    const to = Date.parse(`${value.to}T00:00:00.000Z`);
+    if ((to - from) / 86_400_000 > 365) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'A report may cover at most 366 calendar days.',
+      });
+    }
+  });
+export type OwnerRevenueReportQuery = z.infer<
+  typeof ownerRevenueReportQuerySchema
+>;
+
+const campaignSourceSchema = z.enum([
+  'FACEBOOK',
+  'INSTAGRAM',
+  'CHATGPT',
+  'OTHER',
+]);
+
+export const createBookingAttributionCampaignSchema = z
+  .object({
+    source: campaignSourceSchema,
+    label: z.string().trim().min(1).max(120),
+    startsAt: z.string().datetime().optional(),
+    endsAt: z.string().datetime().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.startsAt &&
+      value.endsAt &&
+      Date.parse(value.endsAt) <= Date.parse(value.startsAt)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endsAt'],
+        message: 'Campaign end must be after its start.',
+      });
+    }
+  });
+export type CreateBookingAttributionCampaignInput = z.infer<
+  typeof createBookingAttributionCampaignSchema
+>;
+
+export const bookingAttributionCampaignListQuerySchema = z.object({
+  cursor: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type BookingAttributionCampaignListQuery = z.infer<
+  typeof bookingAttributionCampaignListQuerySchema
+>;
+
+export const bookingAttributionSummaryQuerySchema = z
+  .object({
+    from: salonLocalDateSchema,
+    to: salonLocalDateSchema,
+    source: z.nativeEnum(BookingAttributionSource).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.from > value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'The end date must be on or after the start date.',
+      });
+    }
+    const from = Date.parse(`${value.from}T00:00:00.000Z`);
+    const to = Date.parse(`${value.to}T00:00:00.000Z`);
+    if ((to - from) / 86_400_000 > 365) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'A report may cover at most 366 calendar days.',
+      });
+    }
+  });
+export type BookingAttributionSummaryQuery = z.infer<
+  typeof bookingAttributionSummaryQuerySchema
+>;
+
+export interface BookingAttributionCampaignDto {
+  id: string;
+  salonId: string;
+  source: Extract<
+    BookingAttributionSourceType,
+    'FACEBOOK' | 'INSTAGRAM' | 'CHATGPT' | 'OTHER'
+  >;
+  label: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  revokedAt: string | null;
+  bookingCount: number;
+  createdAt: string;
+}
+
+/** The opaque token is returned only once, immediately after campaign creation. */
+export interface CreateBookingAttributionCampaignDto extends BookingAttributionCampaignDto {
+  token: string;
+}
+
+export interface BookingAttributionSourceCountDto {
+  source: BookingAttributionSourceType;
+  bookingCount: number;
+}
+
+export interface BookingAttributionCampaignCountDto {
+  campaignId: string;
+  source: BookingAttributionCampaignDto['source'];
+  label: string;
+  bookingCount: number;
+}
+
+export interface BookingAttributionSummaryDto {
+  salonId: string;
+  from: string;
+  to: string;
+  timezone: string;
+  asOf: string;
+  bySource: BookingAttributionSourceCountDto[];
+  campaigns: BookingAttributionCampaignCountDto[];
+}
+
+/**
+ * GET dashboard/salons/:salonId/customers. Search is limited to account id, email, and phone;
+ * User has no canonical name field, and per-visit guest names are not identity evidence.
+ */
+export const ownerCustomerListQuerySchema = z
+  .object({
+    offset: z.coerce.number().int().min(0).default(0),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    search: z.string().trim().min(1).max(120).optional(),
+    /** `q` is the concise URL alias used by dashboard clients; `search` stays backward-compatible. */
+    q: z.string().trim().min(1).max(120).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.search && value.q) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['q'],
+        message: 'Use either q or search, not both.',
+      });
+    }
+  });
+export type OwnerCustomerListQuery = z.infer<typeof ownerCustomerListQuerySchema>;
+
+/**
+ * GET dashboard/salons/:salonId/customers/:customerId/history.
+ * from/to are inclusive salon-local calendar dates; nextCursor is opaque and scope-bound.
+ */
+export const ownerCustomerHistoryQuerySchema = z
+  .object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    source: z.enum(['ONLINE_BOOKING', 'IN_SHOP_APPOINTMENT', 'LIVE_QUEUE']).optional(),
+    status: z.enum(['PENDING_PAYMENT', 'CONFIRMED', 'WAITING', 'CALLED', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'EXPIRED', 'NO_SHOW']).optional(),
+    from: salonLocalDateSchema.optional(),
+    to: salonLocalDateSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.from && value.to && value.from > value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'The end date must be on or after the start date.',
+      });
+      return;
+    }
+    if (value.from && value.to) {
+      const from = Date.parse(`${value.from}T00:00:00.000Z`);
+      const to = Date.parse(`${value.to}T00:00:00.000Z`);
+      if ((to - from) / 86_400_000 > 365) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['to'],
+          message: 'History may cover at most 366 calendar days.',
+        });
+      }
+    }
+  });
+export type OwnerCustomerHistoryQuery = z.infer<typeof ownerCustomerHistoryQuerySchema>;
+
 // ---------- DTOs ----------
 
 /** Money is always shown in the shop's own currency; `amount` is a decimal number with <= 2 dp. */
@@ -489,6 +718,113 @@ export interface OwnerRevenueDto {
   estimatedServiceValueToday: number;
   unpaidInvoiceCount: number;
   unpaidInvoiceTotal: number;
+}
+
+export interface OwnerRevenueReportMetricDto {
+  completedVisits: number;
+  /** Gross completed-service value before invoice discounts; price data is an estimate when no snapshot exists. */
+  grossServiceValue: number;
+  /** Listed-price estimate, not money received. Standalone queue rows without a price snapshot use the current service list price. */
+  estimatedServiceValue: number;
+  invoiceCount: number;
+  invoiceDiscounts: number;
+  /** Issued invoice totals (tax-inclusive), excluding void invoices. */
+  invoicedAmount: number;
+  /** Append-only shop-recorded PAYMENT events for the cash-event period. */
+  recordedCollections: number;
+  /** Append-only shop-recorded REFUND events for the cash-event period. */
+  refunds: number;
+  netRecordedCollections: number;
+}
+
+export interface OwnerRevenueReportGroupDto extends OwnerRevenueReportMetricDto {
+  key: string;
+  label: string;
+}
+
+export interface OwnerRevenueReportServiceDto extends OwnerRevenueReportGroupDto {
+  serviceId: string | null;
+}
+
+export interface OwnerRevenueReportStaffDto extends OwnerRevenueReportGroupDto {
+  staffId: string | null;
+  /** False when only a text label exists and no completed session links the invoice to staff. */
+  identityVerified: boolean;
+}
+
+export interface OwnerRevenueReportCustomerDto extends OwnerRevenueReportGroupDto {
+  customerId: string | null;
+  /** Guest visits remain separate; names or phone numbers are never used to merge identities. */
+  identityVerified: boolean;
+}
+
+export interface OwnerRevenueReportPeriodDto extends OwnerRevenueReportMetricDto {
+  /** Salon-local day, Monday week start, or calendar month start. */
+  period: string;
+}
+
+export interface OwnerRevenueReportDto {
+  salonId: string;
+  currency: string | null;
+  timeZone: string;
+  from: string;
+  to: string;
+  groupBy: 'day' | 'week' | 'month';
+  source: BookingAttributionSourceType | BookingSourceType | null;
+  /** Visit and invoice amounts are bucketed by serviceDate; payments/refunds by recordedAt. */
+  periods: OwnerRevenueReportPeriodDto[];
+  totals: OwnerRevenueReportMetricDto;
+  byService: OwnerRevenueReportServiceDto[];
+  byStaff: OwnerRevenueReportStaffDto[];
+  byCustomer: OwnerRevenueReportCustomerDto[];
+  dataSemantics: {
+    estimateBasis: 'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE';
+    cashSource: 'SHOP_RECORDED_INVOICE_PAYMENT_LEDGER';
+    serviceCashAllocation: 'PRO_RATA_BY_INVOICE_LINE_TOTAL';
+    externalAttribution: 'CAMPAIGN_TOKEN_WHEN_PRESENT_LEGACY_SOURCE_PROJECTION_OTHERWISE';
+  };
+}
+
+export interface OwnerCustomerHistoryPaymentDto {
+  kind: 'PAYMENT' | 'REFUND';
+  method: 'CASH' | 'UPI' | 'CARD' | 'OTHER';
+  amount: string;
+  recordedAt: string;
+}
+
+export interface OwnerCustomerHistoryInvoiceDto {
+  id: string;
+  number: string;
+  status: 'ISSUED' | 'VOID';
+  currency: string;
+  total: string;
+  discountTotal: string;
+  payments: OwnerCustomerHistoryPaymentDto[];
+}
+
+export interface OwnerCustomerHistoryEntryDto {
+  id: string;
+  source: 'ONLINE_BOOKING' | 'IN_SHOP_APPOINTMENT' | 'LIVE_QUEUE';
+  /** Slot start for a booking; salon-local arrival instant for a Live Queue visit. */
+  occurredAt: string;
+  createdAt: string;
+  status: string;
+  /** A per-record entered label, never used to link/merge customer identities. */
+  recordedName: string | null;
+  serviceNames: string[];
+  staffName: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  /** Shop-recorded invoice/payment facts only; no provider settlement is inferred. */
+  invoices: OwnerCustomerHistoryInvoiceDto[];
+}
+
+export interface OwnerCustomerHistoryPageDto {
+  salonId: string;
+  customerId: string;
+  salonTimezone: string;
+  items: OwnerCustomerHistoryEntryDto[];
+  nextCursor: string | null;
 }
 
 export interface OwnerTopServiceDto {

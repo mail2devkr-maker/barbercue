@@ -15,6 +15,8 @@ import {
 import {
   DASHBOARD_PATHS,
   Role,
+  bulkDeactivateSalonChairsApplySchema,
+  bulkDeactivateSalonChairsPreviewSchema,
   createSalonChairSchema,
   createSalonServiceSchema,
   createSalonPhotoSchema,
@@ -32,7 +34,10 @@ import {
   updateSalonTypeSchema,
   updateSalonStatusSchema,
   updateSalonTimezoneSchema,
+  submitSalonLocationProposalSchema,
   type AuthenticatedUser,
+  type BulkDeactivateSalonChairsApplyInput,
+  type BulkDeactivateSalonChairsPreviewInput,
   type CreateSalonChairInput,
   type CreateSalonServiceInput,
   type CreateSalonPhotoInput,
@@ -49,6 +54,7 @@ import {
   type UpdateSalonTypeInput,
   type UpdateSalonStatusInput,
   type UpdateSalonTimezoneInput,
+  type SubmitSalonLocationProposalInput,
 } from '@barbercue/shared';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -66,6 +72,7 @@ import { StaffWorkingHoursService } from './staff-working-hours.service';
 import { SalonTimezoneService } from './salon-timezone.service';
 import { SalonPaymentQrService } from './salon-payment-qr.service';
 import { SalonProfileService } from './salon-profile.service';
+import { SalonLocationService } from './salon-location.service';
 
 const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId`;
 
@@ -101,6 +108,7 @@ export class SalonSetupController {
     private readonly timezone: SalonTimezoneService,
     private readonly paymentQr: SalonPaymentQrService,
     private readonly profile: SalonProfileService,
+    private readonly location: SalonLocationService,
   ) {}
 
   // ---------- Shop profile (Part 2, admin delegated shop management) ----------
@@ -123,6 +131,24 @@ export class SalonSetupController {
     return this.profile.update(user.id, salonId, body);
   }
 
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.location}`)
+  getLocation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.location.get(user.id, salonId);
+  }
+
+  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.location}`)
+  proposeLocation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(submitSalonLocationProposalSchema))
+    body: SubmitSalonLocationProposalInput,
+  ) {
+    return this.location.submit(user.id, salonId, body);
+  }
+
   // ---------- Shop activation ----------
 
   @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.status}`)
@@ -143,6 +169,14 @@ export class SalonSetupController {
     @Param('salonId') salonId: string,
   ) {
     return this.timezone.getTimezone(user.id, salonId);
+  }
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.photoReadiness}`)
+  getPhotoReadiness(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.activation.getPhotoReadiness(user.id, salonId);
   }
 
   @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.timezone}`)
@@ -185,7 +219,9 @@ export class SalonSetupController {
   }
 
   // Multipart sibling of the JSON route above — same shape as photos' upload/link pair.
-  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}/${DASHBOARD_PATHS.photoUpload}`)
+  @Post(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}/${DASHBOARD_PATHS.photoUpload}`,
+  )
   @UseInterceptors(
     FileInterceptor('image', {
       storage: memoryStorage(),
@@ -233,7 +269,9 @@ export class SalonSetupController {
 
   // ---------- Services ----------
 
-  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`)
+  @Get(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`,
+  )
   getSalonType(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
@@ -241,7 +279,9 @@ export class SalonSetupController {
     return this.services.getSalonType(user.id, salonId);
   }
 
-  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`)
+  @Patch(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`,
+  )
   updateSalonType(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
@@ -269,16 +309,24 @@ export class SalonSetupController {
 
   // Preview never writes services. PDF/image extraction requires a deliberate external-AI consent.
   @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-preview`)
-  @UseInterceptors(FileInterceptor('file', {
-    storage: memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 1 },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 6 * 1024 * 1024, files: 1 },
+    }),
+  )
   previewServiceCatalog(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body('consent') consent?: string,
   ) {
-    return this.catalogImports.preview(user.id, salonId, file, consent === 'true');
+    return this.catalogImports.preview(
+      user.id,
+      salonId,
+      file,
+      consent === 'true',
+    );
   }
 
   @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-reviewed`)
@@ -418,6 +466,28 @@ export class SalonSetupController {
     body: UpdateSalonChairInput,
   ) {
     return this.chairs.update(user.id, salonId, chairId, body);
+  }
+
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.chairs}/bulk-deactivate/preview`)
+  @HttpCode(HttpStatus.OK)
+  previewBulkDeactivateChairs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(bulkDeactivateSalonChairsPreviewSchema))
+    body: BulkDeactivateSalonChairsPreviewInput,
+  ) {
+    return this.chairs.previewBulkDeactivate(user.id, salonId, body);
+  }
+
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.chairs}/bulk-deactivate/apply`)
+  @HttpCode(HttpStatus.OK)
+  bulkDeactivateChairs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(bulkDeactivateSalonChairsApplySchema))
+    body: BulkDeactivateSalonChairsApplyInput,
+  ) {
+    return this.chairs.bulkDeactivate(user.id, salonId, body);
   }
 
   // ---------- Staff / barbers ----------

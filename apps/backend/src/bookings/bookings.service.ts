@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { forwardRef, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
@@ -144,8 +145,6 @@ export class BookingsService {
       (sum, s) => sum + decimalStringToPaise(s.price.toString()),
       0,
     );
-    const totalPrice = paiseToDecimalString(totalPricePaise);
-
     // Shop-specific online offer: APP/WEB bookings receive the salon's currently configured
     // percentage, while the underlying Service prices remain untouched. The exact amount is
     // snapshotted on Booking below so changing/ending the offer never rewrites booking history.
@@ -315,6 +314,29 @@ export class BookingsService {
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${input.salonId}))`,
       );
 
+      // External-source attribution is optional evidence, never an authentication credential.
+      // The token is high entropy and only its SHA-256 digest is stored. FOR SHARE serializes
+      // booking creation with campaign revocation: a booking either commits with a campaign that
+      // was valid at this transaction's check, or observes the revoked state and remains
+      // unattributed. Invalid/expired/wrong-salon tokens never block a booking.
+      let attributionCampaignId: string | null = null;
+      if (input.attributionToken) {
+        const tokenHash = createHash('sha256')
+          .update(input.attributionToken, 'utf8')
+          .digest('hex');
+        const campaigns = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT "id"
+          FROM "booking_attribution_campaigns"
+          WHERE "salonId" = ${input.salonId}
+            AND "tokenHash" = ${tokenHash}
+            AND "revokedAt" IS NULL
+            AND ("startsAt" IS NULL OR "startsAt" <= CURRENT_TIMESTAMP)
+            AND ("endsAt" IS NULL OR "endsAt" > CURRENT_TIMESTAMP)
+          FOR SHARE
+        `);
+        attributionCampaignId = campaigns[0]?.id ?? null;
+      }
+
       const slotCapacity = await this.availability.getSlotCapacityForServices(
         tx,
         input.salonId,
@@ -374,6 +396,7 @@ export class BookingsService {
           slotEnd,
           status,
           source,
+          attributionCampaignId,
           idempotencyKey,
           preferredStaffId: input.preferredStaffId ?? null,
           prepaymentRequiredAmount,

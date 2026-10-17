@@ -74,6 +74,8 @@ export const ADMIN_PATHS = {
   status: 'status',
   // Super-admin-only internal access management for co-founders / HR / sales.
   access: 'access',
+  locationVerifications: 'location-verifications',
+  decision: 'decision',
   revoke: 'revoke',
   // FastQue internal field-team provisioning.
   employees: 'employees',
@@ -329,6 +331,7 @@ export const DASHBOARD_PATHS = {
   // Salon photos. URL-based for now — no object storage is configured, so an owner links an
   // image they already host rather than uploading a file.
   photos: 'photos',
+  location: 'location',
   resendInvite: 'resend-invite',
   // Owner-only salon-scoped booking operations (Phase: owner booking dashboard) — mounted at
   // dashboard/salons/:salonId/bookings, same shape as `queue` above.
@@ -345,6 +348,9 @@ export const DASHBOARD_PATHS = {
   workingHours: 'working-hours',
   // GET dashboard/salons/:salonId/customers[/:customerId] (Phase 8 — owner customer CRM).
   customers: 'customers',
+  customerHistory: 'history',
+  // POST dashboard/salons/:salonId/contacts/preview — transient owner contact-list validation.
+  contacts: 'contacts',
   // POST dashboard/salons/:salonId/customers/:customerId/ledger/:ledgerEntryId/waive|restore —
   // Customer Dues + Cancellation Policy mission (New Customer No-Show Grace).
   ledger: 'ledger',
@@ -376,6 +382,10 @@ export const DASHBOARD_PATHS = {
   // postalCode/description). No such endpoint existed before this; shared verbatim by owner and
   // PLATFORM_ADMIN via the same SalonProfileService.
   profile: 'profile',
+  // Authenticated canonical public shop URL and share-safe metadata.
+  shareLinks: 'share-links',
+  // Owner/admin readiness checklist for the three-photo first-activation requirement.
+  photoReadiness: 'photo-readiness',
   // P0 arrival-alert mission — POST dashboard/bookings/:id/arrive|no-show|correct-no-show (staff/
   // owner-triggered booking-lifecycle actions, mounted alongside the existing queue mutations in
   // DashboardQueueController) and GET dashboard/salons/:salonId/arrival-alerts (the "reconstruct
@@ -391,6 +401,23 @@ export const DASHBOARD_PATHS = {
 // configurable, so it stays a named constant (one-line change later) rather than a hardcoded
 // magic number repeated in both the backend sweep and the frontend eligibility display.
 export const ARRIVAL_ALERT_LEAD_MINUTES = 5;
+
+// Requirement #10 — conservative bounds for a future approved description-generation provider.
+export const SALON_DESCRIPTION_SUGGESTION_LIMITS = {
+  maxRequests: 3,
+  throttleWindowMs: 600_000,
+  providerTimeoutMs: 8_000,
+  maxServices: 20,
+  maxHighlights: 5,
+  maxHighlightLength: 120,
+  maxCurrentDescriptionLength: 600,
+  maxPromptCharacters: 4_000,
+  maxSalonNameLength: 120,
+  maxCityNameLength: 120,
+  maxServiceNameLength: 80,
+  minDraftLength: 80,
+  maxDraftLength: 600,
+} as const;
 
 // PublicQueueController's `@Controller('public-queue')` prefix (Phase 9 — shop QR queue entry).
 // `:token` is Salon.publicQueueToken, never the internal Salon.id.
