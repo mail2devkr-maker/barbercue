@@ -59,6 +59,32 @@ export class ResendEmailSender implements EmailSender {
     );
   }
 
+  async sendSalonOwnerInvitation(
+    email: string,
+    invitationUrl: string,
+    salonName: string,
+    expiresInDays: number,
+  ): Promise<'SENT'> {
+    const escape = (value: string) =>
+      value.replace(
+        /[&<>"']/g,
+        (character) =>
+          ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+          })[character] ?? character,
+      );
+    await this.send(
+      email,
+      'Confirm your FastQue shop ownership invitation',
+      `<p>A FastQue administrator invited you to manage ${escape(salonName)}. Accept only if this is your shop. This link expires in ${expiresInDays} days and works once.</p><p><a href="${escape(invitationUrl)}">Review invitation</a></p><p>If this was unexpected, ignore this message. No access has been granted yet.</p>`,
+    );
+    return 'SENT';
+  }
+
   private async send(to: string, subject: string, html: string): Promise<void> {
     this.assertAvailable();
     const apiKey = process.env.RESEND_API_KEY as string;
@@ -90,8 +116,9 @@ export class ResendEmailSender implements EmailSender {
       }
       // Provider error detail is safe to log (Resend's own message/name), never the recipient
       // address alongside it and never the email body (which carries the live reset/invite URL).
+      // Provider messages may echo a request URL; owner invitations contain a bearer secret.
       this.logger.error(
-        `Resend email delivery failed (HTTP ${response.status}): ${body?.message ?? body?.name ?? 'no response body'}`,
+        `Resend email delivery failed (HTTP ${response.status}): ${body?.name ?? 'provider error'}`,
       );
       throw this.deliveryUnavailable();
     }

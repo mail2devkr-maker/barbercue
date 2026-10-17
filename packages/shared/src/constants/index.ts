@@ -71,6 +71,7 @@ export const ADMIN_PATHS = {
   // admin/shops/:id (DELETE) — platform-admin shop removal, guarded server-side to only ever
   // succeed against a shop with zero bookings/staff/queue/reviews/ledger activity.
   shops: 'shops',
+  ownerAccess: 'owner-access',
   status: 'status',
   // Super-admin-only internal access management for co-founders / HR / sales.
   access: 'access',
@@ -84,6 +85,12 @@ export const ADMIN_PATHS = {
   leads: 'leads',
   visits: 'visits',
   followUps: 'follow-ups',
+} as const;
+
+export const OWNER_INVITATION_PATHS = {
+  root: 'owner-invitations',
+  accept: 'accept',
+  acceptExisting: 'accept-existing',
 } as const;
 
 // The ONLY place this wording is allowed to live — every surface that shows a Verified badge

@@ -521,6 +521,31 @@ export const revokeAdminAccessSchema = z.object({
 });
 export type RevokeAdminAccessInput = z.infer<typeof revokeAdminAccessSchema>;
 
+export const ownerAccessEmailSchema = z.string().trim().toLowerCase().email().max(320);
+export const ownerAccessReasonSchema = z.string().trim().min(10).max(1000);
+export const ownerAccessPreviewSchema = z.object({ email: ownerAccessEmailSchema });
+export type OwnerAccessPreviewInput = z.infer<typeof ownerAccessPreviewSchema>;
+export const ownerAccessMutationSchema = z.object({
+  email: ownerAccessEmailSchema,
+  expectedOwnerUserId: z.string().uuid(),
+  reason: ownerAccessReasonSchema,
+  transferConfirmed: z.boolean(),
+  totpCode: z.string().regex(/^\d{6}$/, 'Enter the current six-digit authenticator code'),
+});
+export type OwnerAccessMutationInput = z.infer<typeof ownerAccessMutationSchema>;
+export const acceptOwnerInvitationSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+  password: passwordSchema,
+  confirmPassword: passwordSchema,
+}).refine((value) => value.password === value.confirmPassword, {
+  message: 'Passwords do not match', path: ['confirmPassword'],
+});
+export type AcceptOwnerInvitationInput = z.infer<typeof acceptOwnerInvitationSchema>;
+export const acceptExistingOwnerInvitationSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type AcceptExistingOwnerInvitationInput = z.infer<typeof acceptExistingOwnerInvitationSchema>;
+
 export const adminLoginSchema = z.object({
   email: z.string().email(),
   password: passwordSchema,

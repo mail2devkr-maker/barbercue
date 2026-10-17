@@ -95,6 +95,57 @@ export interface AdminAccessUserDto {
   createdAt: string;
 }
 
+export interface OwnerAccessAccountDto {
+  id: string;
+  email: string | null;
+  status: UserStatus;
+  emailVerified: boolean;
+  hasOwnerRole: boolean;
+}
+
+export interface OwnerAccessInvitationDto {
+  id: string;
+  email: string;
+  status: 'PENDING' | 'ACCEPTED' | 'REVOKED' | 'EXPIRED';
+  expiresAt: string;
+  targetUserId: string | null;
+}
+
+export interface OwnerAccessShopDto {
+  id: string;
+  publicId: string;
+  name: string;
+  status: SalonStatus;
+  location: string;
+  owner: OwnerAccessAccountDto;
+  extraOwnerRoleCount: number;
+  invitation: OwnerAccessInvitationDto | null;
+}
+
+export interface OwnerAccessPreviewDto {
+  email: string;
+  account: Pick<OwnerAccessAccountDto, 'id' | 'status' | 'emailVerified'> | null;
+  action: 'ASSIGN_VERIFIED' | 'INVITE_EXISTING' | 'INVITE_NEW' | 'UNAVAILABLE';
+}
+
+export interface OwnerAccessMutationResultDto {
+  outcome: 'MAPPED' | 'ALREADY_MAPPED' | 'INVITATION_SENT' | 'INVITATION_CREATED';
+  shop: OwnerAccessShopDto;
+}
+
+export interface OwnerAccessAuditPageDto {
+  items: Array<{
+    id: string;
+    action: string;
+    actorUserId: string | null;
+    createdAt: string;
+    beforeOwnerUserId: string | null;
+    afterOwnerUserId: string | null;
+    reason: string | null;
+  }>;
+  nextCursor: string | null;
+}
+
 export interface AdminEmployeeDto extends EmployeeProfileDto {
   userId: string;
   status: UserStatus;

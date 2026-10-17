@@ -1,0 +1,6 @@
+.page{min-height:100vh;display:grid;place-items:center;background:#0b0b11;color:#f7f7fb;padding:22px}
+.card{width:min(520px,100%);box-sizing:border-box;background:#191923;border:1px solid #424252;border-radius:20px;padding:clamp(22px,4vw,36px)}
+.eyebrow{font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:#ff7797;font-weight:750}
+.card h1{font-size:clamp(1.9rem,5vw,2.7rem);margin:8px 0 18px}.card p{line-height:1.55;color:#cacad5}
+.card form{display:grid;gap:12px}.card label{font-weight:700}.card input{width:100%;box-sizing:border-box;min-height:46px;border:1px solid #555564;border-radius:10px;background:#0e0e16;color:#fff;padding:10px 12px;font:16px inherit}
+.links{display:flex;gap:8px;flex-wrap:wrap}.card a{color:#ffa4b9}.notice{background:#19392d;padding:12px;border-radius:10px}.error{background:#432029;color:#ffc0cf!important;padding:12px;border-radius:10px}
