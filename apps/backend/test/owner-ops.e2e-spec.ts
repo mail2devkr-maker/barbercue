@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
@@ -89,12 +89,23 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     return staff;
   }
 
-  async function createBookingAs(customerLabel: string, startIso: string, opts: { serviceIds?: string[]; staffId?: string } = {}) {
+  async function createBookingAs(
+    customerLabel: string,
+    startIso: string,
+    opts: {
+      serviceIds?: string[];
+      staffId?: string;
+      attributionToken?: string;
+    } = {},
+  ) {
     const res = await api('post', 'bookings', tok[customerLabel]).send({
       salonId: ids.salon,
       serviceIds: opts.serviceIds ?? [ids.haircut],
       slotStart: startIso,
       ...(opts.staffId ? { preferredStaffId: opts.staffId } : {}),
+      ...(opts.attributionToken
+        ? { attributionToken: opts.attributionToken }
+        : {}),
     });
     expect(res.status).toBe(201);
     return res.body as { id: string };
@@ -202,6 +213,8 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         `dashboard/salons/${ids.salon}/invoices`,
         `dashboard/salons/${ids.salon}/staff/me/work`,
         `dashboard/salons/${ids.salon}/search?q=ha`,
+        `dashboard/salons/${ids.salon}/booking-attribution/summary?from=${utcToZonedDateStr(new Date(), TZ)}&to=${utcToZonedDateStr(new Date(), TZ)}`,
+        `dashboard/salons/${ids.salon}/booking-attribution/campaigns`,
       ]) {
         await api('get', path, tok.cust1).expect(403);
       }
@@ -232,6 +245,212 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await api('patch', `dashboard/salons/${ids.salon}/queue/settings`, tok.ravi).send({ autoAssignEnabled: true }).expect(403);
       await api('patch', `dashboard/salons/${ids.salon}/contact-visibility`, tok.ravi).send({ showPhoneToCustomers: false }).expect(403);
       await api('post', `dashboard/salons/${ids.salon}/staff/${ids.sunilStaff}/access/revoke`, tok.ravi).send({}).expect(403);
+    });
+  });
+
+  // ------------------------------------------------------------------------------------------
+  describe('booking acquisition attribution', () => {
+    it('attributes only valid salon-scoped campaign tokens while preserving operational source', async () => {
+      const campaignPath = `dashboard/salons/${ids.salon}/booking-attribution/campaigns`;
+      const createdCampaign = await api('post', campaignPath, tok.owner)
+        .send({ source: 'FACEBOOK', label: `Local campaign ${run}` })
+        .expect(201);
+      const campaignId = createdCampaign.body.id as string;
+      const token = createdCampaign.body.token as string;
+      expect(token).toMatch(/^[A-Za-z0-9_-]{40,}$/);
+      expect(createdCampaign.body).not.toHaveProperty('tokenHash');
+
+      const storedCampaign =
+        await prisma.bookingAttributionCampaign.findUniqueOrThrow({
+          where: { id: campaignId },
+        });
+      expect(storedCampaign.tokenHash).toBe(
+        createHash('sha256').update(token, 'utf8').digest('hex'),
+      );
+      expect(storedCampaign.tokenHash).not.toBe(token);
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        where: {
+          action: 'BOOKING_ATTRIBUTION_CAMPAIGN_CREATED',
+          entityId: campaignId,
+        },
+      });
+      expect(JSON.stringify(audit.metadata)).not.toContain(token);
+
+      const booking = await createBookingAs('cust1', slot('10:00', 2), {
+        attributionToken: token,
+      });
+      const storedBooking = await prisma.booking.findUniqueOrThrow({
+        where: { id: booking.id },
+      });
+      expect(storedBooking.source).toBe('WEB');
+      expect(storedBooking.attributionCampaignId).toBe(campaignId);
+
+      const attributedBookings = await api(
+        'get',
+        `dashboard/salons/${ids.salon}/bookings?filter=all&source=FACEBOOK`,
+        tok.owner,
+      ).expect(200);
+      expect(
+        attributedBookings.body.items.map((row: { id: string }) => row.id),
+      ).toContain(booking.id);
+      const webBookings = await api(
+        'get',
+        `dashboard/salons/${ids.salon}/bookings?filter=all&source=FASTQUE_WEB`,
+        tok.owner,
+      ).expect(200);
+      expect(
+        webBookings.body.items.map((row: { id: string }) => row.id),
+      ).not.toContain(booking.id);
+      const ownerRow = attributedBookings.body.items.find(
+        (row: { id: string }) => row.id === booking.id,
+      );
+      expect(ownerRow.attributionSource).toBe('FACEBOOK');
+
+      const today = utcToZonedDateStr(new Date(), TZ);
+      const summary = await api(
+        'get',
+        `dashboard/salons/${ids.salon}/booking-attribution/summary?from=${today}&to=${today}&source=FACEBOOK`,
+        tok.owner,
+      ).expect(200);
+      expect(summary.body.timezone).toBe(TZ);
+      expect(summary.body.bySource).toEqual([
+        { source: 'FACEBOOK', bookingCount: 1 },
+      ]);
+      expect(summary.body.campaigns).toEqual([
+        expect.objectContaining({
+          campaignId,
+          source: 'FACEBOOK',
+          bookingCount: 1,
+        }),
+      ]);
+
+      await api('post', campaignPath, tok.outsider)
+        .send({ source: 'CHATGPT', label: 'Cross-salon attempt' })
+        .expect(403);
+      await api(
+        'get',
+        `dashboard/salons/${ids.salon}/booking-attribution/campaigns`,
+        tok.outsider,
+      ).expect(403);
+    });
+
+    it('ignores invalid, expired, revoked, and cross-salon tokens without blocking booking creation', async () => {
+      const campaignPath = `dashboard/salons/${ids.salon}/booking-attribution/campaigns`;
+      const expired = await api('post', campaignPath, tok.owner)
+        .send({
+          source: 'INSTAGRAM',
+          label: `Expired ${run}`,
+          startsAt: new Date(Date.now() - 60_000).toISOString(),
+          endsAt: new Date(Date.now() - 1).toISOString(),
+        })
+        .expect(201);
+      const revoked = await api('post', campaignPath, tok.owner)
+        .send({ source: 'OTHER', label: `Revoked ${run}` })
+        .expect(201);
+      await api(
+        'post',
+        `${campaignPath}/${revoked.body.id}/revoke`,
+        tok.owner,
+      ).expect(201);
+      await api(
+        'post',
+        `${campaignPath}/${revoked.body.id}/revoke`,
+        tok.owner,
+      ).expect(201);
+      expect(
+        await prisma.auditLog.count({
+          where: {
+            action: 'BOOKING_ATTRIBUTION_CAMPAIGN_REVOKED',
+            entityId: revoked.body.id,
+          },
+        }),
+      ).toBe(1);
+
+      const invalid = await createBookingAs('cust2', slot('10:00', 3), {
+        attributionToken: randomUUID().replaceAll('-', '').repeat(2),
+      });
+      const expiredBooking = await createBookingAs('cust2', slot('11:00', 3), {
+        attributionToken: expired.body.token,
+      });
+      const revokedBooking = await createBookingAs('cust2', slot('12:00', 3), {
+        attributionToken: revoked.body.token,
+      });
+      const otherSalonCampaign = await api(
+        'post',
+        `dashboard/salons/${ids.otherSalon}/booking-attribution/campaigns`,
+        tok.outsider,
+      )
+        .send({ source: 'FACEBOOK', label: `Other salon ${run}` })
+        .expect(201);
+      const crossSalonBooking = await createBookingAs(
+        'cust2',
+        slot('13:00', 3),
+        {
+          attributionToken: otherSalonCampaign.body.token,
+        },
+      );
+
+      for (const bookingId of [
+        invalid.id,
+        expiredBooking.id,
+        revokedBooking.id,
+        crossSalonBooking.id,
+      ]) {
+        const row = await prisma.booking.findUniqueOrThrow({
+          where: { id: bookingId },
+        });
+        expect(row.source).toBe('WEB');
+        expect(row.attributionCampaignId).toBeNull();
+      }
+      await expect(
+        prisma.booking.update({
+          where: { id: invalid.id },
+          data: { attributionCampaignId: otherSalonCampaign.body.id },
+        }),
+      ).rejects.toMatchObject({ code: 'P2003' });
+      expect(
+        (await prisma.booking.findUniqueOrThrow({ where: { id: invalid.id } }))
+          .attributionCampaignId,
+      ).toBeNull();
+    });
+
+    it('serializes booking attribution against concurrent campaign revocation', async () => {
+      const campaign = await api(
+        'post',
+        `dashboard/salons/${ids.salon}/booking-attribution/campaigns`,
+        tok.owner,
+      )
+        .send({ source: 'CHATGPT', label: `Race ${run}` })
+        .expect(201);
+      const [booking, revoked] = await Promise.all([
+        createBookingAs('cust1', slot('14:00', 4), {
+          attributionToken: campaign.body.token,
+        }),
+        api(
+          'post',
+          `dashboard/salons/${ids.salon}/booking-attribution/campaigns/${campaign.body.id}/revoke`,
+          tok.owner,
+        ).expect(201),
+      ]);
+      expect(revoked.body.revokedAt).not.toBeNull();
+      const stored = await prisma.booking.findUniqueOrThrow({
+        where: { id: booking.id },
+      });
+      expect([null, campaign.body.id]).toContain(stored.attributionCampaignId);
+      expect(stored.source).toBe('WEB');
+    });
+
+    it('rejects malformed campaign filters and bounds campaign pagination', async () => {
+      await api(
+        'get',
+        `dashboard/salons/${ids.salon}/booking-attribution/summary?from=2026-10-17&to=2026-10-17&source=UNKNOWN_GUESS`,
+        tok.owner,
+      ).expect(400);
+      await api(
+        'get',
+        `dashboard/salons/${ids.salon}/booking-attribution/campaigns?limit=1000`,
+        tok.owner,
+      ).expect(400);
     });
   });
 
@@ -912,9 +1131,18 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     const SALON = () => `dashboard/salons/${ids.salon}`;
 
     /** A booking that went through the real flow: booked -> arrived -> seated -> completed. */
-    async function completedBooking(customerLabel = 'cust1'): Promise<string> {
+    async function completedBooking(
+      customerLabel = 'cust1',
+      attributionToken?: string,
+    ): Promise<string> {
       const start = new Date(Date.now() + 2 * 60_000); // inside the 15-minute check-in window
-      const booking = await createBookingAs(customerLabel, start.toISOString());
+      const booking = await createBookingAs(
+        customerLabel,
+        start.toISOString(),
+        {
+          attributionToken,
+        },
+      );
       return finishBooking(booking.id);
     }
     async function finishBooking(bookingId: string): Promise<string> {
@@ -1171,7 +1399,8 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         estimateBasis: 'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE',
         cashSource: 'SHOP_RECORDED_INVOICE_PAYMENT_LEDGER',
         serviceCashAllocation: 'PRO_RATA_BY_INVOICE_LINE_TOTAL',
-        externalAttribution: 'NOT_CAPTURED_BY_EXISTING_SOURCE_FIELDS',
+        externalAttribution:
+          'CAMPAIGN_TOKEN_WHEN_PRESENT_LEGACY_SOURCE_PROJECTION_OTHERWISE',
       });
       expect(report.byService).toEqual(expect.arrayContaining([
         expect.objectContaining({ label: 'Haircut', completedVisits: expect.any(Number) }),
@@ -1220,16 +1449,90 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
       await api('get', path, tok.ravi).expect(403);
       await api('get', path, tok.outsider).expect(403);
-      await api('get', `${SALON()}/revenue/report?from=${to}&to=${from}`, tok.owner).expect(400);
-      await api('get', `${SALON()}/revenue/report?from=2020-01-01&to=2022-01-01`, tok.owner).expect(400);
-      await api('get', `${SALON()}/revenue/report?from=${from}&to=${to}&source=FACEBOOK`, tok.owner).expect(400);
+      await api(
+        'get',
+        `${SALON()}/revenue/report?from=${to}&to=${from}`,
+        tok.owner,
+      ).expect(400);
+      await api(
+        'get',
+        `${SALON()}/revenue/report?from=2020-01-01&to=2022-01-01`,
+        tok.owner,
+      ).expect(400);
+      await api(
+        'get',
+        `${SALON()}/revenue/report?from=${from}&to=${to}&source=NOT_A_SUPPORTED_CHANNEL`,
+        tok.owner,
+      ).expect(400);
 
-      const csv = await api('get', `${SALON()}/revenue/report.csv?from=${from}&to=${to}&groupBy=day`, tok.owner).expect(200);
+      const csv = await api(
+        'get',
+        `${SALON()}/revenue/report.csv?from=${from}&to=${to}&groupBy=day`,
+        tok.owner,
+      ).expect(200);
       expect(csv.headers['content-type']).toContain('text/csv');
       expect(csv.headers['content-disposition']).toContain(`fastque-revenue-${from}-${to}.csv`);
       expect(csv.text).toContain('recorded_collections');
       expect(csv.text).toContain('SERVICE');
       expect(csv.text).not.toContain(phone(1));
+    });
+
+    it('filters completed visits, issued invoices and recorded collections by verified campaign attribution', async () => {
+      const today = utcToZonedDateStr(new Date(), TZ);
+      const directBefore = (
+        await api(
+          'get',
+          `${SALON()}/revenue/report?from=${today}&to=${today}&source=WEB`,
+          tok.owner,
+        ).expect(200)
+      ).body;
+      const campaign = await api(
+        'post',
+        `${SALON()}/booking-attribution/campaigns`,
+        tok.owner,
+      )
+        .send({ source: 'INSTAGRAM', label: `Revenue attribution ${run}` })
+        .expect(201);
+      const bookingId = await completedBooking('cust2', campaign.body.token);
+      const booking = await prisma.booking.findUniqueOrThrow({
+        where: { id: bookingId },
+      });
+      expect(booking.source).toBe('WEB');
+      expect(booking.attributionCampaignId).toBe(campaign.body.id);
+
+      const invoice = await issue({ bookingId }).expect(201);
+      await api(
+        'post',
+        `${SALON()}/invoices/${invoice.body.id}/payments`,
+        tok.owner,
+      )
+        .send({ method: 'UPI', amount: invoice.body.total })
+        .expect(201);
+
+      const attributed = await api(
+        'get',
+        `${SALON()}/revenue/report?from=${today}&to=${today}&source=INSTAGRAM`,
+        tok.owner,
+      ).expect(200);
+      expect(attributed.body.totals).toMatchObject({
+        completedVisits: 1,
+        invoiceCount: 1,
+        recordedCollections: invoice.body.total,
+        refunds: 0,
+      });
+      expect(attributed.body.source).toBe('INSTAGRAM');
+
+      const directOnly = await api(
+        'get',
+        `${SALON()}/revenue/report?from=${today}&to=${today}&source=WEB`,
+        tok.owner,
+      ).expect(200);
+      expect(directOnly.body.totals).toMatchObject({
+        completedVisits: directBefore.totals.completedVisits,
+        invoiceCount: directBefore.totals.invoiceCount,
+        recordedCollections: directBefore.totals.recordedCollections,
+        refunds: directBefore.totals.refunds,
+      });
     });
   });
 });

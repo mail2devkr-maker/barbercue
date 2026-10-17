@@ -5,6 +5,8 @@ import { PushNotificationsModule } from '../push-notifications/push-notification
 import { QueueModule } from '../queue/queue.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { CancellationAnalyticsService } from './cancellation-analytics.service';
+import { BookingAttributionController } from './booking-attribution.controller';
+import { BookingAttributionService } from './booking-attribution.service';
 import { InvoicesService } from './invoices.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import { RevenueReportService } from './revenue-report.service';
@@ -36,9 +38,14 @@ import { StaffWorkService } from './staff-work.service';
     NotificationDeliveryModule,
     PushNotificationsModule,
   ],
-  controllers: [OwnerOpsController, CustomerInvoicesController],
+  controllers: [
+    OwnerOpsController,
+    CustomerInvoicesController,
+    BookingAttributionController,
+  ],
   providers: [
     CancellationAnalyticsService,
+    BookingAttributionService,
     InvoicesService,
     OwnerOverviewService,
     RevenueReportService,

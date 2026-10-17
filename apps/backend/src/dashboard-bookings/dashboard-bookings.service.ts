@@ -3,6 +3,9 @@ import { Prisma } from '@prisma/client';
 import {
   ARRIVAL_ALERT_LEAD_MINUTES,
   BookingErrorCode,
+  BookingAttributionSource,
+  BOOKING_ATTRIBUTION_SOURCES,
+  BookingSource,
   BookingStatus,
   OWNER_BOOKING_FILTERS,
   decimalStringToPaise,
@@ -11,6 +14,7 @@ import {
   type BookingServiceItemDto,
   type CancellationPolicyDto,
   type OwnerBookingDetailDto,
+  type BookingAttributionSource as BookingAttributionSourceType,
   type OwnerBookingFilter,
   type PaginatedResult,
 } from '@barbercue/shared';
@@ -64,6 +68,7 @@ const ownerBookingInclude = {
   },
   // Phase 16 (Ratings & Reviews) — id only, same as bookings.service.ts's own bookingDetailInclude.
   reviews: { select: { id: true } },
+  attributionCampaign: { select: { source: true } },
 } satisfies Prisma.BookingInclude;
 
 type OwnerBookingWithDetails = Prisma.BookingGetPayload<{
@@ -87,10 +92,12 @@ export class DashboardBookingsService {
     from: string | undefined,
     to: string | undefined,
     date?: string,
+    sourceRaw?: string,
   ): Promise<PaginatedResult<OwnerBookingDetailDto>> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
 
     const filter = this.resolveFilter(filterRaw);
+    const attributionSource = this.resolveAttributionSource(sourceRaw);
     const limit = this.resolveLimit(limitRaw);
     if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new AppException(
@@ -102,6 +109,7 @@ export class DashboardBookingsService {
 
     const where: Prisma.BookingWhereInput = {
       salonId,
+      ...(attributionSource ? this.attributionWhere(attributionSource) : {}),
       ...(await this.filterWhere(filter, salonId)),
     };
     // `date` (the day scheduler) takes precedence over raw from/to — both exist to scope
@@ -176,6 +184,60 @@ export class DashboardBookingsService {
       );
     }
     return filterRaw as OwnerBookingFilter;
+  }
+
+  private resolveAttributionSource(
+    sourceRaw: string | undefined,
+  ): BookingAttributionSourceType | undefined {
+    if (!sourceRaw) return undefined;
+    if (
+      !(BOOKING_ATTRIBUTION_SOURCES as readonly string[]).includes(sourceRaw)
+    ) {
+      throw new AppException(
+        BookingErrorCode.INVALID_FILTER,
+        'Unknown booking attribution source.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return sourceRaw as BookingAttributionSourceType;
+  }
+
+  private attributionWhere(
+    source: BookingAttributionSourceType,
+  ): Prisma.BookingWhereInput {
+    switch (source) {
+      case BookingAttributionSource.FASTQUE_WEB:
+        return { source: BookingSource.WEB, attributionCampaignId: null };
+      case BookingAttributionSource.FASTQUE_APP:
+        return { source: BookingSource.APP, attributionCampaignId: null };
+      case BookingAttributionSource.WALK_IN:
+        return { source: BookingSource.WALK_IN, attributionCampaignId: null };
+      case BookingAttributionSource.IN_SHOP:
+        return { source: BookingSource.IN_SHOP, attributionCampaignId: null };
+      case BookingAttributionSource.FACEBOOK:
+      case BookingAttributionSource.INSTAGRAM:
+      case BookingAttributionSource.CHATGPT:
+      case BookingAttributionSource.OTHER:
+        return {
+          attributionCampaign: {
+            is: {
+              source,
+            },
+          },
+        };
+      case BookingAttributionSource.UNKNOWN:
+        return {
+          attributionCampaignId: null,
+          source: {
+            notIn: [
+              BookingSource.APP,
+              BookingSource.WEB,
+              BookingSource.WALK_IN,
+              BookingSource.IN_SHOP,
+            ],
+          },
+        };
+    }
   }
 
   private resolveLimit(limitRaw: string | undefined): number {
@@ -281,6 +343,9 @@ export class DashboardBookingsService {
       slotEnd: booking.slotEnd.toISOString(),
       status: booking.status,
       source: booking.source,
+      attributionSource:
+        booking.attributionCampaign?.source ??
+        this.projectBookingSource(booking.source),
       preferredStaffId: booking.preferredStaffId,
       prepaymentRequiredAmount:
         booking.prepaymentRequiredAmount !== null
@@ -368,5 +433,20 @@ export class DashboardBookingsService {
       arrivalAlertDue,
       noShowEligible,
     };
+  }
+
+  private projectBookingSource(source: string): BookingAttributionSourceType {
+    switch (source) {
+      case BookingSource.WEB:
+        return BookingAttributionSource.FASTQUE_WEB;
+      case BookingSource.APP:
+        return BookingAttributionSource.FASTQUE_APP;
+      case BookingSource.WALK_IN:
+        return BookingAttributionSource.WALK_IN;
+      case BookingSource.IN_SHOP:
+        return BookingAttributionSource.IN_SHOP;
+      default:
+        return BookingAttributionSource.UNKNOWN;
+    }
   }
 }

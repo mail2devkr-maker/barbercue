@@ -1,4 +1,5 @@
 import type {
+  BookingAttributionSource,
   BookingSource,
   BookingStatus,
   ChairStatus,
@@ -726,6 +727,8 @@ export type OwnerBookingFilter = (typeof OWNER_BOOKING_FILTERS)[number];
 export interface OwnerBookingDetailDto extends BookingDetailDto {
   customerPhone: string | null;
   customerEmail: string | null;
+  /** Server-derived marketing attribution; absent on older responses. */
+  attributionSource?: BookingAttributionSource;
   // Owner-operations mission — in-shop appointment provenance and trusted cancellation
   // attribution. All optional/nullable so an older client that predates them keeps working.
   // guestName/guestPhone are set only on BookingSource.IN_SHOP rows; internalNote is staff-only.

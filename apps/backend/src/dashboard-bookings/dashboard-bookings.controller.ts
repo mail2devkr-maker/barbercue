@@ -30,6 +30,7 @@ export class DashboardBookingsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('date') date?: string,
+    @Query('source') source?: string,
   ) {
     return this.bookingsService.list(
       user.id,
@@ -40,6 +41,7 @@ export class DashboardBookingsController {
       from,
       to,
       date,
+      source,
     );
   }
 
