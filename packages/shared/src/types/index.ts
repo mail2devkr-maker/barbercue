@@ -5,6 +5,7 @@ import type {
   ChairStatus,
   ChargeType,
   CreditFundingSource,
+  ContactImportValidationStatus,
   CreditTransactionType,
   CrmFollowUpChannel,
   CrmFollowUpStatus,
@@ -1598,6 +1599,26 @@ export interface SalonPhotoActivationReadinessDto {
   ready: boolean;
   grandfathered: boolean;
   reasons: Array<'THREE_VALID_PHOTOS_REQUIRED'>;
+}
+
+export interface SalonContactImportPreviewDto {
+  previewOnly: true;
+  invitationEligibility: 'NOT_EVALUATED';
+  dispatchEnabled: false;
+  dispatchBlockedReason: 'CONSENT_SUPPRESSION_AND_PROVIDER_GATES_REQUIRED';
+  summary: {
+    total: number;
+    validatedForReview: number;
+    invalidPhone: number;
+    consentRequired: number;
+    consentEvidenceIncomplete: number;
+    consentTimestampInvalid: number;
+    duplicateInBatch: number;
+  };
+  items: Array<{
+    index: number;
+    status: ContactImportValidationStatus;
+  }>;
 }
 
 // ---------- Platform admin monitoring ----------

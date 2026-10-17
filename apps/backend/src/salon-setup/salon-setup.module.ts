@@ -13,6 +13,8 @@ import { SalonTimezoneService } from './salon-timezone.service';
 import { SalonPaymentQrService } from './salon-payment-qr.service';
 import { SalonProfileService } from './salon-profile.service';
 import { SalonLocationService } from './salon-location.service';
+import { SalonContactImportPreviewController } from './salon-contact-import-preview.controller';
+import { SalonContactImportPreviewService } from './salon-contact-import-preview.service';
 import { StorageModule } from '../storage/storage.module';
 import { AssignmentReleaseModule } from '../queue/assignment-release.module';
 
@@ -23,7 +25,7 @@ import { AssignmentReleaseModule } from '../queue/assignment-release.module';
   // StorageModule provides ObjectStorageService, which SalonPhotosService/SalonPaymentQrService
   // use to put owner-uploaded images into S3-compatible object storage (Cloudflare R2 for V1).
   imports: [AuthModule, StorageModule, AssignmentReleaseModule],
-  controllers: [SalonSetupController],
+  controllers: [SalonSetupController, SalonContactImportPreviewController],
   providers: [
     SalonServicesService,
     ServiceCatalogImportService,
@@ -37,6 +39,7 @@ import { AssignmentReleaseModule } from '../queue/assignment-release.module';
     SalonPaymentQrService,
     SalonProfileService,
     SalonLocationService,
+    SalonContactImportPreviewService,
   ],
   exports: [SalonActivationService, SalonLocationService],
 })

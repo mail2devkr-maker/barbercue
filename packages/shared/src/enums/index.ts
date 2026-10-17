@@ -598,6 +598,28 @@ export const VerificationSubjectType = {
 export type VerificationSubjectType =
   (typeof VerificationSubjectType)[keyof typeof VerificationSubjectType];
 
+// Contact-list import preview only. These attestations are not independently verified consent.
+export const ContactConsentSource = {
+  OWNER_ATTESTED: 'OWNER_ATTESTED',
+  IN_PERSON: 'IN_PERSON',
+  VERBAL: 'VERBAL',
+  WRITTEN: 'WRITTEN',
+  WEBSITE_FORM: 'WEBSITE_FORM',
+} as const;
+export type ContactConsentSource =
+  (typeof ContactConsentSource)[keyof typeof ContactConsentSource];
+
+export const ContactImportValidationStatus = {
+  VALIDATED_FOR_REVIEW: 'VALIDATED_FOR_REVIEW',
+  INVALID_PHONE: 'INVALID_PHONE',
+  CONSENT_REQUIRED: 'CONSENT_REQUIRED',
+  CONSENT_EVIDENCE_INCOMPLETE: 'CONSENT_EVIDENCE_INCOMPLETE',
+  CONSENT_TIMESTAMP_INVALID: 'CONSENT_TIMESTAMP_INVALID',
+  DUPLICATE_IN_BATCH: 'DUPLICATE_IN_BATCH',
+} as const;
+export type ContactImportValidationStatus =
+  (typeof ContactImportValidationStatus)[keyof typeof ContactImportValidationStatus];
+
 // NOT_SUBMITTED is never a stored value — see VerificationRequest's own doc comment: absence of a
 // row IS "not submitted," the same "no row = default" convention used elsewhere in this schema.
 export const VerificationStatus = {
