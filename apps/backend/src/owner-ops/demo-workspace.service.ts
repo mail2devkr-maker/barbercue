@@ -103,7 +103,8 @@ export class DemoWorkspaceService {
           where: { salonId },
         });
         if (existing) {
-          const dataset = existing.payload as unknown as DemoWorkspaceDatasetDto;
+          const dataset =
+            existing.payload as unknown as DemoWorkspaceDatasetDto;
           await tx.ownerDemoWorkspaceAudit.create({
             data: {
               salonId,

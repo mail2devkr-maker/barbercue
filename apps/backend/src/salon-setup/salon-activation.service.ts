@@ -78,7 +78,8 @@ export class SalonActivationService {
         ? { isClosedForToday: true }
         : {
             status:
-              salon.status === SalonStatus.PENDING || salon.status === SalonStatus.SUSPENDED
+              salon.status === SalonStatus.PENDING ||
+              salon.status === SalonStatus.SUSPENDED
                 ? SalonStatus.ACTIVE
                 : salon.status,
             isClosedForToday: false,
@@ -103,7 +104,11 @@ export class SalonActivationService {
     await this.salonAccess.assertPlatformAdminAccess(adminUserId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { id: true, status: true, shopPhotoRequirementGrandfathered: true },
+      select: {
+        id: true,
+        status: true,
+        shopPhotoRequirementGrandfathered: true,
+      },
     });
     if (!salon) {
       throw new AppException(
@@ -114,9 +119,12 @@ export class SalonActivationService {
     }
 
     const allowed =
-      (salon.status === SalonStatus.PENDING && input.status === SalonStatus.ACTIVE) ||
-      (salon.status === SalonStatus.ACTIVE && input.status === SalonStatus.SUSPENDED) ||
-      (salon.status === SalonStatus.SUSPENDED && input.status === SalonStatus.ACTIVE);
+      (salon.status === SalonStatus.PENDING &&
+        input.status === SalonStatus.ACTIVE) ||
+      (salon.status === SalonStatus.ACTIVE &&
+        input.status === SalonStatus.SUSPENDED) ||
+      (salon.status === SalonStatus.SUSPENDED &&
+        input.status === SalonStatus.ACTIVE);
     if (!allowed) {
       throw new AppException(
         'SALON_STATUS_TRANSITION_INVALID',
@@ -136,7 +144,11 @@ export class SalonActivationService {
         async (tx) => {
           const current = await tx.salon.findUnique({
             where: { id: salonId },
-            select: { id: true, status: true, shopPhotoRequirementGrandfathered: true },
+            select: {
+              id: true,
+              status: true,
+              shopPhotoRequirementGrandfathered: true,
+            },
           });
           if (!current || current.status !== salon.status) {
             throw new AppException(
@@ -145,16 +157,24 @@ export class SalonActivationService {
               HttpStatus.CONFLICT,
             );
           }
-          if (current.status === SalonStatus.PENDING && input.status === SalonStatus.ACTIVE) {
+          if (
+            current.status === SalonStatus.PENDING &&
+            input.status === SalonStatus.ACTIVE
+          ) {
             await this.assertReadyToOpen(salonId, tx);
-            await this.assertPhotoReadyToActivate(salonId, current.shopPhotoRequirementGrandfathered, tx);
+            await this.assertPhotoReadyToActivate(
+              salonId,
+              current.shopPhotoRequirementGrandfathered,
+              tx,
+            );
           }
           const updated = await tx.salon.update({
             where: { id: salonId },
             data: {
               status: input.status,
               isClosedForToday: false,
-              ...(input.status === SalonStatus.ACTIVE || current.status === SalonStatus.ACTIVE
+              ...(input.status === SalonStatus.ACTIVE ||
+              current.status === SalonStatus.ACTIVE
                 ? { shopPhotoRequirementGrandfathered: true }
                 : {}),
             },
@@ -165,7 +185,10 @@ export class SalonActivationService {
               action,
               entityType: 'Salon',
               entityId: salonId,
-              metadata: { previousStatus: salon.status, newStatus: input.status },
+              metadata: {
+                previousStatus: salon.status,
+                newStatus: input.status,
+              },
             },
           });
           return { id: updated.id, status: updated.status };
@@ -187,37 +210,79 @@ export class SalonActivationService {
       select: { status: true, shopPhotoRequirementGrandfathered: true },
     });
     if (!salon) {
-      throw new AppException(BookingErrorCode.SALON_NOT_FOUND, 'Salon not found.', HttpStatus.NOT_FOUND);
+      throw new AppException(
+        BookingErrorCode.SALON_NOT_FOUND,
+        'Salon not found.',
+        HttpStatus.NOT_FOUND,
+      );
     }
-    const grandfathered = this.isGrandfathered(salon.status, salon.shopPhotoRequirementGrandfathered);
-    const photos = await this.prisma.photo.findMany({ where: { salonId }, select: { url: true } });
+    const grandfathered = this.isGrandfathered(
+      salon.status,
+      salon.shopPhotoRequirementGrandfathered,
+    );
+    const photos = await this.prisma.photo.findMany({
+      where: { salonId },
+      select: { url: true },
+    });
     return this.toPhotoReadiness(photos, grandfathered);
   }
 
-  private async activatePendingSalon(salonId: string, ownerUserId: string): Promise<SalonStatusResultDto> {
+  private async activatePendingSalon(
+    salonId: string,
+    ownerUserId: string,
+  ): Promise<SalonStatusResultDto> {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
           const current = await tx.salon.findUnique({
             where: { id: salonId },
-            select: { id: true, ownerUserId: true, status: true, shopPhotoRequirementGrandfathered: true },
+            select: {
+              id: true,
+              ownerUserId: true,
+              status: true,
+              shopPhotoRequirementGrandfathered: true,
+            },
           });
           if (!current) {
-            throw new AppException(BookingErrorCode.SALON_NOT_FOUND, 'Salon not found.', HttpStatus.NOT_FOUND);
+            throw new AppException(
+              BookingErrorCode.SALON_NOT_FOUND,
+              'Salon not found.',
+              HttpStatus.NOT_FOUND,
+            );
           }
           if (current.ownerUserId !== ownerUserId) {
-            throw new AppException('SALON_ACCESS_DENIED', 'You do not have access to this shop.', HttpStatus.FORBIDDEN);
+            throw new AppException(
+              'SALON_ACCESS_DENIED',
+              'You do not have access to this shop.',
+              HttpStatus.FORBIDDEN,
+            );
           }
           if (current.status !== SalonStatus.PENDING) {
-            throw new AppException('SALON_STATUS_TRANSITION_CONFLICT', 'Shop status changed. Refresh and try again.', HttpStatus.CONFLICT);
+            throw new AppException(
+              'SALON_STATUS_TRANSITION_CONFLICT',
+              'Shop status changed. Refresh and try again.',
+              HttpStatus.CONFLICT,
+            );
           }
           await this.assertReadyToOpen(salonId, tx);
-          await this.assertPhotoReadyToActivate(salonId, current.shopPhotoRequirementGrandfathered, tx);
+          await this.assertPhotoReadyToActivate(
+            salonId,
+            current.shopPhotoRequirementGrandfathered,
+            tx,
+          );
           const updated = await tx.salon.update({
             where: { id: salonId },
-            data: { status: SalonStatus.ACTIVE, isClosedForToday: false, shopPhotoRequirementGrandfathered: true },
+            data: {
+              status: SalonStatus.ACTIVE,
+              isClosedForToday: false,
+              shopPhotoRequirementGrandfathered: true,
+            },
           });
-          return { id: updated.id, status: updated.status, isClosedForToday: updated.isClosedForToday };
+          return {
+            id: updated.id,
+            status: updated.status,
+            isClosedForToday: updated.isClosedForToday,
+          };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
@@ -234,7 +299,10 @@ export class SalonActivationService {
     // This method is called only for PENDING activation. A legacy PENDING shop is not covered
     // by the ACTIVE/SUSPENDED grandfathering exception.
     if (marker === true) return;
-    const photos = await db.photo.findMany({ where: { salonId }, select: { url: true } });
+    const photos = await db.photo.findMany({
+      where: { salonId },
+      select: { url: true },
+    });
     const readiness = this.toPhotoReadiness(photos, false);
     if (readiness.ready) return;
     throw new AppException(
@@ -245,7 +313,10 @@ export class SalonActivationService {
     );
   }
 
-  private toPhotoReadiness(photos: Array<{ url: string }>, grandfathered: boolean): SalonPhotoActivationReadinessDto {
+  private toPhotoReadiness(
+    photos: Array<{ url: string }>,
+    grandfathered: boolean,
+  ): SalonPhotoActivationReadinessDto {
     const unique = new Set<string>();
     for (const photo of photos) {
       const parsed = salonPhotoUrlSchema.safeParse(photo.url);
@@ -257,16 +328,31 @@ export class SalonActivationService {
     }
     const current = unique.size;
     const ready = grandfathered || current >= 3;
-    return { required: 3, current, ready, grandfathered, reasons: ready ? [] : ['THREE_VALID_PHOTOS_REQUIRED'] };
+    return {
+      required: 3,
+      current,
+      ready,
+      grandfathered,
+      reasons: ready ? [] : ['THREE_VALID_PHOTOS_REQUIRED'],
+    };
   }
 
-  private isGrandfathered(status: SalonStatus, marker: boolean | null): boolean {
-    return marker === true ||
-      (marker === null && (status === SalonStatus.ACTIVE || status === SalonStatus.SUSPENDED));
+  private isGrandfathered(
+    status: SalonStatus,
+    marker: boolean | null,
+  ): boolean {
+    return (
+      marker === true ||
+      (marker === null &&
+        (status === SalonStatus.ACTIVE || status === SalonStatus.SUSPENDED))
+    );
   }
 
   private rethrowPhotoActivationConflict(error: unknown): never {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2034'
+    ) {
       throw new AppException(
         'SALON_ACTIVATION_REQUIREMENTS_CHANGED',
         'Shop setup changed while activation was in progress. Refresh and try again.',

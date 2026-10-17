@@ -95,7 +95,15 @@ export class SalonDescriptionService {
       draft.length <= SALON_DESCRIPTION_SUGGESTION_LIMITS.maxDraftLength &&
       !/[<>]/.test(draft) &&
       !/(https?:\/\/|www\.)/i.test(draft) &&
-      !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(draft);
+      !Array.from(draft).some((character) => {
+        const code = character.charCodeAt(0);
+        return (
+          (code >= 0x00 && code <= 0x08) ||
+          code === 0x0b ||
+          code === 0x0c ||
+          (code >= 0x0e && code <= 0x1f)
+        );
+      });
     if (!valid) {
       throw new AppException(
         SalonDescriptionErrorCode.INVALID_PROVIDER_RESPONSE,
