@@ -1,3 +1,5 @@
+import type { CapabilityMap, FeatureKey } from "../../lib/capabilities";
+import { isUsable } from "../../lib/capabilities";
 import type { IconName } from "./icons";
 
 // The ONE definition of the owner/staff dashboard's navigation. The sidebar, the icon rail, the
@@ -25,6 +27,8 @@ export interface NavItem {
   /** Open `href` in a new tab so the dashboard (and its session) stays exactly where it was. */
   newTab?: boolean;
   badge?: NavBadge;
+  /** Listed only when the server says this feature is usable for the shop (see lib/capabilities.ts). */
+  requiresFeature?: FeatureKey;
   /** Short description used by global search ("Open Analytics..."). */
   keywords?: string[];
 }
@@ -60,6 +64,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
 
   { id: "services", label: "Services", icon: "tag", group: "SHOP", audience: "owner", path: "services", keywords: ["prices", "menu"] },
   { id: "settings", label: "Shop Settings", icon: "settings", group: "SHOP", audience: "owner", path: "settings", keywords: ["profile", "timezone"] },
+  { id: "demo-data", label: "Demo Data", icon: "eye", group: "SHOP", audience: "owner", path: "demo", requiresFeature: "demoData", keywords: ["sample data", "try", "practice"] },
   { id: "hours", label: "Working Hours", icon: "clock", group: "SHOP", audience: "owner", path: "hours", keywords: ["opening", "closing"] },
   { id: "chairs", label: "Chairs", icon: "chair", group: "SHOP", audience: "owner", path: "chairs", keywords: ["seats"] },
   { id: "payment-qr", label: "Payment QR", icon: "qr", group: "SHOP", audience: "owner", path: "payment-qr", keywords: ["upi", "scan"] },
@@ -72,8 +77,10 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
 ];
 
 /** Items a given kind of user may see (presentation only - every API re-checks on the server). */
-export function navItemsFor(kind: "owner" | "staff"): NavItem[] {
-  return NAV_ITEMS.filter((item) => item.audience === "both" || item.audience === kind);
+export function navItemsFor(kind: "owner" | "staff", features: CapabilityMap = {}): NavItem[] {
+  return NAV_ITEMS.filter(
+    (item) => (item.audience === "both" || item.audience === kind) && (!item.requiresFeature || isUsable(features, item.requiresFeature)),
+  );
 }
 
 export function hrefFor(item: NavItem, salonId: string): string {
