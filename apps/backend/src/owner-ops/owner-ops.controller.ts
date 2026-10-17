@@ -23,6 +23,7 @@ import {
   createInShopBookingSchema,
   createInvoiceSchema,
   createQueueCustomerSchema,
+  ownerRevenueReportQuerySchema,
   queueSettingsSchema,
   recordInvoicePaymentSchema,
   shopCancelBookingSchema,
@@ -37,6 +38,7 @@ import {
   type CreateInvoiceInput,
   type CreateQueueCustomerInput,
   type InvoicePaymentStatus,
+  type OwnerRevenueReportQuery,
   type QueueSettingsInput,
   type RecordInvoicePaymentInput,
   type ShopCancelBookingInput,
@@ -55,6 +57,7 @@ import { QueueService } from '../queue/queue.service';
 import { CancellationAnalyticsService } from './cancellation-analytics.service';
 import { InvoicesService } from './invoices.service';
 import { OwnerOverviewService } from './owner-overview.service';
+import { RevenueReportService } from './revenue-report.service';
 import { OwnerSearchService } from './owner-search.service';
 import { QueueAutoAssignService } from './queue-auto-assign.service';
 import { ShopBookingActionsService } from './shop-booking-actions.service';
@@ -73,6 +76,7 @@ const SALON = 'dashboard/salons/:salonId';
 export class OwnerOpsController {
   constructor(
     private readonly overview: OwnerOverviewService,
+    private readonly revenueReports: RevenueReportService,
     private readonly search: OwnerSearchService,
     private readonly cancellations: CancellationAnalyticsService,
     private readonly bookingActions: ShopBookingActionsService,
@@ -104,6 +108,38 @@ export class OwnerOpsController {
     @Param('salonId', ParseUUIDPipe) salonId: string,
   ) {
     return this.overview.getRevenue(user.id, salonId);
+  }
+
+  @Get(`${SALON}/revenue/report`)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Header('Cache-Control', 'private, no-store')
+  getRevenueReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+    @Query(new ZodValidationPipe(ownerRevenueReportQuerySchema))
+    query: OwnerRevenueReportQuery,
+  ) {
+    return this.revenueReports.getReport(user.id, salonId, query);
+  }
+
+  @Get(`${SALON}/revenue/report.csv`)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  async exportRevenueReport(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+    @Query(new ZodValidationPipe(ownerRevenueReportQuerySchema))
+    query: OwnerRevenueReportQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="fastque-revenue-${query.from}-${query.to}.csv"`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(
+      await this.revenueReports.getCsv(user.id, salonId, query),
+    );
   }
 
   @Get(`${SALON}/search`)
