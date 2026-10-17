@@ -1,0 +1,76 @@
+name: Salon Photo Activation Certification
+
+on:
+  pull_request:
+    paths:
+      - "apps/backend/prisma/**"
+      - "apps/backend/scripts/verify-migration-chain.sh"
+      - "apps/backend/src/salon-setup/**"
+      - "apps/backend/src/salons/salons.service.ts"
+      - "apps/backend/test/salon-photo-activation.e2e-spec.ts"
+      - "packages/shared/src/constants/index.ts"
+      - "packages/shared/src/enums/index.ts"
+      - "packages/shared/src/types/index.ts"
+      - ".github/workflows/salon-photo-activation-certification.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: salon-photo-activation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: PostgreSQL 17 migration, authorization and activation
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: salon_photo_activation_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d salon_photo_activation_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:ci-only@127.0.0.1:5432/salon_photo_activation_ci?schema=public
+      NODE_ENV: development
+      AGENT_LLM_PROVIDER: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared contracts
+        run: npm run build:shared
+      - name: Verify shared contract tests and types
+        run: |
+          npm run test --workspace=@barbercue/shared -- --runInBand
+          npm run typecheck --workspace=@barbercue/shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Verify backend types and production build
+        run: |
+          npm run typecheck --workspace=@barbercue/backend
+          npm run build --workspace=@barbercue/backend
+      - name: Validate schema and apply complete migration chain to disposable PostgreSQL
+        working-directory: apps/backend
+        run: bash scripts/verify-migration-chain.sh
+      - name: Focused activation and registration unit tests
+        run: npm run test --workspace=@barbercue/backend -- --runInBand salon-activation.service.spec salon-photos.service.spec salons.service.spec
+      - name: Real authenticated activation flow and salon isolation
+        working-directory: apps/backend
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/salon-photo-activation.e2e-spec.ts

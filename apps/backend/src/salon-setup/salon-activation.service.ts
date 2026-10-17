@@ -1,10 +1,13 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
   BookingErrorCode,
   ChairStatus,
   SalonSetupErrorCode,
   SalonStatus,
   StaffMemberStatus,
+  salonPhotoUrlSchema,
+  type SalonPhotoActivationReadinessDto,
   type SalonSetupReadinessDto,
   type SalonStatusResultDto,
   type UpdateSalonStatusInput,
@@ -62,7 +65,7 @@ export class SalonActivationService {
       input.status === SalonStatus.ACTIVE &&
       salon.status === SalonStatus.PENDING
     ) {
-      await this.assertReadyToOpen(salonId);
+      return this.activatePendingSalon(salonId, userId);
     }
 
     // Owner "Close my shop" is a temporary same-day pause, not a moderation suspension.
@@ -79,6 +82,9 @@ export class SalonActivationService {
                 ? SalonStatus.ACTIVE
                 : salon.status,
             isClosedForToday: false,
+            ...(salon.status === SalonStatus.SUSPENDED
+              ? { shopPhotoRequirementGrandfathered: true }
+              : {}),
           },
     });
     return {
@@ -97,7 +103,7 @@ export class SalonActivationService {
     await this.salonAccess.assertPlatformAdminAccess(adminUserId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, shopPhotoRequirementGrandfathered: true },
     });
     if (!salon) {
       throw new AppException(
@@ -119,36 +125,155 @@ export class SalonActivationService {
       );
     }
 
-    if (input.status === SalonStatus.ACTIVE) {
-      await this.assertReadyToOpen(salonId);
-    }
-
     const action =
       salon.status === SalonStatus.PENDING
         ? 'ADMIN_SALON_OPENED'
         : salon.status === SalonStatus.SUSPENDED
           ? 'ADMIN_SALON_REOPENED'
           : 'ADMIN_SALON_SUSPENDED';
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.salon.update({
-        where: { id: salonId },
-        // Admin lifecycle decisions are authoritative and separate from an owner's daily pause.
-        data: { status: input.status, isClosedForToday: false },
-      });
-      await tx.auditLog.create({
-        data: {
-          actorUserId: adminUserId,
-          action,
-          entityType: 'Salon',
-          entityId: salonId,
-          metadata: {
-            previousStatus: salon.status,
-            newStatus: input.status,
-          },
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const current = await tx.salon.findUnique({
+            where: { id: salonId },
+            select: { id: true, status: true, shopPhotoRequirementGrandfathered: true },
+          });
+          if (!current || current.status !== salon.status) {
+            throw new AppException(
+              'SALON_STATUS_TRANSITION_CONFLICT',
+              'Shop status changed while this operation was in progress. Refresh and try again.',
+              HttpStatus.CONFLICT,
+            );
+          }
+          if (current.status === SalonStatus.PENDING && input.status === SalonStatus.ACTIVE) {
+            await this.assertReadyToOpen(salonId, tx);
+            await this.assertPhotoReadyToActivate(salonId, current.shopPhotoRequirementGrandfathered, tx);
+          }
+          const updated = await tx.salon.update({
+            where: { id: salonId },
+            data: {
+              status: input.status,
+              isClosedForToday: false,
+              ...(input.status === SalonStatus.ACTIVE || current.status === SalonStatus.ACTIVE
+                ? { shopPhotoRequirementGrandfathered: true }
+                : {}),
+            },
+          });
+          await tx.auditLog.create({
+            data: {
+              actorUserId: adminUserId,
+              action,
+              entityType: 'Salon',
+              entityId: salonId,
+              metadata: { previousStatus: salon.status, newStatus: input.status },
+            },
+          });
+          return { id: updated.id, status: updated.status };
         },
-      });
-      return { id: updated.id, status: updated.status };
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      this.rethrowPhotoActivationConflict(error);
+    }
+  }
+
+  async getPhotoReadiness(
+    userId: string,
+    salonId: string,
+  ): Promise<SalonPhotoActivationReadinessDto> {
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: salonId },
+      select: { status: true, shopPhotoRequirementGrandfathered: true },
     });
+    if (!salon) {
+      throw new AppException(BookingErrorCode.SALON_NOT_FOUND, 'Salon not found.', HttpStatus.NOT_FOUND);
+    }
+    const grandfathered = this.isGrandfathered(salon.status, salon.shopPhotoRequirementGrandfathered);
+    const photos = await this.prisma.photo.findMany({ where: { salonId }, select: { url: true } });
+    return this.toPhotoReadiness(photos, grandfathered);
+  }
+
+  private async activatePendingSalon(salonId: string, ownerUserId: string): Promise<SalonStatusResultDto> {
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const current = await tx.salon.findUnique({
+            where: { id: salonId },
+            select: { id: true, ownerUserId: true, status: true, shopPhotoRequirementGrandfathered: true },
+          });
+          if (!current) {
+            throw new AppException(BookingErrorCode.SALON_NOT_FOUND, 'Salon not found.', HttpStatus.NOT_FOUND);
+          }
+          if (current.ownerUserId !== ownerUserId) {
+            throw new AppException('SALON_ACCESS_DENIED', 'You do not have access to this shop.', HttpStatus.FORBIDDEN);
+          }
+          if (current.status !== SalonStatus.PENDING) {
+            throw new AppException('SALON_STATUS_TRANSITION_CONFLICT', 'Shop status changed. Refresh and try again.', HttpStatus.CONFLICT);
+          }
+          await this.assertReadyToOpen(salonId, tx);
+          await this.assertPhotoReadyToActivate(salonId, current.shopPhotoRequirementGrandfathered, tx);
+          const updated = await tx.salon.update({
+            where: { id: salonId },
+            data: { status: SalonStatus.ACTIVE, isClosedForToday: false, shopPhotoRequirementGrandfathered: true },
+          });
+          return { id: updated.id, status: updated.status, isClosedForToday: updated.isClosedForToday };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      this.rethrowPhotoActivationConflict(error);
+    }
+  }
+
+  private async assertPhotoReadyToActivate(
+    salonId: string,
+    marker: boolean | null,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<void> {
+    // This method is called only for PENDING activation. A legacy PENDING shop is not covered
+    // by the ACTIVE/SUSPENDED grandfathering exception.
+    if (marker === true) return;
+    const photos = await db.photo.findMany({ where: { salonId }, select: { url: true } });
+    const readiness = this.toPhotoReadiness(photos, false);
+    if (readiness.ready) return;
+    throw new AppException(
+      SalonSetupErrorCode.SHOP_PHOTOS_REQUIRED,
+      'Add three distinct valid shop photos before opening your shop.',
+      HttpStatus.CONFLICT,
+      { ...readiness },
+    );
+  }
+
+  private toPhotoReadiness(photos: Array<{ url: string }>, grandfathered: boolean): SalonPhotoActivationReadinessDto {
+    const unique = new Set<string>();
+    for (const photo of photos) {
+      const parsed = salonPhotoUrlSchema.safeParse(photo.url);
+      if (!parsed.success) continue;
+      const normalized = new URL(parsed.data);
+      normalized.search = '';
+      normalized.hash = '';
+      unique.add(normalized.toString());
+    }
+    const current = unique.size;
+    const ready = grandfathered || current >= 3;
+    return { required: 3, current, ready, grandfathered, reasons: ready ? [] : ['THREE_VALID_PHOTOS_REQUIRED'] };
+  }
+
+  private isGrandfathered(status: SalonStatus, marker: boolean | null): boolean {
+    return marker === true ||
+      (marker === null && (status === SalonStatus.ACTIVE || status === SalonStatus.SUSPENDED));
+  }
+
+  private rethrowPhotoActivationConflict(error: unknown): never {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+      throw new AppException(
+        'SALON_ACTIVATION_REQUIREMENTS_CHANGED',
+        'Shop setup changed while activation was in progress. Refresh and try again.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    throw error;
   }
 
   /**
@@ -157,13 +282,16 @@ export class SalonActivationService {
    * be served. The thrown error carries a SalonSetupReadinessDto in `details` so the client can
    * tick off what's already done instead of restating the whole requirement.
    */
-  async assertReadyToOpen(salonId: string): Promise<void> {
+  async assertReadyToOpen(
+    salonId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<void> {
     const [serviceCount, chairCount, staffCount] = await Promise.all([
-      this.prisma.service.count({ where: { salonId, isActive: true } }),
-      this.prisma.chair.count({
+      db.service.count({ where: { salonId, isActive: true } }),
+      db.chair.count({
         where: { salonId, status: ChairStatus.ACTIVE },
       }),
-      this.prisma.salonStaff.count({
+      db.salonStaff.count({
         where: { salonId, status: StaffMemberStatus.ACTIVE },
       }),
     ]);

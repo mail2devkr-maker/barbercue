@@ -145,6 +145,14 @@ export class SalonSetupController {
     return this.timezone.getTimezone(user.id, salonId);
   }
 
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.photoReadiness}`)
+  getPhotoReadiness(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.activation.getPhotoReadiness(user.id, salonId);
+  }
+
   @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.timezone}`)
   updateTimezone(
     @CurrentUser() user: AuthenticatedUser,

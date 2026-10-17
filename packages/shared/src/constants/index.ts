@@ -376,6 +376,8 @@ export const DASHBOARD_PATHS = {
   // postalCode/description). No such endpoint existed before this; shared verbatim by owner and
   // PLATFORM_ADMIN via the same SalonProfileService.
   profile: 'profile',
+  // Owner/admin readiness checklist for the three-photo first-activation requirement.
+  photoReadiness: 'photo-readiness',
   // P0 arrival-alert mission — POST dashboard/bookings/:id/arrive|no-show|correct-no-show (staff/
   // owner-triggered booking-lifecycle actions, mounted alongside the existing queue mutations in
   // DashboardQueueController) and GET dashboard/salons/:salonId/arrival-alerts (the "reconstruct
