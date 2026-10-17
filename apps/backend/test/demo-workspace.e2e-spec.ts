@@ -33,7 +33,8 @@ const isNamedDisposable = /^\/(owner_ops_chain|demo_workspace_e2e)$/.test(
   connection?.pathname ?? '',
 );
 const approvedRunner =
-  process.env.GITHUB_ACTIONS === 'true' ||
+  (process.env.GITHUB_ACTIONS === 'true' &&
+    process.env.OWNER_DEMO_WORKSPACE_ENABLED === 'true') ||
   process.env.ALLOW_DEMO_WORKSPACE_E2E === 'yes';
 const runAgainstDisposableDb = Boolean(
   isLoopback && isNamedDisposable && approvedRunner,
