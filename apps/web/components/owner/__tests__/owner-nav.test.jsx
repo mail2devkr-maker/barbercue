@@ -38,9 +38,9 @@ describe("owner navigation", () => {
     expect(pageExists("notifications")).toBe(true);
   });
 
-  it("does not list modules FastQue does not have (no inventory, payroll, orders, leave or salary rules)", () => {
+  it("does not list modules FastQue does not have (no payroll, orders, leave or salary rules; inventory exists since PR #249)", () => {
     const labels = NAV_ITEMS.map((i) => i.label.toLowerCase()).join(" | ");
-    for (const absent of ["inventory", "payroll", "orders", "delivery", "leave", "salary"]) expect(labels).not.toContain(absent);
+    for (const absent of ["payroll", "orders", "delivery", "leave", "salary"]) expect(labels).not.toContain(absent);
   });
 
   it("gives a barber the operational menu only; billing, analytics and settings stay owner-only", () => {

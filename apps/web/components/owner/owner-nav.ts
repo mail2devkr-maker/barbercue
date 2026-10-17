@@ -62,6 +62,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { id: "settings", label: "Shop Settings", icon: "settings", group: "SHOP", audience: "owner", path: "settings", keywords: ["profile", "timezone"] },
   { id: "hours", label: "Working Hours", icon: "clock", group: "SHOP", audience: "owner", path: "hours", keywords: ["opening", "closing"] },
   { id: "chairs", label: "Chairs", icon: "chair", group: "SHOP", audience: "owner", path: "chairs", keywords: ["seats"] },
+  { id: "inventory", label: "Inventory", icon: "tag", group: "SHOP", audience: "owner", path: "inventory", keywords: ["stock", "products", "suppliers", "purchases", "low stock"] },
   { id: "payment-qr", label: "Payment QR", icon: "qr", group: "SHOP", audience: "owner", path: "payment-qr", keywords: ["upi", "scan"] },
   { id: "notifications", label: "Notifications", icon: "bell", group: "SHOP", audience: "both", path: "notifications", badge: "unread", keywords: ["alerts", "inbox"] },
 
