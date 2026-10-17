@@ -38,6 +38,22 @@ describe("owner navigation", () => {
     expect(pageExists("notifications")).toBe(true);
   });
 
+  it("lists a capability-gated entry only when the server says the feature is usable", () => {
+    const gated = NAV_ITEMS.filter((i) => i.requiresFeature);
+    expect(gated.map((i) => i.id)).toContain("demo-data");
+    const ids = (kind, status) => navItemsFor(kind, status ? { [gated[0].requiresFeature]: { status, reasonCode: null, updatedAt: null } } : undefined).map((i) => i.id);
+    for (const item of gated) {
+      const withStatus = (kind, status) => navItemsFor(kind, { [item.requiresFeature]: { status, reasonCode: null, updatedAt: null } }).map((i) => i.id);
+      expect(navItemsFor("owner").map((i) => i.id)).not.toContain(item.id);
+      expect(withStatus("owner", "DISABLED")).not.toContain(item.id);
+      expect(withStatus("owner", "UNCONFIGURED")).not.toContain(item.id);
+      expect(withStatus("owner", "ENABLED")).toContain(item.id);
+      expect(withStatus("owner", "SANDBOX")).toContain(item.id);
+      expect(withStatus("staff", "ENABLED")).not.toContain(item.id);
+    }
+    expect(ids("owner")).not.toContain("demo-data");
+  });
+
   it("does not list modules FastQue does not have (no inventory, payroll, orders, leave or salary rules)", () => {
     const labels = NAV_ITEMS.map((i) => i.label.toLowerCase()).join(" | ");
     for (const absent of ["inventory", "payroll", "orders", "delivery", "leave", "salary"]) expect(labels).not.toContain(absent);
@@ -49,7 +65,8 @@ describe("owner navigation", () => {
     for (const id of ["bookings", "customers", "analytics", "revenue", "payments", "invoices", "settings", "staff", "payment-qr", "cancellations"]) {
       expect(staff).not.toContain(id);
     }
-    expect(navItemsFor("owner").length).toBe(NAV_ITEMS.length);
+    // Entries that need a server capability are listed only when the shop has it (lib/capabilities.ts).
+    expect(navItemsFor("owner").length).toBe(NAV_ITEMS.filter((i) => !i.requiresFeature).length);
   });
 
   // An owner who clicks a menu entry must stay in the signed-in owner area. /account/* is the CUSTOMER
