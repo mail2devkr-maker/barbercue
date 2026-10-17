@@ -13,6 +13,7 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../../lib/api";
 import { Button } from "../../../../../../../components/ui/Button";
+import { CustomerVisitHistory } from "../../../../../../../components/dashboard/CustomerVisitHistory";
 import styles from "../../../../../../../components/dashboard/dashboard.module.css";
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -155,6 +156,7 @@ export default function DashboardCustomerDetailPage({
         ← Back to customers
       </Link>
       <h1 className={styles.pageTitle}>{summary.phone ?? summary.email ?? "No contact on file"}</h1>
+      <p className={styles.pageSubtitle}>Name not on file. This customer is identified by their verified phone or email.</p>
       <p className={styles.pageSubtitle}>{graceStatus}</p>
       <p className={styles.pageSubtitle}>
         Cancellation courtesy · {cancellationWaiversUsed} of {CANCELLATION_COURTESY_WAIVER_LIMIT} used · {cancellationWaiversRemaining} remaining
@@ -259,6 +261,8 @@ export default function DashboardCustomerDetailPage({
           })}
         </ul>
       )}
+
+      <CustomerVisitHistory salonId={salonId} customerId={customerId} />
 
       {pendingAction && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(20,16,12,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
