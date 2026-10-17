@@ -9,8 +9,11 @@ import { ServiceCatalogPicker } from "../../../../../../components/dashboard/Ser
 import { CatalogImportPanel } from "../../../../../../components/dashboard/CatalogImportPanel";
 import { RemoveAllServicesControl } from "../../../../../../components/dashboard/RemoveAllServicesControl";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
+import { ServiceFilterBar } from "../../../../../../components/dashboard/ServiceFilterBar";
 import { Button } from "../../../../../../components/ui/Button";
+import { filterServices, groupForDisplay, listCategories } from "../../../../../../lib/service-categories";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
+import filterStyles from "../../../../../../components/dashboard/service-filter.module.css";
 
 const MAX_PRICE = 1_000_000;
 const MIN_MINUTES = 5;
@@ -89,6 +92,15 @@ export default function DashboardServicesPage({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(EMPTY_DRAFT);
   const [showInactive, setShowInactive] = useState(false);
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+
+  // Category chips, search and grouping only change how the list is shown, never the services themselves.
+  const categoryOptions = services ? listCategories(services, showInactive) : [];
+  const activeCategory = categoryFilter !== null && categoryOptions.some((c) => c.key === categoryFilter) ? categoryFilter : null;
+  const visibleTotal = services ? filterServices(services, { search: "", categoryKey: null, includeInactive: showInactive }).length : 0;
+  const listEntries = services ? groupForDisplay(filterServices(services, { search: serviceSearch, categoryKey: activeCategory, includeInactive: showInactive })) : [];
+  const shownCount = listEntries.filter((entry) => entry.kind === "service").length;
 
   const activeCount = services?.filter((service) => service.isActive).length ?? 0;
   const inactiveCount = services?.filter((service) => !service.isActive).length ?? 0;
@@ -348,8 +360,32 @@ export default function DashboardServicesPage({
           </Button>
         )}
         {services && (activeCount > 0 || showInactive) && (
+          <ServiceFilterBar
+            categories={categoryOptions}
+            visibleTotal={visibleTotal}
+            shownCount={shownCount}
+            search={serviceSearch}
+            onSearchChange={setServiceSearch}
+            selectedCategory={activeCategory}
+            onCategoryChange={setCategoryFilter}
+          />
+        )}
+        {services && (activeCount > 0 || showInactive) && shownCount === 0 && (
+          <p className={styles.emptyState}>No service matches this search or category.</p>
+        )}
+        {services && (activeCount > 0 || showInactive) && shownCount > 0 && (
           <ul className={styles.rowList}>
-            {services.filter((service) => service.isActive || showInactive).map((service) => editingId === service.id ? (
+            {listEntries.map((entry) => {
+              if (entry.kind === "heading") {
+                return (
+                  <li key={`heading-${entry.key || "none"}`} className={filterStyles.groupHeading}>
+                    <span>{entry.label}</span>
+                    <span className={filterStyles.groupCount}>{entry.count}</span>
+                  </li>
+                );
+              }
+              const service = entry.service;
+              return editingId === service.id ? (
               <li key={service.id} className={styles.row} style={{ display: "block" }}>
                 <div className={styles.editGrid}>
                   <div className={styles.fieldWrap}>
@@ -392,7 +428,8 @@ export default function DashboardServicesPage({
                   <Button type="button" variant="outline" onClick={() => void toggleActive(service)}>{service.isActive ? "Turn off" : "Reactivate"}</Button>
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
