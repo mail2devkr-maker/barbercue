@@ -1145,16 +1145,11 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     });
 
     it('reports salon-local completed visits separately from invoice ledger cash and exports the same scoped report', async () => {
-      const voidedBooking = await completedBooking('cust1');
-      const voidedInvoice = (await issue({ bookingId: voidedBooking }).expect(201)).body as { id: string };
-      await api('post', `${SALON()}/invoices/${voidedInvoice.id}/payments`, tok.owner)
-        .send({ method: 'CASH', amount: 10 })
+      await api('post', `${SALON()}/invoices/${invoiceA.id}/payments`, tok.owner)
+        .send({ kind: 'REFUND', method: 'CASH', amount: 245 })
         .expect(201);
-      await api('post', `${SALON()}/invoices/${voidedInvoice.id}/payments`, tok.owner)
-        .send({ kind: 'REFUND', method: 'CASH', amount: 10 })
-        .expect(201);
-      await api('post', `${SALON()}/invoices/${voidedInvoice.id}/void`, tok.owner)
-        .send({ reason: 'Replaced after test payment reversal' })
+      await api('post', `${SALON()}/invoices/${invoiceA.id}/void`, tok.owner)
+        .send({ reason: 'Fully refunded before voiding for report coverage' })
         .expect(201);
 
       const from = utcToZonedDateStr(new Date(), TZ);
