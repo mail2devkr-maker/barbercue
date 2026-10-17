@@ -322,9 +322,7 @@ describe('SalonChairsService', () => {
         }),
       });
       expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
-      expect(prisma.$transaction.mock.calls[0][1]).toEqual({
-        isolationLevel: expect.any(String),
-      });
+      expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it('rejects stale preview versions without returning false success', async () => {

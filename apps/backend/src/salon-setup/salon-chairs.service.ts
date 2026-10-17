@@ -208,116 +208,115 @@ export class SalonChairsService {
     );
 
     try {
-      return await this.prisma.$transaction(
-        async (tx) => {
-          // Match the queue assignment/manual occupancy lock namespace so a chair cannot be
-          // seated or occupied while this batch checks and changes its availability.
-          for (const item of lockOrder) {
-            await tx.$executeRaw(
-              Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${item.chairId}`}))`,
-            );
-          }
-          // Also serialize with the existing single-chair PATCH path, which uses row updates rather
-          // than the queue advisory lock. Lock only IDs belonging to this salon, in stable order.
-          for (const item of lockOrder) {
-            await tx.$queryRaw(
-              Prisma.sql`SELECT "id" FROM "chairs" WHERE "id" = ${item.chairId} AND "salonId" = ${salonId} FOR UPDATE`,
-            );
-          }
-
-          const chairs = await tx.chair.findMany({
-            where: { salonId, id: { in: items.map((item) => item.chairId) } },
-            select: { id: true, label: true, status: true, updatedAt: true },
-          });
-          const byId = new Map(chairs.map((chair) => [chair.id, chair]));
-          const occupancyConflicts = await this.findOccupancyConflicts(
-            tx,
-            salonId,
-            chairs.map((chair) => chair.id),
+      // Advisory/row locks serialize chair mutations. Keep PostgreSQL's default READ COMMITTED
+      // isolation so a request waiting on those locks observes the preceding commit in its next
+      // statement instead of failing with a serialization error after the wait.
+      return await this.prisma.$transaction(async (tx) => {
+        // Match the queue assignment/manual occupancy lock namespace so a chair cannot be
+        // seated or occupied while this batch checks and changes its availability.
+        for (const item of lockOrder) {
+          await tx.$executeRaw(
+            Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${item.chairId}`}))`,
           );
-          const results: BulkChairDeactivationResultDto['items'] = [];
+        }
+        // Also serialize with the existing single-chair PATCH path, which uses row updates rather
+        // than the queue advisory lock. Lock only IDs belonging to this salon, in stable order.
+        for (const item of lockOrder) {
+          await tx.$queryRaw(
+            Prisma.sql`SELECT "id" FROM "chairs" WHERE "id" = ${item.chairId} AND "salonId" = ${salonId} FOR UPDATE`,
+          );
+        }
 
-          for (const item of items) {
-            const chair = byId.get(item.chairId);
-            if (!chair) {
-              results.push({
-                chairId: item.chairId,
-                label: null,
-                result: 'NOT_FOUND',
-                conflicts: [],
-              });
-              continue;
-            }
+        const chairs = await tx.chair.findMany({
+          where: { salonId, id: { in: items.map((item) => item.chairId) } },
+          select: { id: true, label: true, status: true, updatedAt: true },
+        });
+        const byId = new Map(chairs.map((chair) => [chair.id, chair]));
+        const occupancyConflicts = await this.findOccupancyConflicts(
+          tx,
+          salonId,
+          chairs.map((chair) => chair.id),
+        );
+        const results: BulkChairDeactivationResultDto['items'] = [];
 
-            const conflicts = [...(occupancyConflicts.get(item.chairId) ?? [])];
-            if (chair.status !== ChairStatus.ACTIVE)
-              conflicts.push('NOT_ACTIVE');
-            if (
-              chair.updatedAt.getTime() !==
-              new Date(item.expectedUpdatedAt).getTime()
-            ) {
-              conflicts.push('STALE_PREVIEW');
-            }
-            if (conflicts.length) {
-              results.push({
-                chairId: chair.id,
-                label: chair.label,
-                result: 'CONFLICT',
-                conflicts,
-              });
-              continue;
-            }
-
-            const update = await tx.chair.updateMany({
-              where: {
-                id: chair.id,
-                salonId,
-                status: ChairStatus.ACTIVE,
-                updatedAt: new Date(item.expectedUpdatedAt),
-              },
-              data: { status: ChairStatus.INACTIVE, updatedAt: new Date() },
+        for (const item of items) {
+          const chair = byId.get(item.chairId);
+          if (!chair) {
+            results.push({
+              chairId: item.chairId,
+              label: null,
+              result: 'NOT_FOUND',
+              conflicts: [],
             });
-            if (update.count !== 1) {
-              results.push({
-                chairId: chair.id,
-                label: chair.label,
-                result: 'CONFLICT',
-                conflicts: ['STALE_PREVIEW'],
-              });
-              continue;
-            }
+            continue;
+          }
 
-            await tx.auditLog.create({
-              data: {
-                actorUserId: userId,
-                action: 'CHAIR_BULK_DEACTIVATED',
-                entityType: 'Chair',
-                entityId: chair.id,
-                metadata: {
-                  salonId,
-                  before: { label: chair.label, status: ChairStatus.ACTIVE },
-                  after: { label: chair.label, status: ChairStatus.INACTIVE },
-                },
-              },
-            });
+          const conflicts = [...(occupancyConflicts.get(item.chairId) ?? [])];
+          if (chair.status !== ChairStatus.ACTIVE) conflicts.push('NOT_ACTIVE');
+          if (
+            chair.updatedAt.getTime() !==
+            new Date(item.expectedUpdatedAt).getTime()
+          ) {
+            conflicts.push('STALE_PREVIEW');
+          }
+          if (conflicts.length) {
             results.push({
               chairId: chair.id,
               label: chair.label,
-              result: 'DEACTIVATED',
-              conflicts: [],
+              result: 'CONFLICT',
+              conflicts,
             });
+            continue;
           }
 
-          return {
-            salonId,
-            deactivatedCount: results.filter(
-              (item) => item.result === 'DEACTIVATED',
-            ).length,
-            items: results,
-          };
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
+          const update = await tx.chair.updateMany({
+            where: {
+              id: chair.id,
+              salonId,
+              status: ChairStatus.ACTIVE,
+              updatedAt: new Date(item.expectedUpdatedAt),
+            },
+            data: { status: ChairStatus.INACTIVE, updatedAt: new Date() },
+          });
+          if (update.count !== 1) {
+            results.push({
+              chairId: chair.id,
+              label: chair.label,
+              result: 'CONFLICT',
+              conflicts: ['STALE_PREVIEW'],
+            });
+            continue;
+          }
+
+          await tx.auditLog.create({
+            data: {
+              actorUserId: userId,
+              action: 'CHAIR_BULK_DEACTIVATED',
+              entityType: 'Chair',
+              entityId: chair.id,
+              metadata: {
+                salonId,
+                before: { label: chair.label, status: ChairStatus.ACTIVE },
+                after: { label: chair.label, status: ChairStatus.INACTIVE },
+              },
+            },
+          });
+          results.push({
+            chairId: chair.id,
+            label: chair.label,
+            result: 'DEACTIVATED',
+            conflicts: [],
+          });
+        }
+
+        return {
+          salonId,
+          deactivatedCount: results.filter(
+            (item) => item.result === 'DEACTIVATED',
+          ).length,
+          items: results,
+        };
+      });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
