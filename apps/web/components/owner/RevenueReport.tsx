@@ -21,6 +21,7 @@ import {
   periodLabel,
   presetRange,
   reportFileName,
+  serviceMix,
   todayInZone,
   toCsv,
   validateRange,
@@ -171,6 +172,7 @@ export function RevenueReport({ salonId }: { salonId: string }) {
   const services = data ? filterByName([...data.analytics.serviceValue].sort((a, b) => b.estimatedServiceValue - a.estimatedServiceValue), serviceSearch) : [];
   const staff = data ? filterByName([...data.analytics.barberValue].sort((a, b) => b.estimatedServiceValue - a.estimatedServiceValue), staffSearch) : [];
   const serviceTotal = data?.analytics.serviceValue.reduce((sum, s) => sum + s.estimatedServiceValue, 0) ?? 0;
+  const mix = data ? serviceMix(data.analytics.sourceMix) : { booked: 0, liveQueue: 0, total: 0 };
   const chartLabel = (date: string) => periodLabel(date, granularity);
   const collectedSeries = buckets.map((b) => ({ label: chartLabel(b.date), value: netCollected(b) }));
   const estimatedSeries = buckets.map((b) => ({ label: chartLabel(b.date), value: b.estimated }));
@@ -214,7 +216,7 @@ export function RevenueReport({ salonId }: { salonId: string }) {
             <div className={ui.stat}><div className={ui.statLabel}>Net collected</div><div className={ui.statValue}>{money(totals.net)}</div></div>
             <div className={ui.stat}><div className={ui.statLabel}>Payments recorded</div><div className={ui.statValue}>{totals.count}</div></div>
             <div className={ui.stat}><div className={ui.statLabel}>Estimated service value</div><div className={ui.statValue}>{money(data.analytics.estimatedServiceValue)}</div></div>
-            <div className={ui.stat}><div className={ui.statLabel}>Completed services</div><div className={ui.statValue}>{data.analytics.sourceMix.bookingCompletedCount + data.analytics.sourceMix.walkInCompletedCount}</div></div>
+            <div className={ui.stat}><div className={ui.statLabel}>Completed services</div><div className={ui.statValue}>{mix.total}</div></div>
             {data.payments.first.byMethod.map((m) => (
               <div key={m.method} className={ui.stat}><div className={ui.statLabel}>{METHOD_LABEL[m.method] ?? m.method} (net)</div><div className={ui.statValue}>{money(m.net)}</div></div>
             ))}
@@ -324,8 +326,8 @@ export function RevenueReport({ salonId }: { salonId: string }) {
           <div className={`${ui.grid} ${ui.evenTwo} ${ui.mt16}`}>
             <Card title="Where customers came from" sub="Completed services in this range.">
               <div className={ui.statGrid}>
-                <div className={ui.stat}><div className={ui.statLabel}>Booked in advance</div><div className={ui.statValue}>{data.analytics.sourceMix.bookingCompletedCount}</div></div>
-                <div className={ui.stat}><div className={ui.statLabel}>Walk-in / live queue</div><div className={ui.statValue}>{data.analytics.sourceMix.walkInCompletedCount}</div></div>
+                <div className={ui.stat}><div className={ui.statLabel}>Booked in advance</div><div className={ui.statValue}>{mix.booked}</div></div>
+                <div className={ui.stat}><div className={ui.statLabel}>Live Queue</div><div className={ui.statValue}>{mix.liveQueue}</div></div>
               </div>
             </Card>
             <Card title="Not shown yet">

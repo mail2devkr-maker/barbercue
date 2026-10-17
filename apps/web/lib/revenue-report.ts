@@ -289,3 +289,14 @@ export async function loadAllPayments(fetchPage: (cursor?: string) => Promise<Re
   }
   return { first, items, complete: true };
 }
+
+// ---------- Source mix ----------
+
+/**
+ * Completed services split by how the customer arrived. FastQue's word for a queue-originated visit is
+ * "Live Queue" (never the old term), so the UI reads these through this helper. The server's `completedCount`
+ * counts completed BOOKINGS only, so the total shown to owners is the sum of both parts.
+ */
+export function serviceMix(mix: { bookingCompletedCount: number; walkInCompletedCount: number }): { booked: number; liveQueue: number; total: number } {
+  return { booked: mix.bookingCompletedCount, liveQueue: mix.walkInCompletedCount, total: mix.bookingCompletedCount + mix.walkInCompletedCount };
+}

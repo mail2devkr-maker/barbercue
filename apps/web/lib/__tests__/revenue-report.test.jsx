@@ -228,3 +228,10 @@ describe("loadAllPayments", () => {
     await expect(R.loadAllPayments(async () => { throw new Error("offline"); })).rejects.toThrow("offline");
   });
 });
+
+describe("serviceMix", () => {
+  it("splits completed services by arrival and totals both parts", () => {
+    expect(R.serviceMix({ bookingCompletedCount: 1, walkInCompletedCount: 2 })).toEqual({ booked: 1, liveQueue: 2, total: 3 });
+    expect(R.serviceMix({ bookingCompletedCount: 0, walkInCompletedCount: 83 }).total).toBe(83);
+  });
+});
