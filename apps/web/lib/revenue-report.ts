@@ -1,4 +1,5 @@
-import type { BookingSource, OwnerRevenueReportDto } from "@barbercue/shared";
+import type { BookingAttributionSource, OwnerRevenueReportDto } from "@barbercue/shared";
+import { sourceLabel } from "./booking-sources";
 
 // Owner revenue report UI helpers (requirements #1, #2, #4, #17), integrated with the server report
 // `GET dashboard/salons/:salonId/revenue/report` (+ `.csv`) from Codex PR #226.
@@ -95,24 +96,36 @@ export function periodLabel(period: string, granularity: Granularity): string {
   return shortDate(period);
 }
 
-/** Source filter choices. The server accepts only the sources it already records; external channels are not selectable. */
-export const SOURCE_FILTERS: ReadonlyArray<{ value: BookingSource | ""; label: string }> = [
-  { value: "", label: "All sources" },
-  { value: "APP", label: "FastQue app bookings" },
-  { value: "WEB", label: "FastQue website bookings" },
-  { value: "WALK_IN", label: "Live Queue" },
-  { value: "IN_SHOP", label: "In-shop appointments" },
+const FILTER_SOURCES: ReadonlyArray<BookingAttributionSource> = [
+  "FASTQUE_APP",
+  "FASTQUE_WEB",
+  "WALK_IN",
+  "IN_SHOP",
+  "FACEBOOK",
+  "INSTAGRAM",
+  "CHATGPT",
+  "OTHER",
+  "UNKNOWN",
 ];
 
-export function isKnownSource(value: string): value is BookingSource {
-  return SOURCE_FILTERS.some((s) => s.value !== "" && s.value === value);
+/**
+ * Source filter choices: how the booking reached the shop. Direct sources come from the surface that created the
+ * booking; Facebook, Instagram, ChatGPT and Other appear only for bookings made with a campaign code the owner created.
+ */
+export const SOURCE_FILTERS: ReadonlyArray<{ value: BookingAttributionSource | ""; label: string }> = [
+  { value: "", label: "All sources" },
+  ...FILTER_SOURCES.map((value) => ({ value, label: sourceLabel(value) })),
+];
+
+export function isKnownSource(value: string): value is BookingAttributionSource {
+  return FILTER_SOURCES.some((s) => s === value);
 }
 
 export interface ReportQuery {
   from: string;
   to: string;
   groupBy: Granularity;
-  source: BookingSource | "";
+  source: BookingAttributionSource | "";
 }
 
 /** Query string for both the JSON report and the CSV export, so the two can never use different filters. */
@@ -160,6 +173,8 @@ const SEMANTICS_TEXT: Record<string, Record<string, string>> = {
   },
   externalAttribution: {
     NOT_CAPTURED_BY_EXISTING_SOURCE_FIELDS: "The source filter covers the app, the website, the Live Queue and in-shop appointments. Facebook, Instagram or other campaigns are not captured yet.",
+    CAMPAIGN_TOKEN_WHEN_PRESENT_LEGACY_SOURCE_PROJECTION_OTHERWISE:
+      "Facebook, Instagram, ChatGPT and Other appear only for bookings made with a campaign code you created. That shows a campaign link was used, not where the customer really came from. Other bookings use the source recorded when they were made.",
   },
 };
 
