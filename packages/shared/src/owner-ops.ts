@@ -9,8 +9,9 @@
 import { z } from 'zod';
 import { normalizeContactName, normalizeContactPhone } from './contact';
 import { MAX_SERVICES_PER_BOOKING } from './constants';
-import { BookingSource } from './enums';
+import { BookingAttributionSource, BookingSource } from './enums';
 import type {
+  BookingAttributionSource as BookingAttributionSourceType,
   BookingSource as BookingSourceType,
   BookingStatus,
   QueueEntryStatus,
@@ -108,6 +109,8 @@ export const OwnerOpsErrorCode = {
   INVOICE_REFUND_EXCEEDS_PAID: 'INVOICE_REFUND_EXCEEDS_PAID',
   BILLING_PROFILE_REQUIRED: 'BILLING_PROFILE_REQUIRED',
   BILLING_TAX_NOT_CONFIGURED: 'BILLING_TAX_NOT_CONFIGURED',
+  BOOKING_ATTRIBUTION_CAMPAIGN_NOT_FOUND:
+    'BOOKING_ATTRIBUTION_CAMPAIGN_NOT_FOUND',
 } as const;
 export type OwnerOpsErrorCode = (typeof OwnerOpsErrorCode)[keyof typeof OwnerOpsErrorCode];
 
@@ -122,6 +125,8 @@ export const OWNER_OPS_PATHS = {
   cancellationAnalytics: 'analytics/cancellations',
   bookingsInShop: 'bookings/in-shop',
   bookings: 'bookings',
+  bookingAttribution: 'booking-attribution',
+  attributionCampaigns: 'campaigns',
   cancel: 'cancel',
   reschedule: 'reschedule',
   queueCustomers: 'queue/customers',
@@ -448,24 +453,161 @@ const salonLocalDateSchema = z.string().refine((value) => {
 }, 'Use a valid salon-local date in YYYY-MM-DD format.');
 
 /** GET dashboard/salons/:salonId/revenue/report. `to` is inclusive in the salon's timezone. */
-export const ownerRevenueReportQuerySchema = z.object({
-  from: salonLocalDateSchema,
-  to: salonLocalDateSchema,
-  groupBy: z.enum(['day', 'week', 'month']).default('day'),
-  /** Existing source evidence only; external campaign attribution is a separate contract. */
-  source: z.nativeEnum(BookingSource).optional(),
-}).superRefine((value, ctx) => {
-  if (value.from > value.to) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'The end date must be on or after the start date.' });
-    return;
-  }
-  const from = Date.parse(`${value.from}T00:00:00.000Z`);
-  const to = Date.parse(`${value.to}T00:00:00.000Z`);
-  if ((to - from) / 86_400_000 > 365) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'A report may cover at most 366 calendar days.' });
-  }
+export const ownerRevenueReportQuerySchema = z
+  .object({
+    from: salonLocalDateSchema,
+    to: salonLocalDateSchema,
+    groupBy: z.enum(['day', 'week', 'month']).default('day'),
+    /** Direct source is projected from the legacy booking source; external channels require a valid campaign token. */
+    // Keep legacy APP/WEB filters accepted for already-shipped clients while exposing the
+    // normalized FASTQUE_APP/FASTQUE_WEB attribution vocabulary to new consumers.
+    source: z
+      .enum([
+        'FASTQUE_WEB',
+        'FASTQUE_APP',
+        'WALK_IN',
+        'IN_SHOP',
+        'FACEBOOK',
+        'INSTAGRAM',
+        'CHATGPT',
+        'OTHER',
+        'UNKNOWN',
+        'APP',
+        'WEB',
+      ])
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.from > value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'The end date must be on or after the start date.',
+      });
+      return;
+    }
+    const from = Date.parse(`${value.from}T00:00:00.000Z`);
+    const to = Date.parse(`${value.to}T00:00:00.000Z`);
+    if ((to - from) / 86_400_000 > 365) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'A report may cover at most 366 calendar days.',
+      });
+    }
+  });
+export type OwnerRevenueReportQuery = z.infer<
+  typeof ownerRevenueReportQuerySchema
+>;
+
+const campaignSourceSchema = z.enum([
+  'FACEBOOK',
+  'INSTAGRAM',
+  'CHATGPT',
+  'OTHER',
+]);
+
+export const createBookingAttributionCampaignSchema = z
+  .object({
+    source: campaignSourceSchema,
+    label: z.string().trim().min(1).max(120),
+    startsAt: z.string().datetime().optional(),
+    endsAt: z.string().datetime().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.startsAt &&
+      value.endsAt &&
+      Date.parse(value.endsAt) <= Date.parse(value.startsAt)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endsAt'],
+        message: 'Campaign end must be after its start.',
+      });
+    }
+  });
+export type CreateBookingAttributionCampaignInput = z.infer<
+  typeof createBookingAttributionCampaignSchema
+>;
+
+export const bookingAttributionCampaignListQuerySchema = z.object({
+  cursor: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
 });
-export type OwnerRevenueReportQuery = z.infer<typeof ownerRevenueReportQuerySchema>;
+export type BookingAttributionCampaignListQuery = z.infer<
+  typeof bookingAttributionCampaignListQuerySchema
+>;
+
+export const bookingAttributionSummaryQuerySchema = z
+  .object({
+    from: salonLocalDateSchema,
+    to: salonLocalDateSchema,
+    source: z.nativeEnum(BookingAttributionSource).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.from > value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'The end date must be on or after the start date.',
+      });
+    }
+    const from = Date.parse(`${value.from}T00:00:00.000Z`);
+    const to = Date.parse(`${value.to}T00:00:00.000Z`);
+    if ((to - from) / 86_400_000 > 365) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'A report may cover at most 366 calendar days.',
+      });
+    }
+  });
+export type BookingAttributionSummaryQuery = z.infer<
+  typeof bookingAttributionSummaryQuerySchema
+>;
+
+export interface BookingAttributionCampaignDto {
+  id: string;
+  salonId: string;
+  source: Extract<
+    BookingAttributionSourceType,
+    'FACEBOOK' | 'INSTAGRAM' | 'CHATGPT' | 'OTHER'
+  >;
+  label: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  revokedAt: string | null;
+  bookingCount: number;
+  createdAt: string;
+}
+
+/** The opaque token is returned only once, immediately after campaign creation. */
+export interface CreateBookingAttributionCampaignDto extends BookingAttributionCampaignDto {
+  token: string;
+}
+
+export interface BookingAttributionSourceCountDto {
+  source: BookingAttributionSourceType;
+  bookingCount: number;
+}
+
+export interface BookingAttributionCampaignCountDto {
+  campaignId: string;
+  source: BookingAttributionCampaignDto['source'];
+  label: string;
+  bookingCount: number;
+}
+
+export interface BookingAttributionSummaryDto {
+  salonId: string;
+  from: string;
+  to: string;
+  timezone: string;
+  asOf: string;
+  bySource: BookingAttributionSourceCountDto[];
+  campaigns: BookingAttributionCampaignCountDto[];
+}
 
 // ---------- DTOs ----------
 
@@ -569,7 +711,7 @@ export interface OwnerRevenueReportDto {
   from: string;
   to: string;
   groupBy: 'day' | 'week' | 'month';
-  source: BookingSourceType | null;
+  source: BookingAttributionSourceType | BookingSourceType | null;
   /** Visit and invoice amounts are bucketed by serviceDate; payments/refunds by recordedAt. */
   periods: OwnerRevenueReportPeriodDto[];
   totals: OwnerRevenueReportMetricDto;
@@ -580,7 +722,7 @@ export interface OwnerRevenueReportDto {
     estimateBasis: 'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE';
     cashSource: 'SHOP_RECORDED_INVOICE_PAYMENT_LEDGER';
     serviceCashAllocation: 'PRO_RATA_BY_INVOICE_LINE_TOTAL';
-    externalAttribution: 'NOT_CAPTURED_BY_EXISTING_SOURCE_FIELDS';
+    externalAttribution: 'CAMPAIGN_TOKEN_WHEN_PRESENT_LEGACY_SOURCE_PROJECTION_OTHERWISE';
   };
 }
 

@@ -24,6 +24,24 @@ describe('createBookingSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts an optional opaque campaign token without changing the booking source contract', () => {
+    const token = 'a'.repeat(64);
+    const result = createBookingSchema.safeParse({
+      ...valid,
+      attributionToken: token,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.attributionToken).toBe(token);
+  });
+
+  it('rejects malformed campaign tokens without rejecting the legacy booking request shape', () => {
+    expect(
+      createBookingSchema.safeParse({ ...valid, attributionToken: 'short' })
+        .success,
+    ).toBe(false);
+    expect(createBookingSchema.safeParse(valid).success).toBe(true);
+  });
+
   it('rejects a non-UUID preferredStaffId', () => {
     expect(createBookingSchema.safeParse({ ...valid, preferredStaffId: 'not-a-uuid' }).success).toBe(false);
   });
