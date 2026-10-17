@@ -9,7 +9,9 @@
 import { z } from 'zod';
 import { normalizeContactName, normalizeContactPhone } from './contact';
 import { MAX_SERVICES_PER_BOOKING } from './constants';
+import { BookingSource } from './enums';
 import type {
+  BookingSource as BookingSourceType,
   BookingStatus,
   QueueEntryStatus,
   StaffMemberStatus,
@@ -439,6 +441,32 @@ export const cancellationAnalyticsQuerySchema = z.object({
 });
 export type CancellationAnalyticsQuery = z.infer<typeof cancellationAnalyticsQuerySchema>;
 
+const salonLocalDateSchema = z.string().refine((value) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}, 'Use a valid salon-local date in YYYY-MM-DD format.');
+
+/** GET dashboard/salons/:salonId/revenue/report. `to` is inclusive in the salon's timezone. */
+export const ownerRevenueReportQuerySchema = z.object({
+  from: salonLocalDateSchema,
+  to: salonLocalDateSchema,
+  groupBy: z.enum(['day', 'week', 'month']).default('day'),
+  /** Existing source evidence only; external campaign attribution is a separate contract. */
+  source: z.nativeEnum(BookingSource).optional(),
+}).superRefine((value, ctx) => {
+  if (value.from > value.to) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'The end date must be on or after the start date.' });
+    return;
+  }
+  const from = Date.parse(`${value.from}T00:00:00.000Z`);
+  const to = Date.parse(`${value.to}T00:00:00.000Z`);
+  if ((to - from) / 86_400_000 > 365) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'A report may cover at most 366 calendar days.' });
+  }
+});
+export type OwnerRevenueReportQuery = z.infer<typeof ownerRevenueReportQuerySchema>;
+
 // ---------- DTOs ----------
 
 /** Money is always shown in the shop's own currency; `amount` is a decimal number with <= 2 dp. */
@@ -489,6 +517,71 @@ export interface OwnerRevenueDto {
   estimatedServiceValueToday: number;
   unpaidInvoiceCount: number;
   unpaidInvoiceTotal: number;
+}
+
+export interface OwnerRevenueReportMetricDto {
+  completedVisits: number;
+  /** Gross completed-service value before invoice discounts; price data is an estimate when no snapshot exists. */
+  grossServiceValue: number;
+  /** Listed-price estimate, not money received. Standalone queue rows without a price snapshot use the current service list price. */
+  estimatedServiceValue: number;
+  invoiceCount: number;
+  invoiceDiscounts: number;
+  /** Issued invoice totals (tax-inclusive), excluding void invoices. */
+  invoicedAmount: number;
+  /** Append-only shop-recorded PAYMENT events for the cash-event period. */
+  recordedCollections: number;
+  /** Append-only shop-recorded REFUND events for the cash-event period. */
+  refunds: number;
+  netRecordedCollections: number;
+}
+
+export interface OwnerRevenueReportGroupDto extends OwnerRevenueReportMetricDto {
+  key: string;
+  label: string;
+}
+
+export interface OwnerRevenueReportServiceDto extends OwnerRevenueReportGroupDto {
+  serviceId: string | null;
+}
+
+export interface OwnerRevenueReportStaffDto extends OwnerRevenueReportGroupDto {
+  staffId: string | null;
+  /** False when only a text label exists and no completed session links the invoice to staff. */
+  identityVerified: boolean;
+}
+
+export interface OwnerRevenueReportCustomerDto extends OwnerRevenueReportGroupDto {
+  customerId: string | null;
+  /** Guest visits remain separate; names or phone numbers are never used to merge identities. */
+  identityVerified: boolean;
+}
+
+export interface OwnerRevenueReportPeriodDto extends OwnerRevenueReportMetricDto {
+  /** Salon-local day, Monday week start, or calendar month start. */
+  period: string;
+}
+
+export interface OwnerRevenueReportDto {
+  salonId: string;
+  currency: string | null;
+  timeZone: string;
+  from: string;
+  to: string;
+  groupBy: 'day' | 'week' | 'month';
+  source: BookingSourceType | null;
+  /** Visit and invoice amounts are bucketed by serviceDate; payments/refunds by recordedAt. */
+  periods: OwnerRevenueReportPeriodDto[];
+  totals: OwnerRevenueReportMetricDto;
+  byService: OwnerRevenueReportServiceDto[];
+  byStaff: OwnerRevenueReportStaffDto[];
+  byCustomer: OwnerRevenueReportCustomerDto[];
+  dataSemantics: {
+    estimateBasis: 'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE';
+    cashSource: 'SHOP_RECORDED_INVOICE_PAYMENT_LEDGER';
+    serviceCashAllocation: 'PRO_RATA_BY_INVOICE_LINE_TOTAL';
+    externalAttribution: 'NOT_CAPTURED_BY_EXISTING_SOURCE_FIELDS';
+  };
 }
 
 export interface OwnerTopServiceDto {

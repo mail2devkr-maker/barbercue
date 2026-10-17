@@ -9,6 +9,7 @@ import {
   createInvoiceSchema,
   createQueueCustomerSchema,
   deriveInvoicePaymentStatus,
+  ownerRevenueReportQuerySchema,
   formatInvoiceNumber,
   recordInvoicePaymentSchema,
   shopCancelBookingSchema,
@@ -217,6 +218,22 @@ describe('cancellationAnalyticsQuerySchema', () => {
       expect(cancellationAnalyticsQuerySchema.safeParse({ actor }).success).toBe(true);
     }
     expect(cancellationAnalyticsQuerySchema.safeParse({ actor: 'BOT' }).success).toBe(false);
+  });
+});
+
+describe('ownerRevenueReportQuerySchema', () => {
+  it('validates inclusive salon-local dates, grouping and existing booking sources', () => {
+    expect(ownerRevenueReportQuerySchema.parse({ from: '2026-10-01', to: '2026-10-31', source: 'WEB' })).toEqual({
+      from: '2026-10-01',
+      to: '2026-10-31',
+      groupBy: 'day',
+      source: 'WEB',
+    });
+    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2026-02-30', to: '2026-03-01' }).success).toBe(false);
+    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2026-10-02', to: '2026-10-01' }).success).toBe(false);
+    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2025-01-01', to: '2026-01-02' }).success).toBe(false);
+    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2026-10-01', to: '2026-10-31', source: 'FACEBOOK' }).success).toBe(false);
+    expect(ownerRevenueReportQuerySchema.safeParse({ from: '2026-10-01', to: '2026-10-31', groupBy: 'quarter' }).success).toBe(false);
   });
 });
 

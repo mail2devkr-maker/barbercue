@@ -1143,5 +1143,93 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect(overview.settings.hasBillingProfile).toBe(true);
       expect(overview.settings.hasPaymentQr).toBe(false);
     });
+
+    it('reports salon-local completed visits separately from invoice ledger cash and exports the same scoped report', async () => {
+      await api('post', `${SALON()}/invoices/${invoiceA.id}/payments`, tok.owner)
+        .send({ kind: 'REFUND', method: 'CASH', amount: 245 })
+        .expect(201);
+      await api('post', `${SALON()}/invoices/${invoiceA.id}/void`, tok.owner)
+        .send({ reason: 'Fully refunded before voiding for report coverage' })
+        .expect(201);
+
+      const from = utcToZonedDateStr(new Date(), TZ);
+      const to = addZonedCalendarDays(from, 7);
+      const path = `${SALON()}/revenue/report?from=${from}&to=${to}&groupBy=day`;
+      const reportResponse = await api('get', path, tok.owner).expect(200);
+      const report = reportResponse.body;
+
+      expect(reportResponse.headers['cache-control']).toContain('no-store');
+      expect(report).toMatchObject({ salonId: ids.salon, from, to, groupBy: 'day', timeZone: TZ });
+      expect(report.totals.completedVisits).toBeGreaterThan(0);
+      expect(report.totals.grossServiceValue).toBe(report.totals.estimatedServiceValue);
+      expect(report.totals.estimatedServiceValue).toBeGreaterThan(0);
+      expect(report.totals.invoiceCount).toBeGreaterThan(0);
+      expect(report.totals.recordedCollections).toBeGreaterThanOrEqual(295);
+      expect(report.totals.refunds).toBeGreaterThanOrEqual(50);
+      expect(report.totals.netRecordedCollections).toBeCloseTo(report.totals.recordedCollections - report.totals.refunds, 2);
+      expect(report.dataSemantics).toEqual({
+        estimateBasis: 'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE',
+        cashSource: 'SHOP_RECORDED_INVOICE_PAYMENT_LEDGER',
+        serviceCashAllocation: 'PRO_RATA_BY_INVOICE_LINE_TOTAL',
+        externalAttribution: 'NOT_CAPTURED_BY_EXISTING_SOURCE_FIELDS',
+      });
+      expect(report.byService).toEqual(expect.arrayContaining([
+        expect.objectContaining({ label: 'Haircut', completedVisits: expect.any(Number) }),
+      ]));
+      expect(report.periods).toHaveLength(8);
+      expect(report.periods.reduce((sum: number, period: { recordedCollections: number }) => sum + period.recordedCollections, 0)).toBeCloseTo(report.totals.recordedCollections, 2);
+      expect(report.periods.reduce((sum: number, period: { refunds: number }) => sum + period.refunds, 0)).toBeCloseTo(report.totals.refunds, 2);
+
+      const rangeStart = zonedWallTimeToUtc(from, '00:00', TZ)!;
+      const rangeEnd = zonedWallTimeToUtc(addZonedCalendarDays(to, 1), '00:00', TZ)!;
+      const cashLedger = await prisma.invoicePayment.findMany({
+        where: { salonId: ids.salon, recordedAt: { gte: rangeStart, lt: rangeEnd } },
+      });
+      const expectedCollections = cashLedger
+        .filter((payment) => payment.kind === 'PAYMENT')
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+      const expectedRefunds = cashLedger
+        .filter((payment) => payment.kind === 'REFUND')
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+      expect(report.totals.recordedCollections).toBeCloseTo(expectedCollections, 2);
+      expect(report.totals.refunds).toBeCloseTo(expectedRefunds, 2);
+      expect(report.totals.invoiceCount).toBe(await prisma.invoice.count({
+        where: { salonId: ids.salon, status: 'ISSUED', serviceDate: { gte: rangeStart, lt: rangeEnd } },
+      }));
+      expect(report.totals.invoiceCount).not.toBe(await prisma.invoice.count({
+        where: { salonId: ids.salon, serviceDate: { gte: rangeStart, lt: rangeEnd } },
+      }));
+
+      const walkInCount = await prisma.queueEntry.count({
+        where: {
+          salonId: ids.salon,
+          bookingId: null,
+          source: 'WALK_IN',
+          status: 'COMPLETED',
+          OR: [
+            { serviceCompletedAt: { gte: rangeStart, lt: rangeEnd } },
+            { serviceCompletedAt: null, serviceSessions: { some: { status: 'COMPLETED', endedAt: { gte: rangeStart, lt: rangeEnd } } } },
+          ],
+        },
+      });
+      expect(walkInCount).toBeGreaterThan(0);
+      const walkInReport = (await api('get', `${path}&source=WALK_IN`, tok.owner).expect(200)).body;
+      expect(walkInReport.totals.completedVisits).toBe(walkInCount);
+      const appReport = (await api('get', `${path}&source=APP`, tok.owner).expect(200)).body;
+      expect(appReport.totals.completedVisits).toBe(0);
+
+      await api('get', path, tok.ravi).expect(403);
+      await api('get', path, tok.outsider).expect(403);
+      await api('get', `${SALON()}/revenue/report?from=${to}&to=${from}`, tok.owner).expect(400);
+      await api('get', `${SALON()}/revenue/report?from=2020-01-01&to=2022-01-01`, tok.owner).expect(400);
+      await api('get', `${SALON()}/revenue/report?from=${from}&to=${to}&source=FACEBOOK`, tok.owner).expect(400);
+
+      const csv = await api('get', `${SALON()}/revenue/report.csv?from=${from}&to=${to}&groupBy=day`, tok.owner).expect(200);
+      expect(csv.headers['content-type']).toContain('text/csv');
+      expect(csv.headers['content-disposition']).toContain(`fastque-revenue-${from}-${to}.csv`);
+      expect(csv.text).toContain('recorded_collections');
+      expect(csv.text).toContain('SERVICE');
+      expect(csv.text).not.toContain(phone(1));
+    });
   });
 });

@@ -7,6 +7,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { CancellationAnalyticsService } from './cancellation-analytics.service';
 import { InvoicesService } from './invoices.service';
 import { OwnerOverviewService } from './owner-overview.service';
+import { RevenueReportService } from './revenue-report.service';
 import {
   CustomerInvoicesController,
   OwnerOpsController,
@@ -40,6 +41,7 @@ import { StaffWorkService } from './staff-work.service';
     CancellationAnalyticsService,
     InvoicesService,
     OwnerOverviewService,
+    RevenueReportService,
     OwnerSearchService,
     QueueAutoAssignService,
     ShopBookingActionsService,
