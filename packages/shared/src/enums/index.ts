@@ -531,6 +531,7 @@ export const SalonSetupErrorCode = {
   // a SalonSetupReadinessDto so the UI can tick off what's done and name what's missing, rather
   // than repeating a generic sentence.
   SALON_SETUP_INCOMPLETE: 'SALON_SETUP_INCOMPLETE',
+  SHOP_PHOTOS_REQUIRED: 'SHOP_PHOTOS_REQUIRED',
 } as const;
 export type SalonSetupErrorCode = (typeof SalonSetupErrorCode)[keyof typeof SalonSetupErrorCode];
 

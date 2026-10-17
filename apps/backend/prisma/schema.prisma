@@ -792,6 +792,10 @@ model Salon {
   // Percentage discount applied by FastQue only to APP/WEB bookings for this salon. The Service
   // rows remain the owner's original list prices; 0 means no platform-booking offer is active.
   onlineBookingDiscountPercent Int @default(0)
+  // Photo activation policy. NULL is the additive-migration marker for shops that existed before
+  // this requirement: ACTIVE/SUSPENDED lifecycle state identifies them as grandfathered without
+  // rewriting legacy rows. A newly activated shop is marked true after meeting the requirement.
+  shopPhotoRequirementGrandfathered Boolean?
   // Owner-operations mission. showPhoneToCustomers: the owner's opt-in to publish `phone` to
   // customers (public profile + "Call shop" on their own booking). Defaults to true because the
   // phone was already public before this column existed — the migration changes no behavior; an

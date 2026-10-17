@@ -1295,6 +1295,7 @@ describe('SalonsService', () => {
           cityId: 'c1',
           localityId: null,
           status: 'PENDING',
+          shopPhotoRequirementGrandfathered: false,
         }),
       });
       expect(prisma.userRole.upsert).toHaveBeenCalledWith({
