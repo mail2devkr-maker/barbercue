@@ -3,14 +3,17 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { deleteItem, getItem, setItem } from './secure-storage';
 import { reportNetworkFailure, reportNetworkSuccess } from './network-status';
 import { getCurrentUiStrings } from './current-language';
+import { resolveMobileApiBaseUrl } from './qa-backend-isolation';
 
-// A release binary must never silently point at localhost when an EAS public variable is absent.
-// EAS environments still provide EXPO_PUBLIC_API_BASE_URL for preview/production builds; this
-// fallback protects the customer-facing binary from a misconfigured environment while retaining
-// the convenient local backend default for Metro development.
-const DEVELOPMENT_API_BASE_URL = 'http://localhost:3000/api/v1';
-const PRODUCTION_API_BASE_URL = 'https://barbercuebackend-production.up.railway.app/api/v1';
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? (__DEV__ ? DEVELOPMENT_API_BASE_URL : PRODUCTION_API_BASE_URL);
+// The public production fallback is retained for existing signed-in customers,
+// but EXPLICIT QA builds never inherit that fallback: an absent/non-local URL
+// throws before a test build can silently contact the production backend.
+// Expo inlines both EXPO_PUBLIC_* values in the bundle at build/export time.
+const API_BASE_URL = resolveMobileApiBaseUrl({
+  configuredUrl: process.env.EXPO_PUBLIC_API_BASE_URL,
+  qaIsolated: process.env.EXPO_PUBLIC_FASTQUE_QA_ISOLATED === 'true',
+  development: __DEV__,
+});
 const REFRESH_TOKEN_KEY = 'barbercue_refresh_token';
 const REFRESH_PATH = `auth/${AUTH_PATHS.refresh}`;
 
