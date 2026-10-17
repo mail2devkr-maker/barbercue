@@ -64,12 +64,11 @@ describeDisposable(
       auth[label] = tokens.signAccessToken(
         user.id,
         roles.map(({ role }) => role),
-        roles.some(
-          ({ role }) =>
-            role === Role.SALON_OWNER || role === Role.PLATFORM_ADMIN,
-        )
-          ? SessionAudience.STAFF
-          : SessionAudience.CUSTOMER,
+        roles.some(({ role }) => role === Role.PLATFORM_ADMIN)
+          ? SessionAudience.ADMIN
+          : roles.some(({ role }) => role === Role.SALON_OWNER)
+            ? SessionAudience.STAFF
+            : SessionAudience.CUSTOMER,
       );
       return user;
     }
@@ -154,7 +153,12 @@ describeDisposable(
       ]);
       auth.sameActor = tokens.signAccessToken(
         sameActor.id,
-        [Role.SALON_OWNER, Role.PLATFORM_ADMIN],
+        [Role.PLATFORM_ADMIN],
+        SessionAudience.ADMIN,
+      );
+      auth.sameActorOwner = tokens.signAccessToken(
+        sameActor.id,
+        [Role.SALON_OWNER],
         SessionAudience.STAFF,
       );
       const reviewerA = await createUser('reviewerA', [
@@ -163,7 +167,7 @@ describeDisposable(
       auth.reviewerA = tokens.signAccessToken(
         reviewerA.id,
         [Role.PLATFORM_ADMIN],
-        SessionAudience.STAFF,
+        SessionAudience.ADMIN,
       );
       const reviewerB = await createUser('reviewerB', [
         { role: Role.PLATFORM_ADMIN, salonId: null },
@@ -171,7 +175,7 @@ describeDisposable(
       auth.reviewerB = tokens.signAccessToken(
         reviewerB.id,
         [Role.PLATFORM_ADMIN],
-        SessionAudience.STAFF,
+        SessionAudience.ADMIN,
       );
     }, 120_000);
 
@@ -244,10 +248,11 @@ describeDisposable(
     });
 
     it('prevents self-review and atomically approves with an audit record', async () => {
-      // The dual-role actor is authorized to submit and to enter the admin route; the service must
-      // still reject that actor's own review. This does not rely on client-side role hiding.
+      // The same dual-role principal uses a STAFF token to submit and a separate ADMIN token to
+      // enter the review route; the service must still reject that principal's own review.
+      // This does not rely on client-side role hiding or an invalid cross-audience token.
       const path = ownerLocationPath();
-      const submitted = await api('patch', path, auth.sameActor)
+      const submitted = await api('patch', path, auth.sameActorOwner)
         .send({ latitude: 25.2048, longitude: 55.2708, source: 'GPS' })
         .expect(200);
       const proposalId = submitted.body.id as string;

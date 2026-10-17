@@ -19,7 +19,7 @@ CREATE TABLE "salon_location_proposals" (
   CONSTRAINT "salon_location_proposals_latitude_check" CHECK ("latitude" >= -90 AND "latitude" <= 90),
   CONSTRAINT "salon_location_proposals_longitude_check" CHECK ("longitude" >= -180 AND "longitude" <= 180),
   CONSTRAINT "salon_location_proposals_pending_slot_check" CHECK (
-    ("status" = 'PENDING' AND "pendingSlot" = 1) OR
+    ("status" = 'PENDING' AND "pendingSlot" IS NOT DISTINCT FROM 1) OR
     ("status" <> 'PENDING' AND "pendingSlot" IS NULL)
   ),
   CONSTRAINT "salon_location_proposals_review_state_check" CHECK (
