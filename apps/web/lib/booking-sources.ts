@@ -3,6 +3,7 @@ import type {
   BookingAttributionSource,
   CreateBookingAttributionCampaignInput,
 } from "@barbercue/shared";
+import { CAMPAIGN_QUERY_KEY, isValidCampaignToken } from "./campaign-token";
 
 // Booking sources and campaign codes (owner dashboard, requirement #3), on Codex PR #230:
 //   GET  dashboard/salons/:id/booking-attribution/summary?from&to[&source]   bookings by source and campaign
@@ -152,6 +153,39 @@ export function formatLastDay(endsAt: string | null, timeZone: string): string {
   const ms = Date.parse(endsAt);
   if (!Number.isFinite(ms)) return "—";
   return formatShopDate(new Date(ms - 1).toISOString(), timeZone);
+}
+
+/** The part of the canonical share-link answer (Codex #236: GET dashboard/salons/:id/share-links) this page relies on. */
+export interface ShareLinksAnswer {
+  publicUrl: string | null;
+  readiness?: { ready?: boolean };
+}
+
+/**
+ * The shop's canonical public address from the server, or null when the server says the shop is not ready or sent
+ * something that is not an http(s) address. The campaign link is built only from this, never from a name lookup or the
+ * browser address.
+ */
+export function canonicalBaseUrl(answer: ShareLinksAnswer | null | undefined): string | null {
+  if (!answer || answer.readiness?.ready !== true || !answer.publicUrl) return null;
+  try {
+    const parsed = new URL(answer.publicUrl);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The shareable campaign link: the canonical public shop URL plus `fq_campaign=<token>`. Null for a badly shaped token. */
+export function buildCampaignUrl(publicUrl: string, token: string): string | null {
+  if (!isValidCampaignToken(token)) return null;
+  try {
+    const url = new URL(publicUrl);
+    url.searchParams.set(CAMPAIGN_QUERY_KEY, token);
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function summaryQueryString(range: { from: string; to: string }): string {

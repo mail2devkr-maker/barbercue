@@ -67,6 +67,28 @@ describe("campaignStatus", () => {
   });
 });
 
+describe("campaign link", () => {
+  const TOKEN = "oLeUkicJNsEw6HKmYc_xP3uXRdJ-oxESwdPlmlErmuM";
+  it("uses the canonical URL only when the server says the shop is ready and it is an http(s) address", () => {
+    expect(S.canonicalBaseUrl({ publicUrl: "https://fastque.com/in/patna/fade-house", readiness: { ready: true } })).toBe("https://fastque.com/in/patna/fade-house");
+    expect(S.canonicalBaseUrl({ publicUrl: "https://fastque.com/in/patna/fade-house", readiness: { ready: false } })).toBeNull();
+    expect(S.canonicalBaseUrl({ publicUrl: "https://fastque.com/x" })).toBeNull();
+    expect(S.canonicalBaseUrl({ publicUrl: null, readiness: { ready: true } })).toBeNull();
+    expect(S.canonicalBaseUrl({ publicUrl: "javascript:alert(1)", readiness: { ready: true } })).toBeNull();
+    expect(S.canonicalBaseUrl({ publicUrl: "not a url", readiness: { ready: true } })).toBeNull();
+    expect(S.canonicalBaseUrl(null)).toBeNull();
+  });
+  it("adds exactly one fq_campaign parameter and keeps the shop path", () => {
+    expect(S.buildCampaignUrl("https://fastque.com/in/patna/fade-house", TOKEN)).toBe(`https://fastque.com/in/patna/fade-house?fq_campaign=${TOKEN}`);
+    // an existing value is replaced, never duplicated
+    expect(S.buildCampaignUrl(`https://fastque.com/in/patna/fade-house?fq_campaign=old&x=1`, TOKEN)).toBe(`https://fastque.com/in/patna/fade-house?fq_campaign=${TOKEN}&x=1`);
+  });
+  it("refuses a badly shaped token or address instead of making a link that cannot work", () => {
+    expect(S.buildCampaignUrl("https://fastque.com/x", "short")).toBeNull();
+    expect(S.buildCampaignUrl("not a url", TOKEN)).toBeNull();
+  });
+});
+
 describe("helpers", () => {
   it("formats a date on the shop's calendar and tolerates a missing one", () => {
     expect(S.formatShopDate("2026-10-11T18:30:00.000Z", "Asia/Kolkata")).toBe("12 Oct 2026");
