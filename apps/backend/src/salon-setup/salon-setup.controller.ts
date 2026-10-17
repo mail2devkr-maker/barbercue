@@ -15,6 +15,8 @@ import {
 import {
   DASHBOARD_PATHS,
   Role,
+  bulkDeactivateSalonChairsApplySchema,
+  bulkDeactivateSalonChairsPreviewSchema,
   createSalonChairSchema,
   createSalonServiceSchema,
   createSalonPhotoSchema,
@@ -33,6 +35,8 @@ import {
   updateSalonStatusSchema,
   updateSalonTimezoneSchema,
   type AuthenticatedUser,
+  type BulkDeactivateSalonChairsApplyInput,
+  type BulkDeactivateSalonChairsPreviewInput,
   type CreateSalonChairInput,
   type CreateSalonServiceInput,
   type CreateSalonPhotoInput,
@@ -185,7 +189,9 @@ export class SalonSetupController {
   }
 
   // Multipart sibling of the JSON route above — same shape as photos' upload/link pair.
-  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}/${DASHBOARD_PATHS.photoUpload}`)
+  @Post(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.paymentQr}/${DASHBOARD_PATHS.photoUpload}`,
+  )
   @UseInterceptors(
     FileInterceptor('image', {
       storage: memoryStorage(),
@@ -233,7 +239,9 @@ export class SalonSetupController {
 
   // ---------- Services ----------
 
-  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`)
+  @Get(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`,
+  )
   getSalonType(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
@@ -241,7 +249,9 @@ export class SalonSetupController {
     return this.services.getSalonType(user.id, salonId);
   }
 
-  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`)
+  @Patch(
+    `${SALON_SCOPE}/${DASHBOARD_PATHS.services}/${DASHBOARD_PATHS.salonType}`,
+  )
   updateSalonType(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
@@ -269,16 +279,24 @@ export class SalonSetupController {
 
   // Preview never writes services. PDF/image extraction requires a deliberate external-AI consent.
   @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-preview`)
-  @UseInterceptors(FileInterceptor('file', {
-    storage: memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 1 },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 6 * 1024 * 1024, files: 1 },
+    }),
+  )
   previewServiceCatalog(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body('consent') consent?: string,
   ) {
-    return this.catalogImports.preview(user.id, salonId, file, consent === 'true');
+    return this.catalogImports.preview(
+      user.id,
+      salonId,
+      file,
+      consent === 'true',
+    );
   }
 
   @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-reviewed`)
@@ -418,6 +436,28 @@ export class SalonSetupController {
     body: UpdateSalonChairInput,
   ) {
     return this.chairs.update(user.id, salonId, chairId, body);
+  }
+
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.chairs}/bulk-deactivate/preview`)
+  @HttpCode(HttpStatus.OK)
+  previewBulkDeactivateChairs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(bulkDeactivateSalonChairsPreviewSchema))
+    body: BulkDeactivateSalonChairsPreviewInput,
+  ) {
+    return this.chairs.previewBulkDeactivate(user.id, salonId, body);
+  }
+
+  @Post(`${SALON_SCOPE}/${DASHBOARD_PATHS.chairs}/bulk-deactivate/apply`)
+  @HttpCode(HttpStatus.OK)
+  bulkDeactivateChairs(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(bulkDeactivateSalonChairsApplySchema))
+    body: BulkDeactivateSalonChairsApplyInput,
+  ) {
+    return this.chairs.bulkDeactivate(user.id, salonId, body);
   }
 
   // ---------- Staff / barbers ----------

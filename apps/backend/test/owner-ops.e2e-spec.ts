@@ -28,7 +28,13 @@ const maybe = LOCAL_DB ? describe : describe.skip;
 // or local midnight, whatever hour the suite runs at. Production code is timezone-aware throughout.
 const CANDIDATE_ZONES = ['Asia/Kolkata', 'Europe/London', 'America/New_York', 'Asia/Tokyo', 'Australia/Sydney', 'America/Los_Angeles'];
 const localHourIn = (zone: string) =>
-  Number(new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', hour12: false }).format(new Date())) % 24;
+  Number(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: zone,
+      hour: '2-digit',
+      hour12: false,
+    }).format(new Date()),
+  ) % 24;
 const TZ = CANDIDATE_ZONES.find((zone) => localHourIn(zone) >= 7 && localHourIn(zone) <= 19) ?? 'Asia/Kolkata';
 
 maybe('Owner operations (e2e, disposable local database)', () => {
@@ -61,15 +67,20 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
   async function makeUser(label: string, role: Role | null, salonId: string | null, extra: Record<string, unknown> = {}) {
     const user = await prisma.user.create({
-      data: { email: `e2e-${run}-${label}@example.test`, phone: null, status: UserStatus.ACTIVE, emailVerifiedAt: new Date(), ...extra },
+      data: {
+        email: `e2e-${run}-${label}@example.test`,
+        phone: null,
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+        ...extra,
+      },
     });
-    if (role) await prisma.userRole.create({ data: { userId: user.id, role, salonId } });
+    if (role)
+      await prisma.userRole.create({
+        data: { userId: user.id, role, salonId },
+      });
     ids[label] = user.id;
-    tok[label] = tokens.signAccessToken(
-      user.id,
-      role ? [role] : [Role.CUSTOMER],
-      role === Role.SALON_STAFF || role === Role.SALON_OWNER ? SessionAudience.STAFF : SessionAudience.CUSTOMER,
-    );
+    tok[label] = tokens.signAccessToken(user.id, role ? [role] : [Role.CUSTOMER], role === Role.SALON_STAFF || role === Role.SALON_OWNER ? SessionAudience.STAFF : SessionAudience.CUSTOMER);
     return user;
   }
 
@@ -101,7 +112,9 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   }
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalFilters(new AllExceptionsFilter());
@@ -112,7 +125,9 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     delivery = app.get(NotificationDeliveryService);
     expo = app.get(ExpoPushSender);
 
-    const city = await prisma.city.findFirstOrThrow({ where: { slug: 'jharsuguda' } });
+    const city = await prisma.city.findFirstOrThrow({
+      where: { slug: 'jharsuguda' },
+    });
     const owner = await makeUser('owner', null, null);
     const salon = await prisma.salon.create({
       data: {
@@ -134,18 +149,44 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       },
     });
     ids.salon = salon.id;
-    await prisma.userRole.create({ data: { userId: owner.id, role: Role.SALON_OWNER, salonId: salon.id } });
+    await prisma.userRole.create({
+      data: { userId: owner.id, role: Role.SALON_OWNER, salonId: salon.id },
+    });
     tok.owner = tokens.signAccessToken(owner.id, [Role.SALON_OWNER], SessionAudience.STAFF);
 
     for (let day = 0; day < 7; day++) {
-      await prisma.operatingHours.create({ data: { salonId: salon.id, dayOfWeek: day, openTime: '00:00', closeTime: '23:59', isClosed: false } });
+      await prisma.operatingHours.create({
+        data: {
+          salonId: salon.id,
+          dayOfWeek: day,
+          openTime: '00:00',
+          closeTime: '23:59',
+          isClosed: false,
+        },
+      });
     }
-    const haircut = await prisma.service.create({ data: { salonId: salon.id, name: 'Haircut', price: '250.00', durationMinutes: 30 } });
-    const beard = await prisma.service.create({ data: { salonId: salon.id, name: 'Beard Trim', price: '100.00', durationMinutes: 15 } });
+    const haircut = await prisma.service.create({
+      data: {
+        salonId: salon.id,
+        name: 'Haircut',
+        price: '250.00',
+        durationMinutes: 30,
+      },
+    });
+    const beard = await prisma.service.create({
+      data: {
+        salonId: salon.id,
+        name: 'Beard Trim',
+        price: '100.00',
+        durationMinutes: 15,
+      },
+    });
     ids.haircut = haircut.id;
     ids.beard = beard.id;
     for (const label of ['Chair 1', 'Chair 2', 'Chair 3']) {
-      const chair = await prisma.chair.create({ data: { salonId: salon.id, label } });
+      const chair = await prisma.chair.create({
+        data: { salonId: salon.id, label },
+      });
       ids[label] = chair.id;
     }
     // Ravi does haircut + beard; Sunil only haircuts.
@@ -171,7 +212,13 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       },
     });
     ids.otherSalon = otherSalon.id;
-    await prisma.userRole.create({ data: { userId: outsider.id, role: Role.SALON_OWNER, salonId: otherSalon.id } });
+    await prisma.userRole.create({
+      data: {
+        userId: outsider.id,
+        role: Role.SALON_OWNER,
+        salonId: otherSalon.id,
+      },
+    });
     tok.outsider = tokens.signAccessToken(outsider.id, [Role.SALON_OWNER], SessionAudience.STAFF);
   }, 120_000);
 
@@ -194,27 +241,13 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     });
 
     it('rejects a customer on every owner/staff route', async () => {
-      for (const path of [
-        `dashboard/salons/${ids.salon}/overview`,
-        `dashboard/salons/${ids.salon}/revenue`,
-        `dashboard/salons/${ids.salon}/analytics/cancellations`,
-        `dashboard/salons/${ids.salon}/billing-profile`,
-        `dashboard/salons/${ids.salon}/invoices`,
-        `dashboard/salons/${ids.salon}/staff/me/work`,
-        `dashboard/salons/${ids.salon}/search?q=ha`,
-      ]) {
+      for (const path of [`dashboard/salons/${ids.salon}/overview`, `dashboard/salons/${ids.salon}/revenue`, `dashboard/salons/${ids.salon}/analytics/cancellations`, `dashboard/salons/${ids.salon}/billing-profile`, `dashboard/salons/${ids.salon}/invoices`, `dashboard/salons/${ids.salon}/staff/me/work`, `dashboard/salons/${ids.salon}/search?q=ha`]) {
         await api('get', path, tok.cust1).expect(403);
       }
     });
 
     it('rejects a barber on owner-only routes but lets them reach their own work', async () => {
-      for (const path of [
-        `dashboard/salons/${ids.salon}/overview`,
-        `dashboard/salons/${ids.salon}/revenue`,
-        `dashboard/salons/${ids.salon}/analytics/cancellations`,
-        `dashboard/salons/${ids.salon}/billing-profile`,
-        `dashboard/salons/${ids.salon}/invoices`,
-      ]) {
+      for (const path of [`dashboard/salons/${ids.salon}/overview`, `dashboard/salons/${ids.salon}/revenue`, `dashboard/salons/${ids.salon}/analytics/cancellations`, `dashboard/salons/${ids.salon}/billing-profile`, `dashboard/salons/${ids.salon}/invoices`]) {
         await api('get', path, tok.ravi).expect(403);
       }
       const work = await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, tok.ravi).expect(200);
@@ -239,27 +272,34 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   describe('shop cancellation, notification delivery and attribution', () => {
     it('cancels as the owner, records who did it and tells the customer exactly once', async () => {
       const booking = await createBookingAs('cust1', slot('10:00'));
-      const res = await api('post', `dashboard/salons/${ids.salon}/bookings/${booking.id}/cancel`, tok.owner)
-        .send({ reason: 'Barber unwell' })
-        .expect(201);
+      const res = await api('post', `dashboard/salons/${ids.salon}/bookings/${booking.id}/cancel`, tok.owner).send({ reason: 'Barber unwell' }).expect(201);
       expect(res.body.status).toBe('CANCELLED');
       expect(res.body.cancelledByActor).toBe('OWNER');
       expect(res.body.notification.inApp).toBe('SENT');
       // Nothing is claimed for a channel that cannot deliver: no device is registered.
       expect(res.body.notification.push).toBe('NO_DEVICE');
 
-      const row = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
+      const row = await prisma.booking.findUniqueOrThrow({
+        where: { id: booking.id },
+      });
       expect(row.status).toBe('CANCELLED');
       expect(row.cancelledById).toBe(ids.owner);
       expect(row.cancelledByActor).toBe('OWNER');
       expect(row.cancellationReason).toBe('Barber unwell');
       expect(row.cancellationChargeAmount).toBeNull();
-      expect(await prisma.customerLedgerEntry.count({ where: { bookingId: booking.id } })).toBe(0);
+      expect(
+        await prisma.customerLedgerEntry.count({
+          where: { bookingId: booking.id },
+        }),
+      ).toBe(0);
 
       const inbox = await api('get', 'notifications/mine', tok.cust1).expect(200);
-      const note = (inbox.body.items as Array<{ type: string; payload: Record<string, unknown> }>).find(
-        (n) => n.type === 'booking.cancelled_by_shop',
-      );
+      const note = (
+        inbox.body.items as Array<{
+          type: string;
+          payload: Record<string, unknown>;
+        }>
+      ).find((n) => n.type === 'booking.cancelled_by_shop');
       expect(note).toBeDefined();
       expect(note!.payload.salonName).toBe(`Owner Ops Salon ${run}`);
       expect(note!.payload.serviceName).toBe('Haircut');
@@ -273,10 +313,22 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await api('post', `dashboard/salons/${ids.salon}/bookings/${booking.id}/cancel`, tok.owner).send({}).expect(201);
       await api('post', `dashboard/salons/${ids.salon}/bookings/${booking.id}/cancel`, tok.owner).send({}).expect(409);
       expect(
-        await prisma.notificationDelivery.count({ where: { dedupeKey: { startsWith: `booking.cancelled_by_shop:${booking.id}` } } }),
+        await prisma.notificationDelivery.count({
+          where: {
+            dedupeKey: {
+              startsWith: `booking.cancelled_by_shop:${booking.id}`,
+            },
+          },
+        }),
       ).toBe(2); // one IN_APP + one PUSH ledger row
       expect(
-        await prisma.notification.count({ where: { userId: ids.cust1, type: 'booking.cancelled_by_shop', payload: { path: ['bookingId'], equals: booking.id } } }),
+        await prisma.notification.count({
+          where: {
+            userId: ids.cust1,
+            type: 'booking.cancelled_by_shop',
+            payload: { path: ['bookingId'], equals: booking.id },
+          },
+        }),
       ).toBe(1);
     });
 
@@ -288,15 +340,33 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         type: 'booking.cancelled_by_shop' as const,
         inAppPayload: { hello: 'world' },
         deepLink: 'account/bookings',
-        push: { title: 't', body: 'b', data: {}, category: 'BOOKING_UPDATES' as never },
+        push: {
+          title: 't',
+          body: 'b',
+          data: {},
+          category: 'BOOKING_UPDATES' as never,
+        },
       };
       const [a, b, c] = await Promise.all([delivery.deliverToUser(input), delivery.deliverToUser(input), delivery.deliverToUser(input)]);
       expect([a.inApp, b.inApp, c.inApp].every((s) => s === 'SENT')).toBe(true);
-      expect(await prisma.notification.count({ where: { userId: ids.cust2, payload: { path: ['hello'], equals: 'world' } } })).toBe(1);
+      expect(
+        await prisma.notification.count({
+          where: {
+            userId: ids.cust2,
+            payload: { path: ['hello'], equals: 'world' },
+          },
+        }),
+      ).toBe(1);
     });
 
     it('a failing push provider never rolls the cancellation back, is retried, and is recorded honestly', async () => {
-      await prisma.pushDevice.create({ data: { userId: ids.cust2, expoPushToken: `ExponentPushToken[${run}-e2e]`, platform: 'android' } as never });
+      await prisma.pushDevice.create({
+        data: {
+          userId: ids.cust2,
+          expoPushToken: `ExponentPushToken[${run}-e2e]`,
+          platform: 'android',
+        } as never,
+      });
       const send = jest.spyOn(expo, 'send').mockRejectedValue(new Error('provider down'));
       try {
         const booking = await createBookingAs('cust2', slot('12:00'));
@@ -304,7 +374,9 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         expect(res.body.status).toBe('CANCELLED'); // the business action stands
         expect(res.body.notification.inApp).toBe('SENT'); // the durable in-app notice exists
         expect(res.body.notification.push).toBe('FAILED');
-        const ledger = await prisma.notificationDelivery.findUniqueOrThrow({ where: { dedupeKey: `booking.cancelled_by_shop:${booking.id}:PUSH` } });
+        const ledger = await prisma.notificationDelivery.findUniqueOrThrow({
+          where: { dedupeKey: `booking.cancelled_by_shop:${booking.id}:PUSH` },
+        });
         expect(ledger.status).toBe('FAILED');
         expect(ledger.attempts).toBe(1);
         expect(ledger.nextAttemptAt).not.toBeNull();
@@ -313,7 +385,9 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         send.mockResolvedValue([{ status: 'ok', id: 't1' }]);
         const handled = await delivery.sweepRetries(new Date(Date.now() + 10 * 60_000));
         expect(handled).toBeGreaterThanOrEqual(1);
-        const after = await prisma.notificationDelivery.findUniqueOrThrow({ where: { dedupeKey: `booking.cancelled_by_shop:${booking.id}:PUSH` } });
+        const after = await prisma.notificationDelivery.findUniqueOrThrow({
+          where: { dedupeKey: `booking.cancelled_by_shop:${booking.id}:PUSH` },
+        });
         expect(after.status).toBe('SENT');
         expect(after.attempts).toBe(2);
       } finally {
@@ -327,13 +401,20 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const mine = await createBookingAs('cust1', slot('13:00'));
       await api('post', `bookings/${mine.id}/cancel`, tok.cust1).send({}).expect(200);
       // a barber cancelling an appointment assigned to them
-      const assigned = await createBookingAs('cust1', slot('14:00'), { staffId: ids.raviStaff });
+      const assigned = await createBookingAs('cust1', slot('14:00'), {
+        staffId: ids.raviStaff,
+      });
       await api('post', `dashboard/salons/${ids.salon}/bookings/${assigned.id}/cancel`, tok.ravi).send({ reason: 'Chair repair' }).expect(201);
       // legacy: cancelled before attribution existed and not by the customer
       const legacy = await createBookingAs('cust2', slot('15:00'));
       await prisma.booking.update({
         where: { id: legacy.id },
-        data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledById: null, cancelledByActor: null },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancelledById: null,
+          cancelledByActor: null,
+        },
       });
 
       const res = await api('get', `dashboard/salons/${ids.salon}/analytics/cancellations?range=30d`, tok.owner).expect(200);
@@ -344,18 +425,33 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect(res.body.unattributedCount).toBe(res.body.byActor.UNKNOWN);
       const legacyRow = (res.body.rows as Array<{ bookingId: string; actor: string }>).find((r) => r.bookingId === legacy.id);
       expect(legacyRow?.actor).toBe('UNKNOWN');
-      const staffRow = (res.body.rows as Array<{ bookingId: string; actor: string; reason: string }>).find((r) => r.bookingId === assigned.id);
-      expect(staffRow).toMatchObject({ actor: 'STAFF', reason: 'Chair repair' });
+      const staffRow = (
+        res.body.rows as Array<{
+          bookingId: string;
+          actor: string;
+          reason: string;
+        }>
+      ).find((r) => r.bookingId === assigned.id);
+      expect(staffRow).toMatchObject({
+        actor: 'STAFF',
+        reason: 'Chair repair',
+      });
       expect(res.body.cancellationRatePercent).toBeGreaterThan(0);
 
       const onlyCustomer = await api('get', `dashboard/salons/${ids.salon}/analytics/cancellations?range=30d&actor=CUSTOMER`, tok.owner).expect(200);
       expect(onlyCustomer.body.rows.every((r: { actor: string }) => r.actor === 'CUSTOMER')).toBe(true);
       // Live Queue outcomes are reported separately, never mixed into booking cancellations.
-      expect(res.body.liveQueue).toEqual({ cancelled: expect.any(Number), expired: expect.any(Number), noShow: expect.any(Number) });
+      expect(res.body.liveQueue).toEqual({
+        cancelled: expect.any(Number),
+        expired: expect.any(Number),
+        noShow: expect.any(Number),
+      });
     });
 
     it("a barber cannot cancel a colleague's appointment or another shop's booking", async () => {
-      const theirs = await createBookingAs('cust1', slot('16:00'), { staffId: ids.sunilStaff });
+      const theirs = await createBookingAs('cust1', slot('16:00'), {
+        staffId: ids.sunilStaff,
+      });
       await api('post', `dashboard/salons/${ids.salon}/bookings/${theirs.id}/cancel`, tok.ravi).send({}).expect(403);
       await api('post', `dashboard/salons/${ids.salon}/bookings/${theirs.id}/cancel`, tok.outsider).send({}).expect(403);
       expect((await prisma.booking.findUniqueOrThrow({ where: { id: theirs.id } })).status).toBe('CONFIRMED');
@@ -369,7 +465,14 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const hidden = await api('get', `bookings/${booking.id}`, tok.cust1).expect(200);
       expect(hidden.body.shopPhone).toBeNull();
       await api('patch', `dashboard/salons/${ids.salon}/contact-visibility`, tok.owner).send({ showPhoneToCustomers: true }).expect(200);
-      expect(await prisma.auditLog.count({ where: { action: 'SALON_PHONE_VISIBILITY_CHANGED', entityId: ids.salon } })).toBe(2);
+      expect(
+        await prisma.auditLog.count({
+          where: {
+            action: 'SALON_PHONE_VISIBILITY_CHANGED',
+            entityId: ids.salon,
+          },
+        }),
+      ).toBe(2);
     });
   });
 
@@ -378,16 +481,27 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     it('creates a guest appointment with no account, no payment QR and a full audit trail', async () => {
       const startIso = slot('10:30', 3);
       const res = await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner)
-        .send({ guestName: 'Mohan Das', serviceIds: [ids.haircut], slotStart: startIso, note: 'Prefers scissors only' })
+        .send({
+          guestName: 'Mohan Das',
+          serviceIds: [ids.haircut],
+          slotStart: startIso,
+          note: 'Prefers scissors only',
+        })
         .expect(201);
       expect(res.body.guestName).toBe('Mohan Das');
       expect(res.body.guestPhone).toBeNull();
-      const row = await prisma.booking.findUniqueOrThrow({ where: { id: res.body.id } });
+      const row = await prisma.booking.findUniqueOrThrow({
+        where: { id: res.body.id },
+      });
       expect(row.source).toBe('IN_SHOP');
       expect(row.customerId).toBeNull();
       expect(row.status).toBe('CONFIRMED'); // no online prepayment gate for an in-person booking
       expect(row.createdByUserId).toBe(ids.owner);
-      expect(await prisma.auditLog.count({ where: { action: 'BOOKING_CREATED_IN_SHOP', entityId: row.id } })).toBe(1);
+      expect(
+        await prisma.auditLog.count({
+          where: { action: 'BOOKING_CREATED_IN_SHOP', entityId: row.id },
+        }),
+      ).toBe(1);
       // it is a real booking: it shows up in the owner's Bookings list
       const list = await api('get', `dashboard/salons/${ids.salon}/bookings?filter=all`, tok.owner).expect(200);
       const found = (list.body.items as Array<{ id: string; guestName?: string }>).find((b) => b.id === row.id);
@@ -397,10 +511,21 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     it('stores a phone only with consent and never invents a user account', async () => {
       const usersBefore = await prisma.user.count();
       await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.ravi)
-        .send({ guestName: 'Kiran', guestPhone: '9876511111', serviceIds: [ids.haircut], slotStart: slot('11:30', 3) })
+        .send({
+          guestName: 'Kiran',
+          guestPhone: '9876511111',
+          serviceIds: [ids.haircut],
+          slotStart: slot('11:30', 3),
+        })
         .expect(400);
       const ok = await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.ravi)
-        .send({ guestName: 'Kiran', guestPhone: '9876511111', contactConsent: true, serviceIds: [ids.haircut], slotStart: slot('11:30', 3) })
+        .send({
+          guestName: 'Kiran',
+          guestPhone: '9876511111',
+          contactConsent: true,
+          serviceIds: [ids.haircut],
+          slotStart: slot('11:30', 3),
+        })
         .expect(201);
       expect(ok.body.guestPhone).toBe('+919876511111');
       expect(await prisma.user.count()).toBe(usersBefore);
@@ -408,31 +533,69 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
     it('rejects an exact duplicate even with a fresh idempotency key, and an over-capacity slot', async () => {
       const startIso = slot('13:30', 3);
-      const body = { guestName: 'Duplicate Dan', serviceIds: [ids.haircut], slotStart: startIso };
+      const body = {
+        guestName: 'Duplicate Dan',
+        serviceIds: [ids.haircut],
+        slotStart: startIso,
+      };
       await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner).send(body).expect(201);
       await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner).send(body).expect(409);
       // capacity = min(2 qualified barbers, 3 chairs) = 2 per slot
       const busy = slot('15:30', 3);
-      await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner).send({ guestName: 'A One', serviceIds: [ids.haircut], slotStart: busy }).expect(201);
-      await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner).send({ guestName: 'B Two', serviceIds: [ids.haircut], slotStart: busy }).expect(201);
-      await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner).send({ guestName: 'C Three', serviceIds: [ids.haircut], slotStart: busy }).expect(409);
+      await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner)
+        .send({
+          guestName: 'A One',
+          serviceIds: [ids.haircut],
+          slotStart: busy,
+        })
+        .expect(201);
+      await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner)
+        .send({
+          guestName: 'B Two',
+          serviceIds: [ids.haircut],
+          slotStart: busy,
+        })
+        .expect(201);
+      await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner)
+        .send({
+          guestName: 'C Three',
+          serviceIds: [ids.haircut],
+          slotStart: busy,
+        })
+        .expect(409);
     });
 
     it('does not let another shop create an appointment here, and rejects a barber who cannot do the service', async () => {
       await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.outsider)
-        .send({ guestName: 'Nope', serviceIds: [ids.haircut], slotStart: slot('17:00', 3) })
+        .send({
+          guestName: 'Nope',
+          serviceIds: [ids.haircut],
+          slotStart: slot('17:00', 3),
+        })
         .expect(403);
       await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner)
-        .send({ guestName: 'Needs Beard', serviceIds: [ids.beard], slotStart: slot('17:30', 3), preferredStaffId: ids.sunilStaff })
+        .send({
+          guestName: 'Needs Beard',
+          serviceIds: [ids.beard],
+          slotStart: slot('17:30', 3),
+          preferredStaffId: ids.sunilStaff,
+        })
         .expect(400);
     });
 
     it('a booking made by the shop for a guest can be cancelled with nobody to notify', async () => {
       const made = await api('post', `dashboard/salons/${ids.salon}/bookings/in-shop`, tok.owner)
-        .send({ guestName: 'Walk Away', serviceIds: [ids.haircut], slotStart: slot('18:00', 3) })
+        .send({
+          guestName: 'Walk Away',
+          serviceIds: [ids.haircut],
+          slotStart: slot('18:00', 3),
+        })
         .expect(201);
       const res = await api('post', `dashboard/salons/${ids.salon}/bookings/${made.body.id}/cancel`, tok.owner).send({}).expect(201);
-      expect(res.body.notification).toEqual({ inApp: 'NO_ACCOUNT', push: 'NO_ACCOUNT' });
+      expect(res.body.notification).toEqual({
+        inApp: 'NO_ACCOUNT',
+        push: 'NO_ACCOUNT',
+      });
     });
   });
 
@@ -440,7 +603,11 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   describe('Live Queue: separated views, seating, completion and positions', () => {
     const board = async () => (await api('get', `dashboard/salons/${ids.salon}/queue`, tok.owner).expect(200)).body;
     const addCustomer = async (name: string, extra: Record<string, unknown> = {}) =>
-      (await api('post', `dashboard/salons/${ids.salon}/queue/customers`, tok.owner).send({ name, ...extra }).expect(201)).body as {
+      (
+        await api('post', `dashboard/salons/${ids.salon}/queue/customers`, tok.owner)
+          .send({ name, ...extra })
+          .expect(201)
+      ).body as {
         id: string;
         status: string;
         customerName: string;
@@ -451,7 +618,10 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
     it('adds a local customer who is waiting, named, present, and in exactly one section', async () => {
       const entry = await addCustomer('Anil Verma');
-      expect(entry).toMatchObject({ status: 'WAITING', customerName: 'Anil Verma' });
+      expect(entry).toMatchObject({
+        status: 'WAITING',
+        customerName: 'Anil Verma',
+      });
       expect(entry.arrivedAt).not.toBeNull();
       const b = await board();
       expect(typeof b.revision).toBe('number');
@@ -485,7 +655,11 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
       // The barber sees exactly this as THEIR current service; the colleague sees none.
       const mine = await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, tok.ravi).expect(200);
-      expect(mine.body.current).toMatchObject({ queueEntryId: entry.id, serviceSessionId: session, customerLabel: 'Seated Sam' });
+      expect(mine.body.current).toMatchObject({
+        queueEntryId: entry.id,
+        serviceSessionId: session,
+        customerLabel: 'Seated Sam',
+      });
       expect((await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, tok.sunil).expect(200)).body.current).toBeNull();
 
       // A colleague may not complete it; the performing barber may; a repeat is refused (no double completion).
@@ -530,14 +704,26 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   describe('Direct service start: waiting -> in service when a barber and chair become free', () => {
     const board = async () => (await api('get', `dashboard/salons/${ids.salon}/queue`, tok.owner).expect(200)).body;
     const add = async (name: string, extra: Record<string, unknown> = {}) =>
-      (await api('post', `dashboard/salons/${ids.salon}/queue/customers`, tok.owner).send({ name, ...extra }).expect(201)).body as { id: string };
+      (
+        await api('post', `dashboard/salons/${ids.salon}/queue/customers`, tok.owner)
+          .send({ name, ...extra })
+          .expect(201)
+      ).body as { id: string };
     const settle = () => trigger.idle(ids.salon);
-    const setAuto = (enabled: boolean) =>
-      api('patch', `dashboard/salons/${ids.salon}/queue/settings`, tok.owner).send({ autoAssignEnabled: enabled }).expect(200);
+    const setAuto = (enabled: boolean) => api('patch', `dashboard/salons/${ids.salon}/queue/settings`, tok.owner).send({ autoAssignEnabled: enabled }).expect(200);
     const activeSessions = () =>
-      prisma.serviceSession.findMany({ where: { status: 'ACTIVE', chair: { salonId: ids.salon } }, include: { queueEntry: true } });
+      prisma.serviceSession.findMany({
+        where: { status: 'ACTIVE', chair: { salonId: ids.salon } },
+        include: { queueEntry: true },
+      });
     const assignedHolds = () =>
-      prisma.queueEntry.findMany({ where: { salonId: ids.salon, status: 'CALLED', assignedStaffId: { not: null } } });
+      prisma.queueEntry.findMany({
+        where: {
+          salonId: ids.salon,
+          status: 'CALLED',
+          assignedStaffId: { not: null },
+        },
+      });
     const tokenOfStaff = (staffId: string) => (staffId === ids.raviStaff ? tok.ravi : tok.sunil);
     const start = (entryId: string, token: string) => api('post', `dashboard/queue-entries/${entryId}/start-service`, token);
     const cleanup = async () => {
@@ -554,21 +740,163 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     };
     afterEach(cleanup);
 
+    it('previews occupied chairs, blocks live occupancy, and batch-deactivates only eligible chairs', async () => {
+      await setAuto(false);
+      const activeChairId = ids['Chair 1'];
+      const freeChairId = ids['Chair 2'];
+      const guest = await add('Bulk chair conflict', {
+        serviceId: ids.haircut,
+      });
+      await api('post', `dashboard/queue-entries/${guest.id}/assign`, tok.owner)
+        .send({
+          staffId: ids.raviStaff,
+          chairId: activeChairId,
+          startService: true,
+        })
+        .expect(201);
+
+      const foreignChair = await prisma.chair.create({
+        data: { salonId: ids.otherSalon, label: `Foreign ${run}` },
+      });
+      const path = `dashboard/salons/${ids.salon}/chairs/bulk-deactivate`;
+      const preview = await api('post', `${path}/preview`, tok.owner)
+        .send({ chairIds: [activeChairId, freeChairId] })
+        .expect(200);
+      expect(preview.body.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            chairId: activeChairId,
+            disposition: 'CONFLICT',
+            conflicts: ['ACTIVE_SERVICE_SESSION'],
+          }),
+          expect.objectContaining({
+            chairId: freeChairId,
+            disposition: 'READY',
+          }),
+        ]),
+      );
+
+      const crossSalon = await api('post', `${path}/preview`, tok.owner)
+        .send({ chairIds: [foreignChair.id] })
+        .expect(200);
+      expect(crossSalon.body.items).toEqual([
+        expect.objectContaining({
+          chairId: foreignChair.id,
+          disposition: 'NOT_FOUND',
+          label: null,
+        }),
+      ]);
+      await api('post', `${path}/apply`, tok.outsider)
+        .send({
+          items: [
+            {
+              chairId: freeChairId,
+              expectedUpdatedAt: preview.body.items.find((row: { chairId: string }) => row.chairId === freeChairId).expectedUpdatedAt,
+            },
+          ],
+        })
+        .expect(403);
+
+      try {
+        const applied = await api('post', `${path}/apply`, tok.owner)
+          .send({
+            items: preview.body.items.map((item: { chairId: string; expectedUpdatedAt: string }) => ({
+              chairId: item.chairId,
+              expectedUpdatedAt: item.expectedUpdatedAt,
+            })),
+          })
+          .expect(200);
+
+        expect(applied.body.deactivatedCount).toBe(1);
+        expect(applied.body.items).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              chairId: activeChairId,
+              result: 'CONFLICT',
+              conflicts: ['ACTIVE_SERVICE_SESSION'],
+            }),
+            expect.objectContaining({
+              chairId: freeChairId,
+              result: 'DEACTIVATED',
+              conflicts: [],
+            }),
+          ]),
+        );
+        expect(
+          (
+            await prisma.chair.findUniqueOrThrow({
+              where: { id: activeChairId },
+            })
+          ).status,
+        ).toBe('ACTIVE');
+        expect((await prisma.chair.findUniqueOrThrow({ where: { id: freeChairId } })).status).toBe('INACTIVE');
+        expect(
+          await prisma.auditLog.count({
+            where: { action: 'CHAIR_BULK_DEACTIVATED', entityId: freeChairId },
+          }),
+        ).toBe(1);
+      } finally {
+        await prisma.chair.update({
+          where: { id: freeChairId },
+          data: { status: 'ACTIVE' },
+        });
+      }
+    });
+
+    it('serializes competing apply requests so exactly one deactivation commits', async () => {
+      const chairId = ids['Chair 3'];
+      const path = `dashboard/salons/${ids.salon}/chairs/bulk-deactivate`;
+      const preview = await api('post', `${path}/preview`, tok.owner)
+        .send({ chairIds: [chairId] })
+        .expect(200);
+      const body = {
+        items: [
+          {
+            chairId,
+            expectedUpdatedAt: preview.body.items[0].expectedUpdatedAt,
+          },
+        ],
+      };
+
+      try {
+        const results = await Promise.all([api('post', `${path}/apply`, tok.owner).send(body), api('post', `${path}/apply`, tok.owner).send(body)]);
+        expect(results.map((response) => response.status)).toEqual([200, 200]);
+        expect(results.reduce((sum, response) => sum + response.body.deactivatedCount, 0)).toBe(1);
+        expect(results.flatMap((response) => response.body.items).filter((item: { result: string }) => item.result === 'CONFLICT')).toHaveLength(1);
+        expect((await prisma.chair.findUniqueOrThrow({ where: { id: chairId } })).status).toBe('INACTIVE');
+        expect(
+          await prisma.auditLog.count({
+            where: { action: 'CHAIR_BULK_DEACTIVATED', entityId: chairId },
+          }),
+        ).toBe(1);
+      } finally {
+        await prisma.chair.update({
+          where: { id: chairId },
+          data: { status: 'ACTIVE' },
+        });
+      }
+    });
+
     it('persists the owner ON/OFF choice and never allows another shop to change it', async () => {
       await setAuto(false);
       expect((await board()).autoAssignEnabled).toBe(false);
       await setAuto(true);
       expect((await board()).autoAssignEnabled).toBe(true);
       expect((await prisma.salon.findUniqueOrThrow({ where: { id: ids.salon } })).queueAutoAssignEnabled).toBe(true);
-      expect(await prisma.auditLog.count({ where: { entityId: ids.salon, action: 'QUEUE_AUTO_ASSIGN_ENABLED' } })).toBeGreaterThanOrEqual(1);
+      expect(
+        await prisma.auditLog.count({
+          where: { entityId: ids.salon, action: 'QUEUE_AUTO_ASSIGN_ENABLED' },
+        }),
+      ).toBeGreaterThanOrEqual(1);
       expect((await api('get', `dashboard/salons/${ids.salon}/queue/settings`, tok.ravi).expect(200)).body).toEqual({ autoAssignEnabled: true });
-      await api('patch', `dashboard/salons/${ids.salon}/queue/settings`, tok.outsider)
-        .send({ autoAssignEnabled: false }).expect(403);
+      await api('patch', `dashboard/salons/${ids.salon}/queue/settings`, tok.outsider).send({ autoAssignEnabled: false }).expect(403);
     });
 
     it('OFF: arrived visitors remain WAITING even with spare capacity', async () => {
       await setAuto(false);
-      const waiting = await add('Waiting While Off', { serviceId: ids.haircut });
+      const waiting = await add('Waiting While Off', {
+        serviceId: ids.haircut,
+      });
       await settle();
       expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toContain(waiting.id);
       expect(await activeSessions()).toHaveLength(0);
@@ -588,15 +916,22 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect(await assignedHolds()).toHaveLength(0);
       for (const row of active) {
         expect(row.queueEntry).toMatchObject({
-          status: 'IN_SERVICE', assignedStaffId: row.staffId, assignedChairId: row.chairId,
-          serviceStartedAt: expect.any(Date), assignedAt: expect.any(Date),
+          status: 'IN_SERVICE',
+          assignedStaffId: row.staffId,
+          assignedChairId: row.chairId,
+          serviceStartedAt: expect.any(Date),
+          assignedAt: expect.any(Date),
         });
       }
       const snapshot = await board();
       expect(snapshot.sections.inService.map((x: { id: string }) => x.id).sort()).toEqual([a.id, b.id].sort());
       expect(snapshot.sections.waiting.map((x: { id: string }) => x.id)).toEqual([c.id]);
       expect(snapshot.sections.assigned).toHaveLength(0);
-      expect(snapshot.counts).toMatchObject({ waiting: 1, assigned: 0, inService: 2 });
+      expect(snapshot.counts).toMatchObject({
+        waiting: 1,
+        assigned: 0,
+        inService: 2,
+      });
       const audit = await prisma.auditLog.findFirstOrThrow({
         where: { entityId: a.id, action: 'QUEUE_ENTRY_AUTO_ASSIGNED' },
       });
@@ -614,10 +949,15 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect(new Set(sessions.map((x) => x.staffId)).size).toBe(2);
       expect(new Set(sessions.map((x) => x.chairId)).size).toBe(2);
       await api('post', `dashboard/queue-entries/${c.id}/assign`, tok.owner)
-        .send({ staffId: sessions[0].staffId, chairId: ids['Chair 3'], startService: true })
+        .send({
+          staffId: sessions[0].staffId,
+          chairId: ids['Chair 3'],
+          startService: true,
+        })
         .expect(409);
       expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toEqual([c.id]);
-      void a; void b;
+      void a;
+      void b;
     });
 
     it('a completed service instantly auto-starts the next arrived waiting visitor without a button', async () => {
@@ -632,7 +972,10 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await settle();
       const sessions = await activeSessions();
       expect(sessions).toHaveLength(2);
-      expect(sessions.find((x) => x.queueEntryId === c.id)).toMatchObject({ staffId: occupied.staffId, chairId: occupied.chairId });
+      expect(sessions.find((x) => x.queueEntryId === c.id)).toMatchObject({
+        staffId: occupied.staffId,
+        chairId: occupied.chairId,
+      });
       expect((await board()).sections.inService.map((x: { id: string }) => x.id).sort()).toEqual([b.id, c.id].sort());
       expect(await assignedHolds()).toHaveLength(0);
     });
@@ -646,22 +989,31 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const old = (await activeSessions()).find((x) => x.queueEntryId === a.id)!;
       await api('post', `dashboard/queue-entries/${a.id}/cancel`, tok.owner).expect(201);
       await settle();
-      expect((await activeSessions()).find((x) => x.queueEntryId === c.id))
-        .toMatchObject({ staffId: old.staffId, chairId: old.chairId });
+      expect((await activeSessions()).find((x) => x.queueEntryId === c.id)).toMatchObject({ staffId: old.staffId, chairId: old.chairId });
       expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: a.id } })).status).toBe('CANCELLED');
     });
 
     it('remote customers never start until arrival; after Mark as in the shop they start immediately', async () => {
       await setAuto(true);
       const remote = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1)
-        .send({ serviceId: ids.haircut, contactName: 'Remote Ria', contactPhone: '9876500009' }).expect(201);
+        .send({
+          serviceId: ids.haircut,
+          contactName: 'Remote Ria',
+          contactPhone: '9876500009',
+        })
+        .expect(201);
       await settle();
       expect(await activeSessions()).toHaveLength(0);
       expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toContain(remote.body.id);
       await api('post', `dashboard/queue-entries/${remote.body.id}/arrive`, tok.owner).expect(201);
       await settle();
-      const started = await prisma.queueEntry.findUniqueOrThrow({ where: { id: remote.body.id } });
-      expect(started).toMatchObject({ status: 'IN_SERVICE', serviceStartedAt: expect.any(Date) });
+      const started = await prisma.queueEntry.findUniqueOrThrow({
+        where: { id: remote.body.id },
+      });
+      expect(started).toMatchObject({
+        status: 'IN_SERVICE',
+        serviceStartedAt: expect.any(Date),
+      });
       expect((await activeSessions()).map((x) => x.queueEntryId)).toContain(remote.body.id);
       expect(await assignedHolds()).toHaveLength(0);
     });
@@ -669,12 +1021,23 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     it('manual one-click start respects arrival even if the automatic setting is OFF', async () => {
       await setAuto(false);
       const remote = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1)
-        .send({ serviceId: ids.haircut, contactName: 'Still Traveling', contactPhone: '9876500010' }).expect(201);
+        .send({
+          serviceId: ids.haircut,
+          contactName: 'Still Traveling',
+          contactPhone: '9876500010',
+        })
+        .expect(201);
       await api('post', `dashboard/queue-entries/${remote.body.id}/auto-assign`, tok.owner).expect(409);
       expect(await activeSessions()).toHaveLength(0);
       const present = await add('At The Counter', { serviceId: ids.haircut });
       await api('post', `dashboard/queue-entries/${present.id}/auto-assign`, tok.owner).expect(201);
-      expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: present.id } })).status).toBe('IN_SERVICE');
+      expect(
+        (
+          await prisma.queueEntry.findUniqueOrThrow({
+            where: { id: present.id },
+          })
+        ).status,
+      ).toBe('IN_SERVICE');
       expect((await activeSessions()).map((x) => x.queueEntryId)).toContain(present.id);
       await api('post', `dashboard/queue-entries/${remote.body.id}/cancel`, tok.owner).expect(201);
     });
@@ -695,7 +1058,12 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await setAuto(false);
       const guest = await add('Sunil Customer', { serviceId: ids.haircut });
       const response = await api('post', `dashboard/salons/${ids.salon}/queue/take-next`, tok.sunil).expect(201);
-      expect(response.body).toMatchObject({ id: guest.id, status: 'IN_SERVICE', phase: 'IN_SERVICE', assignedStaffId: ids.sunilStaff });
+      expect(response.body).toMatchObject({
+        id: guest.id,
+        status: 'IN_SERVICE',
+        phase: 'IN_SERVICE',
+        assignedStaffId: ids.sunilStaff,
+      });
       expect(response.body.activeServiceSessionId).toBeTruthy();
       await add('Next While Busy', { serviceId: ids.haircut });
       await api('post', `dashboard/salons/${ids.salon}/queue/take-next`, tok.sunil).expect(409);
@@ -704,8 +1072,14 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
     it('preferred barber and service qualification never leak into the wrong barber', async () => {
       await setAuto(true);
-      const first = await add('Ravi Serving', { serviceId: ids.haircut, preferredStaffId: ids.raviStaff });
-      const wantsRavi = await add('Wait for Ravi', { serviceId: ids.haircut, preferredStaffId: ids.raviStaff });
+      const first = await add('Ravi Serving', {
+        serviceId: ids.haircut,
+        preferredStaffId: ids.raviStaff,
+      });
+      const wantsRavi = await add('Wait for Ravi', {
+        serviceId: ids.haircut,
+        preferredStaffId: ids.raviStaff,
+      });
       const beard = await add('Beard must be Ravi', { serviceId: ids.beard });
       const any = await add('Sunil Can Help', { serviceId: ids.haircut });
       await settle();
@@ -719,12 +1093,16 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
     it('concurrent manual start requests create exactly one ACTIVE ServiceSession', async () => {
       await setAuto(false);
-      const guest = await add('Concurrent Customer', { serviceId: ids.haircut });
-      const results = await Promise.all(
-        Array.from({ length: 6 }, () => api('post', `dashboard/salons/${ids.salon}/queue/auto-assign`, tok.owner).then((r) => r.status)),
-      );
+      const guest = await add('Concurrent Customer', {
+        serviceId: ids.haircut,
+      });
+      const results = await Promise.all(Array.from({ length: 6 }, () => api('post', `dashboard/salons/${ids.salon}/queue/auto-assign`, tok.owner).then((r) => r.status)));
       expect(results.every((x) => x === 201)).toBe(true);
-      expect(await prisma.serviceSession.count({ where: { queueEntryId: guest.id } })).toBe(1);
+      expect(
+        await prisma.serviceSession.count({
+          where: { queueEntryId: guest.id },
+        }),
+      ).toBe(1);
       expect((await activeSessions()).map((x) => x.queueEntryId)).toEqual([guest.id]);
       expect(await assignedHolds()).toHaveLength(0);
     });
@@ -733,12 +1111,24 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await setAuto(false);
       const guest = await add('Legacy Reservation', { serviceId: ids.haircut });
       const reservation = await api('post', `dashboard/queue-entries/${guest.id}/assign`, tok.owner)
-        .send({ staffId: ids.raviStaff, chairId: ids['Chair 1'], startService: false }).expect(201);
-      expect(reservation.body).toMatchObject({ status: 'CALLED', phase: 'ASSIGNED', serviceStartedAt: null });
+        .send({
+          staffId: ids.raviStaff,
+          chairId: ids['Chair 1'],
+          startService: false,
+        })
+        .expect(201);
+      expect(reservation.body).toMatchObject({
+        status: 'CALLED',
+        phase: 'ASSIGNED',
+        serviceStartedAt: null,
+      });
       expect(await activeSessions()).toHaveLength(0);
       expect(await assignedHolds()).toHaveLength(1);
       const active = await start(guest.id, tok.ravi).expect(201);
-      expect(active.body).toMatchObject({ status: 'IN_SERVICE', phase: 'IN_SERVICE' });
+      expect(active.body).toMatchObject({
+        status: 'IN_SERVICE',
+        phase: 'IN_SERVICE',
+      });
       expect((await activeSessions()).map((x) => x.queueEntryId)).toContain(guest.id);
       expect(await assignedHolds()).toHaveLength(0);
     });
@@ -746,10 +1136,18 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     it('marking an unarrived WAITING customer NO SHOW keeps them out of Cancelled & expired semantics', async () => {
       await setAuto(true);
       const remote = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1)
-        .send({ serviceId: ids.haircut, contactName: 'Absent Visitor', contactPhone: '9876500009' }).expect(201);
+        .send({
+          serviceId: ids.haircut,
+          contactName: 'Absent Visitor',
+          contactPhone: '9876500009',
+        })
+        .expect(201);
       await settle();
       const response = await api('post', `dashboard/queue-entries/${remote.body.id}/no-show`, tok.owner).expect(201);
-      expect(response.body).toMatchObject({ status: 'NO_SHOW', phase: 'NO_SHOW' });
+      expect(response.body).toMatchObject({
+        status: 'NO_SHOW',
+        phase: 'NO_SHOW',
+      });
       const snapshot = await board();
       expect(snapshot.sections.historyToday).toContainEqual(expect.objectContaining({ id: remote.body.id, status: 'NO_SHOW' }));
       expect(snapshot.sections.waiting.map((x: { id: string }) => x.id)).not.toContain(remote.body.id);
@@ -764,31 +1162,46 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await setAuto(true);
       await settle();
       await api('post', `dashboard/queue-entries/${arrived.id}/no-show`, tok.owner).expect(409);
-      expect((await prisma.queueEntry.findUniqueOrThrow({ where: { id: arrived.id } })).status).toBe('IN_SERVICE');
+      expect(
+        (
+          await prisma.queueEntry.findUniqueOrThrow({
+            where: { id: arrived.id },
+          })
+        ).status,
+      ).toBe('IN_SERVICE');
     });
 
     it('an existing booking reserves its barber and automatic service start respects that window', async () => {
       const now = new Date();
       await prisma.booking.create({
         data: {
-          salonId: ids.salon, customerId: ids.cust2,
-          serviceId: ids.haircut, preferredStaffId: ids.raviStaff,
+          salonId: ids.salon,
+          customerId: ids.cust2,
+          serviceId: ids.haircut,
+          preferredStaffId: ids.raviStaff,
           slotStart: new Date(now.getTime() - 5 * 60_000),
           slotEnd: new Date(now.getTime() + 25 * 60_000),
-          status: 'CONFIRMED', source: 'APP', idempotencyKey: `e2e-${run}-reserved-ravi-direct`,
+          status: 'CONFIRMED',
+          source: 'APP',
+          idempotencyKey: `e2e-${run}-reserved-ravi-direct`,
         },
       });
       try {
         await setAuto(true);
-        const first = await add('Visit Past Booking', { serviceId: ids.haircut });
+        const first = await add('Visit Past Booking', {
+          serviceId: ids.haircut,
+        });
         await settle();
         expect((await activeSessions()).find((x) => x.queueEntryId === first.id)?.staffId).toBe(ids.sunilStaff);
-        const second = await add('Another While Reserved', { serviceId: ids.haircut });
+        const second = await add('Another While Reserved', {
+          serviceId: ids.haircut,
+        });
         await settle();
         expect((await board()).sections.waiting.map((x: { id: string }) => x.id)).toContain(second.id);
       } finally {
         await prisma.booking.updateMany({
-          where: { idempotencyKey: `e2e-${run}-reserved-ravi-direct` }, data: { status: 'CANCELLED' },
+          where: { idempotencyKey: `e2e-${run}-reserved-ravi-direct` },
+          data: { status: 'CANCELLED' },
         });
       }
     });
@@ -798,7 +1211,9 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   describe('A brand-new shop: automatic assignment is ON by default, backed by the database', () => {
     it('defaults ON, automatically STARTS a service for an arrived customer, and completes it', async () => {
       const owner = await makeUser('freshOwner', null, null);
-      const city = await prisma.city.findFirstOrThrow({ where: { slug: 'jharsuguda' } });
+      const city = await prisma.city.findFirstOrThrow({
+        where: { slug: 'jharsuguda' },
+      });
       // NOTE: the setting is deliberately NOT supplied - the database default decides.
       const fresh = await prisma.salon.create({
         data: {
@@ -815,19 +1230,44 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         },
       });
       expect(fresh.queueAutoAssignEnabled).toBe(true);
-      await prisma.userRole.create({ data: { userId: owner.id, role: Role.SALON_OWNER, salonId: fresh.id } });
+      await prisma.userRole.create({
+        data: { userId: owner.id, role: Role.SALON_OWNER, salonId: fresh.id },
+      });
       const ownerTok = tokens.signAccessToken(owner.id, [Role.SALON_OWNER], SessionAudience.STAFF);
       for (let day = 0; day < 7; day++) {
-        await prisma.operatingHours.create({ data: { salonId: fresh.id, dayOfWeek: day, openTime: '00:00', closeTime: '23:59', isClosed: false } });
+        await prisma.operatingHours.create({
+          data: {
+            salonId: fresh.id,
+            dayOfWeek: day,
+            openTime: '00:00',
+            closeTime: '23:59',
+            isClosed: false,
+          },
+        });
       }
-      const service = await prisma.service.create({ data: { salonId: fresh.id, name: 'Cut', price: '200.00', durationMinutes: 20 } });
-      const chair = await prisma.chair.create({ data: { salonId: fresh.id, label: 'Chair A' } });
+      const service = await prisma.service.create({
+        data: {
+          salonId: fresh.id,
+          name: 'Cut',
+          price: '200.00',
+          durationMinutes: 20,
+        },
+      });
+      const chair = await prisma.chair.create({
+        data: { salonId: fresh.id, label: 'Chair A' },
+      });
       const barberUser = await makeUser('freshBarber', Role.SALON_STAFF, fresh.id);
       const barberTok = tokens.signAccessToken(barberUser.id, [Role.SALON_STAFF], SessionAudience.STAFF);
       const barber = await prisma.salonStaff.create({
         // Deliberately no StaffService mapping: zero mappings means any on-duty barber can serve this service.
         // Previously bookings permitted this but Live Queue auto-assignment rejected everyone.
-        data: { salonId: fresh.id, userId: barberUser.id, displayName: 'Fresh Barber', roleInSalon: 'BARBER', status: 'ACTIVE' },
+        data: {
+          salonId: fresh.id,
+          userId: barberUser.id,
+          displayName: 'Fresh Barber',
+          roleInSalon: 'BARBER',
+          status: 'ACTIVE',
+        },
       });
 
       expect(await prisma.staffService.count({ where: { serviceId: service.id } })).toBe(0);
@@ -837,36 +1277,45 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect((await request(app.getHttpServer()).get(`/api/v1/dashboard/salons/${fresh.id}/queue`).set('Authorization', `Bearer ${ownerTok}`).expect(200)).body.autoAssignEnabled).toBe(true);
       expect((await request(app.getHttpServer()).get(`/api/v1/dashboard/salons/${fresh.id}/overview`).set('Authorization', `Bearer ${ownerTok}`).expect(200)).body.settings.autoAssignEnabled).toBe(true);
 
-      const added = await request(app.getHttpServer())
-        .post(`/api/v1/dashboard/salons/${fresh.id}/queue/customers`)
-        .set('Authorization', `Bearer ${ownerTok}`)
-        .set('Idempotency-Key', randomUUID())
-        .send({ name: 'First Ever', serviceId: service.id })
-        .expect(201);
+      const added = await request(app.getHttpServer()).post(`/api/v1/dashboard/salons/${fresh.id}/queue/customers`).set('Authorization', `Bearer ${ownerTok}`).set('Idempotency-Key', randomUUID()).send({ name: 'First Ever', serviceId: service.id }).expect(201);
       await trigger.idle(fresh.id);
-      const assigned = await prisma.queueEntry.findUniqueOrThrow({ where: { id: added.body.id } });
-      expect(assigned).toMatchObject({ status: 'IN_SERVICE', assignedStaffId: barber.id, assignedChairId: chair.id, serviceStartedAt: expect.any(Date) });
-      expect(await prisma.serviceSession.count({ where: { queueEntryId: assigned.id, status: 'ACTIVE' } })).toBe(1);
-      const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: assigned.id, status: 'ACTIVE' } });
-      await request(app.getHttpServer())
-        .post(`/api/v1/dashboard/service-sessions/${session.id}/complete`)
-        .set('Authorization', `Bearer ${barberTok}`)
-        .set('Idempotency-Key', randomUUID())
-        .expect(201);
+      const assigned = await prisma.queueEntry.findUniqueOrThrow({
+        where: { id: added.body.id },
+      });
+      expect(assigned).toMatchObject({
+        status: 'IN_SERVICE',
+        assignedStaffId: barber.id,
+        assignedChairId: chair.id,
+        serviceStartedAt: expect.any(Date),
+      });
+      expect(
+        await prisma.serviceSession.count({
+          where: { queueEntryId: assigned.id, status: 'ACTIVE' },
+        }),
+      ).toBe(1);
+      const session = await prisma.serviceSession.findFirstOrThrow({
+        where: { queueEntryId: assigned.id, status: 'ACTIVE' },
+      });
+      await request(app.getHttpServer()).post(`/api/v1/dashboard/service-sessions/${session.id}/complete`).set('Authorization', `Bearer ${barberTok}`).set('Idempotency-Key', randomUUID()).expect(201);
       // the barber and chair are released
-      expect(await prisma.serviceSession.count({ where: { status: 'ACTIVE', chair: { salonId: fresh.id } } })).toBe(0);
-      expect(await prisma.queueEntry.count({ where: { salonId: fresh.id, status: 'CALLED' } })).toBe(0);
-      const done = await prisma.queueEntry.findUniqueOrThrow({ where: { id: assigned.id } });
+      expect(
+        await prisma.serviceSession.count({
+          where: { status: 'ACTIVE', chair: { salonId: fresh.id } },
+        }),
+      ).toBe(0);
+      expect(
+        await prisma.queueEntry.count({
+          where: { salonId: fresh.id, status: 'CALLED' },
+        }),
+      ).toBe(0);
+      const done = await prisma.queueEntry.findUniqueOrThrow({
+        where: { id: assigned.id },
+      });
       expect(done.status).toBe('COMPLETED');
 
       // the owner can switch it OFF and back ON, and the choice sticks
       for (const enabled of [false, true]) {
-        await request(app.getHttpServer())
-          .patch(`/api/v1/dashboard/salons/${fresh.id}/queue/settings`)
-          .set('Authorization', `Bearer ${ownerTok}`)
-          .set('Idempotency-Key', randomUUID())
-          .send({ autoAssignEnabled: enabled })
-          .expect(200);
+        await request(app.getHttpServer()).patch(`/api/v1/dashboard/salons/${fresh.id}/queue/settings`).set('Authorization', `Bearer ${ownerTok}`).set('Idempotency-Key', randomUUID()).send({ autoAssignEnabled: enabled }).expect(200);
         const read = await request(app.getHttpServer()).get(`/api/v1/dashboard/salons/${fresh.id}/queue/settings`).set('Authorization', `Bearer ${ownerTok}`).expect(200);
         expect(read.body).toEqual({ autoAssignEnabled: enabled });
       }
@@ -876,18 +1325,37 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   // ------------------------------------------------------------------------------------------
   describe('Staff access', () => {
     it('an owner can remove a barber’s access immediately, and restore it; history is kept', async () => {
-      const auditBefore = await prisma.auditLog.count({ where: { entityId: ids.sunilStaff, action: { in: ['STAFF_ACCESS_REVOKED', 'STAFF_ACCESS_RESTORED'] } } });
+      const auditBefore = await prisma.auditLog.count({
+        where: {
+          entityId: ids.sunilStaff,
+          action: { in: ['STAFF_ACCESS_REVOKED', 'STAFF_ACCESS_RESTORED'] },
+        },
+      });
       await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, tok.sunil).expect(200);
       await api('post', `dashboard/salons/${ids.salon}/staff/${ids.sunilStaff}/access/revoke`, tok.owner).send({ reason: 'Left the shop' }).expect(201);
       // the still-valid access token no longer opens anything at this shop
       await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, tok.sunil).expect(403);
       await api('get', `dashboard/salons/${ids.salon}/queue`, tok.sunil).expect(403);
       await api('post', `dashboard/salons/${ids.salon}/queue/customers`, tok.sunil).send({ name: 'Nope' }).expect(403);
-      const row = await prisma.salonStaff.findUniqueOrThrow({ where: { id: ids.sunilStaff } });
+      const row = await prisma.salonStaff.findUniqueOrThrow({
+        where: { id: ids.sunilStaff },
+      });
       expect(row.accessRevokedAt).not.toBeNull();
       expect(row.status).toBe('INACTIVE');
-      expect(await prisma.userRole.count({ where: { userId: ids.sunil, role: Role.SALON_STAFF, salonId: ids.salon } })).toBe(0);
-      expect(await prisma.serviceSession.count({ where: { staffId: ids.sunilStaff } })).toBeGreaterThan(0); // history untouched
+      expect(
+        await prisma.userRole.count({
+          where: {
+            userId: ids.sunil,
+            role: Role.SALON_STAFF,
+            salonId: ids.salon,
+          },
+        }),
+      ).toBe(0);
+      expect(
+        await prisma.serviceSession.count({
+          where: { staffId: ids.sunilStaff },
+        }),
+      ).toBeGreaterThan(0); // history untouched
       await api('post', `dashboard/salons/${ids.salon}/staff/${ids.sunilStaff}/access/revoke`, tok.owner).send({}).expect(409);
       // a revoked barber cannot clock themselves back in
       await api('patch', `dashboard/staff/${ids.sunilStaff}/status`, tok.sunil).send({ status: 'ACTIVE' }).expect(403);
@@ -895,14 +1363,23 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await api('post', `dashboard/salons/${ids.salon}/staff/${ids.sunilStaff}/access/restore`, tok.owner).send({}).expect(201);
       await api('get', `dashboard/salons/${ids.salon}/staff/me/work`, tok.sunil).expect(200);
       await api('patch', `dashboard/staff/${ids.sunilStaff}/status`, tok.sunil).send({ status: 'ACTIVE' }).expect(200);
-      expect(await prisma.auditLog.count({ where: { entityId: ids.sunilStaff, action: { in: ['STAFF_ACCESS_REVOKED', 'STAFF_ACCESS_RESTORED'] } } })).toBe(auditBefore + 2);
+      expect(
+        await prisma.auditLog.count({
+          where: {
+            entityId: ids.sunilStaff,
+            action: { in: ['STAFF_ACCESS_REVOKED', 'STAFF_ACCESS_RESTORED'] },
+          },
+        }),
+      ).toBe(auditBefore + 2);
     });
 
     it('refuses to remove a barber who is serving a customer, and refuses self-removal', async () => {
       const entry = (await api('post', `dashboard/salons/${ids.salon}/queue/customers`, tok.owner).send({ name: 'In Chair', serviceId: ids.haircut }).expect(201)).body as { id: string };
       await api('post', `dashboard/queue-entries/${entry.id}/assign`, tok.owner).send({ staffId: ids.raviStaff, chairId: ids['Chair 2'] }).expect(201);
       await api('post', `dashboard/salons/${ids.salon}/staff/${ids.raviStaff}/access/revoke`, tok.owner).send({}).expect(409);
-      const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: entry.id } });
+      const session = await prisma.serviceSession.findFirstOrThrow({
+        where: { queueEntryId: entry.id },
+      });
       await api('post', `dashboard/service-sessions/${session.id}/complete`, tok.owner).expect(201);
     });
   });
@@ -919,10 +1396,10 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     }
     async function finishBooking(bookingId: string): Promise<string> {
       const arrived = await api('post', `dashboard/bookings/${bookingId}/arrive`, tok.owner).expect(201);
-      await api('post', `dashboard/queue-entries/${arrived.body.id}/assign`, tok.owner)
-        .send({ staffId: ids.raviStaff, chairId: ids['Chair 3'] })
-        .expect(201);
-      const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: arrived.body.id, status: 'ACTIVE' } });
+      await api('post', `dashboard/queue-entries/${arrived.body.id}/assign`, tok.owner).send({ staffId: ids.raviStaff, chairId: ids['Chair 3'] }).expect(201);
+      const session = await prisma.serviceSession.findFirstOrThrow({
+        where: { queueEntryId: arrived.body.id, status: 'ACTIVE' },
+      });
       await api('post', `dashboard/service-sessions/${session.id}/complete`, tok.ravi).expect(201);
       expect((await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } })).status).toBe('COMPLETED');
       return bookingId;
@@ -930,7 +1407,9 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     async function completedWalkIn(name: string): Promise<string> {
       const entry = (await api('post', `${SALON()}/queue/customers`, tok.owner).send({ name, serviceId: ids.haircut }).expect(201)).body as { id: string };
       await api('post', `dashboard/queue-entries/${entry.id}/assign`, tok.owner).send({ staffId: ids.raviStaff, chairId: ids['Chair 3'] }).expect(201);
-      const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: entry.id, status: 'ACTIVE' } });
+      const session = await prisma.serviceSession.findFirstOrThrow({
+        where: { queueEntryId: entry.id, status: 'ACTIVE' },
+      });
       await api('post', `dashboard/service-sessions/${session.id}/complete`, tok.ravi).expect(201);
       return entry.id;
     }
@@ -950,9 +1429,20 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       // a barber cannot read or change billing configuration
       await api('put', `${SALON()}/billing-profile`, tok.ravi).send({ legalName: 'Hacked', taxEnabled: false }).expect(403);
       const saved = await api('put', `${SALON()}/billing-profile`, tok.owner)
-        .send({ legalName: 'Owner Ops Salon Pvt Ltd', gstin: '22AAAAA0000A1Z5', taxEnabled: true, taxRatePercent: 18, taxMode: 'EXCLUSIVE', invoicePrefix: 'FQ' })
+        .send({
+          legalName: 'Owner Ops Salon Pvt Ltd',
+          gstin: '22AAAAA0000A1Z5',
+          taxEnabled: true,
+          taxRatePercent: 18,
+          taxMode: 'EXCLUSIVE',
+          invoicePrefix: 'FQ',
+        })
         .expect(200);
-      expect(saved.body).toMatchObject({ complete: true, taxRatePercent: 18, invoicePrefix: 'FQ' });
+      expect(saved.body).toMatchObject({
+        complete: true,
+        taxRatePercent: 18,
+        invoicePrefix: 'FQ',
+      });
     });
 
     it('issues from the real service price with exclusive tax, frozen seller details and the right customer/barber', async () => {
@@ -974,15 +1464,37 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         taxRatePercent: 18,
         taxMode: 'EXCLUSIVE',
       });
-      expect(res.body.seller).toMatchObject({ legalName: 'Owner Ops Salon Pvt Ltd', gstin: '22AAAAA0000A1Z5' });
-      expect(res.body.lines).toEqual([expect.objectContaining({ description: 'Haircut', unitPrice: 250, lineTotal: 250 })]);
+      expect(res.body.seller).toMatchObject({
+        legalName: 'Owner Ops Salon Pvt Ltd',
+        gstin: '22AAAAA0000A1Z5',
+      });
+      expect(res.body.lines).toEqual([
+        expect.objectContaining({
+          description: 'Haircut',
+          unitPrice: 250,
+          lineTotal: 250,
+        }),
+      ]);
       // changing the profile later does not rewrite an invoice that was already issued
-      await api('put', `${SALON()}/billing-profile`, tok.owner).send({ legalName: 'Renamed Pvt Ltd', taxEnabled: false, invoicePrefix: 'FQ' }).expect(200);
+      await api('put', `${SALON()}/billing-profile`, tok.owner)
+        .send({
+          legalName: 'Renamed Pvt Ltd',
+          taxEnabled: false,
+          invoicePrefix: 'FQ',
+        })
+        .expect(200);
       const reread = await api('get', `${SALON()}/invoices/${invoiceA.id}`, tok.owner).expect(200);
       expect(reread.body.seller.legalName).toBe('Owner Ops Salon Pvt Ltd');
       expect(reread.body.taxTotal).toBe(45);
       await api('put', `${SALON()}/billing-profile`, tok.owner)
-        .send({ legalName: 'Owner Ops Salon Pvt Ltd', gstin: '22AAAAA0000A1Z5', taxEnabled: true, taxRatePercent: 18, taxMode: 'EXCLUSIVE', invoicePrefix: 'FQ' })
+        .send({
+          legalName: 'Owner Ops Salon Pvt Ltd',
+          gstin: '22AAAAA0000A1Z5',
+          taxEnabled: true,
+          taxRatePercent: 18,
+          taxMode: 'EXCLUSIVE',
+          invoicePrefix: 'FQ',
+        })
         .expect(200);
     });
 
@@ -1001,10 +1513,15 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     it('only a completed service can be invoiced, and a booking-linked visit is invoiced through its booking', async () => {
       const pending = await createBookingAs('cust1', slot('09:00', 4));
       await issue({ bookingId: pending.id }).expect(409);
-      const queueEntryOfBooking = await prisma.queueEntry.findFirstOrThrow({ where: { bookingId: bookingA } });
+      const queueEntryOfBooking = await prisma.queueEntry.findFirstOrThrow({
+        where: { bookingId: bookingA },
+      });
       await issue({ queueEntryId: queueEntryOfBooking.id }).expect(409);
       await issue({}).expect(400);
-      await issue({ bookingId: pending.id, queueEntryId: queueEntryOfBooking.id }).expect(400);
+      await issue({
+        bookingId: pending.id,
+        queueEntryId: queueEntryOfBooking.id,
+      }).expect(400);
     });
 
     it('records only what the shop says it received, never overpaying, with refunds restricted to the owner', async () => {
@@ -1013,20 +1530,52 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         if (key) req.set('Idempotency-Key', key);
         return req.send(body);
       };
-      const partial = await pay(tok.ravi, { method: 'CASH', amount: 100 }).expect(201);
-      expect(partial.body).toMatchObject({ amountPaid: 100, balanceDue: 195, paymentStatus: 'PARTIALLY_PAID' });
-      await pay(tok.ravi, { kind: 'REFUND', method: 'CASH', amount: 10 }).expect(403);
+      const partial = await pay(tok.ravi, {
+        method: 'CASH',
+        amount: 100,
+      }).expect(201);
+      expect(partial.body).toMatchObject({
+        amountPaid: 100,
+        balanceDue: 195,
+        paymentStatus: 'PARTIALLY_PAID',
+      });
+      await pay(tok.ravi, {
+        kind: 'REFUND',
+        method: 'CASH',
+        amount: 10,
+      }).expect(403);
       await pay(tok.owner, { method: 'UPI', amount: 200 }).expect(409); // more than the 195 due
       const key = randomUUID();
       const paid = await pay(tok.owner, { method: 'UPI', amount: 195, reference: 'UPI-TXN-1' }, key).expect(201);
-      expect(paid.body).toMatchObject({ amountPaid: 295, balanceDue: 0, paymentStatus: 'PAID' });
+      expect(paid.body).toMatchObject({
+        amountPaid: 295,
+        balanceDue: 0,
+        paymentStatus: 'PAID',
+      });
       await pay(tok.owner, { method: 'UPI', amount: 195, reference: 'UPI-TXN-1' }, key); // a replayed request
-      expect(await prisma.invoicePayment.count({ where: { invoiceId: invoiceA.id } })).toBe(2);
+      expect(
+        await prisma.invoicePayment.count({
+          where: { invoiceId: invoiceA.id },
+        }),
+      ).toBe(2);
       await pay(tok.owner, { method: 'CASH', amount: 1 }).expect(409); // already fully paid
 
-      const refunded = await pay(tok.owner, { kind: 'REFUND', method: 'CASH', amount: 50, note: 'Goodwill' }).expect(201);
-      expect(refunded.body).toMatchObject({ amountRefunded: 50, balanceDue: 50, paymentStatus: 'PARTIALLY_PAID' });
-      await pay(tok.owner, { kind: 'REFUND', method: 'CASH', amount: 300 }).expect(409); // more than was received
+      const refunded = await pay(tok.owner, {
+        kind: 'REFUND',
+        method: 'CASH',
+        amount: 50,
+        note: 'Goodwill',
+      }).expect(201);
+      expect(refunded.body).toMatchObject({
+        amountRefunded: 50,
+        balanceDue: 50,
+        paymentStatus: 'PARTIALLY_PAID',
+      });
+      await pay(tok.owner, {
+        kind: 'REFUND',
+        method: 'CASH',
+        amount: 300,
+      }).expect(409); // more than was received
       await api('post', `${SALON()}/invoices/${invoiceA.id}/void`, tok.owner).send({ reason: 'Entered by mistake' }).expect(409); // refund first
     });
 
@@ -1034,9 +1583,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await expect(prisma.$executeRaw`UPDATE "invoices" SET "total" = 1 WHERE "id" = ${invoiceA.id}`).rejects.toThrow(/immutable/);
       await expect(prisma.$executeRaw`UPDATE "invoice_payments" SET "amount" = 1 WHERE "invoiceId" = ${invoiceA.id}`).rejects.toThrow(/append-only/);
       await expect(prisma.$executeRaw`DELETE FROM "invoice_payments" WHERE "invoiceId" = ${invoiceA.id}`).rejects.toThrow(/append-only/);
-      await expect(
-        prisma.$executeRaw`INSERT INTO "invoice_payments" ("id","invoiceId","salonId","kind","method","amount","recordedByUserId") VALUES (${randomUUID()}, ${invoiceA.id}, ${ids.salon}, 'PAYMENT', 'CASH', 0, ${ids.owner})`,
-      ).rejects.toThrow();
+      await expect(prisma.$executeRaw`INSERT INTO "invoice_payments" ("id","invoiceId","salonId","kind","method","amount","recordedByUserId") VALUES (${randomUUID()}, ${invoiceA.id}, ${ids.salon}, 'PAYMENT', 'CASH', 0, ${ids.owner})`).rejects.toThrow();
     });
 
     it('shows a customer only their own invoices and PDFs; a stranger or a guest gets nothing', async () => {
@@ -1076,7 +1623,11 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const second = await api('get', `${SALON()}/invoices/by-source?bookingId=${bookingB}`, tok.owner).expect(200);
       await api('post', `${SALON()}/invoices/${second.body.id}/void`, tok.owner).send({ reason: 'Wrong customer details' }).expect(201);
       const voided = await api('get', `${SALON()}/invoices/${second.body.id}`, tok.owner).expect(200);
-      expect(voided.body).toMatchObject({ status: 'VOID', paymentStatus: 'VOID', balanceDue: 0 });
+      expect(voided.body).toMatchObject({
+        status: 'VOID',
+        paymentStatus: 'VOID',
+        balanceDue: 0,
+      });
       await api('post', `${SALON()}/invoices/${second.body.id}/payments`, tok.owner).send({ method: 'CASH', amount: 10 }).expect(409);
       const replacement = await issue({ bookingId: bookingB }).expect(201);
       expect(replacement.body.number).toBe('FQ-000003'); // a void keeps its number; the next is never a reuse
@@ -1086,41 +1637,79 @@ maybe('Owner operations (e2e, disposable local database)', () => {
 
     it('invoices a Live Queue visit and an in-shop guest, with inclusive tax extracted not added', async () => {
       await api('put', `${SALON()}/billing-profile`, tok.owner)
-        .send({ legalName: 'Owner Ops Salon Pvt Ltd', taxEnabled: true, taxRatePercent: 18, taxMode: 'INCLUSIVE', invoicePrefix: 'FQ' })
+        .send({
+          legalName: 'Owner Ops Salon Pvt Ltd',
+          taxEnabled: true,
+          taxRatePercent: 18,
+          taxMode: 'INCLUSIVE',
+          invoicePrefix: 'FQ',
+        })
         .expect(200);
       const entryId = await completedWalkIn('Queue Quentin');
       const walkIn = await issue({ queueEntryId: entryId }).expect(201);
-      expect(walkIn.body).toMatchObject({ sourceType: 'QUEUE_ENTRY', customerName: 'Queue Quentin', subtotal: 250, taxTotal: 38.14, total: 250, taxMode: 'INCLUSIVE', staffName: 'Ravi' });
+      expect(walkIn.body).toMatchObject({
+        sourceType: 'QUEUE_ENTRY',
+        customerName: 'Queue Quentin',
+        subtotal: 250,
+        taxTotal: 38.14,
+        total: 250,
+        taxMode: 'INCLUSIVE',
+        staffName: 'Ravi',
+      });
 
       // Completed visits keep their capacity reserved until their slot ends (a real booking rule), so a
       // third barber is needed for a third appointment in the same half hour.
       await makeStaff('tara', 'Tara', ids.salon, [ids.haircut]);
       const guest = (
         await api('post', `${SALON()}/bookings/in-shop`, tok.owner)
-          .send({ guestName: 'Guest Gita', guestPhone: '9876522222', contactConsent: true, serviceIds: [ids.haircut], slotStart: new Date(Date.now() + 90_000).toISOString() })
+          .send({
+            guestName: 'Guest Gita',
+            guestPhone: '9876522222',
+            contactConsent: true,
+            serviceIds: [ids.haircut],
+            slotStart: new Date(Date.now() + 90_000).toISOString(),
+          })
           .expect(201)
       ).body as { id: string };
       await finishBooking(guest.id);
       const guestInvoice = await issue({ bookingId: guest.id }).expect(201);
-      expect(guestInvoice.body).toMatchObject({ customerName: 'Guest Gita', customerPhone: '+919876522222' });
+      expect(guestInvoice.body).toMatchObject({
+        customerName: 'Guest Gita',
+        customerPhone: '+919876522222',
+      });
       // a guest has no account, so no customer can ever open it
-      expect(await prisma.invoice.findUniqueOrThrow({ where: { id: guestInvoice.body.id } })).toMatchObject({ customerId: null });
+      expect(
+        await prisma.invoice.findUniqueOrThrow({
+          where: { id: guestInvoice.body.id },
+        }),
+      ).toMatchObject({ customerId: null });
     });
 
     it('lists what the shop recorded as received, with totals, for the owner only', async () => {
       const res = await api('get', `${SALON()}/payments`, tok.owner).expect(200);
-      expect(res.body.totals).toMatchObject({ received: 295, refunded: 50, net: 245 });
+      expect(res.body.totals).toMatchObject({
+        received: 295,
+        refunded: 50,
+        net: 245,
+      });
       expect(res.body.totals.count).toBe(3);
       expect((res.body.items as Array<{ kind: string; recordedBy: string }>).map((p) => p.kind).sort()).toEqual(['PAYMENT', 'PAYMENT', 'REFUND']);
       // the barber who recorded the cash payment is named; the owner's entries say "Owner"
       expect((res.body.items as Array<{ recordedBy: string }>).map((p) => p.recordedBy)).toEqual(expect.arrayContaining(['Ravi', 'Owner']));
-      expect(res.body.byMethod).toEqual(expect.arrayContaining([{ method: 'CASH', net: 50 }, { method: 'UPI', net: 195 }]));
+      expect(res.body.byMethod).toEqual(
+        expect.arrayContaining([
+          { method: 'CASH', net: 50 },
+          { method: 'UPI', net: 195 },
+        ]),
+      );
       await api('get', `${SALON()}/payments`, tok.ravi).expect(403);
       await api('get', `${SALON()}/payments`, tok.outsider).expect(403);
-      await api('get', `${SALON()}/payments?from=2020-01-01&to=2020-01-02`, tok.owner).expect(200).expect((r) => {
-        expect(r.body.items).toEqual([]);
-        expect(r.body.totals.net).toBe(0);
-      });
+      await api('get', `${SALON()}/payments?from=2020-01-01&to=2020-01-02`, tok.owner)
+        .expect(200)
+        .expect((r) => {
+          expect(r.body.items).toEqual([]);
+          expect(r.body.totals.net).toBe(0);
+        });
     });
 
     it('reports revenue as money the shop recorded - not completed services, and not unpaid invoices', async () => {
