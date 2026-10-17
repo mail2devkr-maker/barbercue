@@ -75,6 +75,23 @@ export const SalonStatus = {
 } as const;
 export type SalonStatus = (typeof SalonStatus)[keyof typeof SalonStatus];
 
+export const SalonLocationSource = {
+  GPS: 'GPS',
+  MAP_PIN: 'MAP_PIN',
+  MANUAL: 'MANUAL',
+} as const;
+export type SalonLocationSource =
+  (typeof SalonLocationSource)[keyof typeof SalonLocationSource];
+
+export const SalonLocationProposalStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  SUPERSEDED: 'SUPERSEDED',
+} as const;
+export type SalonLocationProposalStatus =
+  (typeof SalonLocationProposalStatus)[keyof typeof SalonLocationProposalStatus];
+
 export const SalonType = {
   GENTS: 'GENTS',
   LADIES: 'LADIES',
@@ -605,6 +622,15 @@ export const VerificationErrorCode = {
 } as const;
 export type VerificationErrorCode =
   (typeof VerificationErrorCode)[keyof typeof VerificationErrorCode];
+
+export const LocationVerificationErrorCode = {
+  PROPOSAL_NOT_FOUND: 'LOCATION_PROPOSAL_NOT_FOUND',
+  PROPOSAL_CONFLICT: 'LOCATION_PROPOSAL_CONFLICT',
+  REVIEWER_MUST_DIFFER: 'LOCATION_REVIEWER_MUST_DIFFER',
+  CURSOR_INVALID: 'LOCATION_CURSOR_INVALID',
+} as const;
+export type LocationVerificationErrorCode =
+  (typeof LocationVerificationErrorCode)[keyof typeof LocationVerificationErrorCode];
 
 export const PremiumErrorCode = {
   PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',

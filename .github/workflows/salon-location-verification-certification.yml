@@ -1,0 +1,111 @@
+name: Salon Location Verification Certification
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'apps/backend/prisma/**'
+      - 'apps/backend/src/admin/**'
+      - 'apps/backend/src/salon-setup/**'
+      - 'apps/backend/test/salon-location-verification.e2e-spec.ts'
+      - 'packages/shared/src/**'
+      - '.github/workflows/salon-location-verification-certification.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  push:
+    branches: [codex/fastque-platform-30-location-verification]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: salon-location-verification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-e2e:
+    name: PostgreSQL 17.11 migrations and authenticated location review
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/location_verification?schema=public
+      PSQL_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/location_verification
+      NODE_ENV: development
+      AGENT_LLM_PROVIDER: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared contracts
+        run: npm run build:shared
+      - name: Prisma schema validation and client generation
+        run: |
+          npm run prisma:validate --workspace=@barbercue/backend
+          npm run prisma:generate --workspace=@barbercue/backend
+      - name: Backend typecheck
+        run: npm run typecheck --workspace=@barbercue/backend
+      - name: Shared contract tests
+        run: npm run test --workspace=@barbercue/shared -- --ci
+      - name: Create fresh disposable database
+        run: psql -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE location_verification'
+      - name: Apply and verify the complete committed migration chain and checksums
+        working-directory: apps/backend
+        run: bash scripts/verify-migration-chain.sh
+      - name: Verify proposal schema guards, indexes and foreign keys
+        run: |
+          psql "$PSQL_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "
+            SELECT CASE WHEN COUNT(*) = 4 THEN 'constraints-ok' ELSE 'constraints-missing' END
+            FROM pg_constraint
+            WHERE conrelid = 'salon_location_proposals'::regclass
+              AND conname IN (
+                'salon_location_proposals_latitude_check',
+                'salon_location_proposals_longitude_check',
+                'salon_location_proposals_pending_slot_check',
+                'salon_location_proposals_review_state_check'
+              );
+            SELECT CASE WHEN COUNT(*) = 3 THEN 'indexes-ok' ELSE 'indexes-missing' END
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = 'salon_location_proposals'
+              AND indexname IN (
+                'salon_location_proposals_salonId_pendingSlot_key',
+                'salon_location_proposals_status_submittedAt_id_idx',
+                'salon_location_proposals_salonId_submittedAt_idx'
+              );
+            SELECT CASE WHEN COUNT(*) = 3 THEN 'foreign-keys-ok' ELSE 'foreign-keys-missing' END
+            FROM pg_constraint
+            WHERE conrelid = 'salon_location_proposals'::regclass AND contype = 'f';
+          " | tee "$RUNNER_TEMP/location-schema-guards.txt"
+          grep -q '^constraints-ok$' "$RUNNER_TEMP/location-schema-guards.txt"
+          grep -q '^indexes-ok$' "$RUNNER_TEMP/location-schema-guards.txt"
+          grep -q '^foreign-keys-ok$' "$RUNNER_TEMP/location-schema-guards.txt"
+      - name: Focused admin controller authorization tests
+        working-directory: apps/backend
+        run: npx jest --ci --runInBand src/admin/admin.controller.spec.ts
+      - name: Authenticated owner/admin API and PostgreSQL E2E
+        working-directory: apps/backend
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/salon-location-verification.e2e-spec.ts
+      - name: Backend production build
+        run: npm run build --workspace=@barbercue/backend

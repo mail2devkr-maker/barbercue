@@ -81,6 +81,19 @@ enum SalonStatus {
   SUSPENDED
 }
 
+enum SalonLocationSource {
+  GPS
+  MAP_PIN
+  MANUAL
+}
+
+enum SalonLocationProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
 enum SalonType {
   GENTS
   LADIES
@@ -367,6 +380,8 @@ model User {
   // practice, and keeping them distinct makes that impossible to blur by accident).
   submittedVerifications  VerificationRequest[]    @relation("VerificationSubmitter")
   reviewedVerifications   VerificationRequest[]    @relation("VerificationReviewer")
+  submittedLocationProposals SalonLocationProposal[] @relation("SalonLocationSubmitter")
+  reviewedLocationProposals  SalonLocationProposal[] @relation("SalonLocationReviewer")
   pushDevices             PushDevice[]
   creditAccount           CustomerCreditAccount?
   manualChairOccupanciesStarted ManualChairOccupancy[] @relation("ManualChairOccupancyStartedBy")
@@ -838,6 +853,7 @@ model Salon {
   paymentPolicy         SalonPaymentPolicy?
   operatingHours        OperatingHours[]
   photos                Photo[]
+  locationProposals     SalonLocationProposal[]
   reviews               Review[]
   ledgerEntries         CustomerLedgerEntry[]
   staffChairAssignments StaffChairAssignment[]
@@ -1632,6 +1648,35 @@ model VerificationRequest {
   @@unique([salonId])
   @@unique([staffId])
   @@map("verification_requests")
+}
+
+// Owner-submitted coordinates are proposals, not public location updates. Only a distinct global
+// platform admin may approve a proposal; approval then copies the coordinates to Salon.lat/lng.
+// Keeping proposals separately preserves review history and ensures EXIF or owner-provided GPS is
+// never treated as proof by itself.
+model SalonLocationProposal {
+  id                String                       @id @default(uuid())
+  salonId           String
+  salon             Salon                        @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  latitude          Float
+  longitude         Float
+  source            SalonLocationSource
+  status            SalonLocationProposalStatus  @default(PENDING)
+  // PostgreSQL NULLS DISTINCT plus this unique pair permits unlimited reviewed history while
+  // allowing only the value 1 to occupy the pending slot for one salon at a time.
+  pendingSlot       Int?
+  submittedByUserId String
+  submittedBy       User                         @relation("SalonLocationSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+  submittedAt       DateTime                     @default(now())
+  reviewedByAdminId String?
+  reviewedByAdmin   User?                        @relation("SalonLocationReviewer", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  reviewNote        String?                      @db.VarChar(500)
+
+  @@index([status, submittedAt, id])
+  @@index([salonId, submittedAt])
+  @@unique([salonId, pendingSlot])
+  @@map("salon_location_proposals")
 }
 
 // ---------- Notifications ----------

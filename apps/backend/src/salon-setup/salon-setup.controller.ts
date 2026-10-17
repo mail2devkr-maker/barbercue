@@ -34,6 +34,7 @@ import {
   updateSalonTypeSchema,
   updateSalonStatusSchema,
   updateSalonTimezoneSchema,
+  submitSalonLocationProposalSchema,
   type AuthenticatedUser,
   type BulkDeactivateSalonChairsApplyInput,
   type BulkDeactivateSalonChairsPreviewInput,
@@ -53,6 +54,7 @@ import {
   type UpdateSalonTypeInput,
   type UpdateSalonStatusInput,
   type UpdateSalonTimezoneInput,
+  type SubmitSalonLocationProposalInput,
 } from '@barbercue/shared';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -70,6 +72,7 @@ import { StaffWorkingHoursService } from './staff-working-hours.service';
 import { SalonTimezoneService } from './salon-timezone.service';
 import { SalonPaymentQrService } from './salon-payment-qr.service';
 import { SalonProfileService } from './salon-profile.service';
+import { SalonLocationService } from './salon-location.service';
 
 const SALON_SCOPE = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/:salonId`;
 
@@ -105,6 +108,7 @@ export class SalonSetupController {
     private readonly timezone: SalonTimezoneService,
     private readonly paymentQr: SalonPaymentQrService,
     private readonly profile: SalonProfileService,
+    private readonly location: SalonLocationService,
   ) {}
 
   // ---------- Shop profile (Part 2, admin delegated shop management) ----------
@@ -125,6 +129,24 @@ export class SalonSetupController {
     body: UpdateSalonProfileInput,
   ) {
     return this.profile.update(user.id, salonId, body);
+  }
+
+  @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.location}`)
+  getLocation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.location.get(user.id, salonId);
+  }
+
+  @Patch(`${SALON_SCOPE}/${DASHBOARD_PATHS.location}`)
+  proposeLocation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(submitSalonLocationProposalSchema))
+    body: SubmitSalonLocationProposalInput,
+  ) {
+    return this.location.submit(user.id, salonId, body);
   }
 
   // ---------- Shop activation ----------

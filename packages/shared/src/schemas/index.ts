@@ -20,6 +20,7 @@ import {
   PhotoType,
   PrepaymentRequirement,
   Role,
+  SalonLocationSource,
   SalonStatus,
   SalonType,
   StaffMemberStatus,
@@ -929,6 +930,29 @@ export const updateSalonProfileSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "No fields to update" });
 export type UpdateSalonProfileInput = z.infer<typeof updateSalonProfileSchema>;
+
+// Owner-proposed coordinates remain private and do not alter public Salon.lat/lng until a
+// different, authorized PLATFORM_ADMIN approves the proposal.
+export const submitSalonLocationProposalSchema = z.object({
+  latitude: z.number().finite().min(-90).max(90),
+  longitude: z.number().finite().min(-180).max(180),
+  source: z.enum([
+    SalonLocationSource.GPS,
+    SalonLocationSource.MAP_PIN,
+    SalonLocationSource.MANUAL,
+  ]),
+});
+export type SubmitSalonLocationProposalInput = z.infer<
+  typeof submitSalonLocationProposalSchema
+>;
+
+export const decideSalonLocationProposalSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  note: z.string().trim().min(3).max(500),
+});
+export type DecideSalonLocationProposalInput = z.infer<
+  typeof decideSalonLocationProposalSchema
+>;
 
 // PATCH dashboard/salons/:salonId/status — owner self-activation. Deliberately restricted to
 // ACTIVE/SUSPENDED: an owner may open or pause their own shop, but cannot move it back to

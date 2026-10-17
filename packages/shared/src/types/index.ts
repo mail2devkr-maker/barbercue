@@ -21,6 +21,8 @@ import type {
   QueueEntrySource,
   QueueEntryStatus,
   Role,
+  SalonLocationProposalStatus,
+  SalonLocationSource,
   SalonStaffRole,
   SalonStatus,
   SalonType,
@@ -1493,6 +1495,43 @@ export interface SalonShareLinksDto {
     title: string;
     description: string | null;
     imageUrl: string | null;
+  };
+}
+
+export interface SalonLocationProposalDto {
+  id: string;
+  status: SalonLocationProposalStatus;
+  latitude: number;
+  longitude: number;
+  source: SalonLocationSource;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+}
+
+export interface SalonLocationDto {
+  salonId: string;
+  current: {
+    latitude: number | null;
+    longitude: number | null;
+    verification: 'VERIFIED' | 'UNVERIFIED';
+    verifiedAt: string | null;
+  };
+  pendingProposal: SalonLocationProposalDto | null;
+}
+
+export interface AdminSalonLocationProposalDto extends SalonLocationProposalDto {
+  submittedByUserId: string;
+  salon: {
+    id: string;
+    publicId: string;
+    name: string;
+    addressLine: string;
+    localityText: string | null;
+    postalCode: string | null;
+    cityName: string;
+    currentLatitude: number | null;
+    currentLongitude: number | null;
   };
 }
 

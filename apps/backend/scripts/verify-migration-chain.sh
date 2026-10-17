@@ -64,3 +64,7 @@ if echo "$DRIFT" | grep -Eqi 'queueAutoAssignEnabled|assignedAt|showPhoneToCusto
   echo "OWNER-OPERATIONS SCHEMA DRIFT DETECTED"; exit 1
 fi
 echo "no owner-operations drift"
+if echo "$DRIFT" | grep -Eqi 'salon_location_proposals|SalonLocationProposal'; then
+  echo "SALON-LOCATION-VERIFICATION SCHEMA DRIFT DETECTED"; exit 1
+fi
+echo "no salon-location-verification drift"
