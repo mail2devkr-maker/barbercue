@@ -36,6 +36,7 @@ import { DbDeadlineSchedulerModule } from './common/db-deadline-scheduler/db-dea
 import { SiteMetricsModule } from './site-metrics/site-metrics.module';
 import { OwnerOpsModule } from './owner-ops/owner-ops.module';
 import { SalonDescriptionModule } from './salon-description/salon-description.module';
+import { InventoryModule } from './inventory/inventory.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { SalonDescriptionModule } from './salon-description/salon-description.mo
     // the other salon-scoped controllers above.
     OwnerOpsModule,
     SalonDescriptionModule,
+    InventoryModule,
     SalonsModule,
     RealtimeModule,
     PremiumModule,
