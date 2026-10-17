@@ -7,6 +7,10 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { CancellationAnalyticsService } from './cancellation-analytics.service';
 import { BookingAttributionController } from './booking-attribution.controller';
 import { BookingAttributionService } from './booking-attribution.service';
+import { CapabilitiesController } from './capabilities.controller';
+import { SalonCapabilitiesService } from './capabilities.service';
+import { DemoWorkspaceController } from './demo-workspace.controller';
+import { DemoWorkspaceService } from './demo-workspace.service';
 import { InvoicesService } from './invoices.service';
 import { OwnerOverviewService } from './owner-overview.service';
 import { RevenueReportService } from './revenue-report.service';
@@ -43,10 +47,14 @@ import { SalonShareLinksService } from './salon-share-links.service';
     OwnerOpsController,
     CustomerInvoicesController,
     BookingAttributionController,
+    DemoWorkspaceController,
+    CapabilitiesController,
   ],
   providers: [
     CancellationAnalyticsService,
     BookingAttributionService,
+    SalonCapabilitiesService,
+    DemoWorkspaceService,
     InvoicesService,
     OwnerOverviewService,
     RevenueReportService,

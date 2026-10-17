@@ -406,6 +406,7 @@ model User {
   manualChairOccupanciesStarted ManualChairOccupancy[] @relation("ManualChairOccupancyStartedBy")
   manualChairOccupanciesEnded   ManualChairOccupancy[] @relation("ManualChairOccupancyEndedBy")
   employeeProfile               EmployeeProfile?
+  createdDemoWorkspaces         OwnerDemoWorkspace[]      @relation("OwnerDemoWorkspaceCreator")
 
   @@map("users")
 }
@@ -889,6 +890,7 @@ model Salon {
   inventorySuppliers     InventorySupplier[]
   inventoryProducts      InventoryProduct[]
   inventoryMovements     InventoryMovement[]
+  demoWorkspace         OwnerDemoWorkspace?
 
   @@unique([cityId, slug])
   @@map("salons")
@@ -2033,6 +2035,13 @@ enum NotificationDeliveryStatus {
   SKIPPED
 }
 
+// Synthetic operational examples stay in a private document, separate from real salon ledgers.
+enum OwnerDemoWorkspaceAuditAction {
+  IMPORTED
+  REUSED
+  DELETED
+}
+
 // Per-salon invoice identity. Only configured values are ever printed: no GSTIN is invented, and
 // tax is applied only when the owner has enabled it AND supplied a rate. gstin is format-checked
 // at write time but NOT verified against the GST portal.
@@ -2165,4 +2174,42 @@ model NotificationDelivery {
 
   @@index([status, nextAttemptAt])
   @@map("notification_deliveries")
+}
+
+// A private, per-shop synthetic dashboard dataset. It intentionally has no relations to
+// bookings, queue entries, customers, invoices, or payments: scheduled jobs, public discovery,
+// live booking/queue APIs and real financial reporting cannot consume demo records by accident.
+model OwnerDemoWorkspace {
+  id              String   @id @default(uuid())
+  salonId         String   @unique
+  salon           Salon    @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  schemaVersion   Int      @default(1)
+  payload         Json     @db.JsonB
+  createdByUserId String?
+  createdBy       User?    @relation("OwnerDemoWorkspaceCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("owner_demo_workspaces")
+}
+
+// Append-only lifecycle evidence. workspaceId intentionally has no FK so deletion of the
+// isolated synthetic payload retains a durable audit event; salon/actor FKs become NULL on delete.
+model OwnerDemoWorkspaceAudit {
+  id           String                         @id @default(uuid())
+  // Immutable identifiers, intentionally relation-free so deleting a shop/user cannot mutate or
+  // block the append-only audit record.
+  salonId      String
+  actorUserId  String
+  workspaceId  String
+  action       OwnerDemoWorkspaceAuditAction
+  recordCounts Json                           @db.JsonB
+  idempotencyKeyHash String?
+  requestHash        String?
+  createdAt    DateTime                       @default(now())
+
+  @@index([salonId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@unique([salonId, actorUserId, idempotencyKeyHash], map: "owner_demo_workspace_audit_import_idempotency_key")
+  @@map("owner_demo_workspace_audit")
 }

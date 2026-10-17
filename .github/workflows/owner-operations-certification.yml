@@ -113,6 +113,17 @@ jobs:
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/inventory.e2e-spec.ts
+      - name: Owner demo workspace E2E - isolation, authorization, idempotency and append-only audit
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+          OWNER_DEMO_WORKSPACE_ENABLED: 'true'
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/demo-workspace.e2e-spec.ts
       - name: Remaining backend E2E suites (regressions vs the recorded baseline)
         working-directory: apps/backend
         env:
