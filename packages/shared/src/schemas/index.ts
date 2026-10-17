@@ -1,10 +1,10 @@
-import { z } from 'zod';
+import { z } from "zod";
 import {
   CONTACT_NAME_MAX_LENGTH,
   CONTACT_NAME_MIN_LENGTH,
   normalizeContactName,
   normalizeContactPhone,
-} from '../contact';
+} from "../contact";
 import {
   ChairStatus,
   ChargeType,
@@ -25,9 +25,9 @@ import {
   StaffMemberStatus,
   UserStatus,
   VerificationStatus,
-} from '../enums';
-import { MAX_SERVICES_PER_BOOKING, PREMIUM_PLAN_IDS } from '../constants';
-import { isValidPostalCode, postalCodeRuleFor } from '../locale';
+} from "../enums";
+import { MAX_SERVICES_PER_BOOKING, PREMIUM_PLAN_IDS } from "../constants";
+import { isValidPostalCode, postalCodeRuleFor } from "../locale";
 
 // Validation schemas shared by the backend (request validation) and clients (form validation).
 // The backend is always the authority — these schemas exist so both sides reject bad input the
@@ -43,8 +43,11 @@ import { isValidPostalCode, postalCodeRuleFor } from '../locale';
 // any of that against.
 const serviceIdsSchema = z
   .array(z.string().uuid())
-  .min(1, 'Select at least one service.')
-  .max(MAX_SERVICES_PER_BOOKING, `Select at most ${MAX_SERVICES_PER_BOOKING} services.`);
+  .min(1, "Select at least one service.")
+  .max(
+    MAX_SERVICES_PER_BOOKING,
+    `Select at most ${MAX_SERVICES_PER_BOOKING} services.`,
+  );
 
 // Production-safety hardening (P0 #1) — an already-installed FastQue client (mobile not yet
 // updated, or any external integration) still sends the ORIGINAL single `serviceId` field on
@@ -57,30 +60,33 @@ const serviceIdsSchema = z
 // used before normalization. See API.md's "Legacy serviceId compatibility" section.
 type ServiceSelectionInput = { serviceId?: string; serviceIds?: string[] };
 
-function checkServiceSelection(value: ServiceSelectionInput, ctx: z.RefinementCtx): void {
+function checkServiceSelection(
+  value: ServiceSelectionInput,
+  ctx: z.RefinementCtx,
+): void {
   if (value.serviceId && value.serviceIds) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Provide either serviceId or serviceIds, not both.',
-      path: ['serviceIds'],
+      message: "Provide either serviceId or serviceIds, not both.",
+      path: ["serviceIds"],
     });
   }
   if (!value.serviceId && !value.serviceIds) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Select at least one service.',
-      path: ['serviceIds'],
+      message: "Select at least one service.",
+      path: ["serviceIds"],
     });
   }
 }
 
 function normalizeServiceSelection<T extends ServiceSelectionInput>(
   value: T,
-): Omit<T, 'serviceId' | 'serviceIds'> & { serviceIds: string[] } {
+): Omit<T, "serviceId" | "serviceIds"> & { serviceIds: string[] } {
   const { serviceId, serviceIds, ...rest } = value;
   return { ...rest, serviceIds: serviceIds ?? [serviceId as string] } as Omit<
     T,
-    'serviceId' | 'serviceIds'
+    "serviceId" | "serviceIds"
   > & { serviceIds: string[] };
 }
 
@@ -128,8 +134,8 @@ export type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
 // server-side once these ids reach AvailabilityService.
 const serviceIdsQueryParam = z
   .string()
-  .min(1, 'serviceIds is required.')
-  .transform((raw) => raw.split(',').map((id) => id.trim()))
+  .min(1, "serviceIds is required.")
+  .transform((raw) => raw.split(",").map((id) => id.trim()))
   .pipe(serviceIdsSchema);
 
 // GET /salons/:salonId/availability query params. Accepts the legacy single `?serviceId=<uuid>`
@@ -139,7 +145,9 @@ export const availabilityQuerySchema = z
   .object({
     serviceId: z.string().uuid().optional(),
     serviceIds: serviceIdsQueryParam.optional(),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format'),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "date must be in YYYY-MM-DD format"),
     staffId: z.string().uuid().optional(),
   })
   .superRefine(checkServiceSelection)
@@ -173,7 +181,8 @@ export const joinQueueSchema = z.object({
     .string()
     .transform((value) => normalizeContactPhone(value))
     .refine((value): value is string => value !== null, {
-      message: 'enter a valid mobile number, with a country code if it is not an Indian number',
+      message:
+        "enter a valid mobile number, with a country code if it is not an Indian number",
     })
     .optional(),
 });
@@ -203,7 +212,7 @@ export const reassignQueueEntrySchema = z
     chairId: z.string().uuid().optional(),
   })
   .refine((v) => v.staffId !== undefined || v.chairId !== undefined, {
-    message: 'Choose a barber, a chair, or both',
+    message: "Choose a barber, a chair, or both",
   });
 export type ReassignQueueEntryInput = z.infer<typeof reassignQueueEntrySchema>;
 
@@ -253,15 +262,15 @@ export const registerSalonSchema = z
   // A half-coordinate is meaningless — it would place the shop on the equator or the prime
   // meridian. Either both arrive or neither does.
   .refine((v) => (v.lat === undefined) === (v.lng === undefined), {
-    message: 'Latitude and longitude must be provided together',
-    path: ['lat'],
+    message: "Latitude and longitude must be provided together",
+    path: ["lat"],
   })
   .superRefine((v, ctx) => {
     if (isValidPostalCode(v.countryCode, v.postalCode)) return;
     const rule = postalCodeRuleFor(v.countryCode);
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ['postalCode'],
+      path: ["postalCode"],
       message: rule.example
         ? `Enter a valid ${rule.label} (for example ${rule.example})`
         : `Enter a valid ${rule.label}`,
@@ -305,10 +314,16 @@ export const salonSearchQuerySchema = z
     priceMin: z.coerce.number().nonnegative().optional(),
     priceMax: z.coerce.number().nonnegative().optional(),
   })
-  .refine((data) => data.priceMin === undefined || data.priceMax === undefined || data.priceMin <= data.priceMax, {
-    message: 'priceMin must not be greater than priceMax.',
-    path: ['priceMin'],
-  });
+  .refine(
+    (data) =>
+      data.priceMin === undefined ||
+      data.priceMax === undefined ||
+      data.priceMin <= data.priceMax,
+    {
+      message: "priceMin must not be greater than priceMax.",
+      path: ["priceMin"],
+    },
+  );
 export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
 
 // GET /cities/search query params (Phase 6A — Country -> Region -> City-search selection flow).
@@ -327,7 +342,10 @@ export type CitySearchQueryInput = z.infer<typeof citySearchQuerySchema>;
 export const otpRequestSchema = z.object({
   phone: z
     .string()
-    .regex(/^\+[1-9]\d{7,14}$/, 'phone must be in E.164 format, e.g. +919876543210'),
+    .regex(
+      /^\+[1-9]\d{7,14}$/,
+      "phone must be in E.164 format, e.g. +919876543210",
+    ),
 });
 export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 
@@ -348,8 +366,8 @@ export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
 // Shared password rule: staff/owner/admin accounts only (customers never have a password).
 const passwordSchema = z
   .string()
-  .min(8, 'password must be at least 8 characters')
-  .max(72, 'password must be at most 72 characters'); // bcrypt truncates beyond 72 bytes
+  .min(8, "password must be at least 8 characters")
+  .max(72, "password must be at most 72 characters"); // bcrypt truncates beyond 72 bytes
 
 export const staffLoginSchema = z.object({
   email: z.string().email(),
@@ -367,13 +385,18 @@ export const ownerSignupSchema = z
     confirmPassword: passwordSchema,
   })
   .refine((value) => value.password === value.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   });
 export type OwnerSignupInput = z.infer<typeof ownerSignupSchema>;
 
 export const employeeLoginSchema = z.object({
-  employeeCode: z.string().trim().min(3).max(32).transform((value) => value.toUpperCase()),
+  employeeCode: z
+    .string()
+    .trim()
+    .min(3)
+    .max(32)
+    .transform((value) => value.toUpperCase()),
   password: passwordSchema,
 });
 export type EmployeeLoginInput = z.infer<typeof employeeLoginSchema>;
@@ -389,18 +412,20 @@ export const createEmployeeSchema = z
     confirmPassword: passwordSchema,
   })
   .refine((value) => value.password === value.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   });
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 
 export const createSpecialEmployeeSchema = createEmployeeSchema.and(
   z.object({
     employeeNumber: z.number().int().min(1).max(100),
-    totpCode: z.string().regex(/^\d{6}$/, 'totpCode must be 6 digits'),
+    totpCode: z.string().regex(/^\d{6}$/, "totpCode must be 6 digits"),
   }),
 );
-export type CreateSpecialEmployeeInput = z.infer<typeof createSpecialEmployeeSchema>;
+export type CreateSpecialEmployeeInput = z.infer<
+  typeof createSpecialEmployeeSchema
+>;
 
 export const updateEmployeeSchema = z
   .object({
@@ -409,7 +434,7 @@ export const updateEmployeeSchema = z
     status: z.nativeEnum(UserStatus).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
-    message: 'No employee changes provided',
+    message: "No employee changes provided",
   });
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 
@@ -419,20 +444,22 @@ export const resetEmployeePasswordSchema = z
     confirmPassword: passwordSchema,
   })
   .refine((value) => value.password === value.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   });
-export type ResetEmployeePasswordInput = z.infer<typeof resetEmployeePasswordSchema>;
+export type ResetEmployeePasswordInput = z.infer<
+  typeof resetEmployeePasswordSchema
+>;
 
 // ---------- FastQue internal Field CRM ----------
 const optionalCrmText = (max: number) =>
-  z.union([z.string().trim().max(max), z.literal('')]).optional();
+  z.union([z.string().trim().max(max), z.literal("")]).optional();
 
 export const createCrmLeadSchema = z.object({
   shopName: z.string().trim().min(2).max(180),
   contactName: optionalCrmText(120),
   phone: optionalCrmText(32),
-  email: z.union([z.string().trim().email(), z.literal('')]).optional(),
+  email: z.union([z.string().trim().email(), z.literal("")]).optional(),
   city: optionalCrmText(120),
   locality: optionalCrmText(160),
   addressLine: optionalCrmText(300),
@@ -456,7 +483,7 @@ export const updateCrmLeadSchema = z
     lostReason: z.union([z.string().trim().max(500), z.null()]).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
-    message: 'No lead changes provided',
+    message: "No lead changes provided",
   });
 export type UpdateCrmLeadInput = z.infer<typeof updateCrmLeadSchema>;
 
@@ -464,7 +491,7 @@ export const onboardCrmLeadSchema = z.object({
   salonPublicId: z
     .string()
     .trim()
-    .regex(/^BC-SHOP-[0-9]{6}$/i, 'Enter a FastQue Shop ID like BC-SHOP-000123')
+    .regex(/^BC-SHOP-[0-9]{6}$/i, "Enter a FastQue Shop ID like BC-SHOP-000123")
     .transform((value) => value.toUpperCase()),
 });
 export type OnboardCrmLeadInput = z.infer<typeof onboardCrmLeadSchema>;
@@ -478,8 +505,8 @@ export const createCrmVisitSchema = z
     notes: optionalCrmText(2000),
   })
   .refine((value) => !!value.leadId || !!value.shopName?.trim(), {
-    message: 'Choose a lead or enter the shop name',
-    path: ['shopName'],
+    message: "Choose a lead or enter the shop name",
+    path: ["shopName"],
   });
 export type CreateCrmVisitInput = z.infer<typeof createCrmVisitSchema>;
 
@@ -500,7 +527,7 @@ export const updateCrmFollowUpSchema = z
     outcome: z.union([z.string().trim().max(1000), z.null()]).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
-    message: 'No follow-up changes provided',
+    message: "No follow-up changes provided",
   });
 export type UpdateCrmFollowUpInput = z.infer<typeof updateCrmFollowUpSchema>;
 
@@ -530,7 +557,7 @@ export const adminLoginSchema = z.object({
   // TOTP_REQUIRED) from "wrong shape" (→ 400) rather than zod rejecting the request outright.
   totpCode: z
     .string()
-    .regex(/^\d{6}$/, 'totpCode must be 6 digits')
+    .regex(/^\d{6}$/, "totpCode must be 6 digits")
     .optional(),
 });
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
@@ -542,7 +569,7 @@ export const adminGoogleLoginSchema = z.object({
   // issued, then verify the same Google credential together with the authenticator code.
   totpCode: z
     .string()
-    .regex(/^\d{6}$/, 'totpCode must be 6 digits')
+    .regex(/^\d{6}$/, "totpCode must be 6 digits")
     .optional(),
 });
 export type AdminGoogleLoginInput = z.infer<typeof adminGoogleLoginSchema>;
@@ -558,7 +585,7 @@ export const logoutRequestSchema = z.object({
 });
 export type LogoutRequestInput = z.infer<typeof logoutRequestSchema>;
 
-export const passwordAudienceSchema = z.enum(['owner', 'staff', 'admin']);
+export const passwordAudienceSchema = z.enum(["owner", "staff", "admin"]);
 export type PasswordAudience = z.infer<typeof passwordAudienceSchema>;
 
 export const forgotPasswordSchema = z.object({
@@ -576,8 +603,8 @@ export const resetPasswordSchema = z
     confirmPassword: passwordSchema,
   })
   .refine((value) => value.newPassword === value.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
@@ -587,8 +614,8 @@ export const initialPasswordSchema = z
     confirmPassword: passwordSchema,
   })
   .refine((value) => value.password === value.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   });
 export type InitialPasswordInput = z.infer<typeof initialPasswordSchema>;
 
@@ -598,8 +625,14 @@ export const salonPaymentPolicySchema = z
     prepaymentPercentage: z.number().int().min(1).max(100).optional(),
   })
   .refine(
-    (val) => val.prepaymentRequirement !== PrepaymentRequirement.PARTIAL || !!val.prepaymentPercentage,
-    { message: 'prepaymentPercentage is required when prepaymentRequirement is PARTIAL', path: ['prepaymentPercentage'] },
+    (val) =>
+      val.prepaymentRequirement !== PrepaymentRequirement.PARTIAL ||
+      !!val.prepaymentPercentage,
+    {
+      message:
+        "prepaymentPercentage is required when prepaymentRequirement is PARTIAL",
+      path: ["prepaymentPercentage"],
+    },
   );
 export type SalonPaymentPolicyInput = z.infer<typeof salonPaymentPolicySchema>;
 
@@ -640,7 +673,7 @@ export const updateSalonServiceSchema = z
     category: z.string().min(1).max(60).nullable().optional(),
     isActive: z.boolean().optional(),
   })
-  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+  .refine((v) => Object.keys(v).length > 0, { message: "No fields to update" });
 export type UpdateSalonServiceInput = z.infer<typeof updateSalonServiceSchema>;
 
 // "HH:mm", 24-hour. Matches exactly what OperatingHours.openTime/closeTime already store and what
@@ -651,8 +684,8 @@ export const TIME_OF_DAY_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const operatingHoursEntrySchema = z
   .object({
     dayOfWeek: z.number().int().min(0).max(6),
-    openTime: z.string().regex(TIME_OF_DAY_REGEX, 'Use a time like 09:00'),
-    closeTime: z.string().regex(TIME_OF_DAY_REGEX, 'Use a time like 21:00'),
+    openTime: z.string().regex(TIME_OF_DAY_REGEX, "Use a time like 09:00"),
+    closeTime: z.string().regex(TIME_OF_DAY_REGEX, "Use a time like 21:00"),
     isClosed: z.boolean(),
   })
   // Only meaningful on an open day; a closed day's times are ignored by AvailabilityService.
@@ -660,8 +693,8 @@ export const operatingHoursEntrySchema = z
   // the availability engine resolves open/close within a single IST calendar day, so a
   // 20:00–02:00 shift would produce an empty or negative window, not a late-night salon.
   .refine((v) => v.isClosed || v.closeTime > v.openTime, {
-    message: 'Closing time must be after opening time',
-    path: ['closeTime'],
+    message: "Closing time must be after opening time",
+    path: ["closeTime"],
   });
 
 // PUT dashboard/salons/:salonId/operating-hours — the whole week, replaced in one call. A weekly
@@ -672,8 +705,8 @@ export const setOperatingHoursSchema = z
     days: z.array(operatingHoursEntrySchema).length(7),
   })
   .refine((v) => new Set(v.days.map((d) => d.dayOfWeek)).size === 7, {
-    message: 'Provide exactly one entry for each day of the week',
-    path: ['days'],
+    message: "Provide exactly one entry for each day of the week",
+    path: ["days"],
   });
 export type SetOperatingHoursInput = z.infer<typeof setOperatingHoursSchema>;
 
@@ -686,8 +719,8 @@ export const setStaffWorkingHoursSchema = z
     days: z.array(operatingHoursEntrySchema).length(7),
   })
   .refine((v) => new Set(v.days.map((d) => d.dayOfWeek)).size === 7, {
-    message: 'Provide exactly one entry for each day of the week',
-    path: ['days'],
+    message: "Provide exactly one entry for each day of the week",
+    path: ["days"],
   });
 export type SetStaffWorkingHoursInput = z.infer<
   typeof setStaffWorkingHoursSchema
@@ -726,7 +759,7 @@ export type SetLanguageInput = z.infer<typeof setLanguageSchema>;
 // account from the current JWT. This prevents an accidental UI/API call from irreversibly
 // removing the caller's credentials and direct identifiers.
 export const deleteAccountSchema = z.object({
-  confirmation: z.literal('DELETE'),
+  confirmation: z.literal("DELETE"),
 });
 export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>;
 
@@ -745,11 +778,11 @@ export const salonPhotoUrlSchema = z
   .refine((v) => {
     try {
       const u = new URL(v);
-      return u.protocol === 'https:' && !u.username && !u.password;
+      return u.protocol === "https:" && !u.username && !u.password;
     } catch {
       return false;
     }
-  }, 'Enter a full https:// image link');
+  }, "Enter a full https:// image link");
 
 export const createSalonPhotoSchema = z.object({
   url: salonPhotoUrlSchema,
@@ -768,7 +801,9 @@ export const salonPhotoUploadMetaSchema = z.object({
   altText: z.string().trim().max(200).optional(),
   type: z.nativeEnum(PhotoType),
 });
-export type SalonPhotoUploadMetaInput = z.infer<typeof salonPhotoUploadMetaSchema>;
+export type SalonPhotoUploadMetaInput = z.infer<
+  typeof salonPhotoUploadMetaSchema
+>;
 
 // PUT dashboard/salons/:salonId/payment-qr — link route (FastQue Credits / Wallet V1), same
 // https-only/no-credentials validation as salonPhotoUrlSchema above; the multipart upload sibling
@@ -790,8 +825,54 @@ export const updateSalonChairSchema = z
     label: z.string().min(1).max(60).optional(),
     status: z.nativeEnum(ChairStatus).optional(),
   })
-  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+  .refine((v) => Object.keys(v).length > 0, { message: "No fields to update" });
 export type UpdateSalonChairInput = z.infer<typeof updateSalonChairSchema>;
+
+const bulkChairIdsSchema = z
+  .array(z.string().uuid())
+  .min(1)
+  .max(50)
+  .superRefine((ids, ctx) => {
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Chair IDs must be unique.",
+      });
+    }
+  });
+
+/** Preview explicitly selected chairs before a batch deactivation. */
+export const bulkDeactivateSalonChairsPreviewSchema = z.object({
+  chairIds: bulkChairIdsSchema,
+});
+export type BulkDeactivateSalonChairsPreviewInput = z.infer<
+  typeof bulkDeactivateSalonChairsPreviewSchema
+>;
+
+/** Apply only against the exact row version returned by the preview. */
+export const bulkDeactivateSalonChairsApplySchema = z.object({
+  items: z
+    .array(
+      z.object({
+        chairId: z.string().uuid(),
+        expectedUpdatedAt: z.string().datetime(),
+      }),
+    )
+    .min(1)
+    .max(50)
+    .superRefine((items, ctx) => {
+      const ids = items.map((item) => item.chairId);
+      if (new Set(ids).size !== ids.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Chair IDs must be unique.",
+        });
+      }
+    }),
+});
+export type BulkDeactivateSalonChairsApplyInput = z.infer<
+  typeof bulkDeactivateSalonChairsApplySchema
+>;
 
 // POST dashboard/salons/:salonId/staff — onboard a staff member quickly. Name is the only
 // required field. Phone/email are optional: when an email is supplied the existing invitation
@@ -799,7 +880,7 @@ export type UpdateSalonChairInput = z.infer<typeof updateSalonChairSchema>;
 export const e164PhoneSchema = z
   .string()
   .trim()
-  .regex(/^\+[1-9]\d{7,14}$/, 'Use international format, e.g. +919876543210');
+  .regex(/^\+[1-9]\d{7,14}$/, "Use international format, e.g. +919876543210");
 
 export const createSalonStaffSchema = z.object({
   displayName: z.string().trim().min(1).max(120),
@@ -816,10 +897,10 @@ export const updateSalonStaffSchema = z
     displayName: z.string().min(1).max(120).optional(),
     status: z.nativeEnum(StaffMemberStatus).optional(),
     bio: z.string().trim().max(500).optional(),
-    photoUrl: z.union([salonPhotoUrlSchema, z.literal('')]).optional(),
+    photoUrl: z.union([salonPhotoUrlSchema, z.literal("")]).optional(),
     yearsExperience: z.number().int().min(0).max(80).optional(),
   })
-  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+  .refine((v) => Object.keys(v).length > 0, { message: "No fields to update" });
 export type UpdateSalonStaffInput = z.infer<typeof updateSalonStaffSchema>;
 
 // PATCH dashboard/salons/:salonId/profile (Part 2, admin delegated shop management) — the one
@@ -836,13 +917,17 @@ export type UpdateSalonStaffInput = z.infer<typeof updateSalonStaffSchema>;
 export const updateSalonProfileSchema = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
-    phone: z.union([z.string().trim().min(1).max(20), z.literal('')]).optional(),
-    email: z.union([z.string().trim().email(), z.literal('')]).optional(),
+    phone: z
+      .union([z.string().trim().min(1).max(20), z.literal("")])
+      .optional(),
+    email: z.union([z.string().trim().email(), z.literal("")]).optional(),
     addressLine: z.string().trim().min(1).max(300).optional(),
-    postalCode: z.union([z.string().trim().max(12), z.literal('')]).optional(),
-    description: z.union([z.string().trim().max(2000), z.literal('')]).optional(),
+    postalCode: z.union([z.string().trim().max(12), z.literal("")]).optional(),
+    description: z
+      .union([z.string().trim().max(2000), z.literal("")])
+      .optional(),
   })
-  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+  .refine((v) => Object.keys(v).length > 0, { message: "No fields to update" });
 export type UpdateSalonProfileInput = z.infer<typeof updateSalonProfileSchema>;
 
 // PATCH dashboard/salons/:salonId/status — owner self-activation. Deliberately restricted to
@@ -865,9 +950,14 @@ export const updateSalonTimezoneSchema = z.object({
     .trim()
     .min(1)
     .max(60)
-    .regex(/^[A-Za-z0-9_+-]+\/[A-Za-z0-9_+\-/]+$/, 'Enter a valid IANA time zone, e.g. Asia/Kolkata'),
+    .regex(
+      /^[A-Za-z0-9_+-]+\/[A-Za-z0-9_+\-/]+$/,
+      "Enter a valid IANA time zone, e.g. Asia/Kolkata",
+    ),
 });
-export type UpdateSalonTimezoneInput = z.infer<typeof updateSalonTimezoneSchema>;
+export type UpdateSalonTimezoneInput = z.infer<
+  typeof updateSalonTimezoneSchema
+>;
 
 // POST premium/dev/activate — dev/test-only Premium activation for the calling user. The backend
 // route itself is unreachable outside a non-production environment (see PremiumController); this
@@ -895,7 +985,9 @@ export const updateReviewSchema = z
     rating: z.number().int().min(1).max(5).optional(),
     comment: z.string().trim().max(1000).optional(),
   })
-  .refine((v) => v.rating !== undefined || v.comment !== undefined, { message: 'No fields to update' });
+  .refine((v) => v.rating !== undefined || v.comment !== undefined, {
+    message: "No fields to update",
+  });
 export type UpdateReviewInput = z.infer<typeof updateReviewSchema>;
 
 // PUT dashboard/salons/:salonId/reviews/:reviewId/response — owner's reply. Required non-empty:
@@ -917,22 +1009,31 @@ export const submitVerificationSchema = z
     evidenceNotes: z.string().trim().max(2000).optional(),
     evidenceUrls: z.array(salonPhotoUrlSchema).max(10).optional(),
   })
-  .refine((v) => !!v.evidenceNotes || (v.evidenceUrls && v.evidenceUrls.length > 0), {
-    message: 'Add a note or at least one evidence link',
-  });
+  .refine(
+    (v) => !!v.evidenceNotes || (v.evidenceUrls && v.evidenceUrls.length > 0),
+    {
+      message: "Add a note or at least one evidence link",
+    },
+  );
 export type SubmitVerificationInput = z.infer<typeof submitVerificationSchema>;
 
 // POST admin/verification/:id/decide — reviewNotes required on REJECTED (the owner needs to know
 // what to fix before resubmitting); optional on APPROVED.
 export const decideVerificationSchema = z
   .object({
-    decision: z.enum([VerificationStatus.APPROVED, VerificationStatus.REJECTED]),
+    decision: z.enum([
+      VerificationStatus.APPROVED,
+      VerificationStatus.REJECTED,
+    ]),
     reviewNotes: z.string().trim().max(1000).optional(),
   })
-  .refine((v) => v.decision !== VerificationStatus.REJECTED || !!v.reviewNotes, {
-    message: 'A reason is required when rejecting a verification request',
-    path: ['reviewNotes'],
-  });
+  .refine(
+    (v) => v.decision !== VerificationStatus.REJECTED || !!v.reviewNotes,
+    {
+      message: "A reason is required when rejecting a verification request",
+      path: ["reviewNotes"],
+    },
+  );
 export type DecideVerificationInput = z.infer<typeof decideVerificationSchema>;
 
 // POST admin/credits/grant (AdminCreditsController, PLATFORM_ADMIN-only) — see
@@ -947,13 +1048,16 @@ export const grantPromotionalCreditsSchema = z.object({
   amount: z.number().finite().positive().multipleOf(0.01),
   reason: z.string().trim().min(1).max(500),
   campaignRef: z.string().trim().min(1).max(200).optional(),
-  fundingSource: z.nativeEnum(CreditFundingSource).default(CreditFundingSource.FASTQUE_FUNDED),
+  fundingSource: z
+    .nativeEnum(CreditFundingSource)
+    .default(CreditFundingSource.FASTQUE_FUNDED),
   // ISO 8601 — must be strictly in the future if provided; enforced again server-side, not just
   // here, since a client clock can't be trusted for a hard business rule.
   expiresAt: z.string().datetime().optional(),
 });
-export type GrantPromotionalCreditsInput = z.infer<typeof grantPromotionalCreditsSchema>;
-
+export type GrantPromotionalCreditsInput = z.infer<
+  typeof grantPromotionalCreditsSchema
+>;
 
 // First-party FastQue visitor registration. The browser-generated UUID is never stored raw in the
 // database; the backend hashes it before persistence. This endpoint records one durable unique
