@@ -101,7 +101,7 @@ Example financial aggregate:
 | 5 | Customer CRM and visit history | Extend `GET /dashboard/salons/:salonId/customers` with search/status/cursor; `GET .../customers/:customerId/history`. | Owner/staff permitted by live salon scope; guests remain unmerged unless verified identity link exists; expose only salon-relevant history. | Customer list/detail exist; visit/revenue summary completeness needs verification. |
 | 6 | External reviews | Proposed provider-neutral `GET/POST /dashboard/salons/:salonId/external-reviews/sync` and `GET .../external-reviews`; sync is disabled until provider approval. | Salon owner/admin; retain source, external review ID, verification evidence, and sync timestamp; never fabricate reviews or response status. | No verified external-review connector on base. |
 | 7 | Service catalog, variants, qualifications | Extend salon-scoped service CRUD/import APIs; add `variants[]` and staff qualification reads/writes only where schema supports it. | Owner/service-manager; catalog import remains compatible; historical booking price/service snapshots are immutable. | Core service/catalog/staff qualification APIs exist; variants scope not complete. |
-| 8 | Inventory | Proposed `/dashboard/salons/:salonId/inventory/{products,categories,stock-movements,reports}`; purchase, consumption and adjustment use typed movement DTOs. | Owner/inventory role; atomic transaction and row/advisory lock; reject negative stock unless a separately approved policy exists; every movement audited. | No database-backed inventory domain identified on base. |
+| 8 | Inventory | `GET/POST /api/v1/dashboard/salons/:salonId/inventory/categories`; `GET/POST .../suppliers`; `GET/POST .../products`; `PATCH .../products/:productId`; `POST .../products/:productId/movements` (required `Idempotency-Key`); `GET .../movements?cursor&limit&q&productId&kind`; `GET .../products?cursor&limit&q&categoryId&lowStock`; `GET .../report`. Product stock changes only through opening, purchase, consumption, or reasoned adjustment movements. | Salon owner or global PLATFORM_ADMIN rechecked server-side; salon-composite FKs; signed filter-bound keyset cursors; DB row-lock trigger enforces nonnegative stock, stock/valuation updates only through a movement, append-only history and unique per-salon idempotency; each mutation and movement has an atomic AuditLog record. No link to invoice/payment ledgers. | Proposed on current contract base; detailed candidate below when exact-head CI is complete. |
 | 9 | Activation photo requirements | `GET /api/v1/dashboard/salons/:salonId/photo-readiness`; existing `PATCH /api/v1/dashboard/salons/:salonId/status` controls activation. | Salon owner or PLATFORM_ADMIN; only first `PENDING -> ACTIVE` requires 3 distinct normalized HTTPS/no-userinfo photo URLs; returns `409 SHOP_PHOTOS_REQUIRED` with `required`, `current`, `ready`, `grandfathered`, and `reasons[]`. Legacy ACTIVE/SUSPENDED rows with NULL marker are grandfathered; legacy PENDING rows are not; new registration writes FALSE. Uploaded JPEG/PNG/WebP is decoded/re-encoded with metadata stripped; third-party linked URLs are not fetched or sanitized, and EXIF is never used as location proof. | Implemented in open Draft PR #237 at exact head `55c95d85461cf7808bcf2496755c8b26a2de34e5`; exact-head disposable PostgreSQL migration/authenticated E2E workflow passed (run 39028165535). No production migration/deployment has occurred. |
 | 10 | AI shop-description adapter | Implemented candidate `POST /api/v1/dashboard/salons/:salonId/description/suggestions`; returns an unsaved draft DTO and never updates the salon profile. | Owner only; server loads tenant facts after authorization; strict input/output limits, route throttling, timeout/abort, manual fallback; no claim is auto-published. Per-provider/global cost budgets and provider retention terms are required before any provider can be wired. | Draft PR #246 implements the fail-closed adapter scaffold; the default provider returns 503, so no AI provider call or spend is enabled. |
 | 11 | Offers authoring | Proposed owner-scoped `GET/POST/PATCH /dashboard/salons/:salonId/offers`; immutable revisions after publication. | Owner; validate schedule, use limits, scope and eligibility server-side; no automatic payment mutation. | Promo credit foundation exists; a general offer domain is incomplete. |
@@ -148,6 +148,36 @@ Owners or platform admins manage salon-scoped campaigns:
 - `GET /dashboard/salons/:salonId/booking-attribution?from&to&source` returns salon-local booking counts by projected source and campaign with no customer-identifying fields.
 
 Campaign assignment is evidence of a campaign-link click, not proof that a customer came from the social platform itself. It must be described as campaign attribution, not verified platform identity. Direct APP/WEB values preserve the existing source capture behavior; the backend does not infer an external source from referrer text, campaign label, user-agent, or client-supplied source. Historical source columns are not rewritten. Legacy rows with no campaign use only the source already stored on the booking; unsupported values map to UNKNOWN. Item-level lists are bounded; aggregate output is bounded by salon/date filters.
+
+### Inventory
+
+Inventory is a salon-owned operational ledger, separate from invoice payments, customer dues, and provider payments. All list routes use bounded `limit` (default 25, maximum 100) and signed `nextCursor` values bound to the salon, filter tuple, and order. Stock quantities are decimal strings in the product's declared unit; costs are decimal strings in the salon currency. The report's stock valuation is explicitly an estimate at weighted-average cost, not revenue or collected money.
+
+```http
+GET /api/v1/dashboard/salons/{salonId}/inventory/products?lowStock=true&limit=25
+Authorization: Bearer <owner access-token>
+
+POST /api/v1/dashboard/salons/{salonId}/inventory/products/{productId}/movements
+Authorization: Bearer <owner access-token>
+Idempotency-Key: <unique-request-id>
+Content-Type: application/json
+
+{"kind":"PURCHASE","quantity":5,"unitCost":200,"supplierId":"supplier-uuid","reference":"PO-123"}
+```
+
+The response is recorded only after the transaction commits and includes the immutable movement ID, signed quantity delta, stock-after snapshot, weighted-average unit cost, and supplier. Retrying the same key and normalized body by the same actor returns the same movement; a different body or actor gets `409 INVENTORY_IDEMPOTENCY_KEY_REUSED`. Consumption decreases stock. Adjustments require a reason. Stock below zero is rejected by both the transaction precheck and PostgreSQL trigger, including concurrent requests. Direct product balance writes and UPDATE/DELETE of movements are rejected by database triggers. Opening stock may be recorded once before other movements. There is no delete endpoint for inventory history; corrections use a new adjustment.
+
+```json
+{
+  "productCount": 12,
+  "lowStockCount": 2,
+  "estimatedStockValue": "1210.00",
+  "valuationBasis": "weighted-average-cost",
+  "currency": "INR",
+  "movementCounts": { "OPENING": 1, "PURCHASE": 4, "CONSUMPTION": 9, "ADJUSTMENT": 0 },
+  "lowStockProducts": []
+}
+```
 
 ### Demo status/import
 
