@@ -14,6 +14,7 @@ import {
   CrmLeadStatus,
   CrmVisitOutcome,
   CreditFundingSource,
+  ContactConsentSource,
   Language,
   NotificationCategory,
   NotificationChannel,
@@ -842,6 +843,32 @@ export const updateSalonProfileSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateSalonProfileInput = z.infer<typeof updateSalonProfileSchema>;
+
+// POST dashboard/salons/:salonId/contacts/preview. The preview is bounded and transient; it
+// intentionally does not accept names or account identifiers and never authorizes invitations.
+export const salonContactImportPreviewSchema = z
+  .object({
+    contacts: z
+      .array(
+        z
+          .object({
+            phone: z.string().trim().min(1).max(40),
+            consent: z
+              .object({
+                granted: z.boolean(),
+                source: z.nativeEnum(ContactConsentSource).optional(),
+                capturedAt: z.string().datetime({ offset: true }).optional(),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(250),
+  })
+  .strict();
+export type SalonContactImportPreviewInput = z.infer<typeof salonContactImportPreviewSchema>;
 
 // PATCH dashboard/salons/:salonId/status — owner self-activation. Deliberately restricted to
 // ACTIVE/SUSPENDED: an owner may open or pause their own shop, but cannot move it back to
