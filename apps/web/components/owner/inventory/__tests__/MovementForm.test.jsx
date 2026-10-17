@@ -139,6 +139,24 @@ describe("MovementForm", () => {
     expect(posts[2].headers["Idempotency-Key"]).not.toBe(posts[0].headers["Idempotency-Key"]);
   });
 
+  it("sends only once when the confirm button is pressed several times before the answer arrives", async () => {
+    let release;
+    install({ onPost: () => new Promise((resolve) => { release = () => resolve({ movement: movement(), created: true }); }) });
+    const r = await mount();
+    await pickProduct(r);
+    await type(r, "qty-PURCHASE", "5");
+    await type(r, "cost-PURCHASE", "80");
+    await act(async () => { button(r, "^Review").props.onClick(); });
+    const confirm = button(r, "Confirm and record");
+    await act(async () => { confirm.props.onClick(); confirm.props.onClick(); confirm.props.onClick(); });
+    expect(posts).toHaveLength(1);
+    await act(async () => { release(); });
+    await flush();
+    expect(posts).toHaveLength(1);
+    expect(text(r)).toContain("Purchase recorded.");
+    expect(text(r)).not.toContain("already been recorded");
+  });
+
   it("says plainly when the server replayed an entry it had already recorded", async () => {
     install({ onPost: () => ({ movement: movement(), created: false }) });
     const r = await mount();

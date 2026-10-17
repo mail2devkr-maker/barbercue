@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { INVENTORY_PATHS } from "@barbercue/shared";
 import type { InventoryMovementDto, InventoryProductDto, InventorySupplierDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../lib/api";
@@ -54,6 +54,8 @@ export function MovementForm({
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // A second press before the first answer arrives must not send again (state updates are too slow to guard this).
+  const inFlight = useRef(false);
   const [recorded, setRecorded] = useState<(Recorded & { unit: string }) | null>(null);
 
   const built = product ? buildMovement(kind, form) : null;
@@ -86,7 +88,8 @@ export function MovementForm({
   }
 
   async function submit() {
-    if (!product || !built?.body) return;
+    if (!product || !built?.body || inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -108,6 +111,7 @@ export function MovementForm({
       setConfirming(false);
       setSubmitError(err instanceof ApiError ? movementErrorText(err.code, err.message) : "Could not reach the server. Nothing was confirmed; you can press the same button again safely.");
     } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   }
