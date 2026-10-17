@@ -235,6 +235,53 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     });
   });
 
+  describe('customer CRM unified visit history', () => {
+    it('returns only this account’s bookings and standalone Live Queue visits to the owning salon', async () => {
+      const booking = await createBookingAs('cust1', slot('16:00'));
+      const queue = await api('post', `salons/${ids.salon}/queue/join`, tok.cust1)
+        .send({
+          serviceId: ids.beard,
+          contactName: 'Record Label',
+          contactPhone: phone(1),
+        })
+        .expect(201);
+
+      const result = await api('get', `dashboard/salons/${ids.salon}/customers/${ids.cust1}/history?limit=20`, tok.owner).expect(200);
+
+      expect(result.headers['cache-control']).toContain('no-store');
+      expect(result.body.customerId).toBe(ids.cust1);
+      expect(result.body.items).toHaveLength(2);
+      expect(result.body.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: booking.id, source: 'ONLINE_BOOKING' }),
+          expect.objectContaining({
+            id: queue.body.id,
+            source: 'LIVE_QUEUE',
+            recordedName: 'Record Label',
+          }),
+        ]),
+      );
+      expect(result.body.items.filter((item: { id: string }) => item.id === booking.id)).toHaveLength(1);
+
+      await api('get', `dashboard/salons/${ids.salon}/customers/${ids.cust1}/history?status=WAITING`, tok.owner)
+        .expect(200)
+        .then((filtered) => {
+          expect(filtered.body.items).toHaveLength(1);
+          expect(filtered.body.items[0]).toMatchObject({
+            id: queue.body.id,
+            status: 'WAITING',
+          });
+        });
+    });
+
+    it('denies customer and unrelated-salon owner access to customer visit history', async () => {
+      await createBookingAs('cust1', slot('17:00'));
+      const path = `dashboard/salons/${ids.salon}/customers/${ids.cust1}/history`;
+      await api('get', path, tok.cust1).expect(403);
+      await api('get', path, tok.outsider).expect(403);
+    });
+  });
+
   // ------------------------------------------------------------------------------------------
   describe('shop cancellation, notification delivery and attribution', () => {
     it('cancels as the owner, records who did it and tells the customer exactly once', async () => {
