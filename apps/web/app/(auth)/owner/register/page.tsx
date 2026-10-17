@@ -8,6 +8,7 @@ import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard
 import authStyles from "../../../../components/auth/customer-auth.module.css";
 import { ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
+import { OwnerPhoneOtpPanel } from "../../../../components/auth/OwnerPhoneOtpPanel";
 
 export default function OwnerRegisterPage() {
   const router = useRouter();
@@ -118,6 +119,14 @@ export default function OwnerRegisterPage() {
       </form>
 
       <div className={authStyles.divider} aria-hidden="true">OR</div>
+      <OwnerPhoneOtpPanel
+        mode="new-owner"
+        onSuccess={() => router.replace("/dashboard/register-shop")}
+      />
+      <div className={authStyles.divider} aria-hidden="true">OR</div>
+      <p className={authStyles.contextLine} style={{ textAlign: "center" }}>
+        Prefer Google? <Link href="/login?next=%2Fdashboard%2Fregister-shop">Continue with Google</Link> on the customer sign-in page, then register your shop.
+      </p>
       <p className={authStyles.contextLine}>
         Already have a shop-owner account? <Link href="/owner/login">Sign in</Link>
       </p>

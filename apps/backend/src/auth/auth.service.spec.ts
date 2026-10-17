@@ -1,6 +1,13 @@
 import { HttpStatus } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { AuthErrorCode, Language, Role, SessionAudience, UserStatus } from '@barbercue/shared';
+import {
+  AuthErrorCode,
+  Language,
+  OtpPurpose,
+  Role,
+  SessionAudience,
+  UserStatus,
+} from '@barbercue/shared';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from './services/password.service';
@@ -17,6 +24,7 @@ describe('AuthService', () => {
   let prisma: {
     user: {
       findUnique: jest.Mock;
+      findUniqueOrThrow: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
@@ -82,12 +90,21 @@ describe('AuthService', () => {
     prisma = {
       user: {
         findUnique: jest.fn(),
+        findUniqueOrThrow: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
       },
-      authIdentity: { findUnique: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
-      userRole: { create: jest.fn(), createMany: jest.fn().mockResolvedValue({ count: 0 }), deleteMany: jest.fn() },
+      authIdentity: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        deleteMany: jest.fn(),
+      },
+      userRole: {
+        create: jest.fn(),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        deleteMany: jest.fn(),
+      },
       salon: { findMany: jest.fn().mockResolvedValue([]) },
       passwordResetToken: {
         create: jest.fn(),
@@ -96,7 +113,10 @@ describe('AuthService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         deleteMany: jest.fn(),
       },
-      refreshToken: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), deleteMany: jest.fn() },
+      refreshToken: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: jest.fn(),
+      },
       otpRequest: { deleteMany: jest.fn() },
       pushDevice: { deleteMany: jest.fn() },
       notificationPreference: { deleteMany: jest.fn() },
@@ -240,7 +260,9 @@ describe('AuthService', () => {
       );
       // The DB grant only ADDS CUSTOMER — it never touches/removes the existing SALON_OWNER row.
       expect(prisma.userRole.create).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ role: Role.SALON_OWNER }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ role: Role.SALON_OWNER }),
+        }),
       );
     });
 
@@ -286,6 +308,25 @@ describe('AuthService', () => {
       expect(prisma.user.create).not.toHaveBeenCalled();
     });
 
+    it('does not let phone possession take over an existing account whose phone was never verified', async () => {
+      otpService.verifyOtp.mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'legacy-owner',
+        phone: '+919876543210',
+        email: 'owner@example.com',
+        phoneVerifiedAt: null,
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.SALON_OWNER, salonId: 'salon-1' }],
+      });
+
+      await expect(
+        service.verifyCustomerOtp('+919876543210', '123456'),
+      ).rejects.toMatchObject({ code: AuthErrorCode.OTP_INVALID });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
     it('propagates OTP failures without issuing tokens', async () => {
       otpService.verifyOtp.mockRejectedValue(
         new AppException(AuthErrorCode.OTP_INVALID, 'bad', 400),
@@ -311,6 +352,264 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({
         code: AuthErrorCode.ACCOUNT_SUSPENDED,
       });
+    });
+  });
+
+  describe('owner phone OTP', () => {
+    const owner = {
+      id: 'owner-1',
+      phone: '+919876543210',
+      phoneVerifiedAt: new Date(),
+      email: 'owner@example.com',
+      passwordHash: null,
+      preferredLanguage: Language.EN,
+      status: UserStatus.ACTIVE,
+      deletedAt: null,
+      roles: [{ role: Role.SALON_OWNER, salonId: 'salon-1' }],
+      ownedSalons: [{ id: 'salon-1' }],
+    };
+
+    it('requests only an account-bound owner challenge for a verified canonical owner phone', async () => {
+      prisma.user.findUnique.mockResolvedValue(owner);
+      otpService.requestOtp.mockResolvedValue({ expiresInSeconds: 300 });
+
+      await expect(service.requestOwnerOtp(owner.phone)).resolves.toEqual({
+        expiresInSeconds: 300,
+      });
+      expect(otpService.requestOtp).toHaveBeenCalledWith(
+        owner.phone,
+        OtpPurpose.OWNER_LOGIN,
+        owner.id,
+      );
+    });
+
+    it('returns the same public request shape without sending for an unknown or non-owner phone', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.requestOwnerOtp('+919900000000')).resolves.toEqual({
+        expiresInSeconds: 300,
+      });
+      expect(otpService.requestOtp).not.toHaveBeenCalled();
+    });
+
+    it('issues a STAFF session containing only SALON_OWNER after canonical DB role verification', async () => {
+      prisma.user.findUnique.mockResolvedValue(owner);
+      otpService.verifyOtp.mockResolvedValue(undefined);
+
+      const result = await service.verifyOwnerOtp(
+        owner.phone,
+        '123456',
+        'browser-test',
+      );
+
+      expect(otpService.verifyOtp).toHaveBeenCalledWith(
+        owner.phone,
+        '123456',
+        OtpPurpose.OWNER_LOGIN,
+        owner.id,
+      );
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        owner.id,
+        [Role.SALON_OWNER],
+        SessionAudience.STAFF,
+        'browser-test',
+      );
+      expect(result.user.audience).toBe(SessionAudience.STAFF);
+      expect(result.user.roles).toEqual([Role.SALON_OWNER]);
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'OWNER_PHONE_OTP_LOGIN',
+          metadata: { audience: SessionAudience.STAFF, method: 'sms_otp' },
+        }),
+      });
+    });
+
+    it('does not issue owner tokens or reveal account eligibility when the phone is not a canonical owner', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...owner,
+        roles: [{ role: Role.CUSTOMER, salonId: null }],
+        ownedSalons: [],
+      });
+
+      await expect(
+        service.verifyOwnerOtp(owner.phone, '123456'),
+      ).rejects.toMatchObject({
+        code: AuthErrorCode.OTP_INVALID,
+        status: HttpStatus.BAD_REQUEST,
+      });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('normalizes wrong, expired and exhausted owner OTP outcomes to one response', async () => {
+      prisma.user.findUnique.mockResolvedValue(owner);
+      otpService.verifyOtp.mockRejectedValue(
+        new AppException(
+          AuthErrorCode.OTP_EXPIRED,
+          'private detail',
+          HttpStatus.BAD_REQUEST,
+        ),
+      );
+
+      await expect(
+        service.verifyOwnerOtp(owner.phone, '123456'),
+      ).rejects.toMatchObject({
+        code: AuthErrorCode.OTP_INVALID,
+        status: HttpStatus.BAD_REQUEST,
+        message:
+          'The verification code is invalid or expired. Request a new code and try again.',
+      });
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('requires an authenticated STAFF owner session to link a phone', async () => {
+      await expect(
+        service.requestOwnerPhoneLinkOtp(
+          'customer-1',
+          SessionAudience.CUSTOMER,
+          [Role.CUSTOMER],
+          '+919900000000',
+        ),
+      ).rejects.toMatchObject({ code: AuthErrorCode.FORBIDDEN_ROLE });
+      expect(otpService.requestOtp).not.toHaveBeenCalled();
+    });
+
+    it('links only the verified unique phone, audits without the number, revokes refresh sessions, and returns a new STAFF session', async () => {
+      const newPhone = '+919900000000';
+      const updatedOwner = { ...owner, phone: newPhone };
+      prisma.user.findUnique
+        .mockResolvedValueOnce(owner) // request authorization
+        .mockResolvedValueOnce(owner) // transactional recheck
+        .mockResolvedValueOnce(null); // uniqueness recheck
+      prisma.user.findUniqueOrThrow.mockResolvedValue(updatedOwner);
+      otpService.verifyOtp.mockResolvedValue(undefined);
+
+      const result = await service.verifyOwnerPhoneLink(
+        owner.id,
+        SessionAudience.STAFF,
+        [Role.SALON_OWNER],
+        newPhone,
+        '123456',
+        'browser-test',
+      );
+
+      expect(otpService.verifyOtp).toHaveBeenCalledWith(
+        newPhone,
+        '123456',
+        OtpPurpose.PHONE_LINK,
+        owner.id,
+      );
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: owner.id },
+        data: { phone: newPhone, phoneVerifiedAt: expect.any(Date) },
+      });
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: owner.id, revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'OWNER_PHONE_LINKED',
+          metadata: expect.not.objectContaining({ phone: newPhone }),
+        }),
+      });
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        owner.id,
+        [Role.SALON_OWNER],
+        SessionAudience.STAFF,
+        'browser-test',
+      );
+      expect(result.success).toBe(true);
+      expect(result.user.phone).toBe(newPhone);
+      expect(result.user.audience).toBe(SessionAudience.STAFF);
+    });
+  });
+
+  describe('customer phone linking', () => {
+    const customer = {
+      id: 'customer-1',
+      phone: null,
+      phoneVerifiedAt: null,
+      email: 'customer@example.com',
+      passwordHash: null,
+      preferredLanguage: Language.EN,
+      status: UserStatus.ACTIVE,
+      deletedAt: null,
+      roles: [{ role: Role.CUSTOMER, salonId: null }],
+    };
+
+    it('requires a CUSTOMER-audience session before requesting a phone link code', async () => {
+      await expect(
+        service.requestCustomerPhoneLinkOtp(
+          customer.id,
+          SessionAudience.STAFF,
+          [Role.SALON_OWNER],
+          '+919900000000',
+        ),
+      ).rejects.toMatchObject({ code: AuthErrorCode.FORBIDDEN_ROLE });
+      expect(otpService.requestOtp).not.toHaveBeenCalled();
+    });
+
+    it('links the unique phone transactionally, audits without PII, revokes sessions, and reissues CUSTOMER only', async () => {
+      const phone = '+919900000000';
+      const linkedCustomer = { ...customer, phone };
+      prisma.user.findUnique
+        .mockResolvedValueOnce(customer) // request authorization
+        .mockResolvedValueOnce(null) // request phone uniqueness
+        .mockResolvedValueOnce(customer) // verify authorization
+        .mockResolvedValueOnce(customer) // transaction recheck
+        .mockResolvedValueOnce(null); // phone uniqueness recheck
+      prisma.user.findUniqueOrThrow.mockResolvedValue(linkedCustomer);
+      otpService.requestOtp.mockResolvedValue({ expiresInSeconds: 300 });
+      otpService.verifyOtp.mockResolvedValue(undefined);
+
+      await service.requestCustomerPhoneLinkOtp(
+        customer.id,
+        SessionAudience.CUSTOMER,
+        [Role.CUSTOMER],
+        phone,
+      );
+      const result = await service.verifyCustomerPhoneLink(
+        customer.id,
+        SessionAudience.CUSTOMER,
+        [Role.CUSTOMER],
+        phone,
+        '123456',
+        'browser-test',
+      );
+
+      expect(otpService.requestOtp).toHaveBeenCalledWith(
+        phone,
+        OtpPurpose.PHONE_LINK,
+        customer.id,
+      );
+      expect(otpService.verifyOtp).toHaveBeenCalledWith(
+        phone,
+        '123456',
+        OtpPurpose.PHONE_LINK,
+        customer.id,
+      );
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: customer.id },
+        data: { phone, phoneVerifiedAt: expect.any(Date) },
+      });
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: customer.id, revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'CUSTOMER_PHONE_LINKED',
+          metadata: expect.not.objectContaining({ phone }),
+        }),
+      });
+      expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
+        customer.id,
+        [Role.CUSTOMER],
+        SessionAudience.CUSTOMER,
+        'browser-test',
+      );
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
     });
   });
 
@@ -445,7 +744,9 @@ describe('AuthService', () => {
       const result = await service.googleLogin('id-token');
 
       expect(prisma.authIdentity.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ userId: 'existing-staff' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ userId: 'existing-staff' }),
+        }),
       );
       expect(prisma.userRole.create).toHaveBeenCalledWith({
         data: { userId: 'existing-staff', role: Role.CUSTOMER },
@@ -500,7 +801,11 @@ describe('AuthService', () => {
         roles: [{ role: Role.CUSTOMER }],
       });
 
-      const result = await service.ownerSignup('  Owner@Example.COM  ', 'password123', 'test-device');
+      const result = await service.ownerSignup(
+        '  Owner@Example.COM  ',
+        'password123',
+        'test-device',
+      );
 
       expect(passwordService.hash).toHaveBeenCalledWith('password123');
       expect(prisma.user.create).toHaveBeenCalledWith(
@@ -538,9 +843,16 @@ describe('AuthService', () => {
       });
       passwordService.compare.mockResolvedValue(true);
 
-      const result = await service.ownerSignup('owner@example.com', 'password123', 'resume-device');
+      const result = await service.ownerSignup(
+        'owner@example.com',
+        'password123',
+        'resume-device',
+      );
 
-      expect(passwordService.compare).toHaveBeenCalledWith('password123', 'hashed-password');
+      expect(passwordService.compare).toHaveBeenCalledWith(
+        'password123',
+        'hashed-password',
+      );
       expect(prisma.user.create).not.toHaveBeenCalled();
       expect(prisma.userRole.create).not.toHaveBeenCalled();
       expect(tokenService.issueTokenPair).toHaveBeenCalledWith(
@@ -692,7 +1004,13 @@ describe('AuthService', () => {
         select: { id: true },
       });
       expect(prisma.userRole.createMany).toHaveBeenCalledWith({
-        data: [{ userId: 'recovered-owner', role: Role.SALON_OWNER, salonId: 'salon-recovered' }],
+        data: [
+          {
+            userId: 'recovered-owner',
+            role: Role.SALON_OWNER,
+            salonId: 'salon-recovered',
+          },
+        ],
         skipDuplicates: true,
       });
       expect(result.user.roles).toEqual([Role.SALON_OWNER]);
@@ -739,7 +1057,11 @@ describe('AuthService', () => {
     });
 
     it('rejects a verified Google token with no email claim and no existing linked identity', async () => {
-      googleAuthService.verifyIdToken.mockResolvedValue({ sub: 'google-sub-no-email', email: null, name: null });
+      googleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'google-sub-no-email',
+        email: null,
+        name: null,
+      });
       prisma.authIdentity.findUnique.mockResolvedValue(null);
 
       await expect(service.staffGoogleLogin('id-token')).rejects.toMatchObject({
@@ -771,9 +1093,11 @@ describe('AuthService', () => {
       googleAuthService.verifyIdToken.mockRejectedValue(
         new AppException(AuthErrorCode.GOOGLE_TOKEN_INVALID, 'bad token', 401),
       );
-      await expect(service.staffGoogleLogin('bad-token')).rejects.toMatchObject({
-        code: AuthErrorCode.GOOGLE_TOKEN_INVALID,
-      });
+      await expect(service.staffGoogleLogin('bad-token')).rejects.toMatchObject(
+        {
+          code: AuthErrorCode.GOOGLE_TOKEN_INVALID,
+        },
+      );
       expect(prisma.user.create).not.toHaveBeenCalled();
       expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
     });
@@ -1154,15 +1478,20 @@ describe('AuthService', () => {
       ['customer', Role.CUSTOMER],
       ['owner', Role.SALON_OWNER],
       ['staff', Role.SALON_STAFF],
-    ])('rejects a linked %s-only account after re-checking current roles', async (_label, role) => {
-      prisma.authIdentity.findUnique.mockResolvedValue({
-        user: { ...admin, roles: [{ role }] },
-      });
-      await expect(
-        service.adminGoogleLogin('id-token', '123456'),
-      ).rejects.toMatchObject({ code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN });
-      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
-    });
+    ])(
+      'rejects a linked %s-only account after re-checking current roles',
+      async (_label, role) => {
+        prisma.authIdentity.findUnique.mockResolvedValue({
+          user: { ...admin, roles: [{ role }] },
+        });
+        await expect(
+          service.adminGoogleLogin('id-token', '123456'),
+        ).rejects.toMatchObject({
+          code: AuthErrorCode.GOOGLE_ACCOUNT_NOT_ADMIN,
+        });
+        expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+      },
+    );
 
     it('rejects an unknown Google user without creating a User or role', async () => {
       prisma.authIdentity.findUnique.mockResolvedValue(null);
@@ -1221,7 +1550,10 @@ describe('AuthService', () => {
 
     it('[Test I] rejects a malformed salon-scoped PLATFORM_ADMIN row via Google login too — the role only grants admin eligibility when global', async () => {
       prisma.authIdentity.findUnique.mockResolvedValue({
-        user: { ...admin, roles: [{ role: Role.PLATFORM_ADMIN, salonId: 's1' }] },
+        user: {
+          ...admin,
+          roles: [{ role: Role.PLATFORM_ADMIN, salonId: 's1' }],
+        },
       });
       await expect(
         service.adminGoogleLogin('id-token', '123456'),
@@ -1316,8 +1648,12 @@ describe('AuthService', () => {
         service.resetPassword('good-token', 'newpassword123'),
         service.resetPassword('good-token', 'newpassword123'),
       ]);
-      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(
+        results.filter((result) => result.status === 'fulfilled'),
+      ).toHaveLength(1);
+      expect(
+        results.filter((result) => result.status === 'rejected'),
+      ).toHaveLength(1);
     });
   });
 
@@ -1357,8 +1693,14 @@ describe('AuthService', () => {
         roles: [{ role: Role.SALON_OWNER }],
       });
       await expect(
-        service.setInitialPassword('owner', SessionAudience.STAFF, 'newpassword'),
-      ).rejects.toMatchObject({ code: AuthErrorCode.PASSWORD_ALREADY_CONFIGURED });
+        service.setInitialPassword(
+          'owner',
+          SessionAudience.STAFF,
+          'newpassword',
+        ),
+      ).rejects.toMatchObject({
+        code: AuthErrorCode.PASSWORD_ALREADY_CONFIGURED,
+      });
       expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
   });
@@ -1371,7 +1713,11 @@ describe('AuthService', () => {
         email: null,
         preferredLanguage: 'HI',
       });
-      const result = await service.me('u1', [Role.CUSTOMER], SessionAudience.CUSTOMER);
+      const result = await service.me(
+        'u1',
+        [Role.CUSTOMER],
+        SessionAudience.CUSTOMER,
+      );
       expect(result.preferredLanguage).toBe('HI');
       expect(result.audience).toBe(SessionAudience.CUSTOMER);
     });
@@ -1418,26 +1764,49 @@ describe('AuthService', () => {
 
     it('anonymizes only the authenticated customer, removes direct identity data, and deletes session/OTP/review records', async () => {
       prisma.user.findUnique.mockResolvedValue(customer);
-      await expect(service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER)).resolves.toEqual({ success: true });
+      await expect(
+        service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER),
+      ).resolves.toEqual({ success: true });
 
-      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
-      expect(prisma.otpRequest.deleteMany).toHaveBeenCalledWith({ where: { phone: '+919876543210' } });
-      expect(prisma.authIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
-      expect(prisma.pushDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
-      expect(prisma.queueEntry.updateMany).toHaveBeenCalledWith({
-        where: { customerId: 'customer-1' }, data: { customerId: null },
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'customer-1' },
       });
-      expect(prisma.review.deleteMany).toHaveBeenCalledWith({ where: { customerId: 'customer-1' } });
-      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
-        where: { id: 'customer-1' },
-        data: expect.objectContaining({
-          phone: null, email: null, passwordHash: null, status: UserStatus.SUSPENDED,
-          deletedAt: expect.any(Date),
+      expect(prisma.otpRequest.deleteMany).toHaveBeenCalledWith({
+        where: { phone: '+919876543210' },
+      });
+      expect(prisma.authIdentity.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'customer-1' },
+      });
+      expect(prisma.pushDevice.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'customer-1' },
+      });
+      expect(prisma.queueEntry.updateMany).toHaveBeenCalledWith({
+        where: { customerId: 'customer-1' },
+        data: { customerId: null },
+      });
+      expect(prisma.review.deleteMany).toHaveBeenCalledWith({
+        where: { customerId: 'customer-1' },
+      });
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'customer-1' },
+          data: expect.objectContaining({
+            phone: null,
+            email: null,
+            passwordHash: null,
+            status: UserStatus.SUSPENDED,
+            deletedAt: expect.any(Date),
+          }),
         }),
-      }));
-      expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ action: 'CUSTOMER_ACCOUNT_DELETED', entityId: 'customer-1' }),
-      }));
+      );
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'CUSTOMER_ACCOUNT_DELETED',
+            entityId: 'customer-1',
+          }),
+        }),
+      );
     });
 
     it('removes only the authenticated phone OTP rows and never accepts a client-supplied target', async () => {
@@ -1445,60 +1814,116 @@ describe('AuthService', () => {
         { id: 'otp-customer', phone: customer.phone },
         { id: 'otp-unrelated', phone: '+919999999999' },
       ];
-      prisma.otpRequest.deleteMany.mockImplementation(({ where: { phone } }: { where: { phone: string } }) => {
-        const before = otpRows.length;
-        otpRows = otpRows.filter((row) => row.phone !== phone);
-        return Promise.resolve({ count: before - otpRows.length });
-      });
+      prisma.otpRequest.deleteMany.mockImplementation(
+        ({ where: { phone } }: { where: { phone: string } }) => {
+          const before = otpRows.length;
+          otpRows = otpRows.filter((row) => row.phone !== phone);
+          return Promise.resolve({ count: before - otpRows.length });
+        },
+      );
       prisma.user.findUnique.mockResolvedValue(customer);
-      await service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER);
+      await service.deleteCustomerAccount(
+        'customer-1',
+        SessionAudience.CUSTOMER,
+      );
 
       expect(prisma.otpRequest.deleteMany).toHaveBeenCalledTimes(1);
-      expect(prisma.otpRequest.deleteMany).toHaveBeenCalledWith({ where: { phone: customer.phone } });
-      expect(prisma.otpRequest.deleteMany).not.toHaveBeenCalledWith({ where: { phone: '+919999999999' } });
-      expect(otpRows).toEqual([{ id: 'otp-unrelated', phone: '+919999999999' }]);
+      expect(prisma.otpRequest.deleteMany).toHaveBeenCalledWith({
+        where: { phone: customer.phone },
+      });
+      expect(prisma.otpRequest.deleteMany).not.toHaveBeenCalledWith({
+        where: { phone: '+919999999999' },
+      });
+      expect(otpRows).toEqual([
+        { id: 'otp-unrelated', phone: '+919999999999' },
+      ]);
     });
 
-    it('deletes only the authenticated customer review rows, preserving other customers\' reviews', async () => {
+    it("deletes only the authenticated customer review rows, preserving other customers' reviews", async () => {
       let reviews = [
-        { id: 'review-customer', customerId: 'customer-1', comment: 'Customer review', ownerResponse: 'Thanks' },
-        { id: 'review-unrelated', customerId: 'customer-2', comment: 'Other review', ownerResponse: null },
+        {
+          id: 'review-customer',
+          customerId: 'customer-1',
+          comment: 'Customer review',
+          ownerResponse: 'Thanks',
+        },
+        {
+          id: 'review-unrelated',
+          customerId: 'customer-2',
+          comment: 'Other review',
+          ownerResponse: null,
+        },
       ];
-      prisma.review.deleteMany.mockImplementation(({ where: { customerId } }: { where: { customerId: string } }) => {
-        const before = reviews.length;
-        reviews = reviews.filter((review) => review.customerId !== customerId);
-        return Promise.resolve({ count: before - reviews.length });
-      });
+      prisma.review.deleteMany.mockImplementation(
+        ({ where: { customerId } }: { where: { customerId: string } }) => {
+          const before = reviews.length;
+          reviews = reviews.filter(
+            (review) => review.customerId !== customerId,
+          );
+          return Promise.resolve({ count: before - reviews.length });
+        },
+      );
       prisma.user.findUnique.mockResolvedValue(customer);
-      await service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER);
+      await service.deleteCustomerAccount(
+        'customer-1',
+        SessionAudience.CUSTOMER,
+      );
 
       expect(prisma.review.deleteMany).toHaveBeenCalledTimes(1);
-      expect(prisma.review.deleteMany).toHaveBeenCalledWith({ where: { customerId: 'customer-1' } });
-      expect(prisma.review.deleteMany).not.toHaveBeenCalledWith({ where: { customerId: 'customer-2' } });
+      expect(prisma.review.deleteMany).toHaveBeenCalledWith({
+        where: { customerId: 'customer-1' },
+      });
+      expect(prisma.review.deleteMany).not.toHaveBeenCalledWith({
+        where: { customerId: 'customer-2' },
+      });
       expect(reviews).toEqual([
-        { id: 'review-unrelated', customerId: 'customer-2', comment: 'Other review', ownerResponse: null },
+        {
+          id: 'review-unrelated',
+          customerId: 'customer-2',
+          comment: 'Other review',
+          ownerResponse: null,
+        },
       ]);
     });
 
     it('removes all customer refresh session records so no device metadata or refresh credential remains', async () => {
       let sessions = [
         { id: 'session-customer', userId: 'customer-1', deviceInfo: 'Android' },
-        { id: 'session-unrelated', userId: 'customer-2', deviceInfo: 'Other device' },
+        {
+          id: 'session-unrelated',
+          userId: 'customer-2',
+          deviceInfo: 'Other device',
+        },
       ];
-      prisma.refreshToken.deleteMany.mockImplementation(({ where: { userId } }: { where: { userId: string } }) => {
-        const before = sessions.length;
-        sessions = sessions.filter((session) => session.userId !== userId);
-        return Promise.resolve({ count: before - sessions.length });
-      });
+      prisma.refreshToken.deleteMany.mockImplementation(
+        ({ where: { userId } }: { where: { userId: string } }) => {
+          const before = sessions.length;
+          sessions = sessions.filter((session) => session.userId !== userId);
+          return Promise.resolve({ count: before - sessions.length });
+        },
+      );
       prisma.user.findUnique.mockResolvedValue(customer);
-      await service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER);
+      await service.deleteCustomerAccount(
+        'customer-1',
+        SessionAudience.CUSTOMER,
+      );
 
-      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { userId: 'customer-1' } });
-      expect(sessions).toEqual([{ id: 'session-unrelated', userId: 'customer-2', deviceInfo: 'Other device' }]);
+      expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'customer-1' },
+      });
+      expect(sessions).toEqual([
+        {
+          id: 'session-unrelated',
+          userId: 'customer-2',
+          deviceInfo: 'Other device',
+        },
+      ]);
     });
 
     it('rejects a non-customer audience before looking up or mutating an account', async () => {
-      await expect(service.deleteCustomerAccount('owner-1', SessionAudience.STAFF)).rejects.toMatchObject({
+      await expect(
+        service.deleteCustomerAccount('owner-1', SessionAudience.STAFF),
+      ).rejects.toMatchObject({
         code: AuthErrorCode.FORBIDDEN_ROLE,
       });
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
@@ -1510,15 +1935,23 @@ describe('AuthService', () => {
         roles: [{ role: Role.CUSTOMER }, { role: Role.SALON_OWNER }],
         ownedSalons: [{ id: 'salon-1' }],
       });
-      await expect(service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER)).rejects.toMatchObject({
+      await expect(
+        service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER),
+      ).rejects.toMatchObject({
         code: AuthErrorCode.FORBIDDEN_ROLE,
       });
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
     it('fails closed for an already deleted or otherwise inactive account', async () => {
-      prisma.user.findUnique.mockResolvedValue({ ...customer, status: UserStatus.SUSPENDED, deletedAt: new Date() });
-      await expect(service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER)).rejects.toMatchObject({
+      prisma.user.findUnique.mockResolvedValue({
+        ...customer,
+        status: UserStatus.SUSPENDED,
+        deletedAt: new Date(),
+      });
+      await expect(
+        service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER),
+      ).rejects.toMatchObject({
         code: AuthErrorCode.UNAUTHENTICATED,
       });
       expect(prisma.user.update).not.toHaveBeenCalled();

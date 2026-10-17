@@ -12,6 +12,12 @@ Three: `development` (local), `staging`, `production`. Each has its own Postgres
 DATABASE_URL
 JWT_ACCESS_SECRET / JWT_REFRESH_SECRET
 OTP_PROVIDER_API_KEY
+OTP_PROVIDER_TEMPLATE_NAME
+OTP_HASH_SECRET
+OTP_ALLOWED_COUNTRY_CALLING_CODES
+OTP_MAX_DAILY_GLOBAL_SENDS
+OTP_MAX_ROLLING_24H_GLOBAL_SENDS
+OTP_MAX_DAILY_PER_COUNTRY_SENDS
 GOOGLE_WEB_CLIENT_ID / GOOGLE_ANDROID_CLIENT_ID   # OAuth client IDs, not secrets — see apps/backend/.env.example
 GEMINI_API_KEY                  # AI Style Advisor image generation; unset = feature disabled, not broken
 PAYMENT_PROVIDER_KEY_ID / PAYMENT_PROVIDER_KEY_SECRET / PAYMENT_WEBHOOK_SECRET
@@ -20,6 +26,26 @@ NEXT_PUBLIC_API_BASE_URL        # apps/web → apps/backend
 EXPO_PUBLIC_API_BASE_URL        # apps/mobile → apps/backend
 REVALIDATE_SECRET               # backend → apps/web ISR revalidation webhook
 ```
+
+Phone OTP remains unavailable unless the backend has the provider key and approved template,
+an independent 32-byte-or-longer OTP hash secret, an explicit destination calling-code allowlist,
+and all three positive-integer send ceilings above. Choose ceiling values only after account pricing,
+credit units, delivery rules and an owner-approved initial volume are verified; the application does
+not invent a monetary price or production quota. For the initial India-only activation, configure
+the allowlist to `91` and keep every other code excluded. Do not put provider credentials in source,
+GitHub Actions, screenshots, or browser/network artifacts; provision replacement credentials only
+through the approved environment secret manager. No staging provider delivery is enabled by this
+configuration: non-production tests use the synthetic sender, and production SMS stays disabled
+until all provider, DLT, and owner gates pass.
+
+The send ceilings are enforced by durable PostgreSQL reservations serialized with a
+transaction-scoped advisory lock shared across backend replicas. They cover global UTC-day volume,
+global rolling-24-hour volume, and per-calling-code UTC-day volume. A reservation is created before
+provider I/O. Accepted and ambiguous/timeout attempts remain counted; the application never
+automatically retries a timed-out request or refunds an uncertain attempt. The ledger stores no
+phone number, account ID, OTP, API key, or provider payload and prunes entries only after they fall
+outside both active windows. This is a message-attempt ceiling, not a verified currency cap: use a
+separately approved low limit until account-specific units and pricing are confirmed.
 
 Secrets never committed; `.env.example` files per app document required keys with placeholder values. Production secrets live in whichever host's built-in secret manager is chosen (Vercel env vars for `apps/web`; Railway/Render variables for `apps/backend`) — not AWS Secrets Manager, since that would reintroduce the AWS-specific dependency this deployment design deliberately avoids for V1.
 
@@ -63,7 +89,7 @@ untouched:
 
 **Remaining step before any Android build — assign the existing keystore.** EAS keys Android
 credentials by application identifier, so `com.dcw.fastque` starts as an empty credentials slot and
-a build would otherwise generate a *fresh* keystore, changing the SHA-1 above and invalidating the
+a build would otherwise generate a _fresh_ keystore, changing the SHA-1 above and invalidating the
 OAuth client. Run `eas credentials -p android` (interactive only — the CLI has no non-interactive
 path for this), select the `com.dcw.fastque` application id, and assign the same keystore already
 used by `com.dcw.barbercue` rather than letting EAS generate one. Verify afterwards that a built
@@ -80,6 +106,7 @@ push token.
 ## CI/CD
 
 GitHub Actions:
+
 - On every PR: install, typecheck, lint, unit tests, build all three apps (catches cross-package breakage from `packages/shared` changes immediately).
 - On merge to `main`: deploy `apps/backend` and `apps/web` to staging automatically; run integration tests against staging.
 - Production deploy: manual promotion (a workflow_dispatch or a tag push), never automatic — this is a payments-handling system, a bad auto-deploy shouldn't be one click away from customers' money.
@@ -96,9 +123,10 @@ npx prisma migrate deploy   # applies any migration not yet recorded as applied 
 npx prisma generate         # regenerates the Prisma Client the backend process actually imports
 ```
 
-`prisma migrate deploy` is non-interactive and additive-only by design: it applies pending migrations in filename order and never prompts for or performs a reset, unlike `prisma migrate dev` (a local-development-only command that can offer to reset on drift — never run this against a database with real data). A first-time deploy to a genuinely empty database replays the full migration history from scratch; every migration currently in `prisma/migrations/` has been verified (Phase 8A) to replay cleanly in that scenario **with one documented exception**: `20260830215000_ensure_primary_platform_admin` intentionally `RAISE EXCEPTION`s if no user row exists with the primary admin's email — it is a narrow, idempotent *"ensure this real account stays PLATFORM_ADMIN"* guard, not a bootstrap, and by design never fabricates that identity. Production has carried that account since before this migration was introduced, so `migrate deploy` runs it there with no manual step. Only a database that never had that account (a fresh/disposable one, e.g. for local certification or CI) needs a resolution step before continuing — see the migration's own file comment, and use `prisma migrate resolve --rolled-back <name>` (not `--applied`: the guard's `DO $$...$$` block fully rolls back on the exception, leaving no partial state to mark as skipped) so the migration still runs for real once the database's own conditions allow it, rather than being permanently treated as already applied.
+`prisma migrate deploy` is non-interactive and additive-only by design: it applies pending migrations in filename order and never prompts for or performs a reset, unlike `prisma migrate dev` (a local-development-only command that can offer to reset on drift — never run this against a database with real data). A first-time deploy to a genuinely empty database replays the full migration history from scratch; every migration currently in `prisma/migrations/` has been verified (Phase 8A) to replay cleanly in that scenario **with one documented exception**: `20260830215000_ensure_primary_platform_admin` intentionally `RAISE EXCEPTION`s if no user row exists with the primary admin's email — it is a narrow, idempotent _"ensure this real account stays PLATFORM_ADMIN"_ guard, not a bootstrap, and by design never fabricates that identity. Production has carried that account since before this migration was introduced, so `migrate deploy` runs it there with no manual step. Only a database that never had that account (a fresh/disposable one, e.g. for local certification or CI) needs a resolution step before continuing — see the migration's own file comment, and use `prisma migrate resolve --rolled-back <name>` (not `--applied`: the guard's `DO $$...$$` block fully rolls back on the exception, leaving no partial state to mark as skipped) so the migration still runs for real once the database's own conditions allow it, rather than being permanently treated as already applied.
 
 **Current safety posture, explicit for anyone deploying this for the first time:**
+
 - Gemini (`GEMINI_API_KEY` + `AI_IMAGE_PROVIDER=gemini`) stays disabled unless BOTH are set intentionally in that environment's own secrets — an unset or partially-set pair always falls back to the safe `UnconfiguredAiImageProvider`, never a crash, never a fake result.
 - Real payment processing is not implemented in any environment yet (`PAYMENT_PROVIDER_KEY_ID`/`_SECRET` are placeholders only) — the Premium plans page honestly shows "online payment is coming soon" regardless of environment.
 - `POST premium/dev/activate` (grants Premium to the calling user with no payment, for local testing) is hard-blocked whenever `NODE_ENV=production` — set that variable in every real deployment target, not just as a default assumption.

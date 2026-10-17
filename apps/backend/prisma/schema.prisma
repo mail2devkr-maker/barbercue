@@ -63,6 +63,14 @@ enum Language {
 enum OtpPurpose {
   LOGIN
   SIGNUP
+  OWNER_LOGIN
+  PHONE_LINK
+}
+
+enum OtpDeliveryAttemptStatus {
+  RESERVED
+  ACCEPTED
+  UNKNOWN
 }
 
 // Major-upgrade phase: customer auth becomes provider-based. GOOGLE is live; WHATSAPP is reserved
@@ -352,6 +360,7 @@ model User {
   notificationPreferences NotificationPreference[]
   ledgerEntries           CustomerLedgerEntry[]
   auditLogs               AuditLog[]
+  otpRequests             OtpRequest[]              @relation("OtpRequestSubject")
   premiumSubscriptions    CustomerSubscription[]
   // Phase 18 (Shop / Barber Verification Foundation) — an owner submitting evidence, and a
   // PLATFORM_ADMIN reviewing it, are deliberately separate relations (never the same person in
@@ -534,17 +543,38 @@ model RefreshToken {
 }
 
 model OtpRequest {
-  id         String     @id @default(uuid())
-  phone      String
-  codeHash   String
-  purpose    OtpPurpose
-  attempts   Int        @default(0)
-  expiresAt  DateTime
-  verifiedAt DateTime?
-  createdAt  DateTime   @default(now())
+  id            String     @id @default(uuid())
+  phone         String
+  codeHash      String
+  // Existing rows and old app instances use the legacy SHA-256 hash until they expire; new
+  // requests use a keyed HMAC digest so a database-only disclosure cannot brute-force six digits.
+  hashVersion   String     @default("LEGACY_SHA256")
+  purpose       OtpPurpose
+  subjectUserId String?
+  subjectUser   User?      @relation("OtpRequestSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+  attempts      Int        @default(0)
+  expiresAt     DateTime
+  verifiedAt    DateTime?
+  createdAt     DateTime   @default(now())
 
   @@index([phone, createdAt])
+  @@index([phone, purpose, createdAt])
+  @@index([subjectUserId, purpose, createdAt])
   @@map("otp_requests")
+}
+
+// Privacy-minimal durable OTP send admission. It stores no phone, user, OTP, or provider detail.
+// Rows are retained only for active budget windows and pruned transactionally on admission.
+model OtpDeliveryAttempt {
+  id                 String                   @id @default(uuid())
+  countryCallingCode String
+  status             OtpDeliveryAttemptStatus @default(RESERVED)
+  createdAt          DateTime                 @default(now())
+  finishedAt         DateTime?
+
+  @@index([createdAt])
+  @@index([countryCallingCode, createdAt])
+  @@map("otp_delivery_attempts")
 }
 
 // Phase 2 addition — not in the original DATABASE.md field list. Needed to implement the

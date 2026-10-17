@@ -98,7 +98,7 @@ function CustomerLoginForm() {
     setResending(true);
     try {
       await sendOtp(phone);
-      setResendMessage("A new code has been sent.");
+      setResendMessage("A new code was requested. It may take a moment to arrive.");
     } catch (err) {
       // The backend's OTP_RATE_LIMITED message is already written for end users (see
       // OtpService) — surfaced as-is rather than replaced with a generic string.
@@ -137,10 +137,10 @@ function CustomerLoginForm() {
       .then((m) => {
         if (!cancelled) setPhoneOtpAvailable(m.phoneOtp);
       })
-      // If the capability probe itself fails, fall back to showing the form: a working sign-in
-      // method must not disappear because one extra request was unlucky.
+      // Fail closed: a phone form must not claim SMS is available if the server capability probe
+      // failed. Google remains available independently.
       .catch(() => {
-        if (!cancelled) setPhoneOtpAvailable(true);
+        if (!cancelled) setPhoneOtpAvailable(false);
       });
     return () => {
       cancelled = true;
@@ -195,7 +195,7 @@ function CustomerLoginForm() {
           </>
         ) : (
           <form onSubmit={verifyOtp} className={authStyles.form}>
-            <p className={authStyles.contextLine}>Enter the code sent to <strong>{phone}</strong>.</p>
+            <p className={authStyles.contextLine}>Enter the 6-digit code for <strong>{phone}</strong>. SMS delivery may take a moment.</p>
             <div className={authStyles.field}>
               <label htmlFor="customer-otp">One-time code</label>
               <input
