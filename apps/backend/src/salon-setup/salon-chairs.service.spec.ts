@@ -17,6 +17,7 @@ describe('SalonChairsService', () => {
     $transaction: jest.Mock;
   };
   let tx: {
+    $executeRaw: jest.Mock;
     $queryRaw: jest.Mock;
     chair: typeof prisma.chair;
     serviceSession: typeof prisma.serviceSession;
@@ -43,6 +44,7 @@ describe('SalonChairsService', () => {
       $transaction: jest.fn(),
     };
     tx = {
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $queryRaw: jest.fn().mockResolvedValue([]),
       chair: prisma.chair,
       serviceSession: prisma.serviceSession,
@@ -299,7 +301,8 @@ describe('SalonChairsService', () => {
           },
         ],
       });
-      expect(tx.$queryRaw).toHaveBeenCalledTimes(4);
+      expect(tx.$executeRaw).toHaveBeenCalledTimes(2);
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(2);
       expect(tx.chair.updateMany).toHaveBeenCalledTimes(1);
       expect(tx.chair.updateMany).toHaveBeenCalledWith({
         where: {

@@ -213,7 +213,7 @@ export class SalonChairsService {
           // Match the queue assignment/manual occupancy lock namespace so a chair cannot be
           // seated or occupied while this batch checks and changes its availability.
           for (const item of lockOrder) {
-            await tx.$queryRaw(
+            await tx.$executeRaw(
               Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`fastque-chair:${item.chairId}`}))`,
             );
           }
