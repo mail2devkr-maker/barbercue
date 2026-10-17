@@ -1137,6 +1137,8 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     async function completedBooking(
       customerLabel = 'cust1',
       attributionToken?: string,
+      completionStaffId = ids.raviStaff,
+      completionChairId = ids['Chair 3'],
     ): Promise<string> {
       const start = new Date(Date.now() + 2 * 60_000); // inside the 15-minute check-in window
       const booking = await createBookingAs(
@@ -1146,12 +1148,16 @@ maybe('Owner operations (e2e, disposable local database)', () => {
           attributionToken,
         },
       );
-      return finishBooking(booking.id);
+      return finishBooking(booking.id, completionStaffId, completionChairId);
     }
-    async function finishBooking(bookingId: string): Promise<string> {
+    async function finishBooking(
+      bookingId: string,
+      staffId = ids.raviStaff,
+      chairId = ids['Chair 3'],
+    ): Promise<string> {
       const arrived = await api('post', `dashboard/bookings/${bookingId}/arrive`, tok.owner).expect(201);
       await api('post', `dashboard/queue-entries/${arrived.body.id}/assign`, tok.owner)
-        .send({ staffId: ids.raviStaff, chairId: ids['Chair 3'] })
+        .send({ staffId, chairId })
         .expect(201);
       const session = await prisma.serviceSession.findFirstOrThrow({ where: { queueEntryId: arrived.body.id, status: 'ACTIVE' } });
       await api('post', `dashboard/service-sessions/${session.id}/complete`, tok.ravi).expect(201);
@@ -1496,7 +1502,24 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       )
         .send({ source: 'INSTAGRAM', label: `Revenue attribution ${run}` })
         .expect(201);
-      const bookingId = await completedBooking('cust2', campaign.body.token);
+      // The report suite has already completed three visits in the same near-now slot, and
+      // completed bookings intentionally reserve capacity through their slot end. Give this
+      // final flow an isolated fourth pool unit rather than weakening the reservation assertion.
+      const attributionStaff = await makeStaff(
+        `attribution-${run}`,
+        'Attribution QA',
+        ids.salon,
+        [ids.haircut],
+      );
+      const attributionChair = await prisma.chair.create({
+        data: { salonId: ids.salon, label: `Attribution QA ${run}` },
+      });
+      const bookingId = await completedBooking(
+        'cust2',
+        campaign.body.token,
+        attributionStaff.id,
+        attributionChair.id,
+      );
       const booking = await prisma.booking.findUniqueOrThrow({
         where: { id: bookingId },
       });
