@@ -86,8 +86,10 @@ The import request key is stored only as SHA-256 with a normalized request hash;
 same active workspace, key reuse for a different request conflicts, and replay after the workspace
 was deleted cannot recreate it. A new key permits an intentional re-import.
 
-The audit table contains actor/shop/workspace IDs, event type, counts and import idempotency hashes
-only. It has PostgreSQL UPDATE/DELETE/TRUNCATE guards and no parent foreign keys, so deleting the
+The audit table contains actor/shop/workspace IDs, event type (`IMPORTED`, `REUSED`, `DELETED`),
+counts and import idempotency hashes only. Every accepted import key is recorded, including a
+request that reuses an already-active workspace, so a retry after later deletion cannot silently
+create a new workspace. It has PostgreSQL UPDATE/DELETE/TRUNCATE guards and no parent foreign keys, so deleting the
 payload or later deleting the shop/account does not mutate historical audit events. DELETE never
 selects by shop/customer name, dates, user-supplied IDs other than the server-issued workspace ID,
 or a shared operational relationship.

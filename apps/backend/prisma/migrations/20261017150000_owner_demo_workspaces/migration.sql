@@ -1,6 +1,6 @@
 -- Private synthetic dashboard examples are stored outside real operating and financial tables.
 -- One active row per salon is serialized by the API and protected by this unique constraint.
-CREATE TYPE "OwnerDemoWorkspaceAuditAction" AS ENUM ('IMPORTED', 'DELETED');
+CREATE TYPE "OwnerDemoWorkspaceAuditAction" AS ENUM ('IMPORTED', 'REUSED', 'DELETED');
 
 CREATE TABLE "owner_demo_workspaces" (
     "id" TEXT NOT NULL,
@@ -32,7 +32,7 @@ CREATE TABLE "owner_demo_workspace_audit" (
     CONSTRAINT "owner_demo_workspace_audit_counts_object_check" CHECK (jsonb_typeof("recordCounts") = 'object'),
     CONSTRAINT "owner_demo_workspace_audit_counts_size_check" CHECK (octet_length("recordCounts"::text) <= 4096),
     CONSTRAINT "owner_demo_workspace_audit_idempotency_check" CHECK (
-      ("action" = 'IMPORTED' AND "idempotencyKeyHash" ~ '^[0-9a-f]{64}$' AND "requestHash" ~ '^[0-9a-f]{64}$') OR
+      ("action" IN ('IMPORTED', 'REUSED') AND "idempotencyKeyHash" ~ '^[0-9a-f]{64}$' AND "requestHash" ~ '^[0-9a-f]{64}$') OR
       ("action" = 'DELETED' AND "idempotencyKeyHash" IS NULL AND "requestHash" IS NULL)
     )
 );

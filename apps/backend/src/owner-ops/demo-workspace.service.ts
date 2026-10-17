@@ -102,7 +102,21 @@ export class DemoWorkspaceService {
         const existing = await tx.ownerDemoWorkspace.findUnique({
           where: { salonId },
         });
-        if (existing) return this.statusDto(existing);
+        if (existing) {
+          const dataset = existing.payload as unknown as DemoWorkspaceDatasetDto;
+          await tx.ownerDemoWorkspaceAudit.create({
+            data: {
+              salonId,
+              actorUserId: userId,
+              workspaceId: existing.id,
+              action: 'REUSED',
+              recordCounts: dataset.counts as unknown as Prisma.InputJsonValue,
+              idempotencyKeyHash,
+              requestHash,
+            },
+          });
+          return this.statusDto(existing);
+        }
 
         const workspaceId = randomUUID();
         const dataset = createDemoWorkspaceDataset({

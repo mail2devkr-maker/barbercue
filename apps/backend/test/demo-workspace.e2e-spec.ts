@@ -424,6 +424,21 @@ maybe(
           where: { salonId: ids.salonA },
         }),
       ).toBe(1);
+      const reusedImportKey = randomUUID();
+      const reusedImport = await api(
+        'post',
+        importPath,
+        token['owner-a'],
+        reusedImportKey,
+      )
+        .send({})
+        .expect(201);
+      expect(reusedImport.body.workspaceId).toBe(workspaceId);
+      expect(
+        await prisma.ownerDemoWorkspaceAudit.count({
+          where: { salonId: ids.salonA },
+        }),
+      ).toBe(2);
       expect(await prisma.salon.count()).toBe(salonCountBefore);
       expect(await prisma.user.count()).toBe(userCountBefore);
       expect(
@@ -507,6 +522,9 @@ maybe(
       await api('post', importPath, token['owner-a'], firstImportKey)
         .send({})
         .expect(409);
+      await api('post', importPath, token['owner-a'], reusedImportKey)
+        .send({})
+        .expect(409);
 
       const reimportKey = randomUUID();
       const reimported = await api(
@@ -532,7 +550,7 @@ maybe(
         await prisma.ownerDemoWorkspaceAudit.count({
           where: { salonId: ids.salonA },
         }),
-      ).toBe(4);
+      ).toBe(5);
 
       const audit = await prisma.ownerDemoWorkspaceAudit.findFirstOrThrow({
         where: { salonId: ids.salonA },

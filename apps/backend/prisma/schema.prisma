@@ -1830,6 +1830,7 @@ enum NotificationDeliveryStatus {
 // Synthetic operational examples stay in a private document, separate from real salon ledgers.
 enum OwnerDemoWorkspaceAuditAction {
   IMPORTED
+  REUSED
   DELETED
 }
 
