@@ -7,6 +7,8 @@ import { useAuth } from '../lib/auth-context';
 import { getGoogleIdToken } from '../lib/google-signin';
 import { beginShopRegistrationAuthentication } from '../lib/shop-registration-intent';
 import { useLanguage } from '../lib/language-context';
+import { useOwnerPhoneOtpAvailable } from '../lib/owner-phone-otp';
+import { ownerPhoneStrings } from '../lib/owner-phone-otp-strings';
 import { fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, InlineError, PremiumButton, PremiumScreen, PremiumSectionHeader } from '../components/ui';
 import type { UiStrings } from '@barbercue/shared';
@@ -27,7 +29,10 @@ function copyFor(t: UiStrings, role: 'OWNER' | 'STAFF'): { eyebrow: string; titl
 export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
   const { role } = route.params;
   const { staffLogin, staffGoogleLogin } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  // Offered only to owners, and only when the server reports that owner phone sign-in is switched on.
+  const ownerPhoneOtpAvailable = useOwnerPhoneOtpAvailable();
+  const phoneCopy = ownerPhoneStrings(language);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +103,19 @@ export default function OwnerStaffLoginScreen({ route, navigation }: Props) {
         >
           <Text style={styles.createAccountTitle}>{t.newToFastQueRegisterShop}</Text>
           <Text style={styles.createAccountHint}>{t.ownerCreateAccountHint}</Text>
+        </Pressable>
+      )}
+
+      {role === 'OWNER' && ownerPhoneOtpAvailable && (
+        <Pressable
+          testID="owner-sign-in-with-phone"
+          style={styles.phoneCard}
+          onPress={() => navigation.navigate('OwnerPhoneLogin')}
+          accessibilityRole="button"
+          accessibilityLabel={phoneCopy.signInWithPhone}
+        >
+          <Text style={styles.phoneCardTitle}>{phoneCopy.signInWithPhone}</Text>
+          <Text style={styles.phoneCardHint}>{phoneCopy.signInWithPhoneHint}</Text>
         </Pressable>
       )}
 
@@ -198,6 +216,17 @@ const styles = StyleSheet.create({
   },
   createAccountTitle: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: fastQue.pink },
   createAccountHint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textSecondary, marginTop: space[1] },
+  phoneCard: {
+    borderWidth: 1,
+    borderColor: fastQue.border,
+    borderRadius: radius.md,
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    marginBottom: space[4],
+    backgroundColor: fastQue.card,
+  },
+  phoneCardTitle: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: fastQue.text },
+  phoneCardHint: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, color: fastQue.textSecondary, marginTop: space[1] },
   registerShopLink: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', marginTop: space[4] },
   registerShopLinkText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.pink },
   googleButton: {
