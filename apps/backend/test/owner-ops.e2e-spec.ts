@@ -107,7 +107,10 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         ? { attributionToken: opts.attributionToken }
         : {}),
     });
-    expect(res.status).toBe(201);
+    if (res.status !== 201) {
+      const code = res.body?.error?.code ?? 'unknown';
+      throw new Error(`Booking creation failed with HTTP ${res.status} (${code}).`);
+    }
     return res.body as { id: string };
   }
 
