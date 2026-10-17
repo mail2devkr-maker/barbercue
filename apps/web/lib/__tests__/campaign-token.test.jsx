@@ -33,6 +33,15 @@ describe("parseCampaignParam", () => {
   });
 });
 
+describe("withoutCampaignParam", () => {
+  it("removes only the campaign parameter", () => {
+    expect(C.withoutCampaignParam(`?fq_campaign=${TOKEN}`)).toBe("");
+    expect(C.withoutCampaignParam(`?city=patna&fq_campaign=${TOKEN}&country=in`)).toBe("?city=patna&country=in");
+    expect(C.withoutCampaignParam("?city=patna")).toBe("?city=patna");
+    expect(C.withoutCampaignParam("")).toBe("");
+  });
+});
+
 describe("shop keys", () => {
   it("normalises case so the public page and the booking page agree", () => {
     expect(C.salonKey("IN", "Patna", "Fade-House")).toBe("in/patna/fade-house");

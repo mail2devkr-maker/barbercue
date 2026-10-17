@@ -15,7 +15,8 @@ interface BookPageParams {
 }
 
 // Authenticated, customer-specific flow — never indexable. See robots.ts.
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+// A cross-origin link from this page never receives its address, only its origin (a campaign code may be in the address for a moment).
+export const metadata: Metadata = { robots: { index: false, follow: false }, referrer: "strict-origin-when-cross-origin" };
 
 export default async function BookPage({
   params,

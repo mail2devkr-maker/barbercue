@@ -34,6 +34,14 @@ export function parseCampaignParam(search: string): string | null {
   return value !== null && isValidCampaignToken(value) ? value : null;
 }
 
+/** The query string without the campaign parameter ("" when nothing else is left, otherwise starting with "?"). */
+export function withoutCampaignParam(search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete(CAMPAIGN_QUERY_KEY);
+  const rest = params.toString();
+  return rest ? `?${rest}` : "";
+}
+
 function keyPart(value: string): string {
   return value.trim().toLowerCase();
 }
