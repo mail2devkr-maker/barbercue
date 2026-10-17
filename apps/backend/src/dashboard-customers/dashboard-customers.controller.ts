@@ -1,7 +1,16 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { DASHBOARD_PATHS, Role, type AuthenticatedUser } from '@barbercue/shared';
+import { Controller, Get, Header, Param, Post, Query } from '@nestjs/common';
+import {
+  DASHBOARD_PATHS,
+  Role,
+  ownerCustomerListQuerySchema,
+  ownerCustomerHistoryQuerySchema,
+  type AuthenticatedUser,
+  type OwnerCustomerListQuery,
+  type OwnerCustomerHistoryQuery,
+} from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { DashboardCustomersService } from './dashboard-customers.service';
 
 // Owner-only for ordinary staff, same reasoning as DashboardBookingsController: customer contact
@@ -17,22 +26,46 @@ export class DashboardCustomersController {
   constructor(private readonly customers: DashboardCustomersService) {}
 
   @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}`)
+  @Header('Cache-Control', 'private, no-store')
   list(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
-    @Query('offset') offset?: string,
-    @Query('limit') limit?: string,
+    @Query(new ZodValidationPipe(ownerCustomerListQuerySchema))
+    query: OwnerCustomerListQuery,
   ) {
-    return this.customers.list(user.id, salonId, offset, limit);
+    return this.customers.list(
+      user.id,
+      salonId,
+      String(query.offset),
+      String(query.limit),
+      query.q ?? query.search,
+    );
   }
 
-  @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}/:customerId`)
+  @Get(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}/:customerId`,
+  )
+  @Header('Cache-Control', 'private, no-store')
   getOne(
     @CurrentUser() user: AuthenticatedUser,
     @Param('salonId') salonId: string,
     @Param('customerId') customerId: string,
   ) {
     return this.customers.getOne(user.id, salonId, customerId);
+  }
+
+  @Get(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}/:customerId/${DASHBOARD_PATHS.customerHistory}`,
+  )
+  @Header('Cache-Control', 'private, no-store')
+  history(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('customerId') customerId: string,
+    @Query(new ZodValidationPipe(ownerCustomerHistoryQuerySchema))
+    query: OwnerCustomerHistoryQuery,
+  ) {
+    return this.customers.history(user.id, salonId, customerId, query);
   }
 
   // Customer Dues + Cancellation Policy mission — reversible New Customer No-Show Grace waiver.
@@ -45,7 +78,12 @@ export class DashboardCustomersController {
     @Param('customerId') customerId: string,
     @Param('ledgerEntryId') ledgerEntryId: string,
   ) {
-    return this.customers.waiveNoShowDue(user.id, salonId, customerId, ledgerEntryId);
+    return this.customers.waiveNoShowDue(
+      user.id,
+      salonId,
+      customerId,
+      ledgerEntryId,
+    );
   }
 
   @Post(
@@ -57,6 +95,11 @@ export class DashboardCustomersController {
     @Param('customerId') customerId: string,
     @Param('ledgerEntryId') ledgerEntryId: string,
   ) {
-    return this.customers.restoreNoShowDue(user.id, salonId, customerId, ledgerEntryId);
+    return this.customers.restoreNoShowDue(
+      user.id,
+      salonId,
+      customerId,
+      ledgerEntryId,
+    );
   }
 }

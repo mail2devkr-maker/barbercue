@@ -467,6 +467,65 @@ export const ownerRevenueReportQuerySchema = z.object({
 });
 export type OwnerRevenueReportQuery = z.infer<typeof ownerRevenueReportQuerySchema>;
 
+/**
+ * GET dashboard/salons/:salonId/customers. Search is limited to account id, email, and phone;
+ * User has no canonical name field, and per-visit guest names are not identity evidence.
+ */
+export const ownerCustomerListQuerySchema = z
+  .object({
+    offset: z.coerce.number().int().min(0).default(0),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    search: z.string().trim().min(1).max(120).optional(),
+    /** `q` is the concise URL alias used by dashboard clients; `search` stays backward-compatible. */
+    q: z.string().trim().min(1).max(120).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.search && value.q) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['q'],
+        message: 'Use either q or search, not both.',
+      });
+    }
+  });
+export type OwnerCustomerListQuery = z.infer<typeof ownerCustomerListQuerySchema>;
+
+/**
+ * GET dashboard/salons/:salonId/customers/:customerId/history.
+ * from/to are inclusive salon-local calendar dates; nextCursor is opaque and scope-bound.
+ */
+export const ownerCustomerHistoryQuerySchema = z
+  .object({
+    cursor: z.string().min(1).max(512).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    source: z.enum(['ONLINE_BOOKING', 'IN_SHOP_APPOINTMENT', 'LIVE_QUEUE']).optional(),
+    status: z.enum(['PENDING_PAYMENT', 'CONFIRMED', 'WAITING', 'CALLED', 'IN_SERVICE', 'COMPLETED', 'CANCELLED', 'EXPIRED', 'NO_SHOW']).optional(),
+    from: salonLocalDateSchema.optional(),
+    to: salonLocalDateSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.from && value.to && value.from > value.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['to'],
+        message: 'The end date must be on or after the start date.',
+      });
+      return;
+    }
+    if (value.from && value.to) {
+      const from = Date.parse(`${value.from}T00:00:00.000Z`);
+      const to = Date.parse(`${value.to}T00:00:00.000Z`);
+      if ((to - from) / 86_400_000 > 365) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['to'],
+          message: 'History may cover at most 366 calendar days.',
+        });
+      }
+    }
+  });
+export type OwnerCustomerHistoryQuery = z.infer<typeof ownerCustomerHistoryQuerySchema>;
+
 // ---------- DTOs ----------
 
 /** Money is always shown in the shop's own currency; `amount` is a decimal number with <= 2 dp. */
@@ -582,6 +641,48 @@ export interface OwnerRevenueReportDto {
     serviceCashAllocation: 'PRO_RATA_BY_INVOICE_LINE_TOTAL';
     externalAttribution: 'NOT_CAPTURED_BY_EXISTING_SOURCE_FIELDS';
   };
+}
+
+export interface OwnerCustomerHistoryPaymentDto {
+  kind: 'PAYMENT' | 'REFUND';
+  method: 'CASH' | 'UPI' | 'CARD' | 'OTHER';
+  amount: string;
+  recordedAt: string;
+}
+
+export interface OwnerCustomerHistoryInvoiceDto {
+  id: string;
+  number: string;
+  status: 'ISSUED' | 'VOID';
+  currency: string;
+  total: string;
+  discountTotal: string;
+  payments: OwnerCustomerHistoryPaymentDto[];
+}
+
+export interface OwnerCustomerHistoryEntryDto {
+  id: string;
+  source: 'ONLINE_BOOKING' | 'IN_SHOP_APPOINTMENT' | 'LIVE_QUEUE';
+  /** Slot start for a booking; salon-local arrival instant for a Live Queue visit. */
+  occurredAt: string;
+  createdAt: string;
+  status: string;
+  /** A per-record entered label, never used to link/merge customer identities. */
+  recordedName: string | null;
+  serviceNames: string[];
+  staffName: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  /** Shop-recorded invoice/payment facts only; no provider settlement is inferred. */
+  invoices: OwnerCustomerHistoryInvoiceDto[];
+}
+
+export interface OwnerCustomerHistoryPageDto {
+  salonId: string;
+  customerId: string;
+  salonTimezone: string;
+  items: OwnerCustomerHistoryEntryDto[];
+  nextCursor: string | null;
 }
 
 export interface OwnerTopServiceDto {
