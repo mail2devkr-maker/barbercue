@@ -810,6 +810,16 @@ export interface OwnerCustomerSummaryDto {
   // Sum of this customer's OUTSTANDING entries at this salon — 0 when none. Matches the total the
   // OUTSTANDING_BALANCE booking-block error reports to the customer (Part I).
   outstandingTotalAmount: number;
+  /** Additive visit roll-up; legacy booking-only fields above retain their original meanings. */
+  totalVisitCount?: number;
+  completedVisitCount?: number;
+  firstCompletedVisitAt?: string | null;
+  lastCompletedVisitAt?: string | null;
+  liveQueueVisitCount?: number;
+  completedLiveQueueVisitCount?: number;
+  cancelledLiveQueueVisitCount?: number;
+  expiredLiveQueueVisitCount?: number;
+  noShowLiveQueueVisitCount?: number;
 }
 
 // POST dashboard/.../ledger/:ledgerEntryId/waive|restore response.

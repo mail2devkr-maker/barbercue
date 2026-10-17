@@ -345,6 +345,7 @@ export const DASHBOARD_PATHS = {
   workingHours: 'working-hours',
   // GET dashboard/salons/:salonId/customers[/:customerId] (Phase 8 — owner customer CRM).
   customers: 'customers',
+  customerHistory: 'history',
   // POST dashboard/salons/:salonId/customers/:customerId/ledger/:ledgerEntryId/waive|restore —
   // Customer Dues + Cancellation Policy mission (New Customer No-Show Grace).
   ledger: 'ledger',

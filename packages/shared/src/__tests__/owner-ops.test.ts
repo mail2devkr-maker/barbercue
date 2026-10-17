@@ -11,6 +11,8 @@ import {
   createInvoiceSchema,
   createQueueCustomerSchema,
   deriveInvoicePaymentStatus,
+  ownerCustomerHistoryQuerySchema,
+  ownerCustomerListQuerySchema,
   ownerRevenueReportQuerySchema,
   formatInvoiceNumber,
   recordInvoicePaymentSchema,
@@ -331,6 +333,44 @@ describe('booking attribution schemas', () => {
       bookingAttributionSummaryQuerySchema.safeParse({
         from: '2025-01-01',
         to: '2026-01-02',
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('owner customer history query schemas', () => {
+  it('bounds list search and pagination while preserving defaults', () => {
+    expect(ownerCustomerListQuerySchema.parse({})).toEqual({
+      offset: 0,
+      limit: 20,
+    });
+    expect(ownerCustomerListQuerySchema.safeParse({ limit: 51 }).success).toBe(false);
+    expect(ownerCustomerListQuerySchema.safeParse({ search: '   ' }).success).toBe(false);
+    expect(ownerCustomerListQuerySchema.parse({ q: 'haircut' }).q).toBe('haircut');
+    expect(ownerCustomerListQuerySchema.safeParse({ q: 'a', search: 'b' }).success).toBe(false);
+  });
+
+  it('accepts each visit source and validated inclusive salon-local dates', () => {
+    for (const source of ['ONLINE_BOOKING', 'IN_SHOP_APPOINTMENT', 'LIVE_QUEUE']) {
+      expect(
+        ownerCustomerHistoryQuerySchema.safeParse({
+          source,
+          from: '2026-10-01',
+          to: '2026-10-31',
+        }).success,
+      ).toBe(true);
+    }
+    expect(
+      ownerCustomerHistoryQuerySchema.safeParse({
+        from: '2026-10-02',
+        to: '2026-10-01',
+      }).success,
+    ).toBe(false);
+    expect(ownerCustomerHistoryQuerySchema.safeParse({ status: 'UNKNOWN' }).success).toBe(false);
+    expect(
+      ownerCustomerHistoryQuerySchema.safeParse({
+        from: '2026-01-01',
+        to: '2027-01-02',
       }).success,
     ).toBe(false);
   });

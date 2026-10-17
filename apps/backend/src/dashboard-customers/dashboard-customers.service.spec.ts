@@ -99,7 +99,8 @@ describe('DashboardCustomersService', () => {
   let prisma: {
     salon: { findUnique: jest.Mock };
     booking: { groupBy: jest.Mock; count: jest.Mock; findMany: jest.Mock; findUnique: jest.Mock };
-    queueEntry: { groupBy: jest.Mock };
+    queueEntry: { groupBy: jest.Mock; count: jest.Mock; findMany: jest.Mock };
+    invoice: { findMany: jest.Mock };
     user: { findMany: jest.Mock };
     service: { findMany: jest.Mock };
     salonStaff: { findMany: jest.Mock };
@@ -110,6 +111,7 @@ describe('DashboardCustomersService', () => {
       updateMany: jest.Mock;
     };
     auditLog: { create: jest.Mock };
+    $queryRaw: jest.Mock;
     $transaction: jest.Mock;
   };
   let salonAccess: {
@@ -137,6 +139,7 @@ describe('DashboardCustomersService', () => {
     prisma.booking.findMany = jest
       .fn()
       .mockResolvedValue(makeCompletedServiceRows(overrides.byService));
+    prisma.$queryRaw.mockResolvedValue(overrides.pageRows ?? []);
     prisma.queueEntry.groupBy = jest
       .fn()
       .mockResolvedValue(overrides.staffGroupRows ?? []);
@@ -145,14 +148,25 @@ describe('DashboardCustomersService', () => {
 
   beforeEach(async () => {
     prisma = {
-      salon: { findUnique: jest.fn().mockResolvedValue({ currency: 'INR' }) },
+      salon: {
+        findUnique: jest.fn().mockResolvedValue({
+          currency: 'INR',
+          timezone: 'Asia/Kolkata',
+          city: { countryCode: 'IN' },
+        }),
+      },
       booking: {
         groupBy: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn().mockResolvedValue({ status: 'NO_SHOW' }),
       },
-      queueEntry: { groupBy: jest.fn().mockResolvedValue([]) },
+      queueEntry: {
+        groupBy: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      invoice: { findMany: jest.fn().mockResolvedValue([]) },
       user: { findMany: jest.fn().mockResolvedValue([]) },
       service: { findMany: jest.fn().mockResolvedValue([]) },
       salonStaff: { findMany: jest.fn().mockResolvedValue([]) },
@@ -163,6 +177,7 @@ describe('DashboardCustomersService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       auditLog: { create: jest.fn().mockResolvedValue({}) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest.fn(),
     };
     // Interactive-transaction mock, same shape as bookings.service.spec.ts: run the callback
@@ -226,6 +241,187 @@ describe('DashboardCustomersService', () => {
       const result = await service.list('owner1', 's1', undefined, '20');
       expect(result.items).toHaveLength(20);
       expect(result.nextCursor).toBe('20');
+    });
+  });
+
+  describe('history', () => {
+    const bookingRow = {
+      id: 'booking-1',
+      slotStart: new Date('2026-10-10T04:30:00.000Z'),
+      status: 'COMPLETED',
+      source: 'APP',
+      createdAt: new Date('2026-10-01T05:00:00.000Z'),
+      guestName: null,
+      services: [{ serviceName: 'Haircut' }],
+      service: { name: 'Haircut' },
+      queueEntries: [
+        {
+          serviceStartedAt: new Date('2026-10-10T04:35:00.000Z'),
+          serviceCompletedAt: new Date('2026-10-10T05:00:00.000Z'),
+          assignedStaff: { displayName: 'Ravi' },
+        },
+      ],
+    };
+    const queueRow = {
+      id: 'queue-1',
+      joinedAt: new Date('2026-10-11T04:30:00.000Z'),
+      createdAt: new Date('2026-10-11T04:30:01.000Z'),
+      status: 'COMPLETED',
+      contactName: 'Visit label only',
+      serviceStartedAt: new Date('2026-10-11T04:35:00.000Z'),
+      serviceCompletedAt: new Date('2026-10-11T05:00:00.000Z'),
+      assignedStaff: { displayName: 'Sunil' },
+      service: { name: 'Beard Trim' },
+      serviceSessions: [
+        { status: 'COMPLETED', service: { name: 'Beard Trim' } },
+        { status: 'ACTIVE', service: { name: 'Haircut' } },
+        { status: 'COMPLETED', service: { name: 'Beard Trim' } },
+      ],
+    };
+
+    it('merges account-linked online and standalone queue visits without duplicating a booking-linked queue row', async () => {
+      prisma.booking.count.mockResolvedValue(1);
+      prisma.queueEntry.count.mockResolvedValue(1);
+      prisma.booking.findMany.mockResolvedValue([bookingRow]);
+      prisma.queueEntry.findMany.mockResolvedValue([queueRow]);
+
+      const result = await service.history('owner1', 's1', 'c1', { limit: 20 });
+
+      expect(result.items.map((item) => item.id)).toEqual(['queue-1', 'booking-1']);
+      expect(result.items[0]).toMatchObject({
+        source: 'LIVE_QUEUE',
+        recordedName: 'Visit label only',
+        serviceNames: ['Beard Trim', 'Haircut'],
+        staffName: 'Sunil',
+        completedAt: '2026-10-11T05:00:00.000Z',
+      });
+      expect(result.items[1]).toMatchObject({
+        source: 'ONLINE_BOOKING',
+        serviceNames: ['Haircut'],
+        staffName: 'Ravi',
+      });
+      expect(prisma.queueEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ salonId: 's1', customerId: 'c1', bookingId: null }),
+        }),
+      );
+      expect(prisma.invoice.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ salonId: 's1', customerId: 'c1' }),
+        }),
+      );
+    });
+
+    it('does not leak unrelated booking statuses when filtering to a queue-only status', async () => {
+      prisma.booking.count.mockResolvedValue(0);
+      prisma.queueEntry.count.mockResolvedValue(1);
+      prisma.booking.findMany.mockResolvedValue([]);
+      prisma.queueEntry.findMany.mockResolvedValue([queueRow]);
+
+      await service.history('owner1', 's1', 'c1', { limit: 20, status: 'WAITING' });
+
+      expect(prisma.booking.findMany).not.toHaveBeenCalled();
+      expect(prisma.queueEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ status: 'WAITING' }) }),
+      );
+    });
+
+    it('distinguishes in-shop appointments from online bookings', async () => {
+      prisma.booking.count.mockResolvedValue(1);
+      prisma.booking.findMany.mockResolvedValue([{ ...bookingRow, source: 'IN_SHOP' }]);
+      prisma.queueEntry.count.mockResolvedValue(0);
+
+      const result = await service.history('owner1', 's1', 'c1', {
+        limit: 20,
+        source: 'IN_SHOP_APPOINTMENT',
+      });
+
+      expect(result.items[0].source).toBe('IN_SHOP_APPOINTMENT');
+      expect(prisma.booking.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ source: 'IN_SHOP' }) }),
+      );
+      expect(prisma.queueEntry.findMany).not.toHaveBeenCalled();
+    });
+
+    it('binds pagination cursors to the selected filters', async () => {
+      prisma.booking.count.mockResolvedValue(2);
+      prisma.booking.findMany.mockResolvedValue([
+        { ...bookingRow, id: 'booking-2', slotStart: new Date('2026-10-12T04:30:00.000Z') },
+        bookingRow,
+      ]);
+      const first = await service.history('owner1', 's1', 'c1', { limit: 1 });
+      expect(first.nextCursor).toBeTruthy();
+      await expect(
+        service.history('owner1', 's1', 'c1', {
+          limit: 1,
+          status: 'COMPLETED',
+          cursor: first.nextCursor!,
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+
+    it('keeps tied online, in-shop, and queue visits on the correct side of a page cursor', async () => {
+      const occurredAt = new Date('2026-10-11T04:30:00.000Z');
+      prisma.booking.count.mockResolvedValue(2);
+      prisma.queueEntry.count.mockResolvedValue(1);
+      prisma.booking.findMany.mockResolvedValue([
+        { ...bookingRow, id: 'online', source: 'APP', slotStart: occurredAt },
+        { ...bookingRow, id: 'in-shop', source: 'IN_SHOP', slotStart: occurredAt },
+      ]);
+      prisma.queueEntry.findMany.mockResolvedValue([
+        { ...queueRow, joinedAt: occurredAt },
+      ]);
+
+      const onlinePage = await service.history('owner1', 's1', 'c1', { limit: 1 });
+      expect(onlinePage.items.map((item) => item.id)).toEqual(['online']);
+      expect(
+        JSON.parse(Buffer.from(onlinePage.nextCursor!, 'base64url').toString('utf8')).rank,
+      ).toBe(0);
+
+      prisma.booking.findMany.mockClear();
+      await service.history('owner1', 's1', 'c1', {
+        limit: 1,
+        cursor: onlinePage.nextCursor!,
+      });
+      const afterOnline = prisma.booking.findMany.mock.calls[0][0].where.AND[0].OR;
+      expect(afterOnline).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ source: { not: 'IN_SHOP' }, id: { gt: 'online' } }),
+          expect.objectContaining({ source: 'IN_SHOP' }),
+        ]),
+      );
+
+      const inShopPage = await service.history('owner1', 's1', 'c1', { limit: 2 });
+      expect(inShopPage.items.map((item) => item.id)).toEqual(['online', 'in-shop']);
+      expect(
+        JSON.parse(Buffer.from(inShopPage.nextCursor!, 'base64url').toString('utf8')).rank,
+      ).toBe(1);
+
+      prisma.booking.findMany.mockClear();
+      prisma.queueEntry.findMany.mockClear();
+      await service.history('owner1', 's1', 'c1', {
+        limit: 2,
+        cursor: inShopPage.nextCursor!,
+      });
+      const afterInShop = prisma.booking.findMany.mock.calls[0][0].where.AND[0].OR;
+      expect(afterInShop).toEqual([
+        expect.objectContaining({ slotStart: { lt: occurredAt } }),
+        expect.objectContaining({
+          slotStart: occurredAt,
+          source: 'IN_SHOP',
+          id: { gt: 'in-shop' },
+        }),
+      ]);
+      expect(prisma.queueEntry.findMany.mock.calls[0][0].where.AND).toEqual([
+        { joinedAt: { lte: occurredAt } },
+      ]);
+    });
+
+    it('checks salon authorization before any history query', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }));
+      await expect(service.history('owner-b', 's1', 'c1', { limit: 20 })).rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.booking.count).not.toHaveBeenCalled();
+      expect(prisma.queueEntry.count).not.toHaveBeenCalled();
     });
   });
 
