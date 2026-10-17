@@ -12,6 +12,7 @@ import { StaffWorkingHoursService } from './staff-working-hours.service';
 import { SalonTimezoneService } from './salon-timezone.service';
 import { SalonPaymentQrService } from './salon-payment-qr.service';
 import { SalonProfileService } from './salon-profile.service';
+import { SalonLocationService } from './salon-location.service';
 import { StorageModule } from '../storage/storage.module';
 import { AssignmentReleaseModule } from '../queue/assignment-release.module';
 
@@ -35,7 +36,8 @@ import { AssignmentReleaseModule } from '../queue/assignment-release.module';
     SalonTimezoneService,
     SalonPaymentQrService,
     SalonProfileService,
+    SalonLocationService,
   ],
-  exports: [SalonActivationService],
+  exports: [SalonActivationService, SalonLocationService],
 })
 export class SalonSetupModule {}

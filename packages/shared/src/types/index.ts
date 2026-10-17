@@ -20,6 +20,8 @@ import type {
   QueueEntrySource,
   QueueEntryStatus,
   Role,
+  SalonLocationProposalStatus,
+  SalonLocationSource,
   SalonStaffRole,
   SalonStatus,
   SalonType,
@@ -1419,6 +1421,43 @@ export interface SalonProfileDetailDto {
   addressLine: string;
   postalCode: string | null;
   description: string | null;
+}
+
+export interface SalonLocationProposalDto {
+  id: string;
+  status: SalonLocationProposalStatus;
+  latitude: number;
+  longitude: number;
+  source: SalonLocationSource;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+}
+
+export interface SalonLocationDto {
+  salonId: string;
+  current: {
+    latitude: number | null;
+    longitude: number | null;
+    verification: 'VERIFIED' | 'UNVERIFIED';
+    verifiedAt: string | null;
+  };
+  pendingProposal: SalonLocationProposalDto | null;
+}
+
+export interface AdminSalonLocationProposalDto extends SalonLocationProposalDto {
+  submittedByUserId: string;
+  salon: {
+    id: string;
+    publicId: string;
+    name: string;
+    addressLine: string;
+    localityText: string | null;
+    postalCode: string | null;
+    cityName: string;
+    currentLatitude: number | null;
+    currentLongitude: number | null;
+  };
 }
 
 // GET/PUT dashboard/salons/:salonId/payment-qr response (FastQue Credits / Wallet V1) — the

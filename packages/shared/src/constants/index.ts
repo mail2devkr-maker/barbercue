@@ -74,6 +74,8 @@ export const ADMIN_PATHS = {
   status: 'status',
   // Super-admin-only internal access management for co-founders / HR / sales.
   access: 'access',
+  locationVerifications: 'location-verifications',
+  decision: 'decision',
   revoke: 'revoke',
   // FastQue internal field-team provisioning.
   employees: 'employees',
@@ -329,6 +331,7 @@ export const DASHBOARD_PATHS = {
   // Salon photos. URL-based for now — no object storage is configured, so an owner links an
   // image they already host rather than uploading a file.
   photos: 'photos',
+  location: 'location',
   resendInvite: 'resend-invite',
   // Owner-only salon-scoped booking operations (Phase: owner booking dashboard) — mounted at
   // dashboard/salons/:salonId/bookings, same shape as `queue` above.
