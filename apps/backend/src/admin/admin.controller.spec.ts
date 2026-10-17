@@ -54,6 +54,8 @@ describe('AdminController authorization', () => {
       Role.PLATFORM_ADMIN,
       Role.CO_FOUNDER,
     ]);
+    expect(routeRoles('listLocationProposals')).toBeUndefined();
+    expect(routeRoles('decideLocationProposal')).toBeUndefined();
   });
 
   it('masks broad monitoring PII for viewer, HR, and sales while preserving it for platform operations', async () => {
@@ -72,6 +74,7 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -116,6 +119,7 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -166,6 +170,7 @@ describe('AdminController authorization', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await controller.deleteShop({ id: 'admin-1' } as never, 'salon-1');
@@ -194,6 +199,7 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

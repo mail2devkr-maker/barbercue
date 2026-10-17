@@ -15,6 +15,7 @@ import {
   updateSalonStatusSchema,
   grantAdminAccessSchema,
   revokeAdminAccessSchema,
+  decideSalonLocationProposalSchema,
   type AuthenticatedUser,
   createEmployeeSchema,
   createSpecialEmployeeSchema,
@@ -28,6 +29,7 @@ import {
   type UpdateSalonStatusInput,
   type GrantAdminAccessInput,
   type RevokeAdminAccessInput,
+  type DecideSalonLocationProposalInput,
 } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -39,6 +41,7 @@ import { SalonActivationService } from '../salon-setup/salon-activation.service'
 import { AdminEmployeeManagementService } from './admin-employee-management.service';
 import { AdminCrmService } from './admin-crm.service';
 import { AdminAccessManagementService } from './admin-access-management.service';
+import { SalonLocationService } from '../salon-setup/salon-location.service';
 
 /** Authentication is global; authorization is admin-role only. Monitoring routes are read-only;
  * the verification routes (Phase 18) and shop deletion are this controller's mutating surfaces —
@@ -54,6 +57,7 @@ export class AdminController {
     private readonly employees: AdminEmployeeManagementService,
     private readonly crm: AdminCrmService,
     private readonly access: AdminAccessManagementService,
+    private readonly location: SalonLocationService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -185,6 +189,27 @@ export class AdminController {
     @Query('status') status?: string,
   ) {
     return this.crm.listFollowUps(employeeId, status);
+  }
+
+  @Get(ADMIN_PATHS.locationVerifications)
+  listLocationProposals(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.location.listPending(user.id, cursor, limit);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.locationVerifications}/:proposalId/${ADMIN_PATHS.decision}`,
+  )
+  decideLocationProposal(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('proposalId') proposalId: string,
+    @Body(new ZodValidationPipe(decideSalonLocationProposalSchema))
+    body: DecideSalonLocationProposalInput,
+  ) {
+    return this.location.decide(user.id, proposalId, body);
   }
 
   @Get(ADMIN_PATHS.access)
