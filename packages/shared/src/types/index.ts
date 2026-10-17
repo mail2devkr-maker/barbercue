@@ -1421,6 +1421,23 @@ export interface SalonProfileDetailDto {
   description: string | null;
 }
 
+/** GET dashboard/salons/:salonId/share-links — canonical public URL and share-safe metadata. */
+export interface SalonShareLinksDto {
+  salonId: string;
+  status: SalonStatus;
+  publicPath: string;
+  publicUrl: string | null;
+  readiness: {
+    ready: boolean;
+    reasons: Array<'SALON_NOT_PUBLIC' | 'WEB_BASE_URL_NOT_CONFIGURED'>;
+  };
+  metadata: {
+    title: string;
+    description: string | null;
+    imageUrl: string | null;
+  };
+}
+
 // GET/PUT dashboard/salons/:salonId/payment-qr response (FastQue Credits / Wallet V1) — the
 // owner-facing counterpart to BookingErrorCode.PAYMENT_QR_REQUIRED. null means not configured yet,
 // which is exactly what blocks that salon from taking an ONLINE (APP/WEB-sourced) booking.
