@@ -38,9 +38,38 @@ describe("owner navigation", () => {
     expect(pageExists("notifications")).toBe(true);
   });
 
-  it("does not list modules FastQue does not have (no inventory, payroll, orders, leave or salary rules)", () => {
+  it("lists a capability-gated entry only when the server says the feature is usable", () => {
+    const gated = NAV_ITEMS.filter((i) => i.requiresFeature);
+    expect(gated.map((i) => i.id)).toContain("demo-data");
+    const ids = (kind, status) => navItemsFor(kind, status ? { [gated[0].requiresFeature]: { status, reasonCode: null, updatedAt: null } } : undefined).map((i) => i.id);
+    for (const item of gated) {
+      const withStatus = (kind, status) => navItemsFor(kind, { [item.requiresFeature]: { status, reasonCode: null, updatedAt: null } }).map((i) => i.id);
+      expect(navItemsFor("owner").map((i) => i.id)).not.toContain(item.id);
+      expect(withStatus("owner", "DISABLED")).not.toContain(item.id);
+      expect(withStatus("owner", "UNCONFIGURED")).not.toContain(item.id);
+      expect(withStatus("owner", "ENABLED")).toContain(item.id);
+      expect(withStatus("owner", "SANDBOX")).toContain(item.id);
+      expect(withStatus("staff", "ENABLED")).not.toContain(item.id);
+    }
+    expect(ids("owner")).not.toContain("demo-data");
+  });
+
+  it("combines the entries of the capability, share, location and inventory work without losing any", () => {
+    const owner = (features) => navItemsFor("owner", features).map((i) => i.id);
+    for (const id of ["marketing", "location", "inventory"]) {
+      expect(owner()).toContain(id); // real routes, listed for owners
+      expect(navItemsFor("staff").map((i) => i.id)).not.toContain(id);
+    }
+    // the one capability-gated entry stays hidden until the server says the feature is usable (fail closed)
+    expect(owner()).not.toContain("demo-data");
+    expect(owner({ demoData: { status: "UNCONFIGURED", reasonCode: null, updatedAt: null } })).not.toContain("demo-data");
+    expect(owner({ demoData: { status: "ENABLED", reasonCode: null, updatedAt: null } })).toContain("demo-data");
+    expect(new Set(NAV_ITEMS.map((i) => i.id)).size).toBe(NAV_ITEMS.length);
+  });
+
+  it("does not list modules FastQue does not have (no payroll, orders, leave or salary rules; inventory exists since PR #249)", () => {
     const labels = NAV_ITEMS.map((i) => i.label.toLowerCase()).join(" | ");
-    for (const absent of ["inventory", "payroll", "orders", "delivery", "leave", "salary"]) expect(labels).not.toContain(absent);
+    for (const absent of ["payroll", "orders", "delivery", "leave", "salary"]) expect(labels).not.toContain(absent);
   });
 
   it("gives a barber the operational menu only; billing, analytics and settings stay owner-only", () => {
@@ -49,7 +78,8 @@ describe("owner navigation", () => {
     for (const id of ["bookings", "customers", "analytics", "revenue", "payments", "invoices", "settings", "staff", "payment-qr", "cancellations"]) {
       expect(staff).not.toContain(id);
     }
-    expect(navItemsFor("owner").length).toBe(NAV_ITEMS.length);
+    // Entries that need a server capability are listed only when the shop has it (lib/capabilities.ts).
+    expect(navItemsFor("owner").length).toBe(NAV_ITEMS.filter((i) => !i.requiresFeature).length);
   });
 
   // An owner who clicks a menu entry must stay in the signed-in owner area. /account/* is the CUSTOMER
