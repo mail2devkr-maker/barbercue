@@ -17,6 +17,8 @@ import { DASHBOARD_PATHS, DISCOVERY_PATHS, Role } from "@barbercue/shared";
 import type { CapacitySummaryDto, OwnerSearchResultDto, SalonWorkplaceDto } from "@barbercue/shared";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
+import { useCapabilities } from "../../lib/use-capabilities";
+import type { CapabilityMap } from "../../lib/capabilities";
 import { rememberLastShop } from "../../lib/last-shop";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { AdminManagingBanner } from "../dashboard/AdminManagingBanner";
@@ -174,7 +176,9 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
     return () => document.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
 
-  const items = useMemo(() => navItemsFor(kind), [kind]);
+  // Menu entries for features that are not switched on for this shop are simply not listed.
+  const capabilities = useCapabilities(salonId, kind === "owner");
+  const items = useMemo(() => navItemsFor(kind, capabilities.features), [kind, capabilities.features]);
   const currentId = activeItemId(pathname, search, salonId, NAV_ITEMS);
   const currentGroup = NAV_ITEMS.find((i) => i.id === currentId)?.group ?? "HOME";
   const visibleGroups = NAV_GROUPS.filter((g) => items.some((i) => i.group === g.id));
@@ -305,7 +309,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
               >
                 <Icon name={drawerOpen ? "close" : "menu"} />
               </button>
-              <GlobalSearch salonId={salonId} kind={kind} />
+              <GlobalSearch salonId={salonId} kind={kind} features={capabilities.features} />
               <div className={ui.topbarRight}>
                 {ownedShops.length > 1 && (
                   <select
@@ -409,7 +413,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
 
 type Hit = { key: string; group: string; title: string; subtitle: string | null; href: string };
 
-function GlobalSearch({ salonId, kind }: { salonId: string; kind: ShopKind }) {
+function GlobalSearch({ salonId, kind, features }: { salonId: string; kind: ShopKind; features: CapabilityMap }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -428,11 +432,11 @@ function GlobalSearch({ salonId, kind }: { salonId: string; kind: ShopKind }) {
   const navHits = useMemo<Hit[]>(() => {
     const q = query.trim().toLowerCase();
     if (q.length < 2) return [];
-    return navItemsFor(kind)
+    return navItemsFor(kind, features)
       .filter((item) => item.label.toLowerCase().includes(q) || (item.keywords ?? []).some((k) => k.includes(q)))
       .slice(0, 5)
       .map((item) => ({ key: `nav-${item.id}`, group: "Go to", title: item.label, subtitle: null, href: hrefFor(item, salonId) }));
-  }, [query, kind, salonId]);
+  }, [query, kind, salonId, features]);
 
   useEffect(() => {
     const q = query.trim();
