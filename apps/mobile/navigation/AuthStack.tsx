@@ -3,6 +3,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import RoleSelectScreen from '../screens/RoleSelectScreen';
 import PhoneOtpLoginScreen from '../screens/PhoneOtpLoginScreen';
 import OwnerStaffLoginScreen from '../screens/OwnerStaffLoginScreen';
+import OwnerPhoneLoginScreen from '../screens/OwnerPhoneLoginScreen';
 import OwnerRegisterScreen from '../screens/OwnerRegisterScreen';
 import OwnerStaffPasswordRecoveryScreen from '../screens/OwnerStaffPasswordRecoveryScreen';
 import GuestSearchStack from './GuestSearchStack';
@@ -15,6 +16,8 @@ export type AuthStackParamList = {
   RoleSelect: undefined;
   CustomerLogin: undefined;
   OwnerStaffLogin: { role: 'OWNER' | 'STAFF' };
+  // Returning shop owners only; reached from OwnerStaffLogin when the server reports ownerPhoneOtp.
+  OwnerPhoneLogin: undefined;
   OwnerRegister: undefined;
   AllServices: undefined;
   PasswordRecovery: { audience: 'owner' | 'staff' };
@@ -35,6 +38,7 @@ export default function AuthStack() {
       <Stack.Screen name="RoleSelect" component={RoleSelectScreen} options={{ headerShown: false }} />
       <Stack.Screen name="CustomerLogin" component={PhoneOtpLoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="OwnerStaffLogin" component={OwnerStaffLoginScreen} options={{ title: t.signInTitle }} />
+      <Stack.Screen name="OwnerPhoneLogin" component={OwnerPhoneLoginScreen} options={{ title: t.signInTitle }} />
       <Stack.Screen name="OwnerRegister" component={OwnerRegisterScreen} options={{ title: "Create your account" }} />
       <Stack.Screen name="AllServices" component={GuestAllServicesScreen} options={{ title: t.allServicesTitle }} />
       <Stack.Screen name="PasswordRecovery" component={OwnerStaffPasswordRecoveryScreen} options={{ title: t.passwordRecoveryTitle }} />
