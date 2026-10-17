@@ -53,6 +53,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
 
   { id: "analytics", label: "Analytics", icon: "chart", group: "BUSINESS", audience: "owner", path: "analytics", keywords: ["reports", "peak hours"] },
   { id: "revenue", label: "Revenue", icon: "rupee", group: "BUSINESS", audience: "owner", path: "revenue", keywords: ["income", "sales"] },
+  { id: "contacts-check", label: "Contact List Check", icon: "phone", group: "BUSINESS", audience: "owner", path: "contacts", keywords: ["import", "invite", "phone numbers", "consent"] },
   { id: "payments", label: "Payments", icon: "card", group: "BUSINESS", audience: "owner", path: "payments", keywords: ["received", "refunds"] },
   { id: "invoices", label: "Billing / Invoices", icon: "receipt", group: "BUSINESS", audience: "owner", path: "invoices", keywords: ["invoice", "gst", "pdf"] },
   { id: "cancellations", label: "Cancellations", icon: "alert", group: "BUSINESS", audience: "owner", path: "cancellations", keywords: ["cancelled", "reasons"] },
