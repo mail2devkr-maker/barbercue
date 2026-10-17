@@ -14,54 +14,68 @@ function fakeStore() {
 }
 
 let store;
+const mounted = [];
+
 function setUrl(path, search) {
   mockPath = path;
   globalThis.window = { location: { search }, sessionStorage: store };
 }
-async function mount(props = {}) {
-  await act(async () => { TestRenderer.create(<CampaignCapture {...props} />); });
+
+// The effect is synchronous, so a synchronous act() flushes it deterministically (no timers or microtask races).
+function mount(props = {}) {
+  let tree;
+  act(() => { tree = TestRenderer.create(<CampaignCapture {...props} />); });
+  mounted.push(tree);
+  return tree;
 }
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   store = fakeStore();
 });
-afterEach(() => { delete globalThis.window; });
+
+afterEach(() => {
+  // Trees are unmounted before the fake window goes away, so nothing can run against a missing window.
+  while (mounted.length) {
+    const tree = mounted.pop();
+    act(() => tree.unmount());
+  }
+  delete globalThis.window;
+});
 
 describe("CampaignCapture", () => {
-  it("remembers the code from a public shop link for that shop", async () => {
+  it("remembers the code from a public shop link for that shop", () => {
     setUrl("/in/patna/fade-house", `?fq_campaign=${TOKEN}`);
-    await mount();
+    mount();
     expect(recallCampaign(store, "in/patna/fade-house")).toBe(TOKEN);
   });
 
-  it("uses the shop key it is given on the booking page", async () => {
+  it("uses the shop key it is given on the booking page", () => {
     setUrl("/book/fade-house", `?city=patna&country=in&fq_campaign=${TOKEN}`);
-    await mount({ salonKey: "in/patna/fade-house" });
+    mount({ salonKey: "in/patna/fade-house" });
     expect(recallCampaign(store, "in/patna/fade-house")).toBe(TOKEN);
   });
 
-  it("does nothing without a code, or with a badly shaped one", async () => {
+  it("does nothing without a code, or with a badly shaped one", () => {
     setUrl("/in/patna/fade-house", "");
-    await mount();
+    mount();
     setUrl("/in/patna/fade-house", "?fq_campaign=short");
-    await mount();
+    mount();
     expect(store.map.size).toBe(0);
   });
 
-  it("does not guess a shop on a page that is not a shop page", async () => {
+  it("does not guess a shop on a page that is not a shop page", () => {
     setUrl("/", `?fq_campaign=${TOKEN}`);
-    await mount();
+    mount();
     setUrl("/book/fade-house", `?fq_campaign=${TOKEN}`);
-    await mount();
+    mount();
     expect(store.map.size).toBe(0);
   });
 
-  it("renders nothing and survives blocked storage", async () => {
+  it("renders nothing and survives blocked storage", () => {
     globalThis.window = { location: { search: `?fq_campaign=${TOKEN}` }, get sessionStorage() { throw new Error("blocked"); } };
     mockPath = "/in/patna/fade-house";
-    let tree;
-    await act(async () => { tree = TestRenderer.create(<CampaignCapture />); });
+    const tree = mount();
     expect(tree.toJSON()).toBeNull();
   });
 });
