@@ -44,7 +44,7 @@ jobs:
     timeout-minutes: 60
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
@@ -135,6 +135,11 @@ jobs:
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci --json --outputFile="$RUNNER_TEMP/backend-e2e.json" || true
           node ../../scripts/ci/jest-baseline-compare.js "$RUNNER_TEMP/backend-e2e.json" ../../docs/owner-operations/baseline/backend-e2e-legacy.json backend-e2e
+      - name: Synthetic backup and restore - full data, schema and financial guards
+        working-directory: apps/backend
+        env:
+          PG_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: bash scripts/verify-platform-recovery.sh
 
   web:
     name: Website - typecheck, tests, production build
