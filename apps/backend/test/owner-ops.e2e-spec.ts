@@ -447,6 +447,28 @@ maybe('Owner operations (e2e, disposable local database)', () => {
             status: 'WAITING',
           });
         });
+
+      const paged = await api(
+        'get',
+        `dashboard/salons/${ids.salon}/customers/${ids.cust1}/history?limit=1`,
+        tok.owner,
+      ).expect(200);
+      expect(paged.body.nextCursor).toEqual(expect.any(String));
+      const [payload, signature] = paged.body.nextCursor.split('.');
+      const tamperedCursor = `${payload}.${signature[0] === 'a' ? 'b' : 'a'}${signature.slice(1)}`;
+      await api(
+        'get',
+        `dashboard/salons/${ids.salon}/customers/${ids.cust1}/history?limit=1&cursor=${encodeURIComponent(tamperedCursor)}`,
+        tok.owner,
+      ).expect(400);
+
+      // A second owner is authorized for this salon, so rejection proves that a valid cursor is
+      // bound to the issuing actor rather than relying only on salon authorization.
+      await makeUser('ownerDelegate', Role.SALON_OWNER, ids.salon);
+      const replayPath = `dashboard/salons/${ids.salon}/customers/${ids.cust1}/history?limit=1&cursor=${encodeURIComponent(paged.body.nextCursor)}`;
+      await api('get', replayPath, tok.ownerDelegate).expect(400);
+      // A cursor cannot turn an unrelated-salon session into access to this customer's history.
+      await api('get', replayPath, tok.outsider).expect(403);
     });
 
     it('denies customer and unrelated-salon owner access to customer visit history', async () => {
