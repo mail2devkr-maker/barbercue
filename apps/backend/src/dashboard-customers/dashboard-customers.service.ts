@@ -1,3 +1,4 @@
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
@@ -117,13 +118,35 @@ interface CustomerHistoryInvoiceRow {
   }[];
 }
 
-function historyFilterKey(query: OwnerCustomerHistoryQuery): string {
-  return JSON.stringify({
-    source: query.source ?? null,
-    status: query.status ?? null,
-    from: query.from ?? null,
-    to: query.to ?? null,
-  });
+function historyFilterKey(
+  actorId: string,
+  query: OwnerCustomerHistoryQuery,
+): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        actorId,
+        source: query.source ?? null,
+        status: query.status ?? null,
+        from: query.from ?? null,
+        to: query.to ?? null,
+      }),
+    )
+    .digest('hex');
+}
+
+function historyCursorSigningKey(): Buffer {
+  const secret = process.env.JWT_ACCESS_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new AppException(
+      BookingErrorCode.CUSTOMER_HISTORY_CURSOR_UNAVAILABLE,
+      'Customer history pagination is temporarily unavailable.',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
+  return createHmac('sha256', secret)
+    .update('fastque:customer-history-cursor:v1')
+    .digest();
 }
 
 function historyRank(
@@ -137,6 +160,7 @@ function historyRank(
 }
 
 function encodeHistoryCursor(
+  actorId: string,
   salonId: string,
   customerId: string,
   item: Pick<OwnerCustomerHistoryEntryDto, 'id' | 'source' | 'occurredAt'>,
@@ -146,30 +170,48 @@ function encodeHistoryCursor(
     v: 1,
     salonId,
     customerId,
-    filterKey: historyFilterKey(query),
+    filterKey: historyFilterKey(actorId, query),
     occurredAt: item.occurredAt,
     rank: historyRank(item.source),
     id: item.id,
   };
-  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+  const payload = Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+  const signature = createHmac('sha256', historyCursorSigningKey())
+    .update(payload)
+    .digest('base64url');
+  return `${payload}.${signature}`;
 }
 
 function decodeHistoryCursor(
   raw: string | undefined,
+  actorId: string,
   salonId: string,
   customerId: string,
   query: OwnerCustomerHistoryQuery,
 ): CustomerHistoryCursor | null {
   if (!raw) return null;
+  const signingKey = historyCursorSigningKey();
   try {
+    const [payload, suppliedSignature, extra] = raw.split('.');
+    if (!payload || !suppliedSignature || extra !== undefined) return null;
+    const expectedSignature = createHmac('sha256', signingKey)
+      .update(payload)
+      .digest();
+    const receivedSignature = Buffer.from(suppliedSignature, 'base64url');
+    if (
+      receivedSignature.length !== expectedSignature.length ||
+      !timingSafeEqual(receivedSignature, expectedSignature)
+    ) {
+      return null;
+    }
     const parsed = JSON.parse(
-      Buffer.from(raw, 'base64url').toString('utf8'),
+      Buffer.from(payload, 'base64url').toString('utf8'),
     ) as Partial<CustomerHistoryCursor>;
     if (
       parsed.v !== 1 ||
       parsed.salonId !== salonId ||
       parsed.customerId !== customerId ||
-      parsed.filterKey !== historyFilterKey(query) ||
+      parsed.filterKey !== historyFilterKey(actorId, query) ||
       (parsed.rank !== 0 && parsed.rank !== 1 && parsed.rank !== 2) ||
       typeof parsed.id !== 'string' ||
       parsed.id.length < 1 ||
@@ -385,6 +427,7 @@ export class DashboardCustomersService {
     const range = this.historyRange(query, salonTimezone);
     const cursor = decodeHistoryCursor(
       query.cursor,
+      userId,
       salonId,
       customerId,
       query,
@@ -648,7 +691,7 @@ export class DashboardCustomersService {
       items: page,
       nextCursor:
         hasMore && last
-          ? encodeHistoryCursor(salonId, customerId, last, query)
+          ? encodeHistoryCursor(userId, salonId, customerId, last, query)
           : null,
     };
   }
