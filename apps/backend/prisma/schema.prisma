@@ -1119,6 +1119,8 @@ model Service {
   durationMinutes Int
   price           Decimal  @db.Decimal(10, 2)
   category        String?
+  // Optional refinement for existing free-text service categories; null preserves all legacy rows.
+  subcategory     String?
   isActive        Boolean  @default(true)
   // Future-proofing only (DATABASE.md): caps a service below the staff/chair-derived capacity for
   // a service that needs a scarce fixed resource. Unset for every V1 service.

@@ -958,6 +958,7 @@ describe('SalonsService', () => {
               durationMinutes: 30,
               price: { toString: () => '300' },
               category: 'Hair',
+              subcategory: 'Haircut',
               isActive: true,
             },
           ],
@@ -1006,6 +1007,7 @@ describe('SalonsService', () => {
           durationMinutes: 30,
           price: 300,
           category: 'Hair',
+          subcategory: 'Haircut',
           isActive: true,
         },
       ]);
@@ -1042,6 +1044,7 @@ describe('SalonsService', () => {
               durationMinutes: 30,
               price: { toString: () => '300' },
               category: null,
+              subcategory: null,
               isActive: true,
             },
           ],
@@ -1055,6 +1058,7 @@ describe('SalonsService', () => {
         'barbercue-demo',
       );
       expect(profile.services[0].category).toBe('');
+      expect(profile.services[0].subcategory).toBeNull();
     });
 
     it('maps ACTIVE staff to the public team list (Phase 17)', async () => {

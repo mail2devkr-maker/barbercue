@@ -263,6 +263,8 @@ export interface ServiceDto {
   durationMinutes: number;
   price: number;
   category: string;
+  /** Optional category refinement. Older service records and clients may omit it. */
+  subcategory?: string | null;
   isActive: boolean;
 }
 
@@ -1355,6 +1357,8 @@ export interface SalonServiceDto {
   durationMinutes: number;
   price: number;
   category: string | null;
+  /** Optional category refinement; null for legacy services without a subcategory. */
+  subcategory?: string | null;
   isActive: boolean;
   // ISO-4217 of the owning salon; null when unknown. Prices are major units.
   currency: string | null;

@@ -274,6 +274,7 @@ export class SalonServicesService {
         price: String(input.price),
         durationMinutes: input.durationMinutes,
         category: input.category ?? null,
+        subcategory: input.subcategory ?? null,
         isActive: true,
       },
     });
@@ -323,6 +324,7 @@ export class SalonServicesService {
           durationMinutes: input.durationMinutes,
         }),
         ...(input.category !== undefined && { category: input.category }),
+        ...(input.subcategory !== undefined && { subcategory: input.subcategory }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
       },
     });
@@ -342,6 +344,7 @@ export class SalonServicesService {
               price: String(existing.price),
               durationMinutes: existing.durationMinutes,
               category: existing.category,
+              subcategory: existing.subcategory,
               isActive: existing.isActive,
             },
             after: {
@@ -350,6 +353,7 @@ export class SalonServicesService {
               price: String(updated.price),
               durationMinutes: updated.durationMinutes,
               category: updated.category,
+              subcategory: updated.subcategory,
               isActive: updated.isActive,
             },
           },
@@ -376,6 +380,7 @@ export class SalonServicesService {
       durationMinutes: number;
       price: unknown;
       category: string | null;
+      subcategory: string | null;
       isActive: boolean;
     },
     currency: string | null,
@@ -387,6 +392,7 @@ export class SalonServicesService {
       durationMinutes: service.durationMinutes,
       price: Number(service.price),
       category: service.category,
+      subcategory: service.subcategory ?? null,
       isActive: service.isActive,
       currency,
     };
