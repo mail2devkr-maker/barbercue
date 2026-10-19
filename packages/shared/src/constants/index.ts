@@ -11,6 +11,12 @@ export const HEALTH_PATH = 'health';
 export const AUTH_PATHS = {
   otpRequest: 'otp/request',
   otpVerify: 'otp/verify',
+  ownerOtpRequest: 'owner/otp/request',
+  ownerOtpVerify: 'owner/otp/verify',
+  ownerPhoneLinkRequest: 'owner/phone/link/request',
+  ownerPhoneLinkVerify: 'owner/phone/link/verify',
+  customerPhoneLinkRequest: 'customer/phone/link/request',
+  customerPhoneLinkVerify: 'customer/phone/link/verify',
   google: 'google',
   staffLogin: 'staff/login',
   // Self-service shop-owner account creation before salon onboarding.

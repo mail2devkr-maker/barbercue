@@ -16,9 +16,11 @@ describe('TwoFactorOtpSender', () => {
   let fetchSpy: jest.SpiedFunction<typeof fetch>;
   let loggerErrorSpy: jest.SpyInstance;
   const originalApiKey = process.env.OTP_PROVIDER_API_KEY;
+  const originalTemplate = process.env.OTP_PROVIDER_TEMPLATE_NAME;
 
   beforeEach(async () => {
-    process.env.OTP_PROVIDER_API_KEY = 'test-secret-key-do-not-log-me';
+    process.env.OTP_PROVIDER_API_KEY = 'synthetic-test-provider-key';
+    process.env.OTP_PROVIDER_TEMPLATE_NAME = 'FASTQUE_LOGIN_TEST';
     fetchSpy = jest.spyOn(global, 'fetch');
     loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
 
@@ -29,115 +31,175 @@ describe('TwoFactorOtpSender', () => {
   });
 
   afterEach(() => {
-    process.env.OTP_PROVIDER_API_KEY = originalApiKey;
+    if (originalApiKey === undefined) delete process.env.OTP_PROVIDER_API_KEY;
+    else process.env.OTP_PROVIDER_API_KEY = originalApiKey;
+    if (originalTemplate === undefined)
+      delete process.env.OTP_PROVIDER_TEMPLATE_NAME;
+    else process.env.OTP_PROVIDER_TEMPLATE_NAME = originalTemplate;
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
-  describe('success', () => {
-    it('sends the exact phone + OTP that OtpService already generated, via a GET request', async () => {
-      fetchSpy.mockResolvedValue(
-        jsonResponse(200, { Status: 'Success', Details: 'SMS SENT' }),
-      );
+  it('uses the documented template send API over POST with key in header and OTP in the JSON body', async () => {
+    fetchSpy.mockResolvedValue(
+      jsonResponse(200, { status: 'sent', session_id: 'synthetic-session' }),
+    );
 
-      await service.sendOtp('+919876543210', '123456');
+    await service.sendOtp('+919876543210', '123456');
 
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      const [url, options] = fetchSpy.mock.calls[0];
-      expect(String(url)).toBe(
-        'https://2factor.in/API/V1/test-secret-key-do-not-log-me/SMS/919876543210/123456',
-      );
-      expect(options).toMatchObject({ method: 'GET' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toBe('https://2factor.in/API/V1/OTP/SEND');
+    expect(init).toMatchObject({
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'synthetic-test-provider-key',
+      },
+      body: JSON.stringify({
+        to: '+919876543210',
+        template_name: 'FASTQUE_LOGIN_TEST',
+        var1: '123456',
+      }),
     });
-
-    it('does not throw and does not generate a second OTP — it only transports the one it was given', async () => {
-      fetchSpy.mockResolvedValue(jsonResponse(200, { Status: 'Success' }));
-      await expect(
-        service.sendOtp('+919876543210', '654321'),
-      ).resolves.toBeUndefined();
-      // Called exactly once — no separate 2Factor AUTOGEN/VERIFY round trip.
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it('strips the leading "+" for the provider request without touching the caller-provided value', async () => {
-      fetchSpy.mockResolvedValue(jsonResponse(200, { Status: 'Success' }));
-      await service.sendOtp('+911234567890', '000000');
-      const [url] = fetchSpy.mock.calls[0];
-      expect(String(url)).toContain('/SMS/911234567890/');
-      expect(String(url)).not.toContain('+');
-    });
+    expect(String(url)).not.toContain('synthetic-test-provider-key');
+    expect(String(url)).not.toContain('123456');
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
 
-  describe('provider failure', () => {
-    it('throws OTP_DELIVERY_FAILED (502) when the provider returns a non-2xx HTTP status', async () => {
-      fetchSpy.mockResolvedValue(
-        jsonResponse(401, { Status: 'Error', Details: 'Invalid API Key' }),
-      );
-      await expect(
-        service.sendOtp('+919876543210', '123456'),
-      ).rejects.toMatchObject({ code: AuthErrorCode.OTP_DELIVERY_FAILED, status: 502 });
-    });
-
-    it('throws OTP_DELIVERY_FAILED when the provider responds 200 but Status is not "Success"', async () => {
-      fetchSpy.mockResolvedValue(
-        jsonResponse(200, { Status: 'Error', Details: 'Insufficient balance' }),
-      );
-      await expect(
-        service.sendOtp('+919876543210', '123456'),
-      ).rejects.toMatchObject({ code: AuthErrorCode.OTP_DELIVERY_FAILED });
-    });
-
-    it('throws OTP_DELIVERY_FAILED on a malformed (non-JSON) provider response', async () => {
-      fetchSpy.mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: () => Promise.reject(new Error('Unexpected token < in JSON')),
-      } as Response);
-      await expect(
-        service.sendOtp('+919876543210', '123456'),
-      ).rejects.toMatchObject({ code: AuthErrorCode.OTP_DELIVERY_FAILED });
-    });
-
-    it('throws OTP_DELIVERY_FAILED on a network-level failure (fetch itself rejects)', async () => {
-      fetchSpy.mockRejectedValue(new Error('ETIMEDOUT'));
-      await expect(
-        service.sendOtp('+919876543210', '123456'),
-      ).rejects.toMatchObject({ code: AuthErrorCode.OTP_DELIVERY_FAILED });
-    });
-
-    it('throws OTP_DELIVERY_FAILED without calling fetch at all when OTP_PROVIDER_API_KEY is unset', async () => {
-      delete process.env.OTP_PROVIDER_API_KEY;
-      await expect(
-        service.sendOtp('+919876543210', '123456'),
-      ).rejects.toMatchObject({ code: AuthErrorCode.OTP_DELIVERY_FAILED });
-      expect(fetchSpy).not.toHaveBeenCalled();
-    });
+  it('treats a provider-accepted status as accepted transport, not as proof of handset delivery', async () => {
+    fetchSpy.mockResolvedValue(jsonResponse(200, { status: 'SENT' }));
+    await expect(
+      service.sendOtp('+919876543210', '654321'),
+    ).resolves.toBeUndefined();
   });
 
-  describe('security: the API key and full OTP are never logged', () => {
-    it('never logs the API key value, even when delivery fails', async () => {
-      fetchSpy.mockResolvedValue(
-        jsonResponse(401, { Status: 'Error', Details: 'Invalid API Key' }),
-      );
-      await expect(service.sendOtp('+919876543210', '123456')).rejects.toBeDefined();
-
-      const loggedText = loggerErrorSpy.mock.calls.map((call) => String(call[0])).join('\n');
-      expect(loggedText).not.toContain('test-secret-key-do-not-log-me');
+  it('fails safely when either provider credential or template configuration is missing', async () => {
+    delete process.env.OTP_PROVIDER_API_KEY;
+    await expect(
+      service.sendOtp('+919876543210', '123456'),
+    ).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
     });
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    it('never logs the API key value when it is missing entirely', async () => {
-      delete process.env.OTP_PROVIDER_API_KEY;
-      await expect(service.sendOtp('+919876543210', '123456')).rejects.toBeDefined();
-      const loggedText = loggerErrorSpy.mock.calls.map((call) => String(call[0])).join('\n');
-      expect(loggedText).not.toMatch(/test-secret-key/);
+    process.env.OTP_PROVIDER_API_KEY = 'synthetic-test-provider-key';
+    delete process.env.OTP_PROVIDER_TEMPLATE_NAME;
+    await expect(
+      service.sendOtp('+919876543210', '123456'),
+    ).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
     });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 
-    it('propagates only a generic, user-safe message — never the raw provider Details/stack', async () => {
-      fetchSpy.mockResolvedValue(
-        jsonResponse(500, { Status: 'Error', Details: 'internal provider stack trace xyz' }),
-      );
-      await expect(service.sendOtp('+919876543210', '123456')).rejects.toMatchObject({
-        message: 'Could not send the verification code. Please try again in a moment.',
+  it('rejects non-2xx, non-sent, malformed and network errors with a generic error', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse(401, {
+        status: 'error',
+        details: 'private provider detail',
+      }),
+    );
+    fetchSpy.mockResolvedValueOnce(jsonResponse(200, { status: 'queued' }));
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new Error('synthetic parse error')),
+    } as Response);
+    fetchSpy.mockRejectedValueOnce(
+      new Error('synthetic network error with request metadata'),
+    );
+
+    for (let i = 0; i < 4; i += 1) {
+      await expect(
+        service.sendOtp('+919876543210', '123456'),
+      ).rejects.toMatchObject({
+        code: AuthErrorCode.OTP_DELIVERY_FAILED,
+        message:
+          'Could not send the verification code. Please try again in a moment.',
+      });
+    }
+    const logs = loggerErrorSpy.mock.calls
+      .map((call) => String(call[0]))
+      .join('\n');
+    expect(logs).not.toContain('synthetic-test-provider-key');
+    expect(logs).not.toContain('+919876543210');
+    expect(logs).not.toContain('123456');
+    expect(logs).not.toContain('private provider detail');
+    expect(logs).not.toContain('synthetic network error');
+  });
+
+  it('aborts a stalled provider request at the configured eight-second timeout without leaking request data', async () => {
+    jest.useFakeTimers();
+    fetchSpy.mockImplementation((_input, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () =>
+            reject(new DOMException('synthetic abort detail', 'AbortError')),
+          { once: true },
+        );
       });
     });
+
+    const pending = service.sendOtp('+919876543210', '123456');
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+      message:
+        'Could not send the verification code. Please try again in a moment.',
+    });
+    const signal = fetchSpy.mock.calls[0][1]?.signal;
+    expect(signal?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(7_999);
+    expect(signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
+    await rejected;
+    expect(signal?.aborted).toBe(true);
+
+    const logs = loggerErrorSpy.mock.calls
+      .map((call) => String(call[0]))
+      .join('\n');
+    expect(logs).toContain('timed out');
+    expect(logs).not.toContain('synthetic-test-provider-key');
+    expect(logs).not.toContain('+919876543210');
+    expect(logs).not.toContain('123456');
+    expect(logs).not.toContain('synthetic abort detail');
+  });
+
+  it('keeps the timeout active while reading provider response body', async () => {
+    jest.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    fetchSpy.mockImplementation((_input, init) => {
+      signal = init?.signal as AbortSignal | undefined;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener(
+              'abort',
+              () =>
+                reject(
+                  new DOMException('synthetic abort detail', 'AbortError'),
+                ),
+              { once: true },
+            );
+          }),
+      } as Response);
+    });
+
+    const pending = service.sendOtp('+919876543210', '123456');
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: AuthErrorCode.OTP_DELIVERY_FAILED,
+    });
+    await Promise.resolve();
+    expect(signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(8_000);
+    await rejected;
+    expect(signal?.aborted).toBe(true);
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      '2Factor OTP request timed out.',
+    );
   });
 });

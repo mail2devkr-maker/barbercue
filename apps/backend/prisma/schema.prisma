@@ -63,6 +63,14 @@ enum Language {
 enum OtpPurpose {
   LOGIN
   SIGNUP
+  OWNER_LOGIN
+  PHONE_LINK
+}
+
+enum OtpDeliveryAttemptStatus {
+  RESERVED
+  ACCEPTED
+  UNKNOWN
 }
 
 // Major-upgrade phase: customer auth becomes provider-based. GOOGLE is live; WHATSAPP is reserved
@@ -393,6 +401,7 @@ model User {
   ledgerEntries                 CustomerLedgerEntry[]
   auditLogs                     AuditLog[]
   inventoryMovements            InventoryMovement[]
+  otpRequests                   OtpRequest[]              @relation("OtpRequestSubject")
   premiumSubscriptions          CustomerSubscription[]
   // Phase 18 (Shop / Barber Verification Foundation) — an owner submitting evidence, and a
   // PLATFORM_ADMIN reviewing it, are deliberately separate relations (never the same person in
@@ -578,17 +587,38 @@ model RefreshToken {
 }
 
 model OtpRequest {
-  id         String     @id @default(uuid())
-  phone      String
-  codeHash   String
-  purpose    OtpPurpose
-  attempts   Int        @default(0)
-  expiresAt  DateTime
-  verifiedAt DateTime?
-  createdAt  DateTime   @default(now())
+  id            String     @id @default(uuid())
+  phone         String
+  codeHash      String
+  // Existing rows and old app instances use the legacy SHA-256 hash until they expire; new
+  // requests use a keyed HMAC digest so a database-only disclosure cannot brute-force six digits.
+  hashVersion   String     @default("LEGACY_SHA256")
+  purpose       OtpPurpose
+  subjectUserId String?
+  subjectUser   User?      @relation("OtpRequestSubject", fields: [subjectUserId], references: [id], onDelete: Cascade)
+  attempts      Int        @default(0)
+  expiresAt     DateTime
+  verifiedAt    DateTime?
+  createdAt     DateTime   @default(now())
 
   @@index([phone, createdAt])
+  @@index([phone, purpose, createdAt])
+  @@index([subjectUserId, purpose, createdAt])
   @@map("otp_requests")
+}
+
+// Privacy-minimal durable OTP send admission. It stores no phone, user, OTP, or provider detail.
+// Rows are retained only for active budget windows and pruned transactionally on admission.
+model OtpDeliveryAttempt {
+  id                 String                   @id @default(uuid())
+  countryCallingCode String
+  status             OtpDeliveryAttemptStatus @default(RESERVED)
+  createdAt          DateTime                 @default(now())
+  finishedAt         DateTime?
+
+  @@index([createdAt])
+  @@index([countryCallingCode, createdAt])
+  @@map("otp_delivery_attempts")
 }
 
 // Phase 2 addition — not in the original DATABASE.md field list. Needed to implement the
@@ -1750,8 +1780,8 @@ model InventoryCategory {
   salon          Salon    @relation(fields: [salonId], references: [id], onDelete: Restrict)
   name           String   @db.VarChar(80)
   normalizedName String   @db.VarChar(80)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
 
   products InventoryProduct[]
 
@@ -1770,8 +1800,8 @@ model InventorySupplier {
   phone          String?  @db.VarChar(40)
   email          String?  @db.VarChar(254)
   notes          String?  @db.VarChar(500)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
 
   products  InventoryProduct[]
   movements InventoryMovement[]
@@ -1797,8 +1827,8 @@ model InventoryProduct {
   averageUnitCost  Decimal            @default(0) @db.Decimal(12, 2)
   reorderThreshold Decimal            @default(0) @db.Decimal(12, 3)
   isActive         Boolean            @default(true)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  createdAt        DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(6)
 
   movements InventoryMovement[]
 
@@ -1829,7 +1859,7 @@ model InventoryMovement {
   reference            String?               @db.VarChar(120)
   idempotencyKey       String                @db.VarChar(128)
   requestHash          String                @db.VarChar(64)
-  recordedAt           DateTime              @default(now())
+  recordedAt           DateTime              @default(now()) @db.Timestamptz(6)
 
   @@unique([salonId, idempotencyKey])
   @@index([salonId, recordedAt, id])

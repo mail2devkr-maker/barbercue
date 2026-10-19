@@ -5,6 +5,7 @@ import {
   AuthErrorCode,
   AuthProvider,
   Role,
+  OtpPurpose,
   SessionAudience,
   UserStatus,
   type AuthSession,
@@ -65,7 +66,7 @@ export class AuthService {
   // ---------- Customer: phone OTP ----------
 
   requestCustomerOtp(phone: string) {
-    return this.otpService.requestOtp(phone);
+    return this.otpService.requestOtp(phone, OtpPurpose.LOGIN);
   }
 
   async verifyCustomerOtp(
@@ -73,7 +74,7 @@ export class AuthService {
     code: string,
     deviceInfo?: string,
   ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
-    await this.otpService.verifyOtp(phone, code);
+    await this.otpService.verifyOtp(phone, code, OtpPurpose.LOGIN);
 
     let user = await this.prisma.user.findUnique({
       where: { phone },
@@ -89,10 +90,14 @@ export class AuthService {
         include: { roles: true },
       });
     } else if (!user.phoneVerifiedAt) {
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { phoneVerifiedAt: new Date() },
-      });
+      // OTP proves control of a number, not ownership of an older account whose phone was
+      // never verified. Require an existing identity login and authenticated phone linking.
+      // This prevents a recycled number from inheriting an existing account's roles.
+      throw new AppException(
+        AuthErrorCode.OTP_INVALID,
+        'The verification code is invalid or expired. Request a new code and try again.',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     this.assertActive(user.status);
@@ -137,6 +142,427 @@ export class AuthService {
       ),
       tokens,
     };
+  }
+
+  // ---------- Shop owner: independently authorized phone OTP ----------
+
+  /**
+   * Owner OTP never creates an account and never trusts the salon's public contact number. A
+   * phone must already be attached and verified on an active User, with a SALON_OWNER role whose
+   * salon points back to that same user through Salon.ownerUserId.
+   */
+  async requestOwnerOtp(phone: string): Promise<{ expiresInSeconds: number }> {
+    const owner = await this.findVerifiedOwnerByPhone(phone);
+    // Keep the public response shape identical for unknown/non-owner numbers. No SMS is sent and
+    // no challenge is created for those accounts, avoiding account enumeration and SMS pumping.
+    if (!owner) return { expiresInSeconds: 300 };
+    return this.otpService.requestOtp(phone, OtpPurpose.OWNER_LOGIN, owner.id);
+  }
+
+  async verifyOwnerOtp(
+    phone: string,
+    code: string,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const owner = await this.findVerifiedOwnerByPhone(phone);
+    if (!owner) throw this.invalidOwnerCredentials();
+
+    try {
+      await this.otpService.verifyOtp(
+        phone,
+        code,
+        OtpPurpose.OWNER_LOGIN,
+        owner.id,
+      );
+    } catch (error) {
+      // Do not reveal whether a phone is owner-eligible through different responses for a missing
+      // account, invalid code, expired code, or exhausted challenge.
+      if (error instanceof AppException) throw this.invalidOwnerCredentials();
+      throw error;
+    }
+    this.assertActive(owner.status);
+
+    // This route creates a new STAFF audience session and includes only the owner role. It never
+    // upgrades or rotates a CUSTOMER session, and owner membership was independently rechecked
+    // from both UserRole and Salon.ownerUserId above.
+    const roles = this.tokenService.scopeRolesToAudience(
+      [Role.SALON_OWNER],
+      SessionAudience.STAFF,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      owner.id,
+      roles,
+      SessionAudience.STAFF,
+      deviceInfo,
+    );
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: owner.id,
+        action: 'OWNER_PHONE_OTP_LOGIN',
+        entityType: 'User',
+        entityId: owner.id,
+        metadata: { audience: SessionAudience.STAFF, method: 'sms_otp' },
+      },
+    });
+    return {
+      user: this.toMeResponse(
+        owner.id,
+        roles,
+        SessionAudience.STAFF,
+        owner.phone,
+        owner.email,
+        owner.preferredLanguage,
+        owner.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
+  async requestOwnerPhoneLinkOtp(
+    userId: string,
+    audience: SessionAudience,
+    sessionRoles: Role[],
+    phone: string,
+  ): Promise<{ expiresInSeconds: number }> {
+    const owner = await this.assertOwnerIdentity(
+      userId,
+      audience,
+      sessionRoles,
+    );
+    const existing = await this.prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+    if (existing && existing.id !== owner.id) throw this.phoneAlreadyLinked();
+    return this.otpService.requestOtp(phone, OtpPurpose.PHONE_LINK, owner.id);
+  }
+
+  async verifyOwnerPhoneLink(
+    userId: string,
+    audience: SessionAudience,
+    sessionRoles: Role[],
+    phone: string,
+    code: string,
+    deviceInfo?: string,
+  ): Promise<{ success: true; user: MeResponse; tokens: AuthTokens }> {
+    await this.assertOwnerIdentity(userId, audience, sessionRoles);
+    await this.otpService.verifyOtp(phone, code, OtpPurpose.PHONE_LINK, userId);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const current = await tx.user.findUnique({
+          where: { id: userId },
+          include: { roles: true, ownedSalons: { select: { id: true } } },
+        });
+        if (
+          !current ||
+          current.status !== UserStatus.ACTIVE ||
+          current.deletedAt
+        ) {
+          throw this.invalidOwnerCredentials();
+        }
+        this.assertCanonicalOwnerAccount(current);
+
+        const linked = await tx.user.findUnique({
+          where: { phone },
+          select: { id: true },
+        });
+        if (linked && linked.id !== userId) throw this.phoneAlreadyLinked();
+
+        const verifiedAt = new Date();
+        await tx.user.update({
+          where: { id: userId },
+          data: { phone, phoneVerifiedAt: verifiedAt },
+        });
+        await tx.refreshToken.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: verifiedAt },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: userId,
+            action: 'OWNER_PHONE_LINKED',
+            entityType: 'User',
+            entityId: userId,
+            // The phone number is intentionally omitted from security audit metadata.
+            metadata: {
+              verifiedAt: verifiedAt.toISOString(),
+              method: 'sms_otp',
+            },
+          },
+        });
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw this.phoneAlreadyLinked();
+      }
+      throw error;
+    }
+    const updated = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { roles: true },
+    });
+    const ownerRoles = this.tokenService.scopeRolesToAudience(
+      [Role.SALON_OWNER],
+      SessionAudience.STAFF,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      userId,
+      ownerRoles,
+      SessionAudience.STAFF,
+      deviceInfo,
+    );
+    return {
+      success: true as const,
+      user: this.toMeResponse(
+        updated.id,
+        ownerRoles,
+        SessionAudience.STAFF,
+        updated.phone,
+        updated.email,
+        updated.preferredLanguage,
+        updated.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
+  async requestCustomerPhoneLinkOtp(
+    userId: string,
+    audience: SessionAudience,
+    sessionRoles: Role[],
+    phone: string,
+  ): Promise<{ expiresInSeconds: number }> {
+    await this.assertCustomerIdentity(userId, audience, sessionRoles);
+    const existing = await this.prisma.user.findUnique({
+      where: { phone },
+      select: { id: true },
+    });
+    if (existing && existing.id !== userId) throw this.phoneAlreadyLinked();
+    return this.otpService.requestOtp(phone, OtpPurpose.PHONE_LINK, userId);
+  }
+
+  async verifyCustomerPhoneLink(
+    userId: string,
+    audience: SessionAudience,
+    sessionRoles: Role[],
+    phone: string,
+    code: string,
+    deviceInfo?: string,
+  ): Promise<{ success: true; user: MeResponse; tokens: AuthTokens }> {
+    await this.assertCustomerIdentity(userId, audience, sessionRoles);
+    await this.otpService.verifyOtp(phone, code, OtpPurpose.PHONE_LINK, userId);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const current = await tx.user.findUnique({
+          where: { id: userId },
+          include: { roles: true },
+        });
+        if (
+          !current ||
+          current.status !== UserStatus.ACTIVE ||
+          current.deletedAt ||
+          !current.roles.some(
+            ({ role, salonId }) => role === Role.CUSTOMER && salonId === null,
+          )
+        ) {
+          throw new AppException(
+            AuthErrorCode.FORBIDDEN_ROLE,
+            'Only an authenticated customer can link a phone number.',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+        const linked = await tx.user.findUnique({
+          where: { phone },
+          select: { id: true },
+        });
+        if (linked && linked.id !== userId) throw this.phoneAlreadyLinked();
+
+        const verifiedAt = new Date();
+        await tx.user.update({
+          where: { id: userId },
+          data: { phone, phoneVerifiedAt: verifiedAt },
+        });
+        await tx.refreshToken.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: verifiedAt },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorUserId: userId,
+            action: 'CUSTOMER_PHONE_LINKED',
+            entityType: 'User',
+            entityId: userId,
+            metadata: {
+              verifiedAt: verifiedAt.toISOString(),
+              method: 'sms_otp',
+            },
+          },
+        });
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw this.phoneAlreadyLinked();
+      }
+      throw error;
+    }
+
+    const updated = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { roles: true },
+    });
+    const customerRoles = this.tokenService.scopeRolesToAudience(
+      [Role.CUSTOMER],
+      SessionAudience.CUSTOMER,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      userId,
+      customerRoles,
+      SessionAudience.CUSTOMER,
+      deviceInfo,
+    );
+    return {
+      success: true,
+      user: this.toMeResponse(
+        updated.id,
+        customerRoles,
+        SessionAudience.CUSTOMER,
+        updated.phone,
+        updated.email,
+        updated.preferredLanguage,
+        updated.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
+  private async assertCustomerIdentity(
+    userId: string,
+    audience: SessionAudience,
+    sessionRoles: Role[],
+  ) {
+    if (
+      audience !== SessionAudience.CUSTOMER ||
+      !sessionRoles.includes(Role.CUSTOMER)
+    ) {
+      throw new AppException(
+        AuthErrorCode.FORBIDDEN_ROLE,
+        'Only an authenticated customer can link a phone number.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { roles: true },
+    });
+    if (
+      !user ||
+      user.status !== UserStatus.ACTIVE ||
+      user.deletedAt ||
+      !user.roles.some(
+        ({ role, salonId }) => role === Role.CUSTOMER && salonId === null,
+      )
+    ) {
+      throw new AppException(
+        AuthErrorCode.FORBIDDEN_ROLE,
+        'Only an authenticated customer can link a phone number.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    return user;
+  }
+
+  private async findVerifiedOwnerByPhone(phone: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { phone },
+      include: { roles: true, ownedSalons: { select: { id: true } } },
+    });
+    if (
+      !user ||
+      user.status !== UserStatus.ACTIVE ||
+      user.deletedAt ||
+      !user.phoneVerifiedAt
+    ) {
+      return null;
+    }
+    return this.hasCanonicalOwnerRole(user) ? user : null;
+  }
+
+  private async assertOwnerIdentity(
+    userId: string,
+    audience: SessionAudience,
+    sessionRoles: Role[],
+  ) {
+    if (
+      audience !== SessionAudience.STAFF ||
+      !sessionRoles.includes(Role.SALON_OWNER)
+    ) {
+      throw new AppException(
+        AuthErrorCode.FORBIDDEN_ROLE,
+        'Only an authenticated shop owner can link a phone number.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { roles: true, ownedSalons: { select: { id: true } } },
+    });
+    if (!user || user.status !== UserStatus.ACTIVE || user.deletedAt) {
+      throw this.invalidOwnerCredentials();
+    }
+    this.assertCanonicalOwnerAccount(user);
+    return user;
+  }
+
+  private assertCanonicalOwnerAccount(user: {
+    id: string;
+    roles: Array<{ role: Role; salonId: string | null }>;
+    ownedSalons: Array<{ id: string }>;
+  }): void {
+    if (!this.hasCanonicalOwnerRole(user)) {
+      throw new AppException(
+        AuthErrorCode.FORBIDDEN_ROLE,
+        'Only an authenticated shop owner can link a phone number.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+  }
+
+  private hasCanonicalOwnerRole(user: {
+    id: string;
+    roles: Array<{ role: Role; salonId: string | null }>;
+    ownedSalons: Array<{ id: string }>;
+  }): boolean {
+    const ownedSalonIds = new Set(user.ownedSalons.map(({ id }) => id));
+    return user.roles.some(
+      ({ role, salonId }) =>
+        role === Role.SALON_OWNER &&
+        salonId !== null &&
+        ownedSalonIds.has(salonId),
+    );
+  }
+
+  private invalidOwnerCredentials(): AppException {
+    return new AppException(
+      AuthErrorCode.OTP_INVALID,
+      'The verification code is invalid or expired. Request a new code and try again.',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private phoneAlreadyLinked(): AppException {
+    return new AppException(
+      AuthErrorCode.PHONE_ALREADY_LINKED,
+      'This mobile number is already linked to another account.',
+      HttpStatus.CONFLICT,
+    );
   }
 
   // ---------- Customer: Google Sign-In ----------
