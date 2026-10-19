@@ -53,7 +53,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   const tok: Record<string, string> = {};
 
   const api = (
-    method: 'get' | 'post' | 'put' | 'patch',
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     path: string,
     token?: string,
     idempotencyKey?: string,
@@ -254,9 +254,10 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   });
 
   describe('service category and subcategory API', () => {
-    it('persists salon-scoped subcategories through authenticated CRUD while retaining category and legacy rows', async () => {
+    it('persists the canonical salon-scoped tree through authenticated CRUD while retaining text and history', async () => {
       const path = `dashboard/salons/${ids.salon}/services`;
       await api('get', `dashboard/salons/${ids.otherSalon}/services`, tok.owner).expect(403);
+      await api('get', `dashboard/salons/${ids.otherSalon}/service-categories`, tok.owner).expect(403);
       const created = await api('post', path, tok.owner).send({
         name: `Taxonomy service ${run}`,
         price: 725,
@@ -264,21 +265,66 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         category: 'Hair',
         subcategory: 'Coloring',
       }).expect(201);
-      expect(created.body).toMatchObject({ category: 'Hair', subcategory: 'Coloring' });
+      expect(created.body).toMatchObject({
+        category: 'Hair', subcategory: 'Coloring',
+        categoryId: expect.any(String), subcategoryId: expect.any(String),
+      });
+
+      const tree = await api('get', `dashboard/salons/${ids.salon}/service-categories`, tok.owner).expect(200);
+      const hair = tree.body.find((category: { name: string }) => category.name === 'Hair');
+      expect(hair).toMatchObject({
+        id: created.body.categoryId,
+        subcategories: expect.arrayContaining([{ id: created.body.subcategoryId, name: 'Coloring' }]),
+      });
+
+      const idempotentCategory = await api('post', `dashboard/salons/${ids.salon}/service-categories`, tok.owner)
+        .send({ name: ' hair ' }).expect(201);
+      expect(idempotentCategory.body).toEqual({ id: created.body.categoryId, name: 'Hair' });
+      const renamedCategory = await api('patch',
+        `dashboard/salons/${ids.salon}/service-categories/${created.body.categoryId}`, tok.owner)
+        .send({ name: 'Hair Care' }).expect(200);
+      expect(renamedCategory.body).toEqual({ id: created.body.categoryId, name: 'Hair Care' });
+      expect((await prisma.service.findUniqueOrThrow({ where: { id: created.body.id } })).category).toBe('Hair Care');
+
+      const addedSubcategory = await api('post',
+        `dashboard/salons/${ids.salon}/service-categories/${created.body.categoryId}/subcategories`, tok.owner)
+        .send({ name: `Extra ${run}` }).expect(201);
+      expect(addedSubcategory.body.id).toEqual(expect.any(String));
+      const renamedSubcategory = await api('patch',
+        `dashboard/salons/${ids.salon}/service-categories/${created.body.categoryId}/subcategories/${created.body.subcategoryId}`,
+        tok.owner).send({ name: 'Color Treatment' }).expect(200);
+      expect(renamedSubcategory.body).toEqual({ id: created.body.subcategoryId, name: 'Color Treatment' });
+      expect((await prisma.service.findUniqueOrThrow({ where: { id: created.body.id } })).subcategory).toBe('Color Treatment');
+      await api('delete',
+        `dashboard/salons/${ids.salon}/service-categories/${created.body.categoryId}/subcategories/${created.body.subcategoryId}`,
+        tok.owner).expect(409);
+      await api('delete', `dashboard/salons/${ids.otherSalon}/service-categories/${created.body.categoryId}`, tok.owner)
+        .expect(403);
 
       const listed = await api('get', path, tok.owner).expect(200);
       expect(listed.body).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: created.body.id, category: 'Hair', subcategory: 'Coloring' }),
+        expect.objectContaining({ id: created.body.id, category: 'Hair Care', subcategory: 'Color Treatment' }),
         expect.objectContaining({ id: ids.haircut, subcategory: null }),
       ]));
 
       const updated = await api('patch', `${path}/${created.body.id}`, tok.owner)
         .send({ subcategory: 'Hair Color' }).expect(200);
-      expect(updated.body).toMatchObject({ category: 'Hair', subcategory: 'Hair Color' });
+      expect(updated.body).toMatchObject({ category: 'Hair Care', subcategory: 'Hair Color' });
       const cleared = await api('patch', `${path}/${created.body.id}`, tok.owner)
         .send({ subcategory: null }).expect(200);
       expect(cleared.body.subcategory).toBeNull();
+      expect(cleared.body.subcategoryId).toBeNull();
+      const historical = await prisma.service.findUniqueOrThrow({ where: { id: ids.haircut } });
+      expect(historical.category).toBeNull();
+      expect(historical.categoryId).toBeNull();
       await api('get', `dashboard/salons/${ids.salon}/services`, tok.outsider).expect(403);
+      await api('get', `dashboard/salons/${ids.salon}/service-categories`, tok.outsider).expect(403);
+
+      await api('delete',
+        `dashboard/salons/${ids.salon}/service-categories/${created.body.categoryId}/subcategories/${addedSubcategory.body.id}`,
+        tok.owner).expect(200);
+      await api('delete', `dashboard/salons/${ids.salon}/service-categories/${created.body.categoryId}`, tok.owner)
+        .expect(409); // category remains in use by the created service
     });
   });
 

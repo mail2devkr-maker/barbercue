@@ -670,6 +670,11 @@ export const createSalonServiceSchema = z.object({
   durationMinutes: z.number().int().min(5).max(480),
   category: z.string().min(1).max(60).optional(),
   subcategory: z.string().trim().min(1).max(60).optional(),
+  categoryId: z.string().uuid().optional(),
+  subcategoryId: z.string().uuid().optional(),
+}).refine((v) => !v.subcategoryId || !!v.categoryId, {
+  message: 'A subcategory ID requires its category ID',
+  path: ['categoryId'],
 });
 export type CreateSalonServiceInput = z.infer<typeof createSalonServiceSchema>;
 
@@ -684,10 +689,19 @@ export const updateSalonServiceSchema = z
     durationMinutes: z.number().int().min(5).max(480).optional(),
     category: z.string().min(1).max(60).nullable().optional(),
     subcategory: z.string().trim().min(1).max(60).nullable().optional(),
+    categoryId: z.string().uuid().nullable().optional(),
+    subcategoryId: z.string().uuid().nullable().optional(),
     isActive: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "No fields to update" });
 export type UpdateSalonServiceInput = z.infer<typeof updateSalonServiceSchema>;
+
+// Canonical salon-owned taxonomy nodes. These labels are intentionally separate from the legacy
+// free-text service fields so an owner can manage stable IDs without forcing old clients to migrate.
+export const serviceTaxonomyNodeInputSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+});
+export type ServiceTaxonomyNodeInput = z.infer<typeof serviceTaxonomyNodeInputSchema>;
 
 // "HH:mm", 24-hour. Matches exactly what OperatingHours.openTime/closeTime already store and what
 // AvailabilityService's istWallTimeToUtc parses — this is a validator for the existing format,

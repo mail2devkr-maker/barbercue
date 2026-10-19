@@ -5,6 +5,7 @@ import { createSalonServiceSchema, normalizeServiceIdentity, type CreateSalonSer
 import { PrismaService } from '../prisma/prisma.service';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { AppException } from '../common/exceptions/app.exception';
+import { ensureServiceTaxonomy } from './service-taxonomy';
 
 export interface CatalogCandidate {
   name: string;
@@ -303,8 +304,10 @@ export class ServiceCatalogImportService {
       for (const item of services) {
         const identity = normalizeServiceIdentity(item.name, item.category);
         if (known.has(identity)) { skipped.push(item.name); continue; }
+        const taxonomy = await ensureServiceTaxonomy(tx, salonId, item.category, item.subcategory);
         await tx.service.create({ data: { salonId, name: item.name, category: item.category ?? null,
           subcategory: item.subcategory ?? null,
+          categoryId: taxonomy.categoryId, subcategoryId: taxonomy.subcategoryId,
           description: item.description ?? null, price: String(item.price),
           durationMinutes: item.durationMinutes, isActive: true } });
         known.add(identity);

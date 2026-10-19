@@ -265,6 +265,9 @@ export interface ServiceDto {
   category: string;
   /** Optional category refinement. Older service records and clients may omit it. */
   subcategory?: string | null;
+  /** Stable salon-scoped taxonomy identifiers; nullable for uncategorized legacy records. */
+  categoryId?: string | null;
+  subcategoryId?: string | null;
   isActive: boolean;
 }
 
@@ -1359,9 +1362,28 @@ export interface SalonServiceDto {
   category: string | null;
   /** Optional category refinement; null for legacy services without a subcategory. */
   subcategory?: string | null;
+  /** Stable salon-scoped taxonomy identifiers; nullable for uncategorized legacy records. */
+  categoryId?: string | null;
+  subcategoryId?: string | null;
   isActive: boolean;
   // ISO-4217 of the owning salon; null when unknown. Prices are major units.
   currency: string | null;
+}
+
+export interface SalonServiceSubcategoryDto {
+  id: string;
+  name: string;
+}
+
+export interface SalonServiceCategoryDto {
+  id: string;
+  name: string;
+  subcategories: SalonServiceSubcategoryDto[];
+}
+
+export interface ServiceTaxonomyNodeDto {
+  id: string;
+  name: string;
 }
 
 // Owner-facing chair. ChairOptionDto (above) stays the queue dashboard's lighter read model;
