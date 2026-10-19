@@ -272,6 +272,20 @@ maybe('Owner operations (e2e, disposable local database)', () => {
             status: 'WAITING',
           });
         });
+
+      const paged = await api(
+        'get',
+        `dashboard/salons/${ids.salon}/customers/${ids.cust1}/history?limit=1`,
+        tok.owner,
+      ).expect(200);
+      expect(paged.body.nextCursor).toEqual(expect.any(String));
+      const [payload, signature] = paged.body.nextCursor.split('.');
+      const tamperedCursor = `${payload}.${signature[0] === 'a' ? 'b' : 'a'}${signature.slice(1)}`;
+      await api(
+        'get',
+        `dashboard/salons/${ids.salon}/customers/${ids.cust1}/history?limit=1&cursor=${encodeURIComponent(tamperedCursor)}`,
+        tok.owner,
+      ).expect(400);
     });
 
     it('denies customer and unrelated-salon owner access to customer visit history', async () => {

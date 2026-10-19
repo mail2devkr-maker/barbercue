@@ -41,7 +41,7 @@ status?         PENDING_PAYMENT | CONFIRMED | WAITING | CALLED | IN_SERVICE |
 from?, to?      inclusive YYYY-MM-DD dates in the salon's configured timezone
 ```
 
-`from` must not be after `to`; the maximum closed date range is 366 calendar days. Cursor continuation is valid only for the same salon, customer, and filters. Ordering uses event instant descending and deterministic source/id tie-breakers.
+`from` must not be after `to`; the maximum closed date range is 366 calendar days. Cursor continuation is valid only for the same authenticated actor, salon, customer, and filters. The opaque cursor is HMAC-signed with a domain-separated key derived from the server access-token secret; tampering or cross-scope replay is rejected. If the signing secret is missing or too short, a page that needs a cursor fails closed with `503 CUSTOMER_HISTORY_CURSOR_UNAVAILABLE`. Ordering uses event instant descending and deterministic source/id tie-breakers.
 
 Response shape:
 
@@ -79,6 +79,7 @@ Invoice amounts, discounts, and payments/refunds are serialized as decimal strin
 - `403 SALON_ACCESS_DENIED`: actor is not authorized for the salon/customer CRM route.
 - `404 BOOKING_NOT_FOUND`: no visits exist for that account at this salon.
 - `422 SALON_TIMEZONE_REQUIRED`: the salon has no usable timezone for local-date filtering.
+- `503 CUSTOMER_HISTORY_CURSOR_UNAVAILABLE`: secure cursor signing or verification cannot be performed because server signing configuration is unavailable.
 
 No mutation is performed by these routes; idempotency keys are not applicable. There is no feature flag or external provider dependency.
 
