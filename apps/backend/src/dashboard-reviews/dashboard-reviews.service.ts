@@ -2,8 +2,13 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   ReviewErrorCode,
+  ReviewSource,
+  ReviewSourceState,
   type OwnerReviewDto,
-  type PaginatedResult,
+  type OwnerReviewsResponseDto,
+  type ReviewProfilesResponseDto,
+  type ReviewSourceDto,
+  type UpdateReviewProfilesInput,
 } from '@barbercue/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
@@ -42,8 +47,19 @@ export class DashboardReviewsService {
     salonId: string,
     cursor: string | undefined,
     limitRaw: string | undefined,
-  ): Promise<PaginatedResult<OwnerReviewDto>> {
+    sourceRaw?: string,
+  ): Promise<OwnerReviewsResponseDto> {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const source = this.resolveSource(sourceRaw);
+    const profile = await this.prisma.salonReviewProfile.findUnique({
+      where: { salonId },
+    });
+    const sources = this.toSources(profile);
+    if (source !== ReviewSource.FASTQUE) {
+      // V1 stores vetted outbound links only. Do not imply provider connectivity or fabricate
+      // third-party review rows while external OAuth/API integrations remain unconfigured.
+      return { source, sources, items: [], nextCursor: null };
+    }
     const limit = this.resolveLimit(limitRaw);
 
     const reviews = await this.prisma.review.findMany({
@@ -56,9 +72,69 @@ export class DashboardReviewsService {
     const hasMore = reviews.length > limit;
     const page = hasMore ? reviews.slice(0, limit) : reviews;
     return {
+      source,
+      sources,
       items: page.map((r) => this.toOwnerDto(r)),
       nextCursor: hasMore ? page[page.length - 1].id : null,
     };
+  }
+
+  async getReviewProfiles(
+    userId: string,
+    salonId: string,
+  ): Promise<ReviewProfilesResponseDto> {
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const profile = await this.prisma.salonReviewProfile.findUnique({
+      where: { salonId },
+    });
+    return { sources: this.toSources(profile) };
+  }
+
+  async updateReviewProfiles(
+    userId: string,
+    salonId: string,
+    input: UpdateReviewProfilesInput,
+  ): Promise<ReviewProfilesResponseDto> {
+    await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
+    const update: Prisma.SalonReviewProfileUpdateInput = {};
+    const changedProviders: string[] = [];
+    if (input.googleUrl !== undefined) {
+      update.googleUrl = input.googleUrl;
+      changedProviders.push(ReviewSource.GOOGLE);
+    }
+    if (input.facebookUrl !== undefined) {
+      update.facebookUrl = input.facebookUrl;
+      changedProviders.push(ReviewSource.FACEBOOK);
+    }
+    if (input.instagramUrl !== undefined) {
+      update.instagramUrl = input.instagramUrl;
+      changedProviders.push(ReviewSource.INSTAGRAM);
+    }
+
+    const profile = await this.prisma.$transaction(async (tx) => {
+      const saved = await tx.salonReviewProfile.upsert({
+        where: { salonId },
+        create: {
+          salonId,
+          googleUrl: input.googleUrl ?? null,
+          facebookUrl: input.facebookUrl ?? null,
+          instagramUrl: input.instagramUrl ?? null,
+        },
+        update,
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: userId,
+          action: 'SALON_REVIEW_PROFILES_UPDATED',
+          entityType: 'SalonReviewProfile',
+          entityId: salonId,
+          // URLs are intentionally omitted from immutable audit metadata.
+          metadata: { salonId, changedProviders },
+        },
+      });
+      return saved;
+    });
+    return { sources: this.toSources(profile) };
   }
 
   async respond(
@@ -113,6 +189,7 @@ export class DashboardReviewsService {
   private toOwnerDto(review: ReviewWithDetails): OwnerReviewDto {
     return {
       id: review.id,
+      source: ReviewSource.FASTQUE,
       bookingId: review.bookingId,
       salonId: review.salonId,
       rating: review.rating,
@@ -124,5 +201,57 @@ export class DashboardReviewsService {
       customerEmail: review.booking.customer?.email ?? null,
       serviceName: review.booking.service.name,
     };
+  }
+
+  private resolveSource(
+    sourceRaw?: string,
+  ): (typeof ReviewSource)[keyof typeof ReviewSource] {
+    const source = sourceRaw ?? ReviewSource.FASTQUE;
+    const validSources: readonly string[] = Object.values(ReviewSource);
+    if (!validSources.includes(source)) {
+      throw new AppException(
+        ReviewErrorCode.INVALID_REVIEW_SOURCE,
+        'Review source is not supported.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return source as (typeof ReviewSource)[keyof typeof ReviewSource];
+  }
+
+  private toSources(
+    profile: {
+      googleUrl: string | null;
+      facebookUrl: string | null;
+      instagramUrl: string | null;
+    } | null,
+  ): ReviewSourceDto[] {
+    return [
+      {
+        source: ReviewSource.FASTQUE,
+        state: ReviewSourceState.CONNECTED,
+        profileUrl: null,
+      },
+      {
+        source: ReviewSource.GOOGLE,
+        state: profile?.googleUrl
+          ? ReviewSourceState.LINK_ONLY
+          : ReviewSourceState.UNAVAILABLE,
+        profileUrl: profile?.googleUrl ?? null,
+      },
+      {
+        source: ReviewSource.FACEBOOK,
+        state: profile?.facebookUrl
+          ? ReviewSourceState.LINK_ONLY
+          : ReviewSourceState.UNAVAILABLE,
+        profileUrl: profile?.facebookUrl ?? null,
+      },
+      {
+        source: ReviewSource.INSTAGRAM,
+        state: profile?.instagramUrl
+          ? ReviewSourceState.LINK_ONLY
+          : ReviewSourceState.UNAVAILABLE,
+        profileUrl: profile?.instagramUrl ?? null,
+      },
+    ];
   }
 }

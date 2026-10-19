@@ -21,6 +21,8 @@ import type {
   PrepaymentRequirement,
   QueueEntrySource,
   QueueEntryStatus,
+  ReviewSource,
+  ReviewSourceState,
   Role,
   SalonLocationProposalStatus,
   SalonLocationSource,
@@ -383,9 +385,27 @@ export interface ReviewDetailDto {
 // pattern as OwnerBookingDetailDto extending BookingDetailDto. No customer display-name for the
 // same schema-gap reason as ReviewSummaryDto above.
 export interface OwnerReviewDto extends ReviewDetailDto {
+  source: ReviewSource;
   customerPhone: string | null;
   customerEmail: string | null;
   serviceName: string;
+}
+
+export interface ReviewSourceDto {
+  source: ReviewSource;
+  state: ReviewSourceState;
+  profileUrl: string | null;
+}
+
+// Owner review list remains pagination-compatible with the existing endpoint; source metadata is
+// additive. External source selections intentionally contain no fetched review rows in V1.
+export interface OwnerReviewsResponseDto extends PaginatedResult<OwnerReviewDto> {
+  source: ReviewSource;
+  sources: ReviewSourceDto[];
+}
+
+export interface ReviewProfilesResponseDto {
+  sources: ReviewSourceDto[];
 }
 
 // ---------- Verification (Phase 18) ----------
