@@ -371,7 +371,7 @@ maybe(
             reasonCode: 'CONTACT_IMPORT_PREVIEW_ONLY',
           });
           expect(body.features.aiDescription.status).toBe('UNCONFIGURED');
-          expect(body.features.offers.status).toBe('UNCONFIGURED');
+          expect(body.features.offers.status).toBe('ENABLED');
         });
       await api('post', importPath, token['owner-b'], randomUUID())
         .send({})
