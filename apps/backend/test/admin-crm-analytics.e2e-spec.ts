@@ -224,7 +224,16 @@ describeDisposable(
         Date.now() - 30 * 24 * 60 * 60 * 1000,
       ).toISOString();
       const to = new Date(Date.now() + 60 * 1000).toISOString();
-      const query = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=1&q=${encodeURIComponent('Synthetic Lead')}`;
+      // Earlier focused E2E steps share the disposable database with this aggregate
+      // regression pass. Scope pagination to this run so their retained fixtures
+      // cannot make this test observe a false third page.
+      const query = new URLSearchParams({
+        from,
+        to,
+        limit: '1',
+        employeeId: ids.employee,
+        q: `Synthetic Lead ${run}`,
+      }).toString();
       const first = await api(
         `admin/crm/leads/page?${query}`,
         auth.platform,
