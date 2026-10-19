@@ -138,14 +138,20 @@ describe('OwnerAssistantService', () => {
   });
 
   it('rejects unsupported periods without pretending to answer them', async () => {
-    await expect(
-      service.query('owner-1', 'salon-1', {
-        question: 'What was our revenue yesterday?',
-      }),
-    ).rejects.toMatchObject({
-      code: OwnerOpsErrorCode.OWNER_ASSISTANT_QUERY_UNSUPPORTED,
-      status: HttpStatus.UNPROCESSABLE_ENTITY,
-    });
+    for (const question of [
+      'What was our revenue yesterday?',
+      'How many barbers are available next week?',
+      'Who is available on 2026-10-25?',
+      'How many appointments in 2 weeks?',
+      'अगले सप्ताह कितने ग्राहक प्रतीक्षा करेंगे?',
+    ]) {
+      await expect(
+        service.query('owner-1', 'salon-1', { question }),
+      ).rejects.toMatchObject({
+        code: OwnerOpsErrorCode.OWNER_ASSISTANT_QUERY_UNSUPPORTED,
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+      });
+    }
     expect(overviewService.getOverview).not.toHaveBeenCalled();
   });
 
