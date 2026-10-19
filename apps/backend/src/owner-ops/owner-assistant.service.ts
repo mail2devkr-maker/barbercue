@@ -11,7 +11,7 @@ import { SalonAccessService } from '../common/salon-access/salon-access.service'
 import { OwnerOverviewService } from './owner-overview.service';
 
 const NON_TODAY_PERIOD =
-  /\b(yesterday|tomorrow|last week|this week|last month|this month|last year|this year)\b|कल|पिछले सप्ताह|इस सप्ताह|पिछले महीने|इस महीने/u;
+  /\b(?:yesterday|tomorrow|last\s+(?:day|week|month|year)|this\s+(?:week|month|year)|next\s+(?:day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|next\s+\d+\s+(?:days?|weeks?|months?|years?)|coming\s+(?:day|week|month|year)|upcoming\s+(?:day|week|month|year)|in\s+\d+\s+(?:days?|weeks?|months?|years?))\b|\b20\d{2}-\d{2}-\d{2}\b|\b(?:on|for)\s+\d{1,2}(?:st|nd|rd|th)?\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b|कल|पिछले\s+(?:दिन|सप्ताह|महीने|वर्ष)|इस\s+(?:सप्ताह|महीने|वर्ष)|अगले\s+(?:दिन|सप्ताह|महीने|वर्ष)|आने\s+वाले\s+(?:दिन|सप्ताह|महीने|वर्ष)/u;
 const TODAY = /\b(today|aaj)\b|आज/u;
 
 function normalize(question: string): string {
