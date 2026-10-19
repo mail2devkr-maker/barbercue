@@ -1750,8 +1750,8 @@ model InventoryCategory {
   salon          Salon    @relation(fields: [salonId], references: [id], onDelete: Restrict)
   name           String   @db.VarChar(80)
   normalizedName String   @db.VarChar(80)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
 
   products InventoryProduct[]
 
@@ -1770,8 +1770,8 @@ model InventorySupplier {
   phone          String?  @db.VarChar(40)
   email          String?  @db.VarChar(254)
   notes          String?  @db.VarChar(500)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
 
   products  InventoryProduct[]
   movements InventoryMovement[]
@@ -1797,8 +1797,8 @@ model InventoryProduct {
   averageUnitCost  Decimal            @default(0) @db.Decimal(12, 2)
   reorderThreshold Decimal            @default(0) @db.Decimal(12, 3)
   isActive         Boolean            @default(true)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  createdAt        DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(6)
 
   movements InventoryMovement[]
 
@@ -1829,7 +1829,7 @@ model InventoryMovement {
   reference            String?               @db.VarChar(120)
   idempotencyKey       String                @db.VarChar(128)
   requestHash          String                @db.VarChar(64)
-  recordedAt           DateTime              @default(now())
+  recordedAt           DateTime              @default(now()) @db.Timestamptz(6)
 
   @@unique([salonId, idempotencyKey])
   @@index([salonId, recordedAt, id])

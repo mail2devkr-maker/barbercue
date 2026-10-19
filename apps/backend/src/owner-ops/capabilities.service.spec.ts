@@ -1,5 +1,9 @@
 import { ConfigService } from '@nestjs/config';
-import { FASTQUE_CAPABILITY_KEYS } from '@barbercue/shared';
+import { ForbiddenException } from '@nestjs/common';
+import {
+  FASTQUE_CAPABILITY_KEYS,
+  SalonDescriptionErrorCode,
+} from '@barbercue/shared';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
 import { SalonCapabilitiesService } from './capabilities.service';
 
@@ -11,7 +15,8 @@ describe('SalonCapabilitiesService', () => {
   let service: SalonCapabilitiesService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    salonAccess.assertOwnerAccess.mockResolvedValue(undefined);
     config.get.mockReturnValue(undefined);
     service = new SalonCapabilitiesService(
       salonAccess as unknown as SalonAccessService,
@@ -19,7 +24,7 @@ describe('SalonCapabilitiesService', () => {
     );
   });
 
-  it('fails closed for every feature when no feature has been activated', async () => {
+  it('reports registered provider-free features without requiring activation', async () => {
     const result = await service.getForOwner('owner-1', 'salon-1');
     expect(Object.keys(result.features).sort()).toEqual(
       [...FASTQUE_CAPABILITY_KEYS].sort(),
@@ -28,7 +33,13 @@ describe('SalonCapabilitiesService', () => {
       status: 'DISABLED',
       reasonCode: 'FEATURE_DISABLED',
     });
-    expect(result.features.inventory.status).toBe('UNCONFIGURED');
+    for (const key of ['revenueReport', 'inventory', 'locationPin'] as const) {
+      expect(result.features[key]).toEqual({
+        status: 'ENABLED',
+        reasonCode: null,
+        updatedAt: null,
+      });
+    }
     expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
       'owner-1',
       'salon-1',
@@ -36,7 +47,9 @@ describe('SalonCapabilitiesService', () => {
   });
 
   it('reports demo data as sandbox only when its explicit deployment flag is enabled', async () => {
-    config.get.mockReturnValue('true');
+    config.get.mockImplementation((key: string) =>
+      key === 'OWNER_DEMO_WORKSPACE_ENABLED' ? 'true' : undefined,
+    );
     const result = await service.getForOwner('owner-1', 'salon-1');
     expect(result.features.demoData).toEqual({
       status: 'SANDBOX',
@@ -48,10 +61,53 @@ describe('SalonCapabilitiesService', () => {
   it('does not claim unfinished provider-backed features are available', async () => {
     config.get.mockReturnValue('true');
     const result = await service.getForOwner('owner-1', 'salon-1');
-    for (const key of FASTQUE_CAPABILITY_KEYS.filter(
-      (entry) => entry !== 'demoData',
-    )) {
+    for (const key of [
+      'offers',
+      'ownerAssistant',
+      'customerAssistant',
+      'consultations',
+      'professionals',
+      'subscription',
+      'ownerEmail',
+      'socialImport',
+    ] as const) {
       expect(result.features[key].status).toBe('UNCONFIGURED');
+      expect(result.features[key].reasonCode).toBe('FEATURE_NOT_IMPLEMENTED');
     }
+    expect(result.features.aiDescription).toMatchObject({
+      status: 'UNCONFIGURED',
+      reasonCode: SalonDescriptionErrorCode.PROVIDER_NOT_CONFIGURED,
+    });
+    expect(result.features.contactImport).toMatchObject({
+      status: 'UNCONFIGURED',
+      reasonCode: 'CONTACT_IMPORT_PREVIEW_ONLY',
+    });
+  });
+
+  it.each([undefined, 'false', 'TRUE', '1', '', true])(
+    'does not enable demo for a noncanonical flag value: %s',
+    async (value) => {
+      config.get.mockReturnValue(value);
+      const result = await service.getForOwner('owner-1', 'salon-1');
+      expect(result.features.demoData.status).toBe('DISABLED');
+    },
+  );
+
+  it('rejects salon access before reading configuration or exposing capabilities', async () => {
+    const denied = new ForbiddenException();
+    salonAccess.assertOwnerAccess.mockRejectedValueOnce(denied);
+    await expect(service.getForOwner('other-owner', 'salon-1')).rejects.toBe(
+      denied,
+    );
+    expect(config.get).not.toHaveBeenCalled();
+  });
+
+  it('does not share mutable capability objects between responses', async () => {
+    const first = await service.getForOwner('owner-1', 'salon-1');
+    first.features.inventory.status = 'DISABLED';
+    first.features.offers.status = 'ENABLED';
+    const second = await service.getForOwner('owner-2', 'salon-2');
+    expect(second.features.inventory.status).toBe('ENABLED');
+    expect(second.features.offers.status).toBe('UNCONFIGURED');
   });
 });

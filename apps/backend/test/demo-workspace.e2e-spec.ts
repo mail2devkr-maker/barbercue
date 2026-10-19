@@ -355,13 +355,23 @@ maybe(
       await api('get', statusPath, token.customer).expect(403);
       await api('get', statusPath, token.staff).expect(403);
       await api('get', statusPath, token['owner-b']).expect(403);
+      await api('get', capabilitiesPath).expect(401);
+      await api('get', capabilitiesPath, token.staff).expect(403);
       await api('get', capabilitiesPath, token.customer).expect(403);
       await api('get', capabilitiesPath, token['owner-b']).expect(403);
       await api('get', capabilitiesPath, token['owner-a'])
         .expect(200)
         .expect(({ body }) => {
           expect(body.features.demoData.status).toBe('SANDBOX');
-          expect(body.features.inventory.status).toBe('UNCONFIGURED');
+          expect(body.features.inventory.status).toBe('ENABLED');
+          expect(body.features.revenueReport.status).toBe('ENABLED');
+          expect(body.features.locationPin.status).toBe('ENABLED');
+          expect(body.features.contactImport).toMatchObject({
+            status: 'UNCONFIGURED',
+            reasonCode: 'CONTACT_IMPORT_PREVIEW_ONLY',
+          });
+          expect(body.features.aiDescription.status).toBe('UNCONFIGURED');
+          expect(body.features.offers.status).toBe('UNCONFIGURED');
         });
       await api('post', importPath, token['owner-b'], randomUUID())
         .send({})
