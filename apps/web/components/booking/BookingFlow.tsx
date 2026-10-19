@@ -19,12 +19,22 @@ import {
   type CancelBookingResponseDto,
   type CustomerCreditBalanceDto,
   type OperatingHoursDto,
+  type PublicOfferDto,
   type ServiceDto,
   type StaffOptionDto,
   formatBookingArrivalTime,
   formatMoney,
   formatZonedDateTime,
 } from "@barbercue/shared";
+import {
+  appliesToServices,
+  customerOfferErrorText,
+  estimateFor,
+  findPublicOffer,
+  isOfferError,
+  offerDiscountText,
+  validUntilText,
+} from "../../lib/public-offers";
 import { apiFetch, ApiError } from "../../lib/api";
 import { newIdempotencyKey } from "../../lib/idempotency";
 import { useAuth } from "../../lib/auth-context";
@@ -74,6 +84,8 @@ export function BookingFlow({
   initialServiceIds,
   initialStaffId,
   campaignKey,
+  offerId,
+  offerCity,
 }: {
   salonId: string;
   services: ServiceDto[];
@@ -102,10 +114,40 @@ export function BookingFlow({
   // Identifies this shop for a campaign code remembered from a shared link (lib/campaign-token.ts). When a valid, unexpired
   // code exists for this shop it is sent as the optional `attributionToken`; the server alone decides whether it counts.
   campaignKey?: string;
+  // An offer chosen on the public Offers page (?offer=). It is looked up in the public offer list of `offerCity` (the city slug the
+  // customer searched with) and, when found for this shop, sent as `offerId`. The server alone decides eligibility and the price.
+  offerId?: string;
+  offerCity?: string;
 }) {
   const { status: authStatus, user, googleLogin } = useAuth();
   const isCustomerSession = hasCustomerBookingSession(authStatus, user);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(initialServiceIds ?? []);
+  const [offer, setOffer] = useState<PublicOfferDto | null>(null);
+  const [offerChecked, setOfferChecked] = useState(false);
+  const [offerDropped, setOfferDropped] = useState(false);
+  const [offerRefused, setOfferRefused] = useState(false);
+  const activeOffer = offer && !offerDropped ? offer : null;
+
+  useEffect(() => {
+    if (!offerId || !offerCity) return;
+    let cancelled = false;
+    void Promise.resolve().then(async () => {
+      try {
+        const found = await findPublicOffer(
+          (cursor) => apiFetch<{ items: PublicOfferDto[]; nextCursor: string | null }>(`offers?${new URLSearchParams({ city: offerCity, limit: "50", ...(cursor ? { cursor } : {}) }).toString()}`),
+          offerId,
+        );
+        if (!cancelled) setOffer(found && found.salon.id === salonId ? found : null);
+      } catch {
+        // No offer is applied when it cannot be read; the booking itself is unaffected.
+      } finally {
+        if (!cancelled) setOfferChecked(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [offerId, offerCity, salonId]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null | undefined>(initialStaffId);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotDto | null>(null);
@@ -190,7 +232,7 @@ export function BookingFlow({
   const idempotencyKey = useMemo(
     () => newIdempotencyKey(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedServiceIds.join(","), selectedStaffId, selectedDate, selectedSlot?.slotStart],
+    [selectedServiceIds.join(","), selectedStaffId, selectedDate, selectedSlot?.slotStart, activeOffer?.id],
   );
 
   // Multi-service booking core mission — toggling any service is a materially different selection:
@@ -304,6 +346,7 @@ export function BookingFlow({
           ...(selectedStyleName ? { selectedStyleName } : {}),
           ...(creditsToRedeem > 0 ? { creditsToRedeem } : {}),
           ...(attributionToken ? { attributionToken } : {}),
+          ...(activeOffer ? { offerId: activeOffer.id } : {}),
         }),
       });
       // One shared link counts for one booking; a later, unrelated booking in this tab is not attributed to it.
@@ -343,7 +386,8 @@ export function BookingFlow({
       // A failed create (e.g. SLOT_FULL) never reaches the redemption step at all — the whole
       // transaction rolls back — so the wallet balance is genuinely untouched and doesn't need
       // re-fetching here.
-      setSubmitError(err instanceof ApiError ? err.message : "Could not create the booking. Please try again.");
+      if (err instanceof ApiError && isOfferError(err.code)) setOfferRefused(true);
+      setSubmitError(err instanceof ApiError ? customerOfferErrorText(err.code, err.message) : "Could not create the booking. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -450,7 +494,13 @@ export function BookingFlow({
               </strong>
             </p>
           )}
-          {(booking.onlineBookingDiscountPercent ?? 0) > 0 && (
+          {booking.offerTitle && (
+            <p className={styles.summaryLine}>
+              <strong>Offer applied: {booking.offerTitle}.</strong>
+              {(booking.onlineBookingDiscountAmount ?? 0) > 0 && <> You save {formatMoney(booking.onlineBookingDiscountAmount ?? 0, currency, countryCode)}.</>}
+            </p>
+          )}
+          {(booking.onlineBookingDiscountPercent ?? 0) > 0 && !booking.offerTitle && (
             <p className={styles.summaryLine}>
               <strong>{booking.onlineBookingDiscountPercent}% FastQue booking offer:</strong>{" "}
               {formatMoney(booking.servicePrice, currency, countryCode)} →{" "}
@@ -637,7 +687,35 @@ export function BookingFlow({
               </>
             );
           })()}
-          {onlineBookingDiscountPercent > 0 && (
+          {offerId && offerChecked && !offer && !offerDropped && (
+            <p className={styles.summaryLine}>The offer you chose is not available for this shop any more, so this booking uses the normal price.</p>
+          )}
+          {activeOffer && (() => {
+            const est = estimateFor(activeOffer, selectedServiceIds);
+            return (
+              <div className={styles.summaryLine} data-testid="offer-applied">
+                <strong>{activeOffer.title}</strong> — {offerDiscountText(activeOffer)}, {validUntilText(activeOffer.validTo)}.
+                {est && est.discount > 0 && (
+                  <>
+                    {" "}About {formatMoney(est.subtotal, currency, countryCode)} → {formatMoney(est.total, currency, countryCode)} for your services.
+                  </>
+                )}
+                {!appliesToServices(activeOffer, selectedServiceIds) && selectedServiceIds.length > 0 && (
+                  <> It does not cover every service you chose, so FastQue may not accept it.</>
+                )}
+                {" "}This replaces the usual website booking discount. The final price is confirmed by FastQue when you book.
+                {offerRefused && (
+                  <>
+                    {" "}
+                    <Button type="button" variant="outline" onClick={() => { setOfferDropped(true); setOfferRefused(false); setSubmitError(null); }}>
+                      Book without this offer
+                    </Button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+          {!activeOffer && onlineBookingDiscountPercent > 0 && (
             <p className={styles.summaryLine}>
               <strong>{onlineBookingDiscountPercent}% FastQue booking offer applied.</strong>
             </p>

@@ -6,6 +6,7 @@ import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { BookingFlow } from "../../../../components/booking/BookingFlow";
 import { CampaignCapture } from "../../../../components/booking/CampaignCapture";
 import { salonKey } from "../../../../lib/campaign-token";
+import { isOfferId } from "../../../../lib/public-offers";
 import { EditorialImage } from "../../../../components/editorial/EditorialImage";
 import { PublicSalonStatus } from "../../../../components/discovery/PublicSalonStatus";
 import styles from "./book.module.css";
@@ -23,10 +24,10 @@ export default async function BookPage({
   searchParams,
 }: {
   params: Promise<BookPageParams>;
-  searchParams: Promise<{ city?: string; country?: string; style?: string; serviceId?: string; staffId?: string }>;
+  searchParams: Promise<{ city?: string; country?: string; style?: string; serviceId?: string; staffId?: string; offer?: string }>;
 }) {
   const { salonSlug } = await params;
-  const { city, country, style, serviceId, staffId } = await searchParams;
+  const { city, country, style, serviceId, staffId, offer } = await searchParams;
   // Multi-service booking core mission — `serviceId` accepts a comma-separated list (set by
   // rebookUrl/AI Style Advisor hand-off) so "Book again" can carry a previous appointment's
   // COMPLETE service selection, not just its first service. A bare single id still works
@@ -71,6 +72,9 @@ export default async function BookPage({
       <CampaignCapture salonKey={campaignKey} />
       <BookingFlow
         campaignKey={campaignKey}
+        // An offer chosen on the public Offers page; the booking flow looks it up and the server decides eligibility.
+        offerId={isOfferId(offer) ? offer : undefined}
+        offerCity={city}
         salonId={salon.id}
         services={salon.services}
         operatingHours={salon.operatingHours}
