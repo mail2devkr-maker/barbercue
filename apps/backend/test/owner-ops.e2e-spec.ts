@@ -53,7 +53,7 @@ maybe('Owner operations (e2e, disposable local database)', () => {
   const tok: Record<string, string> = {};
 
   const api = (
-    method: 'get' | 'post' | 'put' | 'patch',
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete',
     path: string,
     token?: string,
     idempotencyKey?: string,
