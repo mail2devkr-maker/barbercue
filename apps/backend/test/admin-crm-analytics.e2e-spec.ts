@@ -1,3 +1,288 @@
-1ëa¡Ñ1qêmŠ‰ËŠw¶EæYS{i²Ä^¦VœyÈZ¯]þr«×G!j½t
-‰ïx&§ž‹\¢{Þ®Ö«‚éžžÚ%t(Z¯­†ö¥¹çè­©•§¶‹r¥ä²²×¦
-«	©ç¢×(ž÷«¶ö¥¹ëh·*^K+-z`¡j±+®ŠÒ¶¸§‚k¬µ·žÅ§-—*'yÈZ­§-z¹hž–×÷'B²&æFöÕUT”BÒg&öÒv7'—Fòs°¦–×÷'B²”æW7DÆ–6F–öâÒg&öÒtæW7F§2ö6öÖÖöâs°¦–×÷'B²FW7BÂFW7F–ætÖöGVÆRÒg&öÒtæW7F§2÷FW7F–ærs°¦–×÷'B&WVW7Bg&öÒw7WW'FW7Bs°¦–×÷'BG—R²Òg&öÒw7WW'FW7B÷G—W2s°¦–×÷'B°¢7&ÔföÆÆ÷uW6†ææVÂÀ¢7&ÔföÆÆ÷uW7FGW2À¢7&ÔÆVE6÷W&6RÀ¢7&ÔÆVE7FGW2À¢7&Õf—6—D÷WF6öÖRÀ¢&öÆRÀ¢6W76–öäVF–Væ6RÀ¢W6W%7FGW2À§Òg&öÒt&&&W&7VR÷6†&VBs°¦–×÷'B²ÖöGVÆRÒg&öÒrââ÷7&2öæÖöGVÆRs°¦–×÷'B²ÆÄW†6WF–öç4f–ÇFW"Òg&öÒrââ÷7&2ö6öÖÖöâöf–ÇFW'2öÆÂÖW†6WF–öç2æf–ÇFW"s°¦–×÷'B²Fö¶Vå6W'f–6RÒg&öÒrââ÷7&2öWF‚÷6W'f–6W2÷Fö¶Vâç6W'f–6Rs°¦–×÷'B²&—6Ö6W'f–6RÒg&öÒrââ÷7&2÷&—6Ö÷&—6Öç6W'f–6Rs° ¦6öç7BFF&6UW&ÂÒ‚‚’Óâ°¢G'’°¢&WGW&âæWrU$Â‡&ö6W72æVçbäDD$4UõU$Âóòrr“°¢Ò6F6‚°¢&WGW&âçVÆÃ°¢Ð§Ò’‚“°¦6öç7BF—7÷6&ÆTF"Ð¢²s#rãããrÂvÆö6Æ†÷7BuÒæ–æ6ÇVFW2†FF&6UW&Ãòæ†÷7FæÖRóòrr’b`¢FF&6UW&ÃòçF†æÖRÓÓÒrö÷væW%ö÷5ö6†–âs°¦6öç7B&÷fVE'VææW"Ð¢&ö6W72æVçbät•D…T%ô5D”ôå2ÓÓÒwG'VRrÇÀ¢&ö6W72æVçbäÄÄõuôDÔ”åô5$ÕôäÅ•D”55ôS$RÓÓÒw–W2s°¦6öç7BFW67&–&TF—7÷6&ÆRÐ¢F—7÷6&ÆTF"bb&÷fVE'VææW"òFW67&–&R¢FW67&–&Rç6¶—° ¦FW67&–&TF—7÷6&ÆR€¢wÆFf÷&ÒFÖ–â5$ÒæÇ—F–72†WF†VçF–6FVBF—7÷6&ÆR÷7Fw&U5Â’rÀ¢‚’Óâ°¢ÆWB¢”æW7DÆ–6F–öãÄã°¢ÆWB&—6Ö¢&—6Ö6W'f–6S°¢ÆWBFö¶Vç3¢Fö¶Vå6W'f–6S°¢6öç7B'VâÒ&æFöÕUT”B‚“°¢6öç7BWFƒ¢&V6÷&CÇ7G&–ærÂ7G&–æsâÒ·Ó°¢6öç7B–G3¢&V6÷&CÇ7G&–ærÂ7G&–æsâÒ·Ó° ¢6öç7B’Ò‡Fƒ¢7G&–ærÂFö¶Vãó¢7G&–ær’Óâ°¢6öç7B&WÒ&WVW7B†ævWD‡GG6W'fW"‚’’ævWB†ö’÷còG·F‡Ö“°¢–b‡Fö¶Vâ’&Wç6WB‚tWF†÷&—¦F–öârÂ&V&W"G·Fö¶VçÖ“°¢&WGW&â&W°¢Ó° ¢7–æ2gVæ7F–öâ7&VFT66÷VçB€¢Æ&VÃ¢7G&–ærÀ¢&öÆS¢&öÆRÀ¢VF–Væ6S¢6W76–öäVF–Væ6RÀ¢’°¢6öç7BW6W"Òv—B&—6ÖçW6W"æ7&VFR‡°¢FF¢°¢VÖ–Ã¢FÖ–âÖ7&ÒÒG·'VçÒÒG¶Æ&VÇÔW†×ÆRçFW7FÀ¢VÖ–ÅfW&–f–VDC¢æWrFFR‚’À¢7FGW3¢W6W%7FGW2ä5D•dRÀ¢ÒÀ¢Ò“°¢v—B&—6ÖçW6W%&öÆRæ7&VFR‡°¢FF¢²W6W$–C¢W6W"æ–BÂ&öÆRÂ6Æöä–C¢çVÆÂÒÀ¢Ò“°¢WF…¶Æ&VÅÒÒFö¶Vç2ç6–vä66W75Fö¶Vâ‡W6W"æ–BÂ·&öÆUÒÂVF–Væ6R“°¢&WGW&âW6W#°¢Ð ¢&Vf÷&TÆÂ†7–æ2‚’Óâ°¢6öç7BÖöGVÆTf—‡GW&S¢FW7F–ætÖöGVÆRÒv—BFW7Bæ7&VFUFW7F–ætÖöGVÆR‡°¢–×÷'G3¢´ÖöGVÆUÒÀ¢Ò’æ6ö×–ÆR‚“°¢ÒÖöGVÆTf—‡GW&Ræ7&VFTæW7DÆ–6F–öâ‚“°¢ç6WDvÆö&Å&Vf—‚‚v’÷cr“°¢çW6TvÆö&Äf–ÇFW'2†æWrÆÄW†6WF–öç4f–ÇFW"‚’“°¢v—Bæ–æ—B‚“°¢&—6ÖÒævWB…&—6Ö6W'f–6R“°¢Fö¶Vç2ÒævWB…Fö¶Vå6W'f–6R“° ¢6öç7BFÖ–âÒv—B7&VFT66÷VçB€¢wÆFf÷&ÒrÀ¢&öÆRåÄDdõ$ÕôDÔ”âÀ¢6W76–öäVF–Væ6RäDÔ”âÀ¢“°¢6öç7B6ôf÷VæFW"Òv—B7&VFT66÷VçB€¢v6öf÷VæFW"rÀ¢&öÆRä4õôdõTäDU"À¢6W76–öäVF–Væ6RäDÔ”âÀ¢“°¢v—B7&VFT66÷VçB‚v7W7FöÖW"rÂ&öÆRä5U5DôÔU"Â6W76–öäVF–Væ6Rä5U5DôÔU"“° ¢6öç7BV×Æ÷–VUW6W"Òv—B&—6ÖçW6W"æ7&VFR‡°¢FF¢°¢VÖ–Ã¢FÖ–âÖ7&ÒÒG·'VçÒÖV×Æ÷–VTW†×ÆRçFW7FÀ¢VÖ–ÅfW&–f–VDC¢æWrFFR‚’À¢7FGW3¢W6W%7FGW2ä5D•dRÀ¢ÒÀ¢Ò“°¢6öç7BV×Æ÷–VRÒv—B&—6ÖæV×Æ÷–VU&öf–ÆRæ7&VFR‡°¢FF¢°¢W6W$–C¢V×Æ÷–VUW6W"æ–BÀ¢V×Æ÷–VT6öFS¢eÔdRÒG·'Vâç6Æ–6RƒÂ‚—ÖÀ¢gVÆÄæÖS¢u7–çF†WF–25$ÒW†V7WF—fRrÀ¢FW'&—F÷'“¢7–çF†WF–2FW'&—F÷'’G·'Vâç6Æ–6RƒÂb—ÖÀ¢ÒÀ¢Ò“°¢–G2æFÖ–âÒFÖ–âæ–C°¢–G2æ6öf÷VæFW"Ò6ôf÷VæFW"æ–C°¢–G2æV×Æ÷–VRÒV×Æ÷–VRæ–C° ¢6öç7Bæ÷rÒæWrFFR‚“°¢6öç7BÆVDÒv—B&—6ÖæV×Æ÷–VT7&ÔÆVBæ7&VFR‡°¢FF¢°¢V×Æ÷–VU&öf–ÆT–C¢V×Æ÷–VRæ–BÀ¢6†÷æÖS¢7–çF†WF–2ÆVBG·'VçÖÀ¢6—G“¢uFærÀ¢6÷W&6S¢7&ÔÆVE6÷W&6Räd”TÄEõd•4•BÀ¢7FGW3¢7&ÔÆVE7FGW2äôä$ô$DTBÀ¢7&VFVDC¢æWrFFR†æ÷rævWEF–ÖR‚’Ò2¢#B¢c¢c¢’À¢WFFVDC¢æWrFFR†æ÷rævWEF–ÖR‚’Ò"¢#B¢c¢c¢’À¢öæ&ö&FVDC¢æWrFFR†æ÷rævWEF–ÖR‚’Ò#B¢c¢c¢’À¢ÒÀ¢Ò“°¢6öç7BÆVD"Òv—B&—6ÖæV×Æ÷–VT7&ÔÆVBæ7&VFR‡°¢FF¢°¢V×Æ÷–VU&öf–ÆT–C¢V×Æ÷–VRæ–BÀ¢6†÷æÖS¢7–çF†WF–2ÆVB"G·'VçÖÀ¢6—G“¢t†¦—W"rÀ¢6÷W&6S¢7&ÔÆVE6÷W&6Räd”TÄEõd•4•BÀ¢7FGW3¢7&ÔÆVE7FGW2ääUrÀ¢7&VFVDC¢æWrFFR†æ÷rævWEF–ÖR‚’Ò"¢#B¢c¢c¢’À¢WFFVDC¢æWrFFR†æ÷rævWEF–ÖR‚’Òc¢c¢’À¢ÒÀ¢Ò“°¢–G2æÆVDÒÆVDæ–C°¢–G2æÆVD"ÒÆVD"æ–C° ¢6öç7Bf—6—BÒv—B&—6ÖæV×Æ÷–VT7&Õf—6—Bæ7&VFR‡°¢FF¢°¢V×Æ÷–VU&öf–ÆT–C¢V×Æ÷–VRæ–BÀ¢ÆVD–C¢ÆVDæ–BÀ¢6†÷æÖS¢ÆVDç6†÷æÖRÀ¢f—6—FVDC¢æWrFFR†æ÷rævWEF–ÖR‚’Ò"¢c¢c¢’À¢÷WF6öÖS¢7&Õf—6—D÷WF6öÖRä”åDU$U5DTBÀ¢æ÷FW3¢u7–çF†WF–2f—6—Bæ÷FRrÀ¢ÒÀ¢Ò“°¢–G2çf—6—BÒf—6—Bæ–C° ¢6öç7B÷fW&GVRÒv—B&—6ÖæV×Æ÷–VT7&ÔföÆÆ÷uWæ7&VFR‡°¢FF¢°¢V×Æ÷–VU&öf–ÆT–C¢V×Æ÷–VRæ–BÀ¢ÆVD–C¢ÆVDæ–BÀ¢GVTC¢æWrFFR†æ÷rævWEF–ÖR‚’Òc¢c¢’À¢6†ææVÃ¢7&ÔföÆÆ÷uW6†ææVÂä4ÄÂÀ¢7FGW3¢7&ÔföÆÆ÷uW7FGW2äõTâÀ¢ÒÀ¢Ò“°¢6öç7B6ö×ÆWFVBÒv—B&—6ÖæV×Æ÷–VT7&ÔföÆÆ÷uWæ7&VFR‡°¢FF¢°¢V×Æ÷–VU&öf–ÆT–C¢V×Æ÷–VRæ–BÀ¢ÆVD–C¢ÆVD"æ–BÀ¢GVTC¢æWrFFR†æ÷rævWEF–ÖR‚’Ò"¢c¢c¢’À¢6†ææVÃ¢7&ÔföÆÆ÷uW6†ææVÂäTÔ”ÂÀ¢7FGW3¢7&ÔföÆÆ÷uW7FGW2ä4ôÕÄUDTBÀ¢6ö×ÆWFVDC¢æWrFFR†æ÷rævWEF–ÖR‚’Ò3¢c¢’À¢ÒÀ¢Ò“°¢–G2æ÷fW&GVRÒ÷fW&GVRæ–C°¢–G2æ6ö×ÆWFVBÒ6ö×ÆWFVBæ–C°¢ÒÂ#ó“° ¢gFW$ÆÂ†7–æ2‚’Óâ°¢v—Bòæ6Æ÷6R‚“°¢Ò“° ¢—B‚v¶VW2W†—7F–ær5$Ò'&’66W72v†–ÆR&÷FV7F–ær6ö×ÆWFR†—7F÷'’æBæÇ—F–72rÂ7–æ2‚’Óâ°¢v—B’‚vFÖ–âö7&ÒöæÇ—F–72r’æW‡V7BƒC“°¢v—B’€¢vFÖ–âö7&ÒöæÇ—F–73ög&öÓÓ##bÓÓC££ã¢gFóÓ##bÓÓ#C££ã¢rÀ¢WF‚æ6öf÷VæFW"À¢’æW‡V7BƒC2“°¢v—B’‚vFÖ–âö7&ÒöÆVG2÷vSöÆ–Ö—CÓ#rÂWF‚æ7W7FöÖW"’æW‡V7BƒC2“°¢v—B’‚vFÖ–âö7&ÒöÆVG2rÂWF‚æ6öf÷VæFW"’æW‡V7Bƒ#“° ¢6öç7Bg&öÒÒæWrFFR€¢FFRææ÷r‚’Ò3¢#B¢c¢c¢À¢’çFô•4õ7G&–ær‚“°¢6öç7BFòÒæWrFFR„FFRææ÷r‚’²c¢’çFô•4õ7G&–ær‚“°¢6öç7BæÇ—F–72Òv—B’€¢FÖ–âö7&ÒöæÇ—F–73öV×Æ÷–VT–CÒG¶Væ6öFUU$”6ö×öæVçB†–G2æV×Æ÷–VR—Òfg&öÓÒG¶Væ6öFUU$”6ö×öæVçB†g&öÒ—ÒgFóÒG¶Væ6öFUU$”6ö×öæVçB‡Fò—ÖÀ¢WF‚çÆFf÷&ÒÀ¢’æW‡V7Bƒ#“°¢W‡V7B†æÇ—F–72æ&öG’çF÷FÇ2’çFôÖF6„ö&¦V7B‡°¢ÆVG47&VFVC¢"À¢öæ&ö&FVDg&öÕW&–öDÆVG3¢À¢ÆVG4öæ&ö&FVD–åW&–öC¢À¢f—6—G3¢À¢föÆÆ÷uW46ö×ÆWFVC¢À¢÷VäföÆÆ÷uW4÷fW&GVT–åW&–öC¢À¢Ò“°¢W‡V7B†æÇ—F–72æ&öG’æV×Æ÷–VW2’çFôWVÂ…°¢W‡V7Bæö&¦V7D6öçF–æ–ær‡°¢V×Æ÷–VT–C¢–G2æV×Æ÷–VRÀ¢ÆVG47&VFVC¢"À¢öæ&ö&FVDg&öÕW&–öDÆVG3¢À¢6öçfW'6–öåW&6VçC¢SÀ¢Ò’À¢Ò“°¢W‡V7B†æÇ—F–72æ&öG’æV×Æ÷–VW5³Ò’ææ÷BçFô†fU&÷W'G’‚vgVÆÄæÖRr“°¢W‡V7B†æÇ—F–72æ&öG’æV×Æ÷–VW5³Ò’ææ÷BçFô†fU&÷W'G’‚vVÖ–Âr“°¢W‡V7B†æÇ—F–72æ&öG’æV×Æ÷–VW5³Ò’ææ÷BçFô†fU&÷W'G’‚w†öæRr“°¢v—B’€¢vFÖ–âö7&ÒöæÇ—F–73ög&öÓÓ##BÓÓC££ã¢gFóÓ##bÓÓ#C££ã¢rÀ¢WF‚çÆFf÷&ÒÀ¢’æW‡V7BƒC“°¢Ò“° ¢—B‚wvW2ÆVG2v—F†÷WBGWÆ–6FW2æB&V¦V7G27W'6÷'2W6VBv—F‚F–ffW&VçBf–ÇFW'2rÂ7–æ2‚’Óâ°¢6öç7Bg&öÒÒæWrFFR€¢FFRææ÷r‚’Ò3¢#B¢c¢c¢À¢’çFô•4õ7G&–ær‚“°¢6öç7BFòÒæWrFFR„FFRææ÷r‚’²c¢’çFô•4õ7G&–ær‚“°¢òòV&Æ–W"fö7W6VBS$R7FW26†&RF†RF—7÷6&ÆRFF&6Rv—F‚F†—2vw&VvFP¢òò&Vw&W76–öâ72â66÷Rv–æF–öâFòF†—2'Vâ6òF†V—"&WF–æVBf—‡GW&W0¢òò6ææ÷BÖ¶RF†—2FW7Bö'6W'fRfÇ6RF†—&BvRà¢6öç7BVW'’ÒæWrU$Å6V&6…&×2‡°¢g&öÒÀ¢FòÀ¢Æ–Ö—C¢srÀ¢V×Æ÷–VT–C¢–G2æV×Æ÷–VRÀ¢òòF†Rf—‡GW&RæÖW2–æ6ÇVFRf&–çB&WGvVVâ$ÆVB"æBF†R'VâÖ&¶W"à¢òò6V&6‚'’F†RVæ—VRUT”B—G6VÆbv†–ÆR&–æF–ærF†RV×Æ÷–VRf–ÇFW"Föòà¢¢'VâÀ¢Ò’çFõ7G&–ær‚“°¢6öç7Bf—'7BÒv—B’€¢FÖ–âö7&ÒöÆVG2÷vSòG·VW'—ÖÀ¢WF‚çÆFf÷&ÒÀ¢’æW‡V7Bƒ#“°¢W‡V7B†f—'7Bæ&öG’æ—FV×2’çFô†fTÆVæwF‚ƒ“°¢W‡V7B†f—'7Bæ&öG’ææW‡D7W'6÷"’çFôWVÂ†W‡V7Bæç’…7G&–ær’“°¢6öç7B6V6öæBÒv—B’€¢FÖ–âö7&ÒöÆVG2÷vSòG·VW'—Òf7W'6÷#ÒG¶Væ6öFUU$”6ö×öæVçB†f—'7Bæ&öG’ææW‡D7W'6÷"—ÖÀ¢WF‚çÆFf÷&ÒÀ¢’æW‡V7Bƒ#“°¢W‡V7B‡6V6öæBæ&öG’æ—FV×2’çFô†fTÆVæwF‚ƒ“°¢W‡V7B‡6V6öæBæ&öG’æ—FV×5³Òæ–B’ææ÷BçFô&R†f—'7Bæ&öG’æ—FV×5³Òæ–B“°¢W‡V7B‡6V6öæBæ&öG’ææW‡D7W'6÷"’çFô&TçVÆÂ‚“° ¢v—B’€¢FÖ–âö7&ÒöÆVG2÷vSög&öÓÒG¶Væ6öFUU$”6ö×öæVçB†g&öÒ—ÒgFóÒG¶Væ6öFUU$”6ö×öæVçB‡Fò—ÒgÔF–ffW&VçBf7W'6÷#ÒG¶Væ6öFUU$”6ö×öæVçB†f—'7Bæ&öG’ææW‡D7W'6÷"—ÖÀ¢WF‚çÆFf÷&ÒÀ¢’æW‡V7BƒC“°¢v—B’€¢FÖ–âö7&ÒöÆVG2÷vSög&öÓÒG¶Væ6öFUU$”6ö×öæVçB†g&öÒ—ÒgFóÒG¶Væ6öFUU$”6ö×öæVçB†g&öÒ—ÒfÆ–Ö—CÓÀ¢WF‚çÆFf÷&ÒÀ¢’æW‡V7BƒC“°¢Ò“° ¢—B‚vf–ÇFW'2f—6—BæBföÆÆ÷r×WvW2'’7FGW2Â6†ææVÂÂFFRæB6†÷FW‡BrÂ7–æ2‚’Óâ°¢6öç7Bg&öÒÒæWrFFR€¢FFRææ÷r‚’Ò3¢#B¢c¢c¢À¢’çFô•4õ7G&–ær‚“°¢6öç7BFòÒæWrFFR„FFRææ÷r‚’²c¢’çFô•4õ7G&–ær‚“°¢6öç7Bf—6—G2Òv—B’€¢FÖ–âö7&Ò÷f—6—G2÷vSög&öÓÒG¶Væ6öFUU$”6ö×öæVçB†g&öÒ—ÒgFóÒG¶Væ6öFUU$”6ö×öæVçB‡Fò—Òf÷WF6öÖSÒG´7&Õf—6—D÷WF6öÖRä”åDU$U5DTGÒgÕ7–çF†WF–2S#ÆVBS#À¢WF‚çÆFf÷&ÒÀ¢’æW‡V7Bƒ#“°¢W‡V7B€¢f—6—G2æ&öG’æ—FV×2æÖ‚†—FVÓ¢²–C¢7G&–ærÒ’Óâ—FVÒæ–B’À¢’çFô6öçF–â†–G2çf—6—B“° ¢6öç7BföÆÆ÷uW2Òv—B’€¢FÖ–âö7&ÒöföÆÆ÷r×W2÷vSög&öÓÒG¶Væ6öFUU$”6ö×öæVçB†g&öÒ—ÒgFóÒG¶Væ6öFUU$”6ö×öæVçB‡Fò—Òg7FGW3ÒG´7&ÔföÆÆ÷uW7FGW2äõTçÒf6†ææVÃÒG´7&ÔföÆÆ÷uW6†ææVÂä4ÄÇÒgÕ7–çF†WF–2S#ÆVBS#À¢WF‚çÆFf÷&ÒÀ¢’æW‡V7Bƒ#“°¢W‡V7B€¢föÆÆ÷uW2æ&öG’æ—FV×2æÖ‚†—FVÓ¢²–C¢7G&–ærÒ’Óâ—FVÒæ–B’À¢’çFô6öçF–â†–G2æ÷fW&GVR“°¢W‡V7B€¢föÆÆ÷uW2æ&öG’æ—FV×2æÖ‚†—FVÓ¢²–C¢7G&–ærÒ’Óâ—FVÒæ–B’À¢’ææ÷BçFô6öçF–â†–G2æ6ö×ÆWFVB“°¢Ò“°¢ÒÀ¢“°
+import { randomUUID } from 'crypto';
+import { INestApplication } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import request from 'supertest';
+import type { App } from 'supertest/types';
+import {
+  CrmFollowUpChannel,
+  CrmFollowUpStatus,
+  CrmLeadSource,
+  CrmLeadStatus,
+  CrmVisitOutcome,
+  Role,
+  SessionAudience,
+  UserStatus,
+} from '@barbercue/shared';
+import { AppModule } from '../src/app.module';
+import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
+import { TokenService } from '../src/auth/services/token.service';
+import { PrismaService } from '../src/prisma/prisma.service';
+
+const databaseUrl = (() => {
+  try {
+    return new URL(process.env.DATABASE_URL ?? '');
+  } catch {
+    return null;
+  }
+})();
+const disposableDb =
+  ['127.0.0.1', 'localhost'].includes(databaseUrl?.hostname ?? '') &&
+  databaseUrl?.pathname === '/owner_ops_chain';
+const approvedRunner =
+  process.env.GITHUB_ACTIONS === 'true' ||
+  process.env.ALLOW_ADMIN_CRM_ANALYTICS_E2E === 'yes';
+const describeDisposable =
+  disposableDb && approvedRunner ? describe : describe.skip;
+
+describeDisposable(
+  'platform admin CRM analytics (authenticated disposable PostgreSQL)',
+  () => {
+    let app: INestApplication<App>;
+    let prisma: PrismaService;
+    let tokens: TokenService;
+    const run = randomUUID();
+    const auth: Record<string, string> = {};
+    const ids: Record<string, string> = {};
+
+    const api = (path: string, token?: string) => {
+      const req = request(app.getHttpServer()).get(`/api/v1/${path}`);
+      if (token) req.set('Authorization', `Bearer ${token}`);
+      return req;
+    };
+
+    async function createAccount(
+      label: string,
+      role: Role,
+      audience: SessionAudience,
+    ) {
+      const user = await prisma.user.create({
+        data: {
+          email: `admin-crm-${run}-${label}@example.test`,
+          emailVerifiedAt: new Date(),
+          status: UserStatus.ACTIVE,
+        },
+      });
+      await prisma.userRole.create({
+        data: { userId: user.id, role, salonId: null },
+      });
+      auth[label] = tokens.signAccessToken(user.id, [role], audience);
+      return user;
+    }
+
+    beforeAll(async () => {
+      const moduleFixture: TestingModule = await Test.createTestingModule({
+        imports: [AppModule],
+      }).compile();
+      app = moduleFixture.createNestApplication();
+      app.setGlobalPrefix('api/v1');
+      app.useGlobalFilters(new AllExceptionsFilter());
+      await app.init();
+      prisma = app.get(PrismaService);
+      tokens = app.get(TokenService);
+
+      const admin = await createAccount(
+        'platform',
+        Role.PLATFORM_ADMIN,
+        SessionAudience.ADMIN,
+      );
+      const coFounder = await createAccount(
+        'cofounder',
+        Role.CO_FOUNDER,
+        SessionAudience.ADMIN,
+      );
+      await createAccount('customer', Role.CUSTOMER, SessionAudience.CUSTOMER);
+
+      const employeeUser = await prisma.user.create({
+        data: {
+          email: `admin-crm-${run}-employee@example.test`,
+          emailVerifiedAt: new Date(),
+          status: UserStatus.ACTIVE,
+        },
+      });
+      const employee = await prisma.employeeProfile.create({
+        data: {
+          userId: employeeUser.id,
+          employeeCode: `FQ-FE-${run.slice(0, 8)}`,
+          fullName: 'Synthetic CRM Executive',
+          territory: `Synthetic Territory ${run.slice(0, 6)}`,
+        },
+      });
+      ids.admin = admin.id;
+      ids.cofounder = coFounder.id;
+      ids.employee = employee.id;
+
+      const now = new Date();
+      const leadA = await prisma.employeeCrmLead.create({
+        data: {
+          employeeProfileId: employee.id,
+          shopName: `Synthetic Lead A ${run}`,
+          city: 'Patna',
+          source: CrmLeadSource.FIELD_VISIT,
+          status: CrmLeadStatus.ONBOARDED,
+          createdAt: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000),
+          updatedAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+          onboardedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+        },
+      });
+      const leadB = await prisma.employeeCrmLead.create({
+        data: {
+          employeeProfileId: employee.id,
+          shopName: `Synthetic Lead B ${run}`,
+          city: 'Hajipur',
+          source: CrmLeadSource.FIELD_VISIT,
+          status: CrmLeadStatus.NEW,
+          createdAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+          updatedAt: new Date(now.getTime() - 60 * 60 * 1000),
+        },
+      });
+      ids.leadA = leadA.id;
+      ids.leadB = leadB.id;
+
+      const visit = await prisma.employeeCrmVisit.create({
+        data: {
+          employeeProfileId: employee.id,
+          leadId: leadA.id,
+          shopName: leadA.shopName,
+          visitedAt: new Date(now.getTime() - 12 * 60 * 60 * 1000),
+          outcome: CrmVisitOutcome.INTERESTED,
+          notes: 'Synthetic visit note',
+        },
+      });
+      ids.visit = visit.id;
+
+      const overdue = await prisma.employeeCrmFollowUp.create({
+        data: {
+          employeeProfileId: employee.id,
+          leadId: leadA.id,
+          dueAt: new Date(now.getTime() - 60 * 60 * 1000),
+          channel: CrmFollowUpChannel.CALL,
+          status: CrmFollowUpStatus.OPEN,
+        },
+      });
+      const completed = await prisma.employeeCrmFollowUp.create({
+        data: {
+          employeeProfileId: employee.id,
+          leadId: leadB.id,
+          dueAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
+          channel: CrmFollowUpChannel.EMAIL,
+          status: CrmFollowUpStatus.COMPLETED,
+          completedAt: new Date(now.getTime() - 30 * 60 * 1000),
+        },
+      });
+      ids.overdue = overdue.id;
+      ids.completed = completed.id;
+    }, 120_000);
+
+    afterAll(async () => {
+      await app?.close();
+    });
+
+    it('keeps existing CRM array access while protecting complete history and analytics', async () => {
+      await api('admin/crm/analytics').expect(401);
+      await api(
+        'admin/crm/analytics?from=2026-10-01T00:00:00.000Z&to=2026-10-20T00:00:00.000Z',
+        auth.cofounder,
+      ).expect(403);
+      await api('admin/crm/leads/page?limit=20', auth.customer).expect(403);
+      await api('admin/crm/leads', auth.cofounder).expect(200);
+
+      const from = new Date(
+        Date.now() - 30 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      const to = new Date(Date.now() + 60 * 1000).toISOString();
+      const analytics = await api(
+        `admin/crm/analytics?employeeId=${encodeURIComponent(ids.employee)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        auth.platform,
+      ).expect(200);
+      expect(analytics.body.totals).toMatchObject({
+        leadsCreated: 2,
+        onboardedFromPeriodLeads: 1,
+        leadsOnboardedInPeriod: 1,
+        visits: 1,
+        followUpsCompleted: 1,
+        openFollowUpsOverdueInPeriod: 1,
+      });
+      expect(analytics.body.employees).toEqual([
+        expect.objectContaining({
+          employeeId: ids.employee,
+          leadsCreated: 2,
+          onboardedFromPeriodLeads: 1,
+          conversionPercent: 50,
+        }),
+      ]);
+      expect(analytics.body.employees[0]).not.toHaveProperty('fullName');
+      expect(analytics.body.employees[0]).not.toHaveProperty('email');
+      expect(analytics.body.employees[0]).not.toHaveProperty('phone');
+      await api(
+        'admin/crm/analytics?from=2024-01-01T00:00:00.000Z&to=2026-10-20T00:00:00.000Z',
+        auth.platform,
+      ).expect(400);
+    });
+
+    it('pages leads without duplicates and rejects cursors used with different filters', async () => {
+      const from = new Date(
+        Date.now() - 30 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      const to = new Date(Date.now() + 60 * 1000).toISOString();
+      // Earlier focused E2E steps share the disposable database with this aggregate
+      // regression pass. Scope pagination to this run so their retained fixtures
+      // cannot make this test observe a false third page.
+      const query = new URLSearchParams({
+        from,
+        to,
+        limit: '1',
+        employeeId: ids.employee,
+        // The fixture names include a variant between "Lead" and the run marker.
+        // Search by the unique UUID itself while binding the employee filter too.
+        q: run,
+      }).toString();
+      const first = await api(
+        `admin/crm/leads/page?${query}`,
+        auth.platform,
+      ).expect(200);
+      expect(first.body.items).toHaveLength(1);
+      expect(first.body.nextCursor).toEqual(expect.any(String));
+      const second = await api(
+        `admin/crm/leads/page?${query}&cursor=${encodeURIComponent(first.body.nextCursor)}`,
+        auth.platform,
+      ).expect(200);
+      expect(second.body.items).toHaveLength(1);
+      expect(second.body.items[0].id).not.toBe(first.body.items[0].id);
+      expect(second.body.nextCursor).toBeNull();
+
+      await api(
+        `admin/crm/leads/page?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&q=Different&cursor=${encodeURIComponent(first.body.nextCursor)}`,
+        auth.platform,
+      ).expect(400);
+      await api(
+        `admin/crm/leads/page?from=${encodeURIComponent(from)}&to=${encodeURIComponent(from)}&limit=1`,
+        auth.platform,
+      ).expect(400);
+    });
+
+    it('filters visit and follow-up pages by status, channel, date and shop text', async () => {
+      const from = new Date(
+        Date.now() - 30 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      const to = new Date(Date.now() + 60 * 1000).toISOString();
+      const visits = await api(
+        `admin/crm/visits/page?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&outcome=${CrmVisitOutcome.INTERESTED}&q=Synthetic%20Lead%20A`,
+        auth.platform,
+      ).expect(200);
+      expect(
+        visits.body.items.map((item: { id: string }) => item.id),
+      ).toContain(ids.visit);
+
+      const followUps = await api(
+        `admin/crm/follow-ups/page?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&status=${CrmFollowUpStatus.OPEN}&channel=${CrmFollowUpChannel.CALL}&q=Synthetic%20Lead%20A`,
+        auth.platform,
+      ).expect(200);
+      expect(
+        followUps.body.items.map((item: { id: string }) => item.id),
+      ).toContain(ids.overdue);
+      expect(
+        followUps.body.items.map((item: { id: string }) => item.id),
+      ).not.toContain(ids.completed);
+    });
+  },
+);
