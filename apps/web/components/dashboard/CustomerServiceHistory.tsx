@@ -7,7 +7,7 @@ import { useCursorList } from "../../lib/use-cursor-list";
 import { serviceAmountText, serviceHistoryErrorText, serviceSourceLabel } from "../../lib/customer-crm";
 import styles from "./dashboard.module.css";
 
-const OPTIONS = { mismatchCodes: ["INVALID_FILTER"] as const, errorText: serviceHistoryErrorText };
+const OPTIONS = { mismatchCodes: ["INVALID_FILTER"] as const, errorText: serviceHistoryErrorText, keyOf: (row: OwnerCustomerServiceHistoryItemDto) => row.id };
 const NO_PARAMS: Record<string, string> = {};
 
 function formatDate(iso: string): string {

@@ -124,7 +124,7 @@ export function ReviewProfileLinks({ salonId, sources, onSaved }: { salonId: str
               type="url"
               inputMode="url"
               value={form[info.field]}
-              onChange={(e) => setForm({ ...form, [info.field]: e.target.value })}
+              onChange={(e) => { const value = e.target.value; setForm((f) => ({ ...f, [info.field]: value })); }}
               placeholder={info.example}
               maxLength={500}
               autoComplete="off"

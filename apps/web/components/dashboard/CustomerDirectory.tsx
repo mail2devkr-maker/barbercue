@@ -27,7 +27,7 @@ import styles from "./dashboard.module.css";
 import filterStyles from "./customer-filter.module.css";
 
 const MISMATCH_CODES = ["INVALID_FILTER"] as const;
-const OPTIONS = { mismatchCodes: MISMATCH_CODES, errorText: directoryErrorText };
+const OPTIONS = { mismatchCodes: MISMATCH_CODES, errorText: directoryErrorText, keyOf: (row: OwnerCustomerDirectoryItemDto) => row.customerId };
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -75,7 +75,7 @@ export function CustomerDirectory({ salonId, onRouteMissing }: { salonId: string
               type="search"
               className={filterStyles.input}
               value={draft.search}
-              onChange={(e) => setDraft({ ...draft, search: e.target.value })}
+              onChange={(e) => setDraft((d) => ({ ...d, search: e.target.value }))}
               placeholder="Phone number or email"
               maxLength={120}
               autoComplete="off"
@@ -87,7 +87,7 @@ export function CustomerDirectory({ salonId, onRouteMissing }: { salonId: string
               id="customer-sort"
               className={filterStyles.input}
               value={draft.sort}
-              onChange={(e) => setDraft({ ...draft, sort: e.target.value as DirectorySort })}
+              onChange={(e) => setDraft((d) => ({ ...d, sort: e.target.value as DirectorySort }))}
             >
               {DIRECTORY_SORTS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -102,7 +102,7 @@ export function CustomerDirectory({ salonId, onRouteMissing }: { salonId: string
               inputMode="numeric"
               className={filterStyles.input}
               value={draft.minVisits}
-              onChange={(e) => setDraft({ ...draft, minVisits: e.target.value })}
+              onChange={(e) => setDraft((d) => ({ ...d, minVisits: e.target.value }))}
               placeholder="Any"
               maxLength={5}
               aria-invalid={minVisitsError ? true : undefined}
@@ -119,7 +119,7 @@ export function CustomerDirectory({ salonId, onRouteMissing }: { salonId: string
               className={filterStyles.chip}
               aria-pressed={draft.segment === s.value}
               title={s.help}
-              onClick={() => setDraft({ ...draft, segment: s.value })}
+              onClick={() => setDraft((d) => ({ ...d, segment: s.value }))}
             >
               {s.label}
             </button>

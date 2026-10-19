@@ -377,9 +377,15 @@ function OfferEditor({
     const { body, errors: found } = buildOfferBody(form, timeZone);
     setErrors(found);
     if (!body) return;
+    // The server previews only named services, so an offer for "all services" is checked against the shop's active ones.
+    const previewIds = body.serviceIds.length > 0 ? body.serviceIds : services.slice(0, 100).map((s) => s.id);
+    if (previewIds.length === 0) {
+      setCheck({ preview: null, error: "Add an active service before checking prices." });
+      return;
+    }
     setCheck({ preview: null, error: null });
     try {
-      const preview = await apiFetch<OfferPreviewDto>(`${base}/offers/preview`, { method: "POST", body: JSON.stringify(body) });
+      const preview = await apiFetch<OfferPreviewDto>(`${base}/offers/preview`, { method: "POST", body: JSON.stringify({ ...body, serviceIds: previewIds }) });
       setCheck({ preview, error: null });
     } catch (err) {
       setCheck({ preview: null, error: err instanceof ApiError ? offerErrorText(err.code, err.message) : "Could not check the prices." });

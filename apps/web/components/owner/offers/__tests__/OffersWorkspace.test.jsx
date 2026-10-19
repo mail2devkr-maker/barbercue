@@ -201,6 +201,8 @@ describe("OffersWorkspace create", () => {
     await flush();
     expect(text(r)).toContain("Customer pays");
     expect(mutations().every((c) => c.path.endsWith("/offers/preview"))).toBe(true);
+    // An offer for all services is previewed against the active ones (never the inactive one), as the server needs named services.
+    expect(JSON.parse(mutations()[0].opts.body).serviceIds).toEqual([SVC[0].id, SVC[1].id]);
   });
 
   it("blocks creating until the shop has a timezone", async () => {

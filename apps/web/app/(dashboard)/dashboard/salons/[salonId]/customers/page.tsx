@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import { CustomerDirectory } from "../../../../../../components/dashboard/CustomerDirectory";
 import { LegacyCustomerList } from "../../../../../../components/dashboard/LegacyCustomerList";
+import { OwnerOnly } from "../../../../../../components/owner/OwnerOnly";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 /**
@@ -14,6 +15,7 @@ export default function DashboardCustomersPage({ params }: { params: Promise<{ s
   const { salonId } = use(params);
   const [legacy, setLegacy] = useState(false);
   return (
+    <OwnerOnly>
     <main className={styles.page}>
       <h1 className={styles.pageTitle}>Customers</h1>
       <p className={styles.pageSubtitle}>
@@ -23,5 +25,6 @@ export default function DashboardCustomersPage({ params }: { params: Promise<{ s
       </p>
       {legacy ? <LegacyCustomerList salonId={salonId} /> : <CustomerDirectory salonId={salonId} onRouteMissing={() => setLegacy(true)} />}
     </main>
+    </OwnerOnly>
   );
 }

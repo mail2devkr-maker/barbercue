@@ -14,9 +14,16 @@ export interface CursorPage<T> {
 export interface CursorListOptions {
   /** Error codes that mean "this cursor no longer matches the filters"; the list restarts instead of failing. */
   mismatchCodes?: readonly string[];
-  /** Words for a server error code; defaults to the inventory wording. */
+  /** Words for a server error code; defaults to the inventory wording. Pass a stable function (a module-level one): a new function reloads the list. */
   errorText?: (code: string | undefined, message: string) => string;
+  /**
+   * A stable key per row. When given, a "load more" page that adds no row not already shown is a server paging fault (the same page
+   * again): the rows are not duplicated and paging stops with a notice, instead of repeating forever.
+   */
+  keyOf?: (item: never) => string;
 }
+
+export const REPEATED_PAGE_NOTICE = "The server sent the same rows again, so paging stopped. Narrow your search or change the sort to see the rest.";
 
 const DEFAULT_MISMATCH_CODES: readonly string[] = ["CURSOR_FILTER_MISMATCH"];
 
@@ -52,6 +59,7 @@ export function useCursorList<T>(
 ): CursorListState<T> {
   const mismatchCodes = options.mismatchCodes ?? DEFAULT_MISMATCH_CODES;
   const errorText = options.errorText ?? entityErrorText;
+  const keyOf = options.keyOf as ((item: T) => string) | undefined;
   const [items, setItems] = useState<T[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -62,7 +70,11 @@ export function useCursorList<T>(
   const [notice, setNotice] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const generation = useRef(0);
+  const itemsRef = useRef<T[]>([]);
   const paramsKey = JSON.stringify(params);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -93,7 +105,7 @@ export function useCursorList<T>(
     return () => {
       cancelled = true;
     };
-  }, [path, paramsKey, enabled, version]);
+  }, [path, paramsKey, enabled, version, errorText]);
 
   const loadMore = useCallback(() => {
     if (!cursor || loadingMore) return;
@@ -103,7 +115,19 @@ export function useCursorList<T>(
     apiFetch<CursorPage<T>>(`${path}?${listQuery(JSON.parse(paramsKey) as Record<string, string | boolean | null | undefined>, cursor)}`)
       .then((page) => {
         if (mine !== generation.current) return;
-        setItems((prev) => [...prev, ...page.items]);
+        if (keyOf) {
+          const shown = new Set(itemsRef.current.map(keyOf));
+          const fresh = page.items.filter((item) => !shown.has(keyOf(item)));
+          if (page.items.length > 0 && fresh.length === 0) {
+            setNotice(REPEATED_PAGE_NOTICE);
+            setCursor(null);
+            setHasMore(false);
+            return;
+          }
+          setItems((prev) => [...prev, ...fresh]);
+        } else {
+          setItems((prev) => [...prev, ...page.items]);
+        }
         setCursor(page.nextCursor);
         setHasMore(moreAvailable(page));
       })
@@ -119,7 +143,7 @@ export function useCursorList<T>(
       .finally(() => {
         if (mine === generation.current) setLoadingMore(false);
       });
-  }, [cursor, loadingMore, path, paramsKey, mismatchCodes, errorText]);
+  }, [cursor, loadingMore, path, paramsKey, mismatchCodes, errorText, keyOf]);
 
   const reload = useCallback(() => {
     setNotice(null);

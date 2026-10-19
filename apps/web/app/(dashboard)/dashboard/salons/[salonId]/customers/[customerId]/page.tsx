@@ -164,7 +164,7 @@ export default function DashboardCustomerDetailPage({
       </p>
 
       <div className={styles.rowMeta} style={{ margin: "4px 0 20px" }}>
-        {summary.completedCount} completed · {summary.cancelledCount} cancelled · {summary.noShowCount} no-show
+        Bookings: {summary.completedCount} completed · {summary.cancelledCount} cancelled · {summary.noShowCount} no-show (Live Queue visits are listed below)
         {summary.segment && ` · ${SEGMENT_LABEL[summary.segment]} customer`}
       </div>
 

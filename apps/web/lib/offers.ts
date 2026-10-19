@@ -321,6 +321,8 @@ export function offerErrorText(code: string | undefined, message: string): strin
       return "This offer cannot be published yet. Check its dates and that its services are still active.";
     case OfferErrorCode.INVALID:
       return `The offer details were not accepted. ${message}`;
+    case OfferErrorCode.SERVICE_MISMATCH:
+      return "Some of the chosen services are not part of your shop any more, or the preview needs at least one service. Check the services and try again.";
     case OfferErrorCode.CHANGED_RETRY:
       return "The offer changed while you were saving. Reload and try again.";
     case "INVALID_FILTER":

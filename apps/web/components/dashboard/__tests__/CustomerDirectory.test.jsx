@@ -101,6 +101,22 @@ describe("CustomerDirectory", () => {
     expect(q.get("minVisits")).toBe("3");
   });
 
+  it("keeps two filter changes made in the same instant (no change overwrites the other)", async () => {
+    install(() => page([row(1)]));
+    const r = await mount();
+    await act(async () => {
+      button(r, "Repeat").props.onClick();
+      r.root.findByProps({ id: "customer-min-visits" }).props.onChange({ target: { value: "4" } });
+      r.root.findByProps({ id: "customer-sort" }).props.onChange({ target: { value: "visits" } });
+    });
+    await wait(500);
+    await flush();
+    const q = query(calls.at(-1));
+    expect(q.get("segment")).toBe("repeat");
+    expect(q.get("minVisits")).toBe("4");
+    expect(q.get("sort")).toBe("visits");
+  });
+
   it("does not send an invalid minimum and says why", async () => {
     install(() => page([row(1)]));
     const r = await mount();
@@ -118,6 +134,16 @@ describe("CustomerDirectory", () => {
     await flush();
     expect(query(calls.at(-1)).get("cursor")).toBe("signed.cursor/with+chars=");
     expect(text(r)).toContain("+919000000003");
+    expect(button(r, "Show more customers")).toBeUndefined();
+  });
+
+  it("stops paging, without duplicating rows, when the server sends the same page again", async () => {
+    install(() => page([row(1), row(2)], "same.cursor"));
+    const r = await mount();
+    await act(async () => { button(r, "Show more customers").props.onClick(); });
+    await flush();
+    expect(text(r)).toContain("sent the same rows again");
+    expect(r.root.findAllByType("li")).toHaveLength(2);
     expect(button(r, "Show more customers")).toBeUndefined();
   });
 
