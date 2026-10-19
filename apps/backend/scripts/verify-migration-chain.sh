@@ -73,7 +73,7 @@ TAXONOMY_IDS="$("$PSQL" "$PLAIN_URL" -At -v ON_ERROR_STOP=1 -c "SELECT count(DIS
 if [[ "$TAXONOMY_IDS" != "1" ]]; then echo "legacy services did not converge on the same canonical taxonomy IDs"; exit 1; fi
 echo "PASS: case/space-equivalent legacy labels resolve to one stable salon-scoped category/subcategory pair"
 TAXONOMY_LABELS="$("$PSQL" "$PLAIN_URL" -At -v ON_ERROR_STOP=1 -c "SELECT string_agg(category || '/' || subcategory, '|' ORDER BY id) FROM services WHERE id IN ('platform-legacy-service','platform-legacy-service-2')")"
-if [[ "$TAXONOMY_LABELS" != " hair / cut |Hair/Cut" ]]; then echo "legacy free-text labels changed during taxonomy backfill: $TAXONOMY_LABELS"; exit 1; fi
+if [[ "$TAXONOMY_LABELS" != "Hair/Cut| hair / cut " ]]; then echo "legacy free-text labels changed during taxonomy backfill: $TAXONOMY_LABELS"; exit 1; fi
 echo "PASS: original legacy category/subcategory labels remain byte-for-byte unchanged"
 PHOTO_FLAGS="$("$PSQL" "$PLAIN_URL" -At -v ON_ERROR_STOP=1 -c "SELECT string_agg(id||':'||coalesce(\"shopPhotoRequirementGrandfathered\"::text,'NULL'), ',' ORDER BY id) FROM salons WHERE id LIKE 'migration-photo-%'")"
 if [[ "$PHOTO_FLAGS" != "migration-photo-active:NULL,migration-photo-pending:NULL,migration-photo-suspended:NULL" ]]; then
