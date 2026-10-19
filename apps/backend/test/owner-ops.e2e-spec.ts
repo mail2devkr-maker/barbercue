@@ -2147,9 +2147,15 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await api('get', `${customerBase}/directory`, tok.ravi).expect(403);
       await api(
         'get',
-        `dashboard/salons/${ids.otherSalon}/customers/directory?q=${ids.cust1}`,
+        `${customerBase}/directory?q=${ids.cust1}`,
         tok.outsider,
       ).expect(403);
+      const isolatedDirectory = await api(
+        'get',
+        `dashboard/salons/${ids.otherSalon}/customers/directory?q=${ids.cust1}`,
+        tok.outsider,
+      ).expect(200);
+      expect(isolatedDirectory.body.items).toEqual([]);
       await api(
         'get',
         `${customerBase}/${ids.outsider}/services`,
