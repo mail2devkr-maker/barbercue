@@ -10,11 +10,19 @@ describe('SalonServicesService', () => {
   let prisma: {
     $transaction: jest.Mock;
     salon: { findUnique: jest.Mock; update: jest.Mock };
+    salonServiceCategory: {
+      findMany: jest.Mock; findFirst: jest.Mock; create: jest.Mock; upsert: jest.Mock; update: jest.Mock; delete: jest.Mock;
+    };
+    salonServiceSubcategory: {
+      findFirst: jest.Mock; create: jest.Mock; upsert: jest.Mock; count: jest.Mock; update: jest.Mock; delete: jest.Mock;
+    };
     service: {
       findMany: jest.Mock;
       findFirst: jest.Mock;
+      count: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      updateMany: jest.Mock;
     };
     auditLog: { create: jest.Mock };
   };
@@ -29,14 +37,37 @@ describe('SalonServicesService', () => {
         findUnique: jest.fn().mockResolvedValue({ currency: 'INR', salonType: SalonType.UNISEX }),
         update: jest.fn(),
       },
+      salonServiceCategory: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockImplementation(({ where }) => Promise.resolve({
+          id: where.id ?? 'category-1', name: 'Hair',
+        })),
+        create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'category-1', name: data.name })),
+        upsert: jest.fn().mockImplementation(({ create }) => Promise.resolve({ id: 'category-1', name: create.name })),
+        update: jest.fn().mockImplementation(({ where, data }) => Promise.resolve({ id: where.salonId_id.id, name: data.name })),
+        delete: jest.fn().mockResolvedValue(undefined),
+      },
+      salonServiceSubcategory: {
+        findFirst: jest.fn().mockImplementation(({ where }) => Promise.resolve({
+          id: where.id ?? 'subcategory-1', name: 'Haircut',
+        })),
+        create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'subcategory-1', name: data.name })),
+        upsert: jest.fn().mockImplementation(({ create }) => Promise.resolve({ id: 'subcategory-1', name: create.name })),
+        count: jest.fn().mockResolvedValue(0),
+        update: jest.fn().mockImplementation(({ where, data }) => Promise.resolve({ id: where.salonId_categoryId_id.id, name: data.name })),
+        delete: jest.fn().mockResolvedValue(undefined),
+      },
       service: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
+    prisma.$transaction.mockImplementation((task: (tx: typeof prisma) => unknown) => task(prisma));
     salonAccess = {
       assertOwnerAccess: jest.fn().mockResolvedValue(undefined),
       assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER'),
@@ -114,6 +145,96 @@ describe('SalonServicesService', () => {
       expect(prisma.service.findMany).not.toHaveBeenCalled();
     });
 
+    it('authorizes category-tree reads and scopes the hierarchy to that salon', async () => {
+      prisma.salonServiceCategory.findMany.mockResolvedValueOnce([
+        { id: 'cat-1', name: 'Hair', subcategories: [{ id: 'sub-1', name: 'Cut' }] },
+      ]);
+      await expect(service.listCategories('owner-1', 'salon-1')).resolves.toEqual([
+        { id: 'cat-1', name: 'Hair', subcategories: [{ id: 'sub-1', name: 'Cut' }] },
+      ]);
+      expect(salonAccess.assertOwnerOrAdminAccess).toHaveBeenCalledWith('owner-1', 'salon-1');
+      expect(prisma.salonServiceCategory.findMany).toHaveBeenCalledWith({
+        where: { salonId: 'salon-1' },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        include: { subcategories: { orderBy: [{ name: 'asc' }, { id: 'asc' }] } },
+      });
+    });
+
+    it('does not query the category tree when salon authorization fails', async () => {
+      salonAccess.assertOwnerOrAdminAccess.mockRejectedValueOnce(
+        Object.assign(new Error('denied'), { code: 'SALON_ACCESS_DENIED' }),
+      );
+      await expect(service.listCategories('intruder', 'salon-2'))
+        .rejects.toMatchObject({ code: 'SALON_ACCESS_DENIED' });
+      expect(prisma.salonServiceCategory.findMany).not.toHaveBeenCalled();
+    });
+
+    it('creates a stable salon category idempotently and audits only the first creation', async () => {
+      prisma.salonServiceCategory.findFirst.mockResolvedValueOnce(null);
+      await expect(service.createCategory('owner-1', 'salon-1', { name: ' Hair ' }))
+        .resolves.toEqual({ id: 'category-1', name: 'Hair' });
+      expect(prisma.salonServiceCategory.create).toHaveBeenCalledWith({
+        data: { salonId: 'salon-1', name: 'Hair', normalizedName: 'hair' },
+        select: { id: true, name: true },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+        actorUserId: 'owner-1', action: 'SERVICE_CATEGORY_CREATED', entityId: 'category-1',
+      }) });
+
+      prisma.auditLog.create.mockClear();
+      await service.createCategory('owner-1', 'salon-1', { name: 'HAIR' });
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('renames the scoped category without changing its ID and keeps legacy service labels coherent', async () => {
+      const result = await service.renameCategory('owner-1', 'salon-1', 'category-1', { name: 'Hair care' });
+      expect(result).toEqual({ id: 'category-1', name: 'Hair care' });
+      expect(prisma.salonServiceCategory.update).toHaveBeenCalledWith({
+        where: { salonId_id: { salonId: 'salon-1', id: 'category-1' } },
+        data: { name: 'Hair care', normalizedName: 'hair care' },
+        select: { id: true, name: true },
+      });
+      expect(prisma.service.updateMany).toHaveBeenCalledWith({
+        where: { salonId: 'salon-1', categoryId: 'category-1' }, data: { category: 'Hair care' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+        action: 'SERVICE_CATEGORY_RENAMED', entityId: 'category-1',
+      }) });
+    });
+
+    it('refuses category deletion while linked services or children remain', async () => {
+      prisma.service.count.mockResolvedValueOnce(2);
+      prisma.salonServiceSubcategory.count.mockResolvedValueOnce(1);
+      await expect(service.deleteCategory('owner-1', 'salon-1', 'category-1'))
+        .rejects.toMatchObject({ code: 'SERVICE_TAXONOMY_IN_USE', status: 409 });
+      expect(prisma.salonServiceCategory.delete).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('creates subcategories under an authorized category and audits new nodes', async () => {
+      prisma.salonServiceSubcategory.findFirst.mockResolvedValueOnce(null);
+      await expect(service.createSubcategory('owner-1', 'salon-1', 'category-1', { name: 'Cut' }))
+        .resolves.toEqual({ id: 'subcategory-1', name: 'Cut' });
+      expect(prisma.salonServiceSubcategory.create).toHaveBeenCalledWith({
+        data: { salonId: 'salon-1', categoryId: 'category-1', name: 'Cut', normalizedName: 'cut' },
+        select: { id: true, name: true },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+        action: 'SERVICE_SUBCATEGORY_CREATED', entityId: 'subcategory-1',
+      }) });
+    });
+
+    it('renames or safely deletes a subcategory without detaching linked services', async () => {
+      await service.renameSubcategory('owner-1', 'salon-1', 'category-1', 'subcategory-1', { name: 'Trim' });
+      expect(prisma.service.updateMany).toHaveBeenCalledWith({
+        where: { salonId: 'salon-1', subcategoryId: 'subcategory-1' }, data: { subcategory: 'Trim' },
+      });
+      prisma.service.count.mockResolvedValueOnce(1);
+      await expect(service.deleteSubcategory('owner-1', 'salon-1', 'category-1', 'subcategory-1'))
+        .rejects.toMatchObject({ code: 'SERVICE_TAXONOMY_IN_USE' });
+      expect(prisma.salonServiceSubcategory.delete).not.toHaveBeenCalled();
+    });
+
     it("scopes update by BOTH id and salonId so another salon's service cannot be mutated", async () => {
       prisma.service.findFirst.mockResolvedValue(null);
       await expect(
@@ -161,6 +282,8 @@ describe('SalonServicesService', () => {
         price: decimal('300.00'),
         category: 'Hair',
         subcategory: 'Haircut',
+        categoryId: 'category-1',
+        subcategoryId: 'subcategory-1',
         isActive: true,
       });
 
@@ -179,6 +302,8 @@ describe('SalonServicesService', () => {
           name: 'Haircut',
           price: '300',
           durationMinutes: 30,
+          categoryId: 'category-1',
+          subcategoryId: 'subcategory-1',
           subcategory: 'Haircut',
           isActive: true,
         }),
@@ -191,6 +316,8 @@ describe('SalonServicesService', () => {
         price: 300,
         category: 'Hair',
         subcategory: 'Haircut',
+        categoryId: 'category-1',
+        subcategoryId: 'subcategory-1',
         isActive: true,
         currency: 'INR',
       });
@@ -205,6 +332,9 @@ describe('SalonServicesService', () => {
         durationMinutes: 15,
         price: decimal('100'),
         category: null,
+        subcategory: null,
+        categoryId: null,
+        subcategoryId: null,
         isActive: true,
       });
       await service.create('owner-1', 'salon-1', {
@@ -213,7 +343,7 @@ describe('SalonServicesService', () => {
         durationMinutes: 15,
       });
       expect(prisma.service.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ category: null, subcategory: null }),
+        data: expect.objectContaining({ category: null, subcategory: null, categoryId: null, subcategoryId: null }),
       });
     });
   });
@@ -223,6 +353,10 @@ describe('SalonServicesService', () => {
       prisma.service.findFirst.mockResolvedValue({
         id: 'svc-1',
         salonId: 'salon-1',
+        category: null,
+        subcategory: null,
+        categoryId: null,
+        subcategoryId: null,
       });
       prisma.service.update.mockResolvedValue({
         id: 'svc-1',
@@ -258,15 +392,52 @@ describe('SalonServicesService', () => {
       });
     });
 
-    it('can update or clear the optional subcategory independently', async () => {
+    it('resolves a free-text subcategory into the canonical salon tree and can clear it', async () => {
+      prisma.service.findFirst.mockResolvedValue({
+        id: 'svc-1', salonId: 'salon-1', category: 'Hair', subcategory: null,
+        categoryId: 'category-1', subcategoryId: null,
+      });
       await service.update('owner-1', 'salon-1', 'svc-1', { subcategory: 'Coloring' });
       expect(prisma.service.update).toHaveBeenCalledWith({
-        where: { id: 'svc-1' }, data: { subcategory: 'Coloring' },
+        where: { id: 'svc-1' }, data: expect.objectContaining({
+          categoryId: 'category-1', subcategoryId: 'subcategory-1', subcategory: 'Coloring',
+        }),
       });
       prisma.service.update.mockClear();
       await service.update('owner-1', 'salon-1', 'svc-1', { subcategory: null });
       expect(prisma.service.update).toHaveBeenCalledWith({
-        where: { id: 'svc-1' }, data: { subcategory: null },
+        where: { id: 'svc-1' }, data: expect.objectContaining({ subcategory: null, subcategoryId: null }),
+      });
+    });
+
+    it('rejects category and subcategory IDs outside the authorized salon tree', async () => {
+      prisma.salonServiceCategory.findFirst.mockResolvedValueOnce(null);
+      await expect(service.create('owner-1', 'salon-1', {
+        name: 'Cut', price: 100, durationMinutes: 20, categoryId: 'foreign-category-id',
+      })).rejects.toMatchObject({ code: 'SERVICE_TAXONOMY_INVALID' });
+
+      prisma.service.findFirst.mockResolvedValueOnce({
+        id: 'svc-1', salonId: 'salon-1', category: 'Hair', subcategory: null,
+        categoryId: 'category-1', subcategoryId: null,
+      });
+      prisma.salonServiceSubcategory.findFirst.mockResolvedValueOnce(null);
+      await expect(service.update('owner-1', 'salon-1', 'svc-1', {
+        subcategoryId: 'foreign-subcategory-id',
+      })).rejects.toMatchObject({ code: 'SERVICE_TAXONOMY_INVALID' });
+      expect(prisma.service.update).not.toHaveBeenCalled();
+    });
+
+    it('clears a prior child when a service moves to another category', async () => {
+      prisma.service.findFirst.mockResolvedValueOnce({
+        id: 'svc-1', salonId: 'salon-1', category: 'Hair', subcategory: 'Cut',
+        categoryId: 'old-category', subcategoryId: 'old-subcategory',
+      });
+      prisma.salonServiceCategory.findFirst.mockResolvedValueOnce({ id: 'new-category', name: 'Skin' });
+      await service.update('owner-1', 'salon-1', 'svc-1', { categoryId: 'new-category' });
+      expect(prisma.service.update).toHaveBeenCalledWith({
+        where: { id: 'svc-1' }, data: expect.objectContaining({
+          categoryId: 'new-category', subcategoryId: null, category: 'Skin', subcategory: null,
+        }),
       });
     });
 

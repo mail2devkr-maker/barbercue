@@ -5,6 +5,7 @@ import {
   createSalonStaffSchema,
   normalizeServiceIdentity,
   salonContactImportPreviewSchema,
+  updateSalonServiceSchema,
   updateSalonTimezoneSchema,
 } from '..';
 
@@ -41,6 +42,19 @@ describe('owner setup contracts', () => {
     expect(createSalonServiceSchema.safeParse({
       name: 'Skin Fade', durationMinutes: 45,
     }).success).toBe(false);
+  });
+
+  it('accepts stable category IDs and requires a parent for subcategory IDs', () => {
+    const categoryId = '550e8400-e29b-41d4-a716-446655440000';
+    const subcategoryId = '550e8400-e29b-41d4-a716-446655440001';
+    expect(createSalonServiceSchema.safeParse({
+      name: 'Cut', price: 250, durationMinutes: 30, categoryId, subcategoryId,
+    }).success).toBe(true);
+    expect(createSalonServiceSchema.safeParse({
+      name: 'Cut', price: 250, durationMinutes: 30, subcategoryId,
+    }).success).toBe(false);
+    expect(updateSalonServiceSchema.safeParse({ categoryId, subcategoryId }).success).toBe(true);
+    expect(updateSalonServiceSchema.safeParse({ categoryId: 'not-an-id' }).success).toBe(false);
   });
 
   it('ships the complete preset catalog with editable onboarding price/time defaults', () => {

@@ -74,9 +74,17 @@ describe('ServiceCatalogImportService', () => {
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn().mockResolvedValue({ id: 'new' }),
     };
+    const salonServiceCategory = {
+      upsert: jest.fn().mockImplementation(({ create }) => ({ id: 'category-hair', name: create.name })),
+    };
+    const salonServiceSubcategory = {
+      upsert: jest.fn().mockImplementation(({ create }) => ({ id: 'subcategory-' + create.normalizedName, name: create.name })),
+    };
     prisma.$transaction.mockImplementation(async (task: (tx: unknown) => Promise<unknown>) => task({
       $executeRawUnsafe: jest.fn().mockResolvedValue(1),
       service,
+      salonServiceCategory,
+      salonServiceSubcategory,
       auditLog: { create: jest.fn() },
     }));
     await subject.saveReviewed('actor', 'salon', { services: [
@@ -86,9 +94,10 @@ describe('ServiceCatalogImportService', () => {
     expect(service.create).toHaveBeenCalledTimes(2);
     expect(service.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
       category: 'Hair', subcategory: 'Coloring',
+      categoryId: 'category-hair', subcategoryId: 'subcategory-coloring',
     }) });
     expect(service.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
-      category: 'Hair', subcategory: null,
+      category: 'Hair', subcategory: null, categoryId: 'category-hair', subcategoryId: null,
     }) });
   });
 

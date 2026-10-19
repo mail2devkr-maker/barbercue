@@ -959,6 +959,8 @@ describe('SalonsService', () => {
               price: { toString: () => '300' },
               category: 'Hair',
               subcategory: 'Haircut',
+              categoryId: 'category-hair',
+              subcategoryId: 'subcategory-haircut',
               isActive: true,
             },
           ],
@@ -1008,6 +1010,8 @@ describe('SalonsService', () => {
           price: 300,
           category: 'Hair',
           subcategory: 'Haircut',
+          categoryId: 'category-hair',
+          subcategoryId: 'subcategory-haircut',
           isActive: true,
         },
       ]);

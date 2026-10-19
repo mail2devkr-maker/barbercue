@@ -44,6 +44,11 @@ echo "== prepare synthetic legacy data before the platform feature migrations"
 stage "20261017010000_booking_attribution_campaigns"
 "$PSQL" "$PLAIN_URL" -v ON_ERROR_STOP=1 -qc "INSERT INTO salons (id,\"ownerUserId\",name,slug,\"cityId\",\"addressLine\",status,\"updatedAt\") SELECT fixture.id,owner.id,fixture.name,fixture.slug,c.id,'Migration fixture',fixture.status,now() FROM (VALUES ('migration-photo-active','Migration Active','migration-photo-active','ACTIVE'::\"SalonStatus\"),('migration-photo-suspended','Migration Suspended','migration-photo-suspended','SUSPENDED'::\"SalonStatus\"),('migration-photo-pending','Migration Pending','migration-photo-pending','PENDING'::\"SalonStatus\")) AS fixture(id,name,slug,status) CROSS JOIN LATERAL (SELECT id FROM users WHERE email='mail2dev.kr@gmail.com' ORDER BY id LIMIT 1) owner CROSS JOIN LATERAL (SELECT id FROM cities ORDER BY id LIMIT 1) c"
 "$PSQL" "$PLAIN_URL" -X -v ON_ERROR_STOP=1 -f scripts/platform-legacy-fixture.sql
+# Rehearse the taxonomy migration against populated pre-migration service rows. The two labels
+# intentionally differ only by surrounding spaces/case: one canonical node should be reused while
+# every historical text label and booking/queue/invoice reference remains untouched.
+stage "20261019130000_service_category_tree"
+"$PSQL" "$PLAIN_URL" -v ON_ERROR_STOP=1 -qc "UPDATE services SET category='Hair', subcategory='Cut' WHERE id='platform-legacy-service'; INSERT INTO services (id,\"salonId\",name,\"durationMinutes\",price,category,subcategory,\"updatedAt\") VALUES ('platform-legacy-service-2','migration-photo-active','Synthetic second legacy service',25,175,' hair ',' cut ',now())"
 # Remember every original column of every existing table. Additive columns and new tables must
 # not change a single existing value. Migration bookkeeping is expected to change and excluded.
 "$PSQL" "$PLAIN_URL" -X -qAt -v ON_ERROR_STOP=1 > "$STAGING/legacy-fingerprints.sql" <<'SQL'
@@ -64,6 +69,12 @@ echo "All pending migrations applied in $(( ($(date +%s%N)-START_NS)/1000000 )) 
 "$PSQL" "$PLAIN_URL" -X -qAt -v ON_ERROR_STOP=1 -f "$STAGING/legacy-fingerprints.sql" > "$STAGING/after.facts"
 diff -u "$STAGING/before.facts" "$STAGING/after.facts"
 echo "PASS: $(wc -l < "$STAGING/before.facts") historical table fingerprints unchanged across platform migrations"
+TAXONOMY_IDS="$("$PSQL" "$PLAIN_URL" -At -v ON_ERROR_STOP=1 -c "SELECT count(DISTINCT \"categoryId\" || ':' || \"subcategoryId\") FROM services WHERE id IN ('platform-legacy-service','platform-legacy-service-2') AND \"categoryId\" IS NOT NULL AND \"subcategoryId\" IS NOT NULL")"
+if [[ "$TAXONOMY_IDS" != "1" ]]; then echo "legacy services did not converge on the same canonical taxonomy IDs"; exit 1; fi
+echo "PASS: case/space-equivalent legacy labels resolve to one stable salon-scoped category/subcategory pair"
+TAXONOMY_LABELS="$("$PSQL" "$PLAIN_URL" -At -v ON_ERROR_STOP=1 -c "SELECT string_agg(category || '/' || subcategory, '|' ORDER BY id) FROM services WHERE id IN ('platform-legacy-service','platform-legacy-service-2')")"
+if [[ "$TAXONOMY_LABELS" != " hair / cut |Hair/Cut" ]]; then echo "legacy free-text labels changed during taxonomy backfill: $TAXONOMY_LABELS"; exit 1; fi
+echo "PASS: original legacy category/subcategory labels remain byte-for-byte unchanged"
 PHOTO_FLAGS="$("$PSQL" "$PLAIN_URL" -At -v ON_ERROR_STOP=1 -c "SELECT string_agg(id||':'||coalesce(\"shopPhotoRequirementGrandfathered\"::text,'NULL'), ',' ORDER BY id) FROM salons WHERE id LIKE 'migration-photo-%'")"
 if [[ "$PHOTO_FLAGS" != "migration-photo-active:NULL,migration-photo-pending:NULL,migration-photo-suspended:NULL" ]]; then
   echo "photo grandfather marker migration unexpectedly rewrote legacy rows: $PHOTO_FLAGS"; exit 1
@@ -87,7 +98,7 @@ if echo "$DRIFT" | grep -Eqi 'salon_location_proposals|SalonLocationProposal'; t
   echo "SALON-LOCATION-VERIFICATION SCHEMA DRIFT DETECTED"; exit 1
 fi
 echo "no salon-location-verification drift"
-if echo "$DRIFT" | grep -Eqi 'inventory_|Inventory|owner_demo_|OwnerDemo|booking_attribution_campaigns|attributionCampaignId|BookingAttributionCampaign|subcategory'; then
+if echo "$DRIFT" | grep -Eqi 'inventory_|Inventory|owner_demo_|OwnerDemo|booking_attribution_campaigns|attributionCampaignId|BookingAttributionCampaign|subcategory|service_categories|service_subcategories|categoryId'; then
   echo "PLATFORM OR SERVICE-TAXONOMY SCHEMA DRIFT DETECTED"; exit 1
 fi
 echo "no inventory, demo-workspace, attribution or service-taxonomy drift"

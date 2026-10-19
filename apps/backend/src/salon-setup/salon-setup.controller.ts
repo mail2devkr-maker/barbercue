@@ -34,6 +34,7 @@ import {
   updateSalonTypeSchema,
   updateSalonStatusSchema,
   updateSalonTimezoneSchema,
+  serviceTaxonomyNodeInputSchema,
   submitSalonLocationProposalSchema,
   type AuthenticatedUser,
   type BulkDeactivateSalonChairsApplyInput,
@@ -55,6 +56,7 @@ import {
   type UpdateSalonStatusInput,
   type UpdateSalonTimezoneInput,
   type SubmitSalonLocationProposalInput,
+  type ServiceTaxonomyNodeInput,
 } from '@barbercue/shared';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -297,6 +299,74 @@ export class SalonSetupController {
     @Param('salonId') salonId: string,
   ) {
     return this.services.list(user.id, salonId);
+  }
+
+  // Canonical salon-owned category tree from the Issue #221 API contract.
+  @Get(`${SALON_SCOPE}/service-categories`)
+  listServiceCategories(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.services.listCategories(user.id, salonId);
+  }
+
+  @Post(`${SALON_SCOPE}/service-categories`)
+  createServiceCategory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(serviceTaxonomyNodeInputSchema)) body: ServiceTaxonomyNodeInput,
+  ) {
+    return this.services.createCategory(user.id, salonId, body);
+  }
+
+  @Patch(`${SALON_SCOPE}/service-categories/:categoryId`)
+  renameServiceCategory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('categoryId') categoryId: string,
+    @Body(new ZodValidationPipe(serviceTaxonomyNodeInputSchema)) body: ServiceTaxonomyNodeInput,
+  ) {
+    return this.services.renameCategory(user.id, salonId, categoryId, body);
+  }
+
+  @Delete(`${SALON_SCOPE}/service-categories/:categoryId`)
+  deleteServiceCategory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('categoryId') categoryId: string,
+  ) {
+    return this.services.deleteCategory(user.id, salonId, categoryId);
+  }
+
+  @Post(`${SALON_SCOPE}/service-categories/:categoryId/subcategories`)
+  createServiceSubcategory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('categoryId') categoryId: string,
+    @Body(new ZodValidationPipe(serviceTaxonomyNodeInputSchema)) body: ServiceTaxonomyNodeInput,
+  ) {
+    return this.services.createSubcategory(user.id, salonId, categoryId, body);
+  }
+
+  @Patch(`${SALON_SCOPE}/service-categories/:categoryId/subcategories/:subcategoryId`)
+  renameServiceSubcategory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('categoryId') categoryId: string,
+    @Param('subcategoryId') subcategoryId: string,
+    @Body(new ZodValidationPipe(serviceTaxonomyNodeInputSchema)) body: ServiceTaxonomyNodeInput,
+  ) {
+    return this.services.renameSubcategory(user.id, salonId, categoryId, subcategoryId, body);
+  }
+
+  @Delete(`${SALON_SCOPE}/service-categories/:categoryId/subcategories/:subcategoryId`)
+  deleteServiceSubcategory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('categoryId') categoryId: string,
+    @Param('subcategoryId') subcategoryId: string,
+  ) {
+    return this.services.deleteSubcategory(user.id, salonId, categoryId, subcategoryId);
   }
 
   @Get(`${SALON_SCOPE}/${DASHBOARD_PATHS.services}/import-capabilities`)
