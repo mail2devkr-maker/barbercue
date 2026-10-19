@@ -232,8 +232,8 @@ describeDisposable(
         to,
         limit: '1',
         employeeId: ids.employee,
-        // The fixture names include a variant between "Lead" and the run marker.
-        // Search by the unique UUID itself while binding the employee filter too.
+        // Fixture names have A/B between the lead label and the unique run marker.
+        // Keep both the per-run text match and employee filter to exclude earlier E2E data.
         q: run,
       }).toString();
       const first = await api(
