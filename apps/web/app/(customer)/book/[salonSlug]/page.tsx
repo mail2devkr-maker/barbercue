@@ -4,6 +4,8 @@ import { DISCOVERY_PATHS } from "@barbercue/shared";
 import type { PublicSalonStatusDto, SalonProfileDto } from "@barbercue/shared";
 import { fetchDiscoveryOrNull } from "../../../../lib/discovery-api";
 import { BookingFlow } from "../../../../components/booking/BookingFlow";
+import { CampaignCapture } from "../../../../components/booking/CampaignCapture";
+import { salonKey } from "../../../../lib/campaign-token";
 import { EditorialImage } from "../../../../components/editorial/EditorialImage";
 import { PublicSalonStatus } from "../../../../components/discovery/PublicSalonStatus";
 import styles from "./book.module.css";
@@ -13,7 +15,8 @@ interface BookPageParams {
 }
 
 // Authenticated, customer-specific flow — never indexable. See robots.ts.
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+// A cross-origin link from this page never receives its address, only its origin (a campaign code may be in the address for a moment).
+export const metadata: Metadata = { robots: { index: false, follow: false }, referrer: "strict-origin-when-cross-origin" };
 
 export default async function BookPage({
   params,
@@ -42,6 +45,8 @@ export default async function BookPage({
     0,
   );
   if (!salon) notFound();
+  // Same key the public shop page uses, so a campaign code captured there reaches this flow (and a code on this URL works too).
+  const campaignKey = salonKey(country, city, salonSlug);
   const publicStatus = await fetchDiscoveryOrNull<PublicSalonStatusDto>(
     `${DISCOVERY_PATHS.salons}/${country}/${city}/${salonSlug}/${DISCOVERY_PATHS.status}`,
     0,
@@ -63,7 +68,9 @@ export default async function BookPage({
 
       {publicStatus && <PublicSalonStatus status={publicStatus} compact />}
 
+      <CampaignCapture salonKey={campaignKey} />
       <BookingFlow
+        campaignKey={campaignKey}
         salonId={salon.id}
         services={salon.services}
         operatingHours={salon.operatingHours}

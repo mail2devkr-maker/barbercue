@@ -39,6 +39,7 @@ import { RescheduleBookingDialog } from "./RescheduleBookingDialog";
 import { BookingActionsBar } from "./BookingActionsBar";
 import { BookingUpiAction } from "./BookingUpiAction";
 import { hasCustomerBookingSession } from "./booking-session";
+import { forgetCampaign, recallCampaign, sessionTokenStore } from "../../lib/campaign-token";
 import { CheckInPanel, canCheckIn } from "../queue/CheckInPanel";
 import styles from "./booking.module.css";
 
@@ -72,6 +73,7 @@ export function BookingFlow({
   onlineBookingDiscountPercent = 0,
   initialServiceIds,
   initialStaffId,
+  campaignKey,
 }: {
   salonId: string;
   services: ServiceDto[];
@@ -97,6 +99,9 @@ export function BookingFlow({
   // service, not just the first — see apps/web/lib/booking-actions.ts's rebookUrl.
   initialServiceIds?: string[];
   initialStaffId?: string | null;
+  // Identifies this shop for a campaign code remembered from a shared link (lib/campaign-token.ts). When a valid, unexpired
+  // code exists for this shop it is sent as the optional `attributionToken`; the server alone decides whether it counts.
+  campaignKey?: string;
 }) {
   const { status: authStatus, user, googleLogin } = useAuth();
   const isCustomerSession = hasCustomerBookingSession(authStatus, user);
@@ -285,6 +290,8 @@ export function BookingFlow({
     if (!isCustomerSession || selectedServiceIds.length === 0 || !selectedSlot) return;
     setSubmitting(true);
     setSubmitError(null);
+    const tokenStore = sessionTokenStore();
+    const attributionToken = campaignKey ? recallCampaign(tokenStore, campaignKey) : null;
     try {
       const booking = await apiFetch<BookingDetailDto>(BOOKING_PATHS.bookings, {
         method: "POST",
@@ -296,8 +303,11 @@ export function BookingFlow({
           ...(selectedStaffId ? { preferredStaffId: selectedStaffId } : {}),
           ...(selectedStyleName ? { selectedStyleName } : {}),
           ...(creditsToRedeem > 0 ? { creditsToRedeem } : {}),
+          ...(attributionToken ? { attributionToken } : {}),
         }),
       });
+      // One shared link counts for one booking; a later, unrelated booking in this tab is not attributed to it.
+      if (campaignKey) forgetCampaign(tokenStore, campaignKey);
       void refreshCurrentAvailability().catch(() => undefined);
       setConfirmedBooking(booking);
       setCreditsToRedeem(0);
