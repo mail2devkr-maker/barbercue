@@ -7,7 +7,21 @@ import { entityErrorText, listQuery } from "./inventory";
 export interface CursorPage<T> {
   items: T[];
   nextCursor: string | null;
-  hasMore: boolean;
+  /** Some lists (the customer directory) send only a cursor; then more exists exactly when there is a cursor. */
+  hasMore?: boolean;
+}
+
+export interface CursorListOptions {
+  /** Error codes that mean "this cursor no longer matches the filters"; the list restarts instead of failing. */
+  mismatchCodes?: readonly string[];
+  /** Words for a server error code; defaults to the inventory wording. */
+  errorText?: (code: string | undefined, message: string) => string;
+}
+
+const DEFAULT_MISMATCH_CODES: readonly string[] = ["CURSOR_FILTER_MISMATCH"];
+
+function moreAvailable<T>(page: CursorPage<T>): boolean {
+  return page.nextCursor !== null && (page.hasMore ?? true);
 }
 
 export interface CursorListState<T> {
@@ -16,6 +30,8 @@ export interface CursorListState<T> {
   loading: boolean;
   loadingMore: boolean;
   error: string | null;
+  /** HTTP status of the failed first page (404 when the server does not have this route yet), else null. */
+  errorStatus: number | null;
   /** A one-off remark, for example that the list was reloaded because its filters changed under a cursor. */
   notice: string | null;
   hasMore: boolean;
@@ -28,13 +44,21 @@ export interface CursorListState<T> {
  * cursor the server issued for exactly those filters, and a response for filters that have since changed is dropped. If the
  * server says the cursor no longer matches the filters the list restarts from the first page instead of mixing pages.
  */
-export function useCursorList<T>(path: string, params: Record<string, string | boolean | null | undefined>, enabled: boolean = true): CursorListState<T> {
+export function useCursorList<T>(
+  path: string,
+  params: Record<string, string | boolean | null | undefined>,
+  enabled: boolean = true,
+  options: CursorListOptions = {},
+): CursorListState<T> {
+  const mismatchCodes = options.mismatchCodes ?? DEFAULT_MISMATCH_CODES;
+  const errorText = options.errorText ?? entityErrorText;
   const [items, setItems] = useState<T[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(enabled);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const generation = useRef(0);
@@ -48,18 +72,20 @@ export function useCursorList<T>(path: string, params: Record<string, string | b
       if (cancelled) return;
       setLoading(true);
       setError(null);
+      setErrorStatus(null);
       try {
         const page = await apiFetch<CursorPage<T>>(`${path}?${listQuery(JSON.parse(paramsKey) as Record<string, string | boolean | null | undefined>, null)}`);
         if (cancelled || mine !== generation.current) return;
         setItems(page.items);
         setCursor(page.nextCursor);
-        setHasMore(page.hasMore && page.nextCursor !== null);
+        setHasMore(moreAvailable(page));
       } catch (err) {
         if (cancelled || mine !== generation.current) return;
         setItems([]);
         setCursor(null);
         setHasMore(false);
-        setError(err instanceof ApiError ? entityErrorText(err.code, err.message) : "Could not load this list.");
+        setError(err instanceof ApiError ? errorText(err.code, err.message) : "Could not load this list.");
+        setErrorStatus(err instanceof ApiError ? err.status : null);
       } finally {
         if (!cancelled && mine === generation.current) setLoading(false);
       }
@@ -79,26 +105,26 @@ export function useCursorList<T>(path: string, params: Record<string, string | b
         if (mine !== generation.current) return;
         setItems((prev) => [...prev, ...page.items]);
         setCursor(page.nextCursor);
-        setHasMore(page.hasMore && page.nextCursor !== null);
+        setHasMore(moreAvailable(page));
       })
       .catch((err: unknown) => {
         if (mine !== generation.current) return;
-        if (err instanceof ApiError && err.code === "CURSOR_FILTER_MISMATCH") {
+        if (err instanceof ApiError && mismatchCodes.includes(err.code)) {
           setNotice("The list changed while you were paging, so it was reloaded from the start.");
           setVersion((v) => v + 1);
         } else {
-          setError(err instanceof ApiError ? entityErrorText(err.code, err.message) : "Could not load more.");
+          setError(err instanceof ApiError ? errorText(err.code, err.message) : "Could not load more.");
         }
       })
       .finally(() => {
         if (mine === generation.current) setLoadingMore(false);
       });
-  }, [cursor, loadingMore, path, paramsKey]);
+  }, [cursor, loadingMore, path, paramsKey, mismatchCodes, errorText]);
 
   const reload = useCallback(() => {
     setNotice(null);
     setVersion((v) => v + 1);
   }, []);
 
-  return { items, loading, loadingMore, error, notice, hasMore, loadMore, reload };
+  return { items, loading, loadingMore, error, errorStatus, notice, hasMore, loadMore, reload };
 }

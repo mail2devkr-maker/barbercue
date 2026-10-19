@@ -14,6 +14,7 @@ import {
 import { apiFetch, ApiError } from "../../../../../../../lib/api";
 import { Button } from "../../../../../../../components/ui/Button";
 import { CustomerVisitHistory } from "../../../../../../../components/dashboard/CustomerVisitHistory";
+import { CustomerServiceHistory } from "../../../../../../../components/dashboard/CustomerServiceHistory";
 import styles from "../../../../../../../components/dashboard/dashboard.module.css";
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -261,6 +262,8 @@ export default function DashboardCustomerDetailPage({
           })}
         </ul>
       )}
+
+      <CustomerServiceHistory salonId={salonId} customerId={customerId} />
 
       <CustomerVisitHistory salonId={salonId} customerId={customerId} />
 
