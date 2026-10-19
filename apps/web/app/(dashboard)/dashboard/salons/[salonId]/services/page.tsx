@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { DASHBOARD_PATHS, Role, SalonType, formatMoney } from "@barbercue/shared";
 import type { SalonServiceDto, SalonTypeResultDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
@@ -10,8 +11,20 @@ import { CatalogImportPanel } from "../../../../../../components/dashboard/Catal
 import { RemoveAllServicesControl } from "../../../../../../components/dashboard/RemoveAllServicesControl";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { ServiceFilterBar } from "../../../../../../components/dashboard/ServiceFilterBar";
+import { ServiceTaxonomyPicker } from "../../../../../../components/dashboard/ServiceTaxonomyPicker";
 import { Button } from "../../../../../../components/ui/Button";
 import { filterServices, groupForDisplay, listCategories } from "../../../../../../lib/service-categories";
+import {
+  EMPTY_CHOICE,
+  categoryLine,
+  choiceFromService,
+  choiceProblem,
+  parseServiceTree,
+  sortedTree,
+  taxonomyFields,
+  type ServiceTree,
+  type TaxonomyChoice,
+} from "../../../../../../lib/service-taxonomy";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 import filterStyles from "../../../../../../components/dashboard/service-filter.module.css";
 
@@ -40,7 +53,7 @@ const SALON_TYPE_OPTIONS = [
 interface Draft {
   name: string;
   description: string;
-  category: string;
+  taxonomy: TaxonomyChoice;
   price: string;
   durationMinutes: string;
 }
@@ -48,13 +61,15 @@ interface Draft {
 const EMPTY_DRAFT: Draft = {
   name: "",
   description: "",
-  category: "",
+  taxonomy: EMPTY_CHOICE,
   price: "",
   durationMinutes: "30",
 };
 
 function validate(draft: Draft): string | null {
   if (!draft.name.trim()) return "Give the service a name, like “Haircut”.";
+  const categoryProblem = choiceProblem(draft.taxonomy);
+  if (categoryProblem) return categoryProblem;
   const price = Number(draft.price);
   if (!Number.isFinite(price) || price < 0) return "Enter a price, like 300.";
   if (price > MAX_PRICE) return "That price looks too high — please check it.";
@@ -65,11 +80,11 @@ function validate(draft: Draft): string | null {
   return null;
 }
 
-function payloadFor(draft: Draft) {
+function payloadFor(draft: Draft, mode: "create" | "update") {
   return {
     name: draft.name.trim(),
     description: draft.description.trim() || undefined,
-    category: draft.category.trim() || undefined,
+    ...taxonomyFields(draft.taxonomy, mode),
     price: Number(draft.price),
     durationMinutes: Number(draft.durationMinutes),
   };
@@ -92,6 +107,21 @@ export default function DashboardServicesPage({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(EMPTY_DRAFT);
   const [showInactive, setShowInactive] = useState(false);
+  // The shop's category tree; null when the server has none (an older backend), which keeps the plain category text box.
+  const [tree, setTree] = useState<ServiceTree | null>(null);
+
+  const refreshTree = useCallback(async () => {
+    try {
+      const parsed = parseServiceTree(await apiFetch<unknown>(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/service-categories`));
+      setTree(parsed ? sortedTree(parsed) : null);
+    } catch {
+      setTree(null);
+    }
+  }, [salonId]);
+
+  useEffect(() => {
+    void Promise.resolve().then(refreshTree);
+  }, [refreshTree]);
   const [serviceSearch, setServiceSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
@@ -162,9 +192,10 @@ export default function DashboardServicesPage({
     try {
       const created = await apiFetch<SalonServiceDto>(base, {
         method: "POST",
-        body: JSON.stringify(payloadFor(draft)),
+        body: JSON.stringify(payloadFor(draft, "create")),
       });
       setServices((current) => [...(current ?? []), created]);
+      void refreshTree();
       setDraft(EMPTY_DRAFT);
       setNotice(`${created.name} added.`);
     } catch (createError) {
@@ -181,7 +212,7 @@ export default function DashboardServicesPage({
     setEditDraft({
       name: service.name,
       description: service.description ?? "",
-      category: service.category ?? "",
+      taxonomy: choiceFromService(service, tree),
       price: String(service.price),
       durationMinutes: String(service.durationMinutes),
     });
@@ -199,12 +230,12 @@ export default function DashboardServicesPage({
       const updated = await apiFetch<SalonServiceDto>(`${base}/${service.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          ...payloadFor(editDraft),
+          ...payloadFor(editDraft, "update"),
           description: editDraft.description.trim() || null,
-          category: editDraft.category.trim() || null,
         }),
       });
       replaceService(updated);
+      void refreshTree();
       setEditingId(null);
       setNotice(`${updated.name} saved.`);
     } catch (saveError) {
@@ -231,6 +262,9 @@ export default function DashboardServicesPage({
     <RequireRole roles={[Role.SALON_OWNER, Role.PLATFORM_ADMIN]} redirectTo="/dashboard/salons">
     <main className={styles.pageWide}>
       <h1 className={styles.pageTitle}>Services</h1>
+      <p className={styles.rowMeta}>
+        <Link href={`/dashboard/salons/${salonId}/services/categories`}>Manage categories and subcategories</Link>
+      </p>
       <p className={styles.pageSubtitle}>
         Choose common services or add your own. Turning one off keeps every past booking and visit
         intact while removing it from future booking and queue choices.
@@ -313,8 +347,7 @@ export default function DashboardServicesPage({
             <input id="svc-name" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} required maxLength={120} className={styles.input} placeholder="Classic Haircut" />
           </div>
           <div className={styles.fieldWrap} style={{ flex: "1 1 180px" }}>
-            <label className={styles.fieldLabel} htmlFor="svc-category">Category (optional)</label>
-            <input id="svc-category" value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))} maxLength={60} className={styles.input} placeholder="Men's Hair & Grooming" />
+            <ServiceTaxonomyPicker tree={tree} value={draft.taxonomy} onChange={(taxonomy) => setDraft((current) => ({ ...current, taxonomy }))} idPrefix="svc" />
           </div>
           <div className={styles.fieldWrap} style={{ flex: "1 1 120px" }}>
             <label className={styles.fieldLabel} htmlFor="svc-price">Price{currencyLabel}</label>
@@ -393,8 +426,7 @@ export default function DashboardServicesPage({
                     <input id={`edit-name-${service.id}`} value={editDraft.name} onChange={(event) => setEditDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} className={styles.input} />
                   </div>
                   <div className={styles.fieldWrap}>
-                    <label className={styles.fieldLabel} htmlFor={`edit-category-${service.id}`}>Category</label>
-                    <input id={`edit-category-${service.id}`} value={editDraft.category} onChange={(event) => setEditDraft((current) => ({ ...current, category: event.target.value }))} maxLength={60} className={styles.input} />
+                    <ServiceTaxonomyPicker tree={tree} value={editDraft.taxonomy} onChange={(taxonomy) => setEditDraft((current) => ({ ...current, taxonomy }))} idPrefix={`edit-${service.id}`} />
                   </div>
                   <div className={styles.fieldWrap}>
                     <label className={styles.fieldLabel} htmlFor={`edit-price-${service.id}`}>Price{currencyLabel}</label>
@@ -419,7 +451,7 @@ export default function DashboardServicesPage({
                 <div style={{ minWidth: 0 }}>
                   <span className={styles.rowTitle} style={{ opacity: service.isActive ? 1 : 0.55 }}>{service.name}</span>
                   <div className={styles.rowMeta}>
-                    {service.category ? `${service.category} · ` : ""}{formatMoney(service.price, service.currency)} · {service.durationMinutes} min{!service.isActive && " · turned off"}
+                    {categoryLine(service) ? `${categoryLine(service)} · ` : ""}{formatMoney(service.price, service.currency)} · {service.durationMinutes} min{!service.isActive && " · turned off"}
                   </div>
                   {service.description && <p className={styles.rowDescription}>{service.description}</p>}
                 </div>
