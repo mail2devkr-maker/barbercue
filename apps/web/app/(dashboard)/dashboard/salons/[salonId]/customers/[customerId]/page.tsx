@@ -13,6 +13,8 @@ import {
 } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../../lib/api";
 import { Button } from "../../../../../../../components/ui/Button";
+import { CustomerVisitHistory } from "../../../../../../../components/dashboard/CustomerVisitHistory";
+import { CustomerServiceHistory } from "../../../../../../../components/dashboard/CustomerServiceHistory";
 import styles from "../../../../../../../components/dashboard/dashboard.module.css";
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -155,13 +157,14 @@ export default function DashboardCustomerDetailPage({
         ← Back to customers
       </Link>
       <h1 className={styles.pageTitle}>{summary.phone ?? summary.email ?? "No contact on file"}</h1>
+      <p className={styles.pageSubtitle}>Name not on file. This customer is identified by their verified phone or email.</p>
       <p className={styles.pageSubtitle}>{graceStatus}</p>
       <p className={styles.pageSubtitle}>
         Cancellation courtesy · {cancellationWaiversUsed} of {CANCELLATION_COURTESY_WAIVER_LIMIT} used · {cancellationWaiversRemaining} remaining
       </p>
 
       <div className={styles.rowMeta} style={{ margin: "4px 0 20px" }}>
-        {summary.completedCount} completed · {summary.cancelledCount} cancelled · {summary.noShowCount} no-show
+        Bookings: {summary.completedCount} completed · {summary.cancelledCount} cancelled · {summary.noShowCount} no-show (Live Queue visits are listed below)
         {summary.segment && ` · ${SEGMENT_LABEL[summary.segment]} customer`}
       </div>
 
@@ -259,6 +262,10 @@ export default function DashboardCustomerDetailPage({
           })}
         </ul>
       )}
+
+      <CustomerServiceHistory salonId={salonId} customerId={customerId} />
+
+      <CustomerVisitHistory salonId={salonId} customerId={customerId} />
 
       {pendingAction && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(20,16,12,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>

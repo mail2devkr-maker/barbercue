@@ -7,6 +7,7 @@ import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { RequireRole } from "../../../../../../components/auth/RequireRole";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
+import { ChairBulkActions, ChairSelectBox } from "../../../../../../components/dashboard/ChairBulkActions";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 // ChairStatus values are database enums, not language an owner should be shown.
@@ -32,6 +33,16 @@ export default function DashboardChairsPage({
   const [notice, setNotice] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+
+  // Reloads the real list after a bulk removal, so the page never shows what the server did not do.
+  async function reloadChairs() {
+    try {
+      setChairs(await apiFetch<SalonChairDto[]>(base));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not reload chairs.");
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -133,12 +144,29 @@ export default function DashboardChairsPage({
       {chairs === null && !error && <p className={styles.loadingText}>Loading…</p>}
       {chairs?.length === 0 && <p className={styles.emptyState}>No chairs yet. Add your first one above.</p>}
       {chairs && chairs.length > 0 && (
+        <ChairBulkActions salonId={salonId} chairs={chairs} selected={selected} onSelectionChange={setSelected} onChanged={reloadChairs} />
+      )}
+      {chairs && chairs.length > 0 && (
         <ul className={styles.rowList}>
           {chairs.map((c) => (
             <li key={c.id} className={styles.row}>
-              <div style={{ minWidth: 0 }}>
-                <span className={styles.rowTitle} style={{ opacity: c.status === ChairStatus.ACTIVE ? 1 : 0.55 }}>{c.label}</span>
-                <div className={styles.rowMeta}>{STATUS_LABEL[c.status]}</div>
+              <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
+                <ChairSelectBox
+                  chair={c}
+                  checked={selected.has(c.id)}
+                  onChange={(next) =>
+                    setSelected((prev) => {
+                      const copy = new Set(prev);
+                      if (next) copy.add(c.id);
+                      else copy.delete(c.id);
+                      return copy;
+                    })
+                  }
+                />
+                <div style={{ minWidth: 0 }}>
+                  <span className={styles.rowTitle} style={{ opacity: c.status === ChairStatus.ACTIVE ? 1 : 0.55 }}>{c.label}</span>
+                  <div className={styles.rowMeta}>{STATUS_LABEL[c.status]}</div>
+                </div>
               </div>
               <div className={styles.rowActions}>
                 {c.status === ChairStatus.INACTIVE ? (

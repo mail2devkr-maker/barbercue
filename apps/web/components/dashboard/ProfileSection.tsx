@@ -5,6 +5,7 @@ import { DASHBOARD_PATHS, updateSalonProfileSchema } from "@barbercue/shared";
 import type { SalonProfileDetailDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import { Button } from "../ui/Button";
+import { DescriptionAssistant } from "./DescriptionAssistant";
 import styles from "./dashboard.module.css";
 
 type FormState = {
@@ -159,6 +160,8 @@ export function ProfileSection({ salonId }: { salonId: string }) {
               style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--bc-border)", font: "inherit", background: "var(--bc-surface)", color: "var(--bc-ink)" }}
             />
           </label>
+          {/* Optional helper. It only fills the box above; saving stays the owner's explicit step below. */}
+          <DescriptionAssistant salonId={salonId} onUse={(text) => update({ description: text })} />
           <div>
             <Button type="button" variant="secondary" onClick={() => void save()} disabled={saving}>
               {saving ? "Saving…" : "Save profile"}
