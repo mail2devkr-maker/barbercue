@@ -2072,6 +2072,91 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       await api('post', `${SALON()}/invoices/${invoiceA.id}/void`, tok.owner).send({ reason: 'Entered by mistake' }).expect(409); // refund first
     });
 
+    it('serves account-linked CRM totals and completed service history without exposing another salon', async () => {
+      const customerBase = `dashboard/salons/${ids.salon}/customers`;
+      const directory = await api(
+        'get',
+        `${customerBase}/directory?q=${ids.cust1}&limit=50`,
+        tok.owner,
+      ).expect(200);
+      expect(directory.headers['cache-control']).toContain('private');
+      expect(directory.headers['cache-control']).toContain('no-store');
+      const customer = (directory.body.items as Array<Record<string, unknown>>).find(
+        (item) => item.customerId === ids.cust1,
+      );
+      expect(customer).toMatchObject({
+        customerId: ids.cust1,
+        displayName: null,
+        displayNameSource: 'NOT_ON_FILE',
+        recordedCollections: 295,
+        recordedRefunds: 50,
+        totalSpent: 245,
+      });
+      const completedVisits = Number(customer?.completedVisitCount);
+      expect(customer?.segment).toBe(
+        completedVisits >= 5
+          ? 'frequent'
+          : completedVisits >= 2
+            ? 'repeat'
+            : completedVisits === 1
+              ? 'new'
+              : null,
+      );
+
+      const history = await api(
+        'get',
+        `${customerBase}/${ids.cust1}/services?limit=50`,
+        tok.owner,
+      ).expect(200);
+      const bookingRows = (history.body.items as Array<Record<string, unknown>>).filter(
+        (item) => item.bookingId === bookingA,
+      );
+      expect(bookingRows).toHaveLength(1);
+      expect(bookingRows[0]).toMatchObject({
+        source: 'ONLINE_BOOKING',
+        serviceName: 'Haircut',
+        amount: 250,
+        amountKind: 'INVOICED',
+      });
+
+      const firstPage = await api(
+        'get',
+        `${customerBase}/directory?limit=1&sort=totalSpent`,
+        tok.owner,
+      ).expect(200);
+      expect(firstPage.body.nextCursor).toEqual(expect.any(String));
+      const secondPage = await api(
+        'get',
+        `${customerBase}/directory?limit=1&sort=totalSpent&cursor=${encodeURIComponent(firstPage.body.nextCursor)}`,
+        tok.owner,
+      ).expect(200);
+      expect(secondPage.body.items[0].customerId).not.toBe(
+        firstPage.body.items[0].customerId,
+      );
+      await api(
+        'get',
+        `${customerBase}/directory?limit=1&sort=totalSpent&segment=repeat&cursor=${encodeURIComponent(firstPage.body.nextCursor)}`,
+        tok.owner,
+      ).expect(400);
+      await api(
+        'get',
+        `${customerBase}/directory?limit=1&sort=totalSpent&cursor=${encodeURIComponent(firstPage.body.nextCursor)}`,
+        tok.ownerDelegate,
+      ).expect(400);
+
+      await api('get', `${customerBase}/directory`, tok.ravi).expect(403);
+      await api(
+        'get',
+        `dashboard/salons/${ids.otherSalon}/customers/directory?q=${ids.cust1}`,
+        tok.outsider,
+      ).expect(403);
+      await api(
+        'get',
+        `${customerBase}/${ids.outsider}/services`,
+        tok.owner,
+      ).expect(404);
+    });
+
     it('keeps the ledger append-only and the issued amounts frozen at the database level', async () => {
       await expect(prisma.$executeRaw`UPDATE "invoices" SET "total" = 1 WHERE "id" = ${invoiceA.id}`).rejects.toThrow(/immutable/);
       await expect(prisma.$executeRaw`UPDATE "invoice_payments" SET "amount" = 1 WHERE "invoiceId" = ${invoiceA.id}`).rejects.toThrow(/append-only/);

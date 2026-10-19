@@ -1,6 +1,6 @@
 # FastQue Owner Customer CRM and Visit History API v1
 
-Status: Draft implementation contract. Backend source for this slice is in the customer-history recovery PR; do not treat this draft or CI as production release authorization.
+Status: Implemented base history contract. The additive secure directory and per-service history are specified in `FASTQUE_CUSTOMER_CRM_DIRECTORY_V1.md`; neither contract is production release authorization.
 
 ## Scope
 
@@ -18,9 +18,9 @@ Requirement #5: salon-scoped owner customer search/detail and unified history fo
 
 Base: `/api/v1/dashboard/salons/:salonId/customers`
 
-### `GET /`
+### `GET /` (legacy-compatible offset list)
 
-List account-linked customers with summary and visit roll-up.
+List account-linked customers with summary and visit roll-up. Its numeric `nextCursor` behavior is preserved for existing clients.
 
 Query: `offset` (integer, default 0), `limit` (1–50, default 20), and either `q` or legacy `search` (1–120 characters; not both). Existing offset pagination remains compatible. List-level `segment`, `sort`, and cursor pagination are not part of this slice and remain follow-up work.
 
@@ -87,5 +87,6 @@ No mutation is performed by these routes; idempotency keys are not applicable. T
 
 - The User model has no canonical display-name field, so the API does not invent one from a guest label. The UI may show a factual per-visit recorded label and indicate that the account name is not on file.
 - Customer account self-history remains served by the existing customer booking API; this owner CRM endpoint must not be reused as customer authorization.
-- Owner list `segment`, `sort`, and cursor pagination, customer-wide recorded-collection summary, verified display-name persistence, and guest-identity claim are not implemented here.
+- Owner list `segment`, `sort`, secure cursor pagination, actual recorded-collection/repeat metrics and per-service history are specified in `FASTQUE_CUSTOMER_CRM_DIRECTORY_V1.md`.
+- Verified display-name persistence and guest-identity claim remain unimplemented. Guest identity claim requires a separately verified ownership flow; names and phone numbers alone are insufficient.
 - Backend implementation completion SHA and exact-head disposable-PostgreSQL CI result are recorded in the linked implementation PR after publication. Runtime/production and physical-device certification remain separate.

@@ -439,6 +439,8 @@ export const BookingErrorCode = {
   // Customer CRM history paging cannot safely issue or validate its signed cursor without the
   // application access-token signing secret.
   CUSTOMER_HISTORY_CURSOR_UNAVAILABLE: 'CUSTOMER_HISTORY_CURSOR_UNAVAILABLE',
+  // Customer CRM directory/service pagination fails closed if the cursor signing key is unavailable.
+  CUSTOMER_DIRECTORY_CURSOR_UNAVAILABLE: 'CUSTOMER_DIRECTORY_CURSOR_UNAVAILABLE',
   // Customer dues + cancellation policy mission — owner ledger waive/restore mutations.
   LEDGER_ENTRY_NOT_FOUND: 'LEDGER_ENTRY_NOT_FOUND',
   // Attempted to waive a ledger entry that isn't an OUTSTANDING NO_SHOW_CHARGE, or whose customer

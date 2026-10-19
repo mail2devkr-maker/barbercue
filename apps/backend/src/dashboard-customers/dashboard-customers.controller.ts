@@ -4,14 +4,19 @@ import {
   Role,
   ownerCustomerListQuerySchema,
   ownerCustomerHistoryQuerySchema,
+  ownerCustomerDirectoryQuerySchema,
+  ownerCustomerServicesQuerySchema,
   type AuthenticatedUser,
   type OwnerCustomerListQuery,
   type OwnerCustomerHistoryQuery,
+  type OwnerCustomerDirectoryQuery,
+  type OwnerCustomerServicesQuery,
 } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { DashboardCustomersService } from './dashboard-customers.service';
+import { CustomerDirectoryQueryService } from './customer-directory-query.service';
 
 // Owner-only for ordinary staff, same reasoning as DashboardBookingsController: customer contact
 // details and visit history are not given to ordinary staff by default.
@@ -23,7 +28,23 @@ import { DashboardCustomersService } from './dashboard-customers.service';
 @Controller(DASHBOARD_PATHS.dashboard)
 @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
 export class DashboardCustomersController {
-  constructor(private readonly customers: DashboardCustomersService) {}
+  constructor(
+    private readonly customers: DashboardCustomersService,
+    private readonly customerDirectory: CustomerDirectoryQueryService,
+  ) {}
+
+  @Get(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}/${DASHBOARD_PATHS.customerDirectory}`,
+  )
+  @Header('Cache-Control', 'private, no-store')
+  directory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Query(new ZodValidationPipe(ownerCustomerDirectoryQuerySchema))
+    query: OwnerCustomerDirectoryQuery,
+  ) {
+    return this.customerDirectory.directory(user.id, salonId, query);
+  }
 
   @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}`)
   @Header('Cache-Control', 'private, no-store')
@@ -66,6 +87,20 @@ export class DashboardCustomersController {
     query: OwnerCustomerHistoryQuery,
   ) {
     return this.customers.history(user.id, salonId, customerId, query);
+  }
+
+  @Get(
+    `${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.customers}/:customerId/${DASHBOARD_PATHS.customerServices}`,
+  )
+  @Header('Cache-Control', 'private, no-store')
+  services(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Param('customerId') customerId: string,
+    @Query(new ZodValidationPipe(ownerCustomerServicesQuerySchema))
+    query: OwnerCustomerServicesQuery,
+  ) {
+    return this.customerDirectory.services(user.id, salonId, customerId, query);
   }
 
   // Customer Dues + Cancellation Policy mission — reversible New Customer No-Show Grace waiver.

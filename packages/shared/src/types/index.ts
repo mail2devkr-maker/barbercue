@@ -913,6 +913,71 @@ export interface OwnerCustomerSummaryDto {
   noShowLiveQueueVisitCount?: number;
 }
 
+/**
+ * Server-filtered directory row. `totalSpent` is net FastQue shop-recorded invoice collections
+ * (payments less recorded refunds), not an estimate of service value or provider settlement.
+ * No canonical customer name exists yet, so the API explicitly returns null rather than borrowing
+ * a visit's contact label as an identity.
+ */
+export interface OwnerCustomerDirectoryItemDto {
+  customerId: string;
+  phone: string | null;
+  email: string | null;
+  currency: string | null;
+  displayName: null;
+  displayNameSource: 'NOT_ON_FILE';
+  totalBookings: number;
+  completedCount: number;
+  cancelledCount: number;
+  noShowCount: number;
+  firstVisitAt: string | null;
+  lastVisitAt: string | null;
+  totalVisitCount: number;
+  completedVisitCount: number;
+  liveQueueVisitCount: number;
+  completedLiveQueueVisitCount: number;
+  cancelledLiveQueueVisitCount: number;
+  expiredLiveQueueVisitCount: number;
+  noShowLiveQueueVisitCount: number;
+  recordedCollections: number;
+  recordedRefunds: number;
+  totalSpent: number;
+  repeatVisitCount: number;
+  /** Segment is based on completed bookings plus deduplicated standalone authenticated queue visits. */
+  segment: CustomerSegment | null;
+}
+
+export interface OwnerCustomerDirectoryPageDto {
+  salonId: string;
+  currency: string | null;
+  items: OwnerCustomerDirectoryItemDto[];
+  nextCursor: string | null;
+}
+
+export interface OwnerCustomerServiceHistoryItemDto {
+  /** Stable source-qualified row id; it is not an account identity or credential. */
+  id: string;
+  visitId: string;
+  bookingId: string | null;
+  source: 'ONLINE_BOOKING' | 'IN_SHOP_APPOINTMENT' | 'LIVE_QUEUE';
+  serviceId: string | null;
+  serviceName: string;
+  staffName: string | null;
+  date: string;
+  completedAt: string | null;
+  /** Invoiced line total only; null means no matching issued invoice line is recorded. */
+  amount: number | null;
+  amountKind: 'INVOICED' | null;
+  currency: string | null;
+}
+
+export interface OwnerCustomerServiceHistoryPageDto {
+  salonId: string;
+  customerId: string;
+  items: OwnerCustomerServiceHistoryItemDto[];
+  nextCursor: string | null;
+}
+
 // POST dashboard/.../ledger/:ledgerEntryId/waive|restore response.
 export interface LedgerActionResultDto {
   ledgerEntry: CustomerLedgerEntryDto;
