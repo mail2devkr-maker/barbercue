@@ -1,0 +1,66 @@
+# FastQue 30-requirement current status matrix
+
+Snapshot: 2026-10-20. Roadmap source: Issue [#221](https://github.com/mail2devkr-maker/barbercue/issues/221), owner decisions, and the correction in PR [#265 comment #6275668401](https://github.com/mail2devkr-maker/barbercue/pull/265#issuecomment-6275668401).
+
+This matrix distinguishes backend code, tests, non-production integration, frontend, and production. “Candidate” is not a production release. No row is production-live based only on source or CI.
+
+## Exact evidence
+
+- Non-production integrated base: PR [#264](https://github.com/mail2devkr-maker/barbercue/pull/264), head `124ad6d7c2d61ebffc47ac8ebbad8bbc9cb192c5`.
+- Customer CRM extension: Draft PR [#265](https://github.com/mail2devkr-maker/barbercue/pull/265), verified current head `d3de1a5cf4221178aab8d47a4fe22bc4b9b4677b`, stacked on #264. [Owner Operations exact-head CI](https://github.com/mail2devkr-maker/barbercue/actions/runs/39310008153) and [Photo Activation exact-head CI](https://github.com/mail2devkr-maker/barbercue/actions/runs/39310008022) passed.
+- #265 evidence recorded in its exact-head CI/review: complete 65-migration disposable PostgreSQL application with no schema drift; 481/481 shared tests; 66/66 focused authenticated Owner Operations PostgreSQL E2E; synthetic database restore fingerprints and database integrity guards passed. Its broad comparison reports 0 unexpected failures against a stored older baseline (`f2f2b2c...`), not a fresh comparison against current production master `92c288a6f4c1c5abc4b8b7db9364fac4e0a886bd`.
+- Current follow-up branch `codex/fastque-owner-assistant-20261020` is based on #265. It adds a bounded, deterministic, provider-free Owner Insights endpoint and capability status; local focused tests passed 18/18 and shared tests passed 483/483. Shared typecheck/build, Prisma schema validation, and scoped source lint passed. The backend workspace typecheck is not locally certifiable because Prisma generation could not retrieve its pinned engine checksum (GitHub DNS failure), leaving a stale generated client; exact-head CI is pending and must generate the client from the candidate schema.
+- In the table, SOURCE COMPLETE means the scoped backend implementation exists; TEST CERTIFIED means the cited deterministic tests passed; INTEGRATED means the code is in the stated non-production candidate; FRONTEND COMPLETE requires a verified UI integration; PRODUCTION LIVE requires a deployed, authenticated runtime check. “Partial,” “candidate,” and `NO` must not be upgraded by inference from another column.
+- Every row remains `PRODUCTION LIVE: NO`. The verified production release blockers are listed below.
+
+| # | Canonical requirement | Backend source | Test certification | Non-production integration | Frontend | Production live | Blocked / incomplete |
+|---:|---|---|---|---|---|---|---|
+| 1 | Revenue reporting | Candidate #226 in #264 stack | #265 exact-head certification passed | #264/#265 candidate | Separate frontend PRs; final API/UI integration not certified | NO | Production financial reconciliation/runtime acceptance |
+| 2 | Daily, weekly, and monthly aggregation | Candidate #226 in #264 stack | #265 exact-head certification passed | #264/#265 candidate | Separate frontend work | NO | Production runtime not verified |
+| 3 | Booking attribution | Candidate #230 in #264 stack | #265 exact-head certification passed | #264/#265 candidate | UI attribution display not certified | NO | Only evidence-backed attribution is stored; production not verified |
+| 4 | Customer-wise revenue breakdown | Candidate #226 supports customer grouping | #265 exact-head certification passed | #264/#265 candidate | Customer grouping UI not certified | NO | Production reconciliation; avoid guessed guest identities |
+| 5 | Customer CRM | #265 adds secure cursor directory, filters, segments, actual recorded net collections, and service history | #265 exact-head tests/E2E passed as above | #265 stacked on #264 | Frontend directory integration remains separate | NO | Canonical customer name absent; `displayName: null` is intentional; no guest matching by name/phone |
+| 6 | External reviews | #261 profile links, not third-party review ingestion | #265 exact-head certification passed | #264/#265 candidate | External review UI/source aggregation not certified | NO | Provider ingestion/API access absent |
+| 7 | Canonical service category/subcategory tree | #259 stable salon-scoped IDs with legacy text compatibility | #265 exact-head migration/catalog certification passed | #264/#265 candidate | Final catalog UI integration not certified | NO | Production migration gate |
+| 8 | Inventory | #249 movement ledger and server-computed stock | #265 exact-head E2E/certification passed | #264/#265 candidate | Frontend workflow not production-certified | NO | No production inventory migration/runtime |
+| 9 | Three-photo shop activation | #237, with legacy active shops grandfathered | Photo Activation run 39310008022 passed | #264/#265 candidate | Frontend integration separate | NO | Production activation behavior not verified |
+| 10 | AI shop description | #246 fail-closed provider adapter and owner-reviewed draft | #265 exact-head certification passed | #264/#265 candidate | UI/provider behavior not live-certified | NO | Provider is unconfigured; paid calls not authorized |
+| 11 | Offers | #260 server-authoritative preview, eligibility, limits and booking revalidation | #265 exact-head PostgreSQL certification passed | #264/#265 candidate | UI integration separate | NO | No live payment/provider activation |
+| 12 | Verified shop location | #241 proposal/review and location update foundation | #265 exact-head certification passed | #264/#265 candidate | Owner/admin acceptance UI separate | NO | Production review flow not verified |
+| 13 | Contact import with consent | #245 bounded validation/consent preview only | #265 exact-head certification passed for preview | #264/#265 candidate | Frontend preview work may be separate; no end-to-end persistence certification | NO | Retention/deletion/suppression policy and durable import/invitations are incomplete; no messages sent |
+| 14 | Canonical shop sharing | #236 authenticated canonical share links | #265 exact-head certification passed | #264/#265 candidate | Public share UI/runtime not certified | NO | Production public-link/runtime check |
+| 15 | Owner and customer assistants | #265 does not implement assistant execution. Local follow-up adds deterministic, provider-free Owner Insights over existing overview only; customer assistant remains unimplemented | Local Owner Insights/capability tests 18/18 and shared tests 483/483 PASS; exact-head CI pending | Local branch based on #265 only | No UI integration; expose only as limited Quick Insights, not generative AI | NO | Customer real-availability search absent; no provider configured; backend typecheck requires CI Prisma client generation |
+| 16 | Promotions | #260 transactionally revalidates discounts server-side | #265 exact-head PostgreSQL certification passed | #264/#265 candidate | Frontend integration separate | NO | Production commercial-flow acceptance |
+| 17 | CSV/Excel exports | #226 candidate has CSV; XLSX/Excel support is not confirmed | CSV covered by candidate tests; XLSX NOT VERIFIED | #264/#265 candidate, partial | Export UI/Excel compatibility not certified | NO | Requirement remains partial until XLSX and spreadsheet safety are verified |
+| 18 | Owner subscriptions | No complete lifecycle backend verified in #264/#265 | NOT CERTIFIED | NONE | NOT VERIFIED | NO | Sandbox lifecycle design and payment-provider approval; no billing activation |
+| 19 | Authorized social import | No permitted import flow verified | NOT CERTIFIED | NONE | NOT VERIFIED | NO | Provider scopes/approval required; scraping prohibited |
+| 20 | Consultation scheduling | No consultation lifecycle/session backend verified | NOT CERTIFIED | NONE | NOT VERIFIED | NO | Operational/privacy policy and any calling/payment providers remain unresolved |
+| 21 | Owner email / `@fastque.com` | Separate #195 is account mapping, not mailbox provisioning | #195 had CI, but is not in #264 candidate | Separate Draft PR #195 | Separate | NO | Need distinguish verified mapping, alias/forwarding, and paid hosted mailbox; provider/cost not verified |
+| 22 | Private demo workspace | #252 isolated synthetic workspace | #265 exact-head demo PostgreSQL E2E/certification passed | #264/#265 candidate | #255/demo frontend work remains separate integration | NO | Production flag/runtime and final frontend integration |
+| 23 | Safe demo-data deletion | #252 owner-bound preview/token/delete of demo workspace only | #265 exact-head PostgreSQL deletion safeguards passed | #264/#265 candidate | UI confirmation integration separate | NO | No production demo data created; runtime safety not verified |
+| 24 | Daily Deals | #260 offer/deal eligibility and backend pricing | #265 exact-head PostgreSQL certification passed | #264/#265 candidate | Frontend integration separate | NO | Public runtime/payment behavior not certified |
+| 25 | Independent professionals | No independent-profile directory/availability backend verified | NOT CERTIFIED | NONE | NOT VERIFIED | NO | Separate identity, availability and booking contract needed; do not conflate shop staff |
+| 26 | Customer phone OTP | #257 customer OTP backend; customer and staff audiences separated | #265 exact-head synthetic-provider OTP E2E passed | #264/#265 candidate | PR #214 owns customer phone UI; integrated frontend path not certified | NO | Real provider delivery, DLT/templates, pricing/spend approval, runtime account readiness |
+| 27 | Bulk chair operations | #229 conflict-aware transactional bulk deactivation | #265 exact-head PostgreSQL certification passed | #264/#265 candidate | Frontend preview/confirmation integration separate | NO | Live owner acceptance and production migration gate |
+| 28 | Employee-authorized field operations | Separate #196 voice field-visit work; not integrated into #264/#265 | Prior PR CI is source evidence only; current browser/migration blockers remain | Separate Draft #196 | Employee page belongs to separate work; do not edit it here | NO | Draft/runtime integration, concurrency/speech lifecycle and production migration gates |
+| 29 | Admin CRM analytics | #262 signed cursor, role authorization and PII-minimized views | #265 exact-head CI includes 3/3 focused Admin CRM E2E | #264/#265 candidate | Admin UI integration separate | NO | Production admin acceptance/monitoring |
+| 30 | Owner phone onboarding | #257 supports owner phone authentication/linking; this is distinct from SMS budgets | Synthetic-provider auth tests passed in #264/#265 candidate; complete onboarding not certified | #264/#265 candidate, partial | PR #214 owner UI is separate and integrated flow not certified | NO | Verified owner onboarding/authorization and real SMS provider activation remain gated; no role from public shop phone alone |
+
+## Canonical numbering corrections
+
+- #2 is daily/weekly/monthly aggregation.
+- #4 is customer-wise revenue breakdown, not cancellation reporting.
+- #17 is CSV/Excel export, not staff-wise revenue.
+- #26 is customer phone OTP.
+- #28 is employee-authorized field operations.
+- #30 is owner phone onboarding. SMS delivery budgets are a supporting safeguard, not requirement #30.
+
+## Production release gate — NO-GO
+
+The read-only production audit is summarized here without publishing account, branch, deployment, or recovery identifiers:
+
+- Production release remains **NO-GO**. The current candidate contains database migrations, but the production application database target and the separately used migration target have not been independently matched through a safe, redacted fingerprint.
+- A fresh recovery point and a successful isolated restore rehearsal for the exact candidate are still required. Existing historical backup evidence is not a substitute for a current release recovery point.
+- The exact candidate migration set must be reconciled and rehearsed against the isolated recovery copy before any release. Do not infer migration safety from migration-count differences alone.
+- Current deployment configuration may couple a default-branch update to both application services and may execute Prisma migrations before backend startup. A backend-first, website-second rollout must be demonstrated and controlled; do not rely on merge timing or CI status for ordering.
+- Legacy Android compatibility, authenticated runtime acceptance, and an application rollback/monitoring procedure remain release gates. Keep production data and infrastructure unchanged until all are verified.

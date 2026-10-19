@@ -18,6 +18,7 @@ import {
   ownerCustomerDirectoryQuerySchema,
   ownerCustomerServicesQuerySchema,
   ownerRevenueReportQuerySchema,
+  ownerAssistantQuerySchema,
   formatInvoiceNumber,
   recordInvoicePaymentSchema,
   shopCancelBookingSchema,
@@ -659,5 +660,29 @@ describe("customer cancellation push copy", () => {
     });
     expect(hi.body).toContain("Handsome Center");
     expect(hi.body).not.toContain("null");
+  });
+});
+
+describe("ownerAssistantQuerySchema", () => {
+  it("accepts a bounded strict question and trims surrounding whitespace", () => {
+    expect(
+      ownerAssistantQuerySchema.parse({ question: "  appointments today?  " }),
+    ).toEqual({ question: "appointments today?" });
+  });
+
+  it("rejects empty, overlong and unknown fields", () => {
+    expect(ownerAssistantQuerySchema.safeParse({ question: " " }).success).toBe(
+      false,
+    );
+    expect(
+      ownerAssistantQuerySchema.safeParse({ question: "a".repeat(301) })
+        .success,
+    ).toBe(false);
+    expect(
+      ownerAssistantQuerySchema.safeParse({
+        question: "today",
+        userId: "other",
+      }).success,
+    ).toBe(false);
   });
 });
