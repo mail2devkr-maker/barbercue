@@ -110,6 +110,9 @@ export const createBookingSchema = z
     selectedStyleName: z.string().min(1).max(100).optional(),
     // Opaque, server-issued campaign token. This never accepts a source label from a client.
     attributionToken: z.string().min(40).max(128).optional(),
+    // Optional salon-published campaign. The backend rechecks dates, audience, service scope,
+    // redemption limits, and final price inside the booking transaction.
+    offerId: z.string().uuid().optional(),
     // FastQue Credits / Wallet V1: how much of the customer's own wallet balance to apply against
     // this booking's price, reducing what they pay online. Omitted or 0 = redeem nothing. The
     // backend re-validates this against both the live balance and the COMBINED price of every

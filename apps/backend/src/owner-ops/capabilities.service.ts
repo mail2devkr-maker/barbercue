@@ -21,6 +21,8 @@ const AVAILABLE_FEATURES = [
   'revenueReport',
   'inventory',
   'locationPin',
+  // Offers/promotions/Daily Deals are fully server-authoritative and require no paid provider.
+  'offers',
 ] as const satisfies readonly FastQueCapabilityKey[];
 
 @Injectable()

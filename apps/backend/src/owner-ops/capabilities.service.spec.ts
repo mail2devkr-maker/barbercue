@@ -33,7 +33,12 @@ describe('SalonCapabilitiesService', () => {
       status: 'DISABLED',
       reasonCode: 'FEATURE_DISABLED',
     });
-    for (const key of ['revenueReport', 'inventory', 'locationPin'] as const) {
+    for (const key of [
+      'revenueReport',
+      'inventory',
+      'locationPin',
+      'offers',
+    ] as const) {
       expect(result.features[key]).toEqual({
         status: 'ENABLED',
         reasonCode: null,
@@ -62,7 +67,6 @@ describe('SalonCapabilitiesService', () => {
     config.get.mockReturnValue('true');
     const result = await service.getForOwner('owner-1', 'salon-1');
     for (const key of [
-      'offers',
       'ownerAssistant',
       'customerAssistant',
       'consultations',
@@ -105,9 +109,9 @@ describe('SalonCapabilitiesService', () => {
   it('does not share mutable capability objects between responses', async () => {
     const first = await service.getForOwner('owner-1', 'salon-1');
     first.features.inventory.status = 'DISABLED';
-    first.features.offers.status = 'ENABLED';
+    first.features.offers.status = 'DISABLED';
     const second = await service.getForOwner('owner-2', 'salon-2');
     expect(second.features.inventory.status).toBe('ENABLED');
-    expect(second.features.offers.status).toBe('UNCONFIGURED');
+    expect(second.features.offers.status).toBe('ENABLED');
   });
 });

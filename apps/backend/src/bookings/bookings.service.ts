@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import { forwardRef, HttpStatus, Inject, Injectable } from '@nestjs/common';
+import {
+  forwardRef,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   BookingErrorCode,
@@ -9,6 +15,7 @@ import {
   LedgerReason,
   LedgerStatus,
   OwnerOpsErrorCode,
+  OfferErrorCode,
   PrepaymentRequirement,
   QueueEntryStatus,
   SubsidyLedgerStatus,
@@ -45,6 +52,10 @@ import { ReservationService } from './reservation.service';
 import { CancellationPolicyService } from './cancellation-policy.service';
 import { computeArrivalGuidance } from './arrival-guidance';
 import { resolveEffectiveBookingServices } from './effective-booking-services';
+import {
+  OffersService,
+  type LockedOfferApplication,
+} from '../offers/offers.service';
 
 // A booking-triggered cancellation may only auto-cancel a linked queue entry that has not yet
 // genuinely started service — WAITING (never called) or CALLED (called but not yet assigned a
@@ -121,6 +132,7 @@ export class BookingsService {
     @Inject(forwardRef(() => QueueService))
     private readonly queue: QueueService,
     private readonly credits: CustomerCreditsService,
+    @Optional() private readonly offers?: OffersService,
   ) {}
 
   async create(
@@ -145,17 +157,37 @@ export class BookingsService {
       (sum, s) => sum + decimalStringToPaise(s.price.toString()),
       0,
     );
-    // Shop-specific online offer: APP/WEB bookings receive the salon's currently configured
-    // percentage, while the underlying Service prices remain untouched. The exact amount is
-    // snapshotted on Booking below so changing/ending the offer never rewrites booking history.
-    const onlineBookingDiscountPercent =
-      source === BookingSource.APP || source === BookingSource.WEB
+    // A selected campaign replaces (never stacks with) the existing shop-wide online discount.
+    // Its price and eligibility are only a preflight; the transaction locks and revalidates the
+    // offer/redemption limit before writing the booking and immutable redemption record together.
+    let offerApplication: LockedOfferApplication | null = null;
+    if (input.offerId) {
+      if (!this.offers) {
+        throw new AppException(
+          'OFFER_UNAVAILABLE',
+          'Offer booking is not available.',
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+      offerApplication = await this.offers.previewForBooking(
+        input.salonId,
+        customerId,
+        input.offerId,
+        services,
+        source,
+      );
+    }
+    const onlineBookingDiscountPercent = offerApplication
+      ? offerApplication.percent
+      : source === BookingSource.APP || source === BookingSource.WEB
         ? (salon.onlineBookingDiscountPercent ?? 0)
         : 0;
-    const onlineBookingDiscountAmountPaise = computePercentageDiscountPaise(
-      totalPricePaise,
-      onlineBookingDiscountPercent,
-    );
+    const onlineBookingDiscountAmountPaise = offerApplication
+      ? offerApplication.discountAmountPaise
+      : computePercentageDiscountPaise(
+          totalPricePaise,
+          onlineBookingDiscountPercent,
+        );
     const discountedTotalPricePaise = Math.max(
       0,
       totalPricePaise - onlineBookingDiscountAmountPaise,
@@ -383,6 +415,34 @@ export class BookingsService {
         }
       }
 
+      let lockedOfferApplication: LockedOfferApplication | null = null;
+      if (input.offerId) {
+        lockedOfferApplication = await this.offers!.lockAndValidateForBooking(
+          tx,
+          input.salonId,
+          customerId,
+          input.offerId,
+          services,
+          source,
+          new Date(),
+        );
+        if (
+          !offerApplication ||
+          lockedOfferApplication.updatedAt.getTime() !==
+            offerApplication.updatedAt.getTime() ||
+          lockedOfferApplication.discountAmountPaise !==
+            offerApplication.discountAmountPaise ||
+          lockedOfferApplication.percent !== offerApplication.percent ||
+          lockedOfferApplication.title !== offerApplication.title
+        ) {
+          throw new AppException(
+            OfferErrorCode.CHANGED_RETRY,
+            'The offer changed while this booking was being prepared. Refresh and try again.',
+            HttpStatus.CONFLICT,
+          );
+        }
+      }
+
       const created = await tx.booking.create({
         data: {
           salonId: input.salonId,
@@ -404,6 +464,8 @@ export class BookingsService {
           onlineBookingDiscountAmount: paiseToDecimalString(
             onlineBookingDiscountAmountPaise,
           ),
+          offerId: lockedOfferApplication?.offerId ?? null,
+          offerTitle: lockedOfferApplication?.title ?? null,
           selectedStyleName: input.selectedStyleName ?? null,
           checkInOpensMinutesBefore: EARLY_CHECKIN_WINDOW_MINUTES,
           checkInDueGraceMinutes: arrivalPolicy.appointmentArrivalGraceMinutes,
@@ -418,6 +480,16 @@ export class BookingsService {
           },
         },
       });
+
+      if (lockedOfferApplication) {
+        await this.offers!.recordRedemption(
+          tx,
+          lockedOfferApplication,
+          input.salonId,
+          customerId,
+          created.id,
+        );
+      }
 
       // FastQue Credits / Wallet V1: redeem inside the same transaction as the booking's own
       // creation — a rolled-back booking (e.g. SLOT_FULL, discovered a moment later in this same
@@ -1377,6 +1449,8 @@ export class BookingsService {
           : null,
       onlineBookingDiscountPercent: booking.onlineBookingDiscountPercent,
       onlineBookingDiscountAmount: Number(booking.onlineBookingDiscountAmount),
+      offerId: booking.offerId ?? null,
+      offerTitle: booking.offerTitle ?? null,
       // Salon-scoped: a booking's amounts are denominated in its salon's currency.
       currency: booking.salon.currency,
       salonName: booking.salon.name,
