@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -19,10 +20,18 @@ import {
   type AuthenticatedUser,
   createEmployeeSchema,
   createSpecialEmployeeSchema,
+  adminCrmAnalyticsQuerySchema,
+  adminCrmFollowUpPageQuerySchema,
+  adminCrmLeadPageQuerySchema,
+  adminCrmVisitPageQuerySchema,
   resetEmployeePasswordSchema,
   updateEmployeeSchema,
   type CreateEmployeeInput,
   type CreateSpecialEmployeeInput,
+  type AdminCrmAnalyticsQuery,
+  type AdminCrmFollowUpPageQuery,
+  type AdminCrmLeadPageQuery,
+  type AdminCrmVisitPageQuery,
   type DecideVerificationInput,
   type ResetEmployeePasswordInput,
   type UpdateEmployeeInput,
@@ -189,6 +198,51 @@ export class AdminController {
     @Query('status') status?: string,
   ) {
     return this.crm.listFollowUps(employeeId, status);
+  }
+
+  // Cursor-paged CRM reads may traverse the complete field-sales archive and are deliberately
+  // restricted to PLATFORM_ADMIN. Legacy bounded array routes above retain their existing RBAC.
+  @Get(`${ADMIN_PATHS.crm}/analytics`)
+  @Roles(Role.PLATFORM_ADMIN)
+  @Header('Cache-Control', 'private, no-store')
+  crmAnalytics(
+    @Query(new ZodValidationPipe(adminCrmAnalyticsQuerySchema))
+    query: AdminCrmAnalyticsQuery,
+  ) {
+    return this.crm.getAnalytics(query);
+  }
+
+  @Get(`${ADMIN_PATHS.crm}/${ADMIN_PATHS.leads}/page`)
+  @Roles(Role.PLATFORM_ADMIN)
+  @Header('Cache-Control', 'private, no-store')
+  crmLeadsPage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminCrmLeadPageQuerySchema))
+    query: AdminCrmLeadPageQuery,
+  ) {
+    return this.crm.pageLeads(user.id, query);
+  }
+
+  @Get(`${ADMIN_PATHS.crm}/${ADMIN_PATHS.visits}/page`)
+  @Roles(Role.PLATFORM_ADMIN)
+  @Header('Cache-Control', 'private, no-store')
+  crmVisitsPage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminCrmVisitPageQuerySchema))
+    query: AdminCrmVisitPageQuery,
+  ) {
+    return this.crm.pageVisits(user.id, query);
+  }
+
+  @Get(`${ADMIN_PATHS.crm}/${ADMIN_PATHS.followUps}/page`)
+  @Roles(Role.PLATFORM_ADMIN)
+  @Header('Cache-Control', 'private, no-store')
+  crmFollowUpsPage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(adminCrmFollowUpPageQuerySchema))
+    query: AdminCrmFollowUpPageQuery,
+  ) {
+    return this.crm.pageFollowUps(user.id, query);
   }
 
   @Get(ADMIN_PATHS.locationVerifications)

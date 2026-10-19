@@ -34,6 +34,10 @@ describe('AdminController authorization', () => {
       Role.HR_ADMIN,
       Role.SALES_ADMIN,
     ]);
+    expect(routeRoles('crmAnalytics')).toEqual([Role.PLATFORM_ADMIN]);
+    expect(routeRoles('crmLeadsPage')).toEqual([Role.PLATFORM_ADMIN]);
+    expect(routeRoles('crmVisitsPage')).toEqual([Role.PLATFORM_ADMIN]);
+    expect(routeRoles('crmFollowUpsPage')).toEqual([Role.PLATFORM_ADMIN]);
     expect(routeRoles('listEmployees')).toEqual([
       Role.PLATFORM_ADMIN,
       Role.CO_FOUNDER,

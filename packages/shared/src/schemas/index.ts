@@ -545,6 +545,97 @@ export const updateCrmFollowUpSchema = z
   });
 export type UpdateCrmFollowUpInput = z.infer<typeof updateCrmFollowUpSchema>;
 
+// Platform CRM analytics are read-only and bounded. Date filters are UTC instants with an
+// exclusive upper bound; this avoids host-local timezone interpretation in a global admin view.
+const ADMIN_CRM_MAX_RANGE_MS = 366 * 24 * 60 * 60 * 1000;
+const adminCrmRangeFields = {
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+};
+const refineAdminCrmRange = (
+  value: { from?: string; to?: string },
+  context: z.RefinementCtx,
+) => {
+  if (!value.from || !value.to) return;
+  const from = Date.parse(value.from);
+  const to = Date.parse(value.to);
+  if (from >= to) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "from must be earlier than to",
+      path: ["to"],
+    });
+  }
+};
+const refineAdminCrmPageRange = (
+  value: { from?: string; to?: string },
+  context: z.RefinementCtx,
+) => {
+  refineAdminCrmRange(value, context);
+  if (
+    value.from &&
+    value.to &&
+    Date.parse(value.from) < Date.parse(value.to) &&
+    Date.parse(value.to) - Date.parse(value.from) > ADMIN_CRM_MAX_RANGE_MS
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "date range cannot exceed 366 days",
+      path: ["to"],
+    });
+  }
+};
+const adminCrmPageFields = {
+  employeeId: z.string().uuid().optional(),
+  q: z.string().trim().min(1).max(160).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().min(1).max(2048).optional(),
+};
+
+export const adminCrmLeadPageQuerySchema = z
+  .object({
+    ...adminCrmPageFields,
+    ...adminCrmRangeFields,
+    status: z.nativeEnum(CrmLeadStatus).optional(),
+    source: z.nativeEnum(CrmLeadSource).optional(),
+  })
+  .superRefine(refineAdminCrmPageRange);
+export type AdminCrmLeadPageQuery = z.infer<typeof adminCrmLeadPageQuerySchema>;
+
+export const adminCrmVisitPageQuerySchema = z
+  .object({
+    ...adminCrmPageFields,
+    ...adminCrmRangeFields,
+    outcome: z.nativeEnum(CrmVisitOutcome).optional(),
+  })
+  .superRefine(refineAdminCrmPageRange);
+export type AdminCrmVisitPageQuery = z.infer<
+  typeof adminCrmVisitPageQuerySchema
+>;
+
+export const adminCrmFollowUpPageQuerySchema = z
+  .object({
+    ...adminCrmPageFields,
+    ...adminCrmRangeFields,
+    status: z.nativeEnum(CrmFollowUpStatus).optional(),
+    channel: z.nativeEnum(CrmFollowUpChannel).optional(),
+  })
+  .superRefine(refineAdminCrmPageRange);
+export type AdminCrmFollowUpPageQuery = z.infer<
+  typeof adminCrmFollowUpPageQuerySchema
+>;
+
+export const adminCrmAnalyticsQuerySchema = z
+  .object({
+    employeeId: z.string().uuid().optional(),
+    from: z.string().datetime(),
+    to: z.string().datetime(),
+  })
+  .superRefine(refineAdminCrmRange);
+export type AdminCrmAnalyticsQuery = z.infer<
+  typeof adminCrmAnalyticsQuerySchema
+>;
+
 export const managedAdminRoleSchema = z.enum([
   Role.CO_FOUNDER,
   Role.HR_ADMIN,
