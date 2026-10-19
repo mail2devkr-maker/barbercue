@@ -15,6 +15,8 @@ import {
   deriveInvoicePaymentStatus,
   ownerCustomerHistoryQuerySchema,
   ownerCustomerListQuerySchema,
+  ownerCustomerDirectoryQuerySchema,
+  ownerCustomerServicesQuerySchema,
   ownerRevenueReportQuerySchema,
   formatInvoiceNumber,
   recordInvoicePaymentSchema,
@@ -564,6 +566,28 @@ describe('owner customer history query schemas', () => {
         to: '2027-01-02',
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('owner customer directory query schemas', () => {
+  it('defaults bounded keyset paging and supports server-side filters', () => {
+    expect(ownerCustomerDirectoryQuerySchema.parse({})).toEqual({
+      limit: 20,
+      sort: 'lastVisit',
+      minVisits: 0,
+    });
+    expect(ownerCustomerDirectoryQuerySchema.parse({ q: '  haircut  ' }).q).toBe('haircut');
+    expect(ownerCustomerDirectoryQuerySchema.parse({ segment: 'frequent', sort: 'totalSpent', minVisits: 5 })).toMatchObject({
+      segment: 'frequent',
+      sort: 'totalSpent',
+      minVisits: 5,
+    });
+    expect(ownerCustomerDirectoryQuerySchema.safeParse({ limit: 51 }).success).toBe(false);
+    expect(ownerCustomerDirectoryQuerySchema.safeParse({ q: '   ' }).success).toBe(false);
+    expect(ownerCustomerDirectoryQuerySchema.safeParse({ sort: 'name' }).success).toBe(false);
+    expect(ownerCustomerDirectoryQuerySchema.safeParse({ segment: 'guest' }).success).toBe(false);
+    expect(ownerCustomerServicesQuerySchema.parse({}).limit).toBe(20);
+    expect(ownerCustomerServicesQuerySchema.safeParse({ cursor: '' }).success).toBe(false);
   });
 });
 

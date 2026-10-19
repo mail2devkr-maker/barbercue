@@ -668,6 +668,24 @@ export const ownerCustomerHistoryQuerySchema = z
   });
 export type OwnerCustomerHistoryQuery = z.infer<typeof ownerCustomerHistoryQuerySchema>;
 
+/** Additive server-side customer directory; the legacy offset endpoint remains unchanged. */
+export const ownerCustomerDirectoryQuerySchema = z.object({
+  cursor: z.string().min(1).max(1024).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  q: z.string().trim().min(1).max(120).optional(),
+  segment: z.enum(['new', 'repeat', 'frequent']).optional(),
+  sort: z.enum(['lastVisit', 'totalSpent', 'visits']).default('lastVisit'),
+  minVisits: z.coerce.number().int().min(0).max(50_000).default(0),
+});
+export type OwnerCustomerDirectoryQuery = z.infer<typeof ownerCustomerDirectoryQuerySchema>;
+
+/** Stable keyset page for completed service rows in a known salon/customer scope. */
+export const ownerCustomerServicesQuerySchema = z.object({
+  cursor: z.string().min(1).max(1024).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type OwnerCustomerServicesQuery = z.infer<typeof ownerCustomerServicesQuerySchema>;
+
 // ---------- DTOs ----------
 
 /** Money is always shown in the shop's own currency; `amount` is a decimal number with <= 2 dp. */
