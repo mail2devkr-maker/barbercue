@@ -25,6 +25,7 @@ describe('DashboardReviewsService', () => {
   let service: DashboardReviewsService;
   let prisma: {
     review: { findMany: jest.Mock; findFirst: jest.Mock; update: jest.Mock };
+    salonReviewProfile: { findUnique: jest.Mock };
     auditLog: { create: jest.Mock };
   };
   let salonAccess: { assertOwnerOrAdminAccess: jest.Mock };
@@ -36,6 +37,7 @@ describe('DashboardReviewsService', () => {
         findFirst: jest.fn(),
         update: jest.fn(),
       },
+      salonReviewProfile: { findUnique: jest.fn().mockResolvedValue(null) },
       auditLog: { create: jest.fn().mockResolvedValue(undefined) },
     };
     salonAccess = { assertOwnerOrAdminAccess: jest.fn().mockResolvedValue('OWNER') };
@@ -81,6 +83,7 @@ describe('DashboardReviewsService', () => {
         customerPhone: '+919876543210',
         customerEmail: null,
         serviceName: 'Haircut',
+        source: 'FASTQUE',
       });
     });
 
