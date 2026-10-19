@@ -54,6 +54,8 @@ export type Language = (typeof Language)[keyof typeof Language];
 export const OtpPurpose = {
   LOGIN: 'LOGIN',
   SIGNUP: 'SIGNUP',
+  OWNER_LOGIN: 'OWNER_LOGIN',
+  PHONE_LINK: 'PHONE_LINK',
 } as const;
 export type OtpPurpose = (typeof OtpPurpose)[keyof typeof OtpPurpose];
 
@@ -504,6 +506,7 @@ export const AuthErrorCode = {
   // (e.g. TwoFactorOtpSender in production) failed. Distinct from OTP_INVALID/OTP_EXPIRED, which
   // are about what the user typed, not whether the code ever reached them.
   OTP_DELIVERY_FAILED: 'OTP_DELIVERY_FAILED',
+  PHONE_ALREADY_LINKED: 'PHONE_ALREADY_LINKED',
   // Google ID token failed verification (expired, malformed, wrong audience, or the provider's
   // own email_verified claim was false) — never distinguishes *which* check failed to the client.
   GOOGLE_TOKEN_INVALID: 'GOOGLE_TOKEN_INVALID',

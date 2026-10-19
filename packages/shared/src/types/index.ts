@@ -71,9 +71,9 @@ export interface MeResponse extends AuthenticatedUser {
 
 /**
  * GET auth/methods — which sign-in methods this deployment can complete, so a client never
- * presents a form that is guaranteed to fail. Phone OTP depends on an SMS provider that may not
- * be configured; when it isn't, OtpSender throws OTP_DELIVERY_FAILED and the customer sees a 502
- * after typing their number. Exposing the capability lets the UI say so up front instead.
+ * presents a form that is guaranteed to fail. Customer and owner phone OTP depend on a configured
+ * SMS provider, keyed challenge secret, and country allowlist; separate booleans let each UI fail
+ * closed without exposing secret values.
  *
  * Deliberately booleans only — this endpoint is public and must never reveal which key is set,
  * let alone its value.
@@ -81,6 +81,8 @@ export interface MeResponse extends AuthenticatedUser {
 export interface AuthMethodsDto {
   google: boolean;
   phoneOtp: boolean;
+  /** Owner OTP is separately authorized and issues STAFF audience only for an existing verified owner. */
+  ownerPhoneOtp: boolean;
 }
 
 export interface EmployeeProfileDto {

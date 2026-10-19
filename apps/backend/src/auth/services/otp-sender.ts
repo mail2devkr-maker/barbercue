@@ -1,11 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { AuthErrorCode } from '@barbercue/shared';
+import { AppException } from '../../common/exceptions/app.exception';
 
 /**
- * Swappable OTP delivery — exactly the seam ARCHITECTURE.md §4 calls for ("OTP delivery is
- * behind a swappable OtpSender interface"). No SMS provider (MSG91/Twilio/etc.) is contracted
- * yet, so the only implementation below logs to the server console instead of sending a real
- * SMS. Everything upstream of delivery — code generation, hashing, expiry, attempt-limiting — is
- * real (see OtpService); only the transport is a dev stand-in, clearly labeled as such.
+ * Swappable OTP delivery — code generation and verification remain provider-independent. The
+ * unavailable default fails closed; it never writes phone numbers or OTP values to logs.
  */
 export interface OtpSender {
   sendOtp(phone: string, code: string): Promise<void>;
@@ -14,15 +13,14 @@ export interface OtpSender {
 export const OTP_SENDER = Symbol('OTP_SENDER');
 
 @Injectable()
-export class ConsoleOtpSender implements OtpSender {
-  private readonly logger = new Logger(
-    'OtpSender (console — no SMS provider configured)',
-  );
-
-  sendOtp(phone: string, code: string): Promise<void> {
-    this.logger.warn(
-      `OTP for ${phone}: ${code} (valid 5 minutes) — EXTERNAL: wire a real SMS provider here.`,
+export class UnavailableOtpSender implements OtpSender {
+  sendOtp(): Promise<void> {
+    return Promise.reject(
+      new AppException(
+        AuthErrorCode.OTP_DELIVERY_FAILED,
+        'Phone verification is temporarily unavailable.',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      ),
     );
-    return Promise.resolve();
   }
 }

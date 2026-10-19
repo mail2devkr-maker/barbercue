@@ -3,71 +3,73 @@ import { AuthErrorCode } from '@barbercue/shared';
 import { AppException } from '../../common/exceptions/app.exception';
 import type { OtpSender } from './otp-sender';
 
-const TWO_FACTOR_BASE_URL = 'https://2factor.in/API/V1';
+const TWO_FACTOR_SEND_URL = 'https://2factor.in/API/V1/OTP/SEND';
+const PROVIDER_TIMEOUT_MS = 8_000;
 
-interface TwoFactorResponse {
-  Status?: string;
-  Details?: string;
+interface TwoFactorSendResponse {
+  status?: string;
+  session_id?: string;
 }
 
 /**
- * Production OTP delivery via 2Factor.in's "custom OTP" SMS endpoint. OtpService remains the
- * single OTP authority — it generates, hashes, stores, and expires the code (see otp.service.ts);
- * this sender's only job is transporting that already-generated code over SMS. Deliberately does
- * NOT use 2Factor's AUTOGEN/VERIFY flow, which would have 2Factor generate and hold its own OTP
- * value server-side — that would create a second, competing source of truth and make our own
- * hashing/expiry/attempt-limiting meaningless.
- *
- * Endpoint (confirmed against 2Factor's public docs and multiple independent integration
- * write-ups, since no live account/API key exists in this repo to test against directly):
- *   GET https://2factor.in/API/V1/{api_key}/SMS/{phone}/{otp}
- * Response shape is consistent across every 2Factor endpoint: `{ "Status": "Success" | "Error",
- * "Details": string }`. VERIFY BEFORE RELYING ON THIS IN PRODUCTION: confirm this exact request
- * shape against the live 2Factor dashboard/docs for your account, and check whether your account
- * requires a DLT-registered SMS template (a common requirement for Indian transactional SMS,
- * independent of this integration) — see README/DEPLOYMENT.md.
+ * Transports the app-generated OTP through 2Factor's documented template-based send API. The
+ * provider accepts/queues the request; actual handset delivery is not certified by this response
+ * and requires an account DLR/receipt check. The API key is sent only in a header, never in a URL.
  */
 @Injectable()
 export class TwoFactorOtpSender implements OtpSender {
   private readonly logger = new Logger(TwoFactorOtpSender.name);
 
   async sendOtp(phone: string, code: string): Promise<void> {
-    const apiKey = process.env.OTP_PROVIDER_API_KEY;
-    if (!apiKey) {
-      // Never logs the (absent) key value — just the fact that configuration is missing.
-      this.logger.error(
-        'OTP_PROVIDER_API_KEY is not configured; cannot send SMS via 2Factor.',
-      );
+    const apiKey = process.env.OTP_PROVIDER_API_KEY?.trim();
+    const templateName = process.env.OTP_PROVIDER_TEMPLATE_NAME?.trim();
+    if (
+      !apiKey ||
+      !templateName ||
+      !/^[A-Za-z0-9_-]{1,64}$/.test(templateName)
+    ) {
+      this.logger.error('2Factor OTP transport is not fully configured.');
       throw this.deliveryFailed();
     }
-
-    const providerPhone = toTwoFactorPhone(phone);
-    const url = `${TWO_FACTOR_BASE_URL}/${encodeURIComponent(apiKey)}/SMS/${encodeURIComponent(providerPhone)}/${encodeURIComponent(code)}`;
 
     let response: Response;
+    let body: TwoFactorSendResponse | null = null;
+    const timeoutController = new AbortController();
+    const timeout = setTimeout(
+      () => timeoutController.abort(),
+      PROVIDER_TIMEOUT_MS,
+    );
     try {
-      response = await fetch(url, { method: 'GET' });
-    } catch (err) {
-      // Network-level failure (DNS/timeout/connection refused). Never log `url` — it embeds the
-      // API key — log only the failure kind.
+      response = await fetch(TWO_FACTOR_SEND_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': apiKey,
+        },
+        body: JSON.stringify({
+          to: phone,
+          template_name: templateName,
+          var1: code,
+        }),
+        signal: timeoutController.signal,
+      });
+      body = (await response.json()) as TwoFactorSendResponse;
+    } catch {
+      // Cover both waiting for response headers and reading the response body. Do not include
+      // error messages: fetch errors can include request details and provider data.
       this.logger.error(
-        `2Factor SMS request failed before a response was received: ${err instanceof Error ? err.message : 'unknown network error'}`,
+        timeoutController.signal.aborted
+          ? '2Factor OTP request timed out.'
+          : '2Factor OTP request failed before a valid response.',
       );
       throw this.deliveryFailed();
+    } finally {
+      clearTimeout(timeout);
     }
 
-    let body: TwoFactorResponse | null = null;
-    try {
-      body = (await response.json()) as TwoFactorResponse;
-    } catch {
-      body = null;
-    }
-
-    if (!response.ok || body?.Status !== 'Success') {
-      // Log the provider's own status/details for debugging — never the API key, never the
-      // OTP-bearing request URL, and per the security requirement, not the full OTP either.
+    if (!response.ok || body?.status?.toLowerCase() !== 'sent') {
       this.logger.error(
-        `2Factor SMS delivery failed (HTTP ${response.status}): ${body?.Details ?? 'no response body'}`,
+        `2Factor OTP request was not accepted (HTTP ${response.status}).`,
       );
       throw this.deliveryFailed();
     }
@@ -80,14 +82,4 @@ export class TwoFactorOtpSender implements OtpSender {
       HttpStatus.BAD_GATEWAY,
     );
   }
-}
-
-function toTwoFactorPhone(phone: string): string {
-  // Our own stored/validated format is E.164 with a leading "+" (see otpRequestSchema in
-  // packages/shared) — this only affects the outbound provider request, never how the phone
-  // number is stored or compared anywhere else in the application. A leading "+" is stripped
-  // rather than percent-encoded: 2Factor's documented format for Indian numbers is the bare
-  // country-code-prefixed digit string (e.g. "919876543210"), and a literal unencoded "+" in a
-  // URL path segment is a reported gotcha against some SMS-gateway backends of this vintage.
-  return phone.startsWith('+') ? phone.slice(1) : phone;
 }
