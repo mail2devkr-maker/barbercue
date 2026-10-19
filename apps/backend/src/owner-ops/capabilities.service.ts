@@ -45,6 +45,12 @@ export class SalonCapabilitiesService {
     for (const key of AVAILABLE_FEATURES) {
       features[key] = { status: 'ENABLED', reasonCode: null, updatedAt: null };
     }
+    // This is the bounded provider-free query whitelist, not a generative AI integration.
+    features.ownerAssistant = {
+      status: 'ENABLED',
+      reasonCode: 'DETERMINISTIC_QUERY_ONLY',
+      updatedAt: null,
+    };
     // The preview endpoint validates contacts but cannot persist them or send invitations.
     features.contactImport = {
       status: 'UNCONFIGURED',

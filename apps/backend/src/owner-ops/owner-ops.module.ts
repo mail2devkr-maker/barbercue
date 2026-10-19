@@ -24,6 +24,7 @@ import { ShopBookingActionsService } from './shop-booking-actions.service';
 import { StaffAccessService } from './staff-access.service';
 import { StaffWorkService } from './staff-work.service';
 import { SalonShareLinksService } from './salon-share-links.service';
+import { OwnerAssistantService } from './owner-assistant.service';
 
 /**
  * Owner-operations mission: the shop-side read models and workflows that sit on top of the existing
@@ -64,6 +65,7 @@ import { SalonShareLinksService } from './salon-share-links.service';
     StaffAccessService,
     StaffWorkService,
     SalonShareLinksService,
+    OwnerAssistantService,
   ],
   exports: [QueueAutoAssignService, InvoicesService],
 })

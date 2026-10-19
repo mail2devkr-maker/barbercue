@@ -342,6 +342,38 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect(res.body.staffPerformance[0].rating).toBeNull();
     });
 
+    it('serves deterministic Owner Insights only to the authorized salon owner', async () => {
+      const path = `dashboard/salons/${ids.salon}/assistant/query`;
+      const result = await api('post', path, tok.owner)
+        .send({ question: 'How many appointments today?' })
+        .expect(200);
+      expect(result.headers['cache-control']).toContain('no-store');
+      expect(result.body).toMatchObject({
+        salonId: ids.salon,
+        mode: 'DETERMINISTIC',
+        intent: 'APPOINTMENTS_TODAY',
+        timezone: TZ,
+        figures: [
+          expect.objectContaining({
+            metric: 'appointmentsToday',
+            unit: 'count',
+            estimated: false,
+          }),
+        ],
+      });
+      expect(result.body.answer).not.toContain('customer');
+
+      await api('post', path, tok.cust1)
+        .send({ question: 'appointments today' })
+        .expect(403);
+      await api('post', path, tok.ravi)
+        .send({ question: 'appointments today' })
+        .expect(403);
+      await api('post', path, tok.outsider)
+        .send({ question: 'appointments today' })
+        .expect(403);
+    });
+
     it('rejects a customer on every owner/staff route', async () => {
       for (const path of [
         `dashboard/salons/${ids.salon}/overview`,
