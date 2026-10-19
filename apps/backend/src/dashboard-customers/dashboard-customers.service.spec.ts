@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { BookingErrorCode } from '@barbercue/shared';
 import {
   DashboardCustomersService,
   FREQUENT_CUSTOMER_THRESHOLD,
@@ -95,6 +96,21 @@ function makeBookingGroupBy(
 }
 
 describe('DashboardCustomersService', () => {
+  const previousJwtAccessSecret = process.env.JWT_ACCESS_SECRET;
+
+  beforeAll(() => {
+    process.env.JWT_ACCESS_SECRET ??=
+      'customer-history-cursor-test-secret-32-characters-minimum';
+  });
+
+  afterAll(() => {
+    if (previousJwtAccessSecret === undefined) {
+      delete process.env.JWT_ACCESS_SECRET;
+    } else {
+      process.env.JWT_ACCESS_SECRET = previousJwtAccessSecret;
+    }
+  });
+
   let service: DashboardCustomersService;
   let prisma: {
     salon: { findUnique: jest.Mock };
@@ -375,7 +391,12 @@ describe('DashboardCustomersService', () => {
       const onlinePage = await service.history('owner1', 's1', 'c1', { limit: 1 });
       expect(onlinePage.items.map((item) => item.id)).toEqual(['online']);
       expect(
-        JSON.parse(Buffer.from(onlinePage.nextCursor!, 'base64url').toString('utf8')).rank,
+        JSON.parse(
+          Buffer.from(
+            onlinePage.nextCursor!.split('.')[0],
+            'base64url',
+          ).toString('utf8'),
+        ).rank,
       ).toBe(0);
 
       prisma.booking.findMany.mockClear();
@@ -394,7 +415,12 @@ describe('DashboardCustomersService', () => {
       const inShopPage = await service.history('owner1', 's1', 'c1', { limit: 2 });
       expect(inShopPage.items.map((item) => item.id)).toEqual(['online', 'in-shop']);
       expect(
-        JSON.parse(Buffer.from(inShopPage.nextCursor!, 'base64url').toString('utf8')).rank,
+        JSON.parse(
+          Buffer.from(
+            inShopPage.nextCursor!.split('.')[0],
+            'base64url',
+          ).toString('utf8'),
+        ).rank,
       ).toBe(1);
 
       prisma.booking.findMany.mockClear();
@@ -415,6 +441,50 @@ describe('DashboardCustomersService', () => {
       expect(prisma.queueEntry.findMany.mock.calls[0][0].where.AND).toEqual([
         { joinedAt: { lte: occurredAt } },
       ]);
+    });
+
+    it('rejects tampered and actor-replayed history cursors', async () => {
+      prisma.booking.count.mockResolvedValue(2);
+      prisma.booking.findMany.mockResolvedValue([
+        { ...bookingRow, id: 'booking-2', slotStart: new Date('2026-10-12T04:30:00.000Z') },
+        bookingRow,
+      ]);
+      const first = await service.history('owner1', 's1', 'c1', { limit: 1 });
+      const [payload, signature] = first.nextCursor!.split('.');
+      const tampered = `${payload}.${signature[0] === 'a' ? 'b' : 'a'}${signature.slice(1)}`;
+
+      await expect(
+        service.history('owner1', 's1', 'c1', { limit: 1, cursor: tampered }),
+      ).rejects.toMatchObject({ code: BookingErrorCode.INVALID_FILTER });
+      await expect(
+        service.history('owner2', 's1', 'c1', { limit: 1, cursor: first.nextCursor! }),
+      ).rejects.toMatchObject({ code: BookingErrorCode.INVALID_FILTER });
+    });
+
+    it('fails closed with a service error if cursor signing is unavailable', async () => {
+      prisma.booking.count.mockResolvedValue(2);
+      prisma.booking.findMany.mockResolvedValue([
+        { ...bookingRow, id: 'booking-2', slotStart: new Date('2026-10-12T04:30:00.000Z') },
+        bookingRow,
+      ]);
+      const first = await service.history('owner1', 's1', 'c1', { limit: 1 });
+      const configuredSecret = process.env.JWT_ACCESS_SECRET;
+      delete process.env.JWT_ACCESS_SECRET;
+
+      try {
+        await expect(
+          service.history('owner1', 's1', 'c1', {
+            limit: 1,
+            cursor: first.nextCursor!,
+          }),
+        ).rejects.toMatchObject({
+          code: BookingErrorCode.CUSTOMER_HISTORY_CURSOR_UNAVAILABLE,
+          status: 503,
+        });
+      } finally {
+        if (configuredSecret === undefined) delete process.env.JWT_ACCESS_SECRET;
+        else process.env.JWT_ACCESS_SECRET = configuredSecret;
+      }
     });
 
     it('checks salon authorization before any history query', async () => {
