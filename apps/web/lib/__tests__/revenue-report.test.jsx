@@ -51,19 +51,21 @@ describe("labels", () => {
 });
 
 describe("source filter", () => {
-  it("offers only the sources the server records, with the owner-facing words", () => {
-    expect(R.SOURCE_FILTERS.map((s) => s.value)).toEqual(["", "APP", "WEB", "WALK_IN", "IN_SHOP"]);
+  it("offers the sources the server reports, with the owner-facing words", () => {
+    expect(R.SOURCE_FILTERS.map((s) => s.value)).toEqual(["", "FASTQUE_APP", "FASTQUE_WEB", "WALK_IN", "IN_SHOP", "FACEBOOK", "INSTAGRAM", "CHATGPT", "OTHER", "UNKNOWN"]);
     expect(R.SOURCE_FILTERS.find((s) => s.value === "WALK_IN").label).toBe("Live Queue");
-    for (const external of ["FACEBOOK", "INSTAGRAM", "CHATGPT", "OTHER"]) expect(R.isKnownSource(external)).toBe(false);
-    expect(R.isKnownSource("APP")).toBe(true);
-    expect(R.isKnownSource("")).toBe(false);
+    expect(R.SOURCE_FILTERS.find((s) => s.value === "FACEBOOK").label).toBe("Facebook campaign");
+    expect(R.SOURCE_FILTERS.find((s) => s.value === "UNKNOWN").label).toBe("Not recorded");
+    for (const unsupported of ["TIKTOK", "APP", "WEB", ""]) expect(R.isKnownSource(unsupported)).toBe(false);
+    expect(R.isKnownSource("FASTQUE_APP")).toBe(true);
+    expect(R.isKnownSource("INSTAGRAM")).toBe(true);
   });
 });
 
 describe("query string", () => {
   it("builds the same query for the report and the export, leaving out an empty source", () => {
     expect(R.reportQueryString({ from: "2026-10-01", to: "2026-10-16", groupBy: "week", source: "" })).toBe("from=2026-10-01&to=2026-10-16&groupBy=week");
-    expect(R.reportQueryString({ from: "2026-10-01", to: "2026-10-16", groupBy: "day", source: "WEB" })).toBe("from=2026-10-01&to=2026-10-16&groupBy=day&source=WEB");
+    expect(R.reportQueryString({ from: "2026-10-01", to: "2026-10-16", groupBy: "day", source: "FASTQUE_WEB" })).toBe("from=2026-10-01&to=2026-10-16&groupBy=day&source=FASTQUE_WEB");
   });
   it("names the export file like the server does when no name is sent", () => {
     expect(R.csvFallbackName({ from: "2026-10-01", to: "2026-10-16" })).toBe("fastque-revenue-2026-10-01-2026-10-16.csv"); // same naming as the server's own Content-Disposition
@@ -102,6 +104,11 @@ describe("describeSemantics", () => {
     expect(lines).toHaveLength(4);
     expect(lines.join(" ")).toContain("not cash");
     expect(lines.join(" ")).toContain("Facebook, Instagram");
+  });
+  it("explains campaign attribution without claiming where the customer came from", () => {
+    const [line] = R.describeSemantics({ externalAttribution: "CAMPAIGN_TOKEN_WHEN_PRESENT_LEGACY_SOURCE_PROJECTION_OTHERWISE" });
+    expect(line).toContain("campaign code you created");
+    expect(line).toContain("not where the customer really came from");
   });
   it("shows an unknown value verbatim instead of hiding it", () => {
     expect(R.describeSemantics({ cashSource: "SOMETHING_NEW" })).toEqual(["cashSource: SOMETHING_NEW"]);

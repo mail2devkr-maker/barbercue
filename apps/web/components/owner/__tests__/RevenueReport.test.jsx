@@ -122,10 +122,13 @@ describe("RevenueReport (server report)", () => {
     install();
     const r = await mount();
     const select = r.root.findByProps({ id: "rep-source" });
-    await act(async () => { select.props.onChange({ target: { value: "WEB" } }); });
+    await act(async () => { select.props.onChange({ target: { value: "FASTQUE_WEB" } }); });
     await flush();
-    expect(params(reportCalls().at(-1)).get("source")).toBe("WEB");
+    expect(params(reportCalls().at(-1)).get("source")).toBe("FASTQUE_WEB");
     await act(async () => { select.props.onChange({ target: { value: "FACEBOOK" } }); });
+    await flush();
+    expect(params(reportCalls().at(-1)).get("source")).toBe("FACEBOOK");
+    await act(async () => { select.props.onChange({ target: { value: "TIKTOK" } }); });
     await flush();
     expect(params(reportCalls().at(-1)).has("source")).toBe(false);
   });
