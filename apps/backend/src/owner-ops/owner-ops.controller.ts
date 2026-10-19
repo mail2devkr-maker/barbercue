@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Header,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -132,6 +133,7 @@ export class OwnerOpsController {
   }
 
   @Post(`${SALON}/${DASHBOARD_PATHS.assistant}/query`)
+  @HttpCode(200)
   @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
   @Header('Cache-Control', 'private, no-store')
   @Throttle({
