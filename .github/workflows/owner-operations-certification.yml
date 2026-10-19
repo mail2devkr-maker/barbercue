@@ -103,6 +103,16 @@ jobs:
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/owner-ops.e2e-spec.ts
+      - name: Offers and Daily Deals E2E - pricing, authorization, redemption limits and audit
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/offers.e2e-spec.ts
       - name: Customer and shop-owner OTP HTTP E2E - synthetic sender only
         working-directory: apps/backend
         env:

@@ -227,6 +227,30 @@ enum BookingAttributionCampaignSource {
   OTHER
 }
 
+enum OfferKind {
+  OFFER
+  PROMOTION
+  DAILY_DEAL
+}
+
+enum OfferStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+}
+
+enum OfferDiscountType {
+  PERCENT
+  FLAT
+}
+
+enum OfferAudience {
+  ALL
+  NEW
+  REPEAT
+  INACTIVE
+}
+
 // Who actually cancelled a booking, recorded at cancellation time from the authenticated actor —
 // never inferred afterwards from the booking's status. NULL on a row means "not recorded": every
 // cancellation written before this column existed, which analytics reports as UNKNOWN (or, for the
@@ -393,6 +417,7 @@ model User {
   ownedSalons                   Salon[]                  @relation("SalonOwner")
   staffMemberships              SalonStaff[]
   bookings                      Booking[]                @relation("BookingCustomer")
+  offerRedemptions              OfferRedemption[]
   cancelledBookings             Booking[]                @relation("BookingCancelledBy")
   queueEntries                  QueueEntry[]
   reviews                       Review[]
@@ -897,6 +922,7 @@ model Salon {
   chairs                      Chair[]
   services                    Service[]
   serviceCategories           SalonServiceCategory[]
+  offers                      Offer[]
   bookings                    Booking[]
   bookingAttributionCampaigns BookingAttributionCampaign[]
   queueEntries                QueueEntry[]
@@ -1142,8 +1168,10 @@ model Service {
   serviceSessions     ServiceSession[]
   // Multi-service booking core mission — see BookingService's own doc comment.
   bookingServices     BookingService[]
+  offerServices       OfferService[]
 
   @@index([salonId, categoryId, subcategoryId])
+  @@unique([salonId, id])
   @@map("services")
 }
 
@@ -1292,6 +1320,11 @@ model Booking {
   // snapshots: later enabling/disabling/changing the salon offer never rewrites booking history.
   onlineBookingDiscountPercent Int                         @default(0)
   onlineBookingDiscountAmount  Decimal                     @default(0) @db.Decimal(10, 2)
+  // Optional applied offer. The title and amount are snapshots: later edits or expiry never
+  // rewrite the historical booking total. Existing clients ignore these additive fields.
+  offerId                      String?
+  offer                        Offer?                      @relation(fields: [salonId, offerId], references: [salonId, id], onDelete: Restrict)
+  offerTitle                   String?                     @db.VarChar(120)
   // Part 5 completion (arrival guidance) — same snapshot rationale as prepaymentRequiredAmount/
   // cancellationChargeAmount/creditsRedeemedAmount above: captured once, at creation time, from
   // whatever rule was actually in effect then, so a later change to the salon's
@@ -1310,12 +1343,81 @@ model Booking {
   creditTransactions CustomerCreditTransaction[]
   subsidyEntry       PlatformShopSubsidyEntry?
   invoices           Invoice[]
+  offerRedemption    OfferRedemption?
 
   @@index([salonId, slotStart, slotEnd])
   @@index([salonId, status, cancelledAt])
   @@index([salonId, createdAt])
   @@index([salonId, attributionCampaignId, createdAt])
+  @@unique([salonId, id])
   @@map("bookings")
+}
+
+// Salon-funded, provider-free marketing offers, promotions and Daily Deals. A redemption is
+// reserved atomically when an authenticated customer booking is accepted; no payment provider is
+// called. Booking stores its own title/discount snapshots so pausing or editing a campaign never
+// rewrites history.
+model Offer {
+  id                String            @id @default(uuid())
+  salonId           String
+  salon             Salon             @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  kind              OfferKind
+  status            OfferStatus       @default(DRAFT)
+  title             String            @db.VarChar(120)
+  description       String?           @db.VarChar(500)
+  discountType      OfferDiscountType
+  discountValue     Decimal           @db.Decimal(10, 2)
+  currency          String            @db.VarChar(3)
+  audience          OfferAudience     @default(ALL)
+  inactiveDays      Int?
+  validFrom         DateTime          @db.Timestamptz(6)
+  validTo           DateTime          @db.Timestamptz(6)
+  maxRedemptions    Int?
+  perCustomerLimit  Int               @default(1)
+  createdByUserId   String
+  createdAt         DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(6)
+
+  services          OfferService[]
+  bookings          Booking[]
+  redemptions       OfferRedemption[]
+
+  @@unique([salonId, id])
+  @@index([salonId, status, validFrom, validTo, id])
+  @@index([salonId, createdAt, id])
+  @@map("offers")
+}
+
+model OfferService {
+  salonId   String
+  offerId   String
+  offer     Offer   @relation(fields: [salonId, offerId], references: [salonId, id], onDelete: Cascade)
+  serviceId String
+  service   Service @relation(fields: [salonId, serviceId], references: [salonId, id], onDelete: Restrict)
+
+  @@id([offerId, serviceId])
+  @@index([salonId, serviceId, offerId])
+  @@map("offer_services")
+}
+
+model OfferRedemption {
+  id              String   @id @default(uuid())
+  salonId         String
+  offerId         String
+  offer           Offer    @relation(fields: [salonId, offerId], references: [salonId, id], onDelete: Restrict)
+  bookingId       String
+  booking         Booking  @relation(fields: [salonId, bookingId], references: [salonId, id], onDelete: Restrict)
+  customerId      String
+  customer        User     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  discountAmount  Decimal  @db.Decimal(10, 2)
+  currency        String   @db.VarChar(3)
+  redeemedAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([salonId, offerId, redeemedAt])
+  @@index([salonId, customerId, redeemedAt])
+  @@index([offerId, customerId, redeemedAt])
+  @@unique([salonId, bookingId])
+  @@map("offer_redemptions")
 }
 
 // Owner-generated, salon-scoped referral campaigns. Only a SHA-256 digest is stored; the

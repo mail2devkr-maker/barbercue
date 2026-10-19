@@ -4,6 +4,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { QueueModule } from '../queue/queue.module';
 import { CustomerCreditsModule } from '../credits/customer-credits.module';
+import { OffersModule } from '../offers/offers.module';
 import { BookingInfoController } from './booking-info.controller';
 import { BookingsController } from './bookings.controller';
 import { AvailabilityService } from './availability.service';
@@ -24,6 +25,7 @@ import { ArrivalAlertsService } from './arrival-alerts.service';
     NotificationsModule,
     PushNotificationsModule,
     CustomerCreditsModule,
+    OffersModule,
     forwardRef(() => QueueModule),
   ],
   controllers: [BookingInfoController, BookingsController],

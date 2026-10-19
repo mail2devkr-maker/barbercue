@@ -20,3 +20,4 @@ export * from './queue-phase';
 export * from './shop-home';
 export * from './inventory';
 export * from './inventory';
+export * from './offers';

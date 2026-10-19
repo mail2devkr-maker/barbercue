@@ -604,6 +604,9 @@ export interface BookingDto {
   // Exact snapshotted money amount removed from the original service subtotal before credits,
   // prepayment and cancellation/no-show percentage calculations.
   onlineBookingDiscountAmount?: number;
+  /** Applied campaign and immutable title snapshot; null when no offer was used. */
+  offerId?: string | null;
+  offerTitle?: string | null;
 }
 
 // ---------- AI Style Advisor (Phase E) ----------
