@@ -3,8 +3,10 @@ import {
   DASHBOARD_PATHS,
   Role,
   respondToReviewSchema,
+  updateReviewProfilesSchema,
   type AuthenticatedUser,
   type RespondToReviewInput,
+  type UpdateReviewProfilesInput,
 } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -26,8 +28,27 @@ export class DashboardReviewsController {
     @Param('salonId') salonId: string,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
+    @Query('source') source?: string,
   ) {
-    return this.reviews.list(user.id, salonId, cursor, limit);
+    return this.reviews.list(user.id, salonId, cursor, limit, source);
+  }
+
+  @Get(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.reviewProfiles}`)
+  getReviewProfiles(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+  ) {
+    return this.reviews.getReviewProfiles(user.id, salonId);
+  }
+
+  @Put(`${DASHBOARD_PATHS.salons}/:salonId/${DASHBOARD_PATHS.reviewProfiles}`)
+  updateReviewProfiles(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId') salonId: string,
+    @Body(new ZodValidationPipe(updateReviewProfilesSchema))
+    body: UpdateReviewProfilesInput,
+  ) {
+    return this.reviews.updateReviewProfiles(user.id, salonId, body);
   }
 
   @Put(

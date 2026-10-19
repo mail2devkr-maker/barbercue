@@ -1076,6 +1076,88 @@ export const respondToReviewSchema = z.object({
 });
 export type RespondToReviewInput = z.infer<typeof respondToReviewSchema>;
 
+// Salon owners may publish links to their own external review profiles. These links are never
+// fetched server-side in V1. Exact-host checks prevent lookalike domains and open redirects.
+const reviewProfileHosts = {
+  google: new Set([
+    'g.page',
+    'maps.app.goo.gl',
+    'maps.google.com',
+    'google.com',
+    'www.google.com',
+  ]),
+  facebook: new Set([
+    'facebook.com',
+    'www.facebook.com',
+    'm.facebook.com',
+    'fb.com',
+    'www.fb.com',
+    'fb.me',
+  ]),
+  instagram: new Set(['instagram.com', 'www.instagram.com']),
+} as const;
+
+export type ReviewProfileProvider = keyof typeof reviewProfileHosts;
+
+export function isValidReviewProfileUrl(
+  provider: ReviewProfileProvider,
+  value: string,
+): boolean {
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.port ||
+      !reviewProfileHosts[provider].has(url.hostname.toLowerCase()) ||
+      [...url.searchParams.keys()].some((key) =>
+        /^(access_token|token|api_key|key|code)$/i.test(key),
+      )
+    ) {
+      return false;
+    }
+    if (
+      provider === 'google' &&
+      ['google.com', 'www.google.com'].includes(url.hostname.toLowerCase()) &&
+      !/^\/(maps|search)(\/|$)/i.test(url.pathname)
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const reviewProfileUrlSchema = (provider: ReviewProfileProvider) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .url()
+    .refine((value) => isValidReviewProfileUrl(provider, value), {
+      message: 'Use a secure HTTPS link for the matching provider.',
+    })
+    .transform((value) => new URL(value).toString());
+
+// PUT dashboard/salons/:salonId/review-profiles. Omitted fields remain unchanged; null clears a
+// previously configured link. An empty object is rejected to avoid accidental no-op writes.
+export const updateReviewProfilesSchema = z
+  .object({
+    googleUrl: reviewProfileUrlSchema('google').nullable().optional(),
+    facebookUrl: reviewProfileUrlSchema('facebook').nullable().optional(),
+    instagramUrl: reviewProfileUrlSchema('instagram').nullable().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one review profile field is required.',
+  });
+export type UpdateReviewProfilesInput = z.infer<
+  typeof updateReviewProfilesSchema
+>;
+
 // ---------- Verification (Phase 18) ----------
 
 // POST dashboard/salons/:salonId/verification and .../staff/:staffId/verification — evidence is

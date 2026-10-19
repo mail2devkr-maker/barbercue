@@ -598,8 +598,27 @@ export const ReviewErrorCode = {
   REVIEW_NOT_FOUND: 'REVIEW_NOT_FOUND',
   // The review exists, but the caller isn't the customer who wrote it.
   NOT_YOUR_REVIEW: 'NOT_YOUR_REVIEW',
+  INVALID_REVIEW_SOURCE: 'INVALID_REVIEW_SOURCE',
 } as const;
 export type ReviewErrorCode = (typeof ReviewErrorCode)[keyof typeof ReviewErrorCode];
+
+// Source attribution for salon review listings. Third-party links are presentation-only until a
+// provider connector is separately configured; LINK_ONLY never means external reviews were fetched.
+export const ReviewSource = {
+  FASTQUE: 'FASTQUE',
+  GOOGLE: 'GOOGLE',
+  FACEBOOK: 'FACEBOOK',
+  INSTAGRAM: 'INSTAGRAM',
+} as const;
+export type ReviewSource = (typeof ReviewSource)[keyof typeof ReviewSource];
+
+export const ReviewSourceState = {
+  CONNECTED: 'CONNECTED',
+  LINK_ONLY: 'LINK_ONLY',
+  UNAVAILABLE: 'UNAVAILABLE',
+} as const;
+export type ReviewSourceState =
+  (typeof ReviewSourceState)[keyof typeof ReviewSourceState];
 
 // Phase 18 (Shop / Barber Verification Foundation) — foundation only: manual PLATFORM_ADMIN
 // review of owner-supplied evidence, never automated KYC/identity verification. See

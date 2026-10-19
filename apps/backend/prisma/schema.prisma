@@ -922,6 +922,7 @@ model Salon {
   chairs                      Chair[]
   services                    Service[]
   serviceCategories           SalonServiceCategory[]
+  reviewProfiles              SalonReviewProfile?
   offers                      Offer[]
   bookings                    Booking[]
   bookingAttributionCampaigns BookingAttributionCampaign[]
@@ -1796,6 +1797,20 @@ model Review {
   updatedAt     DateTime @updatedAt
 
   @@map("reviews")
+}
+
+// Owner-maintained links to external review profiles. No external provider data is mirrored or
+// fetched in V1; a configured link is exposed as LINK_ONLY, never as a connected review feed.
+model SalonReviewProfile {
+  salonId      String   @id
+  salon        Salon    @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  googleUrl    String?  @db.VarChar(500)
+  facebookUrl  String?  @db.VarChar(500)
+  instagramUrl String?  @db.VarChar(500)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  @@map("salon_review_profiles")
 }
 
 // ---------- Verification (Phase 18 — foundation only) ----------

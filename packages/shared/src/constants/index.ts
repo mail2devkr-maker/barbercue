@@ -369,6 +369,7 @@ export const DASHBOARD_PATHS = {
   // GET dashboard/salons/:salonId/reviews, PUT .../reviews/:reviewId/response (Phase 16 — the
   // owner-response side of Ratings & Reviews; the customer write side is REVIEW_PATHS instead).
   reviews: 'reviews',
+  reviewProfiles: 'review-profiles',
   response: 'response',
   // Phase 18 — dashboard/salons/:salonId/verification (shop) and
   // dashboard/salons/:salonId/staff/:staffId/verification (professional, `staff` above reused).
