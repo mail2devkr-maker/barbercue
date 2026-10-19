@@ -40,7 +40,7 @@ stage "20260830215000_ensure_primary_platform_admin"
 "$PSQL" "$PLAIN_URL" -v ON_ERROR_STOP=1 -qc "INSERT INTO users (id,email,status,\"updatedAt\") VALUES (gen_random_uuid(),'mail2dev.kr@gmail.com','ACTIVE',now())"
 stage "20260930163000_backfill_ghaziabad_city"
 "$PSQL" "$PLAIN_URL" -v ON_ERROR_STOP=1 -qc "INSERT INTO \"Country\" (id,\"isoCode2\",name,slug) VALUES ('test-in','IN','India','india'); INSERT INTO \"Region\" (id,\"countryId\",name,slug,code) VALUES ('test-up','test-in','Uttar Pradesh','uttar-pradesh','IN-UP')"
-echo "== prepare synthetic legacy data before all five platform migrations"
+echo "== prepare synthetic legacy data before the platform feature migrations"
 stage "20261017010000_booking_attribution_campaigns"
 "$PSQL" "$PLAIN_URL" -v ON_ERROR_STOP=1 -qc "INSERT INTO salons (id,\"ownerUserId\",name,slug,\"cityId\",\"addressLine\",status,\"updatedAt\") SELECT fixture.id,owner.id,fixture.name,fixture.slug,c.id,'Migration fixture',fixture.status,now() FROM (VALUES ('migration-photo-active','Migration Active','migration-photo-active','ACTIVE'::\"SalonStatus\"),('migration-photo-suspended','Migration Suspended','migration-photo-suspended','SUSPENDED'::\"SalonStatus\"),('migration-photo-pending','Migration Pending','migration-photo-pending','PENDING'::\"SalonStatus\")) AS fixture(id,name,slug,status) CROSS JOIN LATERAL (SELECT id FROM users WHERE email='mail2dev.kr@gmail.com' ORDER BY id LIMIT 1) owner CROSS JOIN LATERAL (SELECT id FROM cities ORDER BY id LIMIT 1) c"
 "$PSQL" "$PLAIN_URL" -X -v ON_ERROR_STOP=1 -f scripts/platform-legacy-fixture.sql
@@ -60,7 +60,7 @@ SQL
 echo "-- final stage: the full committed migrations directory"
 START_NS=$(date +%s%N)
 npx prisma migrate deploy
-echo "Five pending migrations applied in $(( ($(date +%s%N)-START_NS)/1000000 )) ms (includes Prisma startup)"
+echo "All pending migrations applied in $(( ($(date +%s%N)-START_NS)/1000000 )) ms (includes Prisma startup)"
 "$PSQL" "$PLAIN_URL" -X -qAt -v ON_ERROR_STOP=1 -f "$STAGING/legacy-fingerprints.sql" > "$STAGING/after.facts"
 diff -u "$STAGING/before.facts" "$STAGING/after.facts"
 echo "PASS: $(wc -l < "$STAGING/before.facts") historical table fingerprints unchanged across platform migrations"
@@ -87,7 +87,7 @@ if echo "$DRIFT" | grep -Eqi 'salon_location_proposals|SalonLocationProposal'; t
   echo "SALON-LOCATION-VERIFICATION SCHEMA DRIFT DETECTED"; exit 1
 fi
 echo "no salon-location-verification drift"
-if echo "$DRIFT" | grep -Eqi 'inventory_|Inventory|owner_demo_|OwnerDemo|booking_attribution_campaigns|attributionCampaignId|BookingAttributionCampaign'; then
-  echo "PLATFORM SCHEMA DRIFT DETECTED"; exit 1
+if echo "$DRIFT" | grep -Eqi 'inventory_|Inventory|owner_demo_|OwnerDemo|booking_attribution_campaigns|attributionCampaignId|BookingAttributionCampaign|subcategory'; then
+  echo "PLATFORM OR SERVICE-TAXONOMY SCHEMA DRIFT DETECTED"; exit 1
 fi
-echo "no inventory, demo-workspace or attribution drift"
+echo "no inventory, demo-workspace, attribution or service-taxonomy drift"

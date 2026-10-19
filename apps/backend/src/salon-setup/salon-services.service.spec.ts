@@ -160,6 +160,7 @@ describe('SalonServicesService', () => {
         durationMinutes: 30,
         price: decimal('300.00'),
         category: 'Hair',
+        subcategory: 'Haircut',
         isActive: true,
       });
 
@@ -169,6 +170,7 @@ describe('SalonServicesService', () => {
         price: 300,
         durationMinutes: 30,
         category: 'Hair',
+        subcategory: 'Haircut',
       });
 
       expect(prisma.service.create).toHaveBeenCalledWith({
@@ -177,6 +179,7 @@ describe('SalonServicesService', () => {
           name: 'Haircut',
           price: '300',
           durationMinutes: 30,
+          subcategory: 'Haircut',
           isActive: true,
         }),
       });
@@ -187,6 +190,7 @@ describe('SalonServicesService', () => {
         durationMinutes: 30,
         price: 300,
         category: 'Hair',
+        subcategory: 'Haircut',
         isActive: true,
         currency: 'INR',
       });
@@ -209,7 +213,7 @@ describe('SalonServicesService', () => {
         durationMinutes: 15,
       });
       expect(prisma.service.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ category: null }),
+        data: expect.objectContaining({ category: null, subcategory: null }),
       });
     });
   });
@@ -254,6 +258,18 @@ describe('SalonServicesService', () => {
       });
     });
 
+    it('can update or clear the optional subcategory independently', async () => {
+      await service.update('owner-1', 'salon-1', 'svc-1', { subcategory: 'Coloring' });
+      expect(prisma.service.update).toHaveBeenCalledWith({
+        where: { id: 'svc-1' }, data: { subcategory: 'Coloring' },
+      });
+      prisma.service.update.mockClear();
+      await service.update('owner-1', 'salon-1', 'svc-1', { subcategory: null });
+      expect(prisma.service.update).toHaveBeenCalledWith({
+        where: { id: 'svc-1' }, data: { subcategory: null },
+      });
+    });
+
     it('serializes an updated price through String() for the Decimal column', async () => {
       await service.update('owner-1', 'salon-1', 'svc-1', { price: 450.5 });
       expect(prisma.service.update).toHaveBeenCalledWith({
@@ -270,6 +286,7 @@ describe('SalonServicesService', () => {
         durationMinutes: 45,
         price: decimal('500'),
         category: 'Hair',
+        subcategory: 'Haircut',
         isActive: true,
       });
       const created = await service.create('owner-1', 'salon-1', {

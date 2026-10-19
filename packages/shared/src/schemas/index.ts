@@ -669,6 +669,7 @@ export const createSalonServiceSchema = z.object({
   price: z.number().min(0).max(1_000_000),
   durationMinutes: z.number().int().min(5).max(480),
   category: z.string().min(1).max(60).optional(),
+  subcategory: z.string().trim().min(1).max(60).optional(),
 });
 export type CreateSalonServiceInput = z.infer<typeof createSalonServiceSchema>;
 
@@ -682,6 +683,7 @@ export const updateSalonServiceSchema = z
     price: z.number().min(0).max(1_000_000).optional(),
     durationMinutes: z.number().int().min(5).max(480).optional(),
     category: z.string().min(1).max(60).nullable().optional(),
+    subcategory: z.string().trim().min(1).max(60).nullable().optional(),
     isActive: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "No fields to update" });

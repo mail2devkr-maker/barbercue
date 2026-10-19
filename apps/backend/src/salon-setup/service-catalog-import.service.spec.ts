@@ -50,13 +50,46 @@ describe('ServiceCatalogImportService', () => {
 
   it('extracts CSV rows and never invents missing duration', async () => {
     const preview = await subject.preview('actor', 'salon', file(
-      'menu.csv', 'Service,Price,Duration,Category\nHaircut,150,30 min,Hair\nFacial,500,,Face',
+      'menu.csv', 'Service,Price,Duration,Category,Subcategory\nHaircut,150,30 min,Hair,Haircut\nFacial,500,,Face,Facial treatment',
     ), false);
     expect(preview.services).toEqual([
-      { name: 'Haircut', price: 150, durationMinutes: 30, category: 'Hair', description: '', source: 'menu.csv' },
-      { name: 'Facial', price: 500, durationMinutes: null, category: 'Face', description: '', source: 'menu.csv' },
+      { name: 'Haircut', price: 150, durationMinutes: 30, category: 'Hair', subcategory: 'Haircut', description: '', source: 'menu.csv' },
+      { name: 'Facial', price: 500, durationMinutes: null, category: 'Face', subcategory: 'Facial treatment', description: '', source: 'menu.csv' },
     ]);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('recognizes a subcategory-only CSV column without treating its header as a service', async () => {
+    const preview = await subject.preview('actor', 'salon', file(
+      'taxonomy.csv', 'Service,Subcategory\nBeard Trim,Shaping',
+    ), false);
+    expect(preview.services).toEqual([expect.objectContaining({
+      name: 'Beard Trim', category: '', subcategory: 'Shaping',
+      price: null, durationMinutes: null,
+    })]);
+  });
+
+  it('preserves reviewed subcategory data during catalog import', async () => {
+    const service = {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockResolvedValue({ id: 'new' }),
+    };
+    prisma.$transaction.mockImplementation(async (task: (tx: unknown) => Promise<unknown>) => task({
+      $executeRawUnsafe: jest.fn().mockResolvedValue(1),
+      service,
+      auditLog: { create: jest.fn() },
+    }));
+    await subject.saveReviewed('actor', 'salon', { services: [
+      { name: 'Balayage', category: 'Hair', subcategory: 'Coloring', price: 1200, durationMinutes: 90 },
+      { name: 'Haircut', category: 'Hair', subcategory: '', price: 250, durationMinutes: 30 },
+    ] });
+    expect(service.create).toHaveBeenCalledTimes(2);
+    expect(service.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({
+      category: 'Hair', subcategory: 'Coloring',
+    }) });
+    expect(service.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({
+      category: 'Hair', subcategory: null,
+    }) });
   });
 
   it('rejects disguised image content before OCR and always checks salon access', async () => {
@@ -121,8 +154,8 @@ describe('ServiceCatalogImportService', () => {
     });
     const preview = await subject.preview('actor', 'salon', file('salon.xlsx', book), false);
     expect(preview.services).toEqual([
-      { name: 'Hair Spa', price: 450, durationMinutes: 45, category: '', description: '', source: 'salon.xlsx / sheet1.xml' },
-      { name: 'Facial', price: 700, durationMinutes: 60, category: '', description: '', source: 'salon.xlsx / sheet2.xml' },
+      { name: 'Hair Spa', price: 450, durationMinutes: 45, category: '', subcategory: '', description: '', source: 'salon.xlsx / sheet1.xml' },
+      { name: 'Facial', price: 700, durationMinutes: 60, category: '', subcategory: '', description: '', source: 'salon.xlsx / sheet2.xml' },
     ]);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

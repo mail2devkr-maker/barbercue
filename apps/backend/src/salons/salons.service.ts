@@ -456,6 +456,7 @@ export class SalonsService {
         durationMinutes: s.durationMinutes,
         price: Number(s.price),
         category: s.category ?? '',
+        subcategory: s.subcategory ?? null,
         isActive: s.isActive,
       })),
       operatingHours: salon.operatingHours.map((h) => ({

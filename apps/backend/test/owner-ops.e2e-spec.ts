@@ -253,6 +253,35 @@ maybe('Owner operations (e2e, disposable local database)', () => {
     await app.close();
   });
 
+  describe('service category and subcategory API', () => {
+    it('persists salon-scoped subcategories through authenticated CRUD while retaining category and legacy rows', async () => {
+      const path = `dashboard/salons/${ids.salon}/services`;
+      await api('get', `dashboard/salons/${ids.otherSalon}/services`, tok.owner).expect(403);
+      const created = await api('post', path, tok.owner).send({
+        name: `Taxonomy service ${run}`,
+        price: 725,
+        durationMinutes: 40,
+        category: 'Hair',
+        subcategory: 'Coloring',
+      }).expect(201);
+      expect(created.body).toMatchObject({ category: 'Hair', subcategory: 'Coloring' });
+
+      const listed = await api('get', path, tok.owner).expect(200);
+      expect(listed.body).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: created.body.id, category: 'Hair', subcategory: 'Coloring' }),
+        expect.objectContaining({ id: ids.haircut, subcategory: null }),
+      ]));
+
+      const updated = await api('patch', `${path}/${created.body.id}`, tok.owner)
+        .send({ subcategory: 'Hair Color' }).expect(200);
+      expect(updated.body).toMatchObject({ category: 'Hair', subcategory: 'Hair Color' });
+      const cleared = await api('patch', `${path}/${created.body.id}`, tok.owner)
+        .send({ subcategory: null }).expect(200);
+      expect(cleared.body.subcategory).toBeNull();
+      await api('get', `dashboard/salons/${ids.salon}/services`, tok.outsider).expect(403);
+    });
+  });
+
   // ------------------------------------------------------------------------------------------
   describe('authorization', () => {
     it('lets the owner read the overview, with real numbers and no fabricated revenue', async () => {

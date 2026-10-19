@@ -33,8 +33,11 @@ describe('owner setup contracts', () => {
   it('accepts optional service details without changing price/duration requirements', () => {
     expect(createSalonServiceSchema.safeParse({
       name: 'Skin Fade', description: 'Includes wash and finish',
-      category: "Men's Hair & Grooming", price: 500, durationMinutes: 45,
+      category: "Men's Hair & Grooming", subcategory: 'Fade', price: 500, durationMinutes: 45,
     }).success).toBe(true);
+    expect(createSalonServiceSchema.safeParse({
+      name: 'Skin Fade', category: 'Hair', subcategory: '   ', price: 500, durationMinutes: 45,
+    }).success).toBe(false);
     expect(createSalonServiceSchema.safeParse({
       name: 'Skin Fade', durationMinutes: 45,
     }).success).toBe(false);
