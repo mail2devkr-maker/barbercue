@@ -217,6 +217,55 @@ export interface AdminCrmOverviewDto {
   dueFollowUps: AdminCrmFollowUpDto[];
 }
 
+export interface AdminCrmPageDto<T> {
+  items: T[];
+  nextCursor: string | null;
+  limit: number;
+}
+
+/**
+ * Date-bounded, aggregate-only employee CRM analytics. Employee identity is limited to internal
+ * ID/code and territory; lead contact details and notes are never included in this response.
+ * `onboardedFromPeriodLeads` is the current ONBOARDED count among leads created in the range.
+ */
+export interface AdminCrmAnalyticsDto {
+  from: string;
+  to: string;
+  generatedAt: string;
+  totals: {
+    leadsCreated: number;
+    onboardedFromPeriodLeads: number;
+    leadsOnboardedInPeriod: number;
+    visits: number;
+    followUpsCompleted: number;
+    openFollowUpsOverdueInPeriod: number;
+  };
+  employees: Array<{
+    employeeId: string;
+    employeeCode: string;
+    territory: string | null;
+    status: UserStatus;
+    leadsCreated: number;
+    onboardedFromPeriodLeads: number;
+    leadsOnboardedInPeriod: number;
+    visits: number;
+    followUpsCompleted: number;
+    openFollowUpsOverdueInPeriod: number;
+    conversionPercent: number;
+  }>;
+  territories: Array<{
+    territory: string | null;
+    employees: number;
+    leadsCreated: number;
+    onboardedFromPeriodLeads: number;
+    leadsOnboardedInPeriod: number;
+    visits: number;
+    followUpsCompleted: number;
+    openFollowUpsOverdueInPeriod: number;
+    conversionPercent: number;
+  }>;
+}
+
 export interface AuthTokens {
   accessToken: string;
   // Present in the response body for mobile (stored via secure storage); web instead relies on
