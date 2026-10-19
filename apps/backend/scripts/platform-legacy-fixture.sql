@@ -7,8 +7,7 @@ VALUES ('platform-legacy-service','migration-photo-active','Synthetic legacy ser
 INSERT INTO bookings (id,"salonId","customerId","serviceId","slotStart","slotEnd",status,source,"idempotencyKey","updatedAt")
 VALUES ('platform-legacy-booking','migration-photo-active','platform-legacy-customer','platform-legacy-service',
         '2026-10-11T04:30:00Z','2026-10-11T05:00:00Z','COMPLETED','WEB','platform-legacy-booking',now());
-INSERT INTO booking_services (id,"bookingId","serviceId","sortOrder","serviceName","durationMinutes",price)
-VALUES ('platform-legacy-booking-service','platform-legacy-booking','platform-legacy-service',0,'Synthetic legacy service',30,250);
+-- The historical multi-service migration backfills this row from bookings and services.
 INSERT INTO queue_entries (id,"salonId","customerId","serviceId",source,"tokenNumber",status,"updatedAt")
 SELECT 'platform-legacy-queue-'||n,'migration-photo-active','platform-legacy-customer','platform-legacy-service',
        'WALK_IN',n,CASE WHEN n<=8 THEN 'COMPLETED'::"QueueEntryStatus" ELSE 'EXPIRED'::"QueueEntryStatus" END,now()
