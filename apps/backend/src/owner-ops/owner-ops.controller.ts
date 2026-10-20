@@ -65,7 +65,10 @@ import { QueueService } from '../queue/queue.service';
 import { CancellationAnalyticsService } from './cancellation-analytics.service';
 import { InvoicesService } from './invoices.service';
 import { OwnerOverviewService } from './owner-overview.service';
-import { RevenueReportService } from './revenue-report.service';
+import {
+  buildRevenueExcelXml,
+  RevenueReportService,
+} from './revenue-report.service';
 import { OwnerSearchService } from './owner-search.service';
 import { QueueAutoAssignService } from './queue-auto-assign.service';
 import { ShopBookingActionsService } from './shop-booking-actions.service';
@@ -181,6 +184,25 @@ export class OwnerOpsController {
     return new StreamableFile(
       await this.revenueReports.getCsv(user.id, salonId, query),
     );
+  }
+
+  @Get(`${SALON}/revenue/report.excel.xml`)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Header('Content-Type', 'application/vnd.ms-excel; charset=utf-8')
+  async exportRevenueReportExcel(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+    @Query(new ZodValidationPipe(ownerRevenueReportQuerySchema))
+    query: OwnerRevenueReportQuery,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="fastque-revenue-${query.from}-${query.to}.xml"`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    const report = await this.revenueReports.getReport(user.id, salonId, query);
+    return new StreamableFile(buildRevenueExcelXml(report));
   }
 
   @Get(`${SALON}/search`)
