@@ -2163,6 +2163,170 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       ).expect(404);
     });
 
+    it('advances signed customer-directory keysets across timestamp ties and null visits in PostgreSQL', async () => {
+      const [{ timezone }] = await prisma.$queryRaw<Array<{ timezone: string }>>`
+        SELECT current_setting('TimeZone') AS timezone
+      `;
+      if (process.env.EXPECT_NON_UTC_DATABASE_TIMEZONE === '1') {
+        expect(timezone).toBe('Asia/Kolkata');
+      }
+
+      const directoryCustomers: Array<{ id: string; lastVisit: Date | null }> = [];
+      const tiedAt = new Date('2026-10-01T10:00:00.000Z');
+      for (let index = 0; index < 8; index++) {
+        const label = `directory-${index}`;
+        const user = await makeUser(label, Role.CUSTOMER, null);
+        const lastVisit = index < 4
+          ? tiedAt
+          : index === 4
+            ? new Date('2026-09-30T10:00:00.000Z')
+            : null;
+        directoryCustomers.push({ id: user.id, lastVisit });
+        const slotStart = lastVisit ?? new Date('2026-10-02T10:00:00.000Z');
+        await prisma.booking.create({
+          data: {
+            salonId: ids.salon,
+            customerId: user.id,
+            serviceId: ids.haircut,
+            slotStart,
+            slotEnd: new Date(slotStart.getTime() + 30 * 60_000),
+            status: lastVisit ? 'COMPLETED' : 'CONFIRMED',
+            source: 'WEB',
+            idempotencyKey: `directory-pagination-${run}-${index}`,
+          },
+        });
+      }
+
+      const base = `dashboard/salons/${ids.salon}/customers/directory`;
+      const search = `e2e-${run}-directory-`;
+      const readAllPages = async (sort?: 'lastVisit' | 'visits' | 'totalSpent') => {
+        let cursor: string | null = null;
+        const collected: Array<Record<string, unknown>> = [];
+        const pages = new Set<string>();
+        for (let pageNumber = 0; pageNumber < 10; pageNumber++) {
+          const params = new URLSearchParams({ q: search, limit: '2' });
+          if (sort) params.set('sort', sort);
+          if (cursor) params.set('cursor', cursor);
+          const response = await api(
+            'get',
+            `${base}?${params.toString()}`,
+            tok.owner,
+          ).expect(200);
+          const pageItems = response.body.items as Array<Record<string, unknown>>;
+          expect(pageItems.length).toBeGreaterThan(0);
+          const pageIds = pageItems.map((item) => String(item.customerId));
+          expect(new Set(pageIds).size).toBe(pageIds.length);
+          expect(pageIds.some((id) => pages.has(id))).toBe(false);
+          pageIds.forEach((id) => pages.add(id));
+          collected.push(...pageItems);
+          cursor = response.body.nextCursor as string | null;
+          if (!cursor) break;
+          if (pageNumber === 9) throw new Error('Customer directory cursor did not exhaust.');
+        }
+        expect(collected).toHaveLength(directoryCustomers.length);
+        expect(new Set(collected.map((item) => item.customerId)).size).toBe(
+          directoryCustomers.length,
+        );
+        expect(new Set(collected.map((item) => item.customerId))).toEqual(
+          new Set(directoryCustomers.map((customer) => customer.id)),
+        );
+        return collected;
+      };
+
+      const defaultOrder = await readAllPages();
+      const lastVisitValues = defaultOrder.map((item) => item.lastVisitAt as string | null);
+      expect(lastVisitValues.slice(0, 4)).toEqual(Array(4).fill(tiedAt.toISOString()));
+      expect(lastVisitValues[4]).toBe('2026-09-30T10:00:00.000Z');
+      expect(lastVisitValues.slice(5)).toEqual([null, null, null]);
+      const tiedIds = defaultOrder.slice(0, 4).map((item) => String(item.customerId));
+      expect(tiedIds).toEqual([...tiedIds].sort());
+      const nullIds = defaultOrder.slice(5).map((item) => String(item.customerId));
+      expect(nullIds).toEqual([...nullIds].sort());
+      await readAllPages('visits');
+      await readAllPages('totalSpent');
+
+      const first = await api(
+        'get',
+        `${base}?q=${encodeURIComponent(search)}&limit=2`,
+        tok.owner,
+      ).expect(200);
+      expect(first.body.nextCursor).toEqual(expect.any(String));
+      const [payload, signature] = String(first.body.nextCursor).split('.');
+      const alteredSignature = `${signature[0] === 'a' ? 'b' : 'a'}${signature.slice(1)}`;
+      await api(
+        'get',
+        `${base}?q=${encodeURIComponent(search)}&limit=2&cursor=${encodeURIComponent(`${payload}.${alteredSignature}`)}`,
+        tok.owner,
+      ).expect(400);
+      await makeUser(
+        `directory-cursor-replay-${run}`,
+        Role.SALON_OWNER,
+        ids.salon,
+      );
+      await api(
+        'get',
+        `${base}?q=${encodeURIComponent(search)}&limit=2&cursor=${encodeURIComponent(first.body.nextCursor)}`,
+        tok[`directory-cursor-replay-${run}`],
+      ).expect(400);
+      await api(
+        'get',
+        `dashboard/salons/${ids.otherSalon}/customers/directory?q=${encodeURIComponent(search)}&limit=2`,
+        tok.owner,
+      ).expect(403);
+    });
+
+    it('shows the latest admin location decision only within the authorized salon scope', async () => {
+      const reviewer = await makeUser('location-reviewer', Role.PLATFORM_ADMIN, null);
+      const salon = await prisma.salon.findUniqueOrThrow({
+        where: { id: ids.salon },
+        select: { lat: true, lng: true },
+      });
+      await prisma.salonLocationProposal.create({
+        data: {
+          salonId: ids.salon,
+          latitude: salon.lat ?? 21.85,
+          longitude: salon.lng ?? 84.0,
+          source: 'MANUAL',
+          status: 'APPROVED',
+          submittedByUserId: ids.owner,
+          reviewedByAdminId: reviewer.id,
+          reviewedAt: new Date('2026-10-01T10:00:00.000Z'),
+          reviewNote: 'Approved after address evidence review.',
+        },
+      });
+      const rejectedAt = new Date('2026-10-02T10:00:00.000Z');
+      await prisma.salonLocationProposal.create({
+        data: {
+          salonId: ids.salon,
+          latitude: 22.0,
+          longitude: 85.0,
+          source: 'GPS',
+          status: 'REJECTED',
+          submittedByUserId: ids.owner,
+          reviewedByAdminId: reviewer.id,
+          reviewedAt: rejectedAt,
+          reviewNote: 'Please submit a clearer entrance location.',
+        },
+      });
+
+      const location = await api(
+        'get',
+        `dashboard/salons/${ids.salon}/location`,
+        tok.owner,
+      ).expect(200);
+      expect(location.body.current.verification).toBe('VERIFIED');
+      expect(location.body.lastDecision).toEqual({
+        status: 'REJECTED',
+        reviewNote: 'Please submit a clearer entrance location.',
+        reviewedAt: rejectedAt.toISOString(),
+      });
+      await api(
+        'get',
+        `dashboard/salons/${ids.salon}/location`,
+        tok.outsider,
+      ).expect(403);
+    });
+
     it('keeps the ledger append-only and the issued amounts frozen at the database level', async () => {
       await expect(prisma.$executeRaw`UPDATE "invoices" SET "total" = 1 WHERE "id" = ${invoiceA.id}`).rejects.toThrow(/immutable/);
       await expect(prisma.$executeRaw`UPDATE "invoice_payments" SET "amount" = 1 WHERE "invoiceId" = ${invoiceA.id}`).rejects.toThrow(/append-only/);

@@ -139,4 +139,11 @@ export class PublicOffersController {
   ) {
     return this.offers.publicList(query);
   }
+
+  @Get(':offerId')
+  @Public()
+  @Header('Cache-Control', 'no-store')
+  get(@Param('offerId', ParseUUIDPipe) offerId: string) {
+    return this.offers.publicGet(offerId);
+  }
 }
