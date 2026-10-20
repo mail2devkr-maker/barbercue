@@ -13,6 +13,7 @@ import {
   AUDIENCE_OPTIONS,
   EMPTY_OFFER_FORM,
   KIND_OPTIONS,
+  MAX_OFFER_SERVICES,
   STATUS_OPTIONS,
   audienceText,
   buildOfferBody,
@@ -24,6 +25,7 @@ import {
   formFromOffer,
   kindLabel,
   offerErrorText,
+  previewErrorText,
   previewMoney,
   redemptionText,
   servicesText,
@@ -62,7 +64,7 @@ export function OffersWorkspace({ salonId }: { salonId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [statsFor, setStatsFor] = useState<{ offerId: string; stats: OfferRedemptionStatsDto | null; error: string | null } | null>(null);
-  const [previewFor, setPreviewFor] = useState<{ offerId: string; preview: OfferPreviewDto | null; error: string | null } | null>(null);
+  const [previewFor, setPreviewFor] = useState<{ offerId: string; preview: OfferPreviewDto | null; error: string | null; note?: string } | null>(null);
   const keys = useRef(new Map<string, string>());
 
   const list = useCursorList<OfferDto>(`${base}/offers`, { kind, status }, usable, LIST_OPTIONS);
@@ -147,17 +149,19 @@ export function OffersWorkspace({ salonId }: { salonId: string }) {
   }
 
   async function showPreview(offer: OfferDto) {
-    const ids = offer.serviceIds.length > 0 ? offer.serviceIds : services.slice(0, 100).map((s) => s.id);
+    // A saved offer is checked against named services (the server needs at least one and at most 100); "all services" uses the active ones.
+    const ids = offer.serviceIds.length > 0 ? offer.serviceIds : services.slice(0, MAX_OFFER_SERVICES).map((s) => s.id);
+    const note = offer.serviceIds.length === 0 && services.length > MAX_OFFER_SERVICES ? `This check covers the first ${MAX_OFFER_SERVICES} of your ${services.length} active services.` : undefined;
     if (ids.length === 0) {
       setPreviewFor({ offerId: offer.id, preview: null, error: "Add an active service before previewing prices." });
       return;
     }
-    setPreviewFor({ offerId: offer.id, preview: null, error: null });
+    setPreviewFor({ offerId: offer.id, preview: null, error: null, note });
     try {
       const preview = await apiFetch<OfferPreviewDto>(`${base}/offers/${offer.id}/preview`, { method: "POST", body: JSON.stringify({ serviceIds: ids }) });
-      setPreviewFor({ offerId: offer.id, preview, error: null });
+      setPreviewFor({ offerId: offer.id, preview, error: null, note });
     } catch (err) {
-      setPreviewFor({ offerId: offer.id, preview: null, error: err instanceof ApiError ? offerErrorText(err.code, err.message) : "Could not preview the prices." });
+      setPreviewFor({ offerId: offer.id, preview: null, error: err instanceof ApiError ? previewErrorText(err.code, err.message) : "Could not preview the prices.", note });
     }
   }
 
@@ -279,10 +283,15 @@ export function OffersWorkspace({ salonId }: { salonId: string }) {
   );
 }
 
-function PreviewPanel({ state }: { state: { preview: OfferPreviewDto | null; error: string | null } }) {
+function PreviewPanel({ state }: { state: { preview: OfferPreviewDto | null; error: string | null; note?: string } }) {
   if (state.error) return <Banner tone="error">{state.error}</Banner>;
   if (!state.preview) return <Skeleton height={60} />;
-  return <PreviewTable preview={state.preview} />;
+  return (
+    <>
+      {state.note && <div className={ui.hint}>{state.note}</div>}
+      <PreviewTable preview={state.preview} />
+    </>
+  );
 }
 
 function PreviewTable({ preview }: { preview: OfferPreviewDto }) {
@@ -377,18 +386,13 @@ function OfferEditor({
     const { body, errors: found } = buildOfferBody(form, timeZone);
     setErrors(found);
     if (!body) return;
-    // The server previews only named services, so an offer for "all services" is checked against the shop's active ones.
-    const previewIds = body.serviceIds.length > 0 ? body.serviceIds : services.slice(0, 100).map((s) => s.id);
-    if (previewIds.length === 0) {
-      setCheck({ preview: null, error: "Add an active service before checking prices." });
-      return;
-    }
+    // An empty service list is the server's own "every active service" (bounded to 100); it is sent as it is, never filled in here.
     setCheck({ preview: null, error: null });
     try {
-      const preview = await apiFetch<OfferPreviewDto>(`${base}/offers/preview`, { method: "POST", body: JSON.stringify({ ...body, serviceIds: previewIds }) });
+      const preview = await apiFetch<OfferPreviewDto>(`${base}/offers/preview`, { method: "POST", body: JSON.stringify(body) });
       setCheck({ preview, error: null });
     } catch (err) {
-      setCheck({ preview: null, error: err instanceof ApiError ? offerErrorText(err.code, err.message) : "Could not check the prices." });
+      setCheck({ preview: null, error: err instanceof ApiError ? previewErrorText(err.code, err.message) : "Could not check the prices." });
     }
   }
 
@@ -456,6 +460,7 @@ function OfferEditor({
             <div className={ui.hint}>
               {form.serviceIds.length === 0 ? "All your active services are included. Tick services to limit the offer to them." : `${form.serviceIds.length} selected.`}
             </div>
+            {errors.serviceIds && <div className={ui.hint} role="alert">{errors.serviceIds}</div>}
             {services.length === 0 ? (
               <div className={ui.hint}>You have no active services yet.</div>
             ) : (

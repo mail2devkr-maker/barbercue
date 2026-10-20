@@ -186,3 +186,56 @@ describe("ShopLocation proposing", () => {
     expect(text(r)).toContain("Waiting for review");
   });
 });
+
+describe("ShopLocation last review (Codex PR #268)", () => {
+  const REJECTED = { ...NONE, lastDecision: { status: "REJECTED", reviewNote: "The pin is on the neighbouring plot.", reviewedAt: "2026-10-20T10:15:00.000Z" } };
+  const APPROVED = { ...VERIFIED, lastDecision: { status: "APPROVED", reviewNote: "Verified against the address.", reviewedAt: "2026-10-20T10:15:00.000Z" } };
+
+  it("shows a rejection with the reviewer's note and says the public location did not change", async () => {
+    install({ get: REJECTED });
+    const r = await mount();
+    const t = text(r);
+    expect(t).toContain("Last review");
+    expect(t).toContain("Not approved");
+    expect(t).toContain("The pin is on the neighbouring plot.");
+    expect(t).toContain("did not change");
+    expect(t).toContain("You can send a new proposal");
+  });
+
+  it("shows an approval with its note", async () => {
+    install({ get: APPROVED });
+    const r = await mount();
+    const t = text(r);
+    expect(t).toContain("Last review");
+    expect(t).toContain("Approved");
+    expect(t).toContain("Verified against the address.");
+    expect(t).toContain("became the location customers see");
+  });
+
+  it("says when the reviewer left no note", async () => {
+    install({ get: { ...REJECTED, lastDecision: { status: "REJECTED", reviewNote: null, reviewedAt: null } } });
+    const r = await mount();
+    expect(text(r)).toContain("did not leave a note");
+  });
+
+  it("mentions a newer waiting proposal next to the last decision", async () => {
+    install({ get: { ...PENDING, lastDecision: REJECTED.lastDecision } });
+    const r = await mount();
+    expect(text(r)).toContain("A newer proposal of yours is waiting for review.");
+    expect(text(r)).toContain("Your proposal");
+  });
+
+  it("shows no review card when there is no decision, or an older server sends none", async () => {
+    install({ get: NONE });
+    expect(text(await mount())).not.toContain("Last review");
+    install({ get: { ...NONE, lastDecision: null } });
+    expect(text(await mount())).not.toContain("Last review");
+  });
+
+  it("renders a note as plain text, never as markup", async () => {
+    install({ get: { ...REJECTED, lastDecision: { status: "REJECTED", reviewNote: "<img src=x onerror=alert(1)>", reviewedAt: null } } });
+    const r = await mount();
+    expect(text(r)).toContain("<img src=x onerror=alert(1)>");
+    expect(r.root.findAllByType("img")).toHaveLength(0);
+  });
+});

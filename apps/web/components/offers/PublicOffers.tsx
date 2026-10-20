@@ -6,11 +6,12 @@ import { formatMoney } from "@barbercue/shared";
 import { useCursorList } from "../../lib/use-cursor-list";
 import {
   DEFAULT_COUNTRY,
-  bookOfferHref,
   cityToSlug,
   eligibilityText,
+  offerBookHref,
   offerDiscountText,
   offerKindLabel,
+  publicOfferParams,
   validUntilText,
 } from "../../lib/public-offers";
 import styles from "./public-offers.module.css";
@@ -21,8 +22,8 @@ const OPTIONS = {
   keyOf: (row: PublicOfferDto) => row.id,
 };
 
-function OfferList({ city, country }: { city: string; country: string }) {
-  const list = useCursorList<PublicOfferDto>("offers", { city }, true, OPTIONS);
+function OfferList({ city, country }: { city: string; country: string | null }) {
+  const list = useCursorList<PublicOfferDto>("offers", publicOfferParams(city, country), true, OPTIONS);
   return (
     <>
       {list.error && <p className={styles.error} role="alert">{list.error}</p>}
@@ -31,7 +32,9 @@ function OfferList({ city, country }: { city: string; country: string }) {
         <p className={styles.empty}>There are no offers in this city right now. Check again soon.</p>
       )}
       <ul className={styles.list}>
-        {list.items.map((offer) => (
+        {list.items.map((offer) => {
+          const bookHref = offerBookHref(offer, { country: country ?? DEFAULT_COUNTRY, citySlug: city });
+          return (
           <li key={offer.id} className={styles.card}>
             <div className={styles.head}>
               <span className={styles.kind}>{offerKindLabel(offer.kind)}</span>
@@ -50,11 +53,16 @@ function OfferList({ city, country }: { city: string; country: string }) {
                 ))}
               </ul>
             )}
-            <Link className={styles.book} href={bookOfferHref({ salonSlug: offer.salon.slug, country, citySlug: city, offerId: offer.id })}>
-              Book with this offer
-            </Link>
+            {bookHref ? (
+              <Link className={styles.book} href={bookHref}>
+                Book with this offer
+              </Link>
+            ) : (
+              <p className={styles.muted}>Open this shop from search to book with this offer.</p>
+            )}
           </li>
-        ))}
+          );
+        })}
       </ul>
       {list.notice && <p className={styles.muted} role="status">{list.notice}</p>}
       {list.hasMore && (
@@ -73,7 +81,8 @@ function OfferList({ city, country }: { city: string; country: string }) {
  */
 export function PublicOffers({ city, country }: { city: string | null; country?: string }) {
   const citySlug = city ? cityToSlug(city) : null;
-  const countryCode = (country ?? DEFAULT_COUNTRY).toLowerCase();
+  // Sent to the server only when the address named a country; the cards link with their own canonical country and city.
+  const countryCode = country && /^[A-Za-z]{2}$/.test(country) ? country.toLowerCase() : null;
   return (
     <main className={styles.page}>
       <h1 className={styles.heading}>Offers near you</h1>
@@ -82,7 +91,7 @@ export function PublicOffers({ city, country }: { city: string | null; country?:
         and you need to be signed in to use an offer.
       </p>
       <form action="/offers" method="get" className={styles.form} role="search" aria-label="Find offers in a city">
-        <input type="hidden" name="country" value={countryCode} />
+        {countryCode && <input type="hidden" name="country" value={countryCode} />}
         <label htmlFor="offers-city" className={styles.label}>City</label>
         <input id="offers-city" name="city" defaultValue={citySlug ?? ""} placeholder="For example: jharsuguda" className={styles.input} autoComplete="off" />
         <button type="submit" className={styles.search}>Show offers</button>

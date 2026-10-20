@@ -59,7 +59,7 @@ function ProposalRow({ item, onDecided }: { item: AdminSalonLocationProposalDto;
       <td>{formatReviewTime(item.submittedAt)}</td>
       <td>
         {error && <p role="alert" style={{ color: "#ffb7c9", fontSize: 12, margin: "0 0 6px" }}>{error}</p>}
-        <label htmlFor={`note-${item.id}`} style={{ fontSize: 12 }}>Review note (required, kept with the decision)</label>
+        <label htmlFor={`note-${item.id}`} style={{ fontSize: 12 }}>Review note (required, shown to the owner)</label>
         <textarea
           id={`note-${item.id}`}
           value={note}
@@ -73,7 +73,7 @@ function ProposalRow({ item, onDecided }: { item: AdminSalonLocationProposalDto;
             <p style={{ fontSize: 12, margin: "0 0 6px" }}>
               {confirming === "APPROVED"
                 ? "Approving makes these coordinates the shop's public location for distances and maps."
-                : "Rejecting keeps the current public location. The owner's Shop Location screen does not show your note yet, so tell them separately if they need to try again."}
+                : "Rejecting keeps the current public location and tells the owner why."}
             </p>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <Button type="button" onClick={() => void decide(confirming)} disabled={busy}>{busy ? "Saving…" : `Yes, ${decisionVerb(confirming).toLowerCase()}`}</Button>
@@ -130,7 +130,7 @@ export function LocationProposalReview() {
 
   function decided(id: string, decision: Decision) {
     setItems((prev) => prev.filter((i) => i.id !== id));
-    setNotice(decision === "APPROVED" ? "Approved. The shop's public location now uses the proposed point." : "Rejected. The public location is unchanged. Your note is kept with the decision; the owner's screen does not show it yet.");
+    setNotice(decision === "APPROVED" ? "Approved. The shop's public location now uses the proposed point." : "Rejected. The public location is unchanged and the owner can see your note.");
   }
 
   return (

@@ -8,7 +8,8 @@
     "start": "next start -p 3001",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "check:qa-files": "node scripts/qa-credential-guard.cjs"
   },
   "dependencies": {
     "@barbercue/shared": "*",

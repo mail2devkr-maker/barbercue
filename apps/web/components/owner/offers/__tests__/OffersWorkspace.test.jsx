@@ -46,17 +46,22 @@ const offer = (extra = {}) => ({
 let calls;
 let offers;
 let hook;
-function install({ capability = { status: "ENABLED" }, tz = "Asia/Kolkata", onPost } = {}) {
+let previewHook;
+let servicesAnswer;
+function install({ capability = { status: "ENABLED" }, tz = "Asia/Kolkata", onPost, onPreview, services } = {}) {
   calls = [];
   hook = onPost;
+  previewHook = onPreview;
+  servicesAnswer = services ?? SVC;
   apiFetch.mockImplementation(async (path, opts) => {
     calls.push({ path, opts });
     if (path.endsWith("/capabilities")) return capability ? { features: { offers: capability } } : { features: {} };
     if (path.endsWith("/timezone")) return { timezone: tz };
-    if (path.endsWith("/services")) return SVC;
+    if (path.endsWith("/services")) return servicesAnswer;
     if (/\/offers(\?|$)/.test(path) && !opts?.method) return { items: offers, nextCursor: null };
     if (path.endsWith("/stats")) return { offerId: "o1", redemptionCount: 3, uniqueCustomers: 2, completedBookings: 2, cancelledBookings: 1, recordedDiscount: 150, currency: "INR" };
     if (/\/offers\/[^/]+\/preview$/.test(path)) return { offerId: "o1", currency: "INR", eligibleByRule: true, eligibilityRule: "ALL", lines: [{ serviceId: SVC[0].id, serviceName: "Haircut", basePrice: 300, discount: 60, finalPrice: 240, currency: "INR" }], subtotal: 300, discount: 60, finalTotal: 240 };
+    if (path.endsWith("/offers/preview") && previewHook) return previewHook(opts);
     if (path.endsWith("/offers/preview")) return { offerId: null, currency: "INR", eligibleByRule: null, eligibilityRule: "ALL", lines: [{ serviceId: SVC[0].id, serviceName: "Haircut", basePrice: 300, discount: 60, finalPrice: 240, currency: "INR" }], subtotal: 300, discount: 60, finalTotal: 240 };
     if (opts?.method) return hook ? hook(path, opts) : offer();
     throw new Error(`unexpected ${path}`);
@@ -201,8 +206,8 @@ describe("OffersWorkspace create", () => {
     await flush();
     expect(text(r)).toContain("Customer pays");
     expect(mutations().every((c) => c.path.endsWith("/offers/preview"))).toBe(true);
-    // An offer for all services is previewed against the active ones (never the inactive one), as the server needs named services.
-    expect(JSON.parse(mutations()[0].opts.body).serviceIds).toEqual([SVC[0].id, SVC[1].id]);
+    // An offer for all services is sent with no service ids: the server previews every active service itself (PR #268).
+    expect(JSON.parse(mutations()[0].opts.body).serviceIds).toEqual([]);
   });
 
   it("blocks creating until the shop has a timezone", async () => {
@@ -210,6 +215,66 @@ describe("OffersWorkspace create", () => {
     const r = await mount();
     expect(text(r)).toContain("no timezone yet");
     expect(button(r, "Create an offer")).toBeUndefined();
+  });
+});
+
+describe("OffersWorkspace price check bounds (Codex PR #268)", () => {
+  async function openAndCheck(r) {
+    await act(async () => { button(r, "Create an offer").props.onClick(); });
+    await fillValidForm(r);
+    await act(async () => { button(r, "Check prices").props.onClick(); });
+    await flush();
+  }
+
+  it("sends the ticked services as chosen, and never fills in the list itself", async () => {
+    install();
+    const r = await mount();
+    await act(async () => { button(r, "Create an offer").props.onClick(); });
+    await fillValidForm(r);
+    const boxes = r.root.findAllByType("input").filter((i) => i.props.type === "checkbox");
+    await act(async () => { boxes[1].props.onChange(); });
+    await act(async () => { button(r, "Check prices").props.onClick(); });
+    await flush();
+    expect(JSON.parse(mutations()[0].opts.body).serviceIds).toEqual([SVC[1].id]);
+  });
+
+  it("explains a shop with no active service in plain words", async () => {
+    install({ onPreview: () => { throw new ApiError(400, { error: { code: "OFFER_SERVICE_MISMATCH", message: "There are no active services to preview for this shop." } }); } });
+    const r = await mount();
+    await openAndCheck(r);
+    expect(text(r)).toContain("no active service to check");
+  });
+
+  it("explains the bound of 100 services when the shop has more, and asks for a bounded choice", async () => {
+    install({ onPreview: () => { throw new ApiError(400, { error: { code: "OFFER_INVALID", message: "This shop has more than 100 active services. Select a bounded set to preview." } }); } });
+    const r = await mount();
+    await openAndCheck(r);
+    expect(text(r)).toContain("more than 100 active services");
+    expect(text(r)).toContain("Tick up to 100 services");
+  });
+
+  it("refuses to send more than 100 chosen services and says so", async () => {
+    const many = Array.from({ length: 101 }, (_, i) => ({ id: `b0000000-0000-4000-8000-${String(i).padStart(12, "0")}`, name: `Service ${i}`, price: 10, isActive: true }));
+    install({ services: many });
+    const r = await mount();
+    await act(async () => { button(r, "Create an offer").props.onClick(); });
+    await fillValidForm(r);
+    const boxes = r.root.findAllByType("input").filter((i) => i.props.type === "checkbox");
+    for (const box of boxes) await act(async () => { box.props.onChange(); });
+    await act(async () => { r.root.findByType("form").props.onSubmit({ preventDefault() {} }); });
+    expect(mutations()).toHaveLength(0);
+    expect(text(r)).toContain("Choose at most 100 services");
+  });
+
+  it("says when a saved offer for all services is checked against only the first 100", async () => {
+    const many = Array.from({ length: 130 }, (_, i) => ({ id: `b0000000-0000-4000-8000-${String(i).padStart(12, "0")}`, name: `Service ${i}`, price: 10, isActive: true }));
+    install({ services: many });
+    const r = await mount();
+    await act(async () => { r.root.findAllByType("li")[0].findAllByType("button").find((b) => /Preview prices/.test(collect(b.props.children))).props.onClick(); });
+    await flush();
+    const body = JSON.parse(calls.find((c) => /\/offers\/o1\/preview$/.test(c.path)).opts.body);
+    expect(body.serviceIds).toHaveLength(100);
+    expect(text(r)).toContain("first 100 of your 130 active services");
   });
 });
 

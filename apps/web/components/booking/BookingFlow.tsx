@@ -30,8 +30,8 @@ import {
   appliesToServices,
   customerOfferErrorText,
   estimateFor,
-  findPublicOffer,
   isOfferError,
+  lookupPublicOffer,
   offerDiscountText,
   validUntilText,
 } from "../../lib/public-offers";
@@ -114,8 +114,9 @@ export function BookingFlow({
   // Identifies this shop for a campaign code remembered from a shared link (lib/campaign-token.ts). When a valid, unexpired
   // code exists for this shop it is sent as the optional `attributionToken`; the server alone decides whether it counts.
   campaignKey?: string;
-  // An offer chosen on the public Offers page (?offer=). It is looked up in the public offer list of `offerCity` (the city slug the
-  // customer searched with) and, when found for this shop, sent as `offerId`. The server alone decides eligibility and the price.
+  // An offer chosen on the public Offers page (?offer=). It is read with GET offers/:offerId and, when it belongs to this shop, sent
+  // as `offerId`. The server alone decides eligibility and the price. `offerCity` (the link's city slug) is used only to find the
+  // offer on a server that has no lookup by id.
   offerId?: string;
   offerCity?: string;
 }) {
@@ -129,20 +130,21 @@ export function BookingFlow({
   const activeOffer = offer && !offerDropped ? offer : null;
 
   useEffect(() => {
-    if (!offerId || !offerCity) return;
+    if (!offerId) return;
     let cancelled = false;
     void Promise.resolve().then(async () => {
-      try {
-        const found = await findPublicOffer(
-          (cursor) => apiFetch<{ items: PublicOfferDto[]; nextCursor: string | null }>(`offers?${new URLSearchParams({ city: offerCity, limit: "50", ...(cursor ? { cursor } : {}) }).toString()}`),
-          offerId,
-        );
-        if (!cancelled) setOffer(found && found.salon.id === salonId ? found : null);
-      } catch {
-        // No offer is applied when it cannot be read; the booking itself is unaffected.
-      } finally {
-        if (!cancelled) setOfferChecked(true);
-      }
+      // No offer is applied when it cannot be read; the booking itself is unaffected.
+      const found = await lookupPublicOffer(
+        (id) => apiFetch<PublicOfferDto>(`offers/${encodeURIComponent(id)}`),
+        offerCity
+          ? (cursor) => apiFetch<{ items: PublicOfferDto[]; nextCursor: string | null }>(`offers?${new URLSearchParams({ city: offerCity, limit: "50", ...(cursor ? { cursor } : {}) }).toString()}`)
+          : null,
+        offerId,
+      );
+      if (cancelled) return;
+      // The offer must belong to the shop being booked: another shop's offer is never shown or sent.
+      setOffer(found && found.salon.id === salonId ? found : null);
+      setOfferChecked(true);
     });
     return () => {
       cancelled = true;
