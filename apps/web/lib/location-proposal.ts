@@ -43,9 +43,26 @@ function parseProposal(raw: unknown): SalonLocationProposalDto | null {
   };
 }
 
+/** The latest approve or reject decision of a FastQue reviewer on this shop's proposals (Codex PR #268, `lastDecision`). */
+export interface LastDecision {
+  status: "APPROVED" | "REJECTED";
+  reviewNote: string | null;
+  reviewedAt: string | null;
+}
+
 export interface LocationView {
   current: { latitude: number | null; longitude: number | null; verified: boolean; verifiedAt: string | null };
   pending: SalonLocationProposalDto | null;
+  /** null when there is no decision yet, or when the server does not send one (an older backend). */
+  lastDecision: LastDecision | null;
+}
+
+/** Reads `lastDecision` defensively: only an approval or a rejection is a decision; anything else is "no decision". */
+export function parseLastDecision(raw: unknown): LastDecision | null {
+  if (!isRecord(raw)) return null;
+  if (raw.status !== "APPROVED" && raw.status !== "REJECTED") return null;
+  const note = typeof raw.reviewNote === "string" && raw.reviewNote.trim() !== "" ? raw.reviewNote : null;
+  return { status: raw.status, reviewNote: note, reviewedAt: typeof raw.reviewedAt === "string" ? raw.reviewedAt : null };
 }
 
 /** Reads the server's answer defensively. Anything that is not the documented shape is "no answer", never a guess. */
@@ -65,6 +82,7 @@ export function parseLocation(raw: unknown): LocationView | null {
       verifiedAt: typeof c.verifiedAt === "string" ? c.verifiedAt : null,
     },
     pending: raw.pendingProposal === null || raw.pendingProposal === undefined ? null : parseProposal(raw.pendingProposal),
+    lastDecision: parseLastDecision(raw.lastDecision),
   };
 }
 
@@ -130,6 +148,13 @@ export const PROPOSAL_STATUS_LABEL: Record<string, string> = {
 
 export function proposalStatusLabel(status: string): string {
   return PROPOSAL_STATUS_LABEL[status] ?? status;
+}
+
+/** One sentence on what a decision means for the shop's public location, so a rejection is never read as a fault. */
+export function decisionConsequence(decision: LastDecision): string {
+  return decision.status === "APPROVED"
+    ? "Your proposed point became the location customers see."
+    : "The location customers see did not change. You can send a new proposal below.";
 }
 
 /** Plain words for a browser location failure (GeolocationPositionError codes 1 to 3). */

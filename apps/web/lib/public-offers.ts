@@ -2,13 +2,16 @@ import { OfferErrorCode, formatMoney } from "@barbercue/shared";
 import type { OfferPriceLineDto, PublicOfferDto } from "@barbercue/shared";
 
 // Customer side of Offers, Promotions and Daily Deals (requirements #11, #16, #24) on Codex's
-// docs/contracts/FASTQUE_OFFERS_PROMOTIONS_DAILY_DEALS_V1.md (PR #260):
-//   GET  offers?city=<city-slug>&service=<uuid>&limit&cursor   (public; { items, nextCursor }; per-service price estimates)
+// docs/contracts/FASTQUE_OFFERS_PROMOTIONS_DAILY_DEALS_V1.md (PR #260, with the PR #268 additions):
+//   GET  offers?countryCode=&citySlug=&service=&limit&cursor   (public; { items, nextCursor }; per-service price estimates;
+//                                                              the older `city=<slug>` filter still works)
+//   GET  offers/:offerId                                        (one active, in-date offer; 404 OFFER_NOT_FOUND otherwise)
 //   POST bookings { ..., offerId }                              (the server re-checks eligibility, dates, limits and prices)
 //
 // What a customer sees here is an estimate. The server decides at booking time, and an offer needs a signed-in account.
-// The offer list names the city by its display name and has no country or city slug, so a link to a shop is built only from the
-// city slug the visitor searched with (an offer is never linked from a guess).
+// Every offer names its shop's `countryCode` and `citySlug`, so a link to the shop is built from the offer itself. Only a server
+// older than PR #268 sends neither; for that case a link falls back to the city the visitor searched with, and is left out
+// when there is none (an offer is never linked from a guess).
 
 export const DEFAULT_COUNTRY = "in";
 const CITY_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -26,6 +29,32 @@ export function isOfferId(value: string | null | undefined): value is string {
 export function bookOfferHref(args: { salonSlug: string; country: string; citySlug: string; offerId: string }): string {
   const q = new URLSearchParams({ country: args.country, city: args.citySlug, offer: args.offerId });
   return `/book/${encodeURIComponent(args.salonSlug)}?${q.toString()}`;
+}
+
+/** The shop's canonical country and city slug as the offer states them, or null for a server that does not send them. */
+export function canonicalLocation(offer: { salon: { countryCode?: unknown; citySlug?: unknown } }): { country: string; citySlug: string } | null {
+  const country = typeof offer.salon.countryCode === "string" ? offer.salon.countryCode.trim().toLowerCase() : "";
+  const citySlug = typeof offer.salon.citySlug === "string" ? offer.salon.citySlug.trim().toLowerCase() : "";
+  return /^[a-z]{2}$/.test(country) && CITY_SLUG.test(citySlug) ? { country, citySlug } : null;
+}
+
+/**
+ * The link that opens booking for this offer. It uses the offer's own country and city slug; only when the server sends none (older
+ * than PR #268) does it use the searched city and country, and with neither it returns null rather than guess.
+ */
+export function offerBookHref(offer: PublicOfferDto, searched?: { country?: string | null; citySlug?: string | null }): string | null {
+  const canonical = canonicalLocation(offer);
+  const country = canonical?.country ?? (searched?.citySlug ? (searched.country ?? DEFAULT_COUNTRY).toLowerCase() : null);
+  const citySlug = canonical?.citySlug ?? searched?.citySlug ?? null;
+  if (!country || !citySlug) return null;
+  return bookOfferHref({ salonSlug: offer.salon.slug, country, citySlug, offerId: offer.id });
+}
+
+/** Query for the public list. The legacy `city` filter is sent with the canonical ones so an older server still filters by city. */
+export function publicOfferParams(citySlug: string, country?: string | null): Record<string, string> {
+  const params: Record<string, string> = { city: citySlug, citySlug };
+  if (country && /^[A-Za-z]{2}$/.test(country)) params.countryCode = country.toUpperCase();
+  return params;
 }
 
 export function offerDiscountText(offer: Pick<PublicOfferDto, "discountType" | "discountValue" | "currency">): string {
@@ -103,7 +132,41 @@ export function customerOfferErrorText(code: string | undefined, message: string
   }
 }
 
-/** Looks an offer up by id in the public list of a city, a few pages at most (the server has no lookup by id). */
+/** The HTTP status and code of a failed request, read from the error without depending on its class. */
+function errorParts(err: unknown): { status: number | null; code: string | null } {
+  if (typeof err !== "object" || err === null) return { status: null, code: null };
+  const e = err as { status?: unknown; code?: unknown };
+  return { status: typeof e.status === "number" ? e.status : null, code: typeof e.code === "string" ? e.code : null };
+}
+
+/**
+ * Finds the offer a booking link names. The server's lookup by id (`GET offers/:offerId`) is used first. `OFFER_NOT_FOUND` is a
+ * final answer: the offer is not active, in date or visible. Only a server without that route (a 404 that is not OFFER_NOT_FOUND,
+ * a backend older than PR #268) falls back, and only when the link also names a city, to the bounded search of that city's list.
+ * Any other failure means "no offer applied"; the booking itself is never blocked.
+ */
+export async function lookupPublicOffer(
+  fetchOne: (offerId: string) => Promise<PublicOfferDto>,
+  fetchPage: ((cursor: string | null) => Promise<{ items: PublicOfferDto[]; nextCursor: string | null }>) | null,
+  offerId: string,
+): Promise<PublicOfferDto | null> {
+  try {
+    return await fetchOne(offerId);
+  } catch (err) {
+    const { status, code } = errorParts(err);
+    if (code === OfferErrorCode.NOT_FOUND) return null;
+    if (status === 404 && fetchPage) {
+      try {
+        return await findPublicOffer(fetchPage, offerId);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+/** Looks an offer up by id in the public list of a city, a few pages at most. Only for a server that has no lookup by id. */
 export async function findPublicOffer(
   fetchPage: (cursor: string | null) => Promise<{ items: PublicOfferDto[]; nextCursor: string | null }>,
   offerId: string,

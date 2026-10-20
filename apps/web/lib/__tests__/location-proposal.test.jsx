@@ -82,3 +82,26 @@ describe("labels and links", () => {
     expect(L.formatCoordinates(28.6139, 77.209)).toBe("28.613900, 77.209000");
   });
 });
+
+describe("lastDecision (Codex PR #268)", () => {
+  const base = { current: { latitude: 28.6, longitude: 77.2, verification: "VERIFIED", verifiedAt: "2026-10-01T00:00:00.000Z" }, pendingProposal: null };
+  it("reads an approval and a rejection with their note and date", () => {
+    expect(L.parseLocation({ ...base, lastDecision: { status: "APPROVED", reviewNote: "Matches the address.", reviewedAt: "2026-10-20T10:15:00.000Z" } }).lastDecision).toEqual({
+      status: "APPROVED", reviewNote: "Matches the address.", reviewedAt: "2026-10-20T10:15:00.000Z",
+    });
+    expect(L.parseLocation({ ...base, lastDecision: { status: "REJECTED", reviewNote: "Wrong plot", reviewedAt: null } }).lastDecision).toMatchObject({ status: "REJECTED", reviewNote: "Wrong plot", reviewedAt: null });
+  });
+  it("is null when the server sends nothing, an older shape, or a status that is not a decision", () => {
+    expect(L.parseLocation({ ...base }).lastDecision).toBeNull();
+    expect(L.parseLocation({ ...base, lastDecision: null }).lastDecision).toBeNull();
+    for (const status of ["PENDING", "SUPERSEDED", "approved", 1, undefined]) expect(L.parseLocation({ ...base, lastDecision: { status, reviewNote: "x", reviewedAt: null } }).lastDecision).toBeNull();
+    expect(L.parseLocation({ ...base, lastDecision: "APPROVED" }).lastDecision).toBeNull();
+  });
+  it("treats a blank note as no note", () => {
+    expect(L.parseLocation({ ...base, lastDecision: { status: "REJECTED", reviewNote: "   ", reviewedAt: null } }).lastDecision.reviewNote).toBeNull();
+  });
+  it("says what a decision means for the public location", () => {
+    expect(L.decisionConsequence({ status: "APPROVED", reviewNote: null, reviewedAt: null })).toContain("became the location");
+    expect(L.decisionConsequence({ status: "REJECTED", reviewNote: null, reviewedAt: null })).toContain("did not change");
+  });
+});

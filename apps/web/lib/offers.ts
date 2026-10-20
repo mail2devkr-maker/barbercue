@@ -193,6 +193,9 @@ export function formFromOffer(offer: OfferDto, timeZone: string): OfferForm {
 
 export type OfferErrors = Partial<Record<keyof OfferForm, string>>;
 
+/** The most services one offer or one preview can name; an empty list means every active service (bounded to this many by the server). */
+export const MAX_OFFER_SERVICES = 100;
+
 function wholeNumber(text: string): number | null {
   return /^\d{1,9}$/.test(text.trim()) ? Number(text.trim()) : null;
 }
@@ -237,6 +240,7 @@ export function buildOfferBody(form: OfferForm, timeZone: string): { body: Creat
     if (n === null || n < 1 || n > 1_000_000) errors.maxRedemptions = "Leave empty for no limit, or enter a whole number from 1 to 1,000,000.";
     else maxRedemptions = n;
   }
+  if (new Set(form.serviceIds).size > MAX_OFFER_SERVICES) errors.serviceIds = `Choose at most ${MAX_OFFER_SERVICES} services, or none to cover all of them.`;
   const per = wholeNumber(form.perCustomerLimit);
   if (per === null || per < 1 || per > 100) errors.perCustomerLimit = "Enter a whole number from 1 to 100.";
 
@@ -331,6 +335,18 @@ export function offerErrorText(code: string | undefined, message: string): strin
     default:
       return message;
   }
+}
+
+/**
+ * Words for a refused price check. An empty service list asks the server to check every active service, and it refuses when the shop
+ * has none, or more than 100 (it then asks for a bounded choice); a chosen service that is no longer the shop's is a mismatch.
+ */
+export function previewErrorText(code: string | undefined, message: string): string {
+  if (code === OfferErrorCode.SERVICE_MISMATCH) return "There is no active service to check, or a chosen service is no longer yours. Add or tick an active service and try again.";
+  if (code === OfferErrorCode.INVALID && /more than \d+ active services/i.test(message)) {
+    return `Your shop has more than ${MAX_OFFER_SERVICES} active services, so the check cannot cover all of them. Tick up to ${MAX_OFFER_SERVICES} services to check.`;
+  }
+  return offerErrorText(code, message);
 }
 
 /** Which of the money fields is the discount, in the shop's currency, for a preview line. */

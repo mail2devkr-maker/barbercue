@@ -5,6 +5,7 @@ import { DASHBOARD_PATHS } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../lib/api";
 import {
   formatCoordinates,
+  decisionConsequence,
   formatReviewTime,
   geolocationMessage,
   mapLinkOut,
@@ -142,6 +143,23 @@ export function ShopLocation({ salonId }: { salonId: string }) {
             <p className={ui.cardSub}>No location is set for your shop yet. Without one, customers cannot see how far you are.</p>
           )}
         </Card>
+      )}
+
+      {view?.lastDecision && (
+        <div className={ui.mt16}>
+          <Card title="Last review" sub="The latest decision by a FastQue reviewer on one of your proposals.">
+            <p>
+              <Badge tone={STATUS_TONE[view.lastDecision.status] ?? "neutral"}>{proposalStatusLabel(view.lastDecision.status)}</Badge>
+              {view.lastDecision.reviewedAt && <span className={ui.cardSub}> · {formatReviewTime(view.lastDecision.reviewedAt)}</span>}
+            </p>
+            {view.lastDecision.reviewNote ? (
+              <p>Reviewer note: {view.lastDecision.reviewNote}</p>
+            ) : (
+              <p className={ui.cardSub}>The reviewer did not leave a note.</p>
+            )}
+            <p className={ui.cardSub}>{decisionConsequence(view.lastDecision)}{pending ? " A newer proposal of yours is waiting for review." : ""}</p>
+          </Card>
+        </div>
       )}
 
       {pending && (
