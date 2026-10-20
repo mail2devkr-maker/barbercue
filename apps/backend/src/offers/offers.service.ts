@@ -30,6 +30,30 @@ type OfferWithRelations = Prisma.OfferGetPayload<{
   };
 }>;
 
+const publicOfferInclude = {
+  services: {
+    include: {
+      service: {
+        select: { id: true, name: true, price: true, isActive: true },
+      },
+    },
+  },
+  salon: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      currency: true,
+      city: { select: { name: true, slug: true, countryCode: true } },
+    },
+  },
+  _count: { select: { redemptions: true } },
+} satisfies Prisma.OfferInclude;
+
+type PublicOfferWithRelations = Prisma.OfferGetPayload<{
+  include: typeof publicOfferInclude;
+}>;
+
 export interface LockedOfferApplication {
   offerId: string;
   title: string;
@@ -325,12 +349,6 @@ export class OffersService {
       this.invalid(
         parsed.error.issues[0]?.message ?? 'Offer fields are invalid.',
       );
-    if (!parsed.data.serviceIds.length)
-      this.fail(
-        OfferErrorCode.SERVICE_MISMATCH,
-        'Choose services to preview this offer.',
-        HttpStatus.BAD_REQUEST,
-      );
     const [salon, services] = await Promise.all([
       this.prisma.salon.findUnique({
         where: { id: salonId },
@@ -339,7 +357,21 @@ export class OffersService {
       this.loadServices(this.prisma, salonId, parsed.data.serviceIds),
     ]);
     if (!salon) this.notFound('Shop not found.');
-    this.assertFoundServiceIds(services, parsed.data.serviceIds);
+    if (parsed.data.serviceIds.length) {
+      this.assertFoundServiceIds(services, parsed.data.serviceIds);
+    } else if (services.length === 0) {
+      this.fail(
+        OfferErrorCode.SERVICE_MISMATCH,
+        'There are no active services to preview for this shop.',
+        HttpStatus.BAD_REQUEST,
+      );
+    } else if (services.length > 100) {
+      this.fail(
+        OfferErrorCode.INVALID,
+        'This shop has more than 100 active services. Select a bounded set to preview.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     return this.toPreview(
       null,
       parsed.data,
@@ -420,9 +452,20 @@ export class OffersService {
     query: PublicOfferQuery,
   ): Promise<{ items: PublicOfferDto[]; nextCursor: string | null }> {
     const now = new Date();
-    const cityFilter = query.city
-      ? { city: { is: { slug: query.city.toLowerCase() } } }
-      : {};
+    const citySlug = query.citySlug ?? query.city?.toLowerCase();
+    const cityFilter =
+      citySlug || query.countryCode
+        ? {
+            city: {
+              is: {
+                ...(citySlug ? { slug: citySlug } : {}),
+                ...(query.countryCode
+                  ? { countryCode: query.countryCode }
+                  : {}),
+              },
+            },
+          }
+        : {};
     const applicableServiceFilter = query.service
       ? {
           AND: [
@@ -470,28 +513,43 @@ export class OffersService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: query.limit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
-      include: {
-        services: {
-          include: {
-            service: {
-              select: { id: true, name: true, price: true, isActive: true },
-            },
-          },
-        },
-        salon: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            currency: true,
-            city: { select: { name: true } },
-          },
-        },
-        _count: { select: { redemptions: true } },
-      },
+      include: publicOfferInclude,
     });
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const items = await this.mapPublicOffers(page, query.service);
+    return { items, nextCursor: hasMore ? page[page.length - 1].id : null };
+  }
+
+  async publicGet(offerId: string): Promise<PublicOfferDto> {
+    const now = new Date();
+    const offer = await this.prisma.offer.findFirst({
+      where: {
+        id: offerId,
+        status: 'ACTIVE',
+        validFrom: { lte: now },
+        validTo: { gt: now },
+        salon: { is: { status: 'ACTIVE' } },
+      },
+      include: publicOfferInclude,
+    });
+    if (!offer) this.notFound();
+
+    const activeServiceCount = offer.services.length
+      ? offer.services.filter((link) => link.service.isActive).length
+      : await this.prisma.service.count({
+          where: { salonId: offer.salonId, isActive: true },
+        });
+    if (activeServiceCount === 0) this.notFound();
+    const [publicOffer] = await this.mapPublicOffers([offer]);
+    if (!publicOffer || publicOffer.prices.length === 0) this.notFound();
+    return publicOffer;
+  }
+
+  private async mapPublicOffers(
+    page: PublicOfferWithRelations[],
+    serviceId?: string,
+  ): Promise<PublicOfferDto[]> {
     const unrestrictedSalonIds = [
       ...new Set(
         page
@@ -512,7 +570,7 @@ export class OffersService {
       list.push({ id: service.id, name: service.name, price: service.price });
       servicesBySalon.set(service.salonId, list);
     }
-    const items: PublicOfferDto[] = page.map((offer) => {
+    return page.map((offer) => {
       const linkedServices = offer.services
         .filter((link) => link.service.isActive)
         .map((link) => ({
@@ -524,8 +582,8 @@ export class OffersService {
         offer.services.length > 0
           ? linkedServices
           : (servicesBySalon.get(offer.salonId) ?? []);
-      const selectedServices = query.service
-        ? eligibleServices.filter((service) => service.id === query.service)
+      const selectedServices = serviceId
+        ? eligibleServices.filter((service) => service.id === serviceId)
         : eligibleServices;
       // Public prices are per-service estimates. Booking creation recomputes the final total
       // against the complete selected service set, then locks and revalidates the offer.
@@ -561,12 +619,13 @@ export class OffersService {
           name: offer.salon.name,
           slug: offer.salon.slug,
           city: offer.salon.city.name,
+          countryCode: offer.salon.city.countryCode,
+          citySlug: offer.salon.city.slug,
         },
         eligibility: { audience: offer.audience, accountRequired: true },
         prices,
       };
     });
-    return { items, nextCursor: hasMore ? page[page.length - 1].id : null };
   }
 
   async previewForBooking(

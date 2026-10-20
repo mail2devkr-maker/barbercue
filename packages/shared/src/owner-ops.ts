@@ -8,7 +8,10 @@
 
 import { z } from 'zod';
 import { normalizeContactName, normalizeContactPhone } from './contact';
-import { MAX_SERVICES_PER_BOOKING } from './constants';
+import {
+  MAX_SERVICES_PER_BOOKING,
+  OWNER_ASSISTANT_QUERY_LIMITS,
+} from './constants';
 import { BookingAttributionSource, BookingSource } from './enums';
 import type {
   BookingAttributionSource as BookingAttributionSourceType,
@@ -111,6 +114,7 @@ export const OwnerOpsErrorCode = {
   BILLING_TAX_NOT_CONFIGURED: 'BILLING_TAX_NOT_CONFIGURED',
   BOOKING_ATTRIBUTION_CAMPAIGN_NOT_FOUND:
     'BOOKING_ATTRIBUTION_CAMPAIGN_NOT_FOUND',
+  OWNER_ASSISTANT_QUERY_UNSUPPORTED: 'OWNER_ASSISTANT_QUERY_UNSUPPORTED',
 } as const;
 export type OwnerOpsErrorCode = (typeof OwnerOpsErrorCode)[keyof typeof OwnerOpsErrorCode];
 
@@ -686,6 +690,14 @@ export const ownerCustomerServicesQuerySchema = z.object({
 });
 export type OwnerCustomerServicesQuery = z.infer<typeof ownerCustomerServicesQuerySchema>;
 
+/** Provider-free owner insights accept a bounded, deterministic question only. */
+export const ownerAssistantQuerySchema = z
+  .object({
+    question: z.string().trim().min(2).max(OWNER_ASSISTANT_QUERY_LIMITS.maxQuestionLength),
+  })
+  .strict();
+export type OwnerAssistantQueryInput = z.infer<typeof ownerAssistantQuerySchema>;
+
 // ---------- DTOs ----------
 
 /** Money is always shown in the shop's own currency; `amount` is a decimal number with <= 2 dp. */
@@ -705,6 +717,44 @@ export interface RevenuePointDto {
   /** Salon-local calendar date (YYYY-MM-DD) for daily rows; week start / month start for the others. */
   date: string;
   amount: number;
+}
+
+export type OwnerAssistantIntent =
+  | 'TODAY_SUMMARY'
+  | 'TODAY_RECORDED_AND_ESTIMATED_VALUE'
+  | 'APPOINTMENTS_TODAY'
+  | 'COMPLETED_SERVICES_TODAY'
+  | 'WAITING_QUEUE_NOW'
+  | 'IN_SERVICE_NOW'
+  | 'AVAILABLE_BARBERS_NOW'
+  | 'CANCELLATIONS_TODAY';
+
+export interface OwnerAssistantFigureDto {
+  metric:
+    | 'appointmentsToday'
+    | 'completedServicesToday'
+    | 'waitingInQueue'
+    | 'inService'
+    | 'availableBarbers'
+    | 'cancelledToday'
+    | 'recordedCollectionsToday'
+    | 'estimatedServiceValueToday';
+  value: number;
+  unit: 'count' | 'money';
+  currency: string | null;
+  /** True only for a completed service's listed-price estimate; never call it collected revenue. */
+  estimated: boolean;
+}
+
+export interface OwnerAssistantQueryDto {
+  salonId: string;
+  mode: 'DETERMINISTIC';
+  intent: OwnerAssistantIntent;
+  localDate: string;
+  timezone: string;
+  answer: string;
+  figures: OwnerAssistantFigureDto[];
+  generatedAt: string;
 }
 
 export interface OwnerOverviewKpisDto {

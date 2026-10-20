@@ -45,6 +45,11 @@ describe('SalonCapabilitiesService', () => {
         updatedAt: null,
       });
     }
+    expect(result.features.ownerAssistant).toEqual({
+      status: 'ENABLED',
+      reasonCode: 'DETERMINISTIC_QUERY_ONLY',
+      updatedAt: null,
+    });
     expect(salonAccess.assertOwnerAccess).toHaveBeenCalledWith(
       'owner-1',
       'salon-1',
@@ -67,7 +72,6 @@ describe('SalonCapabilitiesService', () => {
     config.get.mockReturnValue('true');
     const result = await service.getForOwner('owner-1', 'salon-1');
     for (const key of [
-      'ownerAssistant',
       'customerAssistant',
       'consultations',
       'professionals',

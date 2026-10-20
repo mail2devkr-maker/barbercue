@@ -357,6 +357,8 @@ export const DASHBOARD_PATHS = {
   customerHistory: 'history',
   customerDirectory: 'directory',
   customerServices: 'services',
+  // Read-only provider-free queries against the salon's deterministic Owner Overview data.
+  assistant: 'assistant',
   // POST dashboard/salons/:salonId/contacts/preview — transient owner contact-list validation.
   contacts: 'contacts',
   // POST dashboard/salons/:salonId/customers/:customerId/ledger/:ledgerEntryId/waive|restore —
@@ -402,6 +404,12 @@ export const DASHBOARD_PATHS = {
   arrive: 'arrive',
   correctNoShow: 'correct-no-show',
   arrivalAlerts: 'arrival-alerts',
+} as const;
+
+export const OWNER_ASSISTANT_QUERY_LIMITS = {
+  maxQuestionLength: 300,
+  maxRequests: 12,
+  throttleWindowMs: 60_000,
 } as const;
 
 // P0 arrival-alert mission — how far ahead of slotStart the arrival-check alert becomes eligible.

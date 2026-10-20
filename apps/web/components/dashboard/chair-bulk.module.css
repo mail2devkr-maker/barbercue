@@ -1,0 +1,132 @@
+/* Bulk chair removal. Colours come from the shared --bc-* owner tokens (see dashboard.module.css), so
+   this follows the Owner Dashboard theme without redefining any palette. */
+.bar {
+  margin: 0 0 var(--bc-space-3, 12px);
+  color: var(--bc-ink);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--bc-border);
+  border-radius: 12px;
+  background: var(--bc-surface);
+}
+
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.check {
+  width: 24px;
+  height: 24px;
+  margin: 0 10px 0 0;
+  accent-color: var(--bc-accent);
+  flex: none;
+}
+
+.count {
+  color: var(--bc-muted);
+  font-size: 0.9rem;
+  margin-right: auto;
+}
+
+.panel {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--bc-border);
+  border-radius: 14px;
+  background: var(--bc-surface-tint);
+}
+
+.panelTitle {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  color: var(--bc-ink);
+}
+
+.muted {
+  margin: 4px 0 10px;
+  color: var(--bc-muted);
+  font-size: 0.9rem;
+}
+
+.warn {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bc-warn);
+  background: var(--bc-gold-soft);
+  color: var(--bc-ink);
+  font-size: 0.92rem;
+}
+
+.items {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--bc-border);
+  border-radius: 10px;
+  background: var(--bc-surface);
+}
+
+.item[data-verdict="BLOCKED"],
+.item[data-outcome="BLOCKED"],
+.item[data-outcome="FAILED"] {
+  border-color: var(--bc-warn);
+}
+
+.itemName {
+  font-weight: 600;
+}
+
+/* The state is always written out; colour is never the only signal. */
+.badge {
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-border);
+  color: var(--bc-ink);
+}
+
+.reason {
+  flex-basis: 100%;
+  color: var(--bc-muted);
+  font-size: 0.88rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .count {
+    margin-right: 0;
+  }
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}

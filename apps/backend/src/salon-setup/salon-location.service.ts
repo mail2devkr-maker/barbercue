@@ -76,7 +76,7 @@ export class SalonLocationService {
     });
     if (!salon) this.throwSalonNotFound();
 
-    const [pending, matchingApproved] = await Promise.all([
+    const [pending, matchingApproved, lastDecision] = await Promise.all([
       this.prisma.salonLocationProposal.findFirst({
         where: { salonId, status: SalonLocationProposalStatus.PENDING },
         orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
@@ -94,6 +94,19 @@ export class SalonLocationService {
             select: { reviewedAt: true },
           })
         : Promise.resolve(null),
+      this.prisma.salonLocationProposal.findFirst({
+        where: {
+          salonId,
+          status: {
+            in: [
+              SalonLocationProposalStatus.APPROVED,
+              SalonLocationProposalStatus.REJECTED,
+            ],
+          },
+        },
+        orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
+        select: { status: true, reviewNote: true, reviewedAt: true },
+      }),
     ]);
     const verified = matchingApproved !== null;
 
@@ -108,6 +121,13 @@ export class SalonLocationService {
           : null,
       },
       pendingProposal: pending ? this.toProposalDto(pending) : null,
+      lastDecision: lastDecision
+        ? {
+            status: lastDecision.status as 'APPROVED' | 'REJECTED',
+            reviewNote: lastDecision.reviewNote,
+            reviewedAt: lastDecision.reviewedAt?.toISOString() ?? null,
+          }
+        : null,
     };
   }
 

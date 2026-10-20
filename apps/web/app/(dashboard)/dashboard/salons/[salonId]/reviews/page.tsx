@@ -2,9 +2,11 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import { DASHBOARD_PATHS } from "@barbercue/shared";
-import type { OwnerReviewDto, PaginatedResult } from "@barbercue/shared";
+import type { OwnerReviewDto, OwnerReviewsResponseDto, ReviewSource, ReviewSourceDto } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../../../../lib/api";
 import { Button } from "../../../../../../components/ui/Button";
+import { ExternalSourceView, ReviewProfileLinks, ReviewSourceTabs } from "../../../../../../components/dashboard/ReviewSourcesPanel";
+import { parseSources } from "../../../../../../lib/review-profiles";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 function reviewsPath(salonId: string): string {
@@ -128,6 +130,9 @@ export default function DashboardReviewsPage({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Review sources (FastQue, and links to Google, Facebook and Instagram). null when this server does not report them.
+  const [source, setSource] = useState<ReviewSource>("FASTQUE");
+  const [sources, setSources] = useState<ReviewSourceDto[] | null>(null);
 
   const loadPage = useCallback(
     (cursor: string | undefined, append: boolean) => {
@@ -137,11 +142,15 @@ export default function DashboardReviewsPage({
         setError(null);
       }
       const params2 = new URLSearchParams({ limit: "20" });
+      // FastQue is the default, so an older server that has no `source` is never sent one for it.
+      if (source !== "FASTQUE") params2.set("source", source);
       if (cursor) params2.set("cursor", cursor);
-      return apiFetch<PaginatedResult<OwnerReviewDto>>(`${reviewsPath(salonId)}?${params2}`)
+      return apiFetch<OwnerReviewsResponseDto>(`${reviewsPath(salonId)}?${params2}`)
         .then((result) => {
           setItems((prev) => (append ? [...prev, ...result.items] : result.items));
           setNextCursor(result.nextCursor);
+          const reported = parseSources(result.sources);
+          if (reported) setSources(reported);
         })
         .catch((err: unknown) => setError(err instanceof ApiError ? err.message : "Could not load reviews."))
         .finally(() => {
@@ -149,7 +158,7 @@ export default function DashboardReviewsPage({
           setLoadingMore(false);
         });
     },
-    [salonId],
+    [salonId, source],
   );
 
   useEffect(() => {
@@ -169,9 +178,12 @@ export default function DashboardReviewsPage({
         alongside the review on your shop&apos;s profile.
       </p>
 
+      {sources && <ReviewSourceTabs sources={sources} value={source} onChange={(next) => { setItems([]); setNextCursor(null); setSource(next); }} />}
+
       {error && <p className={`${styles.banner} ${styles.bannerError}`}>{error}</p>}
       {loading && <p className={styles.loadingText}>Loading…</p>}
-      {!loading && items.length === 0 && <p className={styles.emptyState}>No reviews yet.</p>}
+      {sources && source !== "FASTQUE" && !loading && <ExternalSourceView source={source} sources={sources} />}
+      {source === "FASTQUE" && !loading && items.length === 0 && <p className={styles.emptyState}>No reviews yet.</p>}
 
       {items.length > 0 && (
         <ul className={styles.rowList} style={{ margin: "16px 0" }}>
@@ -186,6 +198,8 @@ export default function DashboardReviewsPage({
           {loadingMore ? "Loading…" : "Load more"}
         </Button>
       )}
+
+      {sources && <ReviewProfileLinks salonId={salonId} sources={sources} onSaved={setSources} />}
     </main>
   );
 }

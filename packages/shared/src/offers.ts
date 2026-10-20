@@ -107,7 +107,22 @@ export const offerListQuerySchema = z.object({
 export type OfferListQuery = z.infer<typeof offerListQuerySchema>;
 
 export const publicOfferQuerySchema = z.object({
+  /** Legacy city-slug filter retained for existing clients. */
   city: z.string().trim().min(1).max(120).optional(),
+  /** Canonical location filter for public links: pair countryCode with citySlug. */
+  countryCode: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{2}$/)
+    .transform((value) => value.toUpperCase())
+    .optional(),
+  citySlug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .max(120)
+    .optional(),
   service: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().uuid().optional(),
@@ -174,7 +189,14 @@ export interface PublicOfferDto extends Omit<
   OfferDto,
   "salonId" | "redemptionCount"
 > {
-  salon: { id: string; name: string; slug: string; city: string };
+  salon: {
+    id: string;
+    name: string;
+    slug: string;
+    city: string;
+    countryCode: string;
+    citySlug: string;
+  };
   eligibility: {
     audience: (typeof OFFER_AUDIENCES)[number];
     accountRequired: boolean;

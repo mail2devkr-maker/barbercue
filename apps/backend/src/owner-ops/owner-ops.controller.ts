@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Header,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -15,7 +16,9 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import {
+  DASHBOARD_PATHS,
   Role,
   billingProfileSchema,
   cancellationAnalyticsQuerySchema,
@@ -24,6 +27,8 @@ import {
   createInvoiceSchema,
   createQueueCustomerSchema,
   ownerRevenueReportQuerySchema,
+  ownerAssistantQuerySchema,
+  OWNER_ASSISTANT_QUERY_LIMITS,
   queueSettingsSchema,
   recordInvoicePaymentSchema,
   shopCancelBookingSchema,
@@ -39,6 +44,8 @@ import {
   type CreateQueueCustomerInput,
   type InvoicePaymentStatus,
   type OwnerRevenueReportQuery,
+  type OwnerAssistantQueryInput,
+  type OwnerAssistantQueryDto,
   type SalonShareLinksDto,
   type QueueSettingsInput,
   type RecordInvoicePaymentInput,
@@ -65,6 +72,7 @@ import { ShopBookingActionsService } from './shop-booking-actions.service';
 import { StaffAccessService } from './staff-access.service';
 import { StaffWorkService } from './staff-work.service';
 import { SalonShareLinksService } from './salon-share-links.service';
+import { OwnerAssistantService } from './owner-assistant.service';
 
 const SALON = 'dashboard/salons/:salonId';
 
@@ -91,6 +99,7 @@ export class OwnerOpsController {
     private readonly salonAccess: SalonAccessService,
     private readonly realtime: RealtimeGateway,
     private readonly salonShareLinks: SalonShareLinksService,
+    private readonly ownerAssistant: OwnerAssistantService,
   ) {}
 
   // ---------- Overview / search / analytics ----------
@@ -121,6 +130,25 @@ export class OwnerOpsController {
     @Param('salonId', ParseUUIDPipe) salonId: string,
   ) {
     return this.overview.getRevenue(user.id, salonId);
+  }
+
+  @Post(`${SALON}/${DASHBOARD_PATHS.assistant}/query`)
+  @HttpCode(200)
+  @Roles(Role.SALON_OWNER, Role.PLATFORM_ADMIN)
+  @Header('Cache-Control', 'private, no-store')
+  @Throttle({
+    default: {
+      limit: OWNER_ASSISTANT_QUERY_LIMITS.maxRequests,
+      ttl: OWNER_ASSISTANT_QUERY_LIMITS.throttleWindowMs,
+    },
+  })
+  queryOwnerInsights(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('salonId', ParseUUIDPipe) salonId: string,
+    @Body(new ZodValidationPipe(ownerAssistantQuerySchema))
+    body: OwnerAssistantQueryInput,
+  ): Promise<OwnerAssistantQueryDto> {
+    return this.ownerAssistant.query(user.id, salonId, body);
   }
 
   @Get(`${SALON}/revenue/report`)

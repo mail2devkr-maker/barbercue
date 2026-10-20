@@ -31,7 +31,7 @@ created; discovery is not authorization.
 | `GET dashboard/salons/:salonId/offers/:offerId`                 | Get one salon-owned offer.                                                                            |
 | `POST dashboard/salons/:salonId/offers`                         | Create a `DRAFT`; requires `Idempotency-Key`.                                                         |
 | `PATCH dashboard/salons/:salonId/offers/:offerId`               | Edit a draft or paused offer; active offers must first be paused. Requires `Idempotency-Key`.         |
-| `POST dashboard/salons/:salonId/offers/preview`                 | Preview proposed draft pricing without saving it.                                                     |
+| `POST dashboard/salons/:salonId/offers/preview`                 | Preview proposed draft pricing without saving it; empty `serviceIds` previews all active services (bounded to 100). |
 | `POST dashboard/salons/:salonId/offers/:offerId/preview`        | Preview saved campaign pricing for selected service IDs.                                              |
 | `POST dashboard/salons/:salonId/offers/:offerId/publish`        | Validate active services/date range and publish; requires `Idempotency-Key`.                          |
 | `POST dashboard/salons/:salonId/offers/:offerId/pause`          | Stop future redemption; existing booking snapshots remain unchanged. Requires `Idempotency-Key`.      |
@@ -52,11 +52,16 @@ customer eligibility attestation.
 
 ## Public discovery and booking
 
-`GET offers?city=<city-slug>&service=<service-uuid>&limit&cursor` returns `{ items, nextCursor }`.
-Each item has the public offer fields, `{ id, name, slug, city }` salon summary, audience metadata
+`GET offers?countryCode=<ISO-3166-1-alpha-2>&citySlug=<canonical-city-slug>&service=<service-uuid>&limit&cursor`
+returns `{ items, nextCursor }`. The legacy `city=<city-slug>` filter remains supported. Each item
+has the public offer fields, `{ id, name, slug, city, countryCode, citySlug }` salon summary, audience metadata
 `{ audience, accountRequired: true }`, and per-active-service price estimates. Restricted offers
 are only discoverable for linked active services. Unrestricted offers require that the requested
 service belongs to the salon when a service filter is supplied.
+
+`GET offers/:offerId` returns one currently active, in-date offer by ID using the same public DTO
+and active-salon/service checks as list discovery. Draft, paused, expired, hidden-salon, and
+service-less offers are not exposed.
 
 The existing authenticated `POST bookings` accepts optional `offerId`. If omitted, existing
 booking pricing remains unchanged. If present, the backend validates audience/source/date/service
