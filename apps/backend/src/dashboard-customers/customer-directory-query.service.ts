@@ -186,11 +186,17 @@ function directoryCursorClause(
     if (cursor.sortValue === null) {
       return Prisma.sql`AND (m."lastVisitAt" IS NULL AND m."customerId" > ${cursor.customerId})`;
     }
-    const value = new Date(cursor.sortValue);
+    // The source columns are PostgreSQL TIMESTAMP(3) (without time zone), storing UTC wall-clock
+    // values. A JavaScript Date sent as a raw-query parameter can be adapted as a timezone-aware
+    // value, which makes the comparison session-TimeZone dependent and can leave the boundary row
+    // eligible on the next page. Normalize to the stored millisecond precision and explicitly cast
+    // the text parameter back to TIMESTAMP(3), so keyset comparison is independent of connection TZ.
+    const value = new Date(cursor.sortValue).toISOString().replace(/Z$/, '');
+    const timestamp = Prisma.sql`CAST(${value} AS TIMESTAMP(3))`;
     return Prisma.sql`AND (
-      m."lastVisitAt" < ${value}
+      m."lastVisitAt" < ${timestamp}
       OR m."lastVisitAt" IS NULL
-      OR (m."lastVisitAt" = ${value} AND m."customerId" > ${cursor.customerId})
+      OR (m."lastVisitAt" = ${timestamp} AND m."customerId" > ${cursor.customerId})
     )`;
   }
   const value = BigInt(cursor.sortValue!);

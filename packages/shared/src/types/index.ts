@@ -1684,6 +1684,12 @@ export interface SalonLocationDto {
     verifiedAt: string | null;
   };
   pendingProposal: SalonLocationProposalDto | null;
+  /** Most recent terminal admin decision; visible only to an authorized shop owner/admin. */
+  lastDecision: {
+    status: 'APPROVED' | 'REJECTED';
+    reviewNote: string | null;
+    reviewedAt: string | null;
+  } | null;
 }
 
 export interface AdminSalonLocationProposalDto extends SalonLocationProposalDto {

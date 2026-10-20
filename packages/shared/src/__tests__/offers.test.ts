@@ -72,5 +72,11 @@ describe("offers shared contracts", () => {
       publicOfferQuerySchema.safeParse({ service: serviceB, limit: "50" })
         .success,
     ).toBe(true);
+    expect(
+      publicOfferQuerySchema.parse({ countryCode: "in", citySlug: "jharsuguda" }),
+    ).toMatchObject({ countryCode: "IN", citySlug: "jharsuguda" });
+    expect(
+      createOfferSchema.safeParse({ ...validOffer, serviceIds: [] }).success,
+    ).toBe(true);
   });
 });

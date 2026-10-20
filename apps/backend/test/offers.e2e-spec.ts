@@ -93,6 +93,8 @@ maybe('offers/promotions/Daily Deals (e2e, disposable local database)', () => {
     const city = await prisma.city.findFirstOrThrow({
       where: { slug: 'jharsuguda' },
     });
+    ids.citySlug = city.slug;
+    ids.countryCode = city.countryCode;
     const owner = await makeUser('owner');
     const outsider = await makeUser('outsider');
     const salon = await prisma.salon.create({
@@ -222,6 +224,21 @@ maybe('offers/promotions/Daily Deals (e2e, disposable local database)', () => {
       discount: 100,
       finalTotal: 900,
     });
+    const allServicesPreview = await api(
+      'post',
+      `${path}/preview`,
+      tokens.owner,
+    )
+      .send({ ...draft, serviceIds: [] })
+      .expect(201);
+    expect(allServicesPreview.body.lines).toEqual([
+      expect.objectContaining({ serviceId: ids.service, basePrice: 1000 }),
+    ]);
+    expect(allServicesPreview.body).toMatchObject({
+      subtotal: 1000,
+      discount: 100,
+      finalTotal: 900,
+    });
 
     const created = await api('post', path, tokens.owner, `offer-create-${run}`)
       .send(draft)
@@ -253,6 +270,30 @@ maybe('offers/promotions/Daily Deals (e2e, disposable local database)', () => {
         }),
       ]),
     );
+    expect(publicOffer.salon).toMatchObject({
+      countryCode: ids.countryCode,
+      citySlug: ids.citySlug,
+    });
+    const canonicalList = await api(
+      'get',
+      `offers?countryCode=${encodeURIComponent(ids.countryCode)}&citySlug=${encodeURIComponent(ids.citySlug)}`,
+    ).expect(200);
+    expect(canonicalList.body.items.map((item: { id: string }) => item.id)).toContain(
+      ids.offer,
+    );
+    const wrongCountry = await api(
+      'get',
+      `offers?countryCode=US&citySlug=${encodeURIComponent(ids.citySlug)}`,
+    ).expect(200);
+    expect(wrongCountry.body.items.map((item: { id: string }) => item.id)).not.toContain(
+      ids.offer,
+    );
+    const publicById = await api('get', `offers/${ids.offer}`).expect(200);
+    expect(publicById.body).toMatchObject({
+      id: ids.offer,
+      salon: { id: ids.salon, countryCode: ids.countryCode, citySlug: ids.citySlug },
+    });
+    await api('get', `offers/${randomUUID()}`).expect(404);
 
     const createBooking = (customer: string, daysAhead: number) =>
       api(
@@ -322,6 +363,7 @@ maybe('offers/promotions/Daily Deals (e2e, disposable local database)', () => {
       tokens.owner,
       `offer-pause-${run}`,
     ).expect(201);
+    await api('get', `offers/${ids.offer}`).expect(404);
     await api(
       'patch',
       `${path}/${ids.offer}`,
