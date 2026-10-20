@@ -1,5 +1,7 @@
 "use strict";
 
+/* eslint-disable @typescript-eslint/no-require-imports -- a CommonJS script, run by node directly and by the web tests */
+
 // Repository guard against committing local QA sign-in helpers and fixture credential files.
 //
 // Why: a disposable QA login page that contains a test account's email and password (written into a public folder so a browser can
