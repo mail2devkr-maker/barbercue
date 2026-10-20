@@ -103,6 +103,16 @@ jobs:
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/owner-ops.e2e-spec.ts
+      - name: Customer directory keyset continuation under a non-UTC PostgreSQL session timezone
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: 'postgresql://postgres@127.0.0.1:5432/owner_ops_chain?schema=public&options=-c%20TimeZone%3DAsia%2FKolkata'
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/owner-ops.e2e-spec.ts -t "advances signed customer-directory keysets"
       - name: Offers and Daily Deals E2E - pricing, authorization, redemption limits and audit
         working-directory: apps/backend
         env:
