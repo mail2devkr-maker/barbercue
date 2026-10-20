@@ -62,3 +62,11 @@ apps/backend/import-global-locations-report.json
 # header comment for why (hundreds of production-account passwords must never land in git history
 # or CI output).
 apps/backend/prisma/.test-shop-credentials.json
+
+# Local QA sign-in helpers and fixture credential files (a disposable test account's email and password, or an authenticator seed).
+# They must never be committed or served: see apps/web/scripts/qa-credential-guard.cjs, which the web test run enforces.
+**/public/__qa_*
+**/__qa_*
+**/qa-creds*.json
+**/*qa-credentials*.json
+**/fastque-admin-qa-*.json
