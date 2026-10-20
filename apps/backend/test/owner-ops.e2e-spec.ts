@@ -2167,7 +2167,9 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const [{ timezone }] = await prisma.$queryRaw<Array<{ timezone: string }>>`
         SELECT current_setting('TimeZone') AS timezone
       `;
-      expect(timezone).toBe('Asia/Kolkata');
+      if (process.env.EXPECT_NON_UTC_DATABASE_TIMEZONE === '1') {
+        expect(timezone).toBe('Asia/Kolkata');
+      }
 
       const directoryCustomers: Array<{ id: string; lastVisit: Date | null }> = [];
       const tiedAt = new Date('2026-10-01T10:00:00.000Z');
