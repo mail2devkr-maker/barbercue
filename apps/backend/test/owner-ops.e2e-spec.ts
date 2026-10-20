@@ -2258,10 +2258,15 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         `${base}?q=${encodeURIComponent(search)}&limit=2&cursor=${encodeURIComponent(`${payload}.${alteredSignature}`)}`,
         tok.owner,
       ).expect(400);
+      await makeUser(
+        `directory-cursor-replay-${run}`,
+        Role.SALON_OWNER,
+        ids.salon,
+      );
       await api(
         'get',
         `${base}?q=${encodeURIComponent(search)}&limit=2&cursor=${encodeURIComponent(first.body.nextCursor)}`,
-        tok.ownerDelegate,
+        tok[`directory-cursor-replay-${run}`],
       ).expect(400);
       await api(
         'get',
