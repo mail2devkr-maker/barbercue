@@ -21,6 +21,7 @@ on:
       - 'packages/shared/**'
       - 'scripts/ci/**'
       - 'docs/owner-operations/**'
+      - 'docs/contracts/**'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/owner-operations-certification.yml'
