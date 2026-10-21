@@ -36,7 +36,13 @@ function button(renderer, pattern) {
 const hasButton = (renderer, pattern) => buttons(renderer, pattern).length > 0;
 
 async function click(renderer, pattern) {
-  const node = button(renderer, pattern);
+  let node = button(renderer, pattern);
+  // A button disabled only because an async step (save, PDF, letter read) is still settling gets a bounded wait,
+  // so slower machines (CI) do not make the suite flaky. A button that stays disabled still fails loudly.
+  for (let attempt = 0; attempt < 60 && node.props.disabled; attempt += 1) {
+    await flush();
+    node = button(renderer, pattern);
+  }
   if (node.props.disabled) throw new Error(`Button ${pattern} is disabled`);
   await act(async () => {
     node.props.onClick({ preventDefault() {} });
