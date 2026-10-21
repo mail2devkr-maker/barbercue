@@ -225,11 +225,25 @@ describe('SIGTERM drains a real in-flight HTTP request and PostgreSQL transactio
           'SELECT value FROM ' + quotedTable + ' WHERE id = 1',
         );
         expect(rows[0]?.value).toBe('drained');
-      },
-      30_000,
-    );
-
-  afterEach(async () => {
-    // The test owns only a randomized table in the disposable PostgreSQL runner.
-  });
+      } finally {
+        releaseParentLock.resolve();
+        if (lockHolder) await lockHolder.catch(() => undefined);
+        if (child && child.exitCode === null && child.signalCode === null) {
+          child.kill('SIGTERM');
+          try {
+            await within(waitForExit(child), 'shutdown probe cleanup', 3_000);
+          } catch {
+            child.kill('SIGKILL');
+            await within(waitForExit(child), 'forced shutdown probe cleanup', 3_000).catch(
+              () => undefined,
+            );
+          }
+        }
+        if (tableCreated) {
+          await prisma.$executeRawUnsafe('DROP TABLE IF EXISTS ' + quotedTable);
+        }
+      }
+    },
+    30_000,
+  );
 });
