@@ -51,6 +51,8 @@ export function SiteFooter() {
           <div>
             <span>Customers</span>
             <Link href="/search">Find a barber</Link>
+            <Link href="/assistant">Find a time</Link>
+            <Link href="/offers">Offers near you</Link>
             <Link href="/app">Android app & QR</Link>
             <Link href="/account/bookings">My bookings</Link>
             <Link href="/style-advisor">Style Advisor</Link>
