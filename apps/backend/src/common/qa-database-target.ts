@@ -35,7 +35,12 @@ function parseLocalQaTarget(value: string | undefined): ParsedLocalQaTarget {
   }
 
   const databaseName = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
-  if (!/(^|[-_])(qa|test|e2e|scratch|disposable)([-_]|$)/i.test(databaseName)) {
+  // The migration-chain CI database has a fixed name and is created inside a fresh
+  // disposable PostgreSQL service container for each job.
+  const explicitlyDisposableDatabase =
+    /(^|[-_])(qa|test|e2e|scratch|disposable)([-_]|$)/i.test(databaseName) ||
+    databaseName === 'owner_ops_chain';
+  if (!explicitlyDisposableDatabase) {
     throw new Error(
       'The database name must identify a disposable QA/test database.',
     );

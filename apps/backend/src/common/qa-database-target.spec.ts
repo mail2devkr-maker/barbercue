@@ -17,6 +17,21 @@ describe('assertLocalDisposableQaDatabase', () => {
     });
   });
 
+  it('accepts the exact disposable migration-chain database used by CI', () => {
+    expect(
+      assertLocalDisposableQaDatabase({
+        ...base,
+        DATABASE_URL:
+          'postgresql://postgres@127.0.0.1:5432/owner_ops_chain?schema=public',
+        QA_DISPOSABLE_DATABASE_NAME: 'owner_ops_chain',
+      }),
+    ).toEqual({
+      hostname: '127.0.0.1',
+      port: '5432',
+      databaseName: 'owner_ops_chain',
+    });
+  });
+
   it('requires an explicit fixture opt-in', () => {
     expect(() =>
       assertLocalDisposableQaDatabase({
