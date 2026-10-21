@@ -13,6 +13,7 @@ import {
 import { ApiError, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import styles from "./customer-auth.module.css";
+import dashboard from "../dashboard/dashboard.module.css";
 
 /** An existing owner must be signed into their own STAFF account before changing its login phone. */
 export function OwnerPhoneLinkPanel() {
@@ -66,8 +67,8 @@ export function OwnerPhoneLinkPanel() {
   }
   if (!available) {
     return (
-      <section aria-labelledby="owner-phone-link-title">
-        <h2 id="owner-phone-link-title">Owner sign-in phone</h2>
+      <section aria-labelledby="owner-phone-link-title" className={dashboard.dividerSection}>
+        <h2 id="owner-phone-link-title" className={dashboard.sectionHeading}>Owner sign-in phone</h2>
         <p className={styles.contextLine} role="status">
           Mobile verification is temporarily unavailable. Your current sign-in
           methods are unchanged.
@@ -139,8 +140,8 @@ export function OwnerPhoneLinkPanel() {
   }
 
   return (
-    <section aria-labelledby="owner-phone-link-title">
-      <h2 id="owner-phone-link-title">Owner sign-in phone</h2>
+    <section aria-labelledby="owner-phone-link-title" className={dashboard.dividerSection}>
+      <h2 id="owner-phone-link-title" className={dashboard.sectionHeading}>Owner sign-in phone</h2>
       <p className={styles.contextLine}>
         Verify a number you control to use it for future owner sign-ins. This
         changes your account login number, not your shop&apos;s public contact

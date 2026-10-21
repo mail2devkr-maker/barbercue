@@ -160,7 +160,7 @@ export default function AnalyticsView() {
         <p className={styles.error} role="alert">Only platform admins can see CRM analytics.</p>
       ) : (
         <>
-          <section className={styles.filters} aria-label="Analytics period and employee">
+          <section className={`${styles.filters} ${local.bar}`} aria-label="Analytics period and employee">
             <div>
               <span id="crm-presets-label" className={local.sub}>Period (whole UTC days)</span>
               <div className={local.presets} role="group" aria-labelledby="crm-presets-label">
@@ -376,7 +376,7 @@ function DetailSection({ range, employeeId }: { range: AnalyticsRange | null; em
         <input id="crm-in-period" type="checkbox" checked={inPeriod} onChange={(e) => setInPeriod(e.target.checked)} />
         Only rows in the period above ({kind === "leads" ? "created" : kind === "visits" ? "visited" : "due"} in that period)
       </label>
-      <div className={styles.filters} role="search" aria-label="Filter rows">
+      <div className={`${styles.filters} ${local.bar}`} role="search" aria-label="Filter rows">
         <div>
           <label htmlFor="crm-detail-search">Search</label>
           <input

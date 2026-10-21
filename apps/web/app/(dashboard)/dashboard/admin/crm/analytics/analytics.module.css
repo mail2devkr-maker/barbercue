@@ -40,3 +40,10 @@
 .notice { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--bc-radius-sm); background: rgba(255, 193, 7, .12); color: #ffe08a; font-size: var(--bc-text-xs); }
 .retry { margin-left: 10px; }
 .readOnly { margin: 22px 0 0; color: #8b8b99; font-size: var(--bc-text-xs); }
+
+/* The shared filter bar gives its first child `flex: 1 1 360px`; in the stacked phone layout that basis becomes a 360px-tall gap. */
+@media (max-width: 720px) {
+  .bar.bar > div,
+  .bar.bar > div:first-child,
+  .bar.bar > div:not(:first-child) { flex: 0 0 auto; }
+}
