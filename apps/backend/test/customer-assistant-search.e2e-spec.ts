@@ -14,6 +14,7 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
   let app: INestApplication<App>;
   let prisma: PrismaService;
   const run = randomUUID();
+  const serviceQuery = `assistant-${run}`;
   const date = utcToZonedDateStr(
     new Date(Date.now() + 24 * 60 * 60_000),
     'Asia/Kolkata',
@@ -58,7 +59,7 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
     const service = await prisma.service.create({
       data: {
         salonId,
-        name: 'Haircut',
+        name: `Assistant Haircut ${run}`,
         category: 'Hair',
         price: '250.00',
         durationMinutes: 30,
@@ -104,7 +105,7 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
     const bookingsBefore = await prisma.booking.count({ where: { salonId } });
     const response = await request(app.getHttpServer())
       .post('/api/v1/assistant/search')
-      .send({ serviceQuery: 'haircut', date, city: 'jharsuguda', limit: 3 })
+      .send({ serviceQuery, date, city: 'jharsuguda', limit: 3 })
       .expect(201);
 
     expect(response.body).toMatchObject({
@@ -117,7 +118,7 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
           salon: { id: salonId, name: `Assistant E2E ${run}` },
           service: {
             id: serviceId,
-            name: 'Haircut',
+            name: `Assistant Haircut ${run}`,
             category: 'Hair',
             price: 250,
             durationMinutes: 30,
@@ -143,7 +144,7 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
   it('honors the actual service price and does not return shops without an affordable matching service', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/assistant/search')
-      .send({ serviceQuery: 'haircut', date, city: 'jharsuguda', maxPrice: 100 })
+      .send({ serviceQuery, date, city: 'jharsuguda', maxPrice: 100 })
       .expect(201);
     expect(response.body.candidates).toEqual([]);
   });
@@ -151,19 +152,19 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
   it('rejects impossible dates and oversized result requests', async () => {
     const impossible = await request(app.getHttpServer())
       .post('/api/v1/assistant/search')
-      .send({ serviceQuery: 'haircut', date: '2026-02-31' })
+      .send({ serviceQuery, date: '2026-02-31' })
       .expect(400);
     expect(impossible.body.error.code).toBe('VALIDATION_ERROR');
 
     const oversized = await request(app.getHttpServer())
       .post('/api/v1/assistant/search')
-      .send({ serviceQuery: 'haircut', date, limit: 99 })
+      .send({ serviceQuery, date, limit: 99 })
       .expect(400);
     expect(oversized.body.error.code).toBe('VALIDATION_ERROR');
 
     const unlocated = await request(app.getHttpServer())
       .post('/api/v1/assistant/search')
-      .send({ serviceQuery: 'haircut', date })
+      .send({ serviceQuery, date })
       .expect(400);
     expect(unlocated.body.error.code).toBe('VALIDATION_ERROR');
   });
