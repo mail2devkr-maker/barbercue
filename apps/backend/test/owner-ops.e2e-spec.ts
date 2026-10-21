@@ -2616,6 +2616,29 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       expect(csv.text).toContain('recorded_collections');
       expect(csv.text).toContain('SERVICE');
       expect(csv.text).not.toContain(phone(1));
+
+      const excel = await api(
+        'get',
+        `${SALON()}/revenue/report.excel.xml?from=${from}&to=${to}&groupBy=day`,
+        tok.owner,
+      ).expect(200);
+      expect(excel.headers['content-type']).toContain('application/vnd.ms-excel');
+      expect(excel.headers['content-disposition']).toContain(
+        `fastque-revenue-${from}-${to}.xml`,
+      );
+      expect(excel.headers['cache-control']).toContain('no-store');
+      const excelXml = Buffer.isBuffer(excel.body)
+        ? excel.body.toString('utf8')
+        : String(excel.text ?? '');
+      expect(excelXml).toContain('<Worksheet ss:Name="Summary">');
+      expect(excelXml).toContain('<Worksheet ss:Name="Services">');
+      expect(excelXml).toContain('recorded_collections');
+      expect(excelXml).not.toContain(phone(1));
+      await api(
+        'get',
+        `${SALON()}/revenue/report.excel.xml?from=${from}&to=${to}`,
+        tok.outsider,
+      ).expect(403);
     });
 
     it('filters completed visits, issued invoices and recorded collections by verified campaign attribution', async () => {

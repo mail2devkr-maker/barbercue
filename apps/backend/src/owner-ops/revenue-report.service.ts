@@ -1077,3 +1077,142 @@ export function csvCell(value: string | number | null): string {
     : value;
   return `"${safe.replace(/"/g, '""')}"`;
 }
+
+function excelString(value: string): string {
+  const xmlSafe = Array.from(value)
+    .filter((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return (
+        codePoint === 0x09 ||
+        codePoint === 0x0a ||
+        codePoint === 0x0d ||
+        (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+        (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+        (codePoint >= 0x10000 && codePoint <= 0x10ffff)
+      );
+    })
+    .join('');
+  // Every string is emitted as an explicit SpreadsheetML String cell; formulas are never emitted.
+  return xmlSafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function excelCell(value: string | number | null): string {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new RangeError('Excel export cannot contain a non-finite number');
+    }
+    return `<Cell><Data ss:Type="Number">${String(value)}</Data></Cell>`;
+  }
+  return `<Cell><Data ss:Type="String">${excelString(value ?? '')}</Data></Cell>`;
+}
+
+type ExcelRow = Array<string | number | null>;
+
+function excelWorksheet(name: string, rows: ExcelRow[]): string {
+  const table = rows
+    .map((row) => `<Row>${row.map(excelCell).join('')}</Row>`)
+    .join('');
+  return `<Worksheet ss:Name="${excelString(name)}"><Table>${table}</Table></Worksheet>`;
+}
+
+/** Excel 2003 XML workbook; string cells are explicitly typed as text and XML-escaped. */
+export function buildRevenueExcelXml(report: OwnerRevenueReportDto): Buffer {
+  const metricHeaders = [
+    'completed_visits',
+    'gross_service_value',
+    'estimated_service_value',
+    'invoice_count',
+    'invoice_discounts',
+    'invoiced_amount',
+    'recorded_collections',
+    'refunds',
+    'net_recorded_collections',
+  ];
+  const metricValues = (metric: OwnerRevenueReportMetricDto): ExcelRow => [
+    metric.completedVisits,
+    metric.grossServiceValue,
+    metric.estimatedServiceValue,
+    metric.invoiceCount,
+    metric.invoiceDiscounts,
+    metric.invoicedAmount,
+    metric.recordedCollections,
+    metric.refunds,
+    metric.netRecordedCollections,
+  ];
+  const worksheets = [
+    excelWorksheet('Summary', [
+      ['FastQue revenue report'],
+      ['salon_id', report.salonId],
+      ['currency', report.currency],
+      ['time_zone', report.timeZone],
+      ['from_inclusive', report.from],
+      ['to_inclusive', report.to],
+      ['group_by', report.groupBy],
+      ['source', report.source],
+      [],
+      ['metric', 'value'],
+      ['completed_visits', report.totals.completedVisits],
+      ['gross_service_value', report.totals.grossServiceValue],
+      ['estimated_service_value', report.totals.estimatedServiceValue],
+      ['invoice_count', report.totals.invoiceCount],
+      ['invoice_discounts', report.totals.invoiceDiscounts],
+      ['invoiced_amount', report.totals.invoicedAmount],
+      ['recorded_collections', report.totals.recordedCollections],
+      ['refunds', report.totals.refunds],
+      ['net_recorded_collections', report.totals.netRecordedCollections],
+      [],
+      ['estimate_basis', report.dataSemantics.estimateBasis],
+      ['cash_source', report.dataSemantics.cashSource],
+      ['service_cash_allocation', report.dataSemantics.serviceCashAllocation],
+      ['external_attribution', report.dataSemantics.externalAttribution],
+    ]),
+    excelWorksheet('Periods', [
+      ['period', ...metricHeaders],
+      ...report.periods.map((period) => [
+        period.period,
+        ...metricValues(period),
+      ]),
+    ]),
+    excelWorksheet('Services', [
+      ['service_id', 'service', ...metricHeaders],
+      ...report.byService.map((row) => [
+        row.serviceId,
+        row.label,
+        ...metricValues(row),
+      ]),
+    ]),
+    excelWorksheet('Staff', [
+      ['staff_id', 'staff', 'identity_verified', ...metricHeaders],
+      ...report.byStaff.map((row) => [
+        row.staffId,
+        row.label,
+        row.identityVerified ? 'true' : 'false',
+        ...metricValues(row),
+      ]),
+    ]),
+    excelWorksheet('Customers', [
+      ['customer_id', 'customer', 'identity_verified', ...metricHeaders],
+      ...report.byCustomer.map((row) => [
+        row.customerId,
+        row.label,
+        row.identityVerified ? 'true' : 'false',
+        ...metricValues(row),
+      ]),
+    ]),
+  ].join('');
+  const xml =
+    '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<?mso-application progid="Excel.Sheet"?>' +
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ' +
+    'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+    'xmlns:x="urn:schemas-microsoft-com:office:excel" ' +
+    'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' +
+    worksheets +
+    '</Workbook>';
+  return Buffer.from(xml, 'utf8');
+}

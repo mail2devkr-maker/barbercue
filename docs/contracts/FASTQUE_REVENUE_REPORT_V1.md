@@ -8,7 +8,9 @@ This contract covers the first backend reporting slice for roadmap requirements 
 
 `GET /api/v1/dashboard/salons/:salonId/revenue/report.csv`
 
-Both routes require an authenticated `SALON_OWNER` or `PLATFORM_ADMIN` session and re-check access to the exact salon. Queries are salon-scoped and read under a repeatable-read transaction.
+`GET /api/v1/dashboard/salons/:salonId/revenue/report.excel.xml`
+
+All routes require an authenticated `SALON_OWNER` or `PLATFORM_ADMIN` session and re-check access to the exact salon. Queries are salon-scoped and read under a repeatable-read transaction.
 
 Query parameters:
 
@@ -31,6 +33,7 @@ Date ranges are limited to 366 calendar days. Week buckets begin Monday. All dat
 - Existing provider `Payment`/`Refund` rows are not added to the invoice ledger totals. They have no invoice-payment reconciliation key; adding them would risk double counting. A future reconciliation feature must establish that linkage and disclose provider-confirmed cash separately.
 - Customer IDs are used only where the source record has an authenticated customer relation. Guest visits remain separate and are never merged by name or phone. Customer phone/email are not exported.
 - CSV is Excel-compatible and formula-safe. The CSV export calls the same authorization, validated filters, and repeatable-read report query as JSON.
+- Excel XML is a multi-sheet SpreadsheetML workbook (Summary, Periods, Services, Staff, Customers). It uses the same salon authorization and validated filters as JSON, carries no customer phone/email, encodes user-controlled content in explicit string cells (no formula cells are emitted), escapes XML, and is served with `private, no-store` caching.
 
 ## Response shape
 
