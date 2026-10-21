@@ -248,6 +248,9 @@ export default function AdminCrmPage() {
         <div className={styles.headerActions}>
           {showOfferLetter && <a className={styles.offerHeaderButton} href="#offer-letter">Offer letter</a>}
           {showOfferLetter && <a className={styles.offerHeaderButton} href="#company-id-card">Company ID card</a>}
+          {user?.roles.includes(Role.PLATFORM_ADMIN) && (
+            <LinkButton href="/dashboard/admin/crm/analytics" variant="outline">Analytics</LinkButton>
+          )}
           {(user?.roles.includes(Role.PLATFORM_ADMIN) || user?.roles.includes(Role.CO_FOUNDER) || user?.roles.includes(Role.HR_ADMIN)) && (
             <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>
           )}

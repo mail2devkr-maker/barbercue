@@ -8,6 +8,7 @@ import { AuthCard, AuthPageFallback } from "../../../../components/auth/AuthCard
 import authStyles from "../../../../components/auth/customer-auth.module.css";
 import { ApiError } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth-context";
+import { OwnerPhoneOtpPanel } from "../../../../components/auth/OwnerPhoneOtpPanel";
 
 export default function OwnerRegisterPage() {
   const router = useRouter();
@@ -117,6 +118,11 @@ export default function OwnerRegisterPage() {
         </button>
       </form>
 
+      <div className={authStyles.divider} aria-hidden="true">OR</div>
+      <OwnerPhoneOtpPanel
+        mode="new-owner"
+        onSuccess={() => router.replace("/dashboard/register-shop")}
+      />
       <div className={authStyles.divider} aria-hidden="true">OR</div>
       <p className={authStyles.contextLine}>
         Already have a shop-owner account? <Link href="/owner/login">Sign in</Link>

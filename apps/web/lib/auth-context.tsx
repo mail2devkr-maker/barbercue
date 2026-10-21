@@ -10,7 +10,9 @@ import {
   type InitialPasswordInput,
   type EmployeeLoginInput,
   type MeResponse,
+  type OtpRequestInput,
   type OtpVerifyInput,
+  type OwnerPhoneLinkVerifyInput,
   type OwnerSignupInput,
   type StaffLoginInput,
 } from "@barbercue/shared";
@@ -22,6 +24,10 @@ interface AuthContextValue {
   user: MeResponse | null;
   status: AuthStatus;
   verifyCustomerOtp: (input: OtpVerifyInput) => Promise<MeResponse>;
+  requestOwnerOtp: (input: OtpRequestInput) => Promise<{ expiresInSeconds: number }>;
+  verifyOwnerOtp: (input: OtpVerifyInput) => Promise<MeResponse>;
+  requestOwnerPhoneLinkOtp: (input: OtpRequestInput) => Promise<{ expiresInSeconds: number }>;
+  verifyOwnerPhoneLink: (input: OwnerPhoneLinkVerifyInput) => Promise<MeResponse>;
   googleLogin: (input: GoogleLoginInput) => Promise<MeResponse>;
   staffLogin: (input: StaffLoginInput) => Promise<MeResponse>;
   ownerSignup: (input: OwnerSignupInput) => Promise<MeResponse>;
@@ -105,6 +111,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyCustomerOtp = useCallback(
     async (input: OtpVerifyInput) => {
       const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.otpVerify), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return handleAuthResult(result);
+    },
+    [handleAuthResult],
+  );
+
+  const requestOwnerOtp = useCallback(
+    (input: OtpRequestInput) =>
+      apiFetch<{ expiresInSeconds: number }>(authPath(AUTH_PATHS.ownerOtpRequest), {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    [],
+  );
+
+  const verifyOwnerOtp = useCallback(
+    async (input: OtpVerifyInput) => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.ownerOtpVerify), {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      return handleAuthResult(result);
+    },
+    [handleAuthResult],
+  );
+
+  const requestOwnerPhoneLinkOtp = useCallback(
+    (input: OtpRequestInput) =>
+      apiFetch<{ expiresInSeconds: number }>(authPath(AUTH_PATHS.ownerPhoneLinkRequest), {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    [],
+  );
+
+  const verifyOwnerPhoneLink = useCallback(
+    async (input: OwnerPhoneLinkVerifyInput) => {
+      const result = await apiFetch<{ user: MeResponse; tokens: AuthTokens }>(authPath(AUTH_PATHS.ownerPhoneLinkVerify), {
         method: "POST",
         body: JSON.stringify(input),
       });
@@ -230,6 +276,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       status,
       verifyCustomerOtp,
+      requestOwnerOtp,
+      verifyOwnerOtp,
+      requestOwnerPhoneLinkOtp,
+      verifyOwnerPhoneLink,
       googleLogin,
       staffLogin,
       ownerSignup,
@@ -243,7 +293,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshSession,
       applySession: handleAuthResult,
     }),
-    [user, status, verifyCustomerOtp, googleLogin, staffLogin, ownerSignup, employeeLogin, staffGoogleLogin, adminLogin, adminGoogleLogin, setInitialPassword, logout, refreshMe, refreshSession, handleAuthResult],
+    [user, status, verifyCustomerOtp, requestOwnerOtp, verifyOwnerOtp, requestOwnerPhoneLinkOtp, verifyOwnerPhoneLink, googleLogin, staffLogin, ownerSignup, employeeLogin, staffGoogleLogin, adminLogin, adminGoogleLogin, setInitialPassword, logout, refreshMe, refreshSession, handleAuthResult],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -8,14 +8,18 @@ import { apiFetch, apiFetchBlob, ApiError } from "../../lib/api";
 import {
   RANGE_ERROR_TEXT,
   SOURCE_FILTERS,
+  EXCEL_EXPORT_LABEL,
+  EXCEL_EXPORT_NOTE,
   csvFallbackName,
   describeSemantics,
+  excelFallbackName,
   filterByLabel,
   isEmptyReport,
   isKnownSource,
   periodLabel,
   presetRange,
   reportQueryString,
+  safeDownloadName,
   sortByValue,
   todayInZone,
   validateRange,
@@ -75,7 +79,7 @@ export function RevenueReport({ salonId }: { salonId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<null | "csv" | "excel">(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [serviceSearch, setServiceSearch] = useState("");
   const [staffSearch, setStaffSearch] = useState("");
@@ -166,19 +170,22 @@ export function RevenueReport({ salonId }: { salonId: string }) {
     void run({ ...current(), source: next });
   };
 
-  async function downloadCsv() {
+  async function download(kind: "csv" | "excel") {
     if (!data) return;
-    setDownloading(true);
+    setDownloading(kind);
     setNotice(null);
+    setError(null);
     try {
       // The export uses the exact query that produced the report on screen, so the file matches what is shown.
-      const { blob, filename } = await apiFetchBlob(`${base}/revenue/report.csv?${reportQueryString(data.query)}`);
-      saveBlob(blob, filename ?? csvFallbackName(data.query));
-      setNotice("Report downloaded.");
+      const route = kind === "csv" ? "report.csv" : "report.excel.xml";
+      const fallback = kind === "csv" ? csvFallbackName(data.query) : excelFallbackName(data.query);
+      const { blob, filename } = await apiFetchBlob(`${base}/revenue/${route}?${reportQueryString(data.query)}`);
+      saveBlob(blob, safeDownloadName(filename, fallback, kind === "csv" ? ".csv" : ".xml"));
+      setNotice(kind === "csv" ? "Report downloaded." : "Excel-compatible report downloaded. Open it with Excel.");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not download the report.");
+      setError(err instanceof ApiError ? err.message : kind === "csv" ? "Could not download the report." : "Could not download the Excel report.");
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
 
@@ -268,8 +275,10 @@ export function RevenueReport({ salonId }: { salonId: string }) {
                     </table>
                   </div>
                   <div className={`${ui.rowWrap} ${ui.mt12}`}>
-                    <Btn icon="receipt" onClick={() => void downloadCsv()} disabled={downloading || loading}>{downloading ? "Preparing…" : "Download report (CSV)"}</Btn>
+                    <Btn icon="receipt" onClick={() => void download("csv")} disabled={downloading !== null || loading}>{downloading === "csv" ? "Preparing…" : "Download report (CSV)"}</Btn>
+                    <Btn icon="receipt" onClick={() => void download("excel")} disabled={downloading !== null || loading}>{downloading === "excel" ? "Preparing…" : `Download report (${EXCEL_EXPORT_LABEL})`}</Btn>
                   </div>
+                  <p className={ui.cardSub}>{EXCEL_EXPORT_NOTE}</p>
                   <div role="status" aria-live="polite">{notice && <Banner tone="ok">{notice}</Banner>}</div>
                 </Card>
               </div>
@@ -294,7 +303,7 @@ export function RevenueReport({ salonId }: { salonId: string }) {
                           ))}
                         </tbody>
                       </table>
-                      {services.length > TABLE_ROW_LIMIT && <p className={ui.cardSub}>Showing the top {TABLE_ROW_LIMIT} of {services.length}. The CSV has every row.</p>}
+                      {services.length > TABLE_ROW_LIMIT && <p className={ui.cardSub}>Showing the top {TABLE_ROW_LIMIT} of {services.length}. The CSV and Excel files have every row.</p>}
                     </div>
                   )}
                 </Card>
@@ -343,7 +352,7 @@ export function RevenueReport({ salonId }: { salonId: string }) {
                           ))}
                         </tbody>
                       </table>
-                      {customers.length > TABLE_ROW_LIMIT && <p className={ui.cardSub}>Showing the top {TABLE_ROW_LIMIT} of {customers.length}. The CSV has every row.</p>}
+                      {customers.length > TABLE_ROW_LIMIT && <p className={ui.cardSub}>Showing the top {TABLE_ROW_LIMIT} of {customers.length}. The CSV and Excel files have every row.</p>}
                     </div>
                   )}
                 </Card>
