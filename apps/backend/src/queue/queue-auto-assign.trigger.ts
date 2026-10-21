@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { isFastQueMaintenanceEnabled } from '../maintenance/maintenance-mode.service';
 
 export type QueueAutoAssignHandler = (salonId: string) => Promise<void>;
 
@@ -17,28 +18,36 @@ export type QueueAutoAssignHandler = (salonId: string) => Promise<void>;
  * error is logged and the queue simply stays as it was (the owner can still assign by hand).
  */
 @Injectable()
-export class QueueAutoAssignTrigger {
+export class QueueAutoAssignTrigger implements OnModuleDestroy {
   private readonly logger = new Logger(QueueAutoAssignTrigger.name);
   private handler: QueueAutoAssignHandler | null = null;
-  private readonly inFlight = new Map<string, { again: boolean }>();
+  private shuttingDown = false;
+  private readonly inFlight = new Map<
+    string,
+    { again: boolean; promise: Promise<void> | null }
+  >();
 
   register(handler: QueueAutoAssignHandler): void {
     this.handler = handler;
   }
 
   trigger(salonId: string): void {
+    if (this.shuttingDown || isFastQueMaintenanceEnabled()) return;
     if (!this.handler) return;
     const running = this.inFlight.get(salonId);
     if (running) {
       running.again = true;
       return;
     }
-    const state = { again: false };
+    const state = { again: false, promise: null as Promise<void> | null };
     this.inFlight.set(salonId, state);
-    void this.run(salonId, state);
+    state.promise = this.run(salonId, state);
   }
 
-  private async run(salonId: string, state: { again: boolean }): Promise<void> {
+  private async run(
+    salonId: string,
+    state: { again: boolean; promise: Promise<void> | null },
+  ): Promise<void> {
     try {
       do {
         state.again = false;
@@ -49,7 +58,7 @@ export class QueueAutoAssignTrigger {
             `Automatic assignment pass failed for salon ${salonId}: ${err instanceof Error ? err.message : 'unknown error'}`,
           );
         }
-      } while (state.again);
+      } while (state.again && !this.shuttingDown);
     } finally {
       this.inFlight.delete(salonId);
     }
@@ -60,5 +69,14 @@ export class QueueAutoAssignTrigger {
     while (this.inFlight.has(salonId)) {
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    this.shuttingDown = true;
+    await Promise.all(
+      Array.from(this.inFlight.values())
+        .map((state) => state.promise)
+        .filter((promise): promise is Promise<void> => !!promise),
+    );
   }
 }

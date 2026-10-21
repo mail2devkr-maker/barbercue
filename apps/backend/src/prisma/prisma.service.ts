@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { MaintenanceModeService } from '../maintenance/maintenance-mode.service';
 
 // Deliberately does not eagerly $connect() on module init. Prisma Client connects lazily on its
 // first query by default; forcing an eager connect here would crash the entire application at
@@ -10,8 +11,15 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
-  constructor() {
+  constructor(private readonly maintenanceMode: MaintenanceModeService) {
     super();
+    this.$use(async (params, next) => {
+      this.maintenanceMode.assertDatabaseOperationAllowed(params.action);
+      // Prisma's middleware contract types `next` as Promise<any>; returning it is required to
+      // preserve the generated query result, and the operation is still bounded by Prisma's API.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return next(params);
+    });
     this.logger.log(
       'PrismaService ready (lazy connect — first query establishes the connection)',
     );

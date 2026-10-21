@@ -5,6 +5,13 @@
 // `${API_BASE_URL}/${HEALTH_PATH}`, where API_BASE_URL already includes the /api/v1 prefix.
 export const HEALTH_PATH = 'health';
 
+// Public read-only maintenance status used by the web shell to display the current
+// operator-controlled write freeze. The maintenance switch is deployment-scoped.
+export const MAINTENANCE_PATHS = {
+  maintenance: 'maintenance',
+  status: 'status',
+} as const;
+
 // Sub-paths under AuthController's `@Controller('auth')` prefix — used directly as `@Post(...)`
 // decorator arguments on the backend, and as `${API_BASE_URL}/auth/${AUTH_PATHS.otpRequest}` on
 // clients. Kept here so the literal path strings never drift between the two.
