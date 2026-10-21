@@ -459,7 +459,7 @@ maybe('Permanent HR Employee ID registry (disposable PostgreSQL)', () => {
     await createCandidate(
       `replay-${run}@example.test`,
       replayPhone,
-      'Replay Candidate',
+      `Replay Candidate ${run}`,
       replayKey,
     );
     const replay = await api('post', '/admin/employee-register/people').send({
@@ -481,7 +481,7 @@ maybe('Permanent HR Employee ID registry (disposable PostgreSQL)', () => {
     const candidate = (suffix: string) =>
       api('post', '/admin/employee-register/people').send({
         idempotencyKey: key(`contact-race-${suffix}`),
-        fullName: `Contact Race ${suffix}`,
+        fullName: `Contact Race ${suffix} ${run}`,
         email: `contact-race-${suffix}-${run}@example.test`,
         phone,
         matchReview: {
