@@ -14,7 +14,7 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
   let app: INestApplication<App>;
   let prisma: PrismaService;
   const run = randomUUID();
-  const serviceQuery = `assistant-${run}`;
+  const serviceQuery = `haircut-${run}`;
   const date = utcToZonedDateStr(
     new Date(Date.now() + 24 * 60 * 60_000),
     'Asia/Kolkata',
@@ -59,7 +59,7 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
     const service = await prisma.service.create({
       data: {
         salonId,
-        name: `Assistant Haircut ${run}`,
+        name: `Haircut-${run}`,
         category: 'Hair',
         price: '250.00',
         durationMinutes: 30,
@@ -118,7 +118,7 @@ describe('Customer assistant catalog and availability (disposable PostgreSQL HTT
           salon: { id: salonId, name: `Assistant E2E ${run}` },
           service: {
             id: serviceId,
-            name: `Assistant Haircut ${run}`,
+            name: `Haircut-${run}`,
             category: 'Hair',
             price: 250,
             durationMinutes: 30,
