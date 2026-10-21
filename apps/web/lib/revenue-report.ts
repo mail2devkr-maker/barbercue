@@ -139,6 +139,29 @@ export function csvFallbackName(q: Pick<ReportQuery, "from" | "to">): string {
   return `fastque-revenue-${q.from}-${q.to}.csv`;
 }
 
+/**
+ * The Excel-compatible export (requirement #17): a SpreadsheetML 2003 XML workbook (`.xml`), served by
+ * GET revenue/report.excel.xml with the same validated filters as the JSON report and the CSV. It is deliberately NOT called
+ * `.xlsx`: Excel opens it, and may ask to confirm the format, but it is not an Open XML (.xlsx) package.
+ */
+export const EXCEL_EXPORT_LABEL = "Excel-compatible (XML)";
+export const EXCEL_EXPORT_NOTE = "The Excel file is an Excel-compatible XML workbook (.xml), not an .xlsx file. Excel opens it; if it asks about the format, choose to open it.";
+
+export function excelFallbackName(q: Pick<ReportQuery, "from" | "to">): string {
+  return `fastque-revenue-${q.from}-${q.to}.xml`;
+}
+
+/**
+ * A file name safe to hand to the browser's download: only letters, digits, dot, dash and underscore, no path, and the expected
+ * extension. A name the server sends that fails this (a path, a different type, control characters) is replaced by the fallback,
+ * so the report can never be saved under a surprising name or type.
+ */
+export function safeDownloadName(serverName: string | null, fallback: string, extension: string): string {
+  const name = (serverName ?? "").trim();
+  const ok = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(name) && name.toLowerCase().endsWith(extension.toLowerCase()) && !name.includes("..");
+  return ok ? name : fallback;
+}
+
 /** Case-insensitive "contains" filter on a row label; an empty search keeps everything. */
 export function filterByLabel<T extends { label: string }>(rows: ReadonlyArray<T>, search: string): T[] {
   const needle = search.trim().toLowerCase();
