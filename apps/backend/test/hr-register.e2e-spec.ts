@@ -201,6 +201,8 @@ maybe(
       app.setGlobalPrefix('api/v1');
       app.useGlobalFilters(new AllExceptionsFilter());
       await app.init();
+      // One listening server shared by every request: parallel supertest calls must not each bind their own.
+      await app.listen(0);
       prisma = app.get(PrismaService);
       tokens = app.get(TokenService);
       totp = app.get(TotpService);
