@@ -7,6 +7,7 @@ describe('AdminEmployeeManagementService', () => {
   let passwords: any;
   let totp: any;
   let crypto: any;
+  let hr: any;
 
   const standardRow = {
     id: 'ep1',
@@ -94,11 +95,25 @@ describe('AdminEmployeeManagementService', () => {
       decrypt: jest.fn().mockReturnValue('totp-secret'),
     };
 
+    // The register owns allocation and creates the profile; the real behaviour is covered by the PostgreSQL
+    // e2e suite (test/hr-register.e2e-spec.ts). Here it is a stand-in with the same contract.
+    hr = {
+      allocateStandard: jest.fn().mockResolvedValue({ number: 101, code: 'FQ-FE-00101' }),
+      reserveSpecific: jest.fn().mockImplementation((_tx: unknown, value: number) =>
+        Promise.resolve({ number: value, code: `FQ-FE-${String(value).padStart(5, '0')}` }),
+      ),
+      createDirectAccountProfile: jest.fn().mockImplementation(({ id }: any = {}) => Promise.resolve({ id: id ?? 'ep1' })),
+    };
+    hr.createDirectAccountProfile.mockImplementation((_tx: unknown, input: any) =>
+      Promise.resolve({ id: input.code === 'FQ-FE-00007' ? 'ep-special' : 'ep1' }),
+    );
+
     service = new AdminEmployeeManagementService(
       prisma,
       passwords,
       totp,
       crypto,
+      hr,
     );
   });
 
@@ -110,13 +125,18 @@ describe('AdminEmployeeManagementService', () => {
       confirmPassword: 'TempPass123',
     });
 
-    expect(prisma.__tx.employeeProfile.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        employeeCode: 'FQ-FE-00101',
+    expect(hr.allocateStandard).toHaveBeenCalledTimes(1);
+    expect(hr.createDirectAccountProfile).toHaveBeenCalledWith(
+      prisma.__tx,
+      expect.objectContaining({
+        code: 'FQ-FE-00101',
+        number: 101,
         fullName: 'Field Executive',
         territory: 'Patna',
+        reserved: false,
       }),
-    });
+    );
+    expect(hr.reserveSpecific).not.toHaveBeenCalled();
     expect(created.employeeCode).toBe('FQ-FE-00101');
   });
 
@@ -132,12 +152,12 @@ describe('AdminEmployeeManagementService', () => {
 
     expect(crypto.decrypt).toHaveBeenCalledWith('encrypted-secret');
     expect(totp.verifyToken).toHaveBeenCalledWith('totp-secret', '123456');
-    expect(prisma.__tx.employeeProfile.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        employeeCode: 'FQ-FE-00007',
-        fullName: 'Special Executive',
-      }),
-    });
+    expect(hr.reserveSpecific).toHaveBeenCalledWith(prisma.__tx, 7);
+    expect(hr.allocateStandard).not.toHaveBeenCalled();
+    expect(hr.createDirectAccountProfile).toHaveBeenCalledWith(
+      prisma.__tx,
+      expect.objectContaining({ code: 'FQ-FE-00007', number: 7, fullName: 'Special Executive', reserved: true }),
+    );
     expect(prisma.__tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         actorUserId: 'admin1',

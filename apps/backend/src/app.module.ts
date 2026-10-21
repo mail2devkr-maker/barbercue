@@ -20,6 +20,7 @@ import { PremiumModule } from './premium/premium.module';
 import { PublicQueueModule } from './public-queue/public-queue.module';
 import { SalonSetupModule } from './salon-setup/salon-setup.module';
 import { AdminModule } from './admin/admin.module';
+import { HrRegisterModule } from './hr-register/hr-register.module';
 import { DashboardBookingsModule } from './dashboard-bookings/dashboard-bookings.module';
 import { DashboardCustomersModule } from './dashboard-customers/dashboard-customers.module';
 import { DashboardAnalyticsModule } from './dashboard-analytics/dashboard-analytics.module';
@@ -71,6 +72,7 @@ import { OwnerOpsModule } from './owner-ops/owner-ops.module';
     PublicQueueModule,
     SalonSetupModule,
     AdminModule,
+    HrRegisterModule,
     DashboardBookingsModule,
     DashboardCustomersModule,
     DashboardAnalyticsModule,
