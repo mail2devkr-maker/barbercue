@@ -2,6 +2,7 @@ import { DbDeadlineSchedulerService } from './db-deadline-scheduler.service';
 
 describe('DbDeadlineSchedulerService', () => {
   let service: DbDeadlineSchedulerService;
+  const originalMaintenanceMode = process.env.FASTQUE_MAINTENANCE_MODE;
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -11,7 +12,65 @@ describe('DbDeadlineSchedulerService', () => {
 
   afterEach(() => {
     service.onModuleDestroy();
+    if (originalMaintenanceMode === undefined)
+      delete process.env.FASTQUE_MAINTENANCE_MODE;
+    else process.env.FASTQUE_MAINTENANCE_MODE = originalMaintenanceMode;
     jest.useRealTimers();
+  });
+
+  it('does not register or run deadline writers while maintenance is enabled', async () => {
+    process.env.FASTQUE_MAINTENANCE_MODE = 'true';
+    const nextDueAt = jest.fn(async (): Promise<Date | null> => new Date());
+    const runDue = jest.fn(async (): Promise<void> => undefined);
+
+    service.register({
+      name: 'maintenance-paused-job',
+      domain: 'booking',
+      nextDueAt,
+      runDue,
+    });
+    service.signal('booking');
+    await jest.advanceTimersByTimeAsync(0);
+
+    expect(nextDueAt).not.toHaveBeenCalled();
+    expect(runDue).not.toHaveBeenCalled();
+  });
+
+  it('waits for an active deadline writer before shutdown resolves', async () => {
+    let announceStarted: () => void = () => {};
+    let unblock: () => void = () => {};
+    const started = new Promise<void>((resolve) => {
+      announceStarted = resolve;
+    });
+    const blocked = new Promise<void>((resolve) => {
+      unblock = resolve;
+    });
+    const runDue = jest.fn(async () => {
+      announceStarted();
+      await blocked;
+    });
+
+    service.register({
+      name: 'drain-test-job',
+      domain: 'booking',
+      nextDueAt: async () => new Date(Date.now()),
+      runDue,
+    });
+    await jest.advanceTimersByTimeAsync(0);
+    await jest.advanceTimersByTimeAsync(250);
+    await started;
+
+    let shutdownResolved = false;
+    const shutdown = service.onModuleDestroy().then(() => {
+      shutdownResolved = true;
+    });
+    await Promise.resolve();
+    expect(shutdownResolved).toBe(false);
+
+    unblock();
+    await shutdown;
+    expect(shutdownResolved).toBe(true);
+    expect(runDue).toHaveBeenCalledTimes(1);
   });
 
   it('waits until the real deadline instead of polling every minute', async () => {

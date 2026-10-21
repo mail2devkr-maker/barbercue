@@ -1,0 +1,49 @@
+# FastQue maintenance mode v1
+
+This backend-only, opt-in safeguard is disabled unless `FASTQUE_MAINTENANCE_MODE=true` is present when the backend process starts. It does not enable itself on a schedule. `FASTQUE_MAINTENANCE_MESSAGE` is optional plain text (maximum 500 characters); the backend returns a generic scheduled-maintenance notice when the flag is enabled without a custom message.
+
+`GET /api/v1/maintenance/status` is public, returns `{ "enabled": boolean, "message": string | null }`, and sends `Cache-Control: no-store`. It contains no shop, customer, booking, or database details.
+
+When enabled, the global HTTP guard rejects every method other than `GET`, `HEAD`, and `OPTIONS` with HTTP 503 and error code `MAINTENANCE_MODE`. A Prisma middleware independently rejects model writes and all raw SQL operations (raw SQL can hide a data-changing CTE). Deadline-driven booking, queue, reminder, and notification sweeps are not registered; the queue auto-assignment trigger is inert. Graceful backend shutdown waits for already-running deadline jobs to finish.
+
+The flag is captured at process startup. Changing it requires a controlled backend deployment/restart on **every** replica; this PR does not provide a live toggle endpoint. Do not treat one replica's status response as proof that all old instances have drained. Before a database cutover, verify every backend replica runs the maintenance-enabled revision and confirm active requests, separate workers, cron services, retry queues, and other database clients are drained. The source production database remains authoritative until a separate, explicit cutover approval.
+
+The Prisma application middleware does **not** guard the Railway pre-deploy Prisma CLI process, migrations run by other services, direct SQL clients, or writes outside this backend. Before a deployment during the freeze, independently verify the pre-deploy command's exact database target and that it has no pending migration; do not point it at an unverified target. This feature has no schema or data migration and is not production-activated by its PR.
+
+Suggested operational sequence (not an authorization to execute it):
+
+1. Announce the approved maintenance window and verify the notice is live.
+2. Confirm current source and target identities, fresh recovery point, restore rehearsal, compatible schema, and a hashed integrity baseline.
+3. Deploy the already-reviewed backend revision with maintenance enabled while it still targets the source DB; verify all replicas, public status, 503 behavior, and that writers/workers have drained.
+4. Keep the maintenance flag enabled during final synchronization and consistency checks. Ensure exactly one database remains authoritative; do not allow old clients or retries to write to either target.
+5. Obtain the separate final owner GO, update both Railway runtime and direct migration connection targets using the reviewed procedure, and verify the backend uses only the target. The target must preserve the source schema; candidate feature migrations are out of scope.
+6. Verify API health, authentication, read paths, booking/queue/payment invariants, and legacy Android behavior before disabling the flag with a controlled deployment.
+7. Preserve the source project intact for rollback. After writes resume on the target, an application rollback alone is not a database rollback; any return to the source requires a forward synchronization and a new explicit cutover plan.
+
+Production use remains NO-GO until the target project is independently verified, both Railway database targets are confirmed without exposing values, a fresh recoverable source copy and isolated restore are proven, all writers are inventoried/drained, and the owner gives final cutover approval.
+
+## Cross-project rotation runbook (Project #2 to the existing Project #1)
+
+This is a cross-project data move, not a branch toggle. The owner-reported source is Neon Project #2 `muddy-paper-72512632` / `main` / `neondb`; the owner-reported existing target is Project #1 `crimson-field-96192935` / archived `production`. Those identities and the target's current state must be reverified in Neon Console at execution time. The Neon connector currently cannot inspect Project #1 or create branches. The target's archived branch and every existing target record must be preserved; never overwrite, reset, delete, or restore over that branch. Do not create a third project.
+
+### Daytime readiness — no production mutation
+
+1. Record source and target project, branch, branch IDs, database, region, PostgreSQL version, extensions, role/schema requirements, status, compute allowance, storage use, and snapshot/recovery capability. Identify every Railway service, scheduled job, worker, CI task, and external client that can write. Inspect configuration without displaying secret values.
+2. Create a new source recovery point from Project #2 `main` using an authorized Neon branch/snapshot operation. Record its lineage, ready state, expiry/retention, and endpoint identity. An Oct 12 manual snapshot is historical evidence, not a fresh release recovery point.
+3. Prepare a distinct disposable target branch without changing Project #1's archived branch. If Neon requires resuming or modifying the archived branch to create that copy, stop and obtain separate owner approval. Restore the source backup into that disposable branch using a secure operator environment; never put connection strings in chat, tickets, or logs.
+4. Rehearse the complete restore and compare schema objects plus deterministic, privacy-safe table fingerprints/counts across all relevant schemas. Include users, salons, customers, services, bookings, queue, staff/chairs, reviews, invoices, payment/refund ledgers, inventory, audit records, migration history, foreign keys, indexes, sequences, and triggers. Verify append-only financial guards still reject mutation. Preserve photo/object-storage references; this database operation must not rewrite or delete media.
+5. Rehearse the currently deployed master schema only. Verify the exact production `_prisma_migrations` state and hashes. Do not apply the separate pending Owner Operations/30-feature migration chain as part of rotation. Measure restore duration and validate application compatibility against the isolated target.
+
+### Window — only after a separate explicit owner GO
+
+1. Announce the approved window. Before changing configuration, verify fresh recovery and successful isolated restore, and take a final source checkpoint. Confirm the target branch is the reviewed disposable/production target and the archived Project #1 source data is untouched.
+2. Deploy the reviewed backend maintenance revision while it still points to Project #2. Railway backend pre-deploy runs `env DATABASE_URL="$DIRECT_DATABASE_URL" npm run prisma:migrate:deploy`; verify both source endpoints and that there are no unreviewed pending migrations before this step. The application's maintenance guard does not protect this CLI command. Verify every backend replica serves maintenance status enabled and rejects mutations; keep health/status and necessary reads available.
+3. Quiesce every other writer explicitly: scheduled jobs, workers, retry queues, CI, direct SQL users, active customer/owner requests, and old Android reconnects. Observe/drain in-flight work. A 503 from the API alone is not proof of global write quiescence. If any writer cannot be stopped or accounted for, do not switch.
+4. After quiescence, take the final consistent source dump and restore/synchronize it into the target. Re-run row counts and deterministic fingerprints; verify no source mutation occurred during the dump, all required objects and migration hashes match, and target sequences/constraints/triggers are intact. Keep exactly one authoritative writer target: Project #2 remains authoritative until the owner approves the verified target switch.
+5. Obtain a fresh, explicit owner GO that names the exact source and target branch IDs. Update the backend runtime `DATABASE_URL` and migration `DIRECT_DATABASE_URL` together to the target's appropriate pooled/direct endpoints. Never print their values. Inspect staged changes and deployment effects before applying; do not change frontend, mobile, or unrelated services. Railway deployment must be backend-first and observed, not assumed from a master merge.
+6. Verify the backend deployment SHA/ID, pre-deploy output, connection and migration state, health, authenticated owner/customer reads, booking and Live Queue invariants, payment/refund reads, and legacy Android 1.0.3 API behavior while writes remain frozen. Verify the web continues using the backend API and no unexpected backend migration was applied.
+7. Disable maintenance only after acceptance and a deliberate all-replica rollout. Confirm customer-facing notice removal, normal owner/customer mutations, and monitoring. Keep Project #2 and the fresh recovery artifact intact.
+
+### Rollback and forward recovery
+
+Before any writes resume on Project #1, a backend/config rollback to Project #2 is possible only if the target remains unchanged and consistency is reverified. After the first target write, simply switching Railway back to Project #2 would lose those writes and create split-brain risk. Re-entry then requires a new write freeze, reconciliation of all post-cutover target deltas, integrity verification, and a separately approved forward synchronization; never restore an old snapshot over the active database. Application rollback must leave compatible additive schema intact. If the window ends or any gate is uncertain, leave maintenance on only if that is the previously verified safe operating state; otherwise keep the previously authoritative Project #2 serving normally, preserve both databases, and stop without a forced cutover.

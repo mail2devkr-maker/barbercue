@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { isFastQueMaintenanceEnabled } from '../../maintenance/maintenance-mode.service';
 
 export type DbDeadlineDomain = 'booking' | 'queue';
 
@@ -35,9 +36,13 @@ const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
 export class DbDeadlineSchedulerService implements OnModuleDestroy {
   private readonly logger = new Logger(DbDeadlineSchedulerService.name);
   private readonly jobs = new Map<string, JobState>();
+  private readonly activeRuns = new Set<Promise<void>>();
   private reconcileTimer: NodeJS.Timeout | null = null;
+  private shuttingDown = false;
 
   register(job: DbDeadlineJob): () => void {
+    if (this.shuttingDown || isFastQueMaintenanceEnabled())
+      return () => undefined;
     this.unregister(job.name);
     const state: JobState = {
       job,
@@ -48,13 +53,16 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
       pendingRefresh: false,
     };
     this.jobs.set(job.name, state);
-    this.logger.log(`Registered adaptive DB deadline job: ${job.name} (${job.domain})`);
+    this.logger.log(
+      `Registered adaptive DB deadline job: ${job.name} (${job.domain})`,
+    );
     this.ensureReconcileTimer();
     this.queueRefresh(state, 0);
     return () => this.unregister(job.name);
   }
 
   signal(domain: DbDeadlineDomain): void {
+    if (this.shuttingDown || isFastQueMaintenanceEnabled()) return;
     for (const state of this.jobs.values()) {
       if (state.job.domain === domain) this.queueRefresh(state, 50);
     }
@@ -69,6 +77,7 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
   }
 
   private queueRefresh(state: JobState, delayMs: number): void {
+    if (this.shuttingDown) return;
     if (state.refreshTimer) clearTimeout(state.refreshTimer);
     state.refreshTimer = setTimeout(() => {
       state.refreshTimer = null;
@@ -78,6 +87,7 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
   }
 
   private async refresh(state: JobState): Promise<void> {
+    if (this.shuttingDown || isFastQueMaintenanceEnabled()) return;
     if (state.running || state.refreshing) {
       state.pendingRefresh = true;
       return;
@@ -92,6 +102,7 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
 
     try {
       const dueAt = await state.job.nextDueAt();
+      if (this.shuttingDown || isFastQueMaintenanceEnabled()) return;
       if (!dueAt) return;
 
       const delay = Math.max(
@@ -107,31 +118,42 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
       this.logger.error(
         `Could not plan deadline job ${state.job.name}: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
+      if (this.shuttingDown) return;
       // Retry planning later without falling back to minute-level polling.
-      state.timer = setTimeout(() => {
-        state.timer = null;
-        this.queueRefresh(state, 0);
-      }, 5 * 60 * 1000);
+      state.timer = setTimeout(
+        () => {
+          state.timer = null;
+          this.queueRefresh(state, 0);
+        },
+        5 * 60 * 1000,
+      );
       state.timer.unref?.();
     } finally {
       state.refreshing = false;
-      if (state.pendingRefresh) this.queueRefresh(state, 0);
+      if (state.pendingRefresh && !this.shuttingDown)
+        this.queueRefresh(state, 0);
     }
   }
 
-  private async run(state: JobState): Promise<void> {
-    if (state.running) return;
+  private run(state: JobState): void {
+    if (state.running || this.shuttingDown || isFastQueMaintenanceEnabled())
+      return;
     state.running = true;
-    try {
-      await state.job.runDue();
-    } catch (error) {
-      this.logger.error(
-        `Deadline job ${state.job.name} failed: ${error instanceof Error ? error.message : 'unknown error'}`,
-      );
-    } finally {
+    const running = (async () => {
+      try {
+        await state.job.runDue();
+      } catch (error) {
+        this.logger.error(
+          `Deadline job ${state.job.name} failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      }
+    })();
+    this.activeRuns.add(running);
+    void running.finally(() => {
       state.running = false;
-      this.queueRefresh(state, 0);
-    }
+      this.activeRuns.delete(running);
+      if (!this.shuttingDown) this.queueRefresh(state, 0);
+    });
   }
 
   private unregister(name: string): void {
@@ -146,9 +168,16 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
     }
   }
 
-  onModuleDestroy(): void {
-    for (const name of Array.from(this.jobs.keys())) this.unregister(name);
+  async onModuleDestroy(): Promise<void> {
+    this.shuttingDown = true;
+    const states = Array.from(this.jobs.values());
+    for (const state of states) {
+      if (state.timer) clearTimeout(state.timer);
+      if (state.refreshTimer) clearTimeout(state.refreshTimer);
+    }
+    this.jobs.clear();
     if (this.reconcileTimer) clearInterval(this.reconcileTimer);
     this.reconcileTimer = null;
+    await Promise.all(this.activeRuns);
   }
 }

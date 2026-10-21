@@ -17,6 +17,9 @@ import {
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Railway sends SIGTERM during deployments. Enable Nest lifecycle shutdown hooks so
+  // database-backed schedulers and queue auto-assignment can stop and drain their in-flight work.
+  app.enableShutdownHooks();
 
   // Negotiate ordinary HTTP response compression from the client's real Accept-Encoding header.
   // Runtime support is capability-detected so older local Node versions cannot break startup:
