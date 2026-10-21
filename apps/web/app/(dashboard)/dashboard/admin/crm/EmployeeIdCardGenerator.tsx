@@ -18,11 +18,23 @@ export default function EmployeeIdCardGenerator() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const qrNode = useRef<HTMLDivElement>(null);
+  const preselected = useRef(false);
 
   const load = useCallback(async () => {
     try {
       const rows = await apiFetch<AdminEmployeeDto[]>(ADMIN_PATHS.admin + "/" + ADMIN_PATHS.employees);
-      setEmployees(rows.filter((row) => row.status === UserStatus.ACTIVE));
+      const active = rows.filter((row) => row.status === UserStatus.ACTIVE);
+      setEmployees(active);
+      // Opened from the HR register ("Company ID card"): preselect that employee, once.
+      if (!preselected.current) {
+        preselected.current = true;
+        const wanted = new URLSearchParams(window.location.search).get("employee");
+        const match = wanted ? active.find((row) => row.id === wanted) : undefined;
+        if (match) {
+          setEmployeeId(match.id);
+          setTerritory(match.territory ?? "");
+        }
+      }
     } catch (error) {
       setStatus(error instanceof ApiError ? error.message : "Could not load employee records.");
     } finally {
