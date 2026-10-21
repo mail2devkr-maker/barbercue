@@ -1,0 +1,42 @@
+.sub { margin: 0 0 14px; color: #a7a7b4; font-size: var(--bc-text-sm); }
+.problem { margin: 6px 0 0; color: #ffb7c9; font-size: var(--bc-text-xs); }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.preset {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #3a3a48;
+  border-radius: 999px;
+  background: #0d0d12;
+  color: #e8e8ef;
+  font: 600 0.8rem var(--font-body);
+  cursor: pointer;
+}
+.preset:focus-visible { outline: 2px solid #ff6f91; outline-offset: 2px; }
+.presetActive { border-color: #ff6f91; background: rgba(255, 111, 145, .18); color: #fff; }
+.checkRow { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; color: #e8e8ef; font-size: var(--bc-text-xs); }
+.checkRow input { width: 18px; height: 18px; min-height: 0; }
+.counter small { display: block; margin-top: 6px; color: #8b8b99; font-size: 0.68rem; line-height: 1.35; }
+.period { margin: 0 0 14px; color: #a7a7b4; font-size: var(--bc-text-xs); }
+.defs { margin: 0 0 18px; padding: 12px 14px; border: 1px solid #282832; border-radius: var(--bc-radius-sm); background: #12121a; color: #c9c9d4; font-size: var(--bc-text-xs); }
+.defs summary { cursor: pointer; font-weight: 700; color: #e8e8ef; }
+.defs ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.tab { composes: preset; }
+.tabActive { composes: presetActive; }
+.moreRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.more {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 111, 145, .5);
+  border-radius: 10px;
+  background: transparent;
+  color: #ffb7c9;
+  font: 700 0.85rem var(--font-body);
+  cursor: pointer;
+}
+.more:disabled { opacity: .55; cursor: default; }
+.more:focus-visible { outline: 2px solid #ff6f91; outline-offset: 2px; }
+.overdue { background: rgba(255, 80, 100, .2); color: #ffb7c9; }
+.notice { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--bc-radius-sm); background: rgba(255, 193, 7, .12); color: #ffe08a; font-size: var(--bc-text-xs); }
+.retry { margin-left: 10px; }
+.readOnly { margin: 22px 0 0; color: #8b8b99; font-size: var(--bc-text-xs); }

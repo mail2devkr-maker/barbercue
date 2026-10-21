@@ -20,6 +20,8 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
 
   if (pathname === "/dashboard/admin") return true;
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
+  // The platform CRM analytics and its cursor-paged rows are PLATFORM_ADMIN only on the server (ADMIN_CRM_ANALYTICS_V1).
+  if (pathname.startsWith("/dashboard/admin/crm/analytics")) return superAdmin;
   if (pathname.startsWith("/dashboard/admin/crm")) return superAdmin || coFounder || hr || sales;
   if (pathname.startsWith("/dashboard/admin/employees")) return superAdmin || coFounder || hr;
   if (pathname.startsWith("/dashboard/admin/verification")) return superAdmin || coFounder;
