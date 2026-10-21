@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from '../auth/services/password.service';
 import { TotpService } from '../auth/services/totp.service';
 import { CryptoService } from '../auth/services/crypto.service';
+import { HrRegisterService } from '../hr-register/hr-register.service';
 import { AppException } from '../common/exceptions/app.exception';
 
 @Injectable()
@@ -24,6 +25,7 @@ export class AdminEmployeeManagementService {
     private readonly passwords: PasswordService,
     private readonly totp: TotpService,
     private readonly crypto: CryptoService,
+    private readonly hr: HrRegisterService,
   ) {}
 
   async list(): Promise<AdminEmployeeDto[]> {
@@ -49,34 +51,11 @@ export class AdminEmployeeManagementService {
     const passwordHash = await this.passwords.hash(input.password);
 
     const profileId = await this.prisma.$transaction(async (tx) => {
-      // Serialise employee-code allocation so two admin clicks can never mint the same FQ-FE id.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('fastque_employee_code'))`;
-
-      // IDs 1-100 are a permanently reserved owner-controlled block. Ordinary provisioning
-      // starts at 101 and can never consume the reserved range.
-      const firstStandardCode = this.employeeCode(EMPLOYEE_STANDARD_ID_START);
-      const lastStandard = await tx.employeeProfile.findFirst({
-        where: { employeeCode: { gte: firstStandardCode } },
-        orderBy: { employeeCode: 'desc' },
-        select: { employeeCode: true },
-      });
-      let sequence = lastStandard
-        ? Number(lastStandard.employeeCode.replace('FQ-FE-', '')) + 1
-        : EMPLOYEE_STANDARD_ID_START;
-      if (!Number.isSafeInteger(sequence) || sequence < EMPLOYEE_STANDARD_ID_START) {
-        sequence = EMPLOYEE_STANDARD_ID_START;
-      }
-
-      let employeeCode = this.employeeCode(sequence);
-      while (
-        await tx.employeeProfile.findUnique({
-          where: { employeeCode },
-          select: { id: true },
-        })
-      ) {
-        sequence += 1;
-        employeeCode = this.employeeCode(sequence);
-      }
+      // One allocator for every ID: the register serialises on the same advisory lock the legacy path always used and
+      // looks at register persons AND employee profiles, so an offer-reserved ID can never be minted here.
+      // IDs 1-100 stay reserved and are never produced by this standard path.
+      const allocated = await this.hr.allocateStandard(tx);
+      const employeeCode = allocated.code;
 
       const user = await tx.user.create({
         data: {
@@ -91,13 +70,14 @@ export class AdminEmployeeManagementService {
           salonId: null,
         },
       });
-      const profile = await tx.employeeProfile.create({
-        data: {
-          userId: user.id,
-          employeeCode,
-          fullName: input.fullName,
-          territory: input.territory?.trim() || null,
-        },
+      const profile = await this.hr.createDirectAccountProfile(tx, {
+        adminUserId,
+        userId: user.id,
+        number: allocated.number,
+        code: employeeCode,
+        fullName: input.fullName,
+        territory: input.territory?.trim() || null,
+        reserved: false,
       });
       await tx.auditLog.create({
         data: {
@@ -144,19 +124,7 @@ export class AdminEmployeeManagementService {
     const employeeCode = this.employeeCode(input.employeeNumber);
 
     const profileId = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('fastque_employee_code'))`;
-
-      const existing = await tx.employeeProfile.findUnique({
-        where: { employeeCode },
-        select: { id: true },
-      });
-      if (existing) {
-        throw new AppException(
-          'EMPLOYEE_RESERVED_ID_TAKEN',
-          `${employeeCode} is already assigned.`,
-          HttpStatus.CONFLICT,
-        );
-      }
+      await this.hr.reserveSpecific(tx, input.employeeNumber);
 
       const user = await tx.user.create({
         data: {
@@ -171,13 +139,14 @@ export class AdminEmployeeManagementService {
           salonId: null,
         },
       });
-      const profile = await tx.employeeProfile.create({
-        data: {
-          userId: user.id,
-          employeeCode,
-          fullName: input.fullName,
-          territory: input.territory?.trim() || null,
-        },
+      const profile = await this.hr.createDirectAccountProfile(tx, {
+        adminUserId,
+        userId: user.id,
+        number: input.employeeNumber,
+        code: employeeCode,
+        fullName: input.fullName,
+        territory: input.territory?.trim() || null,
+        reserved: true,
       });
       await tx.auditLog.create({
         data: {

@@ -1,0 +1,96 @@
+name: FastQue HR Register Backend Certification
+
+# Source / DB certification of the HR permanent employee-ID register backend (issue #283). Everything runs
+# from the lockfile against a throw-away PostgreSQL service container with synthetic people. It never
+# connects to Neon, Railway, an email or SMS provider, and publishes nothing. A green run is CI evidence only,
+# never proof the feature is live.
+
+on:
+  push:
+    branches:
+      - claude/fastque-hr-backend-283
+      - claude/fastque-hr-integration-283
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hr-register-backend-certification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend - migration rehearsal, e2e on PostgreSQL 18
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared DTOs
+        run: npm run build:shared
+      - name: Generate Prisma client
+        run: npm run prisma:generate --workspace=@barbercue/backend
+      - name: Typecheck backend
+        run: npm run typecheck --workspace=@barbercue/backend
+      - name: Migration rehearsal on a production-shaped pre-HR database (existing data unchanged, no drift)
+        working-directory: apps/backend
+        env:
+          BASE_SCHEMA_REF: origin/master
+        run: |
+          git show origin/master:apps/backend/prisma/schema.prisma > "$RUNNER_TEMP/base.prisma"
+          BASE_SCHEMA="$RUNNER_TEMP/base.prisma" HR_DB=fastque_hr_migration bash scripts/verify-hr-register-migration.sh
+      - name: Full committed migration chain with prisma migrate deploy (fresh database)
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: postgresql://postgres@127.0.0.1:5432/fastque_hr_chain?schema=public
+        run: |
+          psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE fastque_hr_chain"
+          bash scripts/verify-migration-chain.sh
+      - name: HR register e2e - production-shaped database with pre-existing staff (real AppModule, real PostgreSQL)
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: postgresql://postgres@127.0.0.1:5432/fastque_hr_migration?schema=public
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/hr-register.e2e-spec.ts
+      - name: HR register e2e - fresh database built only from the committed migrations
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: postgresql://postgres@127.0.0.1:5432/fastque_hr_chain?schema=public
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/hr-register.e2e-spec.ts
+      - name: Employee management unit tests (legacy allocation now goes through the register)
+        working-directory: apps/backend
+        run: npx jest --ci src/admin
+      - name: Backend production build
+        run: npm run build --workspace=@barbercue/backend
+      - name: Check whitespace
+        run: git diff --check origin/master...HEAD
