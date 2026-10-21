@@ -229,13 +229,18 @@ export class HrRegisterService {
         where.push(Prisma.sql`e."status" = 'NOT_JOINED'`);
         break;
       case 'ACTIVE':
+        // Employed now, and never joined in an earlier episode ("rejoined" needs a previous real joining).
         where.push(
-          Prisma.sql`(e."status" = 'ACTIVE' AND e."episodeNumber" = 1)`,
+          Prisma.sql`(e."status" = 'ACTIVE' AND NOT EXISTS (
+            SELECT 1 FROM "hr_employment_episodes" x
+            WHERE x."personId" = p."id" AND x."episodeNumber" < e."episodeNumber" AND x."joinedOn" IS NOT NULL))`,
         );
         break;
       case 'REJOINED':
         where.push(
-          Prisma.sql`(e."status" = 'ACTIVE' AND e."episodeNumber" > 1)`,
+          Prisma.sql`(e."status" = 'ACTIVE' AND EXISTS (
+            SELECT 1 FROM "hr_employment_episodes" x
+            WHERE x."personId" = p."id" AND x."episodeNumber" < e."episodeNumber" AND x."joinedOn" IS NOT NULL))`,
         );
         break;
       case 'EXITED':
@@ -1101,7 +1106,8 @@ export class HrRegisterService {
         personId: person.id,
         offerId: offer.id,
         episodeId: episode.id,
-        action: rejoin || episode.episodeNumber > 1 ? 'REJOINED' : 'JOINED',
+        // REJOINED only when the person really worked before (a first-ever joining in a later episode is a joining).
+        action: person.originalJoinedOn !== null ? 'REJOINED' : 'JOINED',
         subjectKind: 'EPISODE',
         subjectLabel: `Episode ${episode.episodeNumber}`,
         fromStatus: 'PENDING_JOIN',

@@ -683,6 +683,31 @@ maybe(
             where: { employeeCode: person.employeeCode },
           }),
         ).toBe(1);
+        // Episode 2 is this person's FIRST real joining: it is "joined", never "rejoined".
+        const asActive = await call(
+          'get',
+          `admin/hr/register?employeeCode=${person.employeeCode}&lifecycle=ACTIVE`,
+          tok.hr,
+        );
+        expect(asActive.body.total).toBe(1);
+        expect(
+          (
+            await call(
+              'get',
+              `admin/hr/register?employeeCode=${person.employeeCode}&lifecycle=REJOINED`,
+              tok.hr,
+            )
+          ).body.total,
+        ).toBe(0);
+        const trail = (
+          await call(
+            'get',
+            `admin/hr/persons/${person.id}/audit?limit=100`,
+            tok.hr,
+          )
+        ).body.items.map((e: Json) => e.action);
+        expect(trail).toContain('JOINED');
+        expect(trail).not.toContain('REJOINED');
       });
     });
 
@@ -875,6 +900,21 @@ maybe(
             tok.hr,
           )
         ).body.items.map((entry: Json) => entry.action);
+        const rejoinedList = await call(
+          'get',
+          `admin/hr/register?employeeCode=${person.employeeCode}&lifecycle=REJOINED`,
+          tok.hr,
+        );
+        expect(rejoinedList.body.total).toBe(1);
+        expect(
+          (
+            await call(
+              'get',
+              `admin/hr/register?employeeCode=${person.employeeCode}&lifecycle=ACTIVE`,
+              tok.hr,
+            )
+          ).body.total,
+        ).toBe(0);
         expect(audit).toEqual(
           expect.arrayContaining([
             'IDENTITY_CREATED',
