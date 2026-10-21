@@ -15,6 +15,7 @@ import { SetupChecklist } from "../../../../../../components/dashboard/SetupChec
 import { PaymentQrSection } from "../../../../../../components/dashboard/PaymentQrSection";
 import { ProfileSection } from "../../../../../../components/dashboard/ProfileSection";
 import { OwnerVoiceSettings } from "../../../../../../components/dashboard/OwnerVoiceSettings";
+import { OwnerPhoneLinkPanel } from "../../../../../../components/auth/OwnerPhoneLinkPanel";
 import { ShopControls } from "../../../../../../components/owner/ShopControls";
 import { Button } from "../../../../../../components/ui/Button";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
@@ -454,6 +455,7 @@ export default function DashboardSettingsPage({
       )}
 
       {salon && <TimezoneSection salonId={salonId} />}
+      {salon && <OwnerPhoneLinkPanel />}
       {salon && <OwnerVoiceSettings />}
 
       {salon && <ShopControls salonId={salonId} />}

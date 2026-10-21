@@ -204,6 +204,115 @@ describe("RevenueReport (server report)", () => {
     }
   });
 
+  describe("Excel-compatible (XML) download", () => {
+    async function withDownload(fn) {
+      const anchor = { click: jest.fn(), remove: jest.fn() };
+      globalThis.document = { createElement: jest.fn(() => anchor), body: { appendChild: jest.fn() } };
+      URL.createObjectURL = jest.fn(() => "blob:x");
+      URL.revokeObjectURL = jest.fn();
+      try {
+        await fn(anchor);
+      } finally {
+        delete globalThis.document;
+      }
+    }
+
+    it("is a separate button labelled Excel-compatible (XML), with a note that it is not .xlsx", async () => {
+      install();
+      const r = await mount();
+      expect(button(r, "Download report \\(Excel-compatible \\(XML\\)\\)")).toBeDefined();
+      expect(button(r, "Download report \\(CSV\\)")).toBeDefined();
+      expect(text(r)).toContain("not an .xlsx file");
+      expect(text(r)).not.toMatch(/Download report \(Excel\)|\.xlsx\)/);
+    });
+
+    it("asks the server for the Excel route with exactly the query the screen used, and keeps the server's .xml name", async () => {
+      install();
+      const r = await mount();
+      const shown = reportCalls()[0].split("?")[1];
+      apiFetchBlob.mockResolvedValue({ blob: { size: 1 }, filename: "fastque-revenue-2026-10-01-2026-10-20.xml" });
+      await withDownload(async (anchor) => {
+        await act(async () => { button(r, "Excel-compatible").props.onClick(); });
+        await flush();
+        expect(apiFetchBlob).toHaveBeenCalledTimes(1);
+        expect(apiFetchBlob.mock.calls[0][0]).toBe(`dashboard/salons/s1/revenue/report.excel.xml?${shown}`);
+        expect(anchor.download).toBe("fastque-revenue-2026-10-01-2026-10-20.xml");
+        expect(anchor.click).toHaveBeenCalled();
+        expect(text(r)).toContain("Excel-compatible report downloaded.");
+      });
+    });
+
+    it("carries the chosen range, grouping and source into the Excel request", async () => {
+      install();
+      const r = await mount();
+      await act(async () => { r.root.findByProps({ id: "rep-source" }).props.onChange({ target: { value: "FASTQUE_WEB" } }); });
+      await flush();
+      const latest = reportCalls().at(-1).split("?")[1];
+      apiFetchBlob.mockResolvedValue({ blob: { size: 1 }, filename: null });
+      await withDownload(async () => {
+        await act(async () => { button(r, "Excel-compatible").props.onClick(); });
+        await flush();
+      });
+      const q = new URLSearchParams(apiFetchBlob.mock.calls[0][0].split("?")[1]);
+      expect(q.get("source")).toBe("FASTQUE_WEB");
+      expect(apiFetchBlob.mock.calls[0][0].endsWith(latest)).toBe(true);
+      expect(apiFetchBlob.mock.calls[0][0]).toContain("/revenue/report.excel.xml?");
+    });
+
+    it("falls back to a .xml name when the server sends none, a path, or another type", async () => {
+      for (const sent of [null, "../../evil.xml", "report.xlsx", "a/b.xml", "x\\y.xml", ""]) {
+        jest.clearAllMocks();
+        install();
+        const r = await mount();
+        const q = new URLSearchParams(reportCalls()[0].split("?")[1]);
+        apiFetchBlob.mockResolvedValue({ blob: { size: 1 }, filename: sent });
+        await withDownload(async (anchor) => {
+          await act(async () => { button(r, "Excel-compatible").props.onClick(); });
+          await flush();
+          expect(anchor.download).toBe(`fastque-revenue-${q.get("from")}-${q.get("to")}.xml`);
+        });
+      }
+    });
+
+    it("shows the server's refusal and downloads nothing when the export fails", async () => {
+      install();
+      const r = await mount();
+      apiFetchBlob.mockRejectedValue(new ApiError("Narrow the date range.", 413));
+      await withDownload(async (anchor) => {
+        await act(async () => { button(r, "Excel-compatible").props.onClick(); });
+        await flush();
+        expect(text(r)).toContain("Narrow the date range.");
+        expect(anchor.click).not.toHaveBeenCalled();
+        expect(text(r)).not.toContain("downloaded");
+      });
+    });
+
+    it("says it could not download when the failure is not a server answer", async () => {
+      install();
+      const r = await mount();
+      apiFetchBlob.mockRejectedValue(new Error("offline"));
+      await act(async () => { button(r, "Excel-compatible").props.onClick(); });
+      await flush();
+      expect(text(r)).toContain("Could not download the Excel report.");
+    });
+
+    it("blocks a second download while one is running", async () => {
+      install();
+      const r = await mount();
+      let release;
+      apiFetchBlob.mockImplementation(() => new Promise((resolve) => { release = () => resolve({ blob: { size: 1 }, filename: null }); }));
+      await withDownload(async () => {
+        await act(async () => { button(r, "Excel-compatible").props.onClick(); });
+        expect(button(r, "Preparing")).toBeDefined();
+        expect(button(r, "Preparing").props.disabled).toBe(true);
+        expect(button(r, "Download report \\(CSV\\)").props.disabled).toBe(true);
+        await act(async () => { release(); });
+        await flush();
+      });
+      expect(apiFetchBlob).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("reports a failed download instead of staying silent", async () => {
     install();
     const r = await mount();
