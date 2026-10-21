@@ -7,7 +7,7 @@ describe('PrismaService maintenance write barrier', () => {
   let prisma: PrismaService;
 
   afterEach(async () => {
-    await prisma?.onModuleDestroy();
+    await prisma?.onApplicationShutdown();
     if (originalMode === undefined) delete process.env.FASTQUE_MAINTENANCE_MODE;
     else process.env.FASTQUE_MAINTENANCE_MODE = originalMode;
     if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
