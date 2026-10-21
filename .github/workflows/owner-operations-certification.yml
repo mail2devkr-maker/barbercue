@@ -192,6 +192,8 @@ jobs:
           DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
           NODE_ENV: development
           AGENT_LLM_PROVIDER: none
+          QA_PLATFORM_ADMIN_FIXTURE: '1'
+          QA_DISPOSABLE_DATABASE_NAME: owner_ops_chain
         run: |
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
