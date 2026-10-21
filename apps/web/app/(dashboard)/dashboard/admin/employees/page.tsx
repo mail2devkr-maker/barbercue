@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   ADMIN_PATHS,
@@ -182,6 +183,7 @@ export default function AdminEmployeesPage() {
         <div className={styles.headerActions}>
           <LinkButton href="/dashboard/admin" variant="outline">Platform operations</LinkButton>
           <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>
+          <LinkButton href="/dashboard/admin/hr" variant="outline">Offer letters &amp; register</LinkButton>
           <LinkButton href="/employee/login" variant="outline">Open employee login</LinkButton>
         </div>
       </header>
@@ -218,6 +220,7 @@ export default function AdminEmployeesPage() {
           </div>
         </form>
         <p className={styles.formHint}>IDs FQ-FE-00001 through FQ-FE-00100 are reserved and will never be issued by this standard form. Passwords are stored only as secure hashes.</p>
+        <p className={styles.formHint}>Hiring someone who already has an offer? Use <Link href="/dashboard/admin/hr">Record joining in the offer register</Link> so the employee ID issued with their offer is kept — creating them here would issue a different ID.</p>
       </section>
 
       <section className={styles.section}>
@@ -267,7 +270,7 @@ export default function AdminEmployeesPage() {
           <div className={styles.tableWrap}>
             <table>
               <thead>
-                <tr><th>Employee</th><th>Territory</th><th>Status</th><th>Joined</th><th>Password reset</th><th>Access</th></tr>
+                <tr><th>Employee</th><th>Territory</th><th>Status</th><th>Joined</th><th>Offers &amp; history</th><th>Password reset</th><th>Access</th></tr>
               </thead>
               <tbody>
                 {employees.map((employee) => (
@@ -276,6 +279,7 @@ export default function AdminEmployeesPage() {
                     <td>{employee.territory ?? "Not assigned"}</td>
                     <td><span className={styles.status}>{employee.status}</span></td>
                     <td>{new Date(employee.joinedAt).toLocaleDateString()}</td>
+                    <td><Link href={`/dashboard/admin/hr?code=${encodeURIComponent(employee.employeeCode)}`}>Open record</Link></td>
                     <td>
                       <div className={styles.passwordReset}>
                         <input

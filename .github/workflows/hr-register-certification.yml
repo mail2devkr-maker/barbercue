@@ -1,0 +1,70 @@
+name: FastQue HR Offer Register Web Certification
+
+# Source-level certification of the HR offer register UI (issue #283). Same shape as the other
+# branch-scoped certification workflows. It runs synthetic tests only: no deploy, no database,
+# no email, no provider call. A green run is SOURCE/CI evidence, never proof the feature is live.
+
+on:
+  push:
+    branches:
+      - claude/fastque-hr-register-283
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hr-register-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared dependencies
+        run: npm run build --workspace=@barbercue/shared
+      - name: HR register, offer letter and admin route tests
+        working-directory: apps/web
+        run: >
+          npx jest --runInBand --ci
+          components/hr
+          lib/hr-register
+          lib/__tests__/admin-route-access-hr.test.jsx
+          'app/\(dashboard\)/dashboard/admin/crm'
+      - name: Full web tests must add no failure beyond the two known unrelated suites
+        working-directory: apps/web
+        run: |
+          npx jest --ci --json --outputFile=/tmp/web-jest.json || true
+          node -e '
+            const report = require("/tmp/web-jest.json");
+            const known = ["ServiceCatalogPicker.test.jsx", "ArrivalAlertOverlay.test.jsx"];
+            const failed = report.testResults.filter((s) => s.status === "failed").map((s) => s.name.split(/[\\/]/).pop());
+            const unexpected = failed.filter((name) => !known.includes(name));
+            console.log("failed suites:", failed.join(", ") || "none", "| failed tests:", report.numFailedTests);
+            if (unexpected.length > 0) { console.error("NEW failing suites:", unexpected.join(", ")); process.exit(1); }
+            if (report.numFailedTests > 14) { console.error("More than the 14 recorded baseline failures"); process.exit(1); }
+          '
+      - name: Web TypeScript check
+        run: npm run typecheck --workspace=@barbercue/web
+      - name: Scoped production-source ESLint without auto-fix
+        working-directory: apps/web
+        run: >
+          npx eslint
+          components/hr
+          lib/hr-register
+          'app/(dashboard)/dashboard/admin/hr'
+          'app/(dashboard)/dashboard/admin/crm/page.tsx'
+          'app/(dashboard)/dashboard/admin/crm/offer-letter.ts'
+          lib/admin-route-access.ts
+      - name: Production Next.js build (no deploy)
+        run: npm run build --workspace=@barbercue/web
+      - name: Check whitespace
+        run: git diff --check origin/master...HEAD
