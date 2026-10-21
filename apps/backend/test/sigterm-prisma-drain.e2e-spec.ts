@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
+import { get as httpGet } from 'node:http';
 import { resolve } from 'node:path';
 
 const WAIT_TIMEOUT_MS = 8_000;
@@ -47,6 +48,22 @@ async function freePort(): Promise<number> {
     server.close((error) => (error ? reject(error) : resolveClose()));
   });
   return port;
+}
+
+function httpGetWithoutKeepAlive(url: string): Promise<{ status: number | null; body: string }> {
+  return new Promise((resolveResponse, reject) => {
+    const request = httpGet(url, { agent: false }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer | string) => chunks.push(Buffer.from(chunk)));
+      response.once('end', () => {
+        resolveResponse({
+          status: response.statusCode ?? null,
+          body: Buffer.concat(chunks).toString('utf8'),
+        });
+      });
+    });
+    request.once('error', reject);
+  });
 }
 
 async function waitForOutput(
@@ -202,7 +219,7 @@ describe('SIGTERM drains a real in-flight HTTP request and PostgreSQL transactio
         });
 
         await waitForOutput(child, () => output, 'READY');
-        const responsePromise = fetch('http://127.0.0.1:' + port + '/drain-probe');
+        const responsePromise = httpGetWithoutKeepAlive('http://127.0.0.1:' + port + '/drain-probe');
         void responsePromise.catch(() => undefined);
         await waitForOutput(child, () => output, 'TX_STARTED');
         await waitForLockWait(prisma, tableName);
@@ -215,7 +232,7 @@ describe('SIGTERM drains a real in-flight HTTP request and PostgreSQL transactio
         releaseParentLock.resolve();
         const response = await within(responsePromise, 'in-flight HTTP response', 10_000);
         expect(response.status).toBe(200);
-        expect(await response.text()).toBe('DRAINED');
+        expect(response.body).toBe('DRAINED');
 
         await within(lockHolder, 'parent transaction completion', 5_000);
         const exit = await within(waitForExit(child), 'SIGTERM process shutdown', 5_000);
