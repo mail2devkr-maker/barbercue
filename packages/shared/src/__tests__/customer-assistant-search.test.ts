@@ -74,10 +74,13 @@ describe("customerAssistantSearchSchema", () => {
     ).toBe(false);
   });
 
-  it("requires a country code to be scoped by a city and normalizes it", () => {
+  it("requires a city when a country code is supplied and normalizes it", () => {
+    const { city: _city, ...unlocated } = valid;
     expect(
-      customerAssistantSearchSchema.safeParse({ ...valid, countryCode: "IN" })
-        .success,
+      customerAssistantSearchSchema.safeParse({
+        ...unlocated,
+        countryCode: "IN",
+      }).success,
     ).toBe(false);
     expect(
       customerAssistantSearchSchema.parse({
