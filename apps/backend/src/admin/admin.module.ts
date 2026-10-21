@@ -8,6 +8,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AdminEmployeeManagementService } from './admin-employee-management.service';
 import { AdminCrmService } from './admin-crm.service';
 import { AdminAccessManagementService } from './admin-access-management.service';
+import { AdminEmployeeRegistryService } from './admin-employee-registry.service';
 
 @Module({
   imports: [SalonSetupModule, AuthModule],
@@ -19,6 +20,7 @@ import { AdminAccessManagementService } from './admin-access-management.service'
     AdminEmployeeManagementService,
     AdminCrmService,
     AdminAccessManagementService,
+    AdminEmployeeRegistryService,
   ],
 })
 export class AdminModule {}

@@ -33,7 +33,8 @@ export const SessionAudience = {
   EMPLOYEE: 'EMPLOYEE',
   ADMIN: 'ADMIN',
 } as const;
-export type SessionAudience = (typeof SessionAudience)[keyof typeof SessionAudience];
+export type SessionAudience =
+  (typeof SessionAudience)[keyof typeof SessionAudience];
 
 export const UserStatus = {
   ACTIVE: 'ACTIVE',
@@ -87,13 +88,86 @@ export const SalonStaffRole = {
   MANAGER: 'MANAGER',
   BARBER: 'BARBER',
 } as const;
-export type SalonStaffRole = (typeof SalonStaffRole)[keyof typeof SalonStaffRole];
+export type SalonStaffRole =
+  (typeof SalonStaffRole)[keyof typeof SalonStaffRole];
 
 export const StaffMemberStatus = {
   ACTIVE: 'ACTIVE',
   INACTIVE: 'INACTIVE',
 } as const;
-export type StaffMemberStatus = (typeof StaffMemberStatus)[keyof typeof StaffMemberStatus];
+export type StaffMemberStatus =
+  (typeof StaffMemberStatus)[keyof typeof StaffMemberStatus];
+
+// FastQue HR employee identity and offer-register lifecycle. These values describe durable
+// person/offer/employment records; they are deliberately separate from UserStatus, which only
+// controls whether an account can authenticate.
+export const EmployeeIdentityVerificationStatus = {
+  NEEDS_REVIEW: 'NEEDS_REVIEW',
+  VERIFIED: 'VERIFIED',
+} as const;
+export type EmployeeIdentityVerificationStatus =
+  (typeof EmployeeIdentityVerificationStatus)[keyof typeof EmployeeIdentityVerificationStatus];
+
+export const EmployeeIdentityVerificationMethod = {
+  IN_PERSON: 'IN_PERSON',
+  DOCUMENT_REVIEW: 'DOCUMENT_REVIEW',
+  EXISTING_EMPLOYEE_RECORD: 'EXISTING_EMPLOYEE_RECORD',
+} as const;
+export type EmployeeIdentityVerificationMethod =
+  (typeof EmployeeIdentityVerificationMethod)[keyof typeof EmployeeIdentityVerificationMethod];
+
+export const EmployeeIdentityHistoryStatus = {
+  COMPLETE: 'COMPLETE',
+  NEEDS_REVIEW: 'NEEDS_REVIEW',
+  UNRESOLVED: 'UNRESOLVED',
+} as const;
+export type EmployeeIdentityHistoryStatus =
+  (typeof EmployeeIdentityHistoryStatus)[keyof typeof EmployeeIdentityHistoryStatus];
+
+export const EmployeeIdentityContactKind = {
+  EMAIL: 'EMAIL',
+  PHONE: 'PHONE',
+} as const;
+export type EmployeeIdentityContactKind =
+  (typeof EmployeeIdentityContactKind)[keyof typeof EmployeeIdentityContactKind];
+
+export const EmployeeOfferStatus = {
+  UNKNOWN: 'UNKNOWN',
+  DRAFT: 'DRAFT',
+  ISSUED: 'ISSUED',
+  SENT: 'SENT',
+  ACCEPTED: 'ACCEPTED',
+  DECLINED: 'DECLINED',
+  EXPIRED: 'EXPIRED',
+  NOT_JOINED: 'NOT_JOINED',
+  JOINED: 'JOINED',
+} as const;
+export type EmployeeOfferStatus =
+  (typeof EmployeeOfferStatus)[keyof typeof EmployeeOfferStatus];
+
+export const EmployeeOfferDocumentStatus = {
+  SAVED: 'SAVED',
+  GENERATED_LOCALLY: 'GENERATED_LOCALLY',
+  EMAILED: 'EMAILED',
+} as const;
+export type EmployeeOfferDocumentStatus =
+  (typeof EmployeeOfferDocumentStatus)[keyof typeof EmployeeOfferDocumentStatus];
+
+export const EmployeeEmploymentStatus = {
+  ACTIVE: 'ACTIVE',
+  EXITED: 'EXITED',
+  REVIEW_REQUIRED: 'REVIEW_REQUIRED',
+} as const;
+export type EmployeeEmploymentStatus =
+  (typeof EmployeeEmploymentStatus)[keyof typeof EmployeeEmploymentStatus];
+
+export const EmployeePayFrequency = {
+  MONTHLY: 'MONTHLY',
+  YEARLY: 'YEARLY',
+  HOURLY: 'HOURLY',
+} as const;
+export type EmployeePayFrequency =
+  (typeof EmployeePayFrequency)[keyof typeof EmployeePayFrequency];
 
 // FastQue internal field CRM — kept separate from salon/customer CRM concepts. These values
 // describe the employee sales/onboarding pipeline only.
@@ -128,7 +202,8 @@ export const CrmVisitOutcome = {
   ONBOARDING_ASSISTED: 'ONBOARDING_ASSISTED',
   OTHER: 'OTHER',
 } as const;
-export type CrmVisitOutcome = (typeof CrmVisitOutcome)[keyof typeof CrmVisitOutcome];
+export type CrmVisitOutcome =
+  (typeof CrmVisitOutcome)[keyof typeof CrmVisitOutcome];
 
 export const CrmFollowUpChannel = {
   CALL: 'CALL',
@@ -235,7 +310,8 @@ export const QueueEntrySource = {
   WALK_IN: 'WALK_IN',
   APPOINTMENT: 'APPOINTMENT',
 } as const;
-export type QueueEntrySource = (typeof QueueEntrySource)[keyof typeof QueueEntrySource];
+export type QueueEntrySource =
+  (typeof QueueEntrySource)[keyof typeof QueueEntrySource];
 
 export const QueueEntryStatus = {
   WAITING: 'WAITING',
@@ -246,14 +322,16 @@ export const QueueEntryStatus = {
   CANCELLED: 'CANCELLED',
   EXPIRED: 'EXPIRED',
 } as const;
-export type QueueEntryStatus = (typeof QueueEntryStatus)[keyof typeof QueueEntryStatus];
+export type QueueEntryStatus =
+  (typeof QueueEntryStatus)[keyof typeof QueueEntryStatus];
 
 export const ServiceSessionStatus = {
   ACTIVE: 'ACTIVE',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED',
 } as const;
-export type ServiceSessionStatus = (typeof ServiceSessionStatus)[keyof typeof ServiceSessionStatus];
+export type ServiceSessionStatus =
+  (typeof ServiceSessionStatus)[keyof typeof ServiceSessionStatus];
 
 export const ChargeType = {
   FLAT: 'FLAT',
@@ -270,7 +348,8 @@ export type PaymentType = (typeof PaymentType)[keyof typeof PaymentType];
 export const PaymentProvider = {
   RAZORPAY: 'RAZORPAY',
 } as const;
-export type PaymentProvider = (typeof PaymentProvider)[keyof typeof PaymentProvider];
+export type PaymentProvider =
+  (typeof PaymentProvider)[keyof typeof PaymentProvider];
 
 export const PaymentStatus = {
   CREATED: 'CREATED',
@@ -334,7 +413,8 @@ export const SubscriptionStatus = {
   PAST_DUE: 'PAST_DUE',
   EXPIRED: 'EXPIRED',
 } as const;
-export type SubscriptionStatus = (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus];
+export type SubscriptionStatus =
+  (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus];
 
 export const NotificationChannel = {
   SMS: 'SMS',
@@ -345,14 +425,16 @@ export const NotificationChannel = {
   // Phase 13 (Communication Preferences) — architecture-only, see the Prisma schema's doc comment.
   WHATSAPP: 'WHATSAPP',
 } as const;
-export type NotificationChannel = (typeof NotificationChannel)[keyof typeof NotificationChannel];
+export type NotificationChannel =
+  (typeof NotificationChannel)[keyof typeof NotificationChannel];
 
 export const NotificationStatus = {
   PENDING: 'PENDING',
   SENT: 'SENT',
   FAILED: 'FAILED',
 } as const;
-export type NotificationStatus = (typeof NotificationStatus)[keyof typeof NotificationStatus];
+export type NotificationStatus =
+  (typeof NotificationStatus)[keyof typeof NotificationStatus];
 
 // Phase 13 (Communication Preferences) — see NotificationPreference's own schema.prisma doc
 // comment for what "no row" (the default) means for each category.
@@ -417,7 +499,8 @@ export const BookingErrorCode = {
   // NO_SHOW booking can be corrected this way.
   BOOKING_NOT_NO_SHOW: 'BOOKING_NOT_NO_SHOW',
 } as const;
-export type BookingErrorCode = (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
+export type BookingErrorCode =
+  (typeof BookingErrorCode)[keyof typeof BookingErrorCode];
 
 // Stable machine-readable error codes for the queue/check-in engine — same convention as
 // BookingErrorCode/AuthErrorCode. Reuses BookingErrorCode.{STAFF_NOT_FOUND,STAFF_NOT_QUALIFIED,
@@ -452,7 +535,8 @@ export const QueueErrorCode = {
   // here; normal assignment to any other staff member is rejected outright.
   APPOINTMENT_STAFF_LOCKED: 'APPOINTMENT_STAFF_LOCKED',
 } as const;
-export type QueueErrorCode = (typeof QueueErrorCode)[keyof typeof QueueErrorCode];
+export type QueueErrorCode =
+  (typeof QueueErrorCode)[keyof typeof QueueErrorCode];
 
 export const AuthErrorCode = {
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
@@ -510,7 +594,8 @@ export const StyleAdvisorErrorCode = {
   PREMIUM_REQUIRED: 'PREMIUM_REQUIRED',
   AI_CREDITS_EXHAUSTED: 'AI_CREDITS_EXHAUSTED',
 } as const;
-export type StyleAdvisorErrorCode = (typeof StyleAdvisorErrorCode)[keyof typeof StyleAdvisorErrorCode];
+export type StyleAdvisorErrorCode =
+  (typeof StyleAdvisorErrorCode)[keyof typeof StyleAdvisorErrorCode];
 
 // Stable machine-readable error codes for the Premium plans/subscription module — same convention
 // as StyleAdvisorErrorCode.
@@ -532,7 +617,8 @@ export const SalonSetupErrorCode = {
   // than repeating a generic sentence.
   SALON_SETUP_INCOMPLETE: 'SALON_SETUP_INCOMPLETE',
 } as const;
-export type SalonSetupErrorCode = (typeof SalonSetupErrorCode)[keyof typeof SalonSetupErrorCode];
+export type SalonSetupErrorCode =
+  (typeof SalonSetupErrorCode)[keyof typeof SalonSetupErrorCode];
 
 // Stable machine-readable error codes for Ratings & Reviews (Phase 16) — same convention as
 // BookingErrorCode. Reuses QueueErrorCode.SALON_ACCESS_DENIED for the owner-response permission
@@ -546,7 +632,8 @@ export const ReviewErrorCode = {
   // The review exists, but the caller isn't the customer who wrote it.
   NOT_YOUR_REVIEW: 'NOT_YOUR_REVIEW',
 } as const;
-export type ReviewErrorCode = (typeof ReviewErrorCode)[keyof typeof ReviewErrorCode];
+export type ReviewErrorCode =
+  (typeof ReviewErrorCode)[keyof typeof ReviewErrorCode];
 
 // Phase 18 (Shop / Barber Verification Foundation) — foundation only: manual PLATFORM_ADMIN
 // review of owner-supplied evidence, never automated KYC/identity verification. See
@@ -566,7 +653,8 @@ export const VerificationStatus = {
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED',
 } as const;
-export type VerificationStatus = (typeof VerificationStatus)[keyof typeof VerificationStatus];
+export type VerificationStatus =
+  (typeof VerificationStatus)[keyof typeof VerificationStatus];
 
 export const VerificationErrorCode = {
   SALON_NOT_FOUND: 'SALON_NOT_FOUND',
@@ -589,7 +677,8 @@ export const PremiumErrorCode = {
   // PremiumController's dev-activate route, which is unreachable in production by design.
   DEV_ACTIVATION_DISABLED: 'DEV_ACTIVATION_DISABLED',
 } as const;
-export type PremiumErrorCode = (typeof PremiumErrorCode)[keyof typeof PremiumErrorCode];
+export type PremiumErrorCode =
+  (typeof PremiumErrorCode)[keyof typeof PremiumErrorCode];
 
 // FastQue Credits / Wallet V1 — stable machine-readable error codes for CustomerCreditsService's
 // admin-grant path (AdminCreditsController). Same convention as every other ErrorCode block in
@@ -604,4 +693,5 @@ export const CreditsErrorCode = {
   // the way an exact-match retry can.
   GRANT_IDEMPOTENCY_KEY_REUSED: 'GRANT_IDEMPOTENCY_KEY_REUSED',
 } as const;
-export type CreditsErrorCode = (typeof CreditsErrorCode)[keyof typeof CreditsErrorCode];
+export type CreditsErrorCode =
+  (typeof CreditsErrorCode)[keyof typeof CreditsErrorCode];

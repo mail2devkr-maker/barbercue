@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   createCipheriv,
   createDecipheriv,
+  createHmac,
   randomBytes,
   scryptSync,
 } from 'crypto';
@@ -16,18 +17,40 @@ import {
 @Injectable()
 export class CryptoService {
   private cachedKey: Buffer | undefined;
+  private cachedLookupKey: Buffer | undefined;
+
+  private get rootSecret(): string {
+    const secret = process.env.TOTP_ENCRYPTION_KEY;
+    if (!secret) {
+      throw new Error(
+        'TOTP_ENCRYPTION_KEY must be configured for encrypted HR identity data',
+      );
+    }
+    return secret;
+  }
 
   private get key(): Buffer {
     if (!this.cachedKey) {
-      const secret = process.env.TOTP_ENCRYPTION_KEY;
-      if (!secret) {
-        throw new Error(
-          'TOTP_ENCRYPTION_KEY must be set to encrypt or decrypt a TOTP secret',
-        );
-      }
-      this.cachedKey = scryptSync(secret, 'barbercue-totp-secret-v1', 32);
+      this.cachedKey = scryptSync(
+        this.rootSecret,
+        'barbercue-totp-secret-v1',
+        32,
+      );
     }
     return this.cachedKey;
+  }
+
+  private get lookupKey(): Buffer {
+    if (!this.cachedLookupKey) {
+      // Domain-separated from the AES key. A database-only reader cannot recover or cheaply
+      // dictionary-test normalized emails and phones from their blind-index values.
+      this.cachedLookupKey = scryptSync(
+        this.rootSecret,
+        'barbercue-hr-contact-index-v1',
+        32,
+      );
+    }
+    return this.cachedLookupKey;
   }
 
   encrypt(plaintext: string): string {
@@ -58,5 +81,14 @@ export class CryptoService {
       decipher.update(Buffer.from(encryptedB64, 'base64')),
       decipher.final(),
     ]).toString('utf8');
+  }
+
+  blindIndex(
+    namespace: 'hr-email' | 'hr-phone' | 'hr-idempotency',
+    value: string,
+  ): string {
+    return createHmac('sha256', this.lookupKey)
+      .update(`${namespace}\0${value}`, 'utf8')
+      .digest('hex');
   }
 }

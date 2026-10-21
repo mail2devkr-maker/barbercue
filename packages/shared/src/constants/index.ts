@@ -77,6 +77,16 @@ export const ADMIN_PATHS = {
   revoke: 'revoke',
   // FastQue internal field-team provisioning.
   employees: 'employees',
+  employeeRegister: 'employee-register',
+  people: 'people',
+  matches: 'matches',
+  offers: 'offers',
+  verifyIdentity: 'verify-identity',
+  historyReview: 'history-review',
+  documentStatus: 'document-status',
+  join: 'join',
+  exit: 'exit',
+  employmentHistory: 'employment-history',
   password: 'password',
   special: 'special',
   // FastQue internal field CRM / sales-operations portal.

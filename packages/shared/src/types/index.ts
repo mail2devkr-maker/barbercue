@@ -5,6 +5,12 @@ import type {
   ChargeType,
   CreditFundingSource,
   CreditTransactionType,
+  EmployeeEmploymentStatus,
+  EmployeeIdentityHistoryStatus,
+  EmployeeIdentityVerificationMethod,
+  EmployeeIdentityVerificationStatus,
+  EmployeeOfferDocumentStatus,
+  EmployeeOfferStatus,
   CrmFollowUpChannel,
   CrmFollowUpStatus,
   CrmLeadSource,
@@ -103,6 +109,86 @@ export interface AdminEmployeeDto extends EmployeeProfileDto {
   updatedAt: string;
 }
 
+export interface EmployeeIdentityContactDto {
+  kind: 'EMAIL' | 'PHONE';
+  maskedValue: string;
+}
+
+export interface EmployeeIdentityMatchDto {
+  id: string;
+  employeeCode: string | null;
+  fullName: string;
+  verificationStatus: EmployeeIdentityVerificationStatus;
+  historyStatus: EmployeeIdentityHistoryStatus;
+  linkedEmployeeProfile: boolean;
+  employmentStatus: EmployeeEmploymentStatus | null;
+  contacts: EmployeeIdentityContactDto[];
+  createdAt: string;
+}
+
+export interface EmployeeIdentityPotentialMatchDto {
+  person: EmployeeIdentityMatchDto;
+  reasons: Array<'EMPLOYEE_CODE' | 'EXACT_CONTACT' | 'NAME'>;
+  strength: 'STRONG' | 'POSSIBLE';
+}
+
+export interface EmployeeIdentityMatchReviewDto {
+  matches: EmployeeIdentityPotentialMatchDto[];
+  blocksNewIdentity: boolean;
+  requiresReview: boolean;
+  requiresLegacyProfileReconciliation: boolean;
+}
+
+export interface EmployeeOfferCompensationDto {
+  baseAmount: number;
+  currency: 'INR';
+  frequency: 'MONTHLY' | 'YEARLY' | 'HOURLY';
+  incentiveAmount: number | null;
+  additionalTerms: string | null;
+}
+
+export interface EmployeeOfferVersionDto {
+  id: string;
+  identityId: string;
+  version: number;
+  employeeCode: string | null;
+  source: 'HR_CREATED' | 'HISTORICAL_RECONCILIATION';
+  candidateName: string;
+  position: string;
+  reportingManager: string | null;
+  proposedJoiningAt: string | null;
+  compensation: EmployeeOfferCompensationDto;
+  status: EmployeeOfferStatus;
+  documentStatus: EmployeeOfferDocumentStatus;
+  createdAt: string;
+  issuedAt: string | null;
+  sourceReference: string | null;
+}
+
+export interface EmployeeEmploymentEpisodeDto {
+  id: string;
+  episodeNumber: number;
+  startedAt: string;
+  endedAt: string | null;
+  status: EmployeeEmploymentStatus;
+  offerVersionId: string | null;
+}
+
+export interface EmployeeHrTimelineDto {
+  person: EmployeeIdentityMatchDto;
+  offers: EmployeeOfferVersionDto[];
+  employmentEpisodes: EmployeeEmploymentEpisodeDto[];
+  events: Array<{
+    id: string;
+    eventType: string;
+    entityType: string;
+    entityId: string;
+    occurredAt: string;
+    reason: string | null;
+    metadata: Record<string, unknown> | null;
+  }>;
+}
+
 export interface EmployeeCrmLeadDto {
   id: string;
   shopName: string;
@@ -173,15 +259,24 @@ export interface AdminCrmEmployeePerformanceDto {
 }
 
 export interface AdminCrmLeadDto extends EmployeeCrmLeadDto {
-  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+  employee: Pick<
+    EmployeeProfileDto,
+    'id' | 'employeeCode' | 'fullName' | 'territory'
+  >;
 }
 
 export interface AdminCrmVisitDto extends EmployeeCrmVisitDto {
-  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+  employee: Pick<
+    EmployeeProfileDto,
+    'id' | 'employeeCode' | 'fullName' | 'territory'
+  >;
 }
 
 export interface AdminCrmFollowUpDto extends EmployeeCrmFollowUpDto {
-  employee: Pick<EmployeeProfileDto, 'id' | 'employeeCode' | 'fullName' | 'territory'>;
+  employee: Pick<
+    EmployeeProfileDto,
+    'id' | 'employeeCode' | 'fullName' | 'territory'
+  >;
 }
 
 export interface AdminCrmOverviewDto {
@@ -1170,7 +1265,8 @@ export interface QueueStatusDto {
 // current) or IN_SERVICE (an ACTIVE ServiceSession, walk-in or appointment-check-in). OFF_DUTY
 // mirrors status === INACTIVE, surfaced here too so a UI can render every roster row from this one
 // field instead of combining it with `status` itself.
-export type StaffAvailabilityState = 'AVAILABLE' | 'RESERVED' | 'IN_SERVICE' | 'OFF_DUTY';
+export type StaffAvailabilityState =
+  'AVAILABLE' | 'RESERVED' | 'IN_SERVICE' | 'OFF_DUTY';
 
 // PATCH /dashboard/staff/:id/status response, and the roster entries in DashboardQueueDto below.
 export interface StaffStatusDto {

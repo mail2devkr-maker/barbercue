@@ -84,6 +84,11 @@ jobs:
       - name: Owner-operations migration safety on populated databases (defaults, explicit choices, hold indexes)
         working-directory: apps/backend
         run: bash scripts/verify-owner-ops-migrations.sh
+      - name: HR registry backfill preserves existing employee IDs on a populated disposable database
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+        run: bash scripts/verify-hr-employee-id-migration.sh
       - name: Backend production build
         run: npm run build --workspace=@barbercue/backend
       - name: Shared package tests
@@ -103,6 +108,17 @@ jobs:
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/owner-ops.e2e-spec.ts
+      - name: HR Employee ID Registry E2E - offer-first allocation, verified join, rehire, authorization and append-only history
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+          HR_EMPLOYEE_REGISTRY_ENABLED: 'true'
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/employee-registry.e2e-spec.ts
       - name: Remaining backend E2E suites (regressions vs the recorded baseline)
         working-directory: apps/backend
         env:

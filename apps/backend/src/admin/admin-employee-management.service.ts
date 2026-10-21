@@ -2,7 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   EMPLOYEE_RESERVED_ID_MAX,
   EMPLOYEE_RESERVED_ID_MIN,
-  EMPLOYEE_STANDARD_ID_START,
+  EmployeeIdentityVerificationStatus,
   Role,
   UserStatus,
   type AdminEmployeeDto,
@@ -16,6 +16,10 @@ import { PasswordService } from '../auth/services/password.service';
 import { TotpService } from '../auth/services/totp.service';
 import { CryptoService } from '../auth/services/crypto.service';
 import { AppException } from '../common/exceptions/app.exception';
+import {
+  lockEmployeeCodeNamespace,
+  reservedEmployeeCode,
+} from './employee-code-allocator';
 
 @Injectable()
 export class AdminEmployeeManagementService {
@@ -42,81 +46,19 @@ export class AdminEmployeeManagementService {
     return rows.map((row) => this.toDto(row));
   }
 
-  async create(
+  create(
     adminUserId: string,
     input: CreateEmployeeInput,
   ): Promise<AdminEmployeeDto> {
-    const passwordHash = await this.passwords.hash(input.password);
-
-    const profileId = await this.prisma.$transaction(async (tx) => {
-      // Serialise employee-code allocation so two admin clicks can never mint the same FQ-FE id.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('fastque_employee_code'))`;
-
-      // IDs 1-100 are a permanently reserved owner-controlled block. Ordinary provisioning
-      // starts at 101 and can never consume the reserved range.
-      const firstStandardCode = this.employeeCode(EMPLOYEE_STANDARD_ID_START);
-      const lastStandard = await tx.employeeProfile.findFirst({
-        where: { employeeCode: { gte: firstStandardCode } },
-        orderBy: { employeeCode: 'desc' },
-        select: { employeeCode: true },
-      });
-      let sequence = lastStandard
-        ? Number(lastStandard.employeeCode.replace('FQ-FE-', '')) + 1
-        : EMPLOYEE_STANDARD_ID_START;
-      if (!Number.isSafeInteger(sequence) || sequence < EMPLOYEE_STANDARD_ID_START) {
-        sequence = EMPLOYEE_STANDARD_ID_START;
-      }
-
-      let employeeCode = this.employeeCode(sequence);
-      while (
-        await tx.employeeProfile.findUnique({
-          where: { employeeCode },
-          select: { id: true },
-        })
-      ) {
-        sequence += 1;
-        employeeCode = this.employeeCode(sequence);
-      }
-
-      const user = await tx.user.create({
-        data: {
-          passwordHash,
-          status: UserStatus.ACTIVE,
-        },
-      });
-      await tx.userRole.create({
-        data: {
-          userId: user.id,
-          role: Role.FIELD_EXECUTIVE,
-          salonId: null,
-        },
-      });
-      const profile = await tx.employeeProfile.create({
-        data: {
-          userId: user.id,
-          employeeCode,
-          fullName: input.fullName,
-          territory: input.territory?.trim() || null,
-        },
-      });
-      await tx.auditLog.create({
-        data: {
-          actorUserId: adminUserId,
-          action: 'EMPLOYEE_CREATED',
-          entityType: 'EmployeeProfile',
-          entityId: profile.id,
-          metadata: {
-            employeeCode,
-            fullName: input.fullName,
-            territory: input.territory?.trim() || null,
-            reservedId: false,
-          },
-        },
-      });
-      return profile.id;
-    });
-
-    return this.getOrThrow(profileId);
+    void adminUserId;
+    void input;
+    return Promise.reject(
+      new AppException(
+        'EMPLOYEE_HR_REGISTRY_REQUIRED',
+        'Create an HR identity and offer first. Employee ID allocation occurs only when an offer is officially issued; login is enabled only by the confirmed joining action.',
+        HttpStatus.CONFLICT,
+      ),
+    );
   }
 
   /**
@@ -141,22 +83,38 @@ export class AdminEmployeeManagementService {
 
     await this.assertFreshAdminTotp(adminUserId, input.totpCode);
     const passwordHash = await this.passwords.hash(input.password);
-    const employeeCode = this.employeeCode(input.employeeNumber);
+    const employeeCode = reservedEmployeeCode(input.employeeNumber);
 
     const profileId = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('fastque_employee_code'))`;
+      await lockEmployeeCodeNamespace(tx);
 
-      const existing = await tx.employeeProfile.findUnique({
-        where: { employeeCode },
-        select: { id: true },
-      });
-      if (existing) {
+      const [existingProfile, existingIdentity] = await Promise.all([
+        tx.employeeProfile.findUnique({
+          where: { employeeCode },
+          select: { id: true },
+        }),
+        tx.employeeIdentity.findUnique({
+          where: { employeeCode },
+          select: { id: true },
+        }),
+      ]);
+      if (existingProfile || existingIdentity) {
         throw new AppException(
           'EMPLOYEE_RESERVED_ID_TAKEN',
           `${employeeCode} is already assigned.`,
           HttpStatus.CONFLICT,
         );
       }
+
+      const identity = await tx.employeeIdentity.create({
+        data: {
+          employeeCode,
+          fullName: input.fullName,
+          verificationStatus: EmployeeIdentityVerificationStatus.NEEDS_REVIEW,
+          historyStatus: 'COMPLETE',
+        },
+      });
+      const joinedAt = new Date();
 
       const user = await tx.user.create({
         data: {
@@ -175,8 +133,31 @@ export class AdminEmployeeManagementService {
         data: {
           userId: user.id,
           employeeCode,
+          employeeIdentityId: identity.id,
           fullName: input.fullName,
           territory: input.territory?.trim() || null,
+          joinedAt,
+        },
+      });
+      const episode = await tx.employeeEmploymentEpisode.create({
+        data: {
+          identityId: identity.id,
+          episodeNumber: 1,
+          startedAt: joinedAt,
+        },
+      });
+      await tx.employeeHrEvent.create({
+        data: {
+          identityId: identity.id,
+          actorUserId: adminUserId,
+          eventType: 'EMPLOYMENT_JOINED',
+          entityType: 'EMPLOYMENT_EPISODE',
+          entityId: episode.id,
+          metadata: {
+            status: 'ACTIVE',
+            employeeCode,
+            source: 'SPECIAL_EMPLOYEE_PROVISIONING',
+          },
         },
       });
       await tx.auditLog.create({
@@ -188,8 +169,6 @@ export class AdminEmployeeManagementService {
           metadata: {
             employeeCode,
             reservedNumber: input.employeeNumber,
-            fullName: input.fullName,
-            territory: input.territory?.trim() || null,
             totpReauthenticated: true,
           },
         },
@@ -210,6 +189,16 @@ export class AdminEmployeeManagementService {
       include: { user: true },
     });
     if (!existing) this.notFound();
+    if (
+      input.status === UserStatus.ACTIVE &&
+      existing!.user.status !== UserStatus.ACTIVE
+    ) {
+      throw new AppException(
+        'EMPLOYEE_REJOIN_ACTION_REQUIRED',
+        'Reactivation must use the verified HR joining flow so a new employment episode is recorded.',
+        HttpStatus.CONFLICT,
+      );
+    }
 
     await this.prisma.$transaction(async (tx) => {
       if (input.fullName !== undefined || input.territory !== undefined) {
@@ -222,9 +211,28 @@ export class AdminEmployeeManagementService {
             }),
           },
         });
+        if (input.fullName !== undefined && existing!.employeeIdentityId) {
+          await tx.employeeIdentity.update({
+            where: { id: existing!.employeeIdentityId },
+            data: { fullName: input.fullName },
+          });
+          await tx.employeeHrEvent.create({
+            data: {
+              identityId: existing!.employeeIdentityId,
+              actorUserId: adminUserId,
+              eventType: 'EMPLOYEE_IDENTITY_NAME_UPDATED',
+              entityType: 'EMPLOYEE_IDENTITY',
+              entityId: existing!.employeeIdentityId,
+              metadata: { changed: true },
+            },
+          });
+        }
       }
 
-      if (input.status !== undefined && input.status !== existing!.user.status) {
+      if (
+        input.status !== undefined &&
+        input.status !== existing!.user.status
+      ) {
         await tx.user.update({
           where: { id: existing!.userId },
           data: { status: input.status },
@@ -234,6 +242,18 @@ export class AdminEmployeeManagementService {
             where: { userId: existing!.userId, revokedAt: null },
             data: { revokedAt: new Date() },
           });
+          if (existing!.employeeIdentityId) {
+            await tx.employeeHrEvent.create({
+              data: {
+                identityId: existing!.employeeIdentityId,
+                actorUserId: adminUserId,
+                eventType: 'EMPLOYEE_ACCESS_SUSPENDED',
+                entityType: 'EMPLOYEE_IDENTITY',
+                entityId: existing!.employeeIdentityId,
+                metadata: { sessionsRevoked: true },
+              },
+            });
+          }
         }
       }
 
@@ -244,12 +264,10 @@ export class AdminEmployeeManagementService {
           entityType: 'EmployeeProfile',
           entityId: employeeId,
           metadata: {
-            before: {
-              fullName: existing!.fullName,
-              territory: existing!.territory,
-              status: existing!.user.status,
-            },
-            requested: input,
+            changedFields: Object.keys(input),
+            statusChanged:
+              input.status !== undefined &&
+              input.status !== existing!.user.status,
           },
         },
       });
@@ -358,10 +376,6 @@ export class AdminEmployeeManagementService {
     });
     if (!row) this.notFound();
     return this.toDto(row!);
-  }
-
-  private employeeCode(sequence: number): string {
-    return `FQ-FE-${String(sequence).padStart(5, '0')}`;
   }
 
   private notFound(): never {
