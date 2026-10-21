@@ -172,7 +172,7 @@ describe('SIGTERM drains a real in-flight HTTP request and PostgreSQL transactio
           '      response.status(500).send("TX_FAILED");',
           '    }',
           '  });',
-          '  process.on("SIGTERM", () => process.stdout.write("SIGTERM_SEEN\\n"));',
+          '  process.once("SIGTERM", () => process.stdout.write("SIGTERM_SEEN\\n"));',
           '  app.enableShutdownHooks(["SIGTERM"]);',
           '  await app.listen(Number(process.env.PORT), "127.0.0.1");',
           '  process.stdout.write("READY\\n");',
