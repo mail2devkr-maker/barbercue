@@ -194,7 +194,7 @@ export default function PersonTimeline({ api = httpHrRegisterApi, personId, onCh
 
       <div className={styles.actions} style={{ marginTop: 12 }}>
         {latest && actions.canRecordJoining && (
-          <button type="button" className={styles.primary} onClick={() => setForm({ kind: "joining", offer: latest, rejoin: person.episodeCount > 1 || person.hasEmployeeAccount })}>
+          <button type="button" className={styles.primary} onClick={() => setForm({ kind: "joining", offer: latest, rejoin: person.hasEmployeeAccount })}>
             {person.hasEmployeeAccount ? "Record rejoining" : "Record joining"}
           </button>
         )}

@@ -126,7 +126,7 @@ function createFakeRegister(options = {}) {
     if (!ep) return "OFFERED";
     if (ep.status === "PENDING_JOIN") return ep.episodeNumber > 1 ? "REOFFERED" : "OFFERED";
     if (ep.status === "NOT_JOINED") return "NOT_JOINED";
-    if (ep.status === "ACTIVE") return ep.episodeNumber > 1 ? "REJOINED" : "ACTIVE";
+    if (ep.status === "ACTIVE") return episodesOf(person.id).some((e) => e.episodeNumber < ep.episodeNumber && e.joinedOn) ? "REJOINED" : "ACTIVE";
     return "EXITED";
   }
 
@@ -347,7 +347,7 @@ function createFakeRegister(options = {}) {
         person.salaryHistory.push({ id: nextId("s"), effectiveFrom: input.joinedOn, baseSalaryInr: offer.terms.baseSalaryInr, salaryBasis: offer.terms.salaryBasis, offerVersion: offer.version, recordedAt: tick(), recordedBy: actor });
         for (const open of person.managerHistory) if (open.to === null) open.to = input.joinedOn;
         if (offer.terms.reportingManager) person.managerHistory.push({ id: nextId("mh"), manager: offer.terms.reportingManager, from: input.joinedOn, to: null, offerVersion: offer.version, recordedAt: tick(), recordedBy: actor });
-        log(person.id, episode.episodeNumber > 1 ? "REJOINED" : "JOINED", "EPISODE", `Episode ${episode.episodeNumber}`, "PENDING_JOIN", "ACTIVE");
+        log(person.id, episodesOf(person.id).some((e) => e.episodeNumber < episode.episodeNumber && e.joinedOn) ? "REJOINED" : "JOINED", "EPISODE", `Episode ${episode.episodeNumber}`, "PENDING_JOIN", "ACTIVE");
         return detail(person);
       });
     },

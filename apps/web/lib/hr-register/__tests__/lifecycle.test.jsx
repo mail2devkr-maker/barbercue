@@ -13,11 +13,27 @@ describe("deriveLifecycle", () => {
     [episode(2, "PENDING_JOIN"), "REOFFERED"],
     [episode(1, "NOT_JOINED"), "NOT_JOINED"],
     [episode(1, "ACTIVE"), "ACTIVE"],
-    [episode(2, "ACTIVE"), "REJOINED"],
     [episode(1, "EXITED"), "EXITED"],
     [episode(2, "EXITED"), "EXITED"],
   ])("episode %j is %s", (currentEpisode, expected) => {
     expect(deriveLifecycle({ currentEpisode })).toBe(expected);
+  });
+});
+
+describe("joined vs rejoined", () => {
+  const active = (episodeNumber, joinedOn) => ({ ...episode(episodeNumber, "ACTIVE"), joinedOn });
+
+  test("employed again after a real earlier joining is REJOINED", () => {
+    expect(deriveLifecycle({ currentEpisode: active(2, "2026-10-01"), originalJoinedOn: "2025-06-02" })).toBe("REJOINED");
+  });
+
+  test("a first-ever joining in a later episode (the first never started) is simply Joined", () => {
+    expect(deriveLifecycle({ currentEpisode: active(2, "2026-10-01"), originalJoinedOn: "2026-10-01" })).toBe("ACTIVE");
+    expect(deriveLifecycle({ currentEpisode: active(1, "2026-03-02"), originalJoinedOn: "2026-03-02" })).toBe("ACTIVE");
+  });
+
+  test("without a recorded original joining it never claims a rejoin", () => {
+    expect(deriveLifecycle({ currentEpisode: active(2, "2026-10-01"), originalJoinedOn: null })).toBe("ACTIVE");
   });
 });
 

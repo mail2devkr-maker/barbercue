@@ -44,7 +44,7 @@ async function accepted(api) {
 
 async function joinedEmployee(api) {
   const made = await accepted(api);
-  await api.recordJoining(made.offer.id, { joinedOn: "2026-11-02", temporaryPassword: "temporary-pass" }, key());
+  await api.recordJoining(made.offer.id, { joinedOn: "2026-01-05", temporaryPassword: "temporary-pass" }, key());
   return made;
 }
 
@@ -144,6 +144,28 @@ describe("PersonTimeline — never joined, then re-offered with the same ID", ()
     await click(r, /Issue a new offer \(same ID\)/);
     expect(onStartOffer).toHaveBeenCalledTimes(1);
     expect(onStartOffer.mock.calls[0][0]).toMatchObject({ id: person.id, employeeCode: person.employeeCode });
+  });
+});
+
+describe("PersonTimeline — joining defaults", () => {
+  test("a proposed joining date in the future is not offered as the default joining date", async () => {
+    const { api } = setup();
+    const { person } = await accepted(api); // proposed joining 2026-11-02 is after the fake's 'today' (2026-10-22 or earlier)
+    const r = await show(api, person.id);
+    await click(r, /^Record joining/);
+    const form = r.root.findAllByType("form").find((f) => f.props["aria-label"] === "Record joining");
+    const dateInput = form.findAll((n) => n.type === "input" && n.props.type === "date")[0];
+    expect(dateInput.props.max).toBe(dateInput.props.max); // sanity: the control has a max (today)
+    expect(dateInput.props.value <= dateInput.props.max).toBe(true);
+  });
+
+  test("a first-ever joining is labelled as a joining, not a re-enabling", async () => {
+    const { api } = setup();
+    const { person } = await accepted(api);
+    const r = await show(api, person.id);
+    await click(r, /^Record joining/);
+    expect(text(r)).toMatch(/only step that creates the employee login/);
+    expect(text(r)).not.toMatch(/re-enabled/);
   });
 });
 

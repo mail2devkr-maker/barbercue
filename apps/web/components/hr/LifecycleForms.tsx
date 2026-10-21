@@ -106,7 +106,9 @@ export function TransitionForm({ api, offer, to, onCancel, onDone }: CommonProps
 
 export function JoiningForm({ api, offer, rejoin, onCancel, onDone }: CommonProps & { offer: HrOfferVersion; rejoin: boolean; onDone: (person: HrPersonDetail) => void }) {
   const today = todayInIndia();
-  const [joinedOn, setJoinedOn] = useState(offer.terms.proposedJoiningDate ?? today);
+  // A proposed joining date in the future is not a joining: default to today unless it has already passed.
+  const proposed = offer.terms.proposedJoiningDate;
+  const [joinedOn, setJoinedOn] = useState(proposed && proposed <= today ? proposed : today);
   const [territory, setTerritory] = useState(offer.terms.city ?? "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");

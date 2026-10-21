@@ -40,10 +40,14 @@ export const EPISODE_STATUS_LABEL: Record<HrEpisodeStatus, string> = {
   EXITED: "Exited",
 };
 
-type EpisodeLike = Pick<NonNullable<HrPersonSummary["currentEpisode"]>, "episodeNumber" | "status"> | null;
+type EpisodeLike = Pick<NonNullable<HrPersonSummary["currentEpisode"]>, "episodeNumber" | "status"> & { joinedOn?: string | null };
 
-/** Current stage of a person, derived from the employment episode (never from the offer alone). */
-export function deriveLifecycle(person: { currentEpisode: EpisodeLike }): HrLifecycle {
+/**
+ * Current stage of a person, derived from the employment episode (never from the offer alone).
+ * "Rejoined" means the person really worked before: their first-ever joining date is earlier than this episode's.
+ * A candidate whose first episode never started and who joins in episode 2 has simply joined.
+ */
+export function deriveLifecycle(person: { currentEpisode: EpisodeLike | null; originalJoinedOn?: string | null }): HrLifecycle {
   const episode = person.currentEpisode;
   if (!episode) return "OFFERED";
   switch (episode.status) {
@@ -52,7 +56,7 @@ export function deriveLifecycle(person: { currentEpisode: EpisodeLike }): HrLife
     case "NOT_JOINED":
       return "NOT_JOINED";
     case "ACTIVE":
-      return episode.episodeNumber > 1 ? "REJOINED" : "ACTIVE";
+      return person.originalJoinedOn && episode.joinedOn && person.originalJoinedOn < episode.joinedOn ? "REJOINED" : "ACTIVE";
     case "EXITED":
       return "EXITED";
   }
