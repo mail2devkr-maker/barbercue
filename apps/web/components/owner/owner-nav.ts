@@ -57,6 +57,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
 
   { id: "analytics", label: "Analytics", icon: "chart", group: "BUSINESS", audience: "owner", path: "analytics", keywords: ["reports", "peak hours"] },
   { id: "revenue", label: "Revenue", icon: "rupee", group: "BUSINESS", audience: "owner", path: "revenue", keywords: ["income", "sales"] },
+  { id: "assistant", label: "Quick Insights", icon: "chart", group: "BUSINESS", audience: "owner", path: "assistant", requiresFeature: "ownerAssistant", keywords: ["ask", "question", "today", "summary", "how many"] },
   { id: "marketing", label: "Marketing", icon: "arrowUpRight", group: "BUSINESS", audience: "owner", path: "marketing", keywords: ["share", "whatsapp", "qr", "link", "poster", "promote"] },
   { id: "booking-sources", label: "Booking Sources", icon: "trend", group: "BUSINESS", audience: "owner", path: "booking-sources", keywords: ["campaign", "facebook", "instagram", "where bookings come from"] },
   { id: "offers", label: "Offers", icon: "tag", group: "BUSINESS", audience: "owner", path: "offers", requiresFeature: "offers", keywords: ["discount", "promotion", "daily deal", "festival", "coupon"] },

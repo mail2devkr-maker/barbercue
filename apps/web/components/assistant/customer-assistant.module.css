@@ -1,0 +1,152 @@
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.heading {
+  margin: 0 0 8px;
+}
+
+.muted {
+  color: var(--bc-muted);
+  font-size: var(--bc-text-sm, 14px);
+  line-height: 1.5;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--bc-border);
+  border-radius: 14px;
+  background: var(--bc-surface);
+}
+
+.row {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--bc-border);
+  border-radius: 10px;
+  background: var(--bc-surface);
+  color: var(--bc-ink);
+  font: inherit;
+}
+
+.fieldError {
+  margin: 0;
+  color: var(--bc-accent);
+  font-size: var(--bc-text-sm, 14px);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.primary,
+.secondary,
+.book {
+  display: inline-block;
+  padding: 10px 16px;
+  border: 1px solid var(--bc-border);
+  border-radius: 10px;
+  background: var(--bc-surface);
+  color: var(--bc-ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary,
+.book {
+  background: var(--bc-brand-gradient, var(--bc-accent));
+  border-color: transparent;
+  color: #fff;
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.alert {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--bc-border);
+  border-radius: 12px;
+  color: var(--bc-ink);
+}
+
+.list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid var(--bc-border);
+  border-radius: 14px;
+  background: var(--bc-surface);
+  display: grid;
+  gap: 8px;
+}
+
+.shop {
+  margin: 0;
+  font-size: 18px;
+}
+
+.service {
+  margin: 0;
+  font-weight: 600;
+}
+
+.slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.slot {
+  padding: 4px 10px;
+  border: 1px solid var(--bc-border);
+  border-radius: 999px;
+  font-size: var(--bc-text-sm, 14px);
+}
+
+.empty {
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px dashed var(--bc-border);
+  border-radius: 12px;
+  color: var(--bc-muted);
+}
