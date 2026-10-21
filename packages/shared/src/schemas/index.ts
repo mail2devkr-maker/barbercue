@@ -14,6 +14,11 @@ import {
   CrmLeadStatus,
   CrmVisitOutcome,
   CreditFundingSource,
+  EmployeeEmploymentStatus,
+  EmployeeIdentityVerificationMethod,
+  EmployeeOfferDocumentStatus,
+  EmployeeOfferStatus,
+  EmployeePayFrequency,
   Language,
   NotificationCategory,
   NotificationChannel,
@@ -44,7 +49,10 @@ import { isValidPostalCode, postalCodeRuleFor } from '../locale';
 const serviceIdsSchema = z
   .array(z.string().uuid())
   .min(1, 'Select at least one service.')
-  .max(MAX_SERVICES_PER_BOOKING, `Select at most ${MAX_SERVICES_PER_BOOKING} services.`);
+  .max(
+    MAX_SERVICES_PER_BOOKING,
+    `Select at most ${MAX_SERVICES_PER_BOOKING} services.`,
+  );
 
 // Production-safety hardening (P0 #1) — an already-installed FastQue client (mobile not yet
 // updated, or any external integration) still sends the ORIGINAL single `serviceId` field on
@@ -57,7 +65,10 @@ const serviceIdsSchema = z
 // used before normalization. See API.md's "Legacy serviceId compatibility" section.
 type ServiceSelectionInput = { serviceId?: string; serviceIds?: string[] };
 
-function checkServiceSelection(value: ServiceSelectionInput, ctx: z.RefinementCtx): void {
+function checkServiceSelection(
+  value: ServiceSelectionInput,
+  ctx: z.RefinementCtx,
+): void {
   if (value.serviceId && value.serviceIds) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -137,7 +148,9 @@ export const availabilityQuerySchema = z
   .object({
     serviceId: z.string().uuid().optional(),
     serviceIds: serviceIdsQueryParam.optional(),
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format'),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format'),
     staffId: z.string().uuid().optional(),
   })
   .superRefine(checkServiceSelection)
@@ -171,7 +184,8 @@ export const joinQueueSchema = z.object({
     .string()
     .transform((value) => normalizeContactPhone(value))
     .refine((value): value is string => value !== null, {
-      message: 'enter a valid mobile number, with a country code if it is not an Indian number',
+      message:
+        'enter a valid mobile number, with a country code if it is not an Indian number',
     })
     .optional(),
 });
@@ -303,10 +317,16 @@ export const salonSearchQuerySchema = z
     priceMin: z.coerce.number().nonnegative().optional(),
     priceMax: z.coerce.number().nonnegative().optional(),
   })
-  .refine((data) => data.priceMin === undefined || data.priceMax === undefined || data.priceMin <= data.priceMax, {
-    message: 'priceMin must not be greater than priceMax.',
-    path: ['priceMin'],
-  });
+  .refine(
+    (data) =>
+      data.priceMin === undefined ||
+      data.priceMax === undefined ||
+      data.priceMin <= data.priceMax,
+    {
+      message: 'priceMin must not be greater than priceMax.',
+      path: ['priceMin'],
+    },
+  );
 export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
 
 // GET /cities/search query params (Phase 6A — Country -> Region -> City-search selection flow).
@@ -325,7 +345,10 @@ export type CitySearchQueryInput = z.infer<typeof citySearchQuerySchema>;
 export const otpRequestSchema = z.object({
   phone: z
     .string()
-    .regex(/^\+[1-9]\d{7,14}$/, 'phone must be in E.164 format, e.g. +919876543210'),
+    .regex(
+      /^\+[1-9]\d{7,14}$/,
+      'phone must be in E.164 format, e.g. +919876543210',
+    ),
 });
 export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 
@@ -371,7 +394,12 @@ export const ownerSignupSchema = z
 export type OwnerSignupInput = z.infer<typeof ownerSignupSchema>;
 
 export const employeeLoginSchema = z.object({
-  employeeCode: z.string().trim().min(3).max(32).transform((value) => value.toUpperCase()),
+  employeeCode: z
+    .string()
+    .trim()
+    .min(3)
+    .max(32)
+    .transform((value) => value.toUpperCase()),
   password: passwordSchema,
 });
 export type EmployeeLoginInput = z.infer<typeof employeeLoginSchema>;
@@ -392,13 +420,236 @@ export const createEmployeeSchema = z
   });
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 
+const hrIdempotencyKeySchema = z.string().trim().min(8).max(128);
+const hrEvidenceReferenceSchema = z
+  .string()
+  .trim()
+  .min(4)
+  .max(160)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/)
+  .refine(
+    (value) => !value.includes('://'),
+    'Use an internal evidence reference, not a URL.',
+  );
+const hrReasonSchema = z.string().trim().min(3).max(1000);
+const hrEmailSchema = z.string().trim().toLowerCase().email().max(254);
+const hrPhoneSchema = z
+  .string()
+  .trim()
+  .min(7)
+  .max(32)
+  .regex(/^[+0-9().\-\s]+$/);
+
+export const searchEmployeeIdentitySchema = z.object({
+  q: z.string().trim().min(2).max(160),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type SearchEmployeeIdentityInput = z.infer<
+  typeof searchEmployeeIdentitySchema
+>;
+
+export const matchEmployeeIdentitySchema = z
+  .object({
+    fullName: z.string().trim().min(2).max(120).optional(),
+    email: hrEmailSchema.optional(),
+    phone: hrPhoneSchema.optional(),
+    employeeCode: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^FQ-FE-\d{5,}$/)
+      .optional(),
+    limit: z.number().int().min(1).max(50).default(20),
+  })
+  .refine(
+    (value) =>
+      !!(value.fullName || value.email || value.phone || value.employeeCode),
+    { message: 'Provide at least one identity detail to review.' },
+  );
+export type MatchEmployeeIdentityInput = z.infer<
+  typeof matchEmployeeIdentitySchema
+>;
+
+export const employeeIdentityMatchReviewSchema = z.object({
+  decision: z.enum(['NO_MATCH', 'DISTINCT_PERSON']),
+  reviewedPersonIds: z.array(z.string().min(1).max(160)).max(50).default([]),
+  evidenceReference: hrEvidenceReferenceSchema,
+  reason: hrReasonSchema,
+});
+
+export const createEmployeeIdentitySchema = z
+  .object({
+    idempotencyKey: hrIdempotencyKeySchema,
+    fullName: z.string().trim().min(2).max(120),
+    email: hrEmailSchema.optional(),
+    phone: hrPhoneSchema.optional(),
+    matchReview: employeeIdentityMatchReviewSchema,
+  })
+  .refine((value) => value.email || value.phone, {
+    message: 'At least one contact method is required for matching.',
+    path: ['email'],
+  });
+export type CreateEmployeeIdentityInput = z.infer<
+  typeof createEmployeeIdentitySchema
+>;
+
+export const verifyEmployeeIdentitySchema = z.object({
+  idempotencyKey: hrIdempotencyKeySchema,
+  verificationMethod: z.nativeEnum(EmployeeIdentityVerificationMethod),
+  evidenceReference: hrEvidenceReferenceSchema,
+  reason: hrReasonSchema,
+});
+export type VerifyEmployeeIdentityInput = z.infer<
+  typeof verifyEmployeeIdentitySchema
+>;
+
+export const reviewEmployeeIdentityHistorySchema = z.object({
+  idempotencyKey: hrIdempotencyKeySchema,
+  status: z.enum(['COMPLETE', 'NEEDS_REVIEW', 'UNRESOLVED']),
+  evidenceReference: hrEvidenceReferenceSchema,
+  reason: hrReasonSchema,
+});
+export type ReviewEmployeeIdentityHistoryInput = z.infer<
+  typeof reviewEmployeeIdentityHistorySchema
+>;
+
+export const employeeOfferCompensationSchema = z.object({
+  baseAmount: z.number().finite().min(0).max(100_000_000),
+  currency: z.literal('INR').default('INR'),
+  frequency: z.nativeEnum(EmployeePayFrequency),
+  incentiveAmount: z
+    .number()
+    .finite()
+    .min(0)
+    .max(10_000_000)
+    .nullable()
+    .optional(),
+  additionalTerms: z.string().trim().max(2000).nullable().optional(),
+});
+export type EmployeeOfferCompensationInput = z.infer<
+  typeof employeeOfferCompensationSchema
+>;
+
+export const createEmployeeOfferSchema = z.object({
+  idempotencyKey: hrIdempotencyKeySchema,
+  candidateName: z.string().trim().min(2).max(120).optional(),
+  position: z.string().trim().min(2).max(120),
+  reportingManager: z.string().trim().max(120).nullable().optional(),
+  proposedJoiningAt: z
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .optional(),
+  compensation: employeeOfferCompensationSchema,
+});
+export type CreateEmployeeOfferInput = z.infer<
+  typeof createEmployeeOfferSchema
+>;
+
+export const issueEmployeeOfferSchema = z.object({
+  idempotencyKey: hrIdempotencyKeySchema,
+});
+export type IssueEmployeeOfferInput = z.infer<typeof issueEmployeeOfferSchema>;
+
+export const reconcileHistoricalEmployeeOfferSchema =
+  createEmployeeOfferSchema.extend({
+    sourceReference: hrEvidenceReferenceSchema,
+    offerDate: z.string().datetime({ offset: true }),
+    historicalStatus: z.nativeEnum(EmployeeOfferStatus),
+  });
+export type ReconcileHistoricalEmployeeOfferInput = z.infer<
+  typeof reconcileHistoricalEmployeeOfferSchema
+>;
+
+export const updateEmployeeOfferStatusSchema = z
+  .object({
+    idempotencyKey: hrIdempotencyKeySchema,
+    status: z.nativeEnum(EmployeeOfferStatus),
+    reason: hrReasonSchema.optional(),
+    evidenceReference: hrEvidenceReferenceSchema.optional(),
+  })
+  .refine(
+    (value) =>
+      !['SENT', 'ACCEPTED', 'DECLINED', 'NOT_JOINED'].includes(value.status) ||
+      !!value.evidenceReference,
+    {
+      message: 'An evidence reference is required for this offer status.',
+      path: ['evidenceReference'],
+    },
+  );
+export type UpdateEmployeeOfferStatusInput = z.infer<
+  typeof updateEmployeeOfferStatusSchema
+>;
+
+export const updateEmployeeOfferDocumentSchema = z
+  .object({
+    idempotencyKey: hrIdempotencyKeySchema,
+    status: z.nativeEnum(EmployeeOfferDocumentStatus),
+    evidenceReference: hrEvidenceReferenceSchema.optional(),
+  })
+  .refine((value) => value.status !== 'EMAILED' || !!value.evidenceReference, {
+    message: 'An evidence reference is required to record a sent email.',
+    path: ['evidenceReference'],
+  });
+export type UpdateEmployeeOfferDocumentInput = z.infer<
+  typeof updateEmployeeOfferDocumentSchema
+>;
+
+export const joinEmployeeSchema = z
+  .object({
+    idempotencyKey: hrIdempotencyKeySchema,
+    password: passwordSchema.optional(),
+    confirmPassword: passwordSchema.optional(),
+    territory: z.string().trim().max(160).optional(),
+    startedAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
+  .refine((value) => !!value.password === !!value.confirmPassword, {
+    message:
+      'Provide both temporary password fields when creating a new login.',
+    path: ['confirmPassword'],
+  });
+export type JoinEmployeeInput = z.infer<typeof joinEmployeeSchema>;
+
+export const exitEmployeeSchema = z.object({
+  idempotencyKey: hrIdempotencyKeySchema,
+  occurredAt: z.string().datetime({ offset: true }).optional(),
+  reason: hrReasonSchema,
+});
+export type ExitEmployeeInput = z.infer<typeof exitEmployeeSchema>;
+
+export const reconcileLegacyEmploymentSchema = z
+  .object({
+    idempotencyKey: hrIdempotencyKeySchema,
+    status: z.nativeEnum(EmployeeEmploymentStatus),
+    startedAt: z.string().datetime({ offset: true }),
+    endedAt: z.string().datetime({ offset: true }).optional(),
+    reason: hrReasonSchema,
+    evidenceReference: hrEvidenceReferenceSchema,
+  })
+  .refine(
+    (value) => value.status !== EmployeeEmploymentStatus.REVIEW_REQUIRED,
+    {
+      message: 'Choose an explicit verified employment state.',
+      path: ['status'],
+    },
+  );
+export type ReconcileLegacyEmploymentInput = z.infer<
+  typeof reconcileLegacyEmploymentSchema
+>;
+
 export const createSpecialEmployeeSchema = createEmployeeSchema.and(
   z.object({
     employeeNumber: z.number().int().min(1).max(100),
     totpCode: z.string().regex(/^\d{6}$/, 'totpCode must be 6 digits'),
   }),
 );
-export type CreateSpecialEmployeeInput = z.infer<typeof createSpecialEmployeeSchema>;
+export type CreateSpecialEmployeeInput = z.infer<
+  typeof createSpecialEmployeeSchema
+>;
 
 export const updateEmployeeSchema = z
   .object({
@@ -420,7 +671,9 @@ export const resetEmployeePasswordSchema = z
     message: 'Passwords do not match',
     path: ['confirmPassword'],
   });
-export type ResetEmployeePasswordInput = z.infer<typeof resetEmployeePasswordSchema>;
+export type ResetEmployeePasswordInput = z.infer<
+  typeof resetEmployeePasswordSchema
+>;
 
 // ---------- FastQue internal Field CRM ----------
 const optionalCrmText = (max: number) =>
@@ -596,8 +849,14 @@ export const salonPaymentPolicySchema = z
     prepaymentPercentage: z.number().int().min(1).max(100).optional(),
   })
   .refine(
-    (val) => val.prepaymentRequirement !== PrepaymentRequirement.PARTIAL || !!val.prepaymentPercentage,
-    { message: 'prepaymentPercentage is required when prepaymentRequirement is PARTIAL', path: ['prepaymentPercentage'] },
+    (val) =>
+      val.prepaymentRequirement !== PrepaymentRequirement.PARTIAL ||
+      !!val.prepaymentPercentage,
+    {
+      message:
+        'prepaymentPercentage is required when prepaymentRequirement is PARTIAL',
+      path: ['prepaymentPercentage'],
+    },
   );
 export type SalonPaymentPolicyInput = z.infer<typeof salonPaymentPolicySchema>;
 
@@ -766,7 +1025,9 @@ export const salonPhotoUploadMetaSchema = z.object({
   altText: z.string().trim().max(200).optional(),
   type: z.nativeEnum(PhotoType),
 });
-export type SalonPhotoUploadMetaInput = z.infer<typeof salonPhotoUploadMetaSchema>;
+export type SalonPhotoUploadMetaInput = z.infer<
+  typeof salonPhotoUploadMetaSchema
+>;
 
 // PUT dashboard/salons/:salonId/payment-qr — link route (FastQue Credits / Wallet V1), same
 // https-only/no-credentials validation as salonPhotoUrlSchema above; the multipart upload sibling
@@ -834,11 +1095,15 @@ export type UpdateSalonStaffInput = z.infer<typeof updateSalonStaffSchema>;
 export const updateSalonProfileSchema = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
-    phone: z.union([z.string().trim().min(1).max(20), z.literal('')]).optional(),
+    phone: z
+      .union([z.string().trim().min(1).max(20), z.literal('')])
+      .optional(),
     email: z.union([z.string().trim().email(), z.literal('')]).optional(),
     addressLine: z.string().trim().min(1).max(300).optional(),
     postalCode: z.union([z.string().trim().max(12), z.literal('')]).optional(),
-    description: z.union([z.string().trim().max(2000), z.literal('')]).optional(),
+    description: z
+      .union([z.string().trim().max(2000), z.literal('')])
+      .optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateSalonProfileInput = z.infer<typeof updateSalonProfileSchema>;
@@ -863,9 +1128,14 @@ export const updateSalonTimezoneSchema = z.object({
     .trim()
     .min(1)
     .max(60)
-    .regex(/^[A-Za-z0-9_+-]+\/[A-Za-z0-9_+\-/]+$/, 'Enter a valid IANA time zone, e.g. Asia/Kolkata'),
+    .regex(
+      /^[A-Za-z0-9_+-]+\/[A-Za-z0-9_+\-/]+$/,
+      'Enter a valid IANA time zone, e.g. Asia/Kolkata',
+    ),
 });
-export type UpdateSalonTimezoneInput = z.infer<typeof updateSalonTimezoneSchema>;
+export type UpdateSalonTimezoneInput = z.infer<
+  typeof updateSalonTimezoneSchema
+>;
 
 // POST premium/dev/activate — dev/test-only Premium activation for the calling user. The backend
 // route itself is unreachable outside a non-production environment (see PremiumController); this
@@ -893,7 +1163,9 @@ export const updateReviewSchema = z
     rating: z.number().int().min(1).max(5).optional(),
     comment: z.string().trim().max(1000).optional(),
   })
-  .refine((v) => v.rating !== undefined || v.comment !== undefined, { message: 'No fields to update' });
+  .refine((v) => v.rating !== undefined || v.comment !== undefined, {
+    message: 'No fields to update',
+  });
 export type UpdateReviewInput = z.infer<typeof updateReviewSchema>;
 
 // PUT dashboard/salons/:salonId/reviews/:reviewId/response — owner's reply. Required non-empty:
@@ -915,22 +1187,31 @@ export const submitVerificationSchema = z
     evidenceNotes: z.string().trim().max(2000).optional(),
     evidenceUrls: z.array(salonPhotoUrlSchema).max(10).optional(),
   })
-  .refine((v) => !!v.evidenceNotes || (v.evidenceUrls && v.evidenceUrls.length > 0), {
-    message: 'Add a note or at least one evidence link',
-  });
+  .refine(
+    (v) => !!v.evidenceNotes || (v.evidenceUrls && v.evidenceUrls.length > 0),
+    {
+      message: 'Add a note or at least one evidence link',
+    },
+  );
 export type SubmitVerificationInput = z.infer<typeof submitVerificationSchema>;
 
 // POST admin/verification/:id/decide — reviewNotes required on REJECTED (the owner needs to know
 // what to fix before resubmitting); optional on APPROVED.
 export const decideVerificationSchema = z
   .object({
-    decision: z.enum([VerificationStatus.APPROVED, VerificationStatus.REJECTED]),
+    decision: z.enum([
+      VerificationStatus.APPROVED,
+      VerificationStatus.REJECTED,
+    ]),
     reviewNotes: z.string().trim().max(1000).optional(),
   })
-  .refine((v) => v.decision !== VerificationStatus.REJECTED || !!v.reviewNotes, {
-    message: 'A reason is required when rejecting a verification request',
-    path: ['reviewNotes'],
-  });
+  .refine(
+    (v) => v.decision !== VerificationStatus.REJECTED || !!v.reviewNotes,
+    {
+      message: 'A reason is required when rejecting a verification request',
+      path: ['reviewNotes'],
+    },
+  );
 export type DecideVerificationInput = z.infer<typeof decideVerificationSchema>;
 
 // POST admin/credits/grant (AdminCreditsController, PLATFORM_ADMIN-only) — see
@@ -945,13 +1226,16 @@ export const grantPromotionalCreditsSchema = z.object({
   amount: z.number().finite().positive().multipleOf(0.01),
   reason: z.string().trim().min(1).max(500),
   campaignRef: z.string().trim().min(1).max(200).optional(),
-  fundingSource: z.nativeEnum(CreditFundingSource).default(CreditFundingSource.FASTQUE_FUNDED),
+  fundingSource: z
+    .nativeEnum(CreditFundingSource)
+    .default(CreditFundingSource.FASTQUE_FUNDED),
   // ISO 8601 — must be strictly in the future if provided; enforced again server-side, not just
   // here, since a client clock can't be trusted for a hard business rule.
   expiresAt: z.string().datetime().optional(),
 });
-export type GrantPromotionalCreditsInput = z.infer<typeof grantPromotionalCreditsSchema>;
-
+export type GrantPromotionalCreditsInput = z.infer<
+  typeof grantPromotionalCreditsSchema
+>;
 
 // First-party FastQue visitor registration. The browser-generated UUID is never stored raw in the
 // database; the backend hashes it before persistence. This endpoint records one durable unique

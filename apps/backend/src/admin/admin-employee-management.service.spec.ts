@@ -49,6 +49,14 @@ describe('AdminEmployeeManagementService', () => {
         ),
         update: jest.fn().mockResolvedValue({}),
       },
+      employeeIdentity: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'identity-special' }),
+      },
+      employeeEmploymentEpisode: {
+        create: jest.fn().mockResolvedValue({ id: 'episode-special' }),
+      },
+      employeeHrEvent: { create: jest.fn().mockResolvedValue({}) },
       user: {
         create: jest.fn().mockImplementation(({ data }: any) =>
           Promise.resolve({
@@ -66,9 +74,13 @@ describe('AdminEmployeeManagementService', () => {
       ...tx,
       employeeProfile: {
         findMany: jest.fn().mockResolvedValue([standardRow]),
-        findUnique: jest.fn().mockImplementation(({ where }: any) =>
-          Promise.resolve(where.id === 'ep-special' ? specialRow : standardRow),
-        ),
+        findUnique: jest
+          .fn()
+          .mockImplementation(({ where }: any) =>
+            Promise.resolve(
+              where.id === 'ep-special' ? specialRow : standardRow,
+            ),
+          ),
       },
       user: {
         ...tx.user,
@@ -102,22 +114,40 @@ describe('AdminEmployeeManagementService', () => {
     );
   });
 
-  it('never consumes reserved IDs and starts standard employees at FQ-FE-00101', async () => {
-    const created = await service.create('admin1', {
-      fullName: 'Field Executive',
-      territory: 'Patna',
-      password: 'TempPass123',
-      confirmPassword: 'TempPass123',
-    });
+  it('does not expose the registry until the server-side feature flag is enabled', async () => {
+    const original = process.env.HR_EMPLOYEE_REGISTRY_ENABLED;
+    delete process.env.HR_EMPLOYEE_REGISTRY_ENABLED;
+    const { AdminEmployeeRegistryService } =
+      await import('./admin-employee-registry.service');
+    const registry = new AdminEmployeeRegistryService(
+      prisma,
+      crypto,
+      passwords,
+    );
+    try {
+      await expect(
+        registry.search({ q: 'candidate', limit: 10 }),
+      ).rejects.toMatchObject({
+        code: 'HR_EMPLOYEE_REGISTRY_DISABLED',
+      });
+    } finally {
+      if (original === undefined)
+        delete process.env.HR_EMPLOYEE_REGISTRY_ENABLED;
+      else process.env.HR_EMPLOYEE_REGISTRY_ENABLED = original;
+    }
+  });
 
-    expect(prisma.__tx.employeeProfile.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        employeeCode: 'FQ-FE-00101',
+  it('blocks legacy direct creation until an official offer is issued and joining is confirmed', async () => {
+    await expect(
+      service.create('admin1', {
         fullName: 'Field Executive',
         territory: 'Patna',
+        password: 'TempPass123',
+        confirmPassword: 'TempPass123',
       }),
-    });
-    expect(created.employeeCode).toBe('FQ-FE-00101');
+    ).rejects.toMatchObject({ code: 'EMPLOYEE_HR_REGISTRY_REQUIRED' });
+    expect(prisma.__tx.employeeProfile.create).not.toHaveBeenCalled();
+    expect(prisma.__tx.user.create).not.toHaveBeenCalled();
   });
 
   it('creates an exact reserved ID only after fresh admin TOTP verification', async () => {
@@ -180,6 +210,17 @@ describe('AdminEmployeeManagementService', () => {
       where: { userId: 'u1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
+  });
+
+  it('blocks reactivation outside the HR joining flow', async () => {
+    prisma.employeeProfile.findUnique.mockResolvedValueOnce({
+      ...standardRow,
+      user: { ...standardRow.user, status: UserStatus.SUSPENDED },
+    });
+    await expect(
+      service.update('admin1', 'ep1', { status: UserStatus.ACTIVE }),
+    ).rejects.toMatchObject({ code: 'EMPLOYEE_REJOIN_ACTION_REQUIRED' });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('resets the password and revokes active sessions', async () => {

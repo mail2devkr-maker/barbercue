@@ -39,6 +39,27 @@ describe('AdminController authorization', () => {
       Role.CO_FOUNDER,
       Role.HR_ADMIN,
     ]);
+    for (const method of [
+      'searchEmployeePeople',
+      'createEmployeeIdentity',
+      'getEmployeeIdentity',
+      'verifyEmployeeIdentity',
+      'reviewEmployeeHistory',
+      'createEmployeeOffer',
+      'reconcileHistoricalOffer',
+      'issueEmployeeOffer',
+      'updateEmployeeOfferStatus',
+      'updateEmployeeOfferDocumentStatus',
+      'joinEmployee',
+      'exitEmployee',
+      'reconcileEmployeeHistory',
+    ]) {
+      expect(routeRoles(method)).toEqual([
+        Role.PLATFORM_ADMIN,
+        Role.CO_FOUNDER,
+        Role.HR_ADMIN,
+      ]);
+    }
     expect(routeRoles('listVerification')).toEqual([
       Role.PLATFORM_ADMIN,
       Role.CO_FOUNDER,
@@ -72,6 +93,7 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -116,6 +138,7 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,
@@ -166,6 +189,7 @@ describe('AdminController authorization', () => {
       {} as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     await controller.deleteShop({ id: 'admin-1' } as never, 'salon-1');
@@ -194,6 +218,7 @@ describe('AdminController authorization', () => {
       verification as never,
       salonManagement as never,
       activation as never,
+      {} as never,
       {} as never,
       {} as never,
       {} as never,

@@ -13,6 +13,19 @@ import {
   Role,
   decideVerificationSchema,
   updateSalonStatusSchema,
+  searchEmployeeIdentitySchema,
+  matchEmployeeIdentitySchema,
+  createEmployeeIdentitySchema,
+  verifyEmployeeIdentitySchema,
+  reviewEmployeeIdentityHistorySchema,
+  createEmployeeOfferSchema,
+  reconcileHistoricalEmployeeOfferSchema,
+  issueEmployeeOfferSchema,
+  updateEmployeeOfferStatusSchema,
+  updateEmployeeOfferDocumentSchema,
+  joinEmployeeSchema,
+  exitEmployeeSchema,
+  reconcileLegacyEmploymentSchema,
   grantAdminAccessSchema,
   revokeAdminAccessSchema,
   type AuthenticatedUser,
@@ -28,6 +41,19 @@ import {
   type UpdateSalonStatusInput,
   type GrantAdminAccessInput,
   type RevokeAdminAccessInput,
+  type SearchEmployeeIdentityInput,
+  type MatchEmployeeIdentityInput,
+  type CreateEmployeeIdentityInput,
+  type VerifyEmployeeIdentityInput,
+  type ReviewEmployeeIdentityHistoryInput,
+  type CreateEmployeeOfferInput,
+  type ReconcileHistoricalEmployeeOfferInput,
+  type IssueEmployeeOfferInput,
+  type UpdateEmployeeOfferStatusInput,
+  type UpdateEmployeeOfferDocumentInput,
+  type JoinEmployeeInput,
+  type ExitEmployeeInput,
+  type ReconcileLegacyEmploymentInput,
 } from '@barbercue/shared';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -39,6 +65,7 @@ import { SalonActivationService } from '../salon-setup/salon-activation.service'
 import { AdminEmployeeManagementService } from './admin-employee-management.service';
 import { AdminCrmService } from './admin-crm.service';
 import { AdminAccessManagementService } from './admin-access-management.service';
+import { AdminEmployeeRegistryService } from './admin-employee-registry.service';
 
 /** Authentication is global; authorization is admin-role only. Monitoring routes are read-only;
  * the verification routes (Phase 18) and shop deletion are this controller's mutating surfaces —
@@ -54,6 +81,7 @@ export class AdminController {
     private readonly employees: AdminEmployeeManagementService,
     private readonly crm: AdminCrmService,
     private readonly access: AdminAccessManagementService,
+    private readonly employeeRegistry: AdminEmployeeRegistryService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -155,6 +183,166 @@ export class AdminController {
     body: ResetEmployeePasswordInput,
   ) {
     return this.employees.resetPassword(user.id, id, body);
+  }
+
+  @Get(`${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/search`)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  searchEmployeePeople(
+    @Query(new ZodValidationPipe(searchEmployeeIdentitySchema))
+    body: SearchEmployeeIdentityInput,
+  ) {
+    return this.employeeRegistry.search(body);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/${ADMIN_PATHS.matches}`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  matchEmployeePeople(
+    @Body(new ZodValidationPipe(matchEmployeeIdentitySchema))
+    body: MatchEmployeeIdentityInput,
+  ) {
+    return this.employeeRegistry.matchCandidates(body);
+  }
+
+  @Post(`${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}`)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  createEmployeeIdentity(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createEmployeeIdentitySchema))
+    body: CreateEmployeeIdentityInput,
+  ) {
+    return this.employeeRegistry.createIdentity(user.id, body);
+  }
+
+  @Get(`${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/:id`)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  getEmployeeIdentity(@Param('id') id: string) {
+    return this.employeeRegistry.getPerson(id);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/:id/${ADMIN_PATHS.verifyIdentity}`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  verifyEmployeeIdentity(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(verifyEmployeeIdentitySchema))
+    body: VerifyEmployeeIdentityInput,
+  ) {
+    return this.employeeRegistry.verifyIdentity(user.id, id, body);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/:id/${ADMIN_PATHS.historyReview}`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  reviewEmployeeHistory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(reviewEmployeeIdentityHistorySchema))
+    body: ReviewEmployeeIdentityHistoryInput,
+  ) {
+    return this.employeeRegistry.reviewHistory(user.id, id, body);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/:id/${ADMIN_PATHS.offers}`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  createEmployeeOffer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(createEmployeeOfferSchema))
+    body: CreateEmployeeOfferInput,
+  ) {
+    return this.employeeRegistry.createOffer(user.id, id, body);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/:id/${ADMIN_PATHS.offers}/historical`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  reconcileHistoricalOffer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(reconcileHistoricalEmployeeOfferSchema))
+    body: ReconcileHistoricalEmployeeOfferInput,
+  ) {
+    return this.employeeRegistry.reconcileHistoricalOffer(user.id, id, body);
+  }
+
+  @Post(`${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.offers}/:offerId/issue`)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  issueEmployeeOffer(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('offerId') offerId: string,
+    @Body(new ZodValidationPipe(issueEmployeeOfferSchema))
+    body: IssueEmployeeOfferInput,
+  ) {
+    return this.employeeRegistry.issueOffer(user.id, offerId, body);
+  }
+
+  @Post(`${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.offers}/:offerId/status`)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  updateEmployeeOfferStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('offerId') offerId: string,
+    @Body(new ZodValidationPipe(updateEmployeeOfferStatusSchema))
+    body: UpdateEmployeeOfferStatusInput,
+  ) {
+    return this.employeeRegistry.updateOfferStatus(user.id, offerId, body);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.offers}/:offerId/${ADMIN_PATHS.documentStatus}`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  updateEmployeeOfferDocumentStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('offerId') offerId: string,
+    @Body(new ZodValidationPipe(updateEmployeeOfferDocumentSchema))
+    body: UpdateEmployeeOfferDocumentInput,
+  ) {
+    return this.employeeRegistry.updateOfferDocument(user.id, offerId, body);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/:id/${ADMIN_PATHS.join}`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  joinEmployee(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(joinEmployeeSchema)) body: JoinEmployeeInput,
+  ) {
+    return this.employeeRegistry.join(user.id, id, body);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/:id/${ADMIN_PATHS.exit}`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  exitEmployee(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(exitEmployeeSchema)) body: ExitEmployeeInput,
+  ) {
+    return this.employeeRegistry.exit(user.id, id, body);
+  }
+
+  @Post(
+    `${ADMIN_PATHS.employeeRegister}/${ADMIN_PATHS.people}/:id/${ADMIN_PATHS.employmentHistory}`,
+  )
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.HR_ADMIN)
+  reconcileEmployeeHistory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(reconcileLegacyEmploymentSchema))
+    body: ReconcileLegacyEmploymentInput,
+  ) {
+    return this.employeeRegistry.reconcileLegacyEmployment(user.id, id, body);
   }
 
   @Get(`${ADMIN_PATHS.crm}/${ADMIN_PATHS.overview}`)
