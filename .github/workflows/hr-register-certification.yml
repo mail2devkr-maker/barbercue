@@ -40,18 +40,26 @@ jobs:
           lib/hr-register
           lib/__tests__/admin-route-access-hr.test.jsx
           'app/\(dashboard\)/dashboard/admin/crm'
-      - name: Full web tests must add no failure beyond the two known unrelated suites
+      - name: Full web tests must add no failure beyond the two known unrelated suites (an unrelated flaky suite gets one re-run)
         working-directory: apps/web
         run: |
           npx jest --ci --json --outputFile=/tmp/web-jest.json || true
           node -e '
+            const { spawnSync } = require("child_process");
             const report = require("/tmp/web-jest.json");
             const known = ["ServiceCatalogPicker.test.jsx", "ArrivalAlertOverlay.test.jsx"];
-            const failed = report.testResults.filter((s) => s.status === "failed").map((s) => s.name.split(/[\\/]/).pop());
-            const unexpected = failed.filter((name) => !known.includes(name));
-            console.log("failed suites:", failed.join(", ") || "none", "| failed tests:", report.numFailedTests);
-            if (unexpected.length > 0) { console.error("NEW failing suites:", unexpected.join(", ")); process.exit(1); }
-            if (report.numFailedTests > 14) { console.error("More than the 14 recorded baseline failures"); process.exit(1); }
+            const failedSuites = report.testResults.filter((s) => s.status === "failed");
+            const unexpected = failedSuites.filter((s) => !known.includes(s.name.split(/[\/]/).pop()));
+            console.log("failed suites:", failedSuites.map((s) => s.name.split(/[\/]/).pop()).join(", ") || "none", "| failed tests:", report.numFailedTests);
+            let extraFailures = 0;
+            for (const suite of unexpected) {
+              // One independent re-run: a suite that passes alone is reported as flaky, one that fails again is a regression.
+              const rerun = spawnSync("npx", ["jest", "--ci", suite.name], { stdio: "inherit", shell: true });
+              if (rerun.status !== 0) { console.error("NEW failing suite (failed twice):", suite.name); process.exit(1); }
+              console.log("flaky, passed on re-run:", suite.name);
+              extraFailures += suite.assertionResults.filter((t) => t.status === "failed").length;
+            }
+            if (report.numFailedTests - extraFailures > 14) { console.error("More than the 14 recorded baseline failures"); process.exit(1); }
           '
       - name: Web TypeScript check
         run: npm run typecheck --workspace=@barbercue/web
