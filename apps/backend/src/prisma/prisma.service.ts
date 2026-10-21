@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { MaintenanceModeService } from '../maintenance/maintenance-mode.service';
 
@@ -8,7 +8,7 @@ import { MaintenanceModeService } from '../maintenance/maintenance-mode.service'
 // that never touch the database at all. DB-dependent code paths still fail correctly (and loudly)
 // the moment they actually run a query against an unreachable database.
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleDestroy {
+export class PrismaService extends PrismaClient implements OnApplicationShutdown {
   private readonly logger = new Logger(PrismaService.name);
 
   constructor(private readonly maintenanceMode: MaintenanceModeService) {
@@ -25,7 +25,9 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
     );
   }
 
-  async onModuleDestroy() {
+  // Nest closes the HTTP adapter after OnModuleDestroy and before OnApplicationShutdown.
+  // Keep the pool alive until in-flight requests have drained, then disconnect it.
+  async onApplicationShutdown() {
     await this.$disconnect();
   }
 }
