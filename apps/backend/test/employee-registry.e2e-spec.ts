@@ -390,7 +390,7 @@ maybe('Permanent HR Employee ID registry (disposable PostgreSQL)', () => {
     const distinctContactIdentity = await createCandidate(
       `race-distinct-${run}@example.test`,
       sharedPhone,
-      'Different person sharing a contact',
+      `Different person sharing a contact ${run}`,
     );
     const distinctReview = await prisma.employeeHrEvent.findFirstOrThrow({
       where: {
