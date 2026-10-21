@@ -29,6 +29,7 @@ import {
   VerificationStatus,
 } from "../enums";
 import {
+  CUSTOMER_ASSISTANT_SEARCH_LIMITS,
   MAX_SERVICES_PER_BOOKING,
   PREMIUM_PLAN_IDS,
   SALON_DESCRIPTION_SUGGESTION_LIMITS,
@@ -334,6 +335,86 @@ export const salonSearchQuerySchema = z
     },
   );
 export type SalonSearchQueryInput = z.infer<typeof salonSearchQuerySchema>;
+
+// POST /assistant/search — deterministic retrieval only. `date` is a salon-local calendar day;
+// the backend returns only real bookable slots from AvailabilityService and never creates a
+// booking. Real-calendar validation prevents dates such as 2026-02-31 from silently normalizing.
+export const customerAssistantSearchSchema = z
+  .object({
+    serviceQuery: z
+      .string()
+      .trim()
+      .min(2)
+      .max(CUSTOMER_ASSISTANT_SEARCH_LIMITS.maxQueryLength),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .refine((value) => {
+        const parsed = new Date(`${value}T00:00:00.000Z`);
+        return (
+          Number.isFinite(parsed.getTime()) &&
+          parsed.toISOString().slice(0, 10) === value
+        );
+      }, "date must be a valid YYYY-MM-DD calendar date"),
+    city: z.string().trim().min(1).max(80).optional(),
+    countryCode: z
+      .string()
+      .trim()
+      .length(2)
+      .transform((value) => value.toUpperCase())
+      .optional(),
+    lat: z.number().finite().min(-90).max(90).optional(),
+    lng: z.number().finite().min(-180).max(180).optional(),
+    radiusKm: z.number().finite().positive().max(500).optional(),
+    maxPrice: z
+      .number()
+      .finite()
+      .nonnegative()
+      .max(CUSTOMER_ASSISTANT_SEARCH_LIMITS.maxPrice)
+      .optional(),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(CUSTOMER_ASSISTANT_SEARCH_LIMITS.maxResults)
+      .default(3),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.lat === undefined) !== (value.lng === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "lat and lng must be provided together",
+        path: [value.lat === undefined ? "lat" : "lng"],
+      });
+    }
+    if (
+      value.radiusKm !== undefined &&
+      (value.lat === undefined || value.lng === undefined)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "radiusKm requires lat and lng",
+        path: ["radiusKm"],
+      });
+    }
+    if (value.countryCode !== undefined && value.city === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "countryCode requires city",
+        path: ["countryCode"],
+      });
+    }
+    if (value.city === undefined && value.lat === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "city or coordinates are required to search nearby salons",
+        path: ["city"],
+      });
+    }
+  });
+export type CustomerAssistantSearchInput = z.infer<
+  typeof customerAssistantSearchSchema
+>;
 
 // GET /cities/search query params (Phase 6A — Country -> Region -> City-search selection flow).
 // countryId is required: a global, unscoped city search across ~100K rows is never allowed.

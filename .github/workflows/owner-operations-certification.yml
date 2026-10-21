@@ -156,6 +156,18 @@ jobs:
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           npx jest --config ./test/jest-e2e.json --runInBand --ci test/demo-workspace.e2e-spec.ts
+      - name: Customer assistant E2E - deterministic catalog, price filters and real availability (disposable PostgreSQL)
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
+          NODE_ENV: development
+          AGENT_LLM_PROVIDER: none
+          QA_PLATFORM_ADMIN_FIXTURE: '1'
+          QA_DISPOSABLE_DATABASE_NAME: owner_ops_chain
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/customer-assistant-search.e2e-spec.ts
       - name: External review profile E2E - owner authorization, vetted links and audit without provider calls
         working-directory: apps/backend
         env:
@@ -180,6 +192,8 @@ jobs:
           DATABASE_URL: ${{ env.CHAIN_DATABASE_URL }}
           NODE_ENV: development
           AGENT_LLM_PROVIDER: none
+          QA_PLATFORM_ADMIN_FIXTURE: '1'
+          QA_DISPOSABLE_DATABASE_NAME: owner_ops_chain
         run: |
           export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
           export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
