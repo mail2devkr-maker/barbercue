@@ -22,6 +22,7 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   if (pathname.startsWith("/dashboard/admin/access")) return superAdmin;
   if (pathname.startsWith("/dashboard/admin/crm")) return superAdmin || coFounder || hr || sales;
   if (pathname.startsWith("/dashboard/admin/employees")) return superAdmin || coFounder || hr;
+  if (pathname.startsWith("/dashboard/admin/hr")) return superAdmin || coFounder || hr;
   if (pathname.startsWith("/dashboard/admin/verification")) return superAdmin || coFounder;
   return superAdmin || coFounder;
 }
@@ -29,4 +30,9 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
 /** Offer letters are HR functionality, not part of Sales' otherwise shared CRM workspace. */
 export function canGenerateOfferLetter(roles: Role[]): boolean {
   return roles.includes(Role.PLATFORM_ADMIN) || roles.includes(Role.CO_FOUNDER) || roles.includes(Role.HR_ADMIN);
+}
+
+/** HR offer register: same audience as offer letters. Backend RolesGuard remains authoritative. */
+export function canUseHrRegister(roles: Role[]): boolean {
+  return canGenerateOfferLetter(roles);
 }

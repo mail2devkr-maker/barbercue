@@ -1,3 +1,5 @@
+import { EMPLOYEE_CODE_PATTERN } from "../../../../../lib/hr-register/types";
+
 export type SalaryBasis = "monthly" | "annual";
 
 export type ResumeHints = {
@@ -19,7 +21,10 @@ export type OfferLetterData = {
   email?: string;
   phone?: string;
   role?: string;
-  employeeCode?: string;
+  /** Permanent FastQue employee ID returned by the HR register. Never typed by HR. */
+  employeeCode: string;
+  /** Instant the persisted offer version was issued; makes a reprint show the original letter date. */
+  issuedAt?: string;
   address?: string;
   baseSalary: number;
   salaryBasis: SalaryBasis;
@@ -687,7 +692,7 @@ export function numberToIndianWords(amount: number): string {
 }
 
 // Fixed default for future offer-letter PDFs. Update deliberately on explicit owner request.
-const DEFAULT_EXPECTED_PERFORMANCE_INCENTIVE_MONTHLY_INR = 5000;
+export const DEFAULT_EXPECTED_PERFORMANCE_INCENTIVE_MONTHLY_INR = 5000;
 
 function salaryBreakdown(monthlyCtc: number) {
   const round = (value: number) => Math.round(value);
@@ -769,12 +774,20 @@ export function buildOfferLetterPdf(
 ): Uint8Array {
   const candidateName = data.candidateName.trim();
   const role = (data.role || "Employee").trim() || "Employee";
-  const employeeCode = data.employeeCode?.trim() || "Pending onboarding";
+  const employeeCode = (data.employeeCode ?? "").trim();
+  if (!EMPLOYEE_CODE_PATTERN.test(employeeCode)) {
+    throw new Error("A permanent FastQue employee ID from the HR register is required.");
+  }
+  const issuedAtMs = data.issuedAt === undefined ? Date.now() : Date.parse(data.issuedAt);
+  if (!Number.isFinite(issuedAtMs)) {
+    throw new Error("The offer issue date is not valid.");
+  }
   const dateLabel = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date());
+    ...(data.issuedAt === undefined ? {} : { timeZone: "Asia/Kolkata" }),
+  }).format(new Date(issuedAtMs));
   const joiningLabel = data.joiningDate
     ? new Intl.DateTimeFormat("en-GB", {
         day: "2-digit",
