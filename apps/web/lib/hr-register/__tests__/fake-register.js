@@ -107,6 +107,7 @@ function createFakeRegister(options = {}) {
       hasEmployeeAccount: Boolean(person.employeeProfileId),
       employeeProfileId: person.employeeProfileId || null,
       origin: person.origin,
+      originalJoinedOn: (es.find((e) => e.joinedOn) || {}).joinedOn || null,
     };
   }
 
@@ -195,6 +196,7 @@ function createFakeRegister(options = {}) {
         proposedJoiningDate: terms.proposedJoiningDate,
         reportingManager: manager ? { id: manager.id, fullName: manager.fullName, employeeCode: manager.employeeCode } : null,
         city: terms.city,
+        expectedPerformanceIncentiveMonthlyInr: 5000,
       },
       delivery: { saved: true, pdfCount: 0, emailedRecordedAt: null, acceptanceProven: false },
       pdfHistory: [],
@@ -276,7 +278,8 @@ function createFakeRegister(options = {}) {
       const blocksNewIdentity = found.length > 0 && (found.some((m) => m.strength === "STRONG") || found.length > 1);
       const decisionToken = `tok-${tokens.size + 1}`;
       tokens.set(decisionToken, { ids: found.map((m) => m.person.id), blocksNewIdentity });
-      return clone({ matches: found, blocksNewIdentity, decisionToken });
+      const overrideRequiresSenior = found.some((m) => (m.reasons.includes("EMAIL") || m.reasons.includes("PHONE")) && m.reasons.includes("NAME_EXACT"));
+      return clone({ matches: found, blocksNewIdentity, overrideRequiresSenior, decisionToken });
     },
 
     async createOffer(input, key) {
@@ -304,11 +307,8 @@ function createFakeRegister(options = {}) {
           log(person.id, "IDENTITY_CREATED", "PERSON", person.fullName, null, null, input.identity.overrideReason);
         }
         const offer = newOffer(person, input.terms, kind);
-        return {
-          person: summary(person),
-          offer: { ...offer },
-          letter: { candidateName: person.fullName, email: person.email, phone: person.phone, address: person.address },
-        };
+        // Contacts are NOT in the create response (they would sit in the idempotency cache): read them with getLetterData.
+        return { person: summary(person), offer: { ...offer } };
       });
     },
 

@@ -108,11 +108,12 @@ export function allowedPersonActions(person: Pick<HrPersonDetail, "currentEpisod
     canRecordNotJoined: false,
     canRecordExit: false,
   };
-  if (!latest) return none;
 
+  // Staff hired before the register existed have an episode but no offer yet: they can still be exited
+  // or rehired (the rehire offer becomes their first recorded offer).
   if (episode?.status === "ACTIVE") return { ...none, canRecordExit: true };
-
   if (episode?.status === "EXITED") return { ...none, canRehire: !open };
+  if (!latest) return none;
 
   const pendingJoin = !episode || episode.status === "PENDING_JOIN";
   if (pendingJoin) {

@@ -12,6 +12,7 @@ import type {
   HrCreateOfferInput,
   HrCreateOfferResult,
   HrEmployeeOption,
+  HrLetterData,
   HrMatchResult,
   HrOfferTermsInput,
   HrPersonSummary,
@@ -110,7 +111,8 @@ export default function OfferComposer({ api = httpHrRegisterApi, presetPerson = 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [saved, setSaved] = useState<HrCreateOfferResult | null>(null);
+  // `letter` is read separately (audited) from the saved version, so contacts never travel in the create response.
+  const [saved, setSaved] = useState<(HrCreateOfferResult & { letter: HrLetterData | null }) | null>(null);
   const [pdf, setPdf] = useState<PdfOutcome | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [emailRecorded, setEmailRecorded] = useState(false);
@@ -259,15 +261,17 @@ export default function OfferComposer({ api = httpHrRegisterApi, presetPerson = 
       return;
     }
 
-    setSaved(result);
+    setSaved({ ...result, letter: null });
     onSaved?.(result);
     try {
+      const letter = await api.getLetterData(result.offer.id);
+      setSaved({ ...result, letter });
       const outcome = await generateOfferPdf({
         api,
         employeeCode: result.person.employeeCode,
-        candidateName: result.letter.candidateName,
+        candidateName: letter.candidateName,
         offer: result.offer,
-        contacts: result.letter,
+        contacts: letter,
         event: "GENERATED",
         deliver: deliverPdf,
       });
@@ -286,12 +290,14 @@ export default function OfferComposer({ api = httpHrRegisterApi, presetPerson = 
     setSaving(true);
     setPdfError(null);
     try {
+      const letter = saved.letter ?? (await api.getLetterData(saved.offer.id));
+      if (!saved.letter) setSaved({ ...saved, letter });
       const outcome = await generateOfferPdf({
         api,
         employeeCode: saved.person.employeeCode,
-        candidateName: saved.letter.candidateName,
+        candidateName: letter.candidateName,
         offer: saved.offer,
-        contacts: saved.letter,
+        contacts: letter,
         event: pdf ? "REPRINTED" : "GENERATED",
         deliver: deliverPdf,
       });
@@ -366,7 +372,7 @@ export default function OfferComposer({ api = httpHrRegisterApi, presetPerson = 
           </Banner>
           <div className={styles.card}>
             <div className={styles.cardTop}>
-              <strong>{saved.letter.candidateName}</strong>
+              <strong>{saved.letter?.candidateName ?? saved.person.fullName}</strong>
               <span>
                 <CodeChip code={saved.person.employeeCode} /> <OfferStatusBadge status={saved.offer.status} />
               </span>

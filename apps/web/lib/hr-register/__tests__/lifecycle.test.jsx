@@ -92,6 +92,19 @@ describe("person actions", () => {
   });
 });
 
+describe("staff hired before the register existed (an episode but no offers)", () => {
+  const legacy = (currentEpisode) => ({ currentEpisode, offers: [] });
+
+  test("an active legacy employee can be exited, never offered", () => {
+    expect(allowedPersonActions(legacy(episode(1, "ACTIVE")))).toMatchObject({ canRecordExit: true, canReoffer: false, canRehire: false });
+  });
+
+  test("an exited legacy employee can be rehired, and a person with nothing recorded has no actions", () => {
+    expect(allowedPersonActions(legacy(episode(1, "EXITED"))).canRehire).toBe(true);
+    expect(allowedPersonActions(legacy(null))).toMatchObject({ canRehire: false, canReoffer: false, canRecordExit: false });
+  });
+});
+
 describe("latestOffer", () => {
   test("is the highest version regardless of order", () => {
     expect(latestOffer([offer(2, "ISSUED"), offer(1, "DECLINED"), offer(3, "SENT")]).version).toBe(3);

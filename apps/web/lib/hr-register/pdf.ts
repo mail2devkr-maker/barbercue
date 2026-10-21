@@ -4,7 +4,7 @@ import {
   type OfferLetterData,
 } from "../../app/(dashboard)/dashboard/admin/crm/offer-letter";
 import type { HrRegisterApi } from "./api";
-import type { HrCreateOfferResult, HrOfferVersion, HrPdfEvent } from "./types";
+import type { HrLetterData, HrOfferVersion, HrPdfEvent } from "./types";
 import { newIdempotencyKey } from "../idempotency";
 
 /**
@@ -14,7 +14,7 @@ import { newIdempotencyKey } from "../idempotency";
  * unchanged from `buildOfferLetterPdf`.
  */
 
-export type LetterContacts = HrCreateOfferResult["letter"];
+export type LetterContacts = HrLetterData;
 
 export function offerLetterData(
   employeeCode: string,

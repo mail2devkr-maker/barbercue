@@ -177,9 +177,9 @@ export default function RegisterPanel({ api = httpHrRegisterApi, selectedPersonI
             </div>
             <Facts
               items={[
-                ["Latest offer", <span key="offer">v{person.latestOfferVersion} <OfferStatusBadge status={person.latestOfferStatus} /></span>],
+                ["Latest offer", person.latestOfferStatus ? <span key="offer">v{person.latestOfferVersion} <OfferStatusBadge status={person.latestOfferStatus} /></span> : "None recorded"],
                 ["Offers / episodes", `${person.offerCount} / ${person.episodeCount}`],
-                ["First offer", formatInstant(person.firstOfferIssuedAt)],
+                ["First offer", person.firstOfferIssuedAt ? formatInstant(person.firstOfferIssuedAt) : "—"],
                 ["City", person.city ?? "—"],
                 ["Manager", person.reportingManager ? person.reportingManager.fullName : "—"],
                 ["Contact", [person.maskedEmail, person.maskedPhone].filter(Boolean).join(" · ") || "—"],

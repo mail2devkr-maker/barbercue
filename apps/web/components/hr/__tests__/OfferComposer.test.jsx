@@ -86,6 +86,18 @@ describe("OfferComposer — identity first, saved offer before PDF", () => {
     expect(text(r)).toMatch(/FastQue does not send email/);
   });
 
+  test("contacts are read from the saved version (audited) after the save, not taken from the create response", async () => {
+    const { api, deliverPdf } = setup();
+    const r = await mount(<OfferComposer api={api} deliverPdf={deliverPdf} />);
+    await fillCandidate(r, { email: "asha@example.test", phone: "9000000001" });
+    await click(r, /Check existing records/);
+    await click(r, /Continue as a new candidate/);
+    await fillTerms(r);
+    await submit(r);
+    const order = api.calls.filter((c) => ["createOffer", "getLetterData", "recordPdfEvent"].includes(c));
+    expect(order).toEqual(["createOffer", "getLetterData", "recordPdfEvent"]);
+  });
+
   test("the saved request carries the typed terms and the default role", async () => {
     const { api, deliverPdf } = setup();
     let seen;

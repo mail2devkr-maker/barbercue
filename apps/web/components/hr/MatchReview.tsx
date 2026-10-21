@@ -68,7 +68,7 @@ export function MatchReview({
                   items={[
                     ["Email", person.maskedEmail ?? "—"],
                     ["Phone", person.maskedPhone ?? "—"],
-                    ["Offers", `${person.offerCount} (latest: ${OFFER_STATUS_LABEL[person.latestOfferStatus]})`],
+                    ["Offers", person.latestOfferStatus ? `${person.offerCount} (latest: ${OFFER_STATUS_LABEL[person.latestOfferStatus]})` : "None recorded (hired before the register)"],
                     ["City", person.city ?? "—"],
                   ]}
                 />
@@ -87,6 +87,8 @@ export function MatchReview({
               {blocked
                 ? "These matches are too close to create a new identity without a recorded reason."
                 : "Confirm you checked the records above."}
+              {result.overrideRequiresSenior &&
+                " The contact and name match an existing person exactly, so only a Co-Founder or Platform Admin can create a separate identity."}
             </p>
             <div className={styles.stack}>
               {blocked && (

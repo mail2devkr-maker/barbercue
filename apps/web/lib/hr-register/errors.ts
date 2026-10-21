@@ -17,6 +17,20 @@ export function describeHrFailure(error: unknown, fallback = "Could not complete
       return "That status change is not allowed for this offer in its current state. Refresh to see the latest status.";
     case "HR_OPEN_OFFER_EXISTS":
       return "This person already has an open offer. Record its outcome before issuing another.";
+    case "HR_OVERRIDE_REQUIRES_SENIOR":
+      return "These details match an existing person exactly. Only a Co-Founder or Platform Admin can create a separate identity.";
+    case "HR_LETTER_NOT_STORED":
+      return "The original letter was not stored in the register, so it cannot be reprinted.";
+    case "HR_DATE_IN_FUTURE":
+      return "That date cannot be in the future.";
+    case "HR_PRINTED_CODE_MUST_BE_LINKED":
+      return "The letter printed an employee ID. Link it to that person instead of creating a new identity.";
+    case "HR_PRINTED_CODE_MISMATCH":
+      return "The letter printed a different employee ID. Link the person who owns that ID.";
+    case "HR_RECONCILIATION_RESOLVED":
+      return "This item was already resolved.";
+    case "HR_EXIT_BEFORE_JOIN":
+      return "The last working day cannot be before the joining date.";
     case "HR_RESERVED_CODE":
       return "That employee ID is in the reserved range and cannot be used here.";
     case "IDEMPOTENCY_KEY_REUSED":

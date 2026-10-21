@@ -5,6 +5,7 @@ import type {
   HrCreateOfferInput,
   HrCreateOfferResult,
   HrEmployeeOption,
+  HrLetterData,
   HrMatchQuery,
   HrMatchResult,
   HrOfferTransition,
@@ -57,7 +58,7 @@ export interface HrRegisterApi {
   recordExit(episodeId: string, input: HrExitInput, idempotencyKey: string): Promise<HrPersonDetail>;
   recordPdfEvent(offerId: string, input: { event: HrPdfEvent["event"]; sha256: string; byteLength: number }, idempotencyKey: string): Promise<HrPdfEvent>;
   /** Contact values for one saved version, needed only to regenerate that version's letter. */
-  getLetterData(offerId: string): Promise<HrCreateOfferResult["letter"]>;
+  getLetterData(offerId: string): Promise<HrLetterData>;
   listAudit(personId: string, cursor?: string | null): Promise<HrAuditPage>;
   listReconciliation(status: HrReconciliationStatus | "ALL", cursor?: string | null): Promise<HrReconciliationPage>;
   linkReconciliation(itemId: string, personId: string, idempotencyKey: string): Promise<HrReconciliationItem>;
@@ -140,7 +141,7 @@ export const httpHrRegisterApi: HrRegisterApi = {
   },
 
   getLetterData(offerId) {
-    return apiFetch<HrCreateOfferResult["letter"]>(`${HR_PATHS.offers}/${encodeURIComponent(offerId)}/letter-data`);
+    return apiFetch<HrLetterData>(`${HR_PATHS.offers}/${encodeURIComponent(offerId)}/letter-data`);
   },
 
   listAudit(personId, cursor) {
