@@ -236,7 +236,8 @@ describe('SIGTERM drains a real in-flight HTTP request and PostgreSQL transactio
 
         await within(lockHolder, 'parent transaction completion', 5_000);
         const exit = await within(waitForExit(child), 'SIGTERM process shutdown', 5_000);
-        expect(exit.code).toBe(0);
+        expect(exit.code).toBeNull();
+        expect(exit.signal).toBe('SIGTERM');
 
         const rows = await prisma.$queryRawUnsafe<Array<{ value: string }>>(
           'SELECT value FROM ' + quotedTable + ' WHERE id = 1',
