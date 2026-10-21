@@ -51,6 +51,13 @@ export class SalonCapabilitiesService {
       reasonCode: 'DETERMINISTIC_QUERY_ONLY',
       updatedAt: null,
     };
+    // Customer search uses only the published salon/service catalog and the authoritative booking
+    // availability engine. It is not generative and does not create a booking.
+    features.customerAssistant = {
+      status: 'ENABLED',
+      reasonCode: 'DETERMINISTIC_CATALOG_AVAILABILITY_SEARCH',
+      updatedAt: null,
+    };
     // The preview endpoint validates contacts but cannot persist them or send invitations.
     features.contactImport = {
       status: 'UNCONFIGURED',

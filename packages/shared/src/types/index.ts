@@ -715,6 +715,39 @@ export interface AvailabilitySlotDto {
   state: AvailabilitySlotState;
 }
 
+/**
+ * Provider-free customer assistant search. Results are actual active catalog services and
+ * availability slots from the booking engine. The response intentionally has no customer PII,
+ * generated claims, or booking side effect; booking still requires the existing explicit flow.
+ */
+export interface CustomerAssistantSearchResultDto {
+  mode: "DETERMINISTIC_CATALOG_AVAILABILITY";
+  generated: false;
+  bookingConfirmationRequired: true;
+  date: string; // Interpreted as a salon-local YYYY-MM-DD calendar date.
+  candidates: Array<{
+    salon: {
+      id: string;
+      publicId: string;
+      name: string;
+      slug: string;
+      citySlug: string;
+      countryCode: string;
+      distanceKm: number | null;
+    };
+    service: {
+      id: string;
+      name: string;
+      category: string | null;
+      price: number;
+      durationMinutes: number;
+    };
+    currency: string | null;
+    timeZone: string;
+    availableSlots: Array<{ slotStart: string; slotEnd: string }>;
+  }>;
+}
+
 export type AvailabilitySlotState = "AVAILABLE" | "OCCUPIED";
 
 // Multi-service booking core mission — one ordered entry per service actually selected on this

@@ -412,6 +412,22 @@ export const OWNER_ASSISTANT_QUERY_LIMITS = {
   throttleWindowMs: 60_000,
 } as const;
 
+// Public, provider-free customer booking assistant search.
+export const CUSTOMER_ASSISTANT_PATHS = {
+  assistant: 'assistant',
+  search: 'search',
+} as const;
+
+export const CUSTOMER_ASSISTANT_SEARCH_LIMITS = {
+  maxQueryLength: 80,
+  maxResults: 5,
+  maxPrice: 1_000_000,
+  maxCandidatesScanned: 12,
+  maxSlotsPerSalon: 3,
+  maxRequests: 5,
+  throttleWindowMs: 60_000,
+} as const;
+
 // P0 arrival-alert mission — how far ahead of slotStart the arrival-check alert becomes eligible.
 // A single platform-wide constant for V1, same rationale as reminders.service.ts's
 // REMINDER_WINDOW_MINUTES: no owner-facing settings UI exists yet to make this per-salon
