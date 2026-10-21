@@ -353,10 +353,14 @@ maybe('Permanent HR Employee ID registry (disposable PostgreSQL)', () => {
 
   it('serializes concurrent issuance and rejects duplicate contacts and idempotency-key payload changes', async () => {
     const sharedPhone = `+917${digits}`;
+    // This suite also runs later in the broad E2E pass against the same disposable DB,
+    // but with a fresh encryption key. Keep its exact-name match fixture unique per run
+    // so a previous run's encrypted contact is never loaded under the new test key.
+    const sharedName = `Shared Candidate ${run}`;
     const firstId = await createCandidate(
       `race-a-${run}@example.test`,
       sharedPhone,
-      'Shared Candidate',
+      sharedName,
     );
     await verify(firstId);
     const firstDraft = await createOffer(firstId);
@@ -402,7 +406,7 @@ maybe('Permanent HR Employee ID registry (disposable PostgreSQL)', () => {
     const nameMatches = await api(
       'post',
       '/admin/employee-register/people/matches',
-    ).send({ fullName: 'Shared Candidate', phone: `+916${digits}` });
+    ).send({ fullName: sharedName, phone: `+916${digits}` });
     expect(nameMatches.status).toBe(201);
     expect(nameMatches.body.blocksNewIdentity).toBe(false);
     expect(nameMatches.body.requiresReview).toBe(true);
@@ -416,7 +420,7 @@ maybe('Permanent HR Employee ID registry (disposable PostgreSQL)', () => {
       '/admin/employee-register/people',
     ).send({
       idempotencyKey: key('unreviewed-same-name'),
-      fullName: 'Shared Candidate',
+      fullName: sharedName,
       phone: `+916${digits}`,
       matchReview: {
         decision: 'NO_MATCH',
@@ -432,7 +436,7 @@ maybe('Permanent HR Employee ID registry (disposable PostgreSQL)', () => {
     const secondId = await createCandidate(
       `race-b-${run}@example.test`,
       `+916${digits}`,
-      'Shared Candidate',
+      sharedName,
     );
     await verify(secondId);
     const secondDraft = await createOffer(secondId);
@@ -513,7 +517,7 @@ maybe('Permanent HR Employee ID registry (disposable PostgreSQL)', () => {
     const identityId = await createCandidate(
       `employee-customer-collision-${run}@example.test`,
       phone,
-      'Candidate with existing customer contact',
+      `Candidate with existing customer contact ${run}`,
     );
     await verify(identityId);
     const offerId = await createOffer(identityId);
