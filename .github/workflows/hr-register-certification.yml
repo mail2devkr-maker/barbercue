@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - claude/fastque-hr-register-283
+      - claude/fastque-hr-integration-283
   workflow_dispatch:
 
 permissions:
