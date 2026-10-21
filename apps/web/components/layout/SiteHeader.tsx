@@ -14,6 +14,7 @@ import {
 } from "../../lib/workspace-route";
 import { BrandLockup } from "../ui/BrandLockup";
 import { NotificationBell } from "./NotificationBell";
+import { MaintenanceNotice } from "./MaintenanceNotice";
 import { CloseIcon, LocationIcon, MenuIcon } from "../landing/icons";
 import styles from "../landing/landing.module.css";
 
@@ -110,6 +111,7 @@ export function SiteHeader() {
   return (
     <>
       <header className={styles.landingHeader}>
+        <MaintenanceNotice />
         <div className={styles.hiringBar}>
           <Link href="/careers" className={styles.hiringInner} aria-label="FastQue is hiring — view open field sales role">
             <span className={styles.hiringBadge}>We&apos;re hiring</span>
@@ -258,6 +260,8 @@ export function SiteHeader() {
         </div>
       </header>
       <div className={styles.siteHeaderSpacer} aria-hidden="true" />
+      {/* The header is fixed: this invisible copy of the notice reserves the height the notice adds to it. */}
+      <MaintenanceNotice variant="spacer" />
     </>
   );
 }
