@@ -8,7 +8,10 @@ import { MaintenanceModeService } from '../maintenance/maintenance-mode.service'
 // that never touch the database at all. DB-dependent code paths still fail correctly (and loudly)
 // the moment they actually run a query against an unreachable database.
 @Injectable()
-export class PrismaService extends PrismaClient implements OnApplicationShutdown {
+export class PrismaService
+  extends PrismaClient
+  implements OnApplicationShutdown
+{
   private readonly logger = new Logger(PrismaService.name);
 
   constructor(private readonly maintenanceMode: MaintenanceModeService) {
