@@ -1561,3 +1561,9 @@ export interface HealthCheckResponse {
   service: string;
   timestamp: string;
 }
+
+/** Public status contract. The message is plain text supplied by the deployment operator. */
+export interface MaintenanceStatusDto {
+  enabled: boolean;
+  message: string | null;
+}

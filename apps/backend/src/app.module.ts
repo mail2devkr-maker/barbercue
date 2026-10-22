@@ -35,10 +35,13 @@ import { EmployeeModule } from './employee/employee.module';
 import { DbDeadlineSchedulerModule } from './common/db-deadline-scheduler/db-deadline-scheduler.module';
 import { SiteMetricsModule } from './site-metrics/site-metrics.module';
 import { OwnerOpsModule } from './owner-ops/owner-ops.module';
+import { MaintenanceModule } from './maintenance/maintenance.module';
+import { MaintenanceModeGuard } from './maintenance/maintenance-mode.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    MaintenanceModule,
     DbDeadlineSchedulerModule,
     SiteMetricsModule,
     ScheduleModule.forRoot(),
@@ -86,6 +89,8 @@ import { OwnerOpsModule } from './owner-ops/owner-ops.module';
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // Installed first so all application mutation methods fail closed during scheduled maintenance.
+    { provide: APP_GUARD, useClass: MaintenanceModeGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Default-deny: every route requires a valid access token unless marked @Public().
     { provide: APP_GUARD, useClass: JwtAuthGuard },
