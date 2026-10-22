@@ -26,11 +26,12 @@ afterEach(() => {
 });
 
 describe("MaintenanceNotice", () => {
-  it("shows the approved window and a hedged message before the window", async () => {
-    const r = await mount("banner", "2026-10-21T08:00:00.000Z");
+  it("shows the approved Oct 23 start and a hedged message before the window", async () => {
+    const r = await mount("banner", "2026-10-22T08:00:00.000Z");
     const text = collect(r.toJSON());
     expect(text).toContain("Scheduled maintenance:");
-    expect(text).toContain("Thursday, 22 October 2026, 12:00 AM to 4:00 AM IST");
+    expect(text).toContain("Starting Friday, 23 October 2026, at 12:00 AM IST");
+    expect(text).not.toContain("4:00 AM");
     expect(text).toContain("may be unavailable or slow");
     expect(text).toContain("Please complete any bookings and queue work before then.");
     const region = r.root.findByProps({ "data-testid": "maintenance-notice" });
@@ -39,36 +40,36 @@ describe("MaintenanceNotice", () => {
     await act(async () => r.unmount());
   });
 
-  it("is still shown during the window", async () => {
-    const r = await mount("banner", "2026-10-21T20:00:00.000Z");
-    expect(collect(r.toJSON())).toContain("12:00 AM to 4:00 AM IST");
+  it("is still shown after the approved start", async () => {
+    const r = await mount("banner", "2026-10-22T19:00:00.000Z");
+    expect(collect(r.toJSON())).toContain("Starting Friday, 23 October 2026, at 12:00 AM IST");
     await act(async () => r.unmount());
   });
 
-  it("is gone once the window has ended", async () => {
-    const r = await mount("banner", "2026-10-21T22:30:00.000Z");
-    expect(r.toJSON()).toBeNull();
+  it("does not invent an end time when none is approved", async () => {
+    const r = await mount("banner", "2026-10-22T22:30:00.000Z");
+    expect(collect(r.toJSON())).toContain("Scheduled maintenance:");
     await act(async () => r.unmount());
   });
 
   it("the header's spacer carries the same text, is hidden from assistive technology and is not a second visible notice", async () => {
-    const r = await mount("spacer", "2026-10-21T08:00:00.000Z");
+    const r = await mount("spacer", "2026-10-22T08:00:00.000Z");
     const root = r.toJSON();
     expect(root.props["aria-hidden"]).toBe("true");
     expect(root.props.role).toBeUndefined();
-    expect(collect(root)).toContain("Thursday, 22 October 2026, 12:00 AM to 4:00 AM IST");
+    expect(collect(root)).toContain("Starting Friday, 23 October 2026, at 12:00 AM IST");
     expect(r.root.findAllByProps({ "data-testid": "maintenance-notice" })).toHaveLength(0);
     await act(async () => r.unmount());
   });
 
-  it("the spacer disappears together with the banner after the window", async () => {
-    const r = await mount("spacer", "2026-10-22T00:00:00.000Z");
-    expect(r.toJSON()).toBeNull();
+  it("the spacer remains while no end time is approved", async () => {
+    const r = await mount("spacer", "2026-10-22T22:30:00.000Z");
+    expect(r.toJSON()).not.toBeNull();
     await act(async () => r.unmount());
   });
 
   it("renders for the owner dashboard too", async () => {
-    const r = await mount("inline", "2026-10-21T08:00:00.000Z");
+    const r = await mount("inline", "2026-10-22T08:00:00.000Z");
     expect(collect(r.toJSON())).toContain("Scheduled maintenance:");
     expect(r.root.findAllByProps({ "data-testid": "maintenance-notice" }).length).toBeGreaterThan(0);
     await act(async () => r.unmount());
