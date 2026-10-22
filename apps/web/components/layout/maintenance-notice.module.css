@@ -1,0 +1,43 @@
+.bar {
+  background: #ffd54a;
+  color: #2b1d00;
+  border-bottom: 1px solid rgba(43, 29, 0, 0.28);
+}
+
+.inner {
+  width: min(100% - 24px, 1280px);
+  margin: 0 auto;
+  padding: 7px 0;
+  text-align: center;
+  font: 600 0.8rem/1.35 var(--font-body, system-ui, sans-serif);
+}
+
+.inner strong {
+  font-weight: 800;
+}
+
+/* Inside the owner dashboard the notice sits in the content column, above the page. */
+.inline {
+  border: 1px solid rgba(43, 29, 0, 0.28);
+  border-radius: 12px;
+  margin: 0 0 14px;
+}
+
+/* An invisible copy of the notice that is in the page flow: the site header is fixed, so this reserves exactly the height the
+   notice adds to it (same text, same width, so the same wrapping). */
+.spacer {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (max-width: 520px) {
+  .inner {
+    font-size: 0.74rem;
+    padding: 6px 0;
+  }
+  /* The window and the warning stay; the advice sentence is left out so the fixed header stays compact on a phone. */
+  .advice {
+    display: none;
+  }
+}

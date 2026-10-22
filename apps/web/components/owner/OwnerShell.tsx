@@ -20,6 +20,7 @@ import { useAuth } from "../../lib/auth-context";
 import { rememberLastShop } from "../../lib/last-shop";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import { AdminManagingBanner } from "../dashboard/AdminManagingBanner";
+import { MaintenanceNotice } from "../layout/MaintenanceNotice";
 import { Icon } from "./icons";
 import { BrandLockup } from "../ui/BrandLockup";
 import { NAV_GROUPS, NAV_ITEMS, activeItemId, hrefFor, navItemsFor, type NavItem } from "./owner-nav";
@@ -374,6 +375,7 @@ function ShellInner({ salonId, children }: { salonId: string; children: ReactNod
             </header>
             {/* A plain container: every page supplies its own <main> landmark (legacy pages already do). */}
             <div id="owner-main" className={ui.content} tabIndex={-1}>
+              <MaintenanceNotice variant="inline" />
               <AdminManagingBanner />
               {children}
             </div>
