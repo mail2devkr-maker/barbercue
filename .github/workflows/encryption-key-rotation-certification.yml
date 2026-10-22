@@ -1,0 +1,70 @@
+name: Encryption Key Rotation Certification
+
+# TOTP_ENCRYPTION_KEY rotation tooling (docs/release/ENCRYPTION_KEY_ROTATION.md): unit tests, then the real Nest
+# application booted under every key configuration of the cut-over on a disposable PostgreSQL 17, synthetic admins only.
+on:
+  pull_request:
+    paths:
+      - "apps/backend/src/ops/key-rotation/**"
+      - "apps/backend/src/auth/services/crypto.service.ts"
+      - "apps/backend/scripts/key-rotation/**"
+      - "apps/backend/test/key-rotation.e2e-spec.ts"
+      - "apps/backend/prisma/**"
+      - "docs/release/ENCRYPTION_KEY_ROTATION.md"
+      - ".github/workflows/encryption-key-rotation-certification.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: encryption-key-rotation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: Key rotation - unit, PostgreSQL 17 chain and cut-over e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: key_rotation_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d key_rotation_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:ci-only@127.0.0.1:5432/key_rotation_ci?schema=public
+      NODE_ENV: development
+      AGENT_LLM_PROVIDER: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared contracts
+        run: npm run build:shared
+      - name: Generate Prisma client and type-check the backend
+        run: |
+          npm run prisma:generate --workspace=@barbercue/backend
+          npm run typecheck --workspace=@barbercue/backend
+      - name: Rotation library and CryptoService unit tests
+        run: npm run test --workspace=@barbercue/backend -- --runInBand src/ops/key-rotation src/auth/services
+      - name: Apply complete migration chain to disposable PostgreSQL
+        working-directory: apps/backend
+        run: bash scripts/verify-migration-chain.sh
+      - name: Cut-over e2e (real application under each key configuration)
+        working-directory: apps/backend
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/key-rotation.e2e-spec.ts
