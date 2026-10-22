@@ -8,6 +8,7 @@ import {
   type SalonCapabilitiesDto,
 } from '@barbercue/shared';
 import { SalonAccessService } from '../common/salon-access/salon-access.service';
+import { isContactLedgerConfigured } from '../salon-setup/contact-ledger.config';
 
 const NOT_IMPLEMENTED: FeatureCapabilityDto = {
   status: 'UNCONFIGURED',
@@ -58,12 +59,19 @@ export class SalonCapabilitiesService {
       reasonCode: 'DETERMINISTIC_CATALOG_AVAILABILITY_SEARCH',
       updatedAt: null,
     };
-    // The preview endpoint validates contacts but cannot persist them or send invitations.
-    features.contactImport = {
-      status: 'UNCONFIGURED',
-      reasonCode: 'CONTACT_IMPORT_PREVIEW_ONLY',
-      updatedAt: null,
-    };
+    // The preview endpoint validates contacts but cannot persist them or send invitations. With the consent ledger
+    // configured, consent evidence, opt-outs and erasure are durable, but nothing is ever sent: still not ENABLED.
+    features.contactImport = isContactLedgerConfigured()
+      ? {
+          status: 'SANDBOX',
+          reasonCode: 'CONSENT_LEDGER_NO_DISPATCH',
+          updatedAt: null,
+        }
+      : {
+          status: 'UNCONFIGURED',
+          reasonCode: 'CONTACT_IMPORT_PREVIEW_ONLY',
+          updatedAt: null,
+        };
     // SalonDescriptionModule deliberately binds the unconfigured provider. An environment
     // variable alone must not advertise (or activate) an external AI integration.
     features.aiDescription = {

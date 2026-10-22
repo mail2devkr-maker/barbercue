@@ -1,6 +1,6 @@
 import { PageHead } from "../../../../../../components/owner/parts";
 import { OwnerOnly } from "../../../../../../components/owner/OwnerOnly";
-import { ContactListCheck } from "../../../../../../components/owner/ContactListCheck";
+import { ContactsWorkspace } from "../../../../../../components/owner/ContactsWorkspace";
 
 export default async function Page({ params }: { params: Promise<{ salonId: string }> }) {
   const { salonId } = await params;
@@ -10,9 +10,9 @@ export default async function Page({ params }: { params: Promise<{ salonId: stri
         <PageHead
           eyebrow="Business"
           title="Contact list check"
-          sub="Check a list of phone numbers before you invite people. Nothing is saved and nobody is contacted."
+          sub="Check a list of phone numbers before you invite people. Nobody is contacted."
         />
-        <ContactListCheck salonId={salonId} />
+        <ContactsWorkspace salonId={salonId} />
       </main>
     </OwnerOnly>
   );

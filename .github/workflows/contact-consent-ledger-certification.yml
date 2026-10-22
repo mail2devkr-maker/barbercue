@@ -1,0 +1,71 @@
+name: Contact Consent Ledger Certification
+
+# Requirement 13 (contact import and consent): durable consent evidence, platform-wide suppression and erasure.
+# The real AppModule on PostgreSQL 17, synthetic numbers only. Nothing is sent and no provider is contacted.
+on:
+  pull_request:
+    paths:
+      - "apps/backend/prisma/**"
+      - "apps/backend/scripts/verify-migration-chain.sh"
+      - "apps/backend/src/salon-setup/contact-ledger*"
+      - "apps/backend/src/salon-setup/salon-setup.module.ts"
+      - "apps/backend/src/owner-ops/capabilities.service.ts"
+      - "apps/backend/test/contact-ledger.e2e-spec.ts"
+      - "packages/shared/src/contact-ledger.ts"
+      - "docs/contracts/FASTQUE_CONTACT_CONSENT_LEDGER_V1.md"
+      - ".github/workflows/contact-consent-ledger-certification.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: contact-consent-ledger-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  certify:
+    name: Consent ledger - PostgreSQL 17 chain, fail-closed, isolation, privacy and lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: contact_ledger_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d contact_ledger_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://postgres:ci-only@127.0.0.1:5432/contact_ledger_ci?schema=public
+      NODE_ENV: development
+      AGENT_LLM_PROVIDER: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build shared contracts
+        run: npm run build:shared
+      - name: Generate Prisma client and type-check the backend
+        run: |
+          npm run prisma:generate --workspace=@barbercue/backend
+          npm run typecheck --workspace=@barbercue/backend
+      - name: Apply complete migration chain to disposable PostgreSQL
+        working-directory: apps/backend
+        run: bash scripts/verify-migration-chain.sh
+      - name: Ledger e2e (real application, twice)
+        working-directory: apps/backend
+        run: |
+          export JWT_ACCESS_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          export TOTP_ENCRYPTION_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/contact-ledger.e2e-spec.ts
+          npx jest --config ./test/jest-e2e.json --runInBand --ci test/contact-ledger.e2e-spec.ts

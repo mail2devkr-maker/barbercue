@@ -950,6 +950,7 @@ model Salon {
   serviceCategories           SalonServiceCategory[]
   reviewProfiles              SalonReviewProfile?
   offers                      Offer[]
+  contactConsents              ContactConsentRecord[]
   bookings                    Booking[]
   bookingAttributionCampaigns BookingAttributionCampaign[]
   queueEntries                QueueEntry[]
@@ -2435,4 +2436,41 @@ model OwnerDemoWorkspaceAudit {
   @@index([salonId, createdAt])
   @@index([workspaceId, createdAt])
   @@map("owner_demo_workspace_audit")
+}
+
+// ---- Contact consent ledger (requirement 13): durable consent evidence, suppression and erasure, provider-free. ----
+// No phone number is stored in plaintext: only a keyed hash (HMAC-SHA256 of the E.164 number, key CONTACT_LEDGER_HASH_KEY).
+// Nothing here sends anything; invitation dispatch stays blocked behind the provider and approval gates.
+model ContactConsentRecord {
+  id               String    @id @default(uuid())
+  salonId          String
+  salon            Salon     @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  phoneHash        String    @db.VarChar(64)
+  purpose          String    @default("BOOKING_INVITATION") @db.VarChar(32)
+  source           String    @db.VarChar(24)
+  // When the owner states the contact agreed (never in the future); NOT proof by itself.
+  capturedAt       DateTime
+  recordedAt       DateTime  @default(now())
+  recordedByUserId String
+  policyVersion    String    @db.VarChar(40)
+  status           String    @default("ACTIVE") @db.VarChar(16)
+  withdrawnAt      DateTime?
+  expiresAt        DateTime
+
+  @@unique([salonId, phoneHash, purpose])
+  @@index([salonId, status, expiresAt])
+  @@index([expiresAt])
+  @@index([phoneHash])
+  @@map("contact_consent_records")
+}
+
+// Platform-wide do-not-contact list, keyed by the same hash. Deliberately survives erasure of any consent record: it is the
+// minimal data needed to honour an opt-out, and holds no phone number, name or shop.
+model ContactSuppression {
+  phoneHash       String   @id @db.VarChar(64)
+  reason          String   @db.VarChar(24)
+  createdAt       DateTime @default(now())
+  createdByUserId String?
+
+  @@map("contact_suppressions")
 }
