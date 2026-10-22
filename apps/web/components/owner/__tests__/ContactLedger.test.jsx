@@ -260,4 +260,23 @@ describe("ContactsWorkspace", () => {
     expect(unknown).not.toContain("Saved agreement records");
     expect(unknown).toContain("check only");
   });
+
+  it("re-reads the saved-record counts after the check saves records", async () => {
+    let active = 0;
+    install({
+      [`dashboard/salons/${SALON}/capabilities`]: caps("SANDBOX", "CONSENT_LEDGER_NO_DISPATCH"),
+      "/consents/summary": () => ({ ...summaryBody, active }),
+      "/preview": preview(["VALIDATED_FOR_REVIEW"]),
+      "/consents": () => { active = 7; return saved(["RECORDED"]); },
+    });
+    const r = await mountWorkspace();
+    expect(text(r)).toMatch(/Agreed\s+0/);
+    await act(async () => { r.root.findByProps({ id: "contacts-text" }).props.onChange({ target: { value: "90123 45678, IN_PERSON, 2026-09-30" } }); });
+    await act(async () => { button(r, "Check list").props.onClick(); });
+    await flush();
+    await act(async () => { button(r, "Save agreement records").props.onClick(); });
+    await flush();
+    expect(text(r)).toMatch(/Agreed\s+7/);
+    expect(calls.filter((c) => c.path.endsWith("/consents/summary")).length).toBe(2);
+  });
 });

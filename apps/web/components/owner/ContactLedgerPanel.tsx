@@ -12,7 +12,7 @@ import ui from "./owner.module.css";
  * do for a person: record that they asked to STOP, and ERASE the shop's record of their number. Neither sends anything, and
  * FastQue never shows a saved number back (it keeps only a scrambled fingerprint).
  */
-export function ContactLedgerPanel({ salonId }: { salonId: string }) {
+export function ContactLedgerPanel({ salonId, refreshKey = 0 }: { salonId: string; /** Changes when something elsewhere on the page saved records, so the counts are read again. */ refreshKey?: number }) {
   const [summary, setSummary] = useState<ContactLedgerSummaryDto | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
@@ -38,7 +38,7 @@ export function ContactLedgerPanel({ salonId }: { salonId: string }) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   function describe(err: unknown): string {
     if (err instanceof ApiError && err.status === 400) return "That is not a valid mobile number.";

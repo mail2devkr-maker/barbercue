@@ -34,7 +34,7 @@ interface Result {
  * invitations is not available. What is typed stays in this page's memory only and is gone when the owner clears it or
  * leaves.
  */
-export function ContactListCheck({ salonId, ledgerEnabled = false }: { salonId: string; ledgerEnabled?: boolean }) {
+export function ContactListCheck({ salonId, ledgerEnabled = false, onSaved }: { salonId: string; ledgerEnabled?: boolean; onSaved?: () => void }) {
   const path = `${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.contacts}/preview`;
   const [text, setText] = useState("");
   const [batch, setBatch] = useState<BatchConsent>({ attested: false, source: "OWNER_ATTESTED", date: todayIso() });
@@ -101,7 +101,10 @@ export function ContactListCheck({ salonId, ledgerEnabled = false }: { salonId: 
       const raw = await apiFetch<unknown>(ledgerPath(salonId), { method: "POST", body: JSON.stringify(result.body) });
       const parsedResult = parseRecordResult(raw, result.rows.length);
       if (!parsedResult) setSaveError("FastQue sent an answer this page could not match to your list, so nothing is assumed to be saved.");
-      else setSaved(parsedResult);
+      else {
+        setSaved(parsedResult);
+        onSaved?.();
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 503) setSaveError("Saving agreement records is not switched on for FastQue yet. Nothing was saved.");
       else if (err instanceof ApiError && err.status === 429) setSaveError("You have saved a lot of lists in a short time. Wait a minute and try again.");
