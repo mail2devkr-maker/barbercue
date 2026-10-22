@@ -5,9 +5,20 @@ import { ADMIN_PATHS, UserStatus, type AdminEmployeeDto } from "@barbercue/share
 import { QRCodeCanvas } from "qrcode.react";
 import { ApiError, apiFetch } from "../../../../../lib/api";
 import styles from "../admin.module.css";
-import { buildEmployeeIdCardDraftPdf, formatEmployeeJoiningDate, OFFICIAL_SITE_QR_URL } from "./employee-id-card";
+import { buildEmployeeIdCardDraftPdf, cardJoiningLines, OFFICIAL_SITE_QR_URL } from "./employee-id-card";
 
 /** HR/Co-Founder/Platform Admin-only official ID-card generator for registered active employees. */
+/** Joining date of the current stint, only for someone who has rejoined (register data); otherwise null. */
+function rejoinedAtOf(employee: AdminEmployeeDto): string | null {
+  return employee.employment?.rejoined ? employee.employment.currentJoinedOn : null;
+}
+
+/** The joining line shown beside the card preview, worded exactly as the card will print it. */
+function joiningSummary(employee: AdminEmployeeDto): string {
+  const joining = cardJoiningLines({ joinedAt: employee.joinedAt, rejoinedAt: rejoinedAtOf(employee) });
+  return joining.note ? "Rejoined " + joining.value + " — " + joining.note : joining.value;
+}
+
 export default function EmployeeIdCardGenerator() {
   const [employees, setEmployees] = useState<AdminEmployeeDto[]>([]);
   const [employeeId, setEmployeeId] = useState("");
@@ -18,11 +29,23 @@ export default function EmployeeIdCardGenerator() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const qrNode = useRef<HTMLDivElement>(null);
+  const preselected = useRef(false);
 
   const load = useCallback(async () => {
     try {
       const rows = await apiFetch<AdminEmployeeDto[]>(ADMIN_PATHS.admin + "/" + ADMIN_PATHS.employees);
-      setEmployees(rows.filter((row) => row.status === UserStatus.ACTIVE));
+      const active = rows.filter((row) => row.status === UserStatus.ACTIVE);
+      setEmployees(active);
+      // Opened from the HR register ("Company ID card"): preselect that employee, once.
+      if (!preselected.current) {
+        preselected.current = true;
+        const wanted = new URLSearchParams(window.location.search).get("employee");
+        const match = wanted ? active.find((row) => row.id === wanted) : undefined;
+        if (match) {
+          setEmployeeId(match.id);
+          setTerritory(match.territory ?? "");
+        }
+      }
     } catch (error) {
       setStatus(error instanceof ApiError ? error.message : "Could not load employee records.");
     } finally {
@@ -74,13 +97,15 @@ export default function EmployeeIdCardGenerator() {
       const liveRows = await apiFetch<AdminEmployeeDto[]>(ADMIN_PATHS.admin + "/" + ADMIN_PATHS.employees);
       const latest = liveRows.find((row) => row.id === selected.id);
       if (!latest || latest.status !== UserStatus.ACTIVE || latest.employeeCode !== selected.employeeCode ||
-          latest.fullName !== selected.fullName || latest.joinedAt !== selected.joinedAt) {
+          latest.fullName !== selected.fullName || latest.joinedAt !== selected.joinedAt ||
+          rejoinedAtOf(latest) !== rejoinedAtOf(selected)) {
         throw new Error("Employee record changed or is no longer active. Refresh and select again.");
       }
       const bytes = await buildEmployeeIdCardDraftPdf({
         employeeCode: latest.employeeCode,
         fullName: latest.fullName,
         joinedAt: latest.joinedAt,
+        rejoinedAt: rejoinedAtOf(latest),
         territory: territory.trim().slice(0, 160),
         designation: designation.trim().slice(0, 100) || "Field Executive",
         photo,
@@ -144,7 +169,7 @@ export default function EmployeeIdCardGenerator() {
           </label>
           <label>
             <span>Joining date (from employee record)</span>
-            <input readOnly value={selected ? formatEmployeeJoiningDate(selected.joinedAt) : ""} />
+            <input readOnly value={selected ? joiningSummary(selected) : ""} />
           </label>
         </div>
         <label className={styles.offerUpload}>

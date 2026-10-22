@@ -6,7 +6,10 @@ export type EmployeeCardDraftInput = {
   fullName: string;
   designation: string;
   territory: string;
+  /** First-ever joining (the profile's joinedAt). */
   joinedAt: string;
+  /** Joining date of the CURRENT stint, only for someone who has rejoined; absent for everyone else. */
+  rejoinedAt?: string | null;
   photo: File;
   siteQrCanvas: HTMLCanvasElement;
 };
@@ -28,6 +31,26 @@ export function formatEmployeeJoiningDate(joinedAt: string): string {
   return joined.toLocaleDateString("en-GB", {
     day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata",
   }).replace(/ /g, "-");
+}
+
+/**
+ * What the card prints for the joining date. Someone who has never rejoined keeps the existing "JOINING DATE" line.
+ * Someone who has rejoined gets the date of the current stint under an explicit "REJOINED" label, with the first-ever
+ * joining kept visible beneath it, so neither date is ever mistaken for the other.
+ */
+export function cardJoiningLines(input: { joinedAt: string; rejoinedAt?: string | null }): {
+  label: string;
+  value: string;
+  note: string | null;
+} {
+  const original = formatEmployeeJoiningDate(input.joinedAt);
+  if (input.rejoinedAt) {
+    const current = formatEmployeeJoiningDate(input.rejoinedAt);
+    if (current !== original && current !== "Not recorded") {
+      return { label: "REJOINED", value: current, note: "First joined " + original };
+    }
+  }
+  return { label: "JOINING DATE", value: original, note: null };
 }
 
 function makeCanvas(): HTMLCanvasElement {
@@ -229,10 +252,11 @@ function drawFront(
   ctx.beginPath(); ctx.moveTo(55, 393); ctx.lineTo(606, 393); ctx.stroke();
 
   text(ctx, "EMPLOYEE ID", 54, 430, 246, 21, 650, "#e7c8d3");
-  text(ctx, "JOINING DATE", 345, 430, 290, 21, 650, "#e7c8d3");
+  const joining = cardJoiningLines(input);
+  text(ctx, joining.label, 345, 430, 290, 21, 650, "#e7c8d3");
   text(ctx, input.employeeCode, 54, 470, 270, 32, 700);
-  const dateLabel = formatEmployeeJoiningDate(input.joinedAt);
-  text(ctx, dateLabel, 345, 470, 274, 29, 650);
+  text(ctx, joining.value, 345, 470, 274, 29, 650);
+  if (joining.note) text(ctx, joining.note, 345, 497, 274, 16, 600, "#e7c8d3");
 
   text(ctx, "DESIGNATION", 54, 523, 230, 19, 650, "#e7c8d3");
   text(ctx, "TERRITORY", 345, 523, 270, 19, 650, "#e7c8d3");

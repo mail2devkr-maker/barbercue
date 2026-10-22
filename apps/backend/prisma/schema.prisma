@@ -427,6 +427,12 @@ model EmployeeProfile {
   crmVisits    EmployeeCrmVisit[]
   crmFollowUps EmployeeCrmFollowUp[]
 
+  // HR permanent-ID register (issue #283). The person row owns the code; the profile is the
+  // login-bearing record that exists only after an approved joining (or for pre-existing staff).
+  hrPerson         HrPerson?
+  hrOffersManaged  HrOfferVersion[] @relation("HrOfferReportingManager")
+  hrManagerHistory HrManagerEntry[]
+
   @@map("employee_profiles")
 }
 
@@ -1610,6 +1616,280 @@ model Notification {
   deepLink  String?
 
   @@map("notifications")
+}
+
+// ---------- HR permanent employee-ID register (issue #283) ----------
+//
+// One HrPerson per verified human, holding the PERMANENT FQ-FE-xxxxx code. A code is allocated on the
+// first persisted offer (or by the legacy direct-account / reserved-ID paths), is unique across the
+// whole company, is never changed, freed or reused (DB triggers forbid UPDATE of the code and DELETE
+// of the row), and is later bound to exactly one EmployeeProfile + User on an approved joining.
+// Offer versions and employment episodes are append-only history; offer terms are immutable.
+
+enum HrPersonOrigin {
+  OFFER
+  EXISTING_PROFILE
+  RECONCILIATION
+  DIRECT_ACCOUNT
+}
+
+enum HrOfferKind {
+  FIRST
+  REOFFER
+  REHIRE
+}
+
+enum HrOfferSource {
+  REGISTER
+  HISTORICAL_IMPORT
+}
+
+enum HrOfferStatus {
+  DRAFT
+  ISSUED
+  SENT
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum HrEpisodeStatus {
+  PENDING_JOIN
+  NOT_JOINED
+  ACTIVE
+  EXITED
+}
+
+enum HrSalaryBasis {
+  MONTHLY
+  ANNUAL
+}
+
+enum HrPdfEventKind {
+  GENERATED
+  REPRINTED
+}
+
+enum HrReconciliationSource {
+  SENT_MAIL_AUDIT
+  PDF_REVIEW
+  MANUAL
+}
+
+enum HrReconciliationStatus {
+  UNVERIFIED
+  LINKED
+  IDENTITY_CREATED
+  DUPLICATE
+}
+
+model HrPerson {
+  id           String @id @default(uuid())
+  employeeCode String @unique
+  // Numeric part of the code; 1-100 are the owner-controlled reserved block, 101+ standard.
+  codeNumber   Int    @unique
+  fullName     String
+  nameKey      String
+  nameFirstKey String
+  // Contacts are never stored in plaintext: a keyed blind index for matching, an AES-GCM blob for the
+  // letter / contact-at-issue use cases, and a masked string for lists.
+  emailHash   String?
+  phoneHash   String?
+  emailEnc    String?
+  phoneEnc    String?
+  addressEnc  String?
+  maskedEmail String?
+  maskedPhone String?
+  city        String?
+  origin      HrPersonOrigin
+  // Set only by an approved joining (or the legacy account paths). Unique: one profile per person.
+  employeeProfileId String?          @unique
+  employeeProfile   EmployeeProfile? @relation(fields: [employeeProfileId], references: [id], onDelete: Restrict)
+  // First ever joining date, kept separate from each episode's own joinedOn.
+  originalJoinedOn DateTime? @db.Date
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  episodes       HrEmploymentEpisode[]
+  offers         HrOfferVersion[]
+  auditEvents    HrAuditEvent[]
+  salaryHistory  HrSalaryEntry[]
+  managerHistory HrManagerEntry[]
+  reconciled     HrReconciliationItem[]
+
+  @@index([emailHash])
+  @@index([phoneHash])
+  @@index([nameKey])
+  @@index([nameFirstKey])
+  @@map("hr_persons")
+}
+
+model HrEmploymentEpisode {
+  id                      String          @id @default(uuid())
+  personId                String
+  person                  HrPerson        @relation(fields: [personId], references: [id], onDelete: Restrict)
+  episodeNumber           Int
+  status                  HrEpisodeStatus
+  originatingOfferVersion Int?
+  joinedOn                DateTime?       @db.Date
+  exitedOn                DateTime?       @db.Date
+  notJoinedOn             DateTime?       @db.Date
+  statusReason            String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  offers  HrOfferVersion[]
+  salary  HrSalaryEntry[]
+  manager HrManagerEntry[]
+
+  @@unique([personId, episodeNumber])
+  @@map("hr_employment_episodes")
+}
+
+model HrOfferVersion {
+  id          String              @id @default(uuid())
+  personId    String
+  person      HrPerson            @relation(fields: [personId], references: [id], onDelete: Restrict)
+  episodeId   String
+  episode     HrEmploymentEpisode @relation(fields: [episodeId], references: [id], onDelete: Restrict)
+  version     Int
+  kind        HrOfferKind
+  source      HrOfferSource       @default(REGISTER)
+  status      HrOfferStatus       @default(ISSUED)
+  issuedAt    DateTime            @default(now())
+  sentAt      DateTime?
+  acceptedAt  DateTime?
+  declinedAt  DateTime?
+  expiredAt   DateTime?
+  statusReason String?
+  createdById String?
+
+  // ---- immutable terms (a trigger rejects any UPDATE of these) ----
+  role                      String
+  baseSalaryInr             Decimal          @db.Decimal(12, 2)
+  salaryBasis               HrSalaryBasis
+  salesTarget               Int?
+  incentiveBeyondTargetInr  Int?
+  proposedJoiningDate       DateTime?        @db.Date
+  reportingManagerProfileId String?
+  reportingManager          EmployeeProfile? @relation("HrOfferReportingManager", fields: [reportingManagerProfileId], references: [id], onDelete: Restrict)
+  city                      String?
+  // Snapshot of the standard Expected Performance Incentive at issue time (INR per month).
+  expectedPerformanceIncentiveMonthlyInr Int @default(5000)
+  // AES-GCM blob {candidateName,email,phone,address} exactly as printed on this letter.
+  letterContactEnc String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pdfEvents HrPdfEvent[]
+  salary    HrSalaryEntry[]
+  manager   HrManagerEntry[]
+
+  @@unique([personId, version])
+  @@index([personId, issuedAt])
+  @@index([status])
+  @@map("hr_offer_versions")
+}
+
+model HrPdfEvent {
+  id         String         @id @default(uuid())
+  offerId    String
+  offer      HrOfferVersion @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  event      HrPdfEventKind
+  sha256     String
+  byteLength Int
+  actorId    String?
+  createdAt  DateTime       @default(now())
+
+  @@index([offerId, createdAt])
+  @@map("hr_pdf_events")
+}
+
+model HrAuditEvent {
+  id           String   @id @default(uuid())
+  personId     String
+  person       HrPerson @relation(fields: [personId], references: [id], onDelete: Restrict)
+  offerId      String?
+  episodeId    String?
+  action       String
+  subjectKind  String   @default("PERSON")
+  subjectLabel String?
+  fromStatus   String?
+  toStatus     String?
+  reason       String?
+  actorUserId  String?
+  // Never carries contact values, passwords, PDFs or resume text.
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([personId, createdAt])
+  @@map("hr_audit_events")
+}
+
+model HrSalaryEntry {
+  id            String              @id @default(uuid())
+  personId      String
+  person        HrPerson            @relation(fields: [personId], references: [id], onDelete: Restrict)
+  episodeId     String
+  episode       HrEmploymentEpisode @relation(fields: [episodeId], references: [id], onDelete: Restrict)
+  offerId       String?
+  offer         HrOfferVersion?     @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  effectiveFrom DateTime            @db.Date
+  baseSalaryInr Decimal             @db.Decimal(12, 2)
+  salaryBasis   HrSalaryBasis
+  recordedById  String?
+  createdAt     DateTime            @default(now())
+
+  @@index([personId, effectiveFrom])
+  @@map("hr_salary_history")
+}
+
+model HrManagerEntry {
+  id               String              @id @default(uuid())
+  personId         String
+  person           HrPerson            @relation(fields: [personId], references: [id], onDelete: Restrict)
+  episodeId        String
+  episode          HrEmploymentEpisode @relation(fields: [episodeId], references: [id], onDelete: Restrict)
+  offerId          String?
+  offer            HrOfferVersion?     @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  managerProfileId String
+  manager          EmployeeProfile     @relation(fields: [managerProfileId], references: [id], onDelete: Restrict)
+  fromDate         DateTime            @db.Date
+  // Only ever closed once (NULL -> a date); a trigger rejects any other change.
+  toDate       DateTime? @db.Date
+  recordedById String?
+  createdAt    DateTime  @default(now())
+
+  @@index([personId, fromDate])
+  @@map("hr_manager_history")
+}
+
+// Previously emailed letters that were never saved. NOT people: the employee code stays UNVERIFIED
+// until HR links the original one. Only a keyed hash and a masked string of the recipient are kept.
+model HrReconciliationItem {
+  id                    String                 @id @default(uuid())
+  source                HrReconciliationSource
+  sentOn                DateTime               @db.Date
+  recipientHash         String
+  maskedRecipient       String
+  candidateLabel        String?
+  printedEmployeeCode   String?
+  possibleDuplicateOfId String?
+  possibleDuplicateOf   HrReconciliationItem?  @relation("HrReconciliationDuplicate", fields: [possibleDuplicateOfId], references: [id], onDelete: Restrict)
+  duplicates            HrReconciliationItem[] @relation("HrReconciliationDuplicate")
+  acceptanceNote        String?
+  status                HrReconciliationStatus @default(UNVERIFIED)
+  linkedPersonId        String?
+  linkedPerson          HrPerson?              @relation(fields: [linkedPersonId], references: [id], onDelete: Restrict)
+  createdById           String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([recipientHash, sentOn])
+  @@index([status])
+  @@map("hr_reconciliation_items")
 }
 
 // ---------- Audit ----------

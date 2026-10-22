@@ -5,12 +5,13 @@ import { AdminVerificationService } from './admin-verification.service';
 import { AdminSalonManagementService } from './admin-salon-management.service';
 import { SalonSetupModule } from '../salon-setup/salon-setup.module';
 import { AuthModule } from '../auth/auth.module';
+import { HrRegisterModule } from '../hr-register/hr-register.module';
 import { AdminEmployeeManagementService } from './admin-employee-management.service';
 import { AdminCrmService } from './admin-crm.service';
 import { AdminAccessManagementService } from './admin-access-management.service';
 
 @Module({
-  imports: [SalonSetupModule, AuthModule],
+  imports: [SalonSetupModule, AuthModule, HrRegisterModule],
   controllers: [AdminController],
   providers: [
     AdminMonitoringService,

@@ -2,10 +2,10 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import {
   EMPLOYEE_RESERVED_ID_MAX,
   EMPLOYEE_RESERVED_ID_MIN,
-  EMPLOYEE_STANDARD_ID_START,
   Role,
   UserStatus,
   type AdminEmployeeDto,
+  type AdminEmployeeEmploymentDto,
   type CreateEmployeeInput,
   type CreateSpecialEmployeeInput,
   type ResetEmployeePasswordInput,
@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PasswordService } from '../auth/services/password.service';
 import { TotpService } from '../auth/services/totp.service';
 import { CryptoService } from '../auth/services/crypto.service';
+import { HrRegisterService } from '../hr-register/hr-register.service';
 import { AppException } from '../common/exceptions/app.exception';
 
 @Injectable()
@@ -24,6 +25,7 @@ export class AdminEmployeeManagementService {
     private readonly passwords: PasswordService,
     private readonly totp: TotpService,
     private readonly crypto: CryptoService,
+    private readonly hr: HrRegisterService,
   ) {}
 
   async list(): Promise<AdminEmployeeDto[]> {
@@ -39,7 +41,8 @@ export class AdminEmployeeManagementService {
         },
       },
     });
-    return rows.map((row) => this.toDto(row));
+    const employment = await this.employmentFor(rows.map((row) => row.id));
+    return rows.map((row) => this.toDto(row, employment.get(row.id)));
   }
 
   async create(
@@ -49,34 +52,11 @@ export class AdminEmployeeManagementService {
     const passwordHash = await this.passwords.hash(input.password);
 
     const profileId = await this.prisma.$transaction(async (tx) => {
-      // Serialise employee-code allocation so two admin clicks can never mint the same FQ-FE id.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('fastque_employee_code'))`;
-
-      // IDs 1-100 are a permanently reserved owner-controlled block. Ordinary provisioning
-      // starts at 101 and can never consume the reserved range.
-      const firstStandardCode = this.employeeCode(EMPLOYEE_STANDARD_ID_START);
-      const lastStandard = await tx.employeeProfile.findFirst({
-        where: { employeeCode: { gte: firstStandardCode } },
-        orderBy: { employeeCode: 'desc' },
-        select: { employeeCode: true },
-      });
-      let sequence = lastStandard
-        ? Number(lastStandard.employeeCode.replace('FQ-FE-', '')) + 1
-        : EMPLOYEE_STANDARD_ID_START;
-      if (!Number.isSafeInteger(sequence) || sequence < EMPLOYEE_STANDARD_ID_START) {
-        sequence = EMPLOYEE_STANDARD_ID_START;
-      }
-
-      let employeeCode = this.employeeCode(sequence);
-      while (
-        await tx.employeeProfile.findUnique({
-          where: { employeeCode },
-          select: { id: true },
-        })
-      ) {
-        sequence += 1;
-        employeeCode = this.employeeCode(sequence);
-      }
+      // One allocator for every ID: the register serialises on the same advisory lock the legacy path always used and
+      // looks at register persons AND employee profiles, so an offer-reserved ID can never be minted here.
+      // IDs 1-100 stay reserved and are never produced by this standard path.
+      const allocated = await this.hr.allocateStandard(tx);
+      const employeeCode = allocated.code;
 
       const user = await tx.user.create({
         data: {
@@ -91,13 +71,14 @@ export class AdminEmployeeManagementService {
           salonId: null,
         },
       });
-      const profile = await tx.employeeProfile.create({
-        data: {
-          userId: user.id,
-          employeeCode,
-          fullName: input.fullName,
-          territory: input.territory?.trim() || null,
-        },
+      const profile = await this.hr.createDirectAccountProfile(tx, {
+        adminUserId,
+        userId: user.id,
+        number: allocated.number,
+        code: employeeCode,
+        fullName: input.fullName,
+        territory: input.territory?.trim() || null,
+        reserved: false,
       });
       await tx.auditLog.create({
         data: {
@@ -144,19 +125,7 @@ export class AdminEmployeeManagementService {
     const employeeCode = this.employeeCode(input.employeeNumber);
 
     const profileId = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('fastque_employee_code'))`;
-
-      const existing = await tx.employeeProfile.findUnique({
-        where: { employeeCode },
-        select: { id: true },
-      });
-      if (existing) {
-        throw new AppException(
-          'EMPLOYEE_RESERVED_ID_TAKEN',
-          `${employeeCode} is already assigned.`,
-          HttpStatus.CONFLICT,
-        );
-      }
+      await this.hr.reserveSpecific(tx, input.employeeNumber);
 
       const user = await tx.user.create({
         data: {
@@ -171,13 +140,14 @@ export class AdminEmployeeManagementService {
           salonId: null,
         },
       });
-      const profile = await tx.employeeProfile.create({
-        data: {
-          userId: user.id,
-          employeeCode,
-          fullName: input.fullName,
-          territory: input.territory?.trim() || null,
-        },
+      const profile = await this.hr.createDirectAccountProfile(tx, {
+        adminUserId,
+        userId: user.id,
+        number: input.employeeNumber,
+        code: employeeCode,
+        fullName: input.fullName,
+        territory: input.territory?.trim() || null,
+        reserved: true,
       });
       await tx.auditLog.create({
         data: {
@@ -224,14 +194,14 @@ export class AdminEmployeeManagementService {
         });
       }
 
-      if (input.status !== undefined && input.status !== existing!.user.status) {
+      if (input.status !== undefined && input.status !== existing.user.status) {
         await tx.user.update({
-          where: { id: existing!.userId },
+          where: { id: existing.userId },
           data: { status: input.status },
         });
         if (input.status === UserStatus.SUSPENDED) {
           await tx.refreshToken.updateMany({
-            where: { userId: existing!.userId, revokedAt: null },
+            where: { userId: existing.userId, revokedAt: null },
             data: { revokedAt: new Date() },
           });
         }
@@ -245,9 +215,9 @@ export class AdminEmployeeManagementService {
           entityId: employeeId,
           metadata: {
             before: {
-              fullName: existing!.fullName,
-              territory: existing!.territory,
-              status: existing!.user.status,
+              fullName: existing.fullName,
+              territory: existing.territory,
+              status: existing.user.status,
             },
             requested: input,
           },
@@ -272,11 +242,11 @@ export class AdminEmployeeManagementService {
     const passwordHash = await this.passwords.hash(input.password);
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
-        where: { id: employee!.userId },
+        where: { id: employee.userId },
         data: { passwordHash },
       });
       await tx.refreshToken.updateMany({
-        where: { userId: employee!.userId, revokedAt: null },
+        where: { userId: employee.userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
       await tx.auditLog.create({
@@ -285,7 +255,7 @@ export class AdminEmployeeManagementService {
           action: 'EMPLOYEE_PASSWORD_RESET',
           entityType: 'EmployeeProfile',
           entityId: employeeId,
-          metadata: { employeeCode: employee!.employeeCode },
+          metadata: { employeeCode: employee.employeeCode },
         },
       });
     });
@@ -357,7 +327,42 @@ export class AdminEmployeeManagementService {
       },
     });
     if (!row) this.notFound();
-    return this.toDto(row!);
+    const employment = await this.employmentFor([row.id]);
+    return this.toDto(row, employment.get(row.id));
+  }
+
+  /**
+   * Joining dates from the permanent-ID register, in one query for any number of employees. An employee with no register
+   * person (nothing to compare) simply has no entry. Only stints that really started (a joining date) count.
+   */
+  private async employmentFor(
+    profileIds: string[],
+  ): Promise<Map<string, AdminEmployeeEmploymentDto>> {
+    const result = new Map<string, AdminEmployeeEmploymentDto>();
+    if (profileIds.length === 0) return result;
+    const persons = await this.prisma.hrPerson.findMany({
+      where: { employeeProfileId: { in: profileIds } },
+      select: {
+        employeeProfileId: true,
+        originalJoinedOn: true,
+        episodes: {
+          where: { joinedOn: { not: null } },
+          orderBy: { episodeNumber: 'desc' },
+          select: { joinedOn: true },
+        },
+      },
+    });
+    const day = (value: Date | null | undefined) =>
+      value ? value.toISOString().slice(0, 10) : null;
+    for (const person of persons) {
+      if (!person.employeeProfileId) continue;
+      result.set(person.employeeProfileId, {
+        originalJoinedOn: day(person.originalJoinedOn),
+        currentJoinedOn: day(person.episodes[0]?.joinedOn),
+        rejoined: person.episodes.length > 1,
+      });
+    }
+    return result;
   }
 
   private employeeCode(sequence: number): string {
@@ -372,21 +377,24 @@ export class AdminEmployeeManagementService {
     );
   }
 
-  private toDto(row: {
-    id: string;
-    userId: string;
-    employeeCode: string;
-    fullName: string;
-    territory: string | null;
-    joinedAt: Date;
-    createdAt: Date;
-    updatedAt: Date;
-    user: {
+  private toDto(
+    row: {
       id: string;
-      status: UserStatus;
-      passwordHash: string | null;
-    };
-  }): AdminEmployeeDto {
+      userId: string;
+      employeeCode: string;
+      fullName: string;
+      territory: string | null;
+      joinedAt: Date;
+      createdAt: Date;
+      updatedAt: Date;
+      user: {
+        id: string;
+        status: UserStatus;
+        passwordHash: string | null;
+      };
+    },
+    employment?: AdminEmployeeEmploymentDto,
+  ): AdminEmployeeDto {
     return {
       id: row.id,
       userId: row.user.id,
@@ -398,6 +406,7 @@ export class AdminEmployeeManagementService {
       updatedAt: row.updatedAt.toISOString(),
       status: row.user.status,
       passwordConfigured: row.user.passwordHash !== null,
+      employment: employment ?? null,
     };
   }
 }

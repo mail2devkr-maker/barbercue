@@ -7,6 +7,7 @@ describe('AdminEmployeeManagementService', () => {
   let passwords: any;
   let totp: any;
   let crypto: any;
+  let hr: any;
 
   const standardRow = {
     id: 'ep1',
@@ -70,6 +71,7 @@ describe('AdminEmployeeManagementService', () => {
           Promise.resolve(where.id === 'ep-special' ? specialRow : standardRow),
         ),
       },
+      hrPerson: { findMany: jest.fn().mockResolvedValue([]) },
       user: {
         ...tx.user,
         findUnique: jest.fn().mockResolvedValue({
@@ -94,11 +96,25 @@ describe('AdminEmployeeManagementService', () => {
       decrypt: jest.fn().mockReturnValue('totp-secret'),
     };
 
+    // The register owns allocation and creates the profile; the real behaviour is covered by the PostgreSQL
+    // e2e suite (test/hr-register.e2e-spec.ts). Here it is a stand-in with the same contract.
+    hr = {
+      allocateStandard: jest.fn().mockResolvedValue({ number: 101, code: 'FQ-FE-00101' }),
+      reserveSpecific: jest.fn().mockImplementation((_tx: unknown, value: number) =>
+        Promise.resolve({ number: value, code: `FQ-FE-${String(value).padStart(5, '0')}` }),
+      ),
+      createDirectAccountProfile: jest.fn().mockImplementation(({ id }: any = {}) => Promise.resolve({ id: id ?? 'ep1' })),
+    };
+    hr.createDirectAccountProfile.mockImplementation((_tx: unknown, input: any) =>
+      Promise.resolve({ id: input.code === 'FQ-FE-00007' ? 'ep-special' : 'ep1' }),
+    );
+
     service = new AdminEmployeeManagementService(
       prisma,
       passwords,
       totp,
       crypto,
+      hr,
     );
   });
 
@@ -110,13 +126,18 @@ describe('AdminEmployeeManagementService', () => {
       confirmPassword: 'TempPass123',
     });
 
-    expect(prisma.__tx.employeeProfile.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        employeeCode: 'FQ-FE-00101',
+    expect(hr.allocateStandard).toHaveBeenCalledTimes(1);
+    expect(hr.createDirectAccountProfile).toHaveBeenCalledWith(
+      prisma.__tx,
+      expect.objectContaining({
+        code: 'FQ-FE-00101',
+        number: 101,
         fullName: 'Field Executive',
         territory: 'Patna',
+        reserved: false,
       }),
-    });
+    );
+    expect(hr.reserveSpecific).not.toHaveBeenCalled();
     expect(created.employeeCode).toBe('FQ-FE-00101');
   });
 
@@ -132,12 +153,12 @@ describe('AdminEmployeeManagementService', () => {
 
     expect(crypto.decrypt).toHaveBeenCalledWith('encrypted-secret');
     expect(totp.verifyToken).toHaveBeenCalledWith('totp-secret', '123456');
-    expect(prisma.__tx.employeeProfile.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        employeeCode: 'FQ-FE-00007',
-        fullName: 'Special Executive',
-      }),
-    });
+    expect(hr.reserveSpecific).toHaveBeenCalledWith(prisma.__tx, 7);
+    expect(hr.allocateStandard).not.toHaveBeenCalled();
+    expect(hr.createDirectAccountProfile).toHaveBeenCalledWith(
+      prisma.__tx,
+      expect.objectContaining({ code: 'FQ-FE-00007', number: 7, fullName: 'Special Executive', reserved: true }),
+    );
     expect(prisma.__tx.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         actorUserId: 'admin1',
@@ -194,5 +215,45 @@ describe('AdminEmployeeManagementService', () => {
       data: { passwordHash: 'secure-hash' },
     });
     expect(prisma.__tx.refreshToken.updateMany).toHaveBeenCalled();
+  });
+
+  describe('register employment dates (ID cards)', () => {
+    const joined = (iso: string) => ({ joinedOn: new Date(`${iso}T00:00:00.000Z`) });
+
+    it('reports the first-ever and the current joining and flags a rejoin', async () => {
+      prisma.hrPerson.findMany.mockResolvedValue([
+        {
+          employeeProfileId: 'ep1',
+          originalJoinedOn: new Date('2026-09-01T00:00:00.000Z'),
+          // newest first, only stints that really started
+          episodes: [joined('2026-10-15'), joined('2026-09-01')],
+        },
+      ]);
+      const [row] = await service.list();
+      expect(row.employment).toEqual({
+        originalJoinedOn: '2026-09-01',
+        currentJoinedOn: '2026-10-15',
+        rejoined: true,
+      });
+      expect(prisma.hrPerson.findMany).toHaveBeenCalledTimes(1); // one query for any number of employees
+    });
+
+    it('does not call a first joining a rejoin, and gives nothing for an employee outside the register', async () => {
+      prisma.hrPerson.findMany.mockResolvedValue([
+        {
+          employeeProfileId: 'ep1',
+          originalJoinedOn: new Date('2026-09-01T00:00:00.000Z'),
+          episodes: [joined('2026-09-01')],
+        },
+      ]);
+      expect((await service.list())[0].employment).toEqual({
+        originalJoinedOn: '2026-09-01',
+        currentJoinedOn: '2026-09-01',
+        rejoined: false,
+      });
+
+      prisma.hrPerson.findMany.mockResolvedValue([]);
+      expect((await service.list())[0].employment).toBeNull();
+    });
   });
 });
