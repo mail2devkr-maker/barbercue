@@ -91,20 +91,21 @@ export const httpHrRegisterApi: HrRegisterApi = {
   },
 
   search(filters, cursor) {
-    return apiFetch<HrRegisterPage>(
-      `${HR_PATHS.register}${qs({
-        q: filters.q.trim(),
-        employeeCode: filters.employeeCode.trim(),
-        lifecycle: filters.lifecycle === "ALL" ? null : filters.lifecycle,
-        offerStatus: filters.offerStatus === "ALL" ? null : filters.offerStatus,
-        city: filters.city.trim(),
-        managerId: filters.managerId,
-        issuedFrom: filters.issuedFrom,
-        issuedTo: filters.issuedTo,
-        cursor,
-        limit: 25,
-      })}`,
-    );
+    // POST with the filters in the body: a typed e-mail address or phone number must never sit in a URL.
+    const body: Record<string, unknown> = { limit: 25 };
+    const put = (key: string, value: string | null | undefined) => {
+      if (value && value.trim()) body[key] = value.trim();
+    };
+    put("q", filters.q);
+    put("employeeCode", filters.employeeCode);
+    if (filters.lifecycle !== "ALL") body.lifecycle = filters.lifecycle;
+    if (filters.offerStatus !== "ALL") body.offerStatus = filters.offerStatus;
+    put("city", filters.city);
+    put("managerId", filters.managerId);
+    put("issuedFrom", filters.issuedFrom);
+    put("issuedTo", filters.issuedTo);
+    put("cursor", cursor);
+    return apiFetch<HrRegisterPage>(`${HR_PATHS.register}/search`, { method: "POST", body: JSON.stringify(body) });
   },
 
   getPerson(personId) {

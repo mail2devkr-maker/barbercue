@@ -747,6 +747,16 @@ maybe(
           to: null,
         });
         expect(joined.body.originalJoinedOn).toBe(firstJoin);
+        // The admin employee list (which the ID card reads) carries the register's joining dates.
+        const employmentOf = async (code: string) =>
+          (
+            (await call('get', 'admin/employees', tok.hr)).body as Json[]
+          ).find((e) => e.employeeCode === code)?.employment;
+        expect(await employmentOf(person.employeeCode)).toEqual({
+          originalJoinedOn: firstJoin,
+          currentJoinedOn: firstJoin,
+          rejoined: false,
+        });
 
         expect(await canLogin(person.employeeCode, 'First-Pass-1234')).toBe(
           true,
@@ -857,6 +867,12 @@ maybe(
         expect(await canLogin(person.employeeCode, 'Second-Pass-5678')).toBe(
           true,
         );
+        // After the rejoin the card can show BOTH dates, correctly labelled: the first-ever joining is preserved.
+        expect(await employmentOf(person.employeeCode)).toEqual({
+          originalJoinedOn: firstJoin,
+          currentJoinedOn: rejoinDay,
+          rejoined: true,
+        });
 
         const detail = await getPerson('hr', person.id);
         expect(detail.originalJoinedOn).toBe(firstJoin);
@@ -1388,19 +1404,26 @@ maybe(
         expect(byName.body.items.map((p: Json) => p.id)).toEqual([
           a.body.person.id,
         ]);
-        const byEmail = await call(
-          'get',
-          `admin/hr/register?q=${encodeURIComponent(a.contact.email)}`,
-          tok.hr,
-        );
+        // A contact detail must never be put in a URL: GET refuses it, POST register/search matches it.
+        for (const contactText of [a.contact.email, a.contact.phone]) {
+          const refused = await call(
+            'get',
+            `admin/hr/register?q=${encodeURIComponent(contactText)}`,
+            tok.hr,
+          );
+          expect(refused.status).toBe(400);
+          expect(refused.body.error.code).toBe('HR_CONTACT_SEARCH_REQUIRES_POST');
+          expect(JSON.stringify(refused.body)).not.toContain(contactText);
+        }
+        const byEmail = await call('post', 'admin/hr/register/search', tok.hr, {
+          q: a.contact.email,
+        });
         expect(byEmail.body.items.map((p: Json) => p.id)).toEqual([
           a.body.person.id,
         ]);
-        const byPhone = await call(
-          'get',
-          `admin/hr/register?q=${encodeURIComponent(a.contact.phone)}`,
-          tok.hr,
-        );
+        const byPhone = await call('post', 'admin/hr/register/search', tok.hr, {
+          q: a.contact.phone,
+        });
         expect(byPhone.body.items.map((p: Json) => p.id)).toEqual([
           a.body.person.id,
         ]);

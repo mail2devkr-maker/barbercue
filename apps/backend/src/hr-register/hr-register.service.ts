@@ -193,7 +193,27 @@ export class HrRegisterService {
   // reads
   // ---------------------------------------------------------------------------------------------
 
-  async search(query: HrRegisterQuery): Promise<HrRegisterPage> {
+  /**
+   * Register search. `allowContact` is true only for the POST route: an e-mail address or phone number must never travel in a
+   * URL (proxy, platform and browser logs keep URLs), so the GET route refuses contact-like text instead of matching it.
+   */
+  async search(
+    query: HrRegisterQuery,
+    options: { allowContact: boolean } = { allowContact: false },
+  ): Promise<HrRegisterPage> {
+    if (query.q && !options.allowContact) {
+      const text = query.q.trim();
+      if (
+        text.includes('@') ||
+        (/^[\d\s+()-]+$/.test(text) && normalizePhone(text))
+      ) {
+        throw new AppException(
+          'HR_CONTACT_SEARCH_REQUIRES_POST',
+          'Contact details are searched with the identity check, never in the address.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
     const where: Prisma.Sql[] = [];
     if (query.employeeCode)
       where.push(Prisma.sql`p."employeeCode" = ${query.employeeCode}`);

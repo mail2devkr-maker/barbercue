@@ -1,4 +1,4 @@
-import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, drawApprovedHrSignature, formatEmployeeJoiningDate, ID_CARD_LOGO_FRAME, ID_CARD_HR_SIGNATURE_FRAME, ID_CARD_BACK_SIGNATURE_LAYOUT, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
+import { buildEmployeeIdCardDraftPdf, cardImagesToA4Pdf, cardJoiningLines, drawApprovedHrSignature, formatEmployeeJoiningDate, ID_CARD_LOGO_FRAME, ID_CARD_HR_SIGNATURE_FRAME, ID_CARD_BACK_SIGNATURE_LAYOUT, OFFICIAL_SITE_QR_URL } from "../../app/(dashboard)/dashboard/admin/crm/employee-id-card";
 
 describe("CRM employee ID card HR draft PDF", () => {
   test("A4 contains two physical ISO ID-1 faces without claiming ID verification", () => {
@@ -91,5 +91,29 @@ describe("CRM employee ID card HR draft PDF", () => {
 
   test("site QR remains explicitly non-verifying until a real employee verification service exists", () => {
     expect(OFFICIAL_SITE_QR_URL).toBe("https://fastque.com");
+  });
+
+  describe("joining date on the card for people who rejoined", () => {
+    test("keeps the existing JOINING DATE line for everyone who never rejoined", () => {
+      expect(cardJoiningLines({ joinedAt: "2026-09-01T00:00:00.000Z" })).toEqual({
+        label: "JOINING DATE", value: formatEmployeeJoiningDate("2026-09-01T00:00:00.000Z"), note: null,
+      });
+      expect(cardJoiningLines({ joinedAt: "2026-09-01T00:00:00.000Z", rejoinedAt: null }).label).toBe("JOINING DATE");
+    });
+
+    test("labels the current stint REJOINED and keeps the first-ever joining visible", () => {
+      expect(cardJoiningLines({ joinedAt: "2026-09-01T00:00:00.000Z", rejoinedAt: "2026-10-15" })).toEqual({
+        label: "REJOINED",
+        value: formatEmployeeJoiningDate("2026-10-15"),
+        note: "First joined " + formatEmployeeJoiningDate("2026-09-01T00:00:00.000Z"),
+      });
+    });
+
+    test("never presents the same date twice or an unreadable date as a rejoin", () => {
+      expect(cardJoiningLines({ joinedAt: "2026-09-01T00:00:00.000Z", rejoinedAt: "2026-09-01" }).label).toBe("JOINING DATE");
+      expect(cardJoiningLines({ joinedAt: "2026-09-01T00:00:00.000Z", rejoinedAt: "garbage" })).toEqual({
+        label: "JOINING DATE", value: formatEmployeeJoiningDate("2026-09-01T00:00:00.000Z"), note: null,
+      });
+    });
   });
 });

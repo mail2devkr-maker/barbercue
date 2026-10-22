@@ -11,13 +11,18 @@ beforeEach(() => {
 });
 
 describe("httpHrRegisterApi", () => {
-  test("search sends only the filters that are set, as a GET query", async () => {
-    await httpHrRegisterApi.search({ ...EMPTY, q: " Asha ", lifecycle: "NOT_JOINED", city: "Patna" }, "25");
+  test("search is a POST with only the filters that are set in the body, so nothing typed reaches a URL", async () => {
+    await httpHrRegisterApi.search({ ...EMPTY, q: " asha@example.test ", lifecycle: "NOT_JOINED", city: "Patna" }, "25");
     const [path, options] = apiFetch.mock.calls[0];
-    expect(options).toBeUndefined();
-    const url = new URL(`https://x/${path}`);
-    expect(url.pathname).toBe(`/${HR_PATHS.register}`);
-    expect(Object.fromEntries(url.searchParams)).toEqual({ q: "Asha", lifecycle: "NOT_JOINED", city: "Patna", cursor: "25", limit: "25" });
+    expect(path).toBe(`${HR_PATHS.register}/search`);
+    expect(path).not.toMatch(/asha|@|\?/i);
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ q: "asha@example.test", lifecycle: "NOT_JOINED", city: "Patna", cursor: "25", limit: 25 });
+  });
+
+  test("search leaves out empty and ALL filters", async () => {
+    await httpHrRegisterApi.search({ ...EMPTY }, null);
+    expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ limit: 25 });
   });
 
   test("identity matching is a POST so contact values never reach a URL", async () => {

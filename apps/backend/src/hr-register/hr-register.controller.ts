@@ -48,11 +48,20 @@ export class HrRegisterController {
     private readonly reconciliation: HrReconciliationService,
   ) {}
 
+  /** GET never matches an e-mail or phone number (it would sit in the URL); use POST register/search for that. */
   @Get(HR_PATHS.register)
   search(
     @Query(new ZodValidationPipe(hrRegisterQuerySchema)) query: HrRegisterQuery,
   ) {
-    return this.register.search(query);
+    return this.register.search(query, { allowContact: false });
+  }
+
+  /** The same search with the filters in the body: the only route that may match a contact detail. Read-only. */
+  @Post(`${HR_PATHS.register}/search`)
+  searchInBody(
+    @Body(new ZodValidationPipe(hrRegisterQuerySchema)) query: HrRegisterQuery,
+  ) {
+    return this.register.search(query, { allowContact: true });
   }
 
   @Post(HR_PATHS.matches)

@@ -95,12 +95,24 @@ export interface AdminAccessUserDto {
   createdAt: string;
 }
 
+/** Joining dates from the permanent-ID register, for ID cards: the first-ever joining and the current stint. */
+export interface AdminEmployeeEmploymentDto {
+  /** First-ever joining (YYYY-MM-DD), preserved across exits and rejoins. */
+  originalJoinedOn: string | null;
+  /** Joining date of the current (latest joined) stint, YYYY-MM-DD. */
+  currentJoinedOn: string | null;
+  /** True when this person has joined more than once. */
+  rejoined: boolean;
+}
+
 export interface AdminEmployeeDto extends EmployeeProfileDto {
   userId: string;
   status: UserStatus;
   passwordConfigured: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Null when the employee is not in the register (nothing to compare). */
+  employment?: AdminEmployeeEmploymentDto | null;
 }
 
 export interface EmployeeCrmLeadDto {

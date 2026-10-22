@@ -11,6 +11,8 @@ export function describeHrFailure(error: unknown, fallback = "Could not complete
   switch (error.code) {
     case "HR_MATCH_REVIEW_REQUIRED":
       return "These details are close to an existing person. Review the matches and confirm who this is before continuing.";
+    case "HR_CONTACT_SEARCH_REQUIRES_POST":
+      return "Contact details are checked with the identity check, so they are never put in the page address.";
     case "HR_IDENTITY_CONFLICT":
       return "This identity changed while you were working. Search again and re-check the matches.";
     case "HR_OFFER_INVALID_TRANSITION":

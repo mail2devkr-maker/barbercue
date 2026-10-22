@@ -71,6 +71,7 @@ describe('AdminEmployeeManagementService', () => {
           Promise.resolve(where.id === 'ep-special' ? specialRow : standardRow),
         ),
       },
+      hrPerson: { findMany: jest.fn().mockResolvedValue([]) },
       user: {
         ...tx.user,
         findUnique: jest.fn().mockResolvedValue({
@@ -214,5 +215,45 @@ describe('AdminEmployeeManagementService', () => {
       data: { passwordHash: 'secure-hash' },
     });
     expect(prisma.__tx.refreshToken.updateMany).toHaveBeenCalled();
+  });
+
+  describe('register employment dates (ID cards)', () => {
+    const joined = (iso: string) => ({ joinedOn: new Date(`${iso}T00:00:00.000Z`) });
+
+    it('reports the first-ever and the current joining and flags a rejoin', async () => {
+      prisma.hrPerson.findMany.mockResolvedValue([
+        {
+          employeeProfileId: 'ep1',
+          originalJoinedOn: new Date('2026-09-01T00:00:00.000Z'),
+          // newest first, only stints that really started
+          episodes: [joined('2026-10-15'), joined('2026-09-01')],
+        },
+      ]);
+      const [row] = await service.list();
+      expect(row.employment).toEqual({
+        originalJoinedOn: '2026-09-01',
+        currentJoinedOn: '2026-10-15',
+        rejoined: true,
+      });
+      expect(prisma.hrPerson.findMany).toHaveBeenCalledTimes(1); // one query for any number of employees
+    });
+
+    it('does not call a first joining a rejoin, and gives nothing for an employee outside the register', async () => {
+      prisma.hrPerson.findMany.mockResolvedValue([
+        {
+          employeeProfileId: 'ep1',
+          originalJoinedOn: new Date('2026-09-01T00:00:00.000Z'),
+          episodes: [joined('2026-09-01')],
+        },
+      ]);
+      expect((await service.list())[0].employment).toEqual({
+        originalJoinedOn: '2026-09-01',
+        currentJoinedOn: '2026-09-01',
+        rejoined: false,
+      });
+
+      prisma.hrPerson.findMany.mockResolvedValue([]);
+      expect((await service.list())[0].employment).toBeNull();
+    });
   });
 });
