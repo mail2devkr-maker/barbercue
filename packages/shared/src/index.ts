@@ -21,3 +21,4 @@ export * from './shop-home';
 export * from './inventory';
 export * from './inventory';
 export * from './offers';
+export * from './employee-voice';

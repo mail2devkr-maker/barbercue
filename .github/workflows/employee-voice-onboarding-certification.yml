@@ -1,0 +1,82 @@
+name: Employee Voice Onboarding Certification
+
+on:
+  push:
+    branches:
+      - feat/employee-voice-visit-log-20261013
+  pull_request:
+    branches: [master]
+    paths:
+      - "apps/backend/prisma/schema.prisma"
+      - "apps/backend/prisma/migrations/20261013*employee_voice_visit*/*"
+      - "apps/backend/prisma/tests/employee-voice-visit-migration-smoke.sql"
+      - "apps/backend/src/employee/**"
+      - "packages/shared/src/employee-voice/**"
+      - "packages/shared/src/constants/**"
+      - "packages/shared/src/types/**"
+      - "apps/web/app/employee/**"
+      - ".github/workflows/employee-voice-onboarding-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: employee_voice_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d employee_voice_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://ci:ci-only@127.0.0.1:5432/employee_voice_test?schema=public
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --include=dev --workspaces --include-workspace-root
+      - name: Build shared package
+        run: npm run build --workspace=@barbercue/shared
+      - name: Generate and validate Prisma client/schema
+        run: |
+          npm run prisma:generate --workspace=@barbercue/backend
+          npm run prisma:validate --workspace=@barbercue/backend
+      - name: Apply voice visit migrations to disposable PostgreSQL and assert constraints
+        run: psql "postgresql://ci:ci-only@127.0.0.1:5432/employee_voice_test" -v ON_ERROR_STOP=1 -f apps/backend/prisma/tests/employee-voice-visit-migration-smoke.sql
+      - name: Shared regression tests
+        run: npm run test --workspace=@barbercue/shared -- --runInBand
+      - name: Employee ownership, idempotency and lifecycle tests
+        run: npm run test --workspace=@barbercue/backend -- --runInBand --testPathPatterns=employee/employee-voice-visit.service.spec.ts
+      - name: Employee voice onboarding mobile-width interaction test
+        run: npm run test --workspace=@barbercue/web -- --runInBand --runTestsByPath app/employee/voice-onboarding/__tests__/voice-onboarding.test.jsx
+      - name: Backend TypeScript check and production build
+        run: |
+          npm run typecheck --workspace=@barbercue/backend
+          npm run build --workspace=@barbercue/backend
+      - name: Web TypeScript check and production build
+        run: |
+          npm run typecheck --workspace=@barbercue/web
+          npm run build --workspace=@barbercue/web
+      - name: Changed backend production source lint without auto-fix
+        working-directory: apps/backend
+        run: npx eslint --no-fix src/employee/employee.controller.ts src/employee/employee-voice-visit.service.ts src/employee/employee.module.ts
+      - name: New web onboarding route lint without auto-fix
+        working-directory: apps/web
+        run: npx eslint --no-fix 'app/employee/voice-onboarding/[leadId]/page.tsx'
+      - name: Whitespace validation
+        run: git diff --check

@@ -155,6 +155,13 @@ export interface EmployeeCrmFollowUpDto {
   updatedAt: string;
 }
 
+export type {
+  EmployeeVoiceLanguage,
+  EmployeeVoiceVisitLogDto,
+  EmployeeVoiceVisitLogPageDto,
+  VoiceOnboardingDraft,
+} from '../employee-voice';
+
 export interface EmployeeCrmDashboardDto {
   profile: EmployeeProfileDto;
   counts: {
