@@ -1364,6 +1364,73 @@ describe('QueueService', () => {
     });
   });
 
+  describe('cancelByCustomer', () => {
+    const owned = { id: 'q1', salonId: 's1', status: QueueEntryStatus.WAITING };
+
+    it('lets the signed-in owner cancel a WAITING standalone token without deleting history', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(owned);
+      await service.cancelByCustomer('c1', 'q1');
+      expect(prisma.queueEntry.findFirst).toHaveBeenCalledWith({
+        where: { id: 'q1', customerId: 'c1', bookingId: null },
+        select: { id: true, salonId: true, status: true },
+      });
+      expect(prisma.queueEntry.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'q1',
+          customerId: 'c1',
+          bookingId: null,
+          status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+        },
+        data: { status: QueueEntryStatus.CANCELLED },
+      });
+      expect(prisma.serviceSession.updateMany).not.toHaveBeenCalled();
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+
+    it('permits CALLED/assigned-but-not-started and frees the position', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce({
+        ...owned,
+        status: QueueEntryStatus.CALLED,
+      });
+      await service.cancelByCustomer('c1', 'q1');
+      expect(prisma.queueEntry.updateMany).toHaveBeenCalledTimes(1);
+      expect(realtime.emitQueueUpdated).toHaveBeenCalledWith('s1');
+    });
+
+    it('rejects another customer and booking-linked check-ins without a mutation', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(null);
+      await expect(service.cancelByCustomer('attacker', 'q1')).rejects.toMatchObject({
+        code: 'QUEUE_ENTRY_NOT_FOUND',
+      });
+      expect(prisma.queueEntry.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'q1', customerId: 'attacker', bookingId: null },
+        }),
+      );
+      expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([QueueEntryStatus.IN_SERVICE, QueueEntryStatus.COMPLETED, QueueEntryStatus.CANCELLED])(
+      'refuses terminal or started state %s',
+      async (status) => {
+        prisma.queueEntry.findFirst.mockResolvedValueOnce({ ...owned, status });
+        await expect(service.cancelByCustomer('c1', 'q1')).rejects.toMatchObject({
+          code: 'INVALID_QUEUE_TRANSITION',
+        });
+        expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it('returns a conflict when the compare-and-set loses to service start', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce(owned);
+      prisma.queueEntry.updateMany.mockResolvedValueOnce({ count: 0 });
+      await expect(service.cancelByCustomer('c1', 'q1')).rejects.toMatchObject({
+        code: 'INVALID_QUEUE_TRANSITION',
+      });
+      expect(realtime.emitQueueUpdated).not.toHaveBeenCalled();
+    });
+  });
+
   describe('cancelByStaff', () => {
     it("cascades to cancel an IN_SERVICE entry's ACTIVE ServiceSession", async () => {
       prisma.queueEntry.findUnique.mockResolvedValueOnce(
