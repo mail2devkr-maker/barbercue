@@ -20,7 +20,27 @@ interface JobState {
 
 const MIN_DELAY_MS = 250;
 const MAX_TIMER_DELAY_MS = 2_000_000_000;
-const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+const DEFAULT_RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+const MIN_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Every reconcile tick is one database lookup per job, and on Neon a lookup against a suspended
+ * compute wakes it for at least the ~5 minute autosuspend window. `DB_DEADLINE_RECONCILE_MS` lets
+ * operations stretch the coarse safety-net tick (e.g. 21600000 = 6 h) to save compute hours. The
+ * default stays one hour, so behaviour is unchanged until the variable is set. A value that is not an
+ * integer or is below the 5 minute floor falls back to the default (never to something *more*
+ * frequent); a value above 24 h is capped at 24 h.
+ */
+export function resolveReconcileIntervalMs(raw: string | undefined): number {
+  const text = raw?.trim();
+  if (!text) return DEFAULT_RECONCILE_INTERVAL_MS;
+  const value = Number(text);
+  if (!Number.isInteger(value) || value < MIN_RECONCILE_INTERVAL_MS) {
+    return DEFAULT_RECONCILE_INTERVAL_MS;
+  }
+  return Math.min(value, MAX_RECONCILE_INTERVAL_MS);
+}
 
 /**
  * Keeps deadline-driven database jobs accurate without waking Neon every minute.
@@ -48,7 +68,9 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
       pendingRefresh: false,
     };
     this.jobs.set(job.name, state);
-    this.logger.log(`Registered adaptive DB deadline job: ${job.name} (${job.domain})`);
+    this.logger.log(
+      `Registered adaptive DB deadline job: ${job.name} (${job.domain})`,
+    );
     this.ensureReconcileTimer();
     this.queueRefresh(state, 0);
     return () => this.unregister(job.name);
@@ -62,9 +84,21 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
 
   private ensureReconcileTimer(): void {
     if (this.reconcileTimer) return;
+    const configured = process.env.DB_DEADLINE_RECONCILE_MS;
+    const intervalMs = resolveReconcileIntervalMs(configured);
+    if (
+      configured?.trim() &&
+      intervalMs === DEFAULT_RECONCILE_INTERVAL_MS &&
+      Number(configured) !== intervalMs
+    ) {
+      this.logger.warn(
+        `Ignoring DB_DEADLINE_RECONCILE_MS (expected an integer >= ${MIN_RECONCILE_INTERVAL_MS}); using the default ${DEFAULT_RECONCILE_INTERVAL_MS} ms`,
+      );
+    }
+    this.logger.log(`Deadline reconcile interval: ${intervalMs} ms`);
     this.reconcileTimer = setInterval(() => {
       for (const state of this.jobs.values()) this.queueRefresh(state, 0);
-    }, RECONCILE_INTERVAL_MS);
+    }, intervalMs);
     this.reconcileTimer.unref?.();
   }
 
@@ -108,10 +142,13 @@ export class DbDeadlineSchedulerService implements OnModuleDestroy {
         `Could not plan deadline job ${state.job.name}: ${error instanceof Error ? error.message : 'unknown error'}`,
       );
       // Retry planning later without falling back to minute-level polling.
-      state.timer = setTimeout(() => {
-        state.timer = null;
-        this.queueRefresh(state, 0);
-      }, 5 * 60 * 1000);
+      state.timer = setTimeout(
+        () => {
+          state.timer = null;
+          this.queueRefresh(state, 0);
+        },
+        5 * 60 * 1000,
+      );
       state.timer.unref?.();
     } finally {
       state.refreshing = false;
