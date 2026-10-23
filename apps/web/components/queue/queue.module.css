@@ -119,6 +119,36 @@
   margin: var(--bc-space-2) 0 0;
 }
 
+/* Customer cancellation is deliberately distinct from the shop's operator controls. */
+.customerCancelWrap {
+  margin-top: var(--bc-space-4);
+  padding-top: var(--bc-space-3);
+  border-top: 1px solid var(--bc-border);
+}
+
+.customerCancelButton {
+  appearance: none;
+  border: 1px solid var(--bc-accent);
+  border-radius: var(--bc-radius-sm);
+  background: #ffffff;
+  color: var(--bc-accent);
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: var(--bc-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.customerCancelButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.customerCancelButton:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+
 /* ---------- Join forms ---------- */
 
 .joinCard {
