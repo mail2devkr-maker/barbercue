@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, voiceAnnouncementsFor, type QueueEntryDetailDto, type UiStrings } from '@barbercue/shared';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { useLanguage } from '../lib/language-context';
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from '../lib/realtime';
@@ -35,6 +35,39 @@ export function QueueStatusPanel({
   const { user } = useAuth();
   const { t } = useLanguage();
   const [turnAlert, setTurnAlert] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const canCancel = entry.bookingId === null && (entry.status === 'WAITING' || entry.status === 'CALLED');
+
+  async function cancelQueue(): Promise<void> {
+    if (!canCancel || cancelling) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await apiFetch(`${QUEUE_ENTRIES_PATH}/${entry.id}/cancel`, { method: 'POST' });
+      onEntryChange(null);
+    } catch (error) {
+      setCancelError(error instanceof ApiError ? error.message : 'Could not cancel your Live Queue token. Please try again.');
+      // Shop action may have started the service concurrently: refresh instead of hiding it.
+      void apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`)
+        .then(onEntryChange)
+        .catch(() => undefined);
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  function confirmCancel(): void {
+    if (!canCancel || cancelling) return;
+    Alert.alert(
+      'Cancel Live Queue?',
+      'You will lose your place in line. You can join again if you need to.',
+      [
+        { text: 'Keep my place', style: 'cancel' },
+        { text: 'Cancel queue', style: 'destructive', onPress: () => void cancelQueue() },
+      ],
+    );
+  }
 
   useEffect(() => {
     if (!ACTIVE_STATUSES.has(entry.status)) return undefined;
@@ -114,6 +147,18 @@ export function QueueStatusPanel({
           {entry.assignedChairLabel ? ` — ${entry.assignedChairLabel}` : ''}
         </Text>
       )}
+      {canCancel && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cancel Live Queue token"
+          disabled={cancelling}
+          onPress={confirmCancel}
+          style={[styles.cancelQueueButton, cancelling && styles.cancelDisabled]}
+        >
+          <Text style={styles.cancelQueueText}>{cancelling ? 'Cancelling…' : 'Cancel Live Queue'}</Text>
+        </Pressable>
+      )}
+      {cancelError && <Text accessibilityRole="alert" style={styles.cancelError}>{cancelError}</Text>}
     </View>
   );
 }
@@ -141,4 +186,21 @@ const styles = StyleSheet.create({
     marginBottom: space[3],
   },
   turnAlertText: { fontFamily: font.bodyBold, fontSize: fontSize.xs, color: fastQue.success },
+  cancelQueueButton: {
+    borderWidth: 1,
+    borderColor: fastQue.pink,
+    borderRadius: radius.sm,
+    minHeight: 44,
+    padding: space[3],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space[4],
+  },
+  cancelQueueText: {
+    color: fastQue.pink,
+    fontFamily: font.bodyBold,
+    fontSize: fontSize.sm,
+  },
+  cancelDisabled: { opacity: 0.5 },
+  cancelError: { color: fastQue.pink, fontFamily: font.bodyMedium, fontSize: fontSize.xs, marginTop: space[2] },
 });
