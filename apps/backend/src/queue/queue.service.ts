@@ -371,6 +371,12 @@ export class QueueService {
         HttpStatus.NOT_FOUND,
       );
     }
+    // Idempotent: a retry after a lost response, or a double tap / second device, must end in the
+    // same CANCELLED state instead of telling the customer to "contact the shop" about a visit that
+    // is already cancelled. No side effects are repeated.
+    if (entry.status === QueueEntryStatus.CANCELLED) {
+      return this.getDetailOrThrow(entryId);
+    }
     if (
       entry.status !== QueueEntryStatus.WAITING &&
       entry.status !== QueueEntryStatus.CALLED
@@ -394,6 +400,16 @@ export class QueueService {
       data: { status: QueueEntryStatus.CANCELLED },
     });
     if (claim.count !== 1) {
+      // Lost a race. If another cancel of this same token won (double tap, two devices) the customer
+      // already got what they asked for; anything else (e.g. the shop started the service) is a real
+      // conflict and must be shown as one.
+      const current = await this.prisma.queueEntry.findFirst({
+        where: { id: entryId, customerId, bookingId: null },
+        select: { status: true },
+      });
+      if (current?.status === QueueEntryStatus.CANCELLED) {
+        return this.getDetailOrThrow(entryId);
+      }
       throw new AppException(
         QueueErrorCode.INVALID_QUEUE_TRANSITION,
         'Your Live Queue status changed. Refresh and try again.',

@@ -47,7 +47,7 @@ export function QueueStatusPanel({
       await apiFetch(`${QUEUE_ENTRIES_PATH}/${entry.id}/cancel`, { method: 'POST' });
       onEntryChange(null);
     } catch (error) {
-      setCancelError(error instanceof ApiError ? error.message : 'Could not cancel your Live Queue token. Please try again.');
+      setCancelError(error instanceof ApiError ? error.message : t.couldNotCancelLiveQueue);
       // Shop action may have started the service concurrently: refresh instead of hiding it.
       void apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`)
         .then(onEntryChange)
@@ -60,11 +60,11 @@ export function QueueStatusPanel({
   function confirmCancel(): void {
     if (!canCancel || cancelling) return;
     Alert.alert(
-      'Cancel Live Queue?',
-      'You will lose your place in line. You can join again if you need to.',
+      t.cancelLiveQueueConfirmTitle,
+      t.cancelLiveQueueConfirmMessage,
       [
-        { text: 'Keep my place', style: 'cancel' },
-        { text: 'Cancel queue', style: 'destructive', onPress: () => void cancelQueue() },
+        { text: t.keepMyPlaceAction, style: 'cancel' },
+        { text: t.confirmCancelLiveQueueAction, style: 'destructive', onPress: () => void cancelQueue() },
       ],
     );
   }
@@ -150,12 +150,12 @@ export function QueueStatusPanel({
       {canCancel && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Cancel Live Queue token"
+          accessibilityLabel={t.cancelLiveQueueA11yLabel}
           disabled={cancelling}
           onPress={confirmCancel}
           style={[styles.cancelQueueButton, cancelling && styles.cancelDisabled]}
         >
-          <Text style={styles.cancelQueueText}>{cancelling ? 'Cancelling…' : 'Cancel Live Queue'}</Text>
+          <Text style={styles.cancelQueueText}>{cancelling ? t.cancellingLiveQueueLabel : t.cancelLiveQueueAction}</Text>
         </Pressable>
       )}
       {cancelError && <Text accessibilityRole="alert" style={styles.cancelError}>{cancelError}</Text>}

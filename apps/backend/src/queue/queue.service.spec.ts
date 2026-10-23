@@ -1410,8 +1410,27 @@ describe('QueueService', () => {
       expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
     });
 
-    it.each([QueueEntryStatus.IN_SERVICE, QueueEntryStatus.COMPLETED, QueueEntryStatus.CANCELLED])(
-      'refuses terminal or started state %s',
+    it('treats a repeat cancel of an already CANCELLED token as success with no repeated side effects', async () => {
+      prisma.queueEntry.findFirst.mockResolvedValueOnce({
+        ...owned,
+        status: QueueEntryStatus.CANCELLED,
+      });
+      await expect(service.cancelByCustomer('c1', 'q1')).resolves.toBeDefined();
+      expect(prisma.queueEntry.updateMany).not.toHaveBeenCalled();
+      expect(realtime.emitQueueUpdated).not.toHaveBeenCalled();
+    });
+
+    it('succeeds when the compare-and-set loses to a concurrent cancel of the same token', async () => {
+      prisma.queueEntry.findFirst
+        .mockResolvedValueOnce(owned)
+        .mockResolvedValueOnce({ status: QueueEntryStatus.CANCELLED });
+      prisma.queueEntry.updateMany.mockResolvedValueOnce({ count: 0 });
+      await expect(service.cancelByCustomer('c1', 'q1')).resolves.toBeDefined();
+      expect(realtime.emitQueueUpdated).not.toHaveBeenCalled();
+    });
+
+    it.each([QueueEntryStatus.IN_SERVICE, QueueEntryStatus.COMPLETED])(
+      'refuses started or completed state %s',
       async (status) => {
         prisma.queueEntry.findFirst.mockResolvedValueOnce({ ...owned, status });
         await expect(service.cancelByCustomer('c1', 'q1')).rejects.toMatchObject({

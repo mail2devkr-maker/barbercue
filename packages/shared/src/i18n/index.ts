@@ -665,6 +665,15 @@ export interface UiStrings {
   couldNotJoinQueue: string;
   alreadyInQueueTitle: string;
   alreadyInQueueHint: string;
+  cancelLiveQueueAction: string;
+  cancellingLiveQueueLabel: string;
+  cancelLiveQueueA11yLabel: string;
+  cancelLiveQueueConfirmTitle: string;
+  cancelLiveQueueConfirmMessage: string;
+  keepMyPlaceAction: string;
+  confirmCancelLiveQueueAction: string;
+  couldNotCancelLiveQueue: string;
+  cancelLiveQueueReassurance: string;
   youreInLineTitle: string;
   joinTheQueueTitle: string;
   serviceOptional: string;
@@ -1404,6 +1413,15 @@ const enUi: UiStrings = {
   couldNotJoinQueue: 'Could not join the queue. Please try again.',
   alreadyInQueueTitle: 'Already in a queue',
   alreadyInQueueHint: 'You already have an active queue token at another salon. Finish or cancel it before joining here.',
+  cancelLiveQueueAction: 'Cancel Live Queue',
+  cancellingLiveQueueLabel: 'Cancelling…',
+  cancelLiveQueueA11yLabel: 'Cancel Live Queue token',
+  cancelLiveQueueConfirmTitle: 'Cancel Live Queue?',
+  cancelLiveQueueConfirmMessage: 'You will lose your place in line. You can join again if you need to.',
+  keepMyPlaceAction: 'Keep my place',
+  confirmCancelLiveQueueAction: 'Cancel queue',
+  couldNotCancelLiveQueue: 'Could not cancel your Live Queue token. Please try again.',
+  cancelLiveQueueReassurance: 'You can cancel before your service starts.',
   youreInLineTitle: "You're in line",
   joinTheQueueTitle: 'Join the queue',
   serviceOptional: 'Service (optional)',
@@ -2092,6 +2110,15 @@ const hiUi: UiStrings = {
   couldNotJoinQueue: 'कतार में शामिल नहीं हो सके। कृपया फिर कोशिश करें।',
   alreadyInQueueTitle: 'पहले से कतार में',
   alreadyInQueueHint: 'आपके पास पहले से किसी और सैलून में सक्रिय कतार टोकन है। यहां शामिल होने से पहले उसे पूरा करें या रद्द करें।',
+  cancelLiveQueueAction: 'लाइव कतार रद्द करें',
+  cancellingLiveQueueLabel: 'रद्द किया जा रहा है…',
+  cancelLiveQueueA11yLabel: 'लाइव कतार टोकन रद्द करें',
+  cancelLiveQueueConfirmTitle: 'लाइव कतार रद्द करें?',
+  cancelLiveQueueConfirmMessage: 'कतार में आपकी जगह चली जाएगी। ज़रूरत हो तो आप दोबारा शामिल हो सकते हैं।',
+  keepMyPlaceAction: 'मेरी जगह रखें',
+  confirmCancelLiveQueueAction: 'कतार रद्द करें',
+  couldNotCancelLiveQueue: 'आपका लाइव कतार टोकन रद्द नहीं हो सका। कृपया फिर कोशिश करें।',
+  cancelLiveQueueReassurance: 'सेवा शुरू होने से पहले आप रद्द कर सकते हैं।',
   youreInLineTitle: 'आप कतार में हैं',
   joinTheQueueTitle: 'कतार में शामिल हों',
   serviceOptional: 'सेवा (वैकल्पिक)',
