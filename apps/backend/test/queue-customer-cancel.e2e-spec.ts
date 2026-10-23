@@ -10,6 +10,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { TokenService } from '../src/auth/services/token.service';
 import { QueueAutoAssignTrigger } from '../src/queue/queue-auto-assign.trigger';
 import { RealtimeGateway } from '../src/realtime/realtime.gateway';
+import { io, type Socket as ClientSocket } from 'socket.io-client';
 
 /**
  * Customer Live Queue cancellation (POST /queue-entries/:id/cancel): the REAL AppModule, real Prisma, real
@@ -78,7 +79,9 @@ maybe('Customer Live Queue cancellation (e2e, disposable local database)', () =>
         .expect(201)
     ).body as { id: string; status: string; position: number | null };
   const arrive = (entryId: string) => api('post', `dashboard/queue-entries/${entryId}/arrive`, tok.owner).expect(201);
-  const cancelAs = (label: string, entryId: string) => api('post', `queue-entries/${entryId}/cancel`, tok[label]);
+  // Exactly what the web and mobile clients send: a bare POST with the bearer token, no body, NO Idempotency-Key.
+  const cancelAs = (label: string, entryId: string) =>
+    request(app.getHttpServer()).post(`/api/v1/queue-entries/${entryId}/cancel`).set('Authorization', `Bearer ${tok[label]}`);
   const mine = async (label: string) => (await api('get', 'queue-entries/mine/active', tok[label]).expect(200)).body as { id?: string; position?: number | null; status?: string };
 
   /** Leaves the shop empty for the next scenario: finish sessions, cancel everything still active. */
@@ -156,7 +159,7 @@ maybe('Customer Live Queue cancellation (e2e, disposable local database)', () =>
   describe('permissions', () => {
     it('requires authentication and the customer role; staff and owners cannot use the customer route', async () => {
       const a = await join('cust1');
-      await api('post', `queue-entries/${a.id}/cancel`).expect(401);
+      await request(app.getHttpServer()).post(`/api/v1/queue-entries/${a.id}/cancel`).expect(401);
       await cancelAs('ravi', a.id).expect(403);
       await cancelAs('owner', a.id).expect(403);
       expect((await entryRow(a.id)).status).toBe('WAITING');
@@ -277,6 +280,60 @@ maybe('Customer Live Queue cancellation (e2e, disposable local database)', () =>
       expect((await entryRow(a.id)).status).toBe('COMPLETED');
       expect((await cancelAs('cust1', a.id)).status).toBe(409);
       expect((await entryRow(a.id)).status).toBe('COMPLETED');
+    });
+  });
+
+  describe('realtime (real Socket.IO connections)', () => {
+    const sockets: ClientSocket[] = [];
+    beforeAll(async () => {
+      await app.listen(0); // a real HTTP + Socket.IO listener on a random loopback port
+    });
+    afterEach(() => {
+      while (sockets.length) sockets.pop()?.disconnect();
+    });
+
+    const connect = async (label: string): Promise<ClientSocket> => {
+      const { port } = new URL(await app.getUrl());
+      const socket = io(`http://127.0.0.1:${port}/realtime`, { auth: { token: tok[label] }, transports: ['websocket'], reconnection: false });
+      sockets.push(socket);
+      await new Promise<void>((resolve, reject) => {
+        socket.once('connect', () => resolve());
+        socket.once('connect_error', reject);
+      });
+      await new Promise((resolve) => socket.emit('join:salon', { salonId: ids.salon }, resolve));
+      return socket;
+    };
+    const nextUpdate = (socket: ClientSocket, ms = 4000) =>
+      new Promise<{ salonId: string }>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('no queue.updated received')), ms);
+        socket.once('queue.updated', (payload: { salonId: string }) => {
+          clearTimeout(timer);
+          resolve(payload);
+        });
+      });
+
+    it("pushes queue.updated to the owner's dashboard (and a second device) when a customer cancels", async () => {
+      const a = await join('cust1');
+      const ownerSocket = await connect('owner');
+      const secondDevice = await connect('cust1');
+      const ownerSaw = nextUpdate(ownerSocket);
+      const deviceSaw = nextUpdate(secondDevice);
+      await cancelAs('cust1', a.id).expect(201);
+      await expect(ownerSaw).resolves.toMatchObject({ salonId: ids.salon });
+      await expect(deviceSaw).resolves.toMatchObject({ salonId: ids.salon });
+      // What the board and the second device re-read after that event is already the cancelled state.
+      expect((await mine('cust1')).id).toBeUndefined();
+      expect(((await board()).sections.waiting as Array<{ id: string }>).map((x) => x.id)).not.toContain(a.id);
+    });
+
+    it('a rejected cancel (another customer) pushes nothing to the shop room', async () => {
+      const a = await join('cust1');
+      const ownerSocket = await connect('owner');
+      let received = 0;
+      ownerSocket.on('queue.updated', () => received++);
+      await cancelAs('cust2', a.id).expect(404);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(received).toBe(0);
     });
   });
 
