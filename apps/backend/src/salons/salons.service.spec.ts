@@ -855,6 +855,192 @@ describe('SalonsService', () => {
         });
       });
     });
+
+    describe('reference origin (originLat/originLng) — customer location selector', () => {
+      // Realistic multi-city fixtures, not production selections.
+      const HAJIPUR_CENTRE = { lat: 25.6863, lng: 85.2095 };
+      const PATNA_CENTRE = { lat: 25.5941, lng: 85.1376 };
+
+      interface AnyFindManyArgs {
+        where: Record<string, unknown> & { id?: { in: string[] } };
+        select?: unknown;
+        orderBy?: unknown;
+        take?: number;
+        cursor?: unknown;
+      }
+
+      // Candidate read (select id/lat/lng for the whole filtered set) vs the page load (id IN ...)
+      // vs the plain name-ordered listing — told apart by the arguments, like the real queries.
+      function wireSalons(all: ReturnType<typeof makeSalon>[]) {
+        prisma.salon.findMany.mockImplementation((async (args: AnyFindManyArgs) => {
+          if (args.select) return all.map(({ id, lat, lng }) => ({ id, lat, lng }));
+          if (args.where.id?.in) return all.filter((s) => args.where.id!.in.includes(s.id));
+          return all;
+        }) as never);
+      }
+      const candidateCall = () =>
+        prisma.salon.findMany.mock.calls.map((c) => c[0] as unknown as AnyFindManyArgs).find((a) => a.select);
+
+      it('annotates each item with its distance from the origin but does not filter or reorder without sort/radius', async () => {
+        const a = makeSalon({ id: 'a', lat: 25.69, lng: 85.21 });
+        const b = makeSalon({ id: 'b', lat: null, lng: null });
+        prisma.salon.findMany.mockResolvedValue([a, b]);
+
+        const result = await service.search({ city: 'hajipur', countryCode: 'IN', originLat: HAJIPUR_CENTRE.lat, originLng: HAJIPUR_CENTRE.lng });
+
+        expect(result.items.map((i) => i.id)).toEqual(['a', 'b']);
+        expect(result.items[0].distanceKm).toBeGreaterThanOrEqual(0);
+        expect(result.items[0].distanceKm).toBeLessThan(1);
+        expect(result.items[1].distanceKm).toBeNull();
+        const where = prisma.salon.findMany.mock.calls[0][0].where as Record<string, unknown>;
+        expect(where).not.toHaveProperty('lat');
+        expect(where).not.toHaveProperty('lng');
+        expect(prisma.salon.findMany.mock.calls[0][0]).toMatchObject({ orderBy: { name: 'asc' } });
+      });
+
+      it('ignores a lone originLat (both-or-neither): no origin, no distance, nothing filtered', async () => {
+        prisma.salon.findMany.mockResolvedValue([makeSalon({ id: 'a' })]);
+        const result = await service.search({ originLat: 25.6 });
+        expect(result.items[0].distanceKm).toBeNull();
+      });
+
+      describe('sort=nearest', () => {
+        it('orders by distance from the origin, keeps the city filter, and keeps ONLY ACTIVE shops', async () => {
+          const near = makeSalon({ id: 'near', lat: 25.69, lng: 85.21 });
+          const far = makeSalon({ id: 'far', lat: 25.8, lng: 85.4 });
+          const noCoords = makeSalon({ id: 'no-coords', lat: null, lng: null });
+          wireSalons([far, noCoords, near]);
+
+          const result = await service.search({
+            city: 'hajipur',
+            countryCode: 'IN',
+            originLat: HAJIPUR_CENTRE.lat,
+            originLng: HAJIPUR_CENTRE.lng,
+            sort: 'nearest',
+          });
+
+          expect(result.items.map((i) => i.id)).toEqual(['near', 'far', 'no-coords']);
+          expect(result.items[0].distanceKm).not.toBeNull();
+          expect(result.items[2].distanceKm).toBeNull();
+          const where = candidateCall()!.where as Record<string, unknown>;
+          expect(where.status).toBe('ACTIVE');
+          expect(where.city).toEqual({ slug: 'hajipur', countryCode: 'IN' });
+          expect(where).not.toHaveProperty('lat');
+        });
+
+        it('never silently truncates: 500 shops page through completely, coordinate-less ones last, no duplicates', async () => {
+          const shops = Array.from({ length: 500 }, (_, i) =>
+            makeSalon({
+              id: `s${String(i).padStart(4, '0')}`,
+              // every 5th shop has no coordinates
+              lat: i % 5 === 0 ? null : 25.6 + i * 0.0005,
+              lng: i % 5 === 0 ? null : 85.2 + i * 0.0003,
+            }),
+          );
+          wireSalons(shops);
+
+          const seen: string[] = [];
+          let cursor: string | undefined;
+          let pages = 0;
+          do {
+            const page = await service.search({
+              city: 'hajipur',
+              originLat: HAJIPUR_CENTRE.lat,
+              originLng: HAJIPUR_CENTRE.lng,
+              sort: 'nearest',
+              limit: 50,
+              cursor,
+            });
+            seen.push(...page.items.map((i) => i.id));
+            cursor = page.nextCursor ?? undefined;
+            pages += 1;
+          } while (cursor !== undefined && pages < 20);
+
+          expect(pages).toBe(10);
+          expect(seen).toHaveLength(500); // far beyond the legacy 200-row near-me cap
+          expect(new Set(seen).size).toBe(500);
+          const firstNoCoords = seen.findIndex((id) => shops.find((s) => s.id === id)!.lat === null);
+          expect(seen.slice(firstNoCoords).every((id) => shops.find((s) => s.id === id)!.lat === null)).toBe(true);
+          expect(seen.slice(0, firstNoCoords)).toHaveLength(400);
+        });
+
+        it('loads full rows only for the requested page, not for the whole city', async () => {
+          const shops = Array.from({ length: 60 }, (_, i) => makeSalon({ id: `s${i}`, lat: 25.6 + i * 0.001, lng: 85.2 }));
+          wireSalons(shops);
+          await service.search({ originLat: 25.6, originLng: 85.2, sort: 'nearest', limit: 20 });
+
+          const loads = prisma.salon.findMany.mock.calls
+            .map((c) => c[0] as unknown as AnyFindManyArgs)
+            .filter((a) => a.where.id?.in);
+          expect(loads).toHaveLength(1);
+          expect(loads[0].where.id!.in).toHaveLength(20);
+        });
+
+        it('keeps the other search filters (text, price) in the candidate read', async () => {
+          wireSalons([makeSalon({ id: 'a', lat: 25.7, lng: 85.2 })]);
+          await service.search({ q: 'fade', priceMax: 300, originLat: 25.6, originLng: 85.2, sort: 'nearest' });
+          const where = candidateCall()!.where as Record<string, unknown>;
+          expect(where.OR).toBeDefined(); // the q match
+          expect(where.AND).toBeDefined(); // the broad price condition
+        });
+
+        it('returns an empty page (not an error) for a city with no ACTIVE shops', async () => {
+          wireSalons([]);
+          const result = await service.search({ city: 'empty-town', originLat: 25.6, originLng: 85.2, sort: 'nearest' });
+          expect(result).toEqual({ items: [], nextCursor: null });
+        });
+      });
+
+      describe('radiusKm with an origin', () => {
+        it('is a hard cap, applied with a DB-side coordinate box AND the exact Haversine cutoff', async () => {
+          const inside = makeSalon({ id: 'inside', lat: 25.69, lng: 85.21 });
+          const outside = makeSalon({ id: 'outside', lat: 25.8, lng: 85.4 }); // the mock ignores the box; the exact cutoff must still drop it
+          wireSalons([outside, inside]);
+
+          const result = await service.search({ originLat: HAJIPUR_CENTRE.lat, originLng: HAJIPUR_CENTRE.lng, radiusKm: 5 });
+
+          expect(result.items.map((i) => i.id)).toEqual(['inside']);
+          const where = candidateCall()!.where as { lat?: { not: null; gte: number; lte: number }; lng?: unknown };
+          expect(where.lat).toMatchObject({ not: null });
+          expect(where.lat!.gte).toBeLessThan(HAJIPUR_CENTRE.lat);
+          expect(where.lat!.lte).toBeGreaterThan(HAJIPUR_CENTRE.lat);
+          expect(where.lng).toBeDefined();
+        });
+
+        it('excludes coordinate-less shops only when a radius was actually requested', async () => {
+          const shops = [makeSalon({ id: 'has', lat: 25.69, lng: 85.21 }), makeSalon({ id: 'none', lat: null, lng: null })];
+          wireSalons(shops);
+          const withRadius = await service.search({ originLat: 25.6863, originLng: 85.2095, radiusKm: 5 });
+          const noRadius = await service.search({ originLat: 25.6863, originLng: 85.2095, sort: 'nearest' });
+          expect(withRadius.items.map((i) => i.id)).toEqual(['has']);
+          expect(noRadius.items.map((i) => i.id)).toEqual(['has', 'none']);
+        });
+
+        it('adds NO coordinate box when no radius was selected (selecting a city must not silently apply a radius)', async () => {
+          wireSalons([makeSalon({ id: 'a', lat: 25.7, lng: 85.2 })]);
+          await service.search({ city: 'hajipur', originLat: 25.6, originLng: 85.2, sort: 'nearest' });
+          expect(candidateCall()!.where).not.toHaveProperty('lat');
+        });
+      });
+
+      it('a GPS origin and a city-centre origin give different distances for the same shop', async () => {
+        const shop = makeSalon({ id: 'a', lat: 25.69, lng: 85.21 });
+        wireSalons([shop]);
+        const fromCity = await service.search({ originLat: HAJIPUR_CENTRE.lat, originLng: HAJIPUR_CENTRE.lng, sort: 'nearest' });
+        const fromGps = await service.search({ originLat: PATNA_CENTRE.lat, originLng: PATNA_CENTRE.lng, sort: 'nearest' });
+        expect(fromCity.items[0].distanceKm!).toBeLessThan(1);
+        expect(fromGps.items[0].distanceKm!).toBeGreaterThan(8);
+      });
+
+      it('leaves the legacy "near me" (lat/lng) behaviour untouched, and lat/lng wins if both are supplied', async () => {
+        const near = makeSalon({ id: 'near', lat: 12.9716, lng: 77.6412 });
+        const noCoords = makeSalon({ id: 'no-coords', lat: null, lng: null });
+        prisma.salon.findMany.mockResolvedValue([noCoords, near]);
+        const result = await service.search({ lat: 12.9716, lng: 77.6412, originLat: 25.6, originLng: 85.2, sort: 'nearest' });
+        expect(result.items.map((i) => i.id)).toEqual(['near']); // legacy drops the coordinate-less shop
+        expect(result.nextCursor).toBeNull();
+      });
+    });
   });
 
   describe('getPublicStatus', () => {

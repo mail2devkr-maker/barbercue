@@ -44,8 +44,8 @@ export function PremiumScreen({
   );
 }
 
-export function PremiumCard({ children, style, strong = false }: { children: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean }) {
-  return <View style={[styles.card, strong && styles.cardStrong, style]}>{children}</View>;
+export function PremiumCard({ children, style, strong = false, testID }: { children: ReactNode; style?: StyleProp<ViewStyle>; strong?: boolean; testID?: string }) {
+  return <View testID={testID} style={[styles.card, strong && styles.cardStrong, style]}>{children}</View>;
 }
 
 export function PremiumSectionHeader({ eyebrow, title, subtitle }: { eyebrow?: string; title: string; subtitle?: string }) {
@@ -58,13 +58,13 @@ export function PremiumSectionHeader({ eyebrow, title, subtitle }: { eyebrow?: s
   );
 }
 
-export function PremiumButton({ title, onPress, variant = 'primary', loading, disabled, style }: {
-  title: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'quiet'; loading?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>;
+export function PremiumButton({ title, onPress, variant = 'primary', loading, disabled, style, testID, accessibilityLabel }: {
+  title: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'quiet'; loading?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>; testID?: string; accessibilityLabel?: string;
 }) {
   const inactive = Boolean(loading || disabled);
   const content = loading ? <ActivityIndicator color={fastQue.text} /> : <Text style={[styles.buttonText, variant !== 'primary' && styles.secondaryButtonText]}>{title}</Text>;
   return (
-    <Pressable onPress={onPress} disabled={inactive} accessibilityRole="button" style={({ pressed }) => [styles.buttonHit, inactive && styles.disabled, pressed && styles.pressed, style]}>
+    <Pressable testID={testID} onPress={onPress} disabled={inactive} accessibilityRole="button" accessibilityLabel={accessibilityLabel} style={({ pressed }) => [styles.buttonHit, inactive && styles.disabled, pressed && styles.pressed, style]}>
       {variant === 'primary' ? (
         <GradientView colors={[fastQue.gradientStart, fastQue.gradientMid, fastQue.gradientEnd]} stops={[0, 0.55, 1]} style={styles.primaryButton}>
           {content}

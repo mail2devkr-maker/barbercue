@@ -10,6 +10,7 @@ import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, lineHeightFor, radius, space } from '../../lib/theme';
 import { Screen, SectionHeader, Button, EmptyState, Skeleton, InlineError, NotificationBell } from '../../components/ui';
 import { LiveQueuePanel, type LiveQueuePanelHandle } from '../../components/dashboard/LiveQueuePanel';
+import { StaffMyDayCard } from '../../components/dashboard/StaffMyDayCard';
 import type { StaffTabParamList } from '../../navigation/StaffNavigator';
 
 function meePath(salonId: string): string {
@@ -23,7 +24,8 @@ function statusPath(staffId: string): string {
 // Self clock-in/out: resolves "which SalonStaff row is me at this salon" via the new
 // dashboard/salons/:salonId/staff/me lookup, then reuses the existing self-status PATCH
 // (staff-status.service.ts already lets a SALON_STAFF update their own row with no owner check).
-function SelfStatusCard({ salonId }: { salonId: string }) {
+function SelfStatusCard({ salonId, onMe }: { salonId: string; onMe?: (staffId: string | null) => void }) {
+  const { t } = useLanguage();
   const [me, setMe] = useState<StaffStatusDto | null | undefined>(undefined);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,15 +35,19 @@ function SelfStatusCard({ salonId }: { salonId: string }) {
       let cancelled = false;
       apiFetch<StaffStatusDto | null>(meePath(salonId))
         .then((result) => {
-          if (!cancelled) setMe(result);
+          if (cancelled) return;
+          setMe(result);
+          onMe?.(result?.id ?? null);
         })
         .catch(() => {
-          if (!cancelled) setMe(null);
+          if (cancelled) return;
+          setMe(null);
+          onMe?.(null);
         });
       return () => {
         cancelled = true;
       };
-    }, [salonId]),
+    }, [salonId, onMe]),
   );
 
   async function toggle() {
@@ -75,11 +81,11 @@ function SelfStatusCard({ salonId }: { salonId: string }) {
   return (
     <View style={styles.selfCard}>
       <View>
-        <Text style={styles.selfLabel}>You&apos;re {me.status === 'ACTIVE' ? 'clocked in' : 'clocked out'}</Text>
+        <Text style={styles.selfLabel}>{me.status === 'ACTIVE' ? t.clockedInLabel : t.clockedOutLabel}</Text>
         {error && <InlineError message={error} />}
       </View>
       <Button
-        title={me.status === 'ACTIVE' ? 'Clock out' : 'Clock in'}
+        title={me.status === 'ACTIVE' ? t.clockOutAction : t.clockInAction}
         variant={me.status === 'ACTIVE' ? 'outline' : 'primary'}
         onPress={() => void toggle()}
         loading={updating}
@@ -97,6 +103,8 @@ export default function StaffTodayScreen() {
   const { workplaces, loading, error, selectedSalonId, selectedSalon, selectSalon } = useSalon();
   const panelRef = useRef<LiveQueuePanelHandle>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // This barber's own roster id: they may start only the customer assigned to them.
+  const [myStaffId, setMyStaffId] = useState<string | null>(null);
   const unreadCount = useUnreadNotificationCount();
   const { t } = useLanguage();
 
@@ -152,8 +160,12 @@ export default function StaffTodayScreen() {
         </View>
       )}
 
-      {selectedSalonId && <SelfStatusCard salonId={selectedSalonId} />}
-      {selectedSalonId && <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} />}
+      {workplaces.length > 1 && !selectedSalonId && (
+        <EmptyState title={t.selectShopTitle} message={t.pickShopToContinueHint} />
+      )}
+      {selectedSalonId && <SelfStatusCard salonId={selectedSalonId} onMe={setMyStaffId} />}
+      {selectedSalonId && <StaffMyDayCard salonId={selectedSalonId} onChanged={() => void panelRef.current?.refresh()} />}
+      {selectedSalonId && <LiveQueuePanel ref={panelRef} salonId={selectedSalonId} role="staff" myStaffId={myStaffId} />}
     </Screen>
   );
 }

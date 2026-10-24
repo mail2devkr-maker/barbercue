@@ -241,3 +241,40 @@ describe('arrival-check voice + correction notification copy', () => {
     expect(notificationTypeLabel(Language.HI, 'booking.corrected')).toContain('सुधारी');
   });
 });
+
+// Owner operations (Android + web): the new assignment / start-of-service controls are fully translated.
+// Hindi comes from the same UiStrings architecture as every other label - never from business logic.
+describe('owner operations strings are available in Hindi', () => {
+  const en = UI_STRINGS[Language.EN] as unknown as Record<string, unknown>;
+  const hi = UI_STRINGS[Language.HI] as unknown as Record<string, unknown>;
+  const devanagari = /[ऀ-ॿ]/;
+
+  // The minimum set the owner named: Waiting, Assigned, In Service, Start Service, Complete Service,
+  // Automatic Assignment, No Available Staff, Cancel, Reschedule, Invoices, Notifications.
+  it.each([
+    ['waiting'],
+    ['statusAssigned'],
+    ['inService'],
+    ['startServiceAction'],
+    ['completeServiceAction'],
+    ['automaticAssignmentTitle'],
+    ['noAvailableStaff'],
+    ['cancelAction'],
+    ['rescheduleAction'],
+    ['ownerSectionInvoices'],
+    ['notifications'],
+  ])('%s has a Devanagari Hindi string that differs from the English one', (key) => {
+    expect(typeof en[key]).toBe('string');
+    expect(typeof hi[key]).toBe('string');
+    expect(hi[key]).toMatch(devanagari);
+    expect(hi[key]).not.toBe(en[key]);
+  });
+
+  it('every placeholder in an English owner-operations string is kept in the Hindi one', () => {
+    for (const key of ['assignedToTokenNotStarted', 'autoAssignedNotice', 'queueSectionWaiting', 'queueSectionAssigned', 'queueSectionInService', 'queueSectionCompleted', 'queueSectionHistory', 'chairOccupiedToken', 'myDaySummary', 'waitingYouCanTakeHeading', 'myAppointmentsHeading', 'customerAssignedDetail', 'customerAssignedDetailNoChair']) {
+      const placeholders = String(en[key]).match(/\{[a-z]+\}/g) ?? [];
+      expect(placeholders.length).toBeGreaterThan(0);
+      for (const placeholder of placeholders) expect(String(hi[key])).toContain(placeholder);
+    }
+  });
+});

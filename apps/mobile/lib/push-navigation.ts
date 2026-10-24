@@ -11,8 +11,10 @@ export type OwnerBookingPushData =
   | (OwnerBookingPushBase & { type: 'booking.arrival_check' });
 type OwnerBookingPushListener = (payload: OwnerBookingPushData) => boolean;
 
+// `*_by_shop` are the notices a customer gets when the SHOP cancels or moves their appointment.
+export type CustomerBookingPushType = 'booking.reminder' | 'booking.cancelled_by_shop' | 'booking.rescheduled_by_shop';
 export type CustomerBookingPushData = {
-  type: 'booking.reminder';
+  type: CustomerBookingPushType;
   salonId: string;
   bookingId: string;
 };
@@ -50,10 +52,10 @@ export function requestOwnerBookingPushNavigation(payload: OwnerBookingPushData)
 export function parseCustomerBookingPushData(value: unknown): CustomerBookingPushData | null {
   if (!value || typeof value !== 'object') return null;
   const data = value as Record<string, unknown>;
-  if (data.type !== 'booking.reminder') return null;
+  if (data.type !== 'booking.reminder' && data.type !== 'booking.cancelled_by_shop' && data.type !== 'booking.rescheduled_by_shop') return null;
   if (typeof data.salonId !== 'string' || data.salonId.length === 0) return null;
   if (typeof data.bookingId !== 'string' || data.bookingId.length === 0) return null;
-  return { type: 'booking.reminder', salonId: data.salonId, bookingId: data.bookingId };
+  return { type: data.type, salonId: data.salonId, bookingId: data.bookingId };
 }
 
 export function requestCustomerBookingPushNavigation(payload: CustomerBookingPushData): void {
