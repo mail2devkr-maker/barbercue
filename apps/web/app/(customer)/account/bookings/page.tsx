@@ -1,5 +1,6 @@
 "use client";
 
+import { ShopContactNote } from "../../../../components/booking/ShopContactNote";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BOOKING_PATHS, QUEUE_ENTRIES_PATH,
@@ -108,7 +109,10 @@ function BookingRow({
       )}
       {booking.selectedStyleName && <p className={styles.bookingRowMeta}>Style: {booking.selectedStyleName}</p>}
       {booking.cancellationChargeAmount !== null && booking.cancellationChargeAmount > 0 && (
-        <p className={styles.bookingRowMeta}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</p>
+        <>
+          <p className={styles.bookingRowMeta}>Cancellation charge: {formatMoney(booking.cancellationChargeAmount, booking.currency)}</p>
+          <ShopContactNote shopPhone={booking.shopPhone} salonName={booking.salonName} purpose="charge" className={styles.bookingRowMeta} />
+        </>
       )}
       {CANCELLABLE_STATUSES.has(booking.status) && isCustomerBookingActionable(booking) && (
         <div style={{ marginTop: 8 }}>

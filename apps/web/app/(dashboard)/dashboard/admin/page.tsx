@@ -300,7 +300,7 @@ export default function AdminDashboardPage() {
           <section className={styles.section}>
             <div className={styles.sectionHeader}><h2>Live & recent queue activity</h2><span>Latest 50</span></div>
             <div className={styles.activityGrid}>{data.recentQueue.map((entry) => <article key={entry.id}>
-              <strong>{entry.salonName} · Token #{entry.tokenNumber}</strong>
+              <strong>{entry.salonName} · Queue #{entry.tokenNumber}</strong>
               <span>{entry.status} · {dateTime(entry.joinedAt)}{entry.serviceName ? ` · ${entry.serviceName}` : ""}</span>
               <small>{entry.assignedStaffName ?? "Unassigned"}{entry.assignedChairLabel ? ` · ${entry.assignedChairLabel}` : ""}</small>
             </article>)}</div>

@@ -603,7 +603,7 @@ export function OwnerOverview({ salonId }: { salonId: string }) {
           salonId={salonId}
           onClose={() => setAddOpen(false)}
           onCreated={(entry: QueueEntryDetailDto) => {
-            setNotice(`Added ${entry.customerName ?? "customer"} to the Live Queue as token #${entry.tokenNumber}.`);
+            setNotice(`Added ${entry.customerName ?? "customer"} to the Live Queue as queue #${entry.tokenNumber}.`);
             load();
           }}
         />

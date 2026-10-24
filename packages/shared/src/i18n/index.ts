@@ -71,7 +71,7 @@ const en: VoiceAnnouncements = {
   },
   bookingCancelled: () => 'Booking cancelled.',
   newCustomerJoined: (tokenNumber, serviceName) =>
-    `New customer joined the queue. Token number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
+    `New customer joined the queue. Queue number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
   voiceAnnouncementsOn: () => 'Voice announcements on.',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} customer` : 'customer';
@@ -105,7 +105,7 @@ const hi: VoiceAnnouncements = {
   },
   bookingCancelled: () => 'बुकिंग रद्द कर दी गई है।',
   newCustomerJoined: (tokenNumber, serviceName) =>
-    `कतार में नया ग्राहक जुड़ा। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
+    `कतार में नया ग्राहक जुड़ा। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
   voiceAnnouncementsOn: () => 'आवाज़ में सूचनाएं चालू हैं।',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} ग्राहक` : 'अपॉइंटमेंट के ग्राहक';
@@ -169,7 +169,7 @@ const hiBihar: VoiceAnnouncements = {
   },
   bookingCancelled: () => 'बुकिंग रद्द हो गई है।',
   newCustomerJoined: (tokenNumber, serviceName) =>
-    `कतार में नया ग्राहक आया है। टोकन नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
+    `कतार में नया ग्राहक आया है। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
   voiceAnnouncementsOn: () => 'आवाज़ वाली सूचना चालू हो गई है।',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} वाले ग्राहक` : 'अपॉइंटमेंट वाले ग्राहक';
@@ -1167,7 +1167,7 @@ const enUi: UiStrings = {
   welcomeBack: 'Welcome back',
   welcomeSubtitle: 'Book ahead, or join a live queue near you.',
   liveQueueLabel: 'Live queue',
-  tokenNumberPrefix: 'Token #',
+  tokenNumberPrefix: 'Queue #',
   calledMessage: "You're being called — please head to the counter!",
   positionPrefix: 'Position ',
   positionSuffix: ' in line',
@@ -1403,7 +1403,7 @@ const enUi: UiStrings = {
   couldNotLoadBookings: 'Could not load your bookings.',
   couldNotJoinQueue: 'Could not join the queue. Please try again.',
   alreadyInQueueTitle: 'Already in a queue',
-  alreadyInQueueHint: 'You already have an active queue token at another salon. Finish or cancel it before joining here.',
+  alreadyInQueueHint: 'You already have an active queue number at another salon. Finish or cancel it before joining here.',
   youreInLineTitle: "You're in line",
   joinTheQueueTitle: 'Join the queue',
   serviceOptional: 'Service (optional)',
@@ -1413,7 +1413,7 @@ const enUi: UiStrings = {
   noActiveQueueHint: 'Join a live queue at a nearby shop and follow your position here.',
   findASalonAction: 'Find a salon',
   couldNotLoadQueueStatus: 'Could not load your queue status.',
-  tokenNumberLabel: 'Token #',
+  tokenNumberLabel: 'Queue #',
   estimatedWaitLabel: 'Estimated wait: ',
   headOverNowMessage: "Please head over now — you're almost up.",
   withBarberPrefix: 'With ',
@@ -1855,7 +1855,7 @@ const hiUi: UiStrings = {
   welcomeBack: 'वापसी पर स्वागत है',
   welcomeSubtitle: 'पहले से बुक करें, या पास की लाइव कतार में शामिल हों।',
   liveQueueLabel: 'लाइव कतार',
-  tokenNumberPrefix: 'टोकन #',
+  tokenNumberPrefix: 'कतार #',
   calledMessage: 'आपको बुलाया जा रहा है — कृपया काउंटर पर आएं!',
   positionPrefix: 'लाइन में स्थान ',
   positionSuffix: '',
@@ -2091,7 +2091,7 @@ const hiUi: UiStrings = {
   couldNotLoadBookings: 'आपकी बुकिंग्स लोड नहीं हो सकीं।',
   couldNotJoinQueue: 'कतार में शामिल नहीं हो सके। कृपया फिर कोशिश करें।',
   alreadyInQueueTitle: 'पहले से कतार में',
-  alreadyInQueueHint: 'आपके पास पहले से किसी और सैलून में सक्रिय कतार टोकन है। यहां शामिल होने से पहले उसे पूरा करें या रद्द करें।',
+  alreadyInQueueHint: 'आपके पास पहले से किसी और सैलून में सक्रिय कतार नंबर है। यहां शामिल होने से पहले उसे पूरा करें या रद्द करें।',
   youreInLineTitle: 'आप कतार में हैं',
   joinTheQueueTitle: 'कतार में शामिल हों',
   serviceOptional: 'सेवा (वैकल्पिक)',
@@ -2101,7 +2101,7 @@ const hiUi: UiStrings = {
   noActiveQueueHint: 'पास की किसी दुकान की लाइव कतार में शामिल हों और यहां अपनी स्थिति देखें।',
   findASalonAction: 'सैलून खोजें',
   couldNotLoadQueueStatus: 'आपकी कतार स्थिति लोड नहीं हो सकी।',
-  tokenNumberLabel: 'टोकन #',
+  tokenNumberLabel: 'कतार #',
   estimatedWaitLabel: 'अनुमानित प्रतीक्षा: ',
   headOverNowMessage: 'कृपया अभी आएं — आपकी बारी लगभग आ गई है।',
   withBarberPrefix: 'साथ में ',
