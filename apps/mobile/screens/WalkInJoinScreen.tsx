@@ -113,6 +113,7 @@ export default function WalkInJoinScreen({ route }: Props) {
         <Text style={styles.subtitle}>
           {t.alreadyInQueueHint}
         </Text>
+        <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
       </Screen>
     );
   }

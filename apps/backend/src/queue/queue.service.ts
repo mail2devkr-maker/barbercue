@@ -350,6 +350,81 @@ export class QueueService {
     return this.toDetailDto(entry, position);
   }
 
+  /**
+   * Customer-initiated cancellation of a standalone Live Queue token. This must never
+   * cancel an appointment/booking or interrupt a service already in progress.
+   * Restrict both the lookup and the atomic claim to the authenticated customer.
+   * The status predicate serializes safely against owner call/assign/start/cancel.
+   */
+  async cancelByCustomer(
+    customerId: string,
+    entryId: string,
+  ): Promise<QueueEntryDetailDto> {
+    const entry = await this.prisma.queueEntry.findFirst({
+      where: { id: entryId, customerId, bookingId: null },
+      select: { id: true, salonId: true, status: true },
+    });
+    if (!entry) {
+      throw new AppException(
+        QueueErrorCode.QUEUE_ENTRY_NOT_FOUND,
+        'Live Queue entry not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    // Idempotent: a retry after a lost response, or a double tap / second device, must end in the
+    // same CANCELLED state instead of telling the customer to "contact the shop" about a visit that
+    // is already cancelled. No side effects are repeated.
+    if (entry.status === QueueEntryStatus.CANCELLED) {
+      return this.getDetailOrThrow(entryId);
+    }
+    if (
+      entry.status !== QueueEntryStatus.WAITING &&
+      entry.status !== QueueEntryStatus.CALLED
+    ) {
+      throw new AppException(
+        QueueErrorCode.INVALID_QUEUE_TRANSITION,
+        'This Live Queue token can no longer be cancelled. Please contact the shop.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    // A concurrent call/assignment/start must not change an already-cancelled token,
+    // and a cancellation must never override a started service.
+    const claim = await this.prisma.queueEntry.updateMany({
+      where: {
+        id: entryId,
+        customerId,
+        bookingId: null,
+        status: { in: [QueueEntryStatus.WAITING, QueueEntryStatus.CALLED] },
+      },
+      data: { status: QueueEntryStatus.CANCELLED },
+    });
+    if (claim.count !== 1) {
+      // Lost a race. If another cancel of this same token won (double tap, two devices) the customer
+      // already got what they asked for; anything else (e.g. the shop started the service) is a real
+      // conflict and must be shown as one.
+      const current = await this.prisma.queueEntry.findFirst({
+        where: { id: entryId, customerId, bookingId: null },
+        select: { status: true },
+      });
+      if (current?.status === QueueEntryStatus.CANCELLED) {
+        return this.getDetailOrThrow(entryId);
+      }
+      throw new AppException(
+        QueueErrorCode.INVALID_QUEUE_TRANSITION,
+        'Your Live Queue status changed. Refresh and try again.',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    // Keep the row as an auditable CANCELLED visit, not a deleted/fabricated booking.
+    // An assigned-but-not-started barber/chair is now free for the next customer.
+    await this.recomputeEtas(entry.salonId);
+    this.realtime.emitQueueUpdated(entry.salonId);
+    this.triggerAutoAssign(entry.salonId);
+    return this.getDetailOrThrow(entryId);
+  }
+
   // Public, no auth — a lightweight wait-time widget, deferred from Phase 3A/3B specifically to
   // this phase (see API.md's Discovery section).
   async getQueueStatus(salonId: string): Promise<QueueStatusDto> {

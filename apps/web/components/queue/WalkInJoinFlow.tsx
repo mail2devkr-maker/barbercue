@@ -100,9 +100,13 @@ export function WalkInJoinFlow({ salonId, services }: { salonId: string; service
 
   if (entry && entry.salonId !== salonId) {
     return (
-      <p className={styles.stepLoading}>
-        You already have an active queue token at another salon. Finish or cancel it before joining here.
-      </p>
+      <div>
+        <p className={styles.stepLoading}>
+          You already have an active Live Queue token at another salon. You can cancel it here
+          before joining this salon.
+        </p>
+        <QueueStatusPanel entry={entry} onEntryChange={setEntry} />
+      </div>
     );
   }
 
