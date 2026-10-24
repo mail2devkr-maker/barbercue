@@ -2116,10 +2116,20 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const customer = (directory.body.items as Array<Record<string, unknown>>).find(
         (item) => item.customerId === ids.cust1,
       );
+      // The newest non-blank name this customer gave THIS shop (earlier tests in this suite make them join more than once).
+      const newestJoin = await prisma.queueEntry.findFirst({
+        where: { salonId: ids.salon, customerId: ids.cust1, bookingId: null, contactName: { not: null } },
+        orderBy: { joinedAt: 'desc' },
+        select: { contactName: true },
+      });
+      const newestGivenName = newestJoin?.contactName?.trim();
+      expect(newestGivenName).toBeTruthy();
       expect(customer).toMatchObject({
         customerId: ids.cust1,
-        displayName: null,
-        displayNameSource: 'NOT_ON_FILE',
+        // Owner issue #6: the name this customer gave THIS shop when joining the queue (see 'customer CRM unified visit history'),
+        // shown with its source - a visit-supplied label, not a verified identity. (Previously always null / NOT_ON_FILE.)
+        displayName: newestGivenName,
+        displayNameSource: 'CONTACT_NAME_ON_VISIT',
         recordedCollections: 295,
         recordedRefunds: 50,
         totalSpent: 245,
