@@ -33,15 +33,21 @@ export function CancellationsPanel({ salonId }: { salonId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Actor and period filters may change while a prior response is still in flight.
+    // Only the currently selected filter may replace the visible cancellation figures.
+    let active = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- show the loading state while the new period is fetched
     setData(null);
+    setError(null);
     const params = new URLSearchParams({ range, ...(actor !== "ALL" ? { actor } : {}) });
     apiFetch<CancellationAnalyticsDto>(`${base}/analytics/cancellations?${params.toString()}`)
       .then((d) => {
-        setData(d);
-        setError(null);
+        if (active) setData(d);
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load cancellations."));
+      .catch((err) => {
+        if (active) setError(err instanceof ApiError ? err.message : "Could not load cancellations.");
+      });
+    return () => { active = false; };
   }, [base, range, actor]);
 
   const money = (n: number) => formatMoney(n, data?.currency ?? "INR");
