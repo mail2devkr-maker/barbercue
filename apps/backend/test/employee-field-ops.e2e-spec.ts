@@ -603,6 +603,79 @@ maybe(
         return { owner, salon };
       }
 
+      it('lets an employee see the shop details of a shop THEY onboarded - and nothing else (owner issue #28)', async () => {
+        const { salon, owner } = await makeShop('shopdetail');
+        await prisma.salon.update({
+          where: { id: salon.id },
+          data: { phone: '+919812345678', showPhoneToCustomers: true, localityText: 'Boring Road' },
+        });
+        await prisma.photo.createMany({
+          data: [
+            { salonId: salon.id, url: 'https://img.example.test/gallery-2.jpg', type: 'GALLERY', sortOrder: 2 },
+            { salonId: salon.id, url: 'https://img.example.test/cover.jpg', type: 'COVER', sortOrder: 0, altText: 'Shop front' },
+          ],
+        });
+        await prisma.chair.createMany({
+          data: [
+            { salonId: salon.id, label: 'Chair 1', status: 'ACTIVE' },
+            { salonId: salon.id, label: 'Chair 2', status: 'INACTIVE' },
+            { salonId: salon.id, label: 'Chair 3', status: 'ACTIVE' },
+          ],
+        });
+        const mine = await lead('empA', `Shop Detail Lead ${run}`);
+        await prisma.employeeCrmLead.update({
+          where: { id: mine.id as string },
+          data: { onboardedSalonId: salon.id, onboardedAt: new Date(), status: 'ONBOARDED' },
+        });
+
+        const res = await call('get', `employee/leads/${mine.id}/shop`, tok.empA);
+        expect(res.status).toBe(200);
+        expect(res.body.onboarded).toBe(true);
+        expect(res.body.shop).toMatchObject({
+          salonId: salon.id,
+          name: `FO Shop shopdetail ${run}`,
+          status: 'ACTIVE',
+          addressLine: 'Synthetic test address',
+          localityText: 'Boring Road',
+          businessPhone: '+919812345678',
+          chairCounts: { total: 3, active: 2 },
+        });
+        expect(res.body.shop.publicPath).toMatch(/^\/[a-z]{2}\/[a-z0-9-]+\/fo-shopdetail-/);
+        // Photos are the shop's real ones, in display order (cover first).
+        expect(res.body.shop.photos.map((p: { url: string }) => p.url)).toEqual([
+          'https://img.example.test/cover.jpg',
+          'https://img.example.test/gallery-2.jpg',
+        ]);
+        expect(res.body.shop.photos[0].altText).toBe('Shop front');
+        expect(res.body.shop.chairs.map((c: { label: string }) => c.label)).toEqual(['Chair 1', 'Chair 2', 'Chair 3']);
+        // Nothing about the owner's account, money or customers leaves with it.
+        const raw = JSON.stringify(res.body);
+        expect(raw).not.toContain(owner.id);
+        expect(raw).not.toMatch(/ownerUserId|email|revenue|customer|queue|booking/i);
+
+        // The owner can hide the business phone from this view too.
+        await prisma.salon.update({ where: { id: salon.id }, data: { showPhoneToCustomers: false } });
+        const hidden = await call('get', `employee/leads/${mine.id}/shop`, tok.empA);
+        expect(hidden.body.shop.businessPhone).toBeNull();
+
+        // Another employee cannot read it, and learns nothing: same answer as a lead that does not exist.
+        const other = await call('get', `employee/leads/${mine.id}/shop`, tok.empB);
+        expect(other.status).toBe(404);
+        const missing = await call('get', `employee/leads/${randomUUID()}/shop`, tok.empA);
+        expect(missing.status).toBe(404);
+        expect(other.body.error?.code).toBe(missing.body.error?.code);
+
+        // A lead that was never onboarded has no shop: an honest empty answer, nothing invented.
+        const fresh = await lead('empA', `Not Onboarded ${run}`);
+        const none = await call('get', `employee/leads/${fresh.id}/shop`, tok.empA);
+        expect(none.status).toBe(200);
+        expect(none.body).toEqual({ leadId: fresh.id, onboarded: false, shop: null });
+
+        // Roles: a customer is refused, and nobody anonymous gets in.
+        expect((await call('get', `employee/leads/${mine.id}/shop`, tok.customer)).status).toBe(403);
+        expect((await call('get', `employee/leads/${mine.id}/shop`)).status).toBe(401);
+      });
+
       it('attributes a shop to the employee’s own lead without touching who owns the shop', async () => {
         const { owner, salon } = await makeShop('one');
         const own = await lead('empA', `Onboard One ${run}`);

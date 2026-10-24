@@ -13,6 +13,7 @@ import {
   type EmployeeCrmFollowUpDto,
   type EmployeeCrmLeadDto,
   type EmployeeCrmVisitDto,
+  type EmployeeLeadShopDto,
   type EmployeeProfileDto,
   type OnboardCrmLeadInput,
   type UpdateCrmFollowUpInput,
@@ -37,6 +38,68 @@ export class EmployeeService {
   async getProfile(userId: string): Promise<EmployeeProfileDto> {
     const profile = await this.getProfileEntity(userId);
     return this.profileDto(profile);
+  }
+
+  /**
+   * Shop details for ONE of this employee's own leads. The lead is resolved through the employee's own profile, so another
+   * employee's lead id is indistinguishable from a missing one (same 404). A lead that was never onboarded answers with
+   * `onboarded: false` and no shop - nothing is invented. Only shop-facing facts are selected (no owner contact data).
+   */
+  async getLeadShop(userId: string, leadId: string): Promise<EmployeeLeadShopDto> {
+    const profile = await this.getProfileEntity(userId);
+    const lead = await this.prisma.employeeCrmLead.findFirst({
+      where: { id: leadId, employeeProfileId: profile.id },
+      select: { id: true, onboardedSalonId: true, onboardedAt: true },
+    });
+    if (!lead) {
+      throw new AppException(
+        CrmErrorCode.LEAD_NOT_FOUND,
+        'Lead not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (!lead.onboardedSalonId) return { leadId: lead.id, onboarded: false, shop: null };
+    const salon = await this.prisma.salon.findUnique({
+      where: { id: lead.onboardedSalonId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        status: true,
+        addressLine: true,
+        localityText: true,
+        phone: true,
+        showPhoneToCustomers: true,
+        city: { select: { name: true, slug: true, countryCode: true } },
+        photos: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true, url: true, altText: true, type: true, sortOrder: true },
+        },
+        chairs: {
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, label: true, status: true },
+        },
+      },
+    });
+    if (!salon) return { leadId: lead.id, onboarded: false, shop: null };
+    return {
+      leadId: lead.id,
+      onboarded: true,
+      shop: {
+        salonId: salon.id,
+        name: salon.name,
+        status: salon.status,
+        addressLine: salon.addressLine,
+        localityText: salon.localityText ?? null,
+        cityName: salon.city.name,
+        publicPath: `/${salon.city.countryCode.toLowerCase()}/${salon.city.slug}/${salon.slug}`,
+        onboardedAt: lead.onboardedAt ? lead.onboardedAt.toISOString() : null,
+        businessPhone: salon.showPhoneToCustomers === false ? null : (salon.phone ?? null),
+        photos: salon.photos.map((p) => ({ id: p.id, url: p.url, altText: p.altText ?? null, type: p.type, sortOrder: p.sortOrder })),
+        chairs: salon.chairs.map((c) => ({ id: c.id, label: c.label, status: c.status })),
+        chairCounts: { total: salon.chairs.length, active: salon.chairs.filter((c) => c.status === 'ACTIVE').length },
+      },
+    };
   }
 
   async getDashboard(userId: string): Promise<EmployeeCrmDashboardDto> {

@@ -130,6 +130,11 @@ export class EmployeeController {
     return this.employees.updateFollowUp(user.id, id, body);
   }
 
+  @Get(`${EMPLOYEE_PATHS.leads}/:id/${EMPLOYEE_PATHS.shop}`)
+  leadShop(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    return this.employees.getLeadShop(user.id, id);
+  }
+
   @Get(`${EMPLOYEE_PATHS.leads}/:id/${EMPLOYEE_PATHS.voiceVisitLogs}`)
   listVoiceVisitLogs(
     @CurrentUser() user: AuthenticatedUser,

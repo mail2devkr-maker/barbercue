@@ -19,6 +19,7 @@ import {
 import { ApiError, apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth-context";
 import styles from "./employee.module.css";
+import { EmployeeShopDetails } from "./EmployeeShopDetails";
 
 type Tab = "dashboard" | "leads" | "visits" | "followups";
 
@@ -467,7 +468,10 @@ export default function EmployeeDashboardPage() {
                         <td>{[lead.locality, lead.city].filter(Boolean).join(", ") || "—"}</td>
                         <td>
                           {lead.onboardedSalon ? (
-                            <div><strong>{lead.onboardedSalon.publicId}</strong><small>{lead.onboardedSalon.name}</small></div>
+                            <div>
+                              <strong>{lead.onboardedSalon.publicId}</strong><small>{lead.onboardedSalon.name}</small>
+                              <EmployeeShopDetails leadId={lead.id} />
+                            </div>
                           ) : (
                             <div className={styles.inlineAction}>
                               <input

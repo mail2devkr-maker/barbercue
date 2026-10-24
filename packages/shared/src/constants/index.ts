@@ -57,6 +57,7 @@ export const EMPLOYEE_PATHS = {
   followUps: 'follow-ups',
   onboard: 'onboard',
   voiceVisitLogs: 'voice-visit-logs',
+  shop: 'shop',
 } as const;
 
 export const EMPLOYEE_RESERVED_ID_MIN = 1;
