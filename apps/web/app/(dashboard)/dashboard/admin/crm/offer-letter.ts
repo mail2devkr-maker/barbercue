@@ -1,3 +1,5 @@
+import { approvedSignaturePdfCommands } from "../../../../../lib/approved-signature-watermark";
+
 export type SalaryBasis = "monthly" | "annual";
 
 export type ResumeHints = {
@@ -500,31 +502,6 @@ export async function loadFastQueLogoForPdf(): Promise<PdfBrandImage | null> {
   });
 }
 
-const COMPANY_SIGNATURE_CONTOURS: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [[[497,154],[483,145],[448,140],[445,145],[467,149],[467,153],[386,148],[399,120],[405,123],[410,118],[403,110],[428,59],[430,41],[392,92],[387,91],[397,84],[398,78],[382,86],[383,57],[378,60],[375,89],[362,93],[341,91],[346,75],[350,80],[363,79],[375,66],[369,57],[354,55],[330,72],[332,89],[319,95],[312,80],[335,20],[331,1],[325,1],[316,10],[303,48],[304,71],[288,75],[277,84],[269,75],[261,75],[245,88],[234,79],[217,93],[218,82],[214,78],[195,90],[180,81],[166,83],[152,72],[123,74],[121,63],[97,43],[67,33],[30,36],[14,43],[4,54],[9,76],[36,90],[25,134],[10,170],[14,171],[37,147],[50,142],[61,155],[37,161],[29,172],[50,184],[98,194],[101,200],[109,196],[204,209],[278,209],[316,203],[345,192],[364,179],[384,154],[493,159]],[[101,189],[69,184],[39,170],[60,160],[79,165],[98,159],[103,170]],[[114,153],[118,155],[117,178],[108,169],[108,160]],[[105,191],[108,178],[115,183],[121,181],[125,152],[243,149],[377,154],[365,172],[343,188],[290,204],[204,205]],[[115,143],[114,149],[111,147]],[[93,115],[96,149],[67,154],[58,143]],[[86,108],[82,118],[58,137],[62,128]],[[192,100],[184,108],[180,106]],[[116,87],[114,109],[107,105],[107,100]],[[163,96],[175,86],[191,92],[173,102]],[[412,81],[378,150],[279,145],[124,148],[120,144],[118,129],[125,114],[156,98],[165,106],[185,112],[194,105],[197,95],[211,85],[210,108],[232,84],[238,90],[235,107],[239,108],[245,94],[267,79],[268,108],[284,113],[298,107],[310,94],[317,99],[335,93],[352,98],[375,94],[381,104]],[[301,76],[306,82],[305,89],[287,108],[278,108],[276,93],[286,82]],[[161,83],[158,92],[143,102],[123,106],[124,79],[148,76]],[[346,64],[360,59],[365,67],[371,67],[355,75]],[[90,45],[99,53],[94,58],[97,66],[101,57],[108,61],[95,98],[72,110],[54,132],[50,131],[48,138],[28,146],[42,91],[71,96],[91,94],[45,87],[44,61],[37,84],[22,79],[9,67],[9,55],[38,39],[69,38]],[[328,8],[328,33],[311,73],[307,66],[310,34],[318,15]]];
-
-function companySignatureCommands(x: number, y: number, width: number): string {
-  const sourceWidth = 500;
-  const sourceHeight = 212;
-  const scale = width / sourceWidth;
-  let output = "0.16 0.14 0.16 rg\n";
-
-  for (const contour of COMPANY_SIGNATURE_CONTOURS) {
-    if (contour.length < 3) continue;
-    const [firstX, firstY] = contour[0];
-    output += (x + firstX * scale).toFixed(2) + " " +
-      (y + (sourceHeight - firstY) * scale).toFixed(2) + " m\n";
-    for (let index = 1; index < contour.length; index += 1) {
-      const [pointX, pointY] = contour[index];
-      output += (x + pointX * scale).toFixed(2) + " " +
-        (y + (sourceHeight - pointY) * scale).toFixed(2) + " l\n";
-    }
-    output += "h\n";
-  }
-
-  output += "f*\n";
-  return output;
-}
-
 function ascii(value: string): string {
   return value
     .normalize("NFKD")
@@ -982,7 +959,8 @@ export function buildOfferLetterPdf(
   page2.commands += textCommand("Fastque Digital Technology Private Limited", 48, page2.y, 7.6, true);
   page2.commands += textCommand("Accepted and Agreed", 383, page2.y, 9, true);
   const signatureBottom = page2.y - 72;
-  page2.commands += companySignatureCommands(48, signatureBottom, 150);
+  // Owner-approved D K Pandey watermark; preserve the acceptance signature space.
+  page2.commands += approvedSignaturePdfCommands(48, signatureBottom, 150);
   const signatureLineY = signatureBottom - 4;
   page2.commands += strokeLine(48, signatureLineY, 220, signatureLineY, "0.34 0.32 0.34", 0.6);
   page2.commands += strokeLine(383, signatureLineY, 547, signatureLineY, "0.34 0.32 0.34", 0.6);
