@@ -35,6 +35,8 @@ interface DirectoryRow {
   noShowQueueVisits: number | bigint;
   firstCompletedAt: Date | null;
   lastVisitAt: Date | null;
+  displayName: string | null;
+  displayNameSource: 'CONTACT_NAME_ON_VISIT' | 'GUEST_NAME_ON_BOOKING' | null;
   collectedPaise: bigint | number | string;
   refundedPaise: bigint | number | string;
   netSpentPaise: bigint | number | string;
@@ -123,11 +125,37 @@ function directoryMetrics(salonId: string): Prisma.Sql {
       WHERE i."salonId" = ${salonId}
         AND COALESCE(b."customerId", q."customerId") IS NOT NULL
       GROUP BY COALESCE(b."customerId", q."customerId")
+    ), name_activity AS (
+      -- The name this customer most recently gave THIS shop (queue contact name, or the guest name on one of
+      -- their own bookings). It is a visit-supplied label with its source, never a verified identity, and it
+      -- is scoped to this salon and keyed by the customer's own account (people sharing a phone are not merged).
+      SELECT DISTINCT ON (n."customerId") n."customerId", n."name", n."source"
+      FROM (
+        SELECT
+          q."customerId",
+          LEFT(NULLIF(BTRIM(REGEXP_REPLACE(q."contactName", '[[:cntrl:]]', '', 'g')), ''), 120) AS "name",
+          'CONTACT_NAME_ON_VISIT' AS "source",
+          q."joinedAt" AS "at"
+        FROM "queue_entries" q
+        WHERE q."salonId" = ${salonId} AND q."customerId" IS NOT NULL AND q."bookingId" IS NULL
+        UNION ALL
+        SELECT
+          bk."customerId",
+          LEFT(NULLIF(BTRIM(REGEXP_REPLACE(bk."guestName", '[[:cntrl:]]', '', 'g')), ''), 120) AS "name",
+          'GUEST_NAME_ON_BOOKING' AS "source",
+          bk."createdAt" AS "at"
+        FROM "bookings" bk
+        WHERE bk."salonId" = ${salonId} AND bk."customerId" IS NOT NULL
+      ) n
+      WHERE n."name" IS NOT NULL
+      ORDER BY n."customerId", n."at" DESC
     ), metrics AS (
       SELECT
         u."id" AS "customerId",
         u."phone",
         u."email",
+        nm."name" AS "displayName",
+        nm."source" AS "displayNameSource",
         COALESCE(b."totalBookings", 0)::bigint AS "totalBookings",
         COALESCE(b."completedBookings", 0)::bigint AS "completedBookings",
         COALESCE(b."cancelledBookings", 0)::bigint AS "cancelledBookings",
@@ -161,6 +189,7 @@ function directoryMetrics(salonId: string): Prisma.Sql {
       LEFT JOIN booking_activity b ON b."customerId" = u."id"
       LEFT JOIN queue_activity q ON q."customerId" = u."id"
       LEFT JOIN payment_activity p ON p."customerId" = u."id"
+      LEFT JOIN name_activity nm ON nm."customerId" = u."id"
       WHERE u."deletedAt" IS NULL
         AND (b."customerId" IS NOT NULL OR q."customerId" IS NOT NULL)
     )
@@ -326,8 +355,10 @@ export class CustomerDirectoryQueryService {
       const totalVisitCount = totalBookings + asCount(row.totalQueueVisits);
       return {
         customerId: row.customerId,
-        displayName: null,
-        displayNameSource: 'NOT_ON_FILE',
+        displayName: row.displayName ?? null,
+        displayNameSource: row.displayName
+          ? (row.displayNameSource ?? 'CONTACT_NAME_ON_VISIT')
+          : 'NOT_ON_FILE',
         phone: row.phone,
         email: row.email,
         currency: salon?.currency ?? null,

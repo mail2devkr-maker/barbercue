@@ -61,7 +61,7 @@ beforeEach(() => {
 });
 
 describe("CustomerDirectory", () => {
-  it("asks the server directory route and shows recorded contact, never a name", async () => {
+  it("asks the server directory route and shows recorded contact; with no name on file it shows contact only, never an invented name", async () => {
     install(() => page([row(1), row(2, { phone: null, email: "a@b.test", segment: "frequent" })]));
     const r = await mount();
     expect(calls[0].startsWith("dashboard/salons/s1/customers/directory?")).toBe(true);
@@ -74,6 +74,52 @@ describe("CustomerDirectory", () => {
     expect(t).toContain("Recorded spend");
     expect(t).not.toMatch(/Unknown|null/);
     expect(r.root.findAll((n) => n.props?.href === "/dashboard/salons/s1/customers/c1").length).toBeGreaterThan(0);
+  });
+
+  describe("customer name (owner issue #6)", () => {
+    it("shows the name the customer gave when joining the queue, with that source, beside the contact details", async () => {
+      install(() => page([row(1, { displayName: "Asha Kapoor", displayNameSource: "CONTACT_NAME_ON_VISIT" })]));
+      const r = await mount();
+      const t = text(r);
+      expect(t).toContain("Asha Kapoor");
+      expect(t).toContain("+919000000001");
+      expect(t).toContain("Name given when joining the queue");
+      expect(r.root.findAll((n) => n.props?.title === "Name given when joining the queue").length).toBeGreaterThan(0);
+    });
+
+    it("labels a name that came from a booking differently", async () => {
+      install(() => page([row(2, { displayName: "Bina Guest", displayNameSource: "GUEST_NAME_ON_BOOKING" })]));
+      const t = text(await mount());
+      expect(t).toContain("Bina Guest");
+      expect(t).toContain("Name given on a booking");
+      expect(t).not.toContain("Name given when joining the queue");
+    });
+
+    it("never shows a name or a source note when none is on file, and still shows the contact line", async () => {
+      install(() => page([row(3), row(4, { displayName: "   ", displayNameSource: "NOT_ON_FILE" }), row(5, { phone: null, email: null })]));
+      const t = text(await mount());
+      expect(t).toContain("+919000000003");
+      expect(t).toContain("No contact recorded");
+      expect(t).not.toMatch(/Name given|Unknown|null|undefined/);
+    });
+
+    it("renders a hostile name as plain text (no markup is created from it)", async () => {
+      const hostile = '<img src=x onerror=alert(1)> & "Bob"';
+      install(() => page([row(6, { displayName: hostile, displayNameSource: "CONTACT_NAME_ON_VISIT" })]));
+      const r = await mount();
+      expect(text(r)).toContain(hostile);
+      expect(r.root.findAllByType("img")).toHaveLength(0);
+    });
+
+    it("keeps the name for the same customer when the page is searched again", async () => {
+      install((path) => page(query(path).get("q") ? [row(1, { displayName: "Asha Kapoor", displayNameSource: "CONTACT_NAME_ON_VISIT" })] : [row(1, { displayName: "Asha Kapoor", displayNameSource: "CONTACT_NAME_ON_VISIT" }), row(2)]));
+      const r = await mount();
+      await type(r, "customer-search", "Asha");
+      await wait(500);
+      await flush();
+      expect(calls.some((c) => query(c).get("q") === "Asha")).toBe(true);
+      expect(text(r)).toContain("Asha Kapoor");
+    });
   });
 
   it("sends the search only after the owner pauses, with a phone reduced to digits", async () => {

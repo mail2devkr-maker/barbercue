@@ -2116,10 +2116,20 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const customer = (directory.body.items as Array<Record<string, unknown>>).find(
         (item) => item.customerId === ids.cust1,
       );
+      // The newest non-blank name this customer gave THIS shop (earlier tests in this suite make them join more than once).
+      const newestJoin = await prisma.queueEntry.findFirst({
+        where: { salonId: ids.salon, customerId: ids.cust1, bookingId: null, contactName: { not: null } },
+        orderBy: { joinedAt: 'desc' },
+        select: { contactName: true },
+      });
+      const newestGivenName = newestJoin?.contactName?.trim();
+      expect(newestGivenName).toBeTruthy();
       expect(customer).toMatchObject({
         customerId: ids.cust1,
-        displayName: null,
-        displayNameSource: 'NOT_ON_FILE',
+        // Owner issue #6: the name this customer gave THIS shop when joining the queue (see 'customer CRM unified visit history'),
+        // shown with its source - a visit-supplied label, not a verified identity. (Previously always null / NOT_ON_FILE.)
+        displayName: newestGivenName,
+        displayNameSource: 'CONTACT_NAME_ON_VISIT',
         recordedCollections: 295,
         recordedRefunds: 50,
         totalSpent: 245,
@@ -2193,6 +2203,77 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         `${customerBase}/${ids.outsider}/services`,
         tok.owner,
       ).expect(404);
+    });
+
+    it('shows the name a customer gave THIS shop with its source, never merges people, and never leaks it to another shop (owner issue #6)', async () => {
+      const mk = async (label: string) => makeUser(`name-${label}`, Role.CUSTOMER, null);
+      const [a, b, c, d, e] = [await mk('a'), await mk('b'), await mk('c'), await mk('d'), await mk('e')];
+      let token = 9100 + Math.floor(Math.random() * 800);
+      const queue = (salonId: string, customerId: string, contactName: string | null, joinedAt: string, contactPhone: string | null = null) =>
+        prisma.queueEntry.create({
+          data: {
+            salonId,
+            serviceId: ids.haircut,
+            customerId,
+            source: 'WALK_IN',
+            tokenNumber: token++,
+            status: 'COMPLETED',
+            joinedAt: new Date(joinedAt),
+            contactName,
+            contactPhone,
+          },
+        });
+      const sharedPhone = `+91980${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
+      // A: an old name, then a newer one with stray control characters and padding -> the newest, cleaned.
+      await queue(ids.salon, a.id, 'Old Name', '2026-09-01T10:00:00.000Z', sharedPhone);
+      await queue(ids.salon, a.id, '  Asha\u0007 Kapoor  ', '2026-10-01T10:00:00.000Z', sharedPhone);
+      // D shares A's contact phone but is a different customer account with a different name.
+      await queue(ids.salon, d.id, 'Dev Sharma', '2026-10-02T10:00:00.000Z', sharedPhone);
+      // B: no queue name, but a guest name on one of their own bookings.
+      await prisma.booking.create({
+        data: {
+          salonId: ids.salon,
+          customerId: b.id,
+          serviceId: ids.haircut,
+          slotStart: new Date('2026-10-03T10:00:00.000Z'),
+          slotEnd: new Date('2026-10-03T10:30:00.000Z'),
+          status: 'COMPLETED',
+          source: 'WEB',
+          guestName: 'Bina Guest',
+          idempotencyKey: `name-booking-${run}`,
+        },
+      });
+      // C: only blank / null names -> nothing on file (never a placeholder).
+      await queue(ids.salon, c.id, '   ', '2026-10-04T10:00:00.000Z');
+      await queue(ids.salon, c.id, null, '2026-10-05T10:00:00.000Z');
+      // E: gave a name only to ANOTHER shop.
+      await queue(ids.otherSalon, e.id, 'Elsewhere Person', '2026-10-06T10:00:00.000Z');
+
+      const rows = async (salonId: string, q: string) => {
+        const res = await api('get', `dashboard/salons/${salonId}/customers/directory?${new URLSearchParams({ q, limit: '50' })}`, salonId === ids.salon ? tok.owner : tok.outsider).expect(200);
+        return res.body.items as Array<{ customerId: string; displayName: string | null; displayNameSource: string; phone: string | null }>;
+      };
+      const all = await rows(ids.salon, `e2e-${run}-name-`);
+      const byId = new Map(all.map((r) => [r.customerId, r]));
+      expect(byId.get(a.id)).toMatchObject({ displayName: 'Asha Kapoor', displayNameSource: 'CONTACT_NAME_ON_VISIT' });
+      expect(byId.get(d.id)).toMatchObject({ displayName: 'Dev Sharma', displayNameSource: 'CONTACT_NAME_ON_VISIT' });
+      expect(byId.get(b.id)).toMatchObject({ displayName: 'Bina Guest', displayNameSource: 'GUEST_NAME_ON_BOOKING' });
+      expect(byId.get(c.id)).toMatchObject({ displayName: null, displayNameSource: 'NOT_ON_FILE' });
+      // Shared contact phone does not merge A and D into one row.
+      expect(byId.has(a.id) && byId.has(d.id)).toBe(true);
+      expect(byId.get(a.id)!.customerId).not.toBe(byId.get(d.id)!.customerId);
+      // Another shop's name for E is invisible here (E is not even a customer of this shop).
+      expect(byId.has(e.id)).toBe(false);
+      expect(JSON.stringify(all)).not.toContain('Elsewhere Person');
+      // Searching by the given name finds exactly that customer.
+      const found = await rows(ids.salon, 'Asha');
+      expect(found.map((r) => r.customerId)).toContain(a.id);
+      expect(found.map((r) => r.customerId)).not.toContain(d.id);
+      await api('get', `dashboard/salons/${ids.salon}/customers/directory?q=Asha`, tok.outsider).expect(403);
+      // The other shop sees E's name for ITS OWN customer, and never A's.
+      const other = await rows(ids.otherSalon, `e2e-${run}-name-`);
+      expect(other.find((r) => r.customerId === e.id)).toMatchObject({ displayName: 'Elsewhere Person', displayNameSource: 'CONTACT_NAME_ON_VISIT' });
+      expect(JSON.stringify(other)).not.toContain('Asha Kapoor');
     });
 
     it('advances signed customer-directory keysets across timestamp ties and null visits in PostgreSQL', async () => {
