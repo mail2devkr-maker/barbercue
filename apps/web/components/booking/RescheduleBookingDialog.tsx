@@ -1,5 +1,6 @@
 "use client";
 
+import { ShopContactNote } from "./ShopContactNote";
 import { useEffect, useState } from "react";
 import {
   BOOKING_PATHS,
@@ -145,6 +146,8 @@ export function RescheduleBookingDialog({
             return `${current.date}, ${current.time}${!current.isDeviceLocalTimezone ? " (shop's local time)" : ""}`;
           })()}
         </p>
+
+        <ShopContactNote shopPhone={booking.shopPhone} salonName={booking.salonName} purpose="reschedule" className={styles.summaryLine} />
 
         <div className={styles.chipRowScroll}>
           {days.map((day) => (

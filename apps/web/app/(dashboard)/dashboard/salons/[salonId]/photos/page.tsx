@@ -442,7 +442,7 @@ export default function DashboardPhotosPage({
                 style={visuallyHiddenInput}
               />
               <label htmlFor="cover-photo-file" style={fileLabelStyle}>
-                {coverFile ? "Choose a different photo" : "+ Choose photo"}
+                {coverFile ? "Upload a different photo" : "Upload"}
               </label>
               <p className={styles.hint}>JPG, PNG or WebP, up to {MAX_MB} MB.</p>
 
@@ -533,7 +533,7 @@ export default function DashboardPhotosPage({
             style={{ ...fileLabelStyle, opacity: queueAtCapacity ? 0.5 : 1, pointerEvents: queueAtCapacity ? "none" : "auto" }}
             aria-disabled={queueAtCapacity}
           >
-            + Choose from gallery
+            Upload
           </label>
           <label
             htmlFor="gallery-photo-camera"

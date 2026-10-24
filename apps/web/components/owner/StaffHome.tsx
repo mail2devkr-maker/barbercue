@@ -344,7 +344,7 @@ export function StaffHome({ salonId }: { salonId: string }) {
           salonId={salonId}
           onClose={() => setAddOpen(false)}
           onCreated={(e) => {
-            setNotice(`Added ${e.customerName ?? "customer"} as token #${e.tokenNumber}.`);
+            setNotice(`Added ${e.customerName ?? "customer"} as queue #${e.tokenNumber}.`);
             load();
           }}
         />

@@ -247,7 +247,7 @@ describe("Live Queue: direct service start and a separate NO SHOW tab", () => {
     search = "view=waiting";
     const tree = await render();
     const t = allText(tree);
-    expect(t).toContain("Reserved · token #7 · not started");
+    expect(t).toContain("Reserved · queue #7 · not started");
     expect(t).toContain("Reserved for #7 · not started");
     expect(t).toContain("1 of 3 free");
   });

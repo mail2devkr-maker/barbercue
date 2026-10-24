@@ -627,7 +627,7 @@ export function LiveQueueConsole({ salonId }: { salonId: string }) {
           salonId={salonId}
           onClose={() => setAddOpen(false)}
           onCreated={(entry) => {
-            setNotice(`Added ${entry.customerName ?? "customer"} as token #${entry.tokenNumber}.`);
+            setNotice(`Added ${entry.customerName ?? "customer"} as queue #${entry.tokenNumber}.`);
             setView("waiting");
             void refetch(false);
           }}
@@ -645,8 +645,8 @@ function ChairTile({ chair, busy, onFree }: { chair: ChairOptionDto; busy: boole
       <div className={ui.chairName}>{chair.label}</div>
       <div className={ui.chairState}>
         {occupancy === "FREE" && !reserved && "Free"}
-        {reserved && `Reserved · token #${chair.reservedForTokenNumber ?? "?"} · not started`}
-        {occupancy === "FASTQUE" && `${chair.assignedStaffName ?? "A barber"} · token #${chair.tokenNumber ?? "?"}`}
+        {reserved && `Reserved · queue #${chair.reservedForTokenNumber ?? "?"} · not started`}
+        {occupancy === "FASTQUE" && `${chair.assignedStaffName ?? "A barber"} · queue #${chair.tokenNumber ?? "?"}`}
         {occupancy === "LOCAL" && "Seated without a queue entry"}
       </div>
       {occupancy === "LOCAL" && (
