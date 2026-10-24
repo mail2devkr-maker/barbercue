@@ -111,6 +111,30 @@ export interface AdminEmployeeDto extends EmployeeProfileDto {
   updatedAt: string;
 }
 
+/**
+ * Read-only details of the shop an employee onboarded (owner issue #28). Only shop-facing facts: no owner account contact,
+ * no revenue, no customers, no queue. `shop` is null while the lead has not been onboarded.
+ */
+export interface EmployeeLeadShopDto {
+  leadId: string;
+  onboarded: boolean;
+  shop: {
+    salonId: string;
+    name: string;
+    status: string;
+    addressLine: string;
+    localityText: string | null;
+    cityName: string;
+    publicPath: string;
+    onboardedAt: string | null;
+    /** The shop's published business phone, only when the owner chose to publish it. */
+    businessPhone: string | null;
+    photos: Array<{ id: string; url: string; altText: string | null; type: string; sortOrder: number }>;
+    chairs: Array<{ id: string; label: string; status: string }>;
+    chairCounts: { total: number; active: number };
+  } | null;
+}
+
 export interface EmployeeCrmLeadDto {
   id: string;
   shopName: string;
