@@ -16,6 +16,7 @@ import {
   isFilteringDirectory,
   minVisitsProblem,
   moneyText,
+  nameSourceLabel,
   repeatText,
   segmentLabel,
   spendNote,
@@ -151,7 +152,16 @@ export function CustomerDirectory({ salonId, onRouteMissing }: { salonId: string
             return (
               <li key={c.customerId} className={styles.row}>
                 <Link href={`/${base}/${c.customerId}`} style={{ minWidth: 0, flex: "1 1 220px", textDecoration: "none", color: "inherit" }}>
-                  <span className={styles.rowTitle}>{contactLine(c)}</span>
+                  {nameSourceLabel(c) ? (
+                    <>
+                      <span className={styles.rowTitle}>{c.displayName}</span>
+                      <div className={styles.rowMeta} title={nameSourceLabel(c) ?? undefined}>
+                        {contactLine(c)} · {nameSourceLabel(c)}
+                      </div>
+                    </>
+                  ) : (
+                    <span className={styles.rowTitle}>{contactLine(c)}</span>
+                  )}
                   <div className={styles.rowMeta}>
                     {visitsText(c.completedVisitCount)} · {repeatText(c.repeatVisitCount)} · {c.cancelledCount} cancelled · {c.noShowCount} no-show
                   </div>

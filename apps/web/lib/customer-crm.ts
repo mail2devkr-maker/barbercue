@@ -90,6 +90,15 @@ export function contactLine(item: Pick<OwnerCustomerDirectoryItemDto, "phone" | 
   return parts.length > 0 ? parts.join(" · ") : "No contact recorded";
 }
 
+/**
+ * Where a shown name came from, in words an owner can trust. The name is only what the customer last typed to THIS shop;
+ * it is never presented as a verified identity. Null when there is no name on file (the row then shows contact details only).
+ */
+export function nameSourceLabel(item: Pick<OwnerCustomerDirectoryItemDto, "displayName" | "displayNameSource">): string | null {
+  if (typeof item.displayName !== "string" || item.displayName.trim() === "") return null;
+  return item.displayNameSource === "GUEST_NAME_ON_BOOKING" ? "Name given on a booking" : "Name given when joining the queue";
+}
+
 export function moneyText(amount: number, currency: string | null): string {
   return formatMoney(amount, currency ?? undefined);
 }

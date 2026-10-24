@@ -956,16 +956,17 @@ export interface OwnerCustomerSummaryDto {
 /**
  * Server-filtered directory row. `totalSpent` is net FastQue shop-recorded invoice collections
  * (payments less recorded refunds), not an estimate of service value or provider settlement.
- * No canonical customer name exists yet, so the API explicitly returns null rather than borrowing
- * a visit's contact label as an identity.
+ * No canonical (verified) customer name exists. `displayName` is only what the customer themself last typed to this
+ * shop (queue contact name or the name on their own booking), always paired with `displayNameSource`; otherwise null.
  */
 export interface OwnerCustomerDirectoryItemDto {
   customerId: string;
   phone: string | null;
   email: string | null;
   currency: string | null;
-  displayName: null;
-  displayNameSource: 'NOT_ON_FILE';
+  /** The name the customer last gave this shop, or null. A visit-supplied label with its source - not a verified identity. */
+  displayName: string | null;
+  displayNameSource: 'NOT_ON_FILE' | 'CONTACT_NAME_ON_VISIT' | 'GUEST_NAME_ON_BOOKING';
   totalBookings: number;
   completedCount: number;
   cancelledCount: number;
