@@ -4,7 +4,6 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import {
-  Alert,
   ImageBackground,
   Pressable,
   RefreshControl,
@@ -34,7 +33,8 @@ import { dateLocaleFor } from '../lib/date-locale';
 import { useUnreadNotificationCount } from '../lib/notifications';
 import { useLanguage } from '../lib/language-context';
 import { useAuth } from '../lib/auth-context';
-import { resolveHomeLocation } from '../lib/home-location';
+import { useLocationSelection } from '../lib/location/location-context';
+import { shortLocationLabel } from '../lib/location/selection';
 import { createAuthenticatedHeroCommand, type HeroAction } from '../lib/hero-action-commands';
 import { isCreditsEnabled } from '../lib/feature-flags';
 import { color, fastQue, font, fontSize, lineHeightFor, premiumShadow, radius, space } from '../lib/theme';
@@ -97,9 +97,9 @@ export default function HomeScreen({ navigation }: Props) {
   const { t, language } = useLanguage();
   const { status } = useAuth();
 
-  const [locationLabel, setLocationLabel] = useState<string | null>(null);
-  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(false);
+  // The one shared location model (see lib/location). Tapping a location control only OPENS the
+  // selector; GPS runs solely from the selector's own "Use my current location" action.
+  const { selection, openSelector, refreshDeviceCoords } = useLocationSelection();
 
   const [searchMode, setSearchMode] = useState<'barber' | 'salon'>('barber');
   const [query, setQuery] = useState('');
@@ -184,50 +184,20 @@ export default function HomeScreen({ navigation }: Props) {
     }, [status]),
   );
 
-  // promptIfNeeded: false — only ever reads a permission the customer already granted elsewhere
-  // (e.g. via SalonSearchScreen's "Near Me"). Home never shows its own permission dialog until the
-  // customer explicitly taps the location pill (handleChooseLocation below).
+  // No passive auto-detection here any more: Home never starts GPS by itself and never replaces a
+  // manually chosen city. The one background step is a silent, prompt-free refresh of an
+  // ALREADY-chosen "current location" (a no-op for a manual city — see refreshDeviceCoords).
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      resolveHomeLocation(false).then((result) => {
-        if (!cancelled && result) {
-          setLocationLabel(result.label);
-          setLocationCoords(result.coords);
-        }
-      });
-      return () => {
-        cancelled = true;
-      };
-    }, []),
+      void refreshDeviceCoords();
+    }, [refreshDeviceCoords]),
   );
-
-  async function handleChooseLocation() {
-    setLocating(true);
-    try {
-      // Explicit taps mean "detect/change my location now", so bypass the session cache and prefer
-      // a fresh GPS fix. This prevents both Home location controls from appearing frozen on an old
-      // or unresolved value for the rest of the app session.
-      const result = await resolveHomeLocation(true, true);
-      if (result) {
-        setLocationLabel(result.label);
-        setLocationCoords(result.coords);
-        return;
-      }
-      Alert.alert(t.couldNotGetLocation);
-    } catch {
-      Alert.alert(t.couldNotGetLocation);
-    } finally {
-      setLocating(false);
-    }
-  }
 
   function goSearch(params?: { initialQuery?: string }) {
     navigation.navigate('SearchTab', {
       screen: 'SalonSearch',
       params: {
         ...(params?.initialQuery ? { initialQuery: params.initialQuery } : {}),
-        ...(locationCoords ? { initialLat: locationCoords.lat, initialLng: locationCoords.lng } : {}),
       },
     });
   }
@@ -238,7 +208,7 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   function handleHeroAction(action: HeroAction) {
-    const command = createAuthenticatedHeroCommand(action, locationCoords);
+    const command = createAuthenticatedHeroCommand(action, null);
     if (command.destination === 'search') {
       navigation.navigate('SearchTab', { screen: 'SalonSearch', params: command.params });
     } else if (command.destination === 'queue') {
@@ -248,12 +218,13 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }
 
-  const locationText = locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction;
+  const locationText = shortLocationLabel(selection, t);
   const locationPill = (wide: boolean) => (
     <Pressable
+      testID={wide ? 'home-location-pill-wide' : 'home-location-pill'}
       style={[styles.locationPill, wide && styles.locationPillWide]}
-      onPress={handleChooseLocation}
-      disabled={locating}
+      onPress={openSelector}
+      accessibilityLabel={`${t.locationSelectorTitle}: ${locationText}`}
       accessibilityRole="button"
     >
       <View style={styles.locationDot} />
@@ -449,9 +420,9 @@ export default function HomeScreen({ navigation }: Props) {
           )}
 
           <Text style={styles.fieldLabel}>{t.cityLocationLabel}</Text>
-          <Pressable style={styles.searchInput} onPress={handleChooseLocation} disabled={locating}>
-            <Text style={locationLabel ? styles.cityValueText : styles.cityPlaceholderText} numberOfLines={1}>
-              {locating ? t.detectingLocationAction : locationLabel ?? t.chooseLocationAction}
+          <Pressable testID="home-city-field" style={styles.searchInput} onPress={openSelector} accessibilityRole="button" accessibilityLabel={`${t.locationSelectorTitle}: ${locationText}`}>
+            <Text style={selection ? styles.cityValueText : styles.cityPlaceholderText} numberOfLines={1}>
+              {locationText}
             </Text>
           </Pressable>
 
