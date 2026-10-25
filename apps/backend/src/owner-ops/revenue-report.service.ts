@@ -11,6 +11,7 @@ import {
   decimalStringToPaise,
   paiseToRupees,
   type OwnerRevenueReportCustomerDto,
+  type OwnerRevenueReportSourceDto,
   type OwnerRevenueReportDto,
   type OwnerRevenueReportMetricDto,
   type OwnerRevenueReportPeriodDto,
@@ -173,15 +174,22 @@ function addVisitMetrics(
   metric.estimatedServiceValuePaise += visit.valuePaise;
 }
 
-function sourceOfInvoice(
-  invoice: InvoiceRecord,
-  queueSources: Map<string, string>,
-): Source {
-  if (invoice.booking?.attributionCampaign?.source) {
-    return invoice.booking.attributionCampaign.source;
+/**
+ * The reporting source of a booking row, or null when it carries neither a campaign nor a booking source (never guessed).
+ * One mapping is used for completed visits AND invoices so the by-source rows can never disagree with each other.
+ */
+export function sourceOfBooking(
+  booking:
+    | { source?: string | null; attributionCampaign?: { source: string } | null }
+    | null
+    | undefined,
+): Source | null {
+  if (!booking) return null;
+  if (booking.attributionCampaign?.source) {
+    return booking.attributionCampaign.source as Source;
   }
-  if (invoice.booking?.source) {
-    switch (invoice.booking.source) {
+  if (booking.source) {
+    switch (booking.source) {
       case BookingSource.WEB:
         return BookingAttributionSource.FASTQUE_WEB;
       case BookingSource.APP:
@@ -194,6 +202,15 @@ function sourceOfInvoice(
         return BookingAttributionSource.UNKNOWN;
     }
   }
+  return null;
+}
+
+function sourceOfInvoice(
+  invoice: InvoiceRecord,
+  queueSources: Map<string, string>,
+): Source {
+  const fromBooking = sourceOfBooking(invoice.booking);
+  if (fromBooking) return fromBooking;
   if (!invoice.queueEntryId) return 'UNKNOWN';
   return queueSources.get(invoice.queueEntryId) === QueueEntrySource.WALK_IN
     ? BookingAttributionSource.WALK_IN
@@ -537,6 +554,7 @@ export class RevenueReportService {
         const byService = new Map<string, GroupAccumulator>();
         const byStaff = new Map<string, GroupAccumulator>();
         const byCustomer = new Map<string, GroupAccumulator>();
+        const bySource = new Map<string, GroupAccumulator>();
         const periodMap = new Map<string, MetricAccumulator>();
         let periodCursor =
           query.groupBy === 'month'
@@ -567,6 +585,7 @@ export class RevenueReportService {
           customerLabel: string;
           staffId: string | null;
           staffLabel: string | null;
+          source: Source;
           services: Array<{
             id: string | null;
             name: string;
@@ -610,6 +629,14 @@ export class RevenueReportService {
             Boolean(args.staffId),
           );
           addVisitMetrics(staff, { valuePaise: totalEstimate });
+
+          const visitSourceGroup = groupFor(
+            bySource,
+            `source:${args.source}`,
+            args.source,
+            null,
+          );
+          addVisitMetrics(visitSourceGroup, { valuePaise: totalEstimate });
 
           for (const service of args.services) {
             const serviceKey = service.id
@@ -657,6 +684,7 @@ export class RevenueReportService {
               : (booking.guestName ?? 'Guest visit'),
             staffId: actualStaff?.id ?? null,
             staffLabel: actualStaff?.displayName ?? null,
+            source: sourceOfBooking(booking) ?? BookingAttributionSource.UNKNOWN,
             services,
           });
         }
@@ -674,6 +702,8 @@ export class RevenueReportService {
               : (entry.contactName ?? 'Guest visit'),
             staffId: session?.staff.id ?? null,
             staffLabel: session?.staff.displayName ?? null,
+            // Standalone Live Queue visits are selected as WALK_IN only (see the query above), so this is not a guess.
+            source: BookingAttributionSource.WALK_IN,
             services: session
               ? [
                   {
@@ -779,6 +809,14 @@ export class RevenueReportService {
             Boolean(invoice.customerId),
           );
 
+          const invoiceSource = sourceOfInvoice(invoice, queueSources);
+          const sourceGroup = groupFor(
+            bySource,
+            `source:${invoiceSource}`,
+            invoiceSource,
+            null,
+          );
+
           const lines = invoice.lines.map((line) => ({
             line,
             netPaise: Math.max(
@@ -813,12 +851,16 @@ export class RevenueReportService {
               servicePeriod.invoiceDiscountsPaise += discounts;
               servicePeriod.invoicedAmountPaise += invoiceAmount;
             }
-            for (const group of [staffGroup, customerGroup]) {
+            for (const group of [staffGroup, customerGroup, sourceGroup]) {
               if (!group.invoicedIds.has(invoice.id)) {
                 group.invoicedIds.add(invoice.id);
                 group.invoiceCount += 1;
               }
             }
+            // Unlike the staff and customer rows (which only count invoices), a source row carries the invoiced amount and
+            // discounts too, so the source rows reconcile exactly with the report totals (every invoice has one source).
+            sourceGroup.invoiceDiscountsPaise += discounts;
+            sourceGroup.invoicedAmountPaise += invoiceAmount;
             for (let index = 0; index < lines.length; index++) {
               const item = lines[index];
               const serviceKey = item.line.serviceId
@@ -851,6 +893,7 @@ export class RevenueReportService {
               addAllocation(totals, totalField, amount);
               addAllocation(staffGroup, totalField, amount);
               addAllocation(customerGroup, totalField, amount);
+              addAllocation(sourceGroup, totalField, amount);
               const cashPeriod = periodAt(payment.recordedAt);
               if (cashPeriod) addAllocation(cashPeriod, totalField, amount);
               const allocations = allocatePaise(amount, netWeights);
@@ -924,6 +967,19 @@ export class RevenueReportService {
               a.label.localeCompare(b.label) ||
               a.key.localeCompare(b.key),
           );
+        const sourceDtos: OwnerRevenueReportSourceDto[] = [...bySource.values()]
+          .map((group) => ({
+            source: group.label as BookingAttributionSourceType,
+            key: group.key,
+            label: group.label,
+            ...metricDto(group),
+          }))
+          .sort(
+            (a, b) =>
+              b.netRecordedCollections - a.netRecordedCollections ||
+              b.estimatedServiceValue - a.estimatedServiceValue ||
+              a.key.localeCompare(b.key),
+          );
         const periods: OwnerRevenueReportPeriodDto[] = [
           ...periodMap.entries(),
         ].map(([period, value]) => ({ period, ...metricDto(value) }));
@@ -941,6 +997,7 @@ export class RevenueReportService {
           byService: serviceDtos,
           byStaff: staffDtos,
           byCustomer: customerDtos,
+          bySource: sourceDtos,
           dataSemantics: {
             estimateBasis:
               'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE',
@@ -1021,6 +1078,20 @@ export class RevenueReportService {
       ...report.byStaff.map((row) => [
         'STAFF',
         row.staffId,
+        row.label,
+        row.completedVisits,
+        row.grossServiceValue,
+        row.estimatedServiceValue,
+        row.invoiceCount,
+        row.invoiceDiscounts,
+        row.invoicedAmount,
+        row.recordedCollections,
+        row.refunds,
+        row.netRecordedCollections,
+      ]),
+      ...report.bySource.map((row) => [
+        'SOURCE',
+        row.source,
         row.label,
         row.completedVisits,
         row.grossServiceValue,
@@ -1194,6 +1265,10 @@ export function buildRevenueExcelXml(report: OwnerRevenueReportDto): Buffer {
         row.identityVerified ? 'true' : 'false',
         ...metricValues(row),
       ]),
+    ]),
+    excelWorksheet('Sources', [
+      ['source', 'label', ...metricHeaders],
+      ...report.bySource.map((row) => [row.source, row.label, ...metricValues(row)]),
     ]),
     excelWorksheet('Customers', [
       ['customer_id', 'customer', 'identity_verified', ...metricHeaders],

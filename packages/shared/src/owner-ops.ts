@@ -820,6 +820,11 @@ export interface OwnerRevenueReportStaffDto extends OwnerRevenueReportGroupDto {
   identityVerified: boolean;
 }
 
+export interface OwnerRevenueReportSourceDto extends OwnerRevenueReportGroupDto {
+  /** Where the visits and invoices in this row came from. UNKNOWN means not recorded (old or unattributable); it is never guessed. */
+  source: BookingAttributionSourceType;
+}
+
 export interface OwnerRevenueReportCustomerDto extends OwnerRevenueReportGroupDto {
   customerId: string | null;
   /** Guest visits remain separate; names or phone numbers are never used to merge identities. */
@@ -845,6 +850,8 @@ export interface OwnerRevenueReportDto {
   byService: OwnerRevenueReportServiceDto[];
   byStaff: OwnerRevenueReportStaffDto[];
   byCustomer: OwnerRevenueReportCustomerDto[];
+  /** Every visit and invoice belongs to exactly one source, so these rows add up to `totals`. */
+  bySource: OwnerRevenueReportSourceDto[];
   dataSemantics: {
     estimateBasis: 'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE';
     cashSource: 'SHOP_RECORDED_INVOICE_PAYMENT_LEDGER';

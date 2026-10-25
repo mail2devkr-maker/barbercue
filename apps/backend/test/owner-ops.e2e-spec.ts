@@ -2669,6 +2669,36 @@ maybe('Owner operations (e2e, disposable local database)', () => {
       const appReport = (await api('get', `${path}&source=APP`, tok.owner).expect(200)).body;
       expect(appReport.totals.completedVisits).toBe(0);
 
+      // Owner issue #4 - by source. Every visit and every invoice belongs to exactly one source, so the rows must add up to
+      // the report totals, and each row must equal the same report filtered to that one source (the filter is the proven path).
+      const metricKeys = [
+        'completedVisits', 'grossServiceValue', 'estimatedServiceValue', 'invoiceCount',
+        'invoiceDiscounts', 'invoicedAmount', 'recordedCollections', 'refunds', 'netRecordedCollections',
+      ];
+      expect(Array.isArray(report.bySource)).toBe(true);
+      expect(report.bySource.length).toBeGreaterThan(0);
+      expect(new Set(report.bySource.map((row: { source: string }) => row.source)).size).toBe(report.bySource.length);
+      for (const key of metricKeys) {
+        const sum = report.bySource.reduce((total: number, row: Record<string, number>) => total + row[key], 0);
+        expect([key, Number(sum.toFixed(2))]).toEqual([key, Number(Number(report.totals[key]).toFixed(2))]);
+      }
+      const walkInRow = report.bySource.find((row: { source: string }) => row.source === 'WALK_IN');
+      expect(walkInRow.completedVisits).toBe(walkInCount);
+      for (const row of report.bySource as Array<Record<string, number> & { source: string }>) {
+        if (row.source === 'UNKNOWN') continue;
+        const filtered = (await api('get', `${path}&source=${row.source}`, tok.owner).expect(200)).body;
+        for (const key of metricKeys) {
+          expect([row.source, key, Number(Number(row[key]).toFixed(2))]).toEqual([row.source, key, Number(Number(filtered.totals[key]).toFixed(2))]);
+        }
+      }
+      // The exports carry the same breakdown.
+      const csvBySource = (await api('get', `${SALON()}/revenue/report.csv?from=${from}&to=${to}&groupBy=day`, tok.owner).expect(200)).text;
+      expect(csvBySource).toContain('"SOURCE","WALK_IN"');
+      const xmlBySource = (await api('get', `${SALON()}/revenue/report.excel.xml?from=${from}&to=${to}&groupBy=day`, tok.owner).expect(200)).text;
+      expect(xmlBySource).toContain('ss:Name="Sources"');
+      // Another shop's owner never sees this shop's source breakdown.
+      await api('get', path, tok.outsider).expect(403);
+
       await api('get', path, tok.ravi).expect(403);
       await api('get', path, tok.outsider).expect(403);
       await api(
