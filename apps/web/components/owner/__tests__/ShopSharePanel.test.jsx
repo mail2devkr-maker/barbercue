@@ -16,6 +16,16 @@ const collect = (node) => (node == null || typeof node === "boolean" ? "" : type
 const text = (r) => collect(r.toJSON());
 const flush = async () => { await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); }); };
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
 const READY = {
   salonId: "s1",
   status: "ACTIVE",
@@ -149,5 +159,152 @@ describe("ShopSharePanel", () => {
     const r = await mount();
     expect(text(r)).toContain("Could not load your shop's public link.");
     expect(button(r, /Try again/)).toBeTruthy();
+  });
+  it("never displays the previous shop's public URL or QR while a new shop loads, even when the old response arrives last", async () => {
+    const older = deferred();
+    const newer = deferred();
+    apiFetch.mockImplementation((path) => path.includes("/s1/") ? older.promise : newer.promise);
+    let r;
+    await act(async () => { r = TestRenderer.create(<ShopSharePanel salonId="s1" settingsHref="/settings/s1" />); });
+    await flush();
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+
+    await act(async () => { r.update(<ShopSharePanel salonId="s2" settingsHref="/settings/s2" />); });
+    // Old links must never appear even before the new shop responds.
+    expect(r.root.findAll((n) => n.props?.id === "share-link")).toHaveLength(0);
+    await flush();
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    const nextUrl = "https://fastque.com/in/patna/new-shop";
+    await act(async () => {
+      newer.resolve({ ...READY, salonId: "s2", publicUrl: nextUrl, metadata: { ...READY.metadata, title: "New Shop" } });
+      await newer.promise;
+    });
+    expect(r.root.findByProps({ id: "share-link" }).props.value).toBe(nextUrl);
+
+    await act(async () => { older.resolve(READY); await older.promise; });
+    expect(r.root.findByProps({ id: "share-link" }).props.value).toBe(nextUrl);
+    const qr = r.root.findAll((n) => n.type === "svg" && n.props["data-qr"]);
+    expect(qr[0].props["data-qr"]).toBe(nextUrl);
+    expect(r.root.findByProps({ id: "share-message" }).props.value).toContain("New Shop");
+    expect(r.root.findByProps({ id: "share-message" }).props.value).not.toContain("Fade House");
+  });
+
+  it("clears a previous shop's customized invitation text and feedback when navigating to another shop", async () => {
+    const nextUrl = "https://fastque.com/in/patna/new-shop";
+    apiFetch.mockImplementation(async (path) => path.includes("/s1/")
+      ? READY
+      : { ...READY, salonId: "s2", publicUrl: nextUrl, metadata: { ...READY.metadata, title: "New Shop" } });
+    const r = await mount();
+    await act(async () => { r.root.findByProps({ id: "share-message" }).props.onChange({ target: { value: "Exclusive Fade House invitation" } }); });
+    await act(async () => { await button(r, /Copy link/).props.onClick(); });
+    expect(text(r)).toContain("Link copied.");
+
+    await act(async () => { r.update(<ShopSharePanel salonId="s2" settingsHref="/settings/s2" />); });
+    await flush();
+    expect(r.root.findByProps({ id: "share-link" }).props.value).toBe(nextUrl);
+    expect(r.root.findByProps({ id: "share-message" }).props.value).toContain("New Shop");
+    expect(r.root.findByProps({ id: "share-message" }).props.value).not.toContain("Exclusive Fade House");
+    expect(text(r)).not.toContain("Link copied.");
+  });
+
+  it("ignores a late error from a previous salon instead of replacing the new salon's working share links", async () => {
+    const older = deferred();
+    apiFetch.mockImplementation((path) => path.includes("/s1/") ? older.promise : Promise.resolve({
+      ...READY, salonId: "s2", publicUrl: "https://fastque.com/in/patna/new-shop",
+    }));
+    let r;
+    await act(async () => { r = TestRenderer.create(<ShopSharePanel salonId="s1" settingsHref="/settings/s1" />); });
+    await flush();
+    await act(async () => { r.update(<ShopSharePanel salonId="s2" settingsHref="/settings/s2" />); });
+    await flush();
+    expect(r.root.findByProps({ id: "share-link" }).props.value).toBe("https://fastque.com/in/patna/new-shop");
+    await act(async () => { older.reject(new Error("stale shop offline")); try { await older.promise; } catch {} });
+    expect(r.root.findByProps({ id: "share-link" }).props.value).toBe("https://fastque.com/in/patna/new-shop");
+    expect(text(r)).not.toContain("Could not load your shop's public link.");
+  });
+
+  describe("QR download (owner issue #15)", () => {
+    // A recording stand-in for the browser: what link was created, clicked, attached and removed.
+    function recorder() {
+      const calls = { created: [], appended: [], clicked: 0, removed: 0 };
+      const link = { click() { calls.clicked += 1; }, remove() { calls.removed += 1; } };
+      globalThis.document = {
+        createElement: (tag) => { calls.created.push(tag); return link; },
+        body: { appendChild: (el) => { calls.appended.push(el); } },
+      };
+      return { calls, link };
+    }
+    async function mountWithCanvas(canvas, salonDto = READY) {
+      install({ dto: salonDto });
+      let r;
+      await act(async () => {
+        r = TestRenderer.create(<ShopSharePanel salonId="s1" settingsHref="/dashboard/salons/s1/settings" />, {
+          createNodeMock: () => ({ querySelector: () => canvas }),
+        });
+      });
+      await flush();
+      await flush();
+      return r;
+    }
+    const press = async (r) => { await act(async () => { button(r, /Download QR/).props.onClick(); }); };
+
+    it("saves the 1024px QR image as a PNG named after the shop, and says only that the download started", async () => {
+      const { calls, link } = recorder();
+      const canvas = { toDataURL: jest.fn(() => "data:image/png;base64,AAAA") };
+      const r = await mountWithCanvas(canvas);
+      await press(r);
+      expect(canvas.toDataURL).toHaveBeenCalledWith("image/png");
+      expect(calls.created).toEqual(["a"]);
+      expect(link.href).toBe("data:image/png;base64,AAAA");
+      expect(link.download).toBe("fastque-fade-house-qr.png");
+      expect(calls.appended).toHaveLength(1);
+      expect(calls.clicked).toBe(1);
+      expect(calls.removed).toBe(1);
+      expect(text(r)).toContain("QR code download started.");
+      expect(text(r)).not.toContain("QR code downloaded.");
+    });
+
+    it("builds a safe file name from awkward or non-Latin shop names", async () => {
+      for (const [title, expected] of [
+        ['Raj & Sons: "Hair" / Spa!!', "fastque-raj-sons-hair-spa-qr.png"],
+        ["../../etc/passwd", "fastque-etc-passwd-qr.png"],
+        ["राज सैलून", "fastque-shop-qr.png"],
+      ]) {
+        const { link } = recorder();
+        const r = await mountWithCanvas({ toDataURL: () => "data:image/png;base64,AAAA" }, { ...READY, metadata: { ...READY.metadata, title } });
+        await press(r);
+        expect(link.download).toBe(expected);
+        expect(link.download).not.toMatch(/[\\/:"*?<>|\s]/);
+      }
+    });
+
+    it("tells the owner when the QR image is not ready instead of doing nothing", async () => {
+      const { calls } = recorder();
+      const r = await mountWithCanvas(null);
+      await press(r);
+      expect(calls.created).toEqual([]);
+      expect(calls.clicked).toBe(0);
+      expect(text(r)).toContain("The QR image is not ready yet.");
+      expect(text(r)).not.toContain("download started");
+    });
+
+    it("reports a browser that cannot export the image, without claiming a download", async () => {
+      const { calls } = recorder();
+      const r = await mountWithCanvas({ toDataURL: () => { throw new Error("SecurityError"); } });
+      await press(r);
+      expect(calls.clicked).toBe(0);
+      expect(text(r)).toContain("Your browser could not save the QR image.");
+      expect(text(r)).not.toContain("download started");
+    });
+
+    it("downloads the QR of the current shop only: its image is made from the same trusted public link shown on screen", async () => {
+      recorder();
+      const r = await mountWithCanvas({ toDataURL: () => "data:image/png;base64,AAAA" });
+      const shown = r.root.findByProps({ id: "share-link" }).props.value;
+      expect(shown).toBe(READY.publicUrl);
+      const qrs = r.root.findAll((n) => n.props && (n.props["data-qr"] || n.props["data-qr-canvas"]));
+      expect(qrs.length).toBeGreaterThan(0);
+      for (const q of qrs) expect(q.props["data-qr"] ?? q.props["data-qr-canvas"]).toBe(shown);
+    });
   });
 });
