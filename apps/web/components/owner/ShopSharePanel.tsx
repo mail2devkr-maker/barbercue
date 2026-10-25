@@ -21,7 +21,11 @@ import {
 import { Banner, Btn, BtnLink, Card, Field, Skeleton } from "./parts";
 import ui from "./owner.module.css";
 
-type Load = { kind: "loading" } | { kind: "error"; message: string } | ShareView;
+// Scope every result to the requested shop: switching owners/shops must never render an old shop's public link or QR.
+type Load =
+  | { kind: "loading"; salonId: string }
+  | { kind: "error"; salonId: string; message: string }
+  | (ShareView & { salonId: string });
 
 /**
  * Marketing > Share your shop (requirements #11, #14, #24).
@@ -32,29 +36,47 @@ type Load = { kind: "loading" } | { kind: "error"; message: string } | ShareView
  * "shared" note only appears when that really happened.
  */
 export function ShopSharePanel({ salonId, settingsHref }: { salonId: string; settingsHref: string }) {
-  const [load, setLoad] = useState<Load>({ kind: "loading" });
+  const [load, setLoad] = useState<Load>({ kind: "loading", salonId });
   const [text, setText] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const qrCanvasRef = useRef<HTMLDivElement>(null);
+  const latestRequest = useRef(0);
 
   const run = useCallback(async () => {
-    setLoad({ kind: "loading" });
+    const request = ++latestRequest.current;
+    setLoad({ kind: "loading", salonId });
+    setNotice(null);
     try {
       const dto = await apiFetch<SalonShareLinksDto>(`${DASHBOARD_PATHS.dashboard}/${DASHBOARD_PATHS.salons}/${salonId}/${DASHBOARD_PATHS.shareLinks}`);
       const view = classifyShareLinks(dto);
-      setLoad(view);
+      // An older response must not overwrite another shop's link, QR or retry state.
+      if (request !== latestRequest.current) return;
+      setLoad({ ...view, salonId });
       if (view.kind === "ready") setText((current) => current || defaultInviteText(view.name));
     } catch (err) {
-      setLoad({ kind: "error", message: err instanceof ApiError ? err.message : "Could not load your shop's public link." });
+      if (request !== latestRequest.current) return;
+      setLoad({ kind: "error", salonId, message: err instanceof ApiError ? err.message : "Could not load your shop's public link." });
     }
   }, [salonId]);
 
   useEffect(() => {
-    // Deferred a tick so the effect body never calls setState synchronously (same pattern as the other dashboard pages).
-    void Promise.resolve().then(run);
+    let active = true;
+    // Do not carry a previous salon's invitation text/feedback into a new shop.
+    // Defer state changes to follow the existing Next/React dashboard effect pattern.
+    void Promise.resolve().then(() => {
+      if (!active) return;
+      setText("");
+      setNotice(null);
+      void run();
+    });
+    return () => {
+      active = false;
+      latestRequest.current += 1;
+    };
   }, [run]);
 
-  if (load.kind === "loading") return <Skeleton height={220} />;
+  // Even before the effect cleanup runs, never show a previous shop's public address.
+  if (load.salonId !== salonId || load.kind === "loading") return <Skeleton height={220} />;
   if (load.kind === "error") {
     return (
       <Banner tone="error">
