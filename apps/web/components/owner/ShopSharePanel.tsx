@@ -127,15 +127,24 @@ export function ShopSharePanel({ salonId, settingsHref }: { salonId: string; set
   }
 
   function downloadQr() {
+    // Say what really happened: with no image to save the owner is told so (it used to do nothing), and a browser cannot
+    // confirm that a download finished, so only the start of the download is reported.
     const canvas = qrCanvasRef.current?.querySelector("canvas");
-    if (!canvas) return;
-    const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/png");
-    link.download = `fastque-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "shop"}-qr.png`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setNotice("QR code downloaded.");
+    if (!canvas) {
+      setNotice("The QR image is not ready yet. Wait a moment and try again, or screenshot the QR code above.");
+      return;
+    }
+    try {
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `fastque-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "shop"}-qr.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setNotice("QR code download started. Check your downloads folder.");
+    } catch {
+      setNotice("Your browser could not save the QR image. Screenshot the QR code above instead.");
+    }
   }
 
   return (
