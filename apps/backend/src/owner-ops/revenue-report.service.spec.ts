@@ -1,6 +1,7 @@
 import {
   allocatePaise,
   buildRevenueExcelXml,
+  sourceOfBooking,
   csvCell,
 } from './revenue-report.service';
 import type { OwnerRevenueReportDto } from '@barbercue/shared';
@@ -61,6 +62,7 @@ describe('revenue report accounting helpers', () => {
       byService: [{ key: 'service-1', serviceId: 'service-1', label: '=1+1 & Haircut', ...metrics }],
       byStaff: [{ key: 'staff-1', staffId: 'staff-1', label: 'Staff <One>', identityVerified: true, ...metrics }],
       byCustomer: [{ key: 'customer-1', customerId: 'customer-1', label: 'Customer "One"', identityVerified: true, ...metrics }],
+      bySource: [{ key: 'source:FACEBOOK', source: 'FACEBOOK', label: 'FACEBOOK', ...metrics }],
       dataSemantics: {
         estimateBasis: 'BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE',
         cashSource: 'SHOP_RECORDED_INVOICE_PAYMENT_LEDGER',
@@ -76,10 +78,36 @@ describe('revenue report accounting helpers', () => {
     expect(workbook).toContain('<Worksheet ss:Name="Services">');
     expect(workbook).toContain('<Worksheet ss:Name="Staff">');
     expect(workbook).toContain('<Worksheet ss:Name="Customers">');
+    expect(workbook).toContain('<Worksheet ss:Name="Sources">');
+    expect(workbook).toContain('<Data ss:Type="String">FACEBOOK</Data>');
     expect(workbook).toContain('<Data ss:Type="Number">100</Data>');
     expect(workbook).toContain('<Data ss:Type="String">=1+1 &amp; Haircut</Data>');
     expect(workbook).toContain('Staff &lt;One&gt;');
     expect(workbook).toContain('Customer &quot;One&quot;');
     expect(workbook).not.toContain('ss:Formula');
+  });
+});
+
+describe('sourceOfBooking (owner issue #4: the one source mapping for visits and invoices)', () => {
+  it('maps each persisted booking source to its reporting source', () => {
+    expect(sourceOfBooking({ source: 'WEB' })).toBe('FASTQUE_WEB');
+    expect(sourceOfBooking({ source: 'APP' })).toBe('FASTQUE_APP');
+    expect(sourceOfBooking({ source: 'WALK_IN' })).toBe('WALK_IN');
+    expect(sourceOfBooking({ source: 'IN_SHOP' })).toBe('IN_SHOP');
+  });
+
+  it('a server-issued campaign wins over the channel the booking was made through', () => {
+    for (const campaign of ['FACEBOOK', 'INSTAGRAM', 'CHATGPT', 'OTHER']) {
+      expect(sourceOfBooking({ source: 'WEB', attributionCampaign: { source: campaign } })).toBe(campaign);
+    }
+  });
+
+  it('never guesses: no information is null, and an unrecognised source is UNKNOWN, not a social channel', () => {
+    expect(sourceOfBooking(null)).toBeNull();
+    expect(sourceOfBooking(undefined)).toBeNull();
+    expect(sourceOfBooking({})).toBeNull();
+    expect(sourceOfBooking({ source: null, attributionCampaign: null })).toBeNull();
+    expect(sourceOfBooking({ source: 'SOMETHING_NEW' })).toBe('UNKNOWN');
+    expect(sourceOfBooking({ source: 'WEB', attributionCampaign: null })).not.toMatch(/FACEBOOK|INSTAGRAM|CHATGPT/);
   });
 });

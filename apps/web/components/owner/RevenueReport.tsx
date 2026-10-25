@@ -30,6 +30,7 @@ import {
 import { BarChart, LineChart } from "./charts";
 import { formatMoney } from "./format";
 import { Badge, Banner, Btn, Card, EmptyState, Field, Skeleton, Tabs } from "./parts";
+import { sourceLabel } from "../../lib/booking-sources";
 import ui from "./owner.module.css";
 
 const PRESETS: ReadonlyArray<{ id: PresetId; label: string }> = [
@@ -327,6 +328,30 @@ export function RevenueReport({ salonId }: { salonId: string }) {
                         </tbody>
                       </table>
                       {staff.length > TABLE_ROW_LIMIT && <p className={ui.cardSub}>Showing the top {TABLE_ROW_LIMIT} of {staff.length}.</p>}
+                    </div>
+                  )}
+                </Card>
+              </div>
+
+              <div className={ui.mt16}>
+                <Card title="By source" sub="Where visits and collected money came from. “Not recorded” covers anything that cannot be traced; it is never guessed. The rows add up to the totals above.">
+                  {(report.bySource ?? []).length === 0 ? (
+                    <EmptyState title="No source data in this range" />
+                  ) : (
+                    <div className={ui.tableWrap}>
+                      <table className={ui.table}>
+                        <thead><tr><th>Source</th><th className={ui.num}>Visits</th><th className={ui.num}>Estimated</th><th className={ui.num}>Collected (net)</th></tr></thead>
+                        <tbody>
+                          {(report.bySource ?? []).map((s) => (
+                            <tr key={s.key}>
+                              <td>{sourceLabel(s.source)}</td>
+                              <td className={ui.num}>{s.completedVisits}</td>
+                              <td className={ui.num}>{money(s.estimatedServiceValue)}</td>
+                              <td className={ui.num}>{money(s.netRecordedCollections)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </Card>

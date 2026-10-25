@@ -38,6 +38,11 @@ function report(over = {}) {
       { key: "s-beard", label: "Beard Trim", ...metric({ netRecordedCollections: 150, estimatedServiceValue: 250 }) },
     ],
     byStaff: [{ key: "b1", label: "Arjun", identityVerified: true, ...metric() }, { key: "b2", label: "Unlinked name", identityVerified: false, ...metric({ netRecordedCollections: 1 }) }],
+    bySource: [
+      { key: "source:FASTQUE_WEB", source: "FASTQUE_WEB", label: "FASTQUE_WEB", ...metric({ completedVisits: 2, estimatedServiceValue: 500, netRecordedCollections: 300 }) },
+      { key: "source:FACEBOOK", source: "FACEBOOK", label: "FACEBOOK", ...metric({ completedVisits: 1, estimatedServiceValue: 250, netRecordedCollections: 150 }) },
+      { key: "source:UNKNOWN", source: "UNKNOWN", label: "UNKNOWN", ...metric({ completedVisits: 0, estimatedServiceValue: 0, netRecordedCollections: 0 }) },
+    ],
     byCustomer: [{ key: "c1", label: "Asha", identityVerified: true, ...metric() }, { key: "c2", label: "Guest Ravi", identityVerified: false, ...metric({ netRecordedCollections: 2 }) }],
     dataSemantics: {
       estimateBasis: "BOOKING_PRICE_SNAPSHOT_AND_CURRENT_QUEUE_SERVICE_PRICE",
@@ -156,7 +161,7 @@ describe("RevenueReport (server report)", () => {
 
   it("shows an honest empty state when the range has no activity", async () => {
     const zero = metric({ completedVisits: 0, grossServiceValue: 0, estimatedServiceValue: 0, invoiceCount: 0, invoiceDiscounts: 0, invoicedAmount: 0, recordedCollections: 0, refunds: 0, netRecordedCollections: 0 });
-    install({ result: report({ periods: [], totals: zero, byService: [], byStaff: [], byCustomer: [] }) });
+    install({ result: report({ periods: [], totals: zero, byService: [], byStaff: [], byCustomer: [], bySource: [] }) });
     const r = await mount();
     expect(text(r)).toContain("No activity in this range");
     expect(text(r)).not.toContain("Net collected");
@@ -170,6 +175,36 @@ describe("RevenueReport (server report)", () => {
     expect(t).toMatch(/Guest Ravi\s+Guest/);
     expect(t).not.toMatch(/Arjun\s+Not linked/);
     expect(t).not.toMatch(/Asha\s+Guest/);
+  });
+
+  describe("By source (owner issue #4)", () => {
+    it("shows each source in plain words with its visits and money, and never guesses an unknown one", async () => {
+      install();
+      const r = await mount();
+      const t = text(r);
+      expect(t).toContain("By source");
+      expect(t).toContain("FastQue website");
+      expect(t).toContain("Facebook campaign");
+      expect(t).toContain("Not recorded");
+      expect(t).not.toMatch(/FASTQUE_WEB|source:FACEBOOK/);
+      const rows = r.root.findAllByType("tr").filter((tr) => /FastQue website|Facebook campaign|Not recorded/.test(collect(tr.children)));
+      expect(rows).toHaveLength(3);
+    });
+
+    it("says there is nothing to show instead of an empty or invented table", async () => {
+      install({ result: report({ bySource: [] }) });
+      const t = text(await mount());
+      expect(t).toContain("No source data in this range");
+    });
+
+    it("still renders when an older server does not send the source breakdown", async () => {
+      const old = report();
+      delete old.bySource;
+      install({ result: old });
+      const t = text(await mount());
+      expect(t).toContain("No source data in this range");
+      expect(t).toContain("By customer");
+    });
   });
 
   it("filters the service table by name", async () => {
