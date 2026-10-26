@@ -18,6 +18,7 @@ import {
   type ContactRow,
 } from "../../lib/contact-preview";
 import { ledgerPath, outcomeText, parseRecordResult, savedSentence } from "../../lib/contact-ledger";
+import { MAX_FILE_BYTES, contactFileToList, hasAcceptedExtension } from "../../lib/contact-file";
 import { Badge, Banner, Btn, Card, EmptyState, Field } from "./parts";
 import ui from "./owner.module.css";
 
@@ -44,6 +45,7 @@ export function ContactListCheck({ salonId, ledgerEnabled = false, onSaved }: { 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState<RecordContactConsentsResultDto | null>(null);
+  const [fileNote, setFileNote] = useState<{ tone: "info" | "error"; message: string; problems: string[] } | null>(null);
 
   const parsed = useMemo(() => parseContactList(text), [text]);
   const batchProblem = validateBatch(batch);
@@ -114,6 +116,40 @@ export function ContactListCheck({ salonId, ledgerEnabled = false, onSaved }: { 
     }
   }
 
+
+  // Reads a contacts file (.csv, .txt, .vcf) IN THIS BROWSER. Nothing is uploaded: only the numbers left in the box below are
+  // sent, and only when the owner presses Check. A refused or empty file never changes what is already in the box.
+  async function readFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!hasAcceptedExtension(file.name)) {
+      setFileNote({ tone: "error", message: "That kind of file is not supported. Use a .csv, .txt or .vcf contacts file. Nothing was read.", problems: [] });
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      setFileNote({ tone: "error", message: "That file is larger than 512 KB, which is more than a contact list. Nothing was read.", problems: [] });
+      return;
+    }
+    try {
+      const read = contactFileToList(await file.text(), file.name);
+      const problems = read.problems.slice(0, 5).map((p) => `${p.where}: ${p.message}`);
+      if (read.found === 0) {
+        setFileNote({ tone: "error", message: `No phone numbers could be read from ${file.name}. What was in the box is unchanged.`, problems });
+        return;
+      }
+      setText(read.text);
+      setResult(null);
+      setFileNote({
+        tone: "info",
+        message: `Read ${read.found} number${read.found === 1 ? "" : "s"} from ${file.name} and put them in the box below${text.trim() ? ", replacing what was there" : ""}. The file stays on your device. Review the list, then press Check.${read.problems.length > problems.length ? ` (${read.problems.length - problems.length} more notes not shown.)` : ""}`,
+        problems,
+      });
+    } catch {
+      setFileNote({ tone: "error", message: "Could not read that file. Nothing was changed.", problems: [] });
+    }
+  }
+
   const summary = result?.preview.summary;
   return (
     <div className={ui.mt16}>
@@ -128,6 +164,19 @@ export function ContactListCheck({ salonId, ledgerEnabled = false, onSaved }: { 
           <Field label="Phone numbers" htmlFor="contacts-text">
             <textarea id="contacts-text" className={ui.input} rows={8} value={text} onChange={(e) => { setText(e.target.value); setResult(null); }} spellCheck={false} autoComplete="off" />
           </Field>
+          <Field label="Or read the numbers from a contacts file" htmlFor="contacts-file" hint="A .csv, .txt or phone-export .vcf file, up to 512 KB. It is read in this browser and not uploaded.">
+            <input id="contacts-file" type="file" accept=".csv,.txt,.vcf,.vcard,text/csv,text/plain,text/vcard,text/x-vcard" onChange={(e) => void readFile(e)} />
+          </Field>
+          {fileNote && (
+            <div role="status">
+              <Banner tone={fileNote.tone === "error" ? "error" : "info"}>{fileNote.message}</Banner>
+              {fileNote.problems.length > 0 && (
+                <ul aria-label="Notes about the file">
+                  {fileNote.problems.map((p) => <li key={p} className={ui.cardSub}>{p}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
           <p className={ui.cardSub} role="status">
             {parsed.rows.length} number{parsed.rows.length === 1 ? "" : "s"} read{parsed.problems.length > 0 ? `, ${parsed.problems.length} line${parsed.problems.length === 1 ? "" : "s"} with a problem` : ""}.
           </p>
