@@ -41,7 +41,8 @@ export function ShopNameSearchField({
   const tooShort = trimmed.length < MIN_QUERY_LENGTH;
 
   useEffect(() => {
-    if (!open) return;
+    // Jest's server-side renderer has no document; the outside-click listener is browser-only.
+    if (!open || typeof document === "undefined") return;
     const closeOutside = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
