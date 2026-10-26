@@ -20,9 +20,6 @@ jobs:
       CI: "1"
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_API_BASE_URL: https://barbercuebackend-production.up.railway.app/api/v1
-      FASTQUE_IOS_BUILD: "true"
-      # Synthetic OAuth config exercises native URL-scheme generation only; it cannot authenticate.
-      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 123456789012-test_client.apps.googleusercontent.com
 
     steps:
       - name: Checkout candidate
@@ -55,6 +52,11 @@ jobs:
 
       - name: Generate the iOS native project
         working-directory: apps/mobile
+        env:
+          FASTQUE_IOS_BUILD: "true"
+          # Only native iOS config generation needs a synthetic public OAuth ID.
+          # It cannot authenticate and is deliberately absent from Jest and Android jobs.
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 123456789012-test_client.apps.googleusercontent.com
         run: npx expo prebuild --platform ios --clean
 
       - name: Disable OTA for this standalone simulator smoke
@@ -69,6 +71,10 @@ jobs:
 
       - name: Build standalone Release simulator app
         working-directory: apps/mobile
+        env:
+          FASTQUE_IOS_BUILD: "true"
+          # Expo inlines EXPO_PUBLIC_* values into this iOS simulator bundle only.
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 123456789012-test_client.apps.googleusercontent.com
         run: |
           set -o pipefail
           xcodebuild \
@@ -132,3 +138,4 @@ jobs:
         run: |
           echo "The mobile typecheck or full Jest suite failed; see the earlier step for details."
           exit 1
+
