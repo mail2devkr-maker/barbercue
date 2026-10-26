@@ -23,6 +23,19 @@
       "env": {
         "EXPO_PUBLIC_FASTQUE_CREDITS_ENABLED": "false"
       }
+    },
+    "ios-production": {
+      "extends": "production",
+      "environment": "production",
+      "channel": "production",
+      "autoIncrement": true,
+      "distribution": "store",
+      "env": {
+        "FASTQUE_IOS_BUILD": "true"
+      },
+      "ios": {
+        "simulator": false
+      }
     }
   },
   "submit": {

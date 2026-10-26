@@ -78,6 +78,17 @@ describe('native Google Sign-In service', () => {
     expect(mockSignIn).toHaveBeenCalledTimes(1);
   });
 
+  it('uses an iOS OAuth client only on iOS and preserves Android configuration', () => {
+    const { getGoogleSignInConfiguration } = loadGoogleSignIn();
+    expect(getGoogleSignInConfiguration('web-client-id', 'ios-client-id', 'ios')).toEqual({
+      webClientId: 'web-client-id',
+      iosClientId: 'ios-client-id',
+    });
+    expect(getGoogleSignInConfiguration('web-client-id', 'ios-client-id', 'android')).toEqual({
+      webClientId: 'web-client-id',
+    });
+  });
+
   it('uses the documented interactive fallbacks for a first-time Google user', async () => {
     const { getGoogleIdToken } = loadGoogleSignIn('web-client-id.apps.googleusercontent.com');
     mockSignIn.mockResolvedValue({ kind: 'no-saved-credential' });
