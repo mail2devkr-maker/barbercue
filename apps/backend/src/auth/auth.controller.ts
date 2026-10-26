@@ -58,6 +58,11 @@ import {
 import { AuthService } from './auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from './decorators/public.decorator';
+import { AllowWhilePasswordChangeRequired } from './decorators/allow-password-change.decorator';
+import {
+  changeRequiredPasswordSchema,
+  type ChangeRequiredPasswordInput,
+} from './password-change-required.schema';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { setRefreshCookie, clearRefreshCookie } from '../common/refresh-cookie';
@@ -396,6 +401,7 @@ export class AuthController {
     return { success: true };
   }
 
+  @AllowWhilePasswordChangeRequired()
   @HttpCode(HttpStatus.OK)
   @Post(AUTH_PATHS.logoutAll)
   async logoutAll(
@@ -471,6 +477,31 @@ export class AuthController {
     return { success: true };
   }
 
+  /**
+   * Replaces an administrator-issued temporary password (owner transfer). The only route, besides /me and logout-all,
+   * that such an account may call until it succeeds. Every session of the account is revoked, so the user signs in
+   * again with the new password.
+   */
+  @AllowWhilePasswordChangeRequired()
+  @HttpCode(HttpStatus.OK)
+  @Throttle(AUTH_THROTTLE)
+  @Post('password/change-required')
+  async changeRequiredPassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(changeRequiredPasswordSchema))
+    body: ChangeRequiredPasswordInput,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.authService.changeRequiredPassword(
+      user.id,
+      body.currentPassword,
+      body.newPassword,
+    );
+    clearRefreshCookie(res);
+    return { success: true };
+  }
+
+  @AllowWhilePasswordChangeRequired()
   @Get(AUTH_PATHS.me)
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.me(user.id, user.roles, user.audience);

@@ -4,6 +4,7 @@ import { Reflector } from '@nestjs/core';
 import { AuthErrorCode, type AuthenticatedUser } from '@barbercue/shared';
 import { AppException } from '../../common/exceptions/app.exception';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { ALLOW_PASSWORD_CHANGE_KEY } from '../decorators/allow-password-change.decorator';
 
 /**
  * Registered globally (see AppModule) — every route requires a valid access token by default.
@@ -30,6 +31,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   handleRequest<TUser = AuthenticatedUser>(
     err: unknown,
     user: TUser | false,
+    _info?: unknown,
+    context?: ExecutionContext,
   ): TUser {
     if (err || !user) {
       if (err instanceof AppException) throw err;
@@ -37,6 +40,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         AuthErrorCode.UNAUTHENTICATED,
         'Authentication required.',
         HttpStatus.UNAUTHORIZED,
+      );
+    }
+    // An account holding an administrator-issued temporary password may do nothing but replace it. Enforced here, on
+    // the backend, for every route: a client that skips its own "change password" screen gets nothing.
+    if (
+      (user as { passwordChangeRequired?: boolean }).passwordChangeRequired &&
+      context &&
+      !this.reflector.getAllAndOverride<boolean>(ALLOW_PASSWORD_CHANGE_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+    ) {
+      throw new AppException(
+        'PASSWORD_CHANGE_REQUIRED',
+        'You must change your temporary password before using FastQue.',
+        HttpStatus.FORBIDDEN,
       );
     }
     return user;

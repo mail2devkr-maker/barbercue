@@ -397,6 +397,11 @@ model User {
   status            UserStatus @default(ACTIVE)
   twoFactorEnabled  Boolean    @default(false)
   totpSecret        String?
+  // Set when an administrator issued this account a one-time temporary password (owner transfer). While true the
+  // backend refuses every route except the password change itself; the temporary password also stops working at
+  // temporaryPasswordExpiresAt. Both are cleared together by the user's own password change.
+  passwordChangeRequired     Boolean   @default(false)
+  temporaryPasswordExpiresAt DateTime?
   // Phase 14 (Localization & Voice Operations) — drives which packages/shared/src/i18n
   // VoiceAnnouncements dictionary realtime alert handlers speak from, plus the language switcher's
   // initial state. Defaults to EN, so every existing/new user behaves exactly as before this field
@@ -416,6 +421,8 @@ model User {
   passwordResetTokens           PasswordResetToken[]
   ownedSalons                   Salon[]                  @relation("SalonOwner")
   staffMemberships              SalonStaff[]
+  ownerTransfersFrom            SalonOwnerTransfer[]     @relation("OwnerTransferFrom")
+  ownerTransfersTo              SalonOwnerTransfer[]     @relation("OwnerTransferTo")
   bookings                      Booking[]                @relation("BookingCustomer")
   offerRedemptions              OfferRedemption[]
   cancelledBookings             Booking[]                @relation("BookingCancelledBy")
@@ -959,6 +966,7 @@ model Salon {
   operatingHours              OperatingHours[]
   photos                      Photo[]
   locationProposals           SalonLocationProposal[]
+  ownerTransfers              SalonOwnerTransfer[]
   reviews                     Review[]
   ledgerEntries               CustomerLedgerEntry[]
   staffChairAssignments       StaffChairAssignment[]
@@ -1926,6 +1934,46 @@ model SalonLocationProposal {
   @@index([status, submittedAt, id])
   @@index([salonId, submittedAt])
   @@map("salon_location_proposals")
+}
+
+// Administrator-authorized transfer of a shop to a different owner identity. The shop and all of its data stay where
+// they are; only the owner link moves, and only after the new owner's identity was independently verified.
+enum OwnerTransferStatus {
+  PREPARED
+  VERIFIED
+  COMPLETED
+  CANCELLED
+}
+
+enum OwnerVerificationMethod {
+  OFFLINE_DOCUMENT
+  REGISTERED_PHONE_CALLBACK
+}
+
+model SalonOwnerTransfer {
+  id                      String                   @id @default(uuid())
+  salonId                 String
+  salon                   Salon                    @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  fromUserId              String
+  fromUser                User                     @relation("OwnerTransferFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUserId                String?
+  toUser                  User?                    @relation("OwnerTransferTo", fields: [toUserId], references: [id], onDelete: Restrict)
+  newEmail                String                   @db.VarChar(254)
+  status                  OwnerTransferStatus      @default(PREPARED)
+  // One open (PREPARED/VERIFIED) transfer per shop; finished ones leave the slot free (NULLs are distinct).
+  openSlot                Int?
+  verificationMethod      OwnerVerificationMethod?
+  verificationReference   String?                  @db.VarChar(200)
+  verifiedByAdminId       String?
+  verifiedAt              DateTime?
+  preparedByAdminId       String
+  preparedAt              DateTime                 @default(now())
+  completedAt             DateTime?
+  cancelledAt             DateTime?
+
+  @@unique([salonId, openSlot])
+  @@index([salonId, preparedAt])
+  @@map("salon_owner_transfers")
 }
 
 // ---------- Notifications ----------
