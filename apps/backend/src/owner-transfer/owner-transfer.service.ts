@@ -64,11 +64,21 @@ export type AcceptOwnerInvitationInput = z.infer<
   typeof acceptOwnerInvitationSchema
 >;
 
+export interface OwnerTransferHistoryEntry {
+  action: string;
+  at: string;
+  actorEmail: string | null;
+}
+
 export interface OwnerTransferDto {
   id: string;
   salonId: string;
   newEmail: string;
   status: OwnerTransferStatus;
+  preparedByAdminId: string;
+  verifiedByAdminId: string | null;
+  /** Newest last. Only present on the list endpoint. Never contains a token or a password. */
+  history?: OwnerTransferHistoryEntry[];
   verificationEvidence: OwnerEvidenceKind[];
   verifiedAt: string | null;
   inviteNotBefore: string | null;
@@ -115,6 +125,8 @@ export class OwnerTransferService {
     salonId: string;
     newEmail: string;
     status: OwnerTransferStatus;
+    preparedByAdminId: string;
+    verifiedByAdminId: string | null;
     verificationEvidence: OwnerEvidenceKind[];
     verifiedAt: Date | null;
     inviteNotBefore: Date | null;
@@ -129,6 +141,8 @@ export class OwnerTransferService {
       salonId: row.salonId,
       newEmail: row.newEmail,
       status: row.status,
+      preparedByAdminId: row.preparedByAdminId,
+      verifiedByAdminId: row.verifiedByAdminId,
       verificationEvidence: row.verificationEvidence,
       verifiedAt: row.verifiedAt?.toISOString() ?? null,
       inviteNotBefore: row.inviteNotBefore?.toISOString() ?? null,
@@ -150,7 +164,29 @@ export class OwnerTransferService {
       orderBy: [{ preparedAt: 'desc' }, { id: 'desc' }],
       take: 20,
     });
-    return rows.map((row) => this.toDto(row));
+    const audit = await this.prisma.auditLog.findMany({
+      where: {
+        entityType: 'SalonOwnerTransfer',
+        entityId: { in: rows.map((row) => row.id) },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        entityId: true,
+        action: true,
+        createdAt: true,
+        actor: { select: { email: true } },
+      },
+    });
+    return rows.map((row) => ({
+      ...this.toDto(row),
+      history: audit
+        .filter((entry) => entry.entityId === row.id)
+        .map((entry) => ({
+          action: entry.action,
+          at: entry.createdAt.toISOString(),
+          actorEmail: entry.actor?.email ?? null,
+        })),
+    }));
   }
 
   async prepare(

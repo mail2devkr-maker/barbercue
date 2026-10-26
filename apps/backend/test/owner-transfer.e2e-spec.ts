@@ -743,6 +743,28 @@ describeDisposable(
       }
     });
 
+    it('the administrator list shows status and audit history, never a token or password, and only to administrators', async () => {
+      const res = await api('get', `admin/salons/${ids.StudioSalon}/owner-transfers`, auth.admin1);
+      expect(res.status).toBe(200);
+      const done = res.body.find((row: { id: string }) => row.id === studioTransfer);
+      expect(done.status).toBe('COMPLETED');
+      expect(done.preparedByAdminId).toBe(ids.admin1);
+      expect(done.verifiedByAdminId).toBe(ids.admin2);
+      expect(done.history.map((h: { action: string }) => h.action)).toEqual([
+        'SALON_OWNER_TRANSFER_PREPARED',
+        'SALON_OWNER_TRANSFER_VERIFIED',
+        'SALON_OWNER_TRANSFER_INVITED',
+        'SALON_OWNER_TRANSFER_COMPLETED',
+      ]);
+      expect(done.history[0].actorEmail).toBe(`ot-${run}-admin1@example.test`);
+      const text = JSON.stringify(res.body);
+      expect(text).not.toMatch(/[a-f0-9]{64}/);
+      expect(text).not.toContain('invitationTokenHash');
+      expect(text).not.toContain(NEW_PASSWORD);
+      expect((await api('get', `admin/salons/${ids.StudioSalon}/owner-transfers`, auth.shared)).status).toBe(403);
+      expect((await api('get', `admin/salons/${ids.StudioSalon}/owner-transfers`, auth.customer)).status).toBe(403);
+    });
+
     it('the database itself refuses inconsistent transfer rows', async () => {
       const base = {
         salonId: ids.SpareSalon,

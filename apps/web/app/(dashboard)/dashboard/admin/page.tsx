@@ -156,6 +156,7 @@ export default function AdminDashboardPage() {
           {canManageEmployees && <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>}
           {canOpenCrm && <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>}
           {canReviewVerification && <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>}
+          {superAdmin && <LinkButton href="/dashboard/admin/owner-transfers" variant="outline">Owner transfers</LinkButton>}
           <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
         </div>
       </header>
