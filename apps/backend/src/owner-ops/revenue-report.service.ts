@@ -851,16 +851,17 @@ export class RevenueReportService {
               servicePeriod.invoiceDiscountsPaise += discounts;
               servicePeriod.invoicedAmountPaise += invoiceAmount;
             }
+            // Every invoice belongs to exactly one staff row, one customer row and one source row, so each of these row sets adds
+            // up to the report totals. (The staff and customer rows used to count the invoice but leave the amount and discounts at
+            // 0, which looked like "nothing was invoiced"; they now carry the same figures the totals do.)
             for (const group of [staffGroup, customerGroup, sourceGroup]) {
               if (!group.invoicedIds.has(invoice.id)) {
                 group.invoicedIds.add(invoice.id);
                 group.invoiceCount += 1;
+                group.invoiceDiscountsPaise += discounts;
+                group.invoicedAmountPaise += invoiceAmount;
               }
             }
-            // Unlike the staff and customer rows (which only count invoices), a source row carries the invoiced amount and
-            // discounts too, so the source rows reconcile exactly with the report totals (every invoice has one source).
-            sourceGroup.invoiceDiscountsPaise += discounts;
-            sourceGroup.invoicedAmountPaise += invoiceAmount;
             for (let index = 0; index < lines.length; index++) {
               const item = lines[index];
               const serviceKey = item.line.serviceId

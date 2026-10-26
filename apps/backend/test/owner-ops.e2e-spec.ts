@@ -2682,6 +2682,15 @@ maybe('Owner operations (e2e, disposable local database)', () => {
         const sum = report.bySource.reduce((total: number, row: Record<string, number>) => total + row[key], 0);
         expect([key, Number(sum.toFixed(2))]).toEqual([key, Number(Number(report.totals[key]).toFixed(2))]);
       }
+      // Staff and customer rows used to count invoices but leave invoicedAmount/invoiceDiscounts at 0. Every invoice belongs to
+      // exactly one staff row and one customer row, so for every metric those rows must add up to the totals as well.
+      expect(report.totals.invoicedAmount).toBeGreaterThan(0);
+      for (const [group, rows] of [['byStaff', report.byStaff], ['byCustomer', report.byCustomer]] as Array<[string, Array<Record<string, number>>]>) {
+        for (const key of metricKeys) {
+          const sum = rows.reduce((total: number, row) => total + row[key], 0);
+          expect([group, key, Number(sum.toFixed(2))]).toEqual([group, key, Number(Number(report.totals[key]).toFixed(2))]);
+        }
+      }
       const walkInRow = report.bySource.find((row: { source: string }) => row.source === 'WALK_IN');
       expect(walkInRow.completedVisits).toBe(walkInCount);
       for (const row of report.bySource as Array<Record<string, number> & { source: string }>) {
