@@ -479,6 +479,9 @@ export const appleNonceSchema = z.object({
 export type AppleNonceInput = z.infer<typeof appleNonceSchema>;
 export const appleLoginSchema = appleNonceSchema.extend({
   identityToken: z.string().min(1).max(8192),
+  // Exchanged server-side so the corresponding Apple refresh token can be revoked if the user
+  // later deletes their FastQue account. The code is short-lived and is never persisted/logged.
+  authorizationCode: z.string().min(1).max(4096),
 });
 export type AppleLoginInput = z.infer<typeof appleLoginSchema>;
 

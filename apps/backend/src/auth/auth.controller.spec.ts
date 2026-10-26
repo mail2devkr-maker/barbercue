@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { generateKeyPairSync } from 'node:crypto';
 import type { Response } from 'express';
 import {
   REFRESH_TOKEN_COOKIE_NAME,
@@ -19,7 +20,10 @@ describe('AuthController', () => {
         accessToken: 'access-token',
         refreshToken: 'rotated-refresh-token',
       }),
-      deleteCustomerAccount: jest.fn().mockResolvedValue({ success: true }),
+      deleteCustomerAccount: jest.fn().mockResolvedValue({
+        success: true,
+        appleRevocation: 'not_applicable',
+      }),
     };
     res = { cookie: jest.fn(), clearCookie: jest.fn() };
     const moduleRef = await Test.createTestingModule({
@@ -55,7 +59,10 @@ describe('AuthController', () => {
         { confirmation: 'DELETE' },
         res as unknown as Response,
       ),
-    ).resolves.toEqual({ success: true });
+    ).resolves.toEqual({
+      success: true,
+      appleRevocation: 'not_applicable',
+    });
 
     expect(authService.deleteCustomerAccount).toHaveBeenCalledWith(
       'customer-a',
@@ -73,12 +80,24 @@ describe('AuthController', () => {
       'GOOGLE_ANDROID_CLIENT_ID',
       'GOOGLE_IOS_CLIENT_ID',
       'APPLE_IOS_CLIENT_ID',
+      'APPLE_TEAM_ID',
+      'APPLE_KEY_ID',
+      'APPLE_PRIVATE_KEY',
+      'TOTP_ENCRYPTION_KEY',
     ] as const;
     const originals = new Map(names.map((name) => [name, process.env[name]]));
     try {
       for (const name of names) delete process.env[name];
       process.env.GOOGLE_IOS_CLIENT_ID = 'public-google-ios-client-id';
       process.env.APPLE_IOS_CLIENT_ID = 'com.dcw.fastque';
+      process.env.APPLE_TEAM_ID = 'ABCDE12345';
+      process.env.APPLE_KEY_ID = 'FGHIJ67890';
+      process.env.APPLE_PRIVATE_KEY = generateKeyPairSync('ec', {
+        namedCurve: 'prime256v1',
+      })
+        .privateKey.export({ format: 'pem', type: 'pkcs8' })
+        .toString();
+      process.env.TOTP_ENCRYPTION_KEY = 'test-only-encryption-key';
 
       const methods = controller.authMethods();
 

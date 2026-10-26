@@ -586,6 +586,8 @@ export interface UiStrings {
   couldNotLoadSessions: string;
   couldNotSignOutSession: string;
   couldNotSignOutOtherSessions: string;
+  appleRevocationReminderTitle: string;
+  appleRevocationReminderMessage: string;
   voiceHint: string;
   premiumActive: string;
   premiumInactive: string;
@@ -1336,6 +1338,8 @@ const enUi: UiStrings = {
   couldNotLoadSessions: 'Could not load your sessions.',
   couldNotSignOutSession: 'Could not sign out that session.',
   couldNotSignOutOtherSessions: 'Could not sign out other sessions.',
+  appleRevocationReminderTitle: 'Revoke FastQue in Apple settings',
+  appleRevocationReminderMessage: 'Your FastQue account was deleted. To revoke Apple access, open Settings, tap your name, then Sign-In & Security → Sign in with Apple → FastQue → Stop Using Apple ID.',
   voiceHint: 'Also controls voice announcements read aloud on this device.',
   premiumActive: 'Active',
   premiumInactive: 'Not subscribed — manage on web',
@@ -2034,6 +2038,8 @@ const hiUi: UiStrings = {
   couldNotLoadSessions: 'आपके सत्र लोड नहीं हो सके।',
   couldNotSignOutSession: 'उस सत्र से साइन आउट नहीं हो सका।',
   couldNotSignOutOtherSessions: 'अन्य सत्रों से साइन आउट नहीं हो सका।',
+  appleRevocationReminderTitle: 'Apple सेटिंग्स में FastQue का एक्सेस हटाएँ',
+  appleRevocationReminderMessage: 'आपका FastQue खाता हटा दिया गया है। Apple एक्सेस हटाने के लिए Settings खोलें, अपना नाम चुनें, फिर Sign-In & Security → Sign in with Apple → FastQue → Stop Using Apple ID चुनें।',
   voiceHint: 'यह डिवाइस पर बोली जाने वाली आवाज़ सूचनाओं को भी नियंत्रित करता है।',
   premiumActive: 'सक्रिय',
   premiumInactive: 'सदस्यता नहीं है — वेब पर प्रबंधित करें',

@@ -1,10 +1,19 @@
 import { generateKeyPairSync, createHash } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { AuthErrorCode } from '@barbercue/shared';
-import { AppleAuthService } from './apple-auth.service';
+import { AppleAuthService, isAppleAuthConfigured } from './apple-auth.service';
 
 describe('AppleAuthService', () => {
   const originalClientId = process.env.APPLE_IOS_CLIENT_ID;
+  const appleEnvironment = [
+    'APPLE_TEAM_ID',
+    'APPLE_KEY_ID',
+    'APPLE_PRIVATE_KEY',
+    'TOTP_ENCRYPTION_KEY',
+  ] as const;
+  const originalAppleEnvironment = new Map(
+    appleEnvironment.map((name) => [name, process.env[name]]),
+  );
   const { privateKey, publicKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
   });
@@ -24,6 +33,7 @@ describe('AppleAuthService', () => {
 
   beforeEach(() => {
     process.env.APPLE_IOS_CLIENT_ID = 'com.dcw.fastque';
+    for (const name of appleEnvironment) delete process.env[name];
     prisma = {
       appleAuthNonce: {
         create: jest.fn(),
@@ -42,6 +52,11 @@ describe('AppleAuthService', () => {
     fetchSpy.mockRestore();
     if (originalClientId === undefined) delete process.env.APPLE_IOS_CLIENT_ID;
     else process.env.APPLE_IOS_CLIENT_ID = originalClientId;
+    for (const name of appleEnvironment) {
+      const original = originalAppleEnvironment.get(name);
+      if (original === undefined) delete process.env[name];
+      else process.env[name] = original;
+    }
   });
 
   async function signedToken(overrides: Record<string, unknown> = {}) {
@@ -163,6 +178,57 @@ describe('AppleAuthService', () => {
       service.verifyIdToken('malformed', 'x'.repeat(43)),
     ).rejects.toMatchObject({
       code: AuthErrorCode.APPLE_TOKEN_INVALID,
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('exchanges a short-lived authorization code and revokes the refresh token without logging secrets', async () => {
+    const { privateKey: signingKey } = generateKeyPairSync('ec', {
+      namedCurve: 'prime256v1',
+    });
+    process.env.APPLE_TEAM_ID = 'ABCDE12345';
+    process.env.APPLE_KEY_ID = 'FGHIJ67890';
+    process.env.APPLE_PRIVATE_KEY = signingKey
+      .export({ format: 'pem', type: 'pkcs8' })
+      .toString();
+    process.env.TOTP_ENCRYPTION_KEY = 'test-only-encryption-key';
+    fetchSpy
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ refresh_token: 'provider-refresh-token' }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => {
+          throw new Error('Apple revoke returns an empty 200 response');
+        },
+      } as unknown as Response);
+
+    await expect(
+      service.exchangeAuthorizationCode('short-lived-authorization-code'),
+    ).resolves.toBe('provider-refresh-token');
+    await expect(
+      service.revokeRefreshToken('provider-refresh-token'),
+    ).resolves.toBeUndefined();
+
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      1,
+      'https://appleid.apple.com/auth/token',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      2,
+      'https://appleid.apple.com/auth/revoke',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('does not advertise or call Apple when token revocation credentials are incomplete', async () => {
+    expect(isAppleAuthConfigured()).toBe(false);
+    await expect(
+      service.exchangeAuthorizationCode('short-lived-authorization-code'),
+    ).rejects.toMatchObject({
+      code: AuthErrorCode.APPLE_PROVIDER_UNAVAILABLE,
     });
     expect(fetchSpy).not.toHaveBeenCalled();
   });

@@ -3,7 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   AUTH_PATHS,
   LANGUAGE_LABELS,
@@ -123,13 +123,16 @@ export default function AccountScreen() {
     setDeleting(true);
     setDeletionError(null);
     try {
-      await apiFetch(`auth/${AUTH_PATHS.accountDeletion}`, {
+      const result = await apiFetch<{ appleRevocation?: 'not_applicable' | 'completed' | 'manual_required' }>(`auth/${AUTH_PATHS.accountDeletion}`, {
         method: 'DELETE',
         body: JSON.stringify({ confirmation: 'DELETE' }),
       });
       // The server has already revoked every session and stripped credentials. logout() still
       // clears this device's secure storage even when its best-effort server call is rejected.
       await logout();
+      if (result.appleRevocation === 'manual_required') {
+        Alert.alert(t.appleRevocationReminderTitle, t.appleRevocationReminderMessage);
+      }
     } catch (err) {
       setDeletionError(err instanceof ApiError ? err.message : 'Could not delete your account. Please try again.');
       setDeleting(false);

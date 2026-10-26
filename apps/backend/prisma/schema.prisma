@@ -478,6 +478,9 @@ model AuthIdentity {
   // The provider's own stable subject identifier (Google/Apple `sub` claim) — never the email, which
   // can change or be reused. This is the actual identity key for lookups.
   providerSub String
+  // Apple refresh token encrypted with the existing TOTP_ENCRYPTION_KEY. It is retained only to
+  // revoke Apple authorization when a customer deletes their FastQue account.
+  providerRefreshTokenEncrypted String? @map("provider_refresh_token_encrypted") @db.Text
   // Snapshot of the verified email at link time, for display/support only — never used to look up
   // or match an identity; account linking keys off (provider, providerSub) plus a one-time,
   // explicit "does an existing User already have this verified email" check at link time (see

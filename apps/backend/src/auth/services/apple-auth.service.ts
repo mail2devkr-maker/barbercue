@@ -1,4 +1,9 @@
-import { createHash, createPublicKey, randomBytes } from 'node:crypto';
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  randomBytes,
+} from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Prisma } from '@prisma/client';
@@ -8,8 +13,54 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 const APPLE_ISSUER = 'https://appleid.apple.com';
 const APPLE_JWKS_URL = 'https://appleid.apple.com/auth/keys';
+const APPLE_TOKEN_URL = 'https://appleid.apple.com/auth/token';
+const APPLE_REVOKE_URL = 'https://appleid.apple.com/auth/revoke';
 const APPLE_NONCE_TTL_MS = 5 * 60 * 1000;
 const APPLE_JWKS_CACHE_MS = 60 * 60 * 1000;
+const APPLE_REQUEST_TIMEOUT_MS = 5_000;
+
+interface AppleServerConfig {
+  clientId: string;
+  teamId: string;
+  keyId: string;
+  privateKey: string;
+}
+
+/** Apple is advertised only when sign-in AND later account-deletion revocation are configured. */
+export function isAppleAuthConfigured(): boolean {
+  return Boolean(getAppleServerConfig() && process.env.TOTP_ENCRYPTION_KEY);
+}
+
+function getAppleServerConfig(): AppleServerConfig | null {
+  const clientId = process.env.APPLE_IOS_CLIENT_ID?.trim();
+  const teamId = process.env.APPLE_TEAM_ID?.trim();
+  const keyId = process.env.APPLE_KEY_ID?.trim();
+  const configuredKey = process.env.APPLE_PRIVATE_KEY;
+  if (
+    !clientId ||
+    !teamId ||
+    !/^[A-Z0-9]{10}$/.test(teamId) ||
+    !keyId ||
+    !/^[A-Z0-9]{10}$/.test(keyId) ||
+    !configuredKey
+  ) {
+    return null;
+  }
+  const privateKey = configuredKey.replace(/\\n/g, '\n');
+  if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) return null;
+  try {
+    const parsedKey = createPrivateKey(privateKey);
+    if (
+      parsedKey.asymmetricKeyType !== 'ec' ||
+      parsedKey.asymmetricKeyDetails?.namedCurve !== 'prime256v1'
+    ) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  return { clientId, teamId, keyId, privateKey };
+}
 
 interface AppleJwk {
   kty: string;
@@ -137,6 +188,104 @@ export class AppleAuthService {
     };
   }
 
+  /** Exchange Apple's short-lived authorization code; only the encrypted refresh token is stored. */
+  async exchangeAuthorizationCode(authorizationCode: string): Promise<string> {
+    const config = getAppleServerConfig();
+    if (!config || !process.env.TOTP_ENCRYPTION_KEY) {
+      throw this.providerUnavailable();
+    }
+    if (!authorizationCode || authorizationCode.length > 4096) {
+      throw this.invalidToken();
+    }
+    const clientSecret = await this.createClientSecret(config);
+    const payload = await this.postForm(APPLE_TOKEN_URL, {
+      client_id: config.clientId,
+      client_secret: clientSecret,
+      code: authorizationCode,
+      grant_type: 'authorization_code',
+    });
+    if (typeof payload.refresh_token !== 'string' || !payload.refresh_token) {
+      throw this.providerUnavailable();
+    }
+    return payload.refresh_token;
+  }
+
+  /** Revoke the retained Apple refresh token before local account deletion commits. */
+  async revokeRefreshToken(refreshToken: string): Promise<void> {
+    const config = getAppleServerConfig();
+    if (!config || !process.env.TOTP_ENCRYPTION_KEY || !refreshToken) {
+      throw this.providerUnavailable();
+    }
+    const clientSecret = await this.createClientSecret(config);
+    await this.postForm(
+      APPLE_REVOKE_URL,
+      {
+        client_id: config.clientId,
+        client_secret: clientSecret,
+        token: refreshToken,
+        token_type_hint: 'refresh_token',
+      },
+      false,
+    );
+  }
+
+  private async createClientSecret(config: AppleServerConfig): Promise<string> {
+    try {
+      return await this.jwtService.signAsync(
+        {},
+        {
+          secret: config.privateKey,
+          algorithm: 'ES256',
+          issuer: config.teamId,
+          subject: config.clientId,
+          audience: APPLE_ISSUER,
+          expiresIn: '5m',
+          keyid: config.keyId,
+        },
+      );
+    } catch {
+      throw this.providerUnavailable();
+    }
+  }
+
+  private async postForm(
+    url: string,
+    fields: Record<string, string>,
+    requireJson = true,
+  ): Promise<Record<string, unknown>> {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      APPLE_REQUEST_TIMEOUT_MS,
+    );
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { accept: 'application/json' },
+        body: new URLSearchParams(fields),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw this.providerUnavailable();
+      if (!requireJson) return {};
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      if (!payload || typeof payload !== 'object') {
+        throw this.providerUnavailable();
+      }
+      return payload as Record<string, unknown>;
+    } catch (error) {
+      if (error instanceof AppException) throw error;
+      // Never propagate Apple response bodies, authorization codes, or token values to logs/errors.
+      throw this.providerUnavailable();
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private async getAppleKey(kid: string): Promise<string> {
     let keys = await this.getAppleJwks(false);
     let jwk = keys.find((key) => key.kid === kid);
@@ -208,6 +357,14 @@ export class AppleAuthService {
       AuthErrorCode.APPLE_TOKEN_INVALID,
       'Could not verify your Apple sign-in. Please try again.',
       HttpStatus.UNAUTHORIZED,
+    );
+  }
+
+  private providerUnavailable(): AppException {
+    return new AppException(
+      AuthErrorCode.APPLE_PROVIDER_UNAVAILABLE,
+      'Apple sign-in is temporarily unavailable. Please try again later.',
+      HttpStatus.SERVICE_UNAVAILABLE,
     );
   }
 }
