@@ -15,6 +15,7 @@ import { SalonImage } from "../../../../../../components/ui/SalonImage";
 import { Button } from "../../../../../../components/ui/Button";
 import { SetupNavigation } from "../../../../../../components/dashboard/SetupNavigation";
 import { PhotoReadinessCard } from "../../../../../../components/dashboard/PhotoReadinessCard";
+import { SocialPhotoNote } from "../../../../../../components/dashboard/SocialPhotoNote";
 import styles from "../../../../../../components/dashboard/dashboard.module.css";
 
 /** Which of the two routes to the cover photo the owner is using. Never both at once. */
@@ -508,6 +509,7 @@ export default function DashboardPhotosPage({
           Add up to {SALON_PHOTO_UPLOAD.maxBatchCount} photos at once — from your device or
           straight from the camera — review them below, then upload the batch.
         </p>
+        <SocialPhotoNote />
 
         <input
           ref={galleryFileInputRef}
