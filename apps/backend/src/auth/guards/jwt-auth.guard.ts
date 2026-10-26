@@ -54,7 +54,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ) {
       throw new AppException(
         'PASSWORD_CHANGE_REQUIRED',
-        'You must change your temporary password before using FastQue.',
+        'You must change your temporary password before using FastQue. Open the FastQue website and sign in to choose a new password.',
         HttpStatus.FORBIDDEN,
       );
     }

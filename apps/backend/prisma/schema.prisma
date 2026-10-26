@@ -1937,39 +1937,56 @@ model SalonLocationProposal {
 }
 
 // Administrator-authorized transfer of a shop to a different owner identity. The shop and all of its data stay where
-// they are; only the owner link moves, and only after the new owner's identity was independently verified.
+// they are; only the owner link moves, and only when the person who controls the destination e-mail address accepts
+// a single-use invitation, after their authority over the shop was verified outside FastQue.
 enum OwnerTransferStatus {
   PREPARED
   VERIFIED
+  INVITED
   COMPLETED
   CANCELLED
 }
 
-enum OwnerVerificationMethod {
-  OFFLINE_DOCUMENT
+// What an administrator actually checked. A callback to the shop's public phone number is supplementary only and never
+// counts toward the required evidence.
+enum OwnerEvidenceKind {
+  GOVERNMENT_ID
+  IN_PERSON_VISIT
+  BUSINESS_OR_SHOP_PROOF
+  CURRENT_OWNER_WRITTEN_CONSENT
   REGISTERED_PHONE_CALLBACK
 }
 
 model SalonOwnerTransfer {
-  id                      String                   @id @default(uuid())
-  salonId                 String
-  salon                   Salon                    @relation(fields: [salonId], references: [id], onDelete: Restrict)
-  fromUserId              String
-  fromUser                User                     @relation("OwnerTransferFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
-  toUserId                String?
-  toUser                  User?                    @relation("OwnerTransferTo", fields: [toUserId], references: [id], onDelete: Restrict)
-  newEmail                String                   @db.VarChar(254)
-  status                  OwnerTransferStatus      @default(PREPARED)
-  // One open (PREPARED/VERIFIED) transfer per shop; finished ones leave the slot free (NULLs are distinct).
-  openSlot                Int?
-  verificationMethod      OwnerVerificationMethod?
-  verificationReference   String?                  @db.VarChar(200)
-  verifiedByAdminId       String?
-  verifiedAt              DateTime?
-  preparedByAdminId       String
-  preparedAt              DateTime                 @default(now())
-  completedAt             DateTime?
-  cancelledAt             DateTime?
+  id                       String              @id @default(uuid())
+  salonId                  String
+  salon                    Salon               @relation(fields: [salonId], references: [id], onDelete: Restrict)
+  fromUserId               String
+  fromUser                 User                @relation("OwnerTransferFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  // Set when the destination e-mail already belongs to a verified account (a reversal or a second shop for an owner).
+  targetUserId             String?
+  toUserId                 String?
+  toUser                   User?               @relation("OwnerTransferTo", fields: [toUserId], references: [id], onDelete: Restrict)
+  newEmail                 String              @db.VarChar(254)
+  status                   OwnerTransferStatus @default(PREPARED)
+  // One open (PREPARED/VERIFIED/INVITED) transfer per shop; finished ones leave the slot free (NULLs are distinct).
+  openSlot                 Int?
+  verificationEvidence     OwnerEvidenceKind[] @default([])
+  verificationReference    String?             @db.VarChar(300)
+  verifiedByAdminId        String?
+  verifiedAt               DateTime?
+  // Break-glass: only when no second administrator exists. Requires a written justification and a cool-down.
+  breakGlassJustification  String?             @db.VarChar(500)
+  inviteNotBefore          DateTime?
+  preparedByAdminId        String
+  preparedAt               DateTime            @default(now())
+  // Single-use invitation: only the SHA-256 of the token is stored. Re-issuing replaces it.
+  invitationTokenHash      String?             @unique @db.VarChar(64)
+  invitationExpiresAt      DateTime?
+  invitationCount          Int                 @default(0)
+  lastInvitedAt            DateTime?
+  completedAt              DateTime?
+  cancelledAt              DateTime?
 
   @@unique([salonId, openSlot])
   @@index([salonId, preparedAt])

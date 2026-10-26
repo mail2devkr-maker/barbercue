@@ -59,6 +59,18 @@ export class ResendEmailSender implements EmailSender {
     );
   }
 
+  async sendOwnerTransferInvitation(
+    email: string,
+    acceptUrl: string,
+    expiresInHours: number,
+  ): Promise<void> {
+    await this.send(
+      email,
+      'Accept ownership of your shop on FastQue',
+      `<p>FastQue has been asked to make this e-mail address the owner account of a shop. If you are the intended owner, open the link below to confirm and choose your password. This link works once and expires in ${expiresInHours} hours.</p><p><a href="${acceptUrl}">${acceptUrl}</a></p><p>If you were not expecting this, ignore this message; nothing changes unless the link is opened.</p>`,
+    );
+  }
+
   private async send(to: string, subject: string, html: string): Promise<void> {
     this.assertAvailable();
     const apiKey = process.env.RESEND_API_KEY as string;

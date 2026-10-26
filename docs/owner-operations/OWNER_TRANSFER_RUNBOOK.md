@@ -1,8 +1,8 @@
 # Shop owner transfer - production checklist (issue #314)
 
-Moves a shop from one owner account to a different, separately verified owner identity **without deleting or recreating
-the shop**. Shop id, status, staff, services, photos, chairs and history stay exactly as they are; only the owner link
-moves.
+Moves a shop from one owner account to a different, separately verified owner **without deleting or recreating the
+shop**. Shop id, status, staff, services, photos, chairs, bookings, financial records and history stay exactly as they
+are; only the owner link moves.
 
 Targets (from issue #314, to be re-confirmed by the owner before execution):
 
@@ -11,92 +11,119 @@ Targets (from issue #314, to be re-confirmed by the owner before execution):
 | Studio 25 Salons | BC-SHOP-000088 | SUSPENDED (stays suspended) | studio25salons@gmail.com |
 | Glamourous looks studio | BC-SHOP-000076 | ACTIVE | glamorouslooksstudio@gmail.com |
 
-> Never copy, paste, log or store the passwords that appear in the owner's screenshot. This workflow never uses them.
+> Never copy, paste, log or store the passwords that appear in the owner's screenshot. This workflow never uses them:
+> the new owner chooses their own password on the acceptance page.
 
-## What the code guarantees (tested on a disposable PostgreSQL)
+## How it works
 
-* Only a PLATFORM_ADMIN session can prepare, verify, execute or cancel a transfer.
-* One open transfer per shop (database-enforced). The new e-mail must not already have an account.
-* `execute` is refused until the owner is **verified**. Verification is recorded outside FastQue and states the method
-  (`OFFLINE_DOCUMENT` or `REGISTERED_PHONE_CALLBACK`) and a written reference. For a phone callback the last four digits
-  of the number called must match the phone FastQue holds for the shop; a shop with no registered phone cannot use it.
-* If another active platform administrator exists, the verifier must be a **different** administrator from the preparer.
-* `execute` runs in one transaction under a row lock: creates the new account (`passwordChangeRequired`, temporary
-  password valid 72 hours, e-mail **not** marked verified), grants SALON_OWNER for that shop only, moves
-  `salons.ownerUserId`, removes the former account's roles for that shop, moves a staff row the former owner held there,
-  revokes **all** of the former account's sessions and unused recovery links, and writes the audit trail.
-* The temporary password is returned **once** in the `execute` response (`Cache-Control: no-store`), stored only as a
-  bcrypt hash, and never written to logs or to the audit trail.
-* The backend refuses every route for an account in the temporary state except `GET /auth/me`, `POST /auth/logout-all`
-  and `POST /auth/password/change-required` (error `PASSWORD_CHANGE_REQUIRED`, HTTP 403). Changing the password clears
-  the state, kills the temporary password and revokes every session.
-* An expired temporary password cannot sign in (the administrator must issue a new transfer).
-* Audit actions: `SALON_OWNER_TRANSFER_PREPARED`, `_VERIFIED`, `_COMPLETED`, `_CANCELLED`.
+1. **Prepare** (administrator A) - names the shop and the destination e-mail. Nothing changes.
+2. **Verify** (administrator B, a different person) - records that identity AND authority over the shop were checked
+   outside FastQue. The server requires BOTH an identity item (`GOVERNMENT_ID` or `IN_PERSON_VISIT`) AND an authority item
+   (`BUSINESS_OR_SHOP_PROOF` or `CURRENT_OWNER_WRITTEN_CONSENT`). A callback to the shop's public phone number
+   (`REGISTERED_PHONE_CALLBACK`) may be added but never counts toward either requirement. The database repeats this rule as
+   a check constraint.
+3. **Invite** - FastQue e-mails a single-use link to the destination address. The administrator never sees the token (only
+   its SHA-256 is stored). **Nothing has moved yet.**
+4. **Accept** (the recipient, on the web page that link opens) - proves control of the inbox. A new address chooses its
+   own password (the address is then marked verified). An address that already has an active, verified FastQue account
+   only confirms and keeps its password. **Only now** does ownership move.
+5. Acceptance, in one transaction under a row lock: creates the account if needed; grants SALON_OWNER for this shop (the
+   `(user, role, shop)` unique key forbids duplicates); moves `salons.ownerUserId`; removes the former account's roles for
+   this shop only; moves a staff row the former owner held there; revokes **all** of the former account's sessions and
+   unused recovery links; writes the audit trail. The shop's status is not touched.
 
-## Release classification
+### Independence and the exception procedure
+
+* If another active platform administrator exists, the verifier must be a different administrator from the preparer.
+* If none exists (break-glass): the verifier must supply a written justification (at least 50 characters), the transfer is
+  marked break-glass in the audit trail, and the invitation cannot be sent until **24 hours** after verification.
+* There is no other bypass.
+
+### Expired invitation recovery (no second account, no second transfer)
+
+An invitation lasts 72 hours. After it expires the administrator re-sends it on the same transfer with a written reason
+that the recipient was re-confirmed. At most 3 invitations per transfer, at least 10 minutes apart; each new invitation
+kills the previous link. Beyond that, cancel and verify again. If the e-mail transport fails, the transfer is restored to
+its previous state so no usable token is lost or left dangling.
+
+### Reversal
+
+Reassigning a shop back to a previous owner (or giving one owner a second shop) is the same flow with a destination
+address that already has an **active, verified** account. An unverified or inactive account is refused. The old and the
+new owner never hold the shop at the same time, and the former account loses it at the moment of acceptance.
+
+## Mandatory password change (accounts an administrator flags)
+
+Separately from the transfer, an account flagged `passwordChangeRequired` (temporary password, optional expiry) can do
+nothing except `GET /auth/me`, `POST /auth/logout-all` and `POST /auth/password/change-required`; every other route
+answers 403 `PASSWORD_CHANGE_REQUIRED` from the backend. The web redirects to `/change-password-required`, where the
+person enters the temporary password and chooses their own; the change revokes all sessions. The Android app shows the
+server's message (it must be completed on the website); a native change screen is not built.
+
+## What the tests prove (disposable PostgreSQL)
+
+Admin-only access; one open transfer per shop; unverified/same-owner destinations refused; evidence rules (phone callback
+alone, identity-only, authority-only all refused); independence; break-glass justification and cool-down; nothing moves
+before acceptance; acceptance moves only the owner link (a generic count of every `salonId` table is identical before and
+after); single-use, expiry, re-send limits and reasons, failed-send rollback, cancel kills the link; reversal without
+duplicate roles or password change; the former account is denied the moved shop at once and keeps the other shop until it
+is transferred; the new owner reaches only their own shop; audit rows contain no token or password; flagged-account gate.
+Thirteen deliberate breakages of the code were run; twelve are caught (the thirteenth, the expiry check inside the row
+lock, is redundant with the earlier expiry check and can only matter in a race).
+
+## Release classification and gates
 
 This change **adds a migration** (`20261027140000_owner_transfer_password_gate`: two columns on `users`, one table, two
-enums). It is therefore **not** a no-migration release. Before it can run in production:
+enums). It is **not** a no-migration release.
 
-1. Owner authorization to deploy this PR (separate from the transfer itself).
-2. Fresh encrypted P1 backup (`p1_backup.py --label <next> --clipboard`), checksum + decryption + 75->76 table check,
-   disposable restore, new Neon recovery branch, and the schema inventory guard (`p1_expected_schema.json`) regenerated
-   for the new table and migration.
-3. Exact-head CI green; pinned Railway deploy backend first (it runs the migration), then web (no web change needed).
-4. Live check: `/api/v1/health`, an unauthenticated call to `/auth/password/change-required` returns 401.
+1. Separate owner authorization to deploy this PR; exact-head CI green on the release commit.
+2. Fresh encrypted P1 backup, checksum + decryption + table-of-contents check, disposable restore, new Neon recovery
+   branch.
+3. Schema inventory for the backup guard: `C:\fastque-recovery\rotation\p1_expected_schema.owner_transfer.json`
+   (76 tables, 70 finished migrations). Use it only for a release containing this migration and not PR #313.
+4. `docs/owner-operations/owner-transfer-rollback.sql` restores the previous schema exactly (rehearsed: schema
+   fingerprint after rollback equals the master fingerprint, and re-applying restores the migrated fingerprint). It drops
+   the transfer table, so use it only before any transfer must be kept; it does not undo an ownership change.
+5. Pinned Railway deploy, backend first (it runs the migration), then web (the acceptance and password pages).
+6. Production e-mail must be able to send: `RESEND_API_KEY`/`EMAIL_FROM_ADDRESS` and `WEB_BASE_URL` (https). Until the
+   provider is bound, the invite endpoint fails closed with 503 and nothing changes.
 
-## Identity verification (owner actions, outside FastQue)
+## Execution (platform administrators; do both shops in one window)
 
-For **each** shop, before anything is executed:
-
-1. Decide who is legally authorized to own the shop and who the new e-mail belongs to.
-2. Verify that person by one of:
-   * **Offline document**: an administrator checks photo ID against the registered owner's name in person or by video and
-     records who checked, when and how in the reference field. No document number is recorded.
-   * **Registered phone callback**: an administrator calls the phone number FastQue already holds for the shop (not a
-     number supplied in the request), the person confirms the shop details and the new e-mail address, and the last four
-     digits of the number called are entered.
-3. A second administrator (if available) performs the `verify` step.
-
-## Execution (platform administrator, per shop; do both shops in one window)
-
-Between the two transfers the shared account still owns the other shop and its sessions were just revoked, so run the
-second transfer straight after the first.
+Between the two transfers the shared account still owns the other shop, and its sessions are revoked at the first
+acceptance, so complete the second acceptance soon after the first.
 
 ```
 POST /api/v1/admin/salons/{salonId}/owner-transfers            { "newEmail": "<address>" }
-POST /api/v1/admin/owner-transfers/{id}/verify                 { "method": "...", "reference": "...", "registeredPhoneLast4": "####" }
-POST /api/v1/admin/owner-transfers/{id}/execute                -> response contains the temporary password ONCE
+POST /api/v1/admin/owner-transfers/{id}/verify                 { "evidence": ["GOVERNMENT_ID","BUSINESS_OR_SHOP_PROOF"], "reference": "<who checked what, how>", "breakGlassJustification": "<only if no second admin>" }
+POST /api/v1/admin/owner-transfers/{id}/invite                 { }                      (re-send after expiry: { "reference": "<reason>" })
+POST /api/v1/admin/owner-transfers/{id}/cancel
+GET  /api/v1/admin/salons/{salonId}/owner-transfers
 ```
 
-* Hand the temporary password to the verified person over a channel that is not e-mail to the shared inbox (in person or
-  by the same verified phone call). Do not paste it into chat, issues or tickets. Do not take a screenshot of it.
-* The person signs in at the normal owner login with the new e-mail and the temporary password, and must choose their own
-  password immediately (`POST /auth/password/change-required`) within 72 hours, then signs in again.
-* Studio 25 Salons stays **SUSPENDED**. Reopening is a separate authorization.
+The recipient opens the emailed link (`/accept-owner-invitation?token=...`), chooses a password, and signs in at the owner
+login. There is no administrator web screen for these calls yet; they are API calls from an administrator session.
 
 ## Verification after each transfer (read-only)
 
-* `salons.ownerUserId` equals the new user; exactly one `user_roles` row with SALON_OWNER for the shop; none for the old
-  user.
-* Staff, services, chairs and photo counts for the shop equal the counts recorded before; shop status unchanged.
-* The old account has zero unrevoked refresh tokens; the old account is denied the shop (403) after the transfer.
-* Audit log shows PREPARED, VERIFIED and COMPLETED for the transfer with no password material.
-* The new owner can use the shop only after changing the temporary password; a call before that returns
-  `PASSWORD_CHANGE_REQUIRED`.
+* `salons.ownerUserId` equals the new user; exactly one SALON_OWNER `user_roles` row for the shop and none for the old user.
+* Row counts of every table with a `salonId` for the shop equal the counts recorded before; shop status unchanged.
+* The old account has zero unrevoked refresh tokens and is denied the shop (403).
+* The new owner can sign in, reaches only their own shop, and the previous owner's other shop is unaffected.
+* Audit log: PREPARED, VERIFIED, INVITED, COMPLETED (and REINVITED/CANCELLED if used), with no token or password.
 
 ## Rollback
 
-* Before `execute`: `POST .../cancel` (nothing has changed).
-* After `execute`: the transfer is an ordinary, audited ownership change. To reverse it, prepare and verify a new
-  transfer to the intended owner. The full pre-release backup and Neon recovery branch are the disaster fallback only.
+* Before acceptance: `POST .../cancel` (nothing changed; the link dies).
+* After acceptance: prepare and verify a new transfer back to the intended owner (reversal above). The pre-release
+  backup and Neon recovery branch are the disaster fallback only.
 
 ## Remaining owner actions and known limits
 
-* Confirm the legally authorized owner and the two new e-mail addresses (issue #314 says to confirm before any change).
-* Provide an administrator who can verify (a second administrator is strongly recommended).
-* Google sign-in for a new owner who still has the temporary state: the gate applies to every session, so such an owner
-  must first change the password with the temporary one. The gate fails closed.
+* Confirm the legally authorized person and the e-mail address for each shop (issue #314 asks for this before any change).
+* Supply an administrator who can verify (a second administrator is strongly recommended) and collect the evidence.
+* Authorize the migration release; bind the e-mail provider if not already bound.
+* No administrator web UI for the transfer; no native Android change-password screen (the server message directs the user
+  to the website). Physical Android and real e-mail delivery are not verified.
 * Access tokens signed before a transfer can live up to 15 minutes, but owner routes check the database role on every
   request, so the former account is denied immediately.
-* The new e-mail is intentionally not marked verified; the owner can verify it later through the normal flow.

@@ -1,8 +1,8 @@
-import { randomInt } from 'crypto';
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { createHash, randomBytes } from 'crypto';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import {
+  OwnerEvidenceKind,
   OwnerTransferStatus,
-  OwnerVerificationMethod,
   Prisma,
   Role,
   UserStatus,
@@ -11,6 +11,13 @@ import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/exceptions/app.exception';
 import { PasswordService } from '../auth/services/password.service';
+import { EMAIL_SENDER, type EmailSender } from '../auth/services/email-sender';
+import { passwordWebBaseUrl } from '../auth/services/password-link';
+
+export const INVITATION_TTL_HOURS = 72;
+export const MAX_INVITATIONS = 3;
+export const MIN_REINVITE_MINUTES = 10;
+export const BREAK_GLASS_COOLDOWN_HOURS = 24;
 
 export const prepareOwnerTransferSchema = z.object({
   newEmail: z.string().trim().toLowerCase().email().max(254),
@@ -20,18 +27,34 @@ export type PrepareOwnerTransferInput = z.infer<
 >;
 
 export const verifyOwnerTransferSchema = z.object({
-  method: z.nativeEnum(OwnerVerificationMethod),
-  // What was checked, by whom, and how (never a document number or a password). Kept in the audit trail.
-  reference: z.string().trim().min(10).max(200),
-  // REGISTERED_PHONE_CALLBACK only: the last four digits of the number that was actually called. It must match the
-  // phone FastQue holds for the shop, so a callback to some other number cannot be recorded as verification.
-  registeredPhoneLast4: z
-    .string()
-    .regex(/^\d{4}$/)
-    .optional(),
+  // What was actually checked. The server requires BOTH an identity item (government ID or an in-person visit) AND an
+  // authority item (business/shop proof or the current owner's written consent). A callback to the shop's public phone
+  // number is allowed as supplementary evidence but can never satisfy either requirement.
+  evidence: z.array(z.nativeEnum(OwnerEvidenceKind)).min(2).max(5),
+  // Who checked what, when and how. Never a document number.
+  reference: z.string().trim().min(20).max(300),
+  // Only when no second administrator exists. Written, audited, and followed by a cool-down before the invitation.
+  breakGlassJustification: z.string().trim().min(50).max(500).optional(),
 });
 export type VerifyOwnerTransferInput = z.infer<
   typeof verifyOwnerTransferSchema
+>;
+
+export const inviteOwnerTransferSchema = z.object({
+  // Required when RE-issuing an invitation after the previous one expired: why the recipient is still the right person.
+  reference: z.string().trim().min(10).max(300).optional(),
+});
+export type InviteOwnerTransferInput = z.infer<
+  typeof inviteOwnerTransferSchema
+>;
+
+export const acceptOwnerInvitationSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+  // Required only when the destination e-mail has no FastQue account yet; the owner chooses it, nobody else ever sees it.
+  password: z.string().min(8).max(72).optional(),
+});
+export type AcceptOwnerInvitationInput = z.infer<
+  typeof acceptOwnerInvitationSchema
 >;
 
 export interface OwnerTransferDto {
@@ -39,41 +62,45 @@ export interface OwnerTransferDto {
   salonId: string;
   newEmail: string;
   status: OwnerTransferStatus;
-  verificationMethod: OwnerVerificationMethod | null;
+  verificationEvidence: OwnerEvidenceKind[];
   verifiedAt: string | null;
+  inviteNotBefore: string | null;
+  invitationExpiresAt: string | null;
+  invitationCount: number;
+  breakGlass: boolean;
   preparedAt: string;
   completedAt: string | null;
 }
 
-export interface ExecutedOwnerTransferDto extends OwnerTransferDto {
-  newOwnerUserId: string;
-  /** Shown exactly once. Never stored in plain text and never logged. */
-  temporaryPassword: string;
-  temporaryPasswordExpiresAt: string;
+export function hashInvitationToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
-export const TEMPORARY_PASSWORD_HOURS = 72;
-const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-
-export function generateTemporaryPassword(): string {
-  const pick = () => ALPHABET[randomInt(ALPHABET.length)];
-  const group = () => Array.from({ length: 5 }, pick).join('');
-  return [group(), group(), group(), group()].join('-');
-}
+const IDENTITY_KINDS: OwnerEvidenceKind[] = [
+  OwnerEvidenceKind.GOVERNMENT_ID,
+  OwnerEvidenceKind.IN_PERSON_VISIT,
+];
+const AUTHORITY_KINDS: OwnerEvidenceKind[] = [
+  OwnerEvidenceKind.BUSINESS_OR_SHOP_PROOF,
+  OwnerEvidenceKind.CURRENT_OWNER_WRITTEN_CONSENT,
+];
 
 /**
  * Administrator-authorized transfer of a shop to a different owner identity.
  *
  * The shop is never deleted or recreated: staff, services, photos, chairs, history and the shop's status stay exactly
- * as they are. Only the owner link moves, in one transaction, and only after the new owner's identity was verified
- * outside FastQue (offline document or a callback to the phone FastQue already holds for the shop) - the administrator
- * has no access to the owner's inbox, so no e-mail round trip is ever treated as proof.
+ * as they are. Only the owner link moves, in one transaction, and only when the holder of the destination e-mail
+ * address accepts a single-use emailed invitation - an administrator typing an address is never treated as proof of
+ * anything. Before an invitation can be sent, the person's identity AND authority over the shop must have been checked
+ * outside FastQue by an administrator other than the one who prepared the transfer (a single administrator may act
+ * alone only through a written, audited break-glass exception followed by a cool-down).
  */
 @Injectable()
 export class OwnerTransferService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
+    @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
   ) {}
 
   private toDto(row: {
@@ -81,8 +108,12 @@ export class OwnerTransferService {
     salonId: string;
     newEmail: string;
     status: OwnerTransferStatus;
-    verificationMethod: OwnerVerificationMethod | null;
+    verificationEvidence: OwnerEvidenceKind[];
     verifiedAt: Date | null;
+    inviteNotBefore: Date | null;
+    invitationExpiresAt: Date | null;
+    invitationCount: number;
+    breakGlassJustification: string | null;
     preparedAt: Date;
     completedAt: Date | null;
   }): OwnerTransferDto {
@@ -91,8 +122,12 @@ export class OwnerTransferService {
       salonId: row.salonId,
       newEmail: row.newEmail,
       status: row.status,
-      verificationMethod: row.verificationMethod,
+      verificationEvidence: row.verificationEvidence,
       verifiedAt: row.verifiedAt?.toISOString() ?? null,
+      inviteNotBefore: row.inviteNotBefore?.toISOString() ?? null,
+      invitationExpiresAt: row.invitationExpiresAt?.toISOString() ?? null,
+      invitationCount: row.invitationCount,
+      breakGlass: row.breakGlassJustification !== null,
       preparedAt: row.preparedAt.toISOString(),
       completedAt: row.completedAt?.toISOString() ?? null,
     };
@@ -120,8 +155,9 @@ export class OwnerTransferService {
       where: { id: salonId },
       select: { id: true, ownerUserId: true },
     });
-    if (!salon)
+    if (!salon) {
       this.fail('SALON_NOT_FOUND', 'Shop not found.', HttpStatus.NOT_FOUND);
+    }
     const owners = await this.prisma.userRole.findMany({
       where: { salonId, role: Role.SALON_OWNER },
       select: { userId: true },
@@ -133,16 +169,31 @@ export class OwnerTransferService {
         HttpStatus.CONFLICT,
       );
     }
-    const taken = await this.prisma.user.findUnique({
+    // An address that already has an account is allowed only when that account is active and its e-mail was verified
+    // (reversal to a previous owner, or one owner taking a second shop). An unverified existing account is refused: it
+    // could belong to anyone.
+    const existing = await this.prisma.user.findUnique({
       where: { email: input.newEmail },
-      select: { id: true },
+      select: { id: true, status: true, emailVerifiedAt: true },
     });
-    if (taken) {
-      this.fail(
-        'OWNER_TRANSFER_EMAIL_IN_USE',
-        'That e-mail address already belongs to an account. Use an address that has no FastQue account yet.',
-        HttpStatus.CONFLICT,
-      );
+    if (existing) {
+      if (
+        existing.status !== UserStatus.ACTIVE ||
+        existing.emailVerifiedAt === null
+      ) {
+        this.fail(
+          'OWNER_TRANSFER_TARGET_UNVERIFIED',
+          'That address belongs to an account whose e-mail was never verified or is not active.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      if (existing.id === salon.ownerUserId) {
+        this.fail(
+          'OWNER_TRANSFER_SAME_OWNER',
+          'That account already owns this shop.',
+          HttpStatus.CONFLICT,
+        );
+      }
     }
     try {
       const row = await this.prisma.$transaction(async (tx) => {
@@ -150,6 +201,7 @@ export class OwnerTransferService {
           data: {
             salonId,
             fromUserId: salon.ownerUserId,
+            targetUserId: existing?.id ?? null,
             newEmail: input.newEmail,
             status: OwnerTransferStatus.PREPARED,
             openSlot: 1,
@@ -162,7 +214,11 @@ export class OwnerTransferService {
             action: 'SALON_OWNER_TRANSFER_PREPARED',
             entityType: 'SalonOwnerTransfer',
             entityId: created.id,
-            metadata: { salonId, fromUserId: salon.ownerUserId },
+            metadata: {
+              salonId,
+              fromUserId: salon.ownerUserId,
+              targetsExistingAccount: existing !== null,
+            },
           },
         });
         return created;
@@ -190,7 +246,6 @@ export class OwnerTransferService {
   ): Promise<OwnerTransferDto> {
     const transfer = await this.prisma.salonOwnerTransfer.findUnique({
       where: { id: transferId },
-      include: { salon: { select: { phone: true } } },
     });
     if (!transfer) {
       this.fail(
@@ -206,50 +261,61 @@ export class OwnerTransferService {
         HttpStatus.CONFLICT,
       );
     }
+    const evidence = Array.from(new Set(input.evidence));
+    if (
+      !evidence.some((k) => IDENTITY_KINDS.includes(k)) ||
+      !evidence.some((k) => AUTHORITY_KINDS.includes(k))
+    ) {
+      this.fail(
+        'OWNER_TRANSFER_EVIDENCE_INSUFFICIENT',
+        "Evidence must include an identity check (government ID or in-person visit) and proof of authority over the shop (business/shop proof or the current owner's written consent). A phone callback alone is not enough.",
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
     // Independent verification: when another active platform administrator exists, they - not the person who prepared
-    // the transfer - must be the one who confirms the owner's identity.
-    if (transfer.preparedByAdminId === adminId) {
-      const otherAdmins = await this.prisma.userRole.count({
-        where: {
-          role: Role.PLATFORM_ADMIN,
-          userId: { not: adminId },
-          user: { status: UserStatus.ACTIVE },
-        },
-      });
-      if (otherAdmins > 0) {
-        this.fail(
-          'OWNER_TRANSFER_NOT_INDEPENDENT',
-          'Another administrator must verify the owner, not the one who prepared the transfer.',
-          HttpStatus.FORBIDDEN,
-        );
-      }
+    // the transfer - must confirm. With no second administrator, a written break-glass justification is mandatory and a
+    // cool-down delays the invitation.
+    const otherAdmins = await this.prisma.userRole.count({
+      where: {
+        role: Role.PLATFORM_ADMIN,
+        userId: { not: transfer.preparedByAdminId },
+        user: { status: UserStatus.ACTIVE },
+      },
+    });
+    const samePerson = transfer.preparedByAdminId === adminId;
+    if (samePerson && otherAdmins > 0) {
+      this.fail(
+        'OWNER_TRANSFER_NOT_INDEPENDENT',
+        'Another administrator must verify the owner, not the one who prepared the transfer.',
+        HttpStatus.FORBIDDEN,
+      );
     }
-    if (input.method === OwnerVerificationMethod.REGISTERED_PHONE_CALLBACK) {
-      const registered = (transfer.salon.phone ?? '').replace(/\D/g, '');
-      if (registered.length < 4 || !input.registeredPhoneLast4) {
-        this.fail(
-          'OWNER_TRANSFER_PHONE_UNVERIFIABLE',
-          'A phone callback needs the shop to have a registered phone and the last four digits of the number called.',
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
-      }
-      if (registered.slice(-4) !== input.registeredPhoneLast4) {
-        this.fail(
-          'OWNER_TRANSFER_PHONE_MISMATCH',
-          'That is not the phone number registered for this shop.',
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
-      }
+    const breakGlass = samePerson;
+    if (breakGlass && !input.breakGlassJustification) {
+      this.fail(
+        'OWNER_TRANSFER_BREAK_GLASS_REQUIRED',
+        'No second administrator exists. A written break-glass justification is required.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
-    const claimed = await this.prisma.$transaction(async (tx) => {
+    const verifiedAt = new Date();
+    const inviteNotBefore = breakGlass
+      ? new Date(verifiedAt.getTime() + BREAK_GLASS_COOLDOWN_HOURS * 3_600_000)
+      : verifiedAt;
+    const done = await this.prisma.$transaction(async (tx) => {
       const result = await tx.salonOwnerTransfer.updateMany({
         where: { id: transferId, status: OwnerTransferStatus.PREPARED },
         data: {
           status: OwnerTransferStatus.VERIFIED,
-          verificationMethod: input.method,
+          verificationEvidence: evidence,
           verificationReference: input.reference,
           verifiedByAdminId: adminId,
-          verifiedAt: new Date(),
+          verifiedAt,
+          breakGlassJustification: breakGlass
+            ? input.breakGlassJustification
+            : null,
+          inviteNotBefore,
         },
       });
       if (result.count !== 1) {
@@ -267,9 +333,13 @@ export class OwnerTransferService {
           entityId: transferId,
           metadata: {
             salonId: transfer.salonId,
-            method: input.method,
+            evidence,
             reference: input.reference,
-            sameAdminAsPreparer: transfer.preparedByAdminId === adminId,
+            breakGlass,
+            breakGlassJustification: breakGlass
+              ? input.breakGlassJustification
+              : null,
+            inviteNotBefore: inviteNotBefore.toISOString(),
           },
         },
       });
@@ -277,7 +347,7 @@ export class OwnerTransferService {
         where: { id: transferId },
       });
     });
-    return this.toDto(claimed);
+    return this.toDto(done);
   }
 
   async cancel(adminId: string, transferId: string): Promise<OwnerTransferDto> {
@@ -286,12 +356,17 @@ export class OwnerTransferService {
         where: {
           id: transferId,
           status: {
-            in: [OwnerTransferStatus.PREPARED, OwnerTransferStatus.VERIFIED],
+            in: [
+              OwnerTransferStatus.PREPARED,
+              OwnerTransferStatus.VERIFIED,
+              OwnerTransferStatus.INVITED,
+            ],
           },
         },
         data: {
           status: OwnerTransferStatus.CANCELLED,
           openSlot: null,
+          invitationTokenHash: null,
           cancelledAt: new Date(),
         },
       });
@@ -319,117 +394,365 @@ export class OwnerTransferService {
     return this.toDto(row);
   }
 
-  async execute(
+  /**
+   * Sends (or, after expiry, re-sends) the single-use invitation to the destination address. The token is never
+   * returned: only the holder of that inbox can ever see it. Re-issuing is the recovery path for an expired invitation -
+   * no second account and no second transfer - and is limited to three invitations, ten minutes apart, each needing a
+   * fresh written reason, and each one invalidates the previous token.
+   */
+  async invite(
     adminId: string,
     transferId: string,
-  ): Promise<ExecutedOwnerTransferDto> {
-    const temporaryPassword = generateTemporaryPassword();
-    const passwordHash = await this.passwords.hash(temporaryPassword);
-    const expiresAt = new Date(
-      Date.now() + TEMPORARY_PASSWORD_HOURS * 3_600_000,
-    );
-
-    const done = await this.prisma.$transaction(async (tx) => {
-      // Lock the row first: a transfer completes at most once, and only after verification. A concurrent execute waits
-      // here and then finds it COMPLETED.
-      const locked = await tx.$queryRaw<{ id: string }[]>`
-        SELECT "id" FROM "salon_owner_transfers"
-        WHERE "id" = ${transferId} AND "status" = 'VERIFIED'::"OwnerTransferStatus"
-        FOR UPDATE`;
-      if (locked.length !== 1) {
+    input: InviteOwnerTransferInput,
+  ): Promise<OwnerTransferDto> {
+    this.emailSender.assertAvailable();
+    const webBase = passwordWebBaseUrl();
+    const transfer = await this.prisma.salonOwnerTransfer.findUnique({
+      where: { id: transferId },
+    });
+    if (!transfer) {
+      this.fail(
+        'OWNER_TRANSFER_NOT_FOUND',
+        'Transfer not found.',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const now = new Date();
+    const reissue = transfer.status === OwnerTransferStatus.INVITED;
+    if (
+      transfer.status !== OwnerTransferStatus.VERIFIED &&
+      !(
+        reissue &&
+        (transfer.invitationExpiresAt?.getTime() ?? 0) <= now.getTime()
+      )
+    ) {
+      this.fail(
+        'OWNER_TRANSFER_STATE',
+        reissue
+          ? 'The current invitation has not expired yet.'
+          : 'Only a verified transfer can be invited.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (transfer.inviteNotBefore && transfer.inviteNotBefore > now) {
+      this.fail(
+        'OWNER_TRANSFER_COOLING_DOWN',
+        `This break-glass transfer cannot send an invitation before ${transfer.inviteNotBefore.toISOString()}.`,
+        HttpStatus.CONFLICT,
+      );
+    }
+    if (reissue) {
+      if (!input.reference) {
         this.fail(
-          'OWNER_TRANSFER_STATE',
-          'Only a verified transfer can be completed, and only once.',
-          HttpStatus.CONFLICT,
+          'OWNER_TRANSFER_REASON_REQUIRED',
+          'Re-sending an invitation needs a written reason (for example that the recipient was re-confirmed).',
+          HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      const transfer = await tx.salonOwnerTransfer.findUniqueOrThrow({
-        where: { id: transferId },
-      });
-      const salon = await tx.salon.findUniqueOrThrow({
-        where: { id: transfer.salonId },
-        select: { id: true, ownerUserId: true, status: true },
-      });
-      if (salon.ownerUserId !== transfer.fromUserId) {
+      if (transfer.invitationCount >= MAX_INVITATIONS) {
         this.fail(
-          'OWNER_TRANSFER_STALE',
-          'The shop owner changed after this transfer was prepared. Prepare a new one.',
-          HttpStatus.CONFLICT,
+          'OWNER_TRANSFER_INVITATION_LIMIT',
+          'The invitation limit for this transfer was reached. Cancel it and verify again.',
+          HttpStatus.TOO_MANY_REQUESTS,
         );
       }
       if (
-        await tx.user.findUnique({
-          where: { email: transfer.newEmail },
-          select: { id: true },
-        })
+        transfer.lastInvitedAt &&
+        now.getTime() - transfer.lastInvitedAt.getTime() <
+          MIN_REINVITE_MINUTES * 60_000
       ) {
         this.fail(
-          'OWNER_TRANSFER_EMAIL_IN_USE',
-          'That e-mail address now belongs to an account.',
+          'OWNER_TRANSFER_TOO_SOON',
+          'Wait a few minutes before sending another invitation.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+    }
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(
+      now.getTime() + INVITATION_TTL_HOURS * 3_600_000,
+    );
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.salonOwnerTransfer.updateMany({
+        where: {
+          id: transferId,
+          status: transfer.status,
+          invitationCount: transfer.invitationCount,
+        },
+        data: {
+          status: OwnerTransferStatus.INVITED,
+          invitationTokenHash: hashInvitationToken(token),
+          invitationExpiresAt: expiresAt,
+          invitationCount: { increment: 1 },
+          lastInvitedAt: now,
+        },
+      });
+      if (result.count !== 1) {
+        this.fail(
+          'OWNER_TRANSFER_STATE',
+          'The transfer changed while the invitation was prepared. Try again.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await tx.auditLog.create({
+        data: {
+          actorUserId: adminId,
+          action: reissue
+            ? 'SALON_OWNER_TRANSFER_REINVITED'
+            : 'SALON_OWNER_TRANSFER_INVITED',
+          entityType: 'SalonOwnerTransfer',
+          entityId: transferId,
+          // Never the token.
+          metadata: {
+            salonId: transfer.salonId,
+            invitationNumber: transfer.invitationCount + 1,
+            reason: input.reference ?? null,
+            expiresAt: expiresAt.toISOString(),
+          },
+        },
+      });
+      return tx.salonOwnerTransfer.findUniqueOrThrow({
+        where: { id: transferId },
+      });
+    });
+
+    const url = new URL('/accept-owner-invitation', webBase);
+    url.searchParams.set('token', token);
+    try {
+      await this.emailSender.sendOwnerTransferInvitation(
+        transfer.newEmail,
+        url.toString(),
+        INVITATION_TTL_HOURS,
+      );
+    } catch (error) {
+      // The message never left, so nobody holds the token: put the transfer back exactly as it was.
+      await this.prisma.salonOwnerTransfer.updateMany({
+        where: { id: transferId, invitationCount: claimed.invitationCount },
+        data: {
+          status: transfer.status,
+          invitationTokenHash: transfer.invitationTokenHash,
+          invitationExpiresAt: transfer.invitationExpiresAt,
+          invitationCount: transfer.invitationCount,
+          lastInvitedAt: transfer.lastInvitedAt,
+        },
+      });
+      throw error;
+    }
+    return this.toDto(claimed);
+  }
+
+  /** What the invitation page may show before the recipient commits: shop name and whether a password must be chosen. */
+  async inspectInvitation(token: string): Promise<{
+    shopName: string;
+    email: string;
+    needsPassword: boolean;
+    expiresAt: string;
+  }> {
+    const transfer = await this.findOpenInvitation(token);
+    const salon = await this.prisma.salon.findUniqueOrThrow({
+      where: { id: transfer.salonId },
+      select: { name: true },
+    });
+    return {
+      shopName: salon.name,
+      email: transfer.newEmail,
+      needsPassword: transfer.targetUserId === null,
+      expiresAt: transfer.invitationExpiresAt!.toISOString(),
+    };
+  }
+
+  private async findOpenInvitation(token: string) {
+    const transfer = /^[a-f0-9]{64}$/.test(token)
+      ? await this.prisma.salonOwnerTransfer.findUnique({
+          where: { invitationTokenHash: hashInvitationToken(token) },
+        })
+      : null;
+    // One generic answer for unknown, used, cancelled and expired links alike.
+    if (
+      !transfer ||
+      transfer.status !== OwnerTransferStatus.INVITED ||
+      !transfer.invitationExpiresAt ||
+      transfer.invitationExpiresAt.getTime() <= Date.now()
+    ) {
+      this.fail(
+        'OWNER_INVITATION_INVALID',
+        'This invitation is invalid or has expired. Ask FastQue to send a new one.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return transfer;
+  }
+
+  /**
+   * The only place ownership actually moves. Reached by the holder of the destination inbox presenting the single-use
+   * token. For an existing verified account nothing about its credentials changes; for a new address the recipient
+   * chooses their own password and the address is marked verified.
+   */
+  async acceptInvitation(
+    input: AcceptOwnerInvitationInput,
+  ): Promise<{ shopName: string }> {
+    const open = await this.findOpenInvitation(input.token);
+    if (open.targetUserId === null && !input.password) {
+      this.fail(
+        'OWNER_INVITATION_PASSWORD_REQUIRED',
+        'Choose a password to finish creating your account.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const passwordHash = input.password
+      ? await this.passwords.hash(input.password)
+      : null;
+
+    return this.prisma.$transaction(async (tx) => {
+      // Lock the row, then check expiry in the application: comparing a timestamp-without-zone column to now() in SQL
+      // would depend on the database session time zone.
+      const locked = await tx.$queryRaw<
+        { id: string; invitationExpiresAt: Date | null }[]
+      >`
+        SELECT "id", "invitationExpiresAt" FROM "salon_owner_transfers"
+        WHERE "id" = ${open.id}
+          AND "status" = 'INVITED'::"OwnerTransferStatus"
+          AND "invitationTokenHash" = ${hashInvitationToken(input.token)}
+        FOR UPDATE`;
+      if (
+        locked.length !== 1 ||
+        !locked[0].invitationExpiresAt ||
+        locked[0].invitationExpiresAt.getTime() <= Date.now()
+      ) {
+        this.fail(
+          'OWNER_INVITATION_INVALID',
+          'This invitation is invalid or has expired. Ask FastQue to send a new one.',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      const salon = await tx.salon.findUniqueOrThrow({
+        where: { id: open.salonId },
+        select: { id: true, name: true, ownerUserId: true, status: true },
+      });
+      if (salon.ownerUserId !== open.fromUserId) {
+        this.fail(
+          'OWNER_TRANSFER_STALE',
+          'The shop owner changed after this transfer was prepared. Ask FastQue to prepare a new one.',
           HttpStatus.CONFLICT,
         );
       }
 
-      const newOwner = await tx.user.create({
-        data: {
-          email: transfer.newEmail,
-          status: UserStatus.ACTIVE,
-          // The administrator cannot read the inbox, so the address is NOT marked verified by this transfer.
-          passwordHash,
-          passwordChangeRequired: true,
-          temporaryPasswordExpiresAt: expiresAt,
+      let newOwnerId: string;
+      if (open.targetUserId) {
+        const target = await tx.user.findUniqueOrThrow({
+          where: { id: open.targetUserId },
+          select: {
+            id: true,
+            status: true,
+            emailVerifiedAt: true,
+            email: true,
+          },
+        });
+        if (
+          target.status !== UserStatus.ACTIVE ||
+          target.emailVerifiedAt === null ||
+          target.email !== open.newEmail
+        ) {
+          this.fail(
+            'OWNER_TRANSFER_TARGET_UNVERIFIED',
+            'The destination account is no longer eligible.',
+            HttpStatus.CONFLICT,
+          );
+        }
+        newOwnerId = target.id;
+      } else {
+        if (
+          await tx.user.findUnique({
+            where: { email: open.newEmail },
+            select: { id: true },
+          })
+        ) {
+          this.fail(
+            'OWNER_TRANSFER_EMAIL_IN_USE',
+            'That e-mail address now belongs to an account.',
+            HttpStatus.CONFLICT,
+          );
+        }
+        const created = await tx.user.create({
+          data: {
+            email: open.newEmail,
+            status: UserStatus.ACTIVE,
+            // The recipient just proved control of this inbox by presenting a token that was only ever e-mailed there.
+            emailVerifiedAt: new Date(),
+            passwordHash,
+          },
+        });
+        newOwnerId = created.id;
+      }
+
+      // Exactly one owner role for this shop; the unique key forbids a duplicate.
+      await tx.userRole.upsert({
+        where: {
+          userId_role_salonId: {
+            userId: newOwnerId,
+            role: Role.SALON_OWNER,
+            salonId: open.salonId,
+          },
         },
-      });
-      await tx.userRole.create({
-        data: {
-          userId: newOwner.id,
+        update: {},
+        create: {
+          userId: newOwnerId,
           role: Role.SALON_OWNER,
-          salonId: transfer.salonId,
+          salonId: open.salonId,
         },
       });
       await tx.salon.update({
-        where: { id: transfer.salonId },
-        data: { ownerUserId: newOwner.id },
+        where: { id: open.salonId },
+        data: { ownerUserId: newOwnerId },
       });
-
-      // The former account loses every role scoped to THIS shop and nothing else; its own rows elsewhere stay.
+      // The former account loses every role scoped to THIS shop and nothing else; its roles elsewhere stay.
       const removedRoles = await tx.userRole.deleteMany({
-        where: { userId: transfer.fromUserId, salonId: transfer.salonId },
+        where: { userId: open.fromUserId, salonId: open.salonId },
       });
-      // A staff row the former owner held in this shop moves with the ownership; history keeps pointing at the row.
-      const movedStaff = await tx.salonStaff.updateMany({
-        where: { salonId: transfer.salonId, userId: transfer.fromUserId },
-        data: { userId: newOwner.id },
+      // A staff row the former owner held in this shop moves with the ownership (history keeps pointing at the row),
+      // unless the new owner already has one there.
+      const alreadyStaff = await tx.salonStaff.count({
+        where: { salonId: open.salonId, userId: newOwnerId },
       });
+      const movedStaff =
+        alreadyStaff === 0
+          ? await tx.salonStaff.updateMany({
+              where: { salonId: open.salonId, userId: open.fromUserId },
+              data: { userId: newOwnerId },
+            })
+          : { count: 0 };
       // Sessions and unused recovery links of the former account end now.
       const revoked = await tx.refreshToken.updateMany({
-        where: { userId: transfer.fromUserId, revokedAt: null },
+        where: { userId: open.fromUserId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
       await tx.passwordResetToken.updateMany({
-        where: { userId: transfer.fromUserId, usedAt: null },
+        where: { userId: open.fromUserId, usedAt: null },
         data: { usedAt: new Date() },
       });
 
-      const completed = await tx.salonOwnerTransfer.update({
-        where: { id: transferId },
+      await tx.salonOwnerTransfer.update({
+        where: { id: open.id },
         data: {
           status: OwnerTransferStatus.COMPLETED,
           openSlot: null,
           completedAt: new Date(),
-          toUserId: newOwner.id,
+          toUserId: newOwnerId,
+          invitationTokenHash: null,
         },
       });
       await tx.auditLog.create({
         data: {
-          actorUserId: adminId,
+          actorUserId: newOwnerId,
           action: 'SALON_OWNER_TRANSFER_COMPLETED',
           entityType: 'SalonOwnerTransfer',
-          entityId: transferId,
+          entityId: open.id,
           metadata: {
-            salonId: transfer.salonId,
-            fromUserId: transfer.fromUserId,
-            toUserId: newOwner.id,
+            salonId: open.salonId,
+            fromUserId: open.fromUserId,
+            toUserId: newOwnerId,
+            createdAccount: open.targetUserId === null,
             shopStatusUnchanged: salon.status,
             removedFormerRoles: removedRoles.count,
             movedStaffRows: movedStaff.count,
@@ -437,14 +760,7 @@ export class OwnerTransferService {
           },
         },
       });
-      return { completed, newOwnerId: newOwner.id };
+      return { shopName: salon.name };
     });
-
-    return {
-      ...this.toDto(done.completed),
-      newOwnerUserId: done.newOwnerId,
-      temporaryPassword,
-      temporaryPasswordExpiresAt: expiresAt.toISOString(),
-    };
   }
 }

@@ -88,6 +88,21 @@ async function fetchOrOffline(path: string, options: RequestInit): Promise<Respo
   }
 }
 
+export const PASSWORD_CHANGE_PATH = "/change-password-required";
+
+/**
+ * The backend refuses every route for an account that still holds an administrator-issued temporary password
+ * (PASSWORD_CHANGE_REQUIRED). Whatever the person was doing, the only way forward is the change-password page, so send
+ * them there once instead of leaving every screen showing a vague error.
+ */
+export function redirectIfPasswordChangeRequired(error: ApiError): void {
+  if (error.status !== 403 || error.code !== "PASSWORD_CHANGE_REQUIRED") return;
+  if (typeof window === "undefined" || window.location.pathname === PASSWORD_CHANGE_PATH) return;
+  // No router is available outside React; a full navigation also drops any half-rendered state of the blocked screen.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(PASSWORD_CHANGE_PATH);
+}
+
 /**
  * Authenticated binary download (e.g. an invoice PDF) with the same one-shot silent refresh as
  * apiFetch. Returns the file as a Blob plus the server-suggested filename. The bytes are never
@@ -138,7 +153,9 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     }
   }
   if (!res.ok) {
-    throw new ApiError(res.status, (body ?? {}) as ApiErrorBody);
+    const error = new ApiError(res.status, (body ?? {}) as ApiErrorBody);
+    redirectIfPasswordChangeRequired(error);
+    throw error;
   }
   return body as T;
 }
