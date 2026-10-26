@@ -166,7 +166,13 @@ describe("OfferPromoPanel (owner issue #17)", () => {
       expect(body.endsAt).toBe("2026-10-31T18:30:00.000Z"); // 1 Nov 00:00 Asia/Kolkata (the last day, 31 Oct, is included)
       const link = field(r, "promo-link-o1").props.value;
       expect(link).toBe(`https://fastque.com/in/patna/fade-house?fq_campaign=${TOKEN}`);
-      expect(decodeURIComponent(anchor(r, /WhatsApp/).props.href.split("?text=")[1]).endsWith(link)).toBe(true);
+      expect(anchor(r, /Facebook/).props.href).toContain(encodeURIComponent(link));
+      // the link is labelled Facebook, so WhatsApp and Email must NOT carry it (they would be counted as Facebook)
+      expect(decodeURIComponent(anchor(r, /WhatsApp/).props.href.split("?text=")[1]).endsWith("fade-house")).toBe(true);
+      expect(anchor(r, /WhatsApp/).props.href).not.toContain(TOKEN);
+      expect(anchor(r, /Email/).props.href).not.toContain(TOKEN);
+      expect(text(r)).toContain("the label you chose");
+      expect(text(r)).toContain("cannot confirm where the link is really posted");
       expect(text(r)).toContain("Tracking link ready");
     });
 
@@ -214,5 +220,86 @@ describe("OfferPromoPanel (owner issue #17)", () => {
     expect(text(await mount())).toContain("no trusted public address");
     install({ shareFail: new ApiError("Shop not found.", 404) });
     expect(text(await mount())).toContain("Shop not found.");
+  });
+  describe("shop and offer isolation (review of PR #306)", () => {
+    const READY2 = { ...READY, salonId: "s2", publicPath: "/in/patna/other-shop", publicUrl: "https://fastque.com/in/patna/other-shop", name: "Other Shop" };
+    const render = (r, salonId, offer = OFFER) => act(async () => { r.update(<OfferPromoPanel salonId={salonId} offer={offer} services={SERVICES} timeZone={TZ} />); });
+    const pending = () => { let release; const gate = new Promise((res) => { release = res; }); return { gate, release }; };
+
+    it("never shows or shares the previous shop's link, not even for a moment after the shop changes", async () => {
+      install();
+      const r = await mount();
+      await act(async () => { await button(r, /Make a tracking link/).props.onClick(); });
+      await flush();
+      expect(field(r, "promo-link-o1").props.value).toContain(TOKEN);
+      const gate = pending();
+      apiFetch.mockImplementation(async (path) => { await gate.gate; if (path === "dashboard/salons/s2/share-links") return READY2; throw new Error(`unexpected ${path}`); });
+      await render(r, "s2");
+      const t = text(r);
+      expect(t).toContain("Preparing your post");
+      expect(t).not.toContain("fade-house");
+      expect(t).not.toContain(TOKEN);
+      expect(r.root.findAll((n) => n.props && n.props.id === "promo-link-o1")).toHaveLength(0);
+      await act(async () => { gate.release(); });
+      await flush();
+      expect(field(r, "promo-link-o1").props.value).toBe("https://fastque.com/in/patna/other-shop");
+      expect(JSON.stringify(r.toJSON())).not.toContain(TOKEN);
+    });
+
+    it("drops a tracking link that finishes for the previous shop after the owner has moved on", async () => {
+      install();
+      const r = await mount();
+      const gate = pending();
+      apiFetch.mockImplementation(async (path) => {
+        if (path.endsWith("/campaigns")) { await gate.gate; return { id: "c1", token: TOKEN, source: "FACEBOOK", label: "x" }; }
+        if (path === "dashboard/salons/s2/share-links") return READY2;
+        throw new Error(`unexpected ${path}`);
+      });
+      let click;
+      await act(async () => { click = button(r, /Make a tracking link/).props.onClick(); });
+      await render(r, "s2");
+      await flush();
+      await act(async () => { gate.release(); await click; });
+      await flush();
+      expect(field(r, "promo-link-o1").props.value).toBe("https://fastque.com/in/patna/other-shop");
+      expect(JSON.stringify(r.toJSON())).not.toContain(TOKEN);
+    });
+
+    it("starts a different offer of the same shop from scratch: no old text edits, no old tracking link", async () => {
+      install();
+      const r = await mount();
+      await type(r, "promo-text-o1", "My own words");
+      await act(async () => { await button(r, /Make a tracking link/).props.onClick(); });
+      await flush();
+      await render(r, "s1", { ...OFFER, id: "o2", title: "Winter Special" });
+      await flush();
+      await flush();
+      const t = JSON.stringify(r.toJSON());
+      expect(t).not.toContain(TOKEN);
+      expect(t).not.toContain("My own words");
+      expect(field(r, "promo-link-o2").props.value).toBe("https://fastque.com/in/patna/fade-house");
+    });
+  });
+
+  describe("channel labels (review of PR #306)", () => {
+    it("a link labelled Other may be carried by WhatsApp and Email, but the Facebook button keeps the plain link", async () => {
+      install({ campaign: { id: "c1", token: TOKEN, source: "OTHER", label: "x" } });
+      const r = await mount();
+      await type(r, "promo-source-o1", "OTHER");
+      await act(async () => { await button(r, /Make a tracking link/).props.onClick(); });
+      await flush();
+      expect(anchor(r, /WhatsApp/).props.href).toContain(encodeURIComponent(TOKEN));
+      expect(anchor(r, /Email/).props.href).toContain(encodeURIComponent(TOKEN));
+      expect(anchor(r, /Facebook/).props.href).not.toContain(TOKEN);
+    });
+    it("a link labelled Instagram is carried by no automatic share button", async () => {
+      install();
+      const r = await mount();
+      await type(r, "promo-source-o1", "INSTAGRAM");
+      await act(async () => { await button(r, /Make a tracking link/).props.onClick(); });
+      await flush();
+      for (const re of [/WhatsApp/, /Facebook/, /Email/]) expect(anchor(r, re).props.href).not.toContain(TOKEN);
+      expect(field(r, "promo-link-o1").props.value).toContain(TOKEN); // Copy post / Share use the link shown, which the owner can see
+    });
   });
 });
