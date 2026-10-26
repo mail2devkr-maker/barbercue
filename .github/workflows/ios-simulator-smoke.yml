@@ -44,6 +44,8 @@ jobs:
         run: npm run build:shared
 
       - name: Typecheck and test mobile workspace
+        id: mobile-quality
+        continue-on-error: true
         run: |
           npm run typecheck --workspace=@barbercue/mobile
           npm run test --workspace=@barbercue/mobile -- --runInBand
@@ -121,3 +123,9 @@ jobs:
             ${{ runner.temp }}/xcodebuild-simulator.log
             ${{ runner.temp }}/fastque-ios-simulator.png
             ${{ runner.temp }}/fatal-scan.txt
+
+      - name: Keep mobile test failures blocking
+        if: always() && steps.mobile-quality.outcome == 'failure'
+        run: |
+          echo "The mobile typecheck or full Jest suite failed; see the earlier step for details."
+          exit 1
