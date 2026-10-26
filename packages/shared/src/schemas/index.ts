@@ -304,6 +304,8 @@ export const salonSearchQuerySchema = z
     countryCode: z.string().length(2).optional(),
     locality: z.string().optional(),
     service: z.string().optional(),
+    // Dedicated shop-name filter for /search; unlike q it never matches services/descriptions.
+    shopName: z.string().trim().min(1).max(120).optional(),
     q: z.string().optional(),
     cursor: z.string().uuid().optional(),
     limit: z.coerce.number().int().min(1).max(50).optional(),
