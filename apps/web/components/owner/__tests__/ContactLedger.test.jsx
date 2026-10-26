@@ -6,6 +6,7 @@ import { ContactsWorkspace } from "../ContactsWorkspace";
 import { apiFetch, ApiError } from "../../../lib/api";
 import { resetCapabilitiesCache } from "../../../lib/use-capabilities";
 
+jest.mock("next/link", () => ({ __esModule: true, default: ({ children, href, ...rest }) => <a href={href} {...rest}>{children}</a> }));
 jest.mock("../../../lib/api", () => {
   class MockApiError extends Error {
     constructor(message, status = 400) {
@@ -232,6 +233,14 @@ describe("ContactLedgerPanel", () => {
 });
 
 describe("ContactsWorkspace", () => {
+  it("points to the shop link and QR code and says FastQue itself sends no invitations (owner issue #14)", async () => {
+    const r = await mountWorkspace();
+    const t = text(r);
+    expect(t).toContain("Invite people your own way");
+    expect(t).toContain("FastQue does not send invitations");
+    expect(r.root.findAll((n) => n.props?.href === "/dashboard/salons/s1/marketing").length).toBeGreaterThan(0);
+  });
+
   const caps = (status, reasonCode = null) => ({ features: { contactImport: { status, reasonCode, updatedAt: null } } });
   async function mountWorkspace() {
     let r;
