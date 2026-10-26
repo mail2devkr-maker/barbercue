@@ -66,7 +66,9 @@
   gap: 6px;
 }
 
-.field span {
+/* Style only the two form labels; the old descendant selector also styled
+   suggestion option text inside the light service autocomplete as pale uppercase. */
+.field > span {
   padding-left: 4px;
   color: var(--fq-text-muted);
   font-size: 0.75rem;
