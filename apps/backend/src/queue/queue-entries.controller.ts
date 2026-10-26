@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Param, Post } from '@nestjs/common';
 import {
   QUEUE_ENTRIES_PATH,
   Role,
@@ -16,5 +16,15 @@ export class QueueEntriesController {
   @Get('mine/active')
   getMyActiveEntry(@CurrentUser() user: AuthenticatedUser) {
     return this.queueService.getActiveForCustomer(user.id);
+  }
+
+  // Customers may leave a standalone Live Queue while WAITING or CALLED (including
+  // assigned-but-not-started). Appointment check-ins use the booking cancellation flow.
+  @Post(':id/cancel')
+  cancelMyEntry(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.queueService.cancelByCustomer(user.id, id);
   }
 }

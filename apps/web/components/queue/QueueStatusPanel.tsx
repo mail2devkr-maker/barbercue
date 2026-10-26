@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { QUEUE_ENTRIES_PATH, queuePhaseOf, type QueueEntryDetailDto } from "@barbercue/shared";
-import { apiFetch } from "../../lib/api";
+import { apiFetch, ApiError } from "../../lib/api";
 import { getRealtimeSocket, joinSalonRoom, onReconnect } from "../../lib/realtime";
 import styles from "./queue.module.css";
 
@@ -40,6 +40,27 @@ export function QueueStatusPanel({
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
 }) {
   const [turnAlert, setTurnAlert] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const canCancel = entry.bookingId === null && (entry.status === "WAITING" || entry.status === "CALLED");
+
+  async function cancelMyQueue(): Promise<void> {
+    if (cancelling || !canCancel) return;
+    if (!window.confirm("Cancel your Live Queue token? You will lose your place in line.")) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await apiFetch(`${QUEUE_ENTRIES_PATH}/${entry.id}/cancel`, { method: "POST" });
+      onEntryChange(null);
+    } catch (error) {
+      setCancelError(error instanceof ApiError ? error.message : "Could not cancel your Live Queue token. Please try again.");
+      // A race with the shop calling/starting the service may make the token ineligible.
+      // Refresh server truth; never pretend a failed cancellation succeeded.
+      void apiFetch<QueueEntryDetailDto | null>(`${QUEUE_ENTRIES_PATH}/mine/active`).then(onEntryChange).catch(() => undefined);
+    } finally {
+      setCancelling(false);
+    }
+  }
   const audioContextRef = useRef<AudioContext | null>(null);
 
   function playChime() {
@@ -153,6 +174,21 @@ export function QueueStatusPanel({
           {entry.assignedChairLabel ? ` — ${entry.assignedChairLabel}` : ""}
         </p>
       )}
+      {canCancel && (
+        <div className={styles.customerCancelWrap}>
+          <button
+            type="button"
+            className={styles.customerCancelButton}
+            onClick={() => void cancelMyQueue()}
+            disabled={cancelling}
+            aria-label="Cancel Live Queue token"
+          >
+            {cancelling ? "Cancelling…" : "Cancel Live Queue"}
+          </button>
+          <p className={styles.ticketReassure}>You can cancel before your service starts.</p>
+        </div>
+      )}
+      {cancelError && <p className={styles.errorText} role="alert">{cancelError}</p>}
       {ACTIVE_STATUSES.has(entry.status) && (
         <p className={styles.ticketReassure}>
           This updates automatically — no need to refresh.
