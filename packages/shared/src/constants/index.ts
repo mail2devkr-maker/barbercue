@@ -18,6 +18,8 @@ export const AUTH_PATHS = {
   customerPhoneLinkRequest: 'customer/phone/link/request',
   customerPhoneLinkVerify: 'customer/phone/link/verify',
   google: 'google',
+  appleNonce: 'apple/nonce',
+  apple: 'apple',
   staffLogin: 'staff/login',
   // Self-service shop-owner account creation before salon onboarding.
   ownerSignup: 'owner/signup',
@@ -28,6 +30,7 @@ export const AUTH_PATHS = {
   // user on no match; this one must never create one), and keeping them physically separate
   // makes that difference impossible to blur by accident in either handler.
   staffGoogle: 'staff/google',
+  staffApple: 'staff/apple',
   adminLogin: 'admin/login',
   adminGoogle: 'admin/google',
   refresh: 'refresh',

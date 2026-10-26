@@ -70,10 +70,18 @@ describe('native Google Sign-In service', () => {
 
   it('configures Credential Manager and invokes the Google action for a configured build', async () => {
     const { getGoogleIdToken } = loadGoogleSignIn('web-client-id.apps.googleusercontent.com');
-    mockSignIn.mockResolvedValue({ kind: 'success', data: { idToken: 'id-token' } });
+    mockSignIn.mockResolvedValue({
+      kind: 'success',
+      data: { idToken: 'id-token' },
+    });
 
-    await expect(getGoogleIdToken(t)).resolves.toEqual({ type: 'success', idToken: 'id-token' });
-    expect(mockConfigure).toHaveBeenCalledWith({ webClientId: 'web-client-id.apps.googleusercontent.com' });
+    await expect(getGoogleIdToken(t)).resolves.toEqual({
+      type: 'success',
+      idToken: 'id-token',
+    });
+    expect(mockConfigure).toHaveBeenCalledWith({
+      webClientId: 'web-client-id.apps.googleusercontent.com',
+    });
     expect(mockCheckPlayServices).toHaveBeenCalledTimes(1);
     expect(mockSignIn).toHaveBeenCalledTimes(1);
   });
@@ -93,9 +101,15 @@ describe('native Google Sign-In service', () => {
     const { getGoogleIdToken } = loadGoogleSignIn('web-client-id.apps.googleusercontent.com');
     mockSignIn.mockResolvedValue({ kind: 'no-saved-credential' });
     mockCreateAccount.mockResolvedValue({ kind: 'no-saved-credential' });
-    mockPresentExplicitSignIn.mockResolvedValue({ kind: 'success', data: { idToken: 'id-token' } });
+    mockPresentExplicitSignIn.mockResolvedValue({
+      kind: 'success',
+      data: { idToken: 'id-token' },
+    });
 
-    await expect(getGoogleIdToken(t)).resolves.toEqual({ type: 'success', idToken: 'id-token' });
+    await expect(getGoogleIdToken(t)).resolves.toEqual({
+      type: 'success',
+      idToken: 'id-token',
+    });
     expect(mockCreateAccount).toHaveBeenCalledTimes(1);
     expect(mockPresentExplicitSignIn).toHaveBeenCalledTimes(1);
   });

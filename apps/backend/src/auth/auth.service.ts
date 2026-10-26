@@ -10,6 +10,7 @@ import {
   UserStatus,
   type AuthSession,
   type AuthTokens,
+  type AppleLoginInput,
   Language,
   type MeResponse,
   type PasswordAudience,
@@ -22,6 +23,7 @@ import { OtpService } from './services/otp.service';
 import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
 import { GoogleAuthService } from './services/google-auth.service';
+import { AppleAuthService } from './services/apple-auth.service';
 import { EMAIL_SENDER, type EmailSender } from './services/email-sender';
 import {
   buildPasswordLink,
@@ -60,6 +62,7 @@ export class AuthService {
     private readonly totpService: TotpService,
     private readonly cryptoService: CryptoService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly appleAuthService: AppleAuthService,
     @Inject(EMAIL_SENDER) private readonly emailSender: EmailSender,
   ) {}
 
@@ -676,6 +679,103 @@ export class AuthService {
     };
   }
 
+  createAppleLoginNonce() {
+    return this.appleAuthService.createLoginNonce();
+  }
+
+  /** Customer Apple login mirrors customer Google semantics but keys by Apple's stable `sub`. */
+  async appleLogin(
+    input: AppleLoginInput,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const identity = await this.appleAuthService.verifyIdToken(
+      input.identityToken,
+      input.nonce,
+    );
+    const user = await this.prisma.$transaction(async (tx) => {
+      await this.appleAuthService.consumeLoginNonce(tx, input.nonce);
+
+      const existingIdentity = await tx.authIdentity.findUnique({
+        where: {
+          provider_providerSub: {
+            provider: AuthProvider.APPLE,
+            providerSub: identity.sub,
+          },
+        },
+        include: { user: { include: { roles: true } } },
+      });
+      if (existingIdentity) return existingIdentity.user;
+
+      if (identity.email) {
+        const existingUser = await tx.user.findUnique({
+          where: { email: identity.email },
+          include: { roles: true },
+        });
+        if (existingUser) {
+          await tx.authIdentity.create({
+            data: {
+              userId: existingUser.id,
+              provider: AuthProvider.APPLE,
+              providerSub: identity.sub,
+              email: identity.email,
+            },
+          });
+          return existingUser;
+        }
+      }
+
+      return tx.user.create({
+        data: {
+          email: identity.email,
+          emailVerifiedAt: identity.email ? new Date() : null,
+          status: UserStatus.ACTIVE,
+          roles: { create: { role: Role.CUSTOMER } },
+          authIdentities: {
+            create: {
+              provider: AuthProvider.APPLE,
+              providerSub: identity.sub,
+              email: identity.email,
+            },
+          },
+        },
+        include: { roles: true },
+      });
+    });
+
+    this.assertActive(user.status);
+    let roles = user.roles.map((r) => r.role);
+    if (!roles.includes(Role.CUSTOMER)) {
+      await this.prisma.userRole.createMany({
+        data: [{ userId: user.id, role: Role.CUSTOMER }],
+        skipDuplicates: true,
+      });
+      roles = [...roles, Role.CUSTOMER];
+    }
+
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
+      SessionAudience.CUSTOMER,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      sessionRoles,
+      SessionAudience.CUSTOMER,
+      deviceInfo,
+    );
+    return {
+      user: this.toMeResponse(
+        user.id,
+        sessionRoles,
+        SessionAudience.CUSTOMER,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
   // ---------- Prospective shop owner: self-service email + password ----------
 
   /**
@@ -1048,6 +1148,122 @@ export class AuthService {
 
     // Security fix: staff/owner Google login is a STAFF-audience session — never PLATFORM_ADMIN,
     // even if this same User row also holds it.
+    const sessionRoles = this.tokenService.scopeRolesToAudience(
+      roles,
+      SessionAudience.STAFF,
+    );
+    const tokens = await this.tokenService.issueTokenPair(
+      user.id,
+      sessionRoles,
+      SessionAudience.STAFF,
+      deviceInfo,
+    );
+    return {
+      user: this.toMeResponse(
+        user.id,
+        sessionRoles,
+        SessionAudience.STAFF,
+        user.phone,
+        user.email,
+        user.preferredLanguage,
+        user.passwordHash,
+      ),
+      tokens,
+    };
+  }
+
+  /** Apple owner/staff login never creates an account or grants a role. */
+  async staffAppleLogin(
+    input: AppleLoginInput,
+    deviceInfo?: string,
+  ): Promise<{ user: MeResponse; tokens: AuthTokens }> {
+    const identity = await this.appleAuthService.verifyIdToken(
+      input.identityToken,
+      input.nonce,
+    );
+    const user = await this.prisma.$transaction(async (tx) => {
+      await this.appleAuthService.consumeLoginNonce(tx, input.nonce);
+
+      const repairMissingOwnerRole = async <
+        T extends { id: string; roles: Array<{ role: Role }> },
+      >(
+        candidate: T,
+      ): Promise<T> => {
+        const alreadyOperator = candidate.roles.some(
+          ({ role }) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+        );
+        if (alreadyOperator) return candidate;
+        const ownedSalons = await tx.salon.findMany({
+          where: { ownerUserId: candidate.id },
+          select: { id: true },
+        });
+        if (ownedSalons.length === 0) return candidate;
+        await tx.userRole.createMany({
+          data: ownedSalons.map(({ id: salonId }) => ({
+            userId: candidate.id,
+            role: Role.SALON_OWNER,
+            salonId,
+          })),
+          skipDuplicates: true,
+        });
+        const refreshed = await tx.user.findUnique({
+          where: { id: candidate.id },
+          include: { roles: true },
+        });
+        return (refreshed ?? candidate) as T;
+      };
+
+      const existingIdentity = await tx.authIdentity.findUnique({
+        where: {
+          provider_providerSub: {
+            provider: AuthProvider.APPLE,
+            providerSub: identity.sub,
+          },
+        },
+        include: { user: { include: { roles: true } } },
+      });
+      if (existingIdentity)
+        return repairMissingOwnerRole(existingIdentity.user);
+      if (!identity.email) return null;
+
+      const candidate = await tx.user.findUnique({
+        where: { email: identity.email },
+        include: { roles: true },
+      });
+      if (!candidate) return null;
+
+      const repairedCandidate = await repairMissingOwnerRole(candidate);
+      const canAccessStaff = repairedCandidate.roles.some(
+        ({ role }) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+      );
+      // The role gate happens before identity linking. A customer-only Apple account with the same
+      // email cannot be elevated into the owner/staff surface.
+      if (!canAccessStaff) return null;
+
+      await tx.authIdentity.create({
+        data: {
+          userId: repairedCandidate.id,
+          provider: AuthProvider.APPLE,
+          providerSub: identity.sub,
+          email: identity.email,
+        },
+      });
+      return repairedCandidate;
+    });
+
+    const roles = user?.roles.map((role) => role.role) ?? [];
+    const canAccessStaff = roles.some(
+      (role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF,
+    );
+    if (!user || !canAccessStaff) {
+      throw new AppException(
+        AuthErrorCode.APPLE_ACCOUNT_NOT_STAFF,
+        'This Apple account is not registered as a shop owner or staff member.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    this.assertActive(user.status);
+
     const sessionRoles = this.tokenService.scopeRolesToAudience(
       roles,
       SessionAudience.STAFF,

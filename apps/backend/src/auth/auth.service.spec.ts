@@ -16,6 +16,7 @@ import { OtpService } from './services/otp.service';
 import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
 import { GoogleAuthService } from './services/google-auth.service';
+import { AppleAuthService } from './services/apple-auth.service';
 import { EMAIL_SENDER } from './services/email-sender';
 import { AppException } from '../common/exceptions/app.exception';
 
@@ -51,6 +52,7 @@ describe('AuthService', () => {
     };
     refreshToken: { updateMany: jest.Mock; deleteMany: jest.Mock };
     otpRequest: { deleteMany: jest.Mock };
+    appleAuthNonce: { create: jest.Mock; deleteMany: jest.Mock };
     pushDevice: { deleteMany: jest.Mock };
     notificationPreference: { deleteMany: jest.Mock };
     notification: { deleteMany: jest.Mock };
@@ -71,6 +73,11 @@ describe('AuthService', () => {
   let totpService: { verifyToken: jest.Mock };
   let cryptoService: { decrypt: jest.Mock };
   let googleAuthService: { verifyIdToken: jest.Mock };
+  let appleAuthService: {
+    createLoginNonce: jest.Mock;
+    verifyIdToken: jest.Mock;
+    consumeLoginNonce: jest.Mock;
+  };
   let emailSender: {
     assertAvailable: jest.Mock;
     sendPasswordReset: jest.Mock;
@@ -118,6 +125,7 @@ describe('AuthService', () => {
         deleteMany: jest.fn(),
       },
       otpRequest: { deleteMany: jest.fn() },
+      appleAuthNonce: { create: jest.fn(), deleteMany: jest.fn() },
       pushDevice: { deleteMany: jest.fn() },
       notificationPreference: { deleteMany: jest.fn() },
       notification: { deleteMany: jest.fn() },
@@ -164,6 +172,16 @@ describe('AuthService', () => {
     totpService = { verifyToken: jest.fn() };
     cryptoService = { decrypt: jest.fn() };
     googleAuthService = { verifyIdToken: jest.fn() };
+    appleAuthService = {
+      createLoginNonce: jest
+        .fn()
+        .mockResolvedValue({
+          nonce: 'nonce-value',
+          expiresAt: '2030-01-01T00:00:00.000Z',
+        }),
+      verifyIdToken: jest.fn(),
+      consumeLoginNonce: jest.fn().mockResolvedValue(undefined),
+    };
     emailSender = {
       assertAvailable: jest.fn(),
       sendPasswordReset: jest.fn(),
@@ -180,6 +198,7 @@ describe('AuthService', () => {
         { provide: TotpService, useValue: totpService },
         { provide: CryptoService, useValue: cryptoService },
         { provide: GoogleAuthService, useValue: googleAuthService },
+        { provide: AppleAuthService, useValue: appleAuthService },
         { provide: EMAIL_SENDER, useValue: emailSender },
       ],
     }).compile();
@@ -784,6 +803,107 @@ describe('AuthService', () => {
         code: AuthErrorCode.ACCOUNT_SUSPENDED,
       });
       expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Apple login', () => {
+    it('creates a customer session from a verified, one-use Apple identity', async () => {
+      appleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'apple-sub-1',
+        email: 'customer@privaterelay.appleid.com',
+      });
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        id: 'apple-customer',
+        email: 'customer@privaterelay.appleid.com',
+        phone: null,
+        passwordHash: null,
+        preferredLanguage: Language.EN,
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+
+      const result = await service.appleLogin(
+        { identityToken: 'signed-apple-token', nonce: 'a'.repeat(43) },
+        'ios-device',
+      );
+
+      expect(appleAuthService.verifyIdToken).toHaveBeenCalledWith(
+        'signed-apple-token',
+        'a'.repeat(43),
+      );
+      expect(appleAuthService.consumeLoginNonce).toHaveBeenCalledWith(
+        prisma,
+        'a'.repeat(43),
+      );
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            roles: { create: { role: Role.CUSTOMER } },
+            authIdentities: {
+              create: expect.objectContaining({
+                provider: 'APPLE',
+                providerSub: 'apple-sub-1',
+              }),
+            },
+          }),
+        }),
+      );
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+    });
+
+    it('never turns an Apple customer identity into an owner/staff session', async () => {
+      appleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'apple-customer',
+        email: 'same@example.com',
+      });
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'customer-only',
+        email: 'same@example.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+
+      await expect(
+        service.staffAppleLogin({
+          identityToken: 'signed-apple-token',
+          nonce: 'b'.repeat(43),
+        }),
+      ).rejects.toMatchObject({ code: AuthErrorCode.APPLE_ACCOUNT_NOT_STAFF });
+      expect(prisma.authIdentity.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('issues a STAFF-audience session only for an already owner-linked Apple identity', async () => {
+      appleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'apple-owner',
+        email: 'owner@example.com',
+      });
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'apple-identity',
+        user: {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          phone: null,
+          passwordHash: null,
+          preferredLanguage: Language.EN,
+          status: UserStatus.ACTIVE,
+          roles: [{ role: Role.SALON_OWNER }],
+        },
+      });
+
+      const result = await service.staffAppleLogin({
+        identityToken: 'signed-apple-token',
+        nonce: 'c'.repeat(43),
+      });
+
+      expect(result.user.audience).toBe(SessionAudience.STAFF);
+      expect(result.user.roles).toEqual([Role.SALON_OWNER]);
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
     });
   });
 

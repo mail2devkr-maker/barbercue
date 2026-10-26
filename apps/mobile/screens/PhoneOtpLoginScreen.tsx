@@ -1,30 +1,15 @@
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import {
-  AUTH_PATHS,
-  OTP_RESEND_COOLDOWN_SECONDS,
-  otpRequestSchema,
-  otpVerifySchema,
-  type AuthMethodsDto,
-} from '@barbercue/shared';
+import { AUTH_PATHS, OTP_RESEND_COOLDOWN_SECONDS, otpRequestSchema, otpVerifySchema, type AuthMethodsDto } from '@barbercue/shared';
 import { ApiError, apiFetch } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import { getGoogleIdToken } from '../lib/google-signin';
 import { useLanguage } from '../lib/language-context';
 import { color, fastQue, font, fontSize, radius, space } from '../lib/theme';
 import { BrandLockup, GradientView } from '../components/ui';
+import { AppleSignInButton } from '../components/auth/AppleSignInButton';
 
 // Exact website 3-stop brand gradient (pink 0% -> coral 55% -> orange 100%, matching
 // apps/web/components/landing/landing.module.css's `--fq-gradient` on master).
@@ -71,11 +56,7 @@ function GoogleSignInButton() {
         </View>
       )}
       <Pressable style={styles.googleButton} onPress={() => void handleGoogleSignIn()} disabled={submitting}>
-        {submitting ? (
-          <ActivityIndicator color={fastQue.text} />
-        ) : (
-          <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>
-        )}
+        {submitting ? <ActivityIndicator color={fastQue.text} /> : <Text style={styles.googleButtonText}>{t.continueWithGoogle}</Text>}
       </Pressable>
       <View style={styles.dividerRow}>
         <View style={styles.dividerLine} />
@@ -139,7 +120,10 @@ export default function PhoneOtpLoginScreen() {
   }, []);
 
   async function sendOtp(targetPhone: string): Promise<void> {
-    await apiFetch(`auth/${AUTH_PATHS.otpRequest}`, { method: 'POST', body: JSON.stringify({ phone: targetPhone }) });
+    await apiFetch(`auth/${AUTH_PATHS.otpRequest}`, {
+      method: 'POST',
+      body: JSON.stringify({ phone: targetPhone }),
+    });
   }
 
   async function requestOtp() {
@@ -209,15 +193,14 @@ export default function PhoneOtpLoginScreen() {
       <View style={styles.blobGold} pointerEvents="none" />
       <View style={styles.blobAccent} pointerEvents="none" />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={insets.top}
-      >
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={insets.top}>
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: Math.max(insets.top, space[6]), paddingBottom: Math.max(insets.bottom, space[6]) },
+            {
+              paddingTop: Math.max(insets.top, space[6]),
+              paddingBottom: Math.max(insets.bottom, space[6]),
+            },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -226,11 +209,7 @@ export default function PhoneOtpLoginScreen() {
 
           <Text style={styles.eyebrow}>{t.signInTitle}</Text>
           <Text style={styles.subtitle}>
-            {step === 'phone'
-              ? phoneOtpAvailable === false
-                ? t.otpSubtitleGoogleOnly
-                : t.otpSubtitleBoth
-              : `${t.enterCodeSentToPrefix}${phone}.`}
+            {step === 'phone' ? (phoneOtpAvailable === false ? t.otpSubtitleGoogleOnly : t.otpSubtitleBoth) : `${t.enterCodeSentToPrefix}${phone}.`}
           </Text>
 
           {error && (
@@ -247,15 +226,11 @@ export default function PhoneOtpLoginScreen() {
           <View style={styles.card}>
             {step === 'phone' ? (
               <>
-                {/* Always render the Google entry point. getGoogleIdToken() reports a missing or
-                    invalid build configuration in the inline error card, rather than making the
-                    sign-in option silently disappear. */}
                 <GoogleSignInButton />
+                <AppleSignInButton audience="customer" />
                 {phoneOtpAvailable === false ? (
                   <View style={styles.noticeCard}>
-                    <Text style={styles.noticeCardText}>
-                      {t.phoneOtpUnavailableNotice}
-                    </Text>
+                    <Text style={styles.noticeCardText}>{t.phoneOtpUnavailableNotice}</Text>
                   </View>
                 ) : phoneOtpAvailable === null ? (
                   <ActivityIndicator color={fastQue.textSecondary} />
@@ -271,11 +246,7 @@ export default function PhoneOtpLoginScreen() {
                     />
                     <Pressable onPress={() => void requestOtp()} disabled={submitting}>
                       <GradientView colors={GRADIENT_COLORS} stops={GRADIENT_STOPS} style={styles.primaryButton}>
-                        {submitting ? (
-                          <ActivityIndicator color={color.accentContrast} />
-                        ) : (
-                          <Text style={styles.primaryButtonText}>{t.sendOtpAction}</Text>
-                        )}
+                        {submitting ? <ActivityIndicator color={color.accentContrast} /> : <Text style={styles.primaryButtonText}>{t.sendOtpAction}</Text>}
                       </GradientView>
                     </Pressable>
                   </>
@@ -326,7 +297,11 @@ export default function PhoneOtpLoginScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: fastQue.background },
   flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: space[5] },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: space[5],
+  },
 
   // Restrained warmth — two soft, low-opacity tinted circles standing in for a gradient. Brand
   // pink (decorative) top-left, brand orange (also decorative here, not an action) bottom-right —
@@ -380,7 +355,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     marginBottom: space[4],
   },
-  errorCardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: fastQue.error, textAlign: 'center' },
+  errorCardText: {
+    fontFamily: font.bodyMedium,
+    fontSize: fontSize.xs,
+    color: fastQue.error,
+    textAlign: 'center',
+  },
 
   successCard: {
     borderWidth: 1,
@@ -391,7 +371,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[4],
     marginBottom: space[4],
   },
-  successCardText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: fastQue.success, textAlign: 'center' },
+  successCardText: {
+    fontFamily: font.bodyMedium,
+    fontSize: fontSize.xs,
+    color: fastQue.success,
+    textAlign: 'center',
+  },
 
   noticeCard: {
     borderWidth: 1,
@@ -400,7 +385,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     padding: space[4],
   },
-  noticeCardText: { fontFamily: font.bodyRegular, fontSize: fontSize.xs, lineHeight: 19, color: fastQue.textSecondary },
+  noticeCardText: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.xs,
+    lineHeight: 19,
+    color: fastQue.textSecondary,
+  },
 
   card: {
     backgroundColor: fastQue.card,
@@ -436,7 +426,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: space[3],
   },
-  primaryButtonText: { fontFamily: font.bodyBold, fontSize: fontSize.base, color: color.accentContrast },
+  primaryButtonText: {
+    fontFamily: font.bodyBold,
+    fontSize: fontSize.base,
+    color: color.accentContrast,
+  },
 
   googleButton: {
     minHeight: 52,
@@ -448,9 +442,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: space[3],
   },
-  googleButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: fastQue.text },
+  googleButtonText: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.sm,
+    color: fastQue.text,
+  },
 
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: space[4] },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: space[4],
+  },
   dividerLine: { flex: 1, height: 1, backgroundColor: fastQue.border },
   dividerText: {
     fontFamily: font.bodyBold,
@@ -472,5 +474,9 @@ const styles = StyleSheet.create({
     marginTop: space[3],
   },
   resendButtonDisabled: { borderColor: fastQue.border },
-  resendButtonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.xs, color: fastQue.text },
+  resendButtonText: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.xs,
+    color: fastQue.text,
+  },
 });

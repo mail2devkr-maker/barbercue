@@ -15,9 +15,7 @@ function withIosGoogleUrlScheme(plugins, iosUrlScheme) {
     if (name !== 'react-native-nitro-google-signin') return plugin;
 
     found = true;
-    const existingOptions = Array.isArray(plugin) && plugin[1] && typeof plugin[1] === 'object'
-      ? plugin[1]
-      : {};
+    const existingOptions = Array.isArray(plugin) && plugin[1] && typeof plugin[1] === 'object' ? plugin[1] : {};
     return [name, { ...existingOptions, iosUrlScheme }];
   });
 
@@ -27,18 +25,32 @@ function withIosGoogleUrlScheme(plugins, iosUrlScheme) {
   return updated;
 }
 
+function withIosAppleSignIn(config) {
+  const plugins = [...(config.plugins || [])];
+  if (!plugins.some((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin) === 'expo-apple-authentication')) {
+    plugins.push('expo-apple-authentication');
+  }
+  return {
+    ...config,
+    ios: { ...(config.ios || {}), usesAppleSignIn: true },
+    plugins,
+  };
+}
+
 module.exports = ({ config }) => {
   if (process.env.FASTQUE_IOS_BUILD !== 'true') return config;
 
   const iosUrlScheme = googleIosUrlScheme(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID);
   if (!iosUrlScheme) {
-    throw new Error(
-      'FastQue iOS build requires EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID to be a valid Google iOS OAuth client ID.',
-    );
+    throw new Error('FastQue iOS build requires EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID to be a valid Google iOS OAuth client ID.');
   }
 
-  return { ...config, plugins: withIosGoogleUrlScheme(config.plugins, iosUrlScheme) };
+  return withIosAppleSignIn({
+    ...config,
+    plugins: withIosGoogleUrlScheme(config.plugins, iosUrlScheme),
+  });
 };
 
 module.exports.googleIosUrlScheme = googleIosUrlScheme;
 module.exports.withIosGoogleUrlScheme = withIosGoogleUrlScheme;
+module.exports.withIosAppleSignIn = withIosAppleSignIn;

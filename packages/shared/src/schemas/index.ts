@@ -94,7 +94,9 @@ function normalizeServiceSelection<T extends ServiceSelectionInput>(
   return { ...rest, serviceIds: serviceIds ?? [serviceId as string] } as Omit<
     T,
     "serviceId" | "serviceIds"
-  > & { serviceIds: string[] };
+  > & {
+    serviceIds: string[];
+  };
 }
 
 export const createBookingSchema = z
@@ -440,15 +442,24 @@ export const otpRequestSchema = z.object({
 export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 
 export const otpVerifySchema = z.object({
-  phone: z.string().regex(/^\+[1-9]\d{7,14}$/, 'phone must be in E.164 format, e.g. +919876543210'),
-  code: z.string().regex(/^\d{6}$/, 'code must be a 6-digit OTP'),
+  phone: z
+    .string()
+    .regex(
+      /^\+[1-9]\d{7,14}$/,
+      "phone must be in E.164 format, e.g. +919876543210",
+    ),
+  code: z.string().regex(/^\d{6}$/, "code must be a 6-digit OTP"),
 });
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
 
 export const ownerPhoneLinkRequestSchema = otpRequestSchema;
 export const ownerPhoneLinkVerifySchema = otpVerifySchema;
-export type OwnerPhoneLinkRequestInput = z.infer<typeof ownerPhoneLinkRequestSchema>;
-export type OwnerPhoneLinkVerifyInput = z.infer<typeof ownerPhoneLinkVerifySchema>;
+export type OwnerPhoneLinkRequestInput = z.infer<
+  typeof ownerPhoneLinkRequestSchema
+>;
+export type OwnerPhoneLinkVerifyInput = z.infer<
+  typeof ownerPhoneLinkVerifySchema
+>;
 
 // POST /auth/google — the client only ever sends the ID token it got directly from Google's own
 // sign-in SDK (Google Identity Services on web, expo-auth-session on mobile); the backend is what
@@ -457,6 +468,17 @@ export const googleLoginSchema = z.object({
   idToken: z.string().min(1),
 });
 export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
+
+// Apple identity tokens are verified against Apple's JWKS. The raw nonce is returned by the
+// backend once and consumed atomically after its exact signed claim is validated.
+export const appleNonceSchema = z.object({
+  nonce: z.string().min(32).max(128),
+});
+export type AppleNonceInput = z.infer<typeof appleNonceSchema>;
+export const appleLoginSchema = appleNonceSchema.extend({
+  identityToken: z.string().min(1).max(8192),
+});
+export type AppleLoginInput = z.infer<typeof appleLoginSchema>;
 
 // Shared password rule: staff/owner/admin accounts only (customers never have a password).
 const passwordSchema = z
@@ -838,19 +860,21 @@ export type CancellationPolicyInput = z.infer<typeof cancellationPolicySchema>;
 // POST dashboard/salons/:salonId/services. Price is rupees (matches Service.price's Decimal(10,2)
 // and every other money field in this package); duration is whole minutes because the whole
 // booking/slot engine works in minutes.
-export const createSalonServiceSchema = z.object({
-  name: z.string().min(1).max(120),
-  description: z.string().trim().max(1000).optional(),
-  price: z.number().min(0).max(1_000_000),
-  durationMinutes: z.number().int().min(5).max(480),
-  category: z.string().min(1).max(60).optional(),
-  subcategory: z.string().trim().min(1).max(60).optional(),
-  categoryId: z.string().uuid().optional(),
-  subcategoryId: z.string().uuid().optional(),
-}).refine((v) => !v.subcategoryId || !!v.categoryId, {
-  message: 'A subcategory ID requires its category ID',
-  path: ['categoryId'],
-});
+export const createSalonServiceSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    description: z.string().trim().max(1000).optional(),
+    price: z.number().min(0).max(1_000_000),
+    durationMinutes: z.number().int().min(5).max(480),
+    category: z.string().min(1).max(60).optional(),
+    subcategory: z.string().trim().min(1).max(60).optional(),
+    categoryId: z.string().uuid().optional(),
+    subcategoryId: z.string().uuid().optional(),
+  })
+  .refine((v) => !v.subcategoryId || !!v.categoryId, {
+    message: "A subcategory ID requires its category ID",
+    path: ["categoryId"],
+  });
 export type CreateSalonServiceInput = z.infer<typeof createSalonServiceSchema>;
 
 // PATCH .../services/:serviceId — every field optional (partial update). `isActive: false` is the
@@ -876,7 +900,9 @@ export type UpdateSalonServiceInput = z.infer<typeof updateSalonServiceSchema>;
 export const serviceTaxonomyNodeInputSchema = z.object({
   name: z.string().trim().min(1).max(60),
 });
-export type ServiceTaxonomyNodeInput = z.infer<typeof serviceTaxonomyNodeInputSchema>;
+export type ServiceTaxonomyNodeInput = z.infer<
+  typeof serviceTaxonomyNodeInputSchema
+>;
 
 // "HH:mm", 24-hour. Matches exactly what OperatingHours.openTime/closeTime already store and what
 // AvailabilityService's istWallTimeToUtc parses — this is a validator for the existing format,
@@ -1148,7 +1174,7 @@ export type SubmitSalonLocationProposalInput = z.infer<
 >;
 
 export const decideSalonLocationProposalSchema = z.object({
-  decision: z.enum(['APPROVED', 'REJECTED']),
+  decision: z.enum(["APPROVED", "REJECTED"]),
   note: z.string().trim().min(3).max(500),
 });
 export type DecideSalonLocationProposalInput = z.infer<
@@ -1179,7 +1205,9 @@ export const salonContactImportPreviewSchema = z
       .max(250),
   })
   .strict();
-export type SalonContactImportPreviewInput = z.infer<typeof salonContactImportPreviewSchema>;
+export type SalonContactImportPreviewInput = z.infer<
+  typeof salonContactImportPreviewSchema
+>;
 
 // PATCH dashboard/salons/:salonId/status — owner self-activation. Deliberately restricted to
 // ACTIVE/SUSPENDED: an owner may open or pause their own shop, but cannot move it back to
@@ -1252,21 +1280,21 @@ export type RespondToReviewInput = z.infer<typeof respondToReviewSchema>;
 // fetched server-side in V1. Exact-host checks prevent lookalike domains and open redirects.
 const reviewProfileHosts = {
   google: new Set([
-    'g.page',
-    'maps.app.goo.gl',
-    'maps.google.com',
-    'google.com',
-    'www.google.com',
+    "g.page",
+    "maps.app.goo.gl",
+    "maps.google.com",
+    "google.com",
+    "www.google.com",
   ]),
   facebook: new Set([
-    'facebook.com',
-    'www.facebook.com',
-    'm.facebook.com',
-    'fb.com',
-    'www.fb.com',
-    'fb.me',
+    "facebook.com",
+    "www.facebook.com",
+    "m.facebook.com",
+    "fb.com",
+    "www.fb.com",
+    "fb.me",
   ]),
-  instagram: new Set(['instagram.com', 'www.instagram.com']),
+  instagram: new Set(["instagram.com", "www.instagram.com"]),
 } as const;
 
 export type ReviewProfileProvider = keyof typeof reviewProfileHosts;
@@ -1278,7 +1306,7 @@ export function isValidReviewProfileUrl(
   try {
     const url = new URL(value);
     if (
-      url.protocol !== 'https:' ||
+      url.protocol !== "https:" ||
       url.username ||
       url.password ||
       url.port ||
@@ -1290,8 +1318,8 @@ export function isValidReviewProfileUrl(
       return false;
     }
     if (
-      provider === 'google' &&
-      ['google.com', 'www.google.com'].includes(url.hostname.toLowerCase()) &&
+      provider === "google" &&
+      ["google.com", "www.google.com"].includes(url.hostname.toLowerCase()) &&
       !/^\/(maps|search)(\/|$)/i.test(url.pathname)
     ) {
       return false;
@@ -1310,7 +1338,7 @@ const reviewProfileUrlSchema = (provider: ReviewProfileProvider) =>
     .max(500)
     .url()
     .refine((value) => isValidReviewProfileUrl(provider, value), {
-      message: 'Use a secure HTTPS link for the matching provider.',
+      message: "Use a secure HTTPS link for the matching provider.",
     })
     .transform((value) => new URL(value).toString());
 
@@ -1318,13 +1346,13 @@ const reviewProfileUrlSchema = (provider: ReviewProfileProvider) =>
 // previously configured link. An empty object is rejected to avoid accidental no-op writes.
 export const updateReviewProfilesSchema = z
   .object({
-    googleUrl: reviewProfileUrlSchema('google').nullable().optional(),
-    facebookUrl: reviewProfileUrlSchema('facebook').nullable().optional(),
-    instagramUrl: reviewProfileUrlSchema('instagram').nullable().optional(),
+    googleUrl: reviewProfileUrlSchema("google").nullable().optional(),
+    facebookUrl: reviewProfileUrlSchema("facebook").nullable().optional(),
+    instagramUrl: reviewProfileUrlSchema("instagram").nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {
-    message: 'At least one review profile field is required.',
+    message: "At least one review profile field is required.",
   });
 export type UpdateReviewProfilesInput = z.infer<
   typeof updateReviewProfilesSchema
@@ -1404,12 +1432,22 @@ export type SiteVisitInput = z.infer<typeof siteVisitSchema>;
 // loaded by the backend after authorization; caller-supplied highlights are owner attestations.
 export const salonDescriptionSuggestionSchema = z
   .object({
-    language: z.enum(['en', 'hi']).default('en'),
-    tone: z.enum(['professional', 'friendly', 'premium']).default('professional'),
+    language: z.enum(["en", "hi"]).default("en"),
+    tone: z
+      .enum(["professional", "friendly", "premium"])
+      .default("professional"),
     ownerAttestedHighlights: z
-      .array(z.string().trim().min(1).max(SALON_DESCRIPTION_SUGGESTION_LIMITS.maxHighlightLength))
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(SALON_DESCRIPTION_SUGGESTION_LIMITS.maxHighlightLength),
+      )
       .max(SALON_DESCRIPTION_SUGGESTION_LIMITS.maxHighlights)
       .default([]),
   })
   .strict();
-export type SalonDescriptionSuggestionInput = z.infer<typeof salonDescriptionSuggestionSchema>;
+export type SalonDescriptionSuggestionInput = z.infer<
+  typeof salonDescriptionSuggestionSchema
+>;

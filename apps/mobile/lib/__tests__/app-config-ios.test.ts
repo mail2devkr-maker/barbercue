@@ -3,6 +3,7 @@
 type ExpoConfigFn = ((input: { config: Record<string, unknown> }) => Record<string, unknown>) & {
   googleIosUrlScheme: (clientId?: string) => string | null;
   withIosGoogleUrlScheme: (plugins: unknown[], iosUrlScheme: string) => unknown[];
+  withIosAppleSignIn: (config: Record<string, unknown>) => Record<string, unknown>;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -20,8 +21,9 @@ describe('FastQue iOS Expo config', () => {
   });
 
   it('derives the reversed URL scheme from a valid iOS client ID', () => {
-    expect(appConfig.googleIosUrlScheme('123456789012-test_client.apps.googleusercontent.com'))
-      .toBe('com.googleusercontent.apps.123456789012-test_client');
+    expect(appConfig.googleIosUrlScheme('123456789012-test_client.apps.googleusercontent.com')).toBe(
+      'com.googleusercontent.apps.123456789012-test_client',
+    );
   });
 
   it('rejects malformed client IDs rather than inventing a URL scheme', () => {
@@ -35,16 +37,34 @@ describe('FastQue iOS Expo config', () => {
     );
     expect(result).toEqual([
       'expo-secure-store',
-      ['react-native-nitro-google-signin', {
-        existingOption: true,
-        iosUrlScheme: 'com.googleusercontent.apps.123456789012-test',
-      }],
+      [
+        'react-native-nitro-google-signin',
+        {
+          existingOption: true,
+          iosUrlScheme: 'com.googleusercontent.apps.123456789012-test',
+        },
+      ],
     ]);
   });
 
   it('fails if the app no longer includes the required native sign-in plugin', () => {
-    expect(() => appConfig.withIosGoogleUrlScheme(['expo-secure-store'], 'scheme'))
-      .toThrow(/requires the react-native-nitro-google-signin config plugin/);
+    expect(() => appConfig.withIosGoogleUrlScheme(['expo-secure-store'], 'scheme')).toThrow(
+      /requires the react-native-nitro-google-signin config plugin/,
+    );
+  });
+
+  it('adds Apple authentication capability and plugin without changing Android config', () => {
+    const result = appConfig.withIosAppleSignIn({
+      ios: { bundleIdentifier: 'com.dcw.fastque' },
+      plugins: ['expo-secure-store'],
+      android: { package: 'com.dcw.fastque' },
+    });
+    expect(result.ios).toEqual({
+      bundleIdentifier: 'com.dcw.fastque',
+      usesAppleSignIn: true,
+    });
+    expect(result.plugins).toEqual(['expo-secure-store', 'expo-apple-authentication']);
+    expect(result.android).toEqual({ package: 'com.dcw.fastque' });
   });
 
   it('does not change native config when the iOS build gate is off', () => {
@@ -56,7 +76,8 @@ describe('FastQue iOS Expo config', () => {
   it('fails closed when an iOS build has no valid iOS OAuth client ID', () => {
     process.env.FASTQUE_IOS_BUILD = 'true';
     delete process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-    expect(() => appConfig({ config: { plugins: ['react-native-nitro-google-signin'] } }))
-      .toThrow(/EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID/);
+    expect(() => appConfig({ config: { plugins: ['react-native-nitro-google-signin'] } })).toThrow(
+      /EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID/,
+    );
   });
 });
