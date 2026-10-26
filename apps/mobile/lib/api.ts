@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { deleteItem, getItem, setItem } from './secure-storage';
 import { reportNetworkFailure, reportNetworkSuccess } from './network-status';
 import { getCurrentUiStrings } from './current-language';
+import { isPasswordChangeRequired, notifyPasswordChangeRequired } from './password-change-gate';
 
 // A release binary must never silently point at localhost when an EAS public variable is absent.
 // EAS environments still provide EXPO_PUBLIC_API_BASE_URL for preview/production builds; this
@@ -149,7 +150,10 @@ function parseApiPayload<T>(status: number, text: string): T {
     }
   }
   if (status < 200 || status >= 300) {
-    throw new ApiError(status, (body ?? {}) as ApiErrorBody);
+    const error = new ApiError(status, (body ?? {}) as ApiErrorBody);
+    // The account must replace an administrator-issued temporary password before anything else works.
+    if (isPasswordChangeRequired(status, error.code)) notifyPasswordChangeRequired();
+    throw error;
   }
   return body as T;
 }

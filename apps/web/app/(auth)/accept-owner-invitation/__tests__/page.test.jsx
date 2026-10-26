@@ -37,9 +37,16 @@ function install(preview = PREVIEW, accept = async () => ({ shopName: "Studio 25
   });
 }
 let replaceState;
+let listeners = {};
 async function mount() {
   replaceState = jest.fn();
-  global.window = { location: { hash: token ? `#t=${token}` : "", pathname: "/accept-owner-invitation" }, history: { replaceState } };
+  listeners = {};
+  global.window = {
+    location: { hash: token ? `#t=${token}` : "", pathname: "/accept-owner-invitation" },
+    history: { replaceState },
+    addEventListener: (name, fn) => { listeners[name] = fn; },
+    removeEventListener: (name) => { delete listeners[name]; },
+  };
   let r;
   await act(async () => { r = TestRenderer.create(<AcceptOwnerInvitationPage />); });
   await flush();
@@ -66,6 +73,18 @@ describe("accept owner invitation page (owner transfer)", () => {
     const r = await mount();
     expect(replaceState).toHaveBeenCalledWith(null, "", "/accept-owner-invitation");
     expect(JSON.stringify(r.toJSON())).not.toContain("a".repeat(64));
+  });
+
+  it("picks up a second invitation link opened in the same tab (fragment-only navigation)", async () => {
+    install();
+    const r = await mount();
+    expect(text(r)).toContain("Take over Studio 25 Salons");
+    install({ ...PREVIEW, shopName: "Glamourous looks studio" });
+    global.window.location.hash = `#t=${"b".repeat(64)}`;
+    await act(async () => { listeners.hashchange(); });
+    await flush();
+    expect(text(r)).toContain("Take over Glamourous looks studio");
+    expect(JSON.parse(calls[0].opts.body)).toEqual({ token: "b".repeat(64) });
   });
 
   it("ignores a malformed fragment and a query-string token (only #t=<64 hex> is accepted)", async () => {

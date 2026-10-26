@@ -39,6 +39,13 @@ export default function AcceptOwnerInvitationPage() {
   useEffect(() => {
     // Read after mount (a fragment does not exist during server rendering).
     void Promise.resolve().then(() => setToken(readInvitationToken()));
+    // Opening a second invitation link in a tab that already shows this page only changes the fragment; pick it up.
+    const onHashChange = () => {
+      setPhase({ kind: "loading" });
+      setToken(readInvitationToken());
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
 
   useEffect(() => {
