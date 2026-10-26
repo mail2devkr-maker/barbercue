@@ -13,7 +13,7 @@ import type {
 import { COUNTRY_PATHS, DISCOVERY_PATHS, PRICE_FILTER_PRESETS, formatPriceFilterLabel, validatePriceRange } from "@barbercue/shared";
 import { SERVICE_CATEGORIES } from "../../../lib/editorial/manifest";
 import { SalonCard } from "../../../components/discovery/SalonCard";
-import { ShopServiceSearchField } from "../../../components/discovery/ShopServiceSearchField";
+import { ShopNameSearchField } from "../../../components/discovery/ShopNameSearchField";
 import { CitySearchField } from "../../../components/salons/CitySearchField";
 import { Button } from "../../../components/ui/Button";
 import { apiFetch } from "../../../lib/api";
@@ -297,7 +297,7 @@ function PriceFilterDropdown({
 export default function SearchClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [q, setQ] = useState(searchParams.get("service") ?? "");
+  const [q, setQ] = useState(searchParams.get("shopName") ?? "");
   // Issue #13 Mission D: real city autocomplete needs a country to scope the search to (the
   // backend's cities/search endpoint is deliberately country-scoped — see CitySearchField's own
   // doc comment on why an unscoped ~100K-row global search isn't safe to ship). This product's
@@ -400,7 +400,7 @@ export default function SearchClient() {
         if (india) setDefaultCountryId(india.id);
       })
       .catch(() => {
-        /* City autocomplete just stays disabled — "Shop or service" search and Near Me still work */
+        /* City autocomplete stays disabled — shop-name search and Near Me still work */
       });
   }, []);
 
@@ -408,7 +408,7 @@ export default function SearchClient() {
     const params = new URLSearchParams();
     // city/countryCode already arrive as real slugs/codes here (from CitySearchField's own
     // selection, or a shared/bookmarked URL) — no client-side normalization needed or safe to do.
-    for (const key of ["q", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm", "priceMin", "priceMax"]) {
+    for (const key of ["q", "shopName", "city", "countryCode", "locality", "service", "lat", "lng", "radiusKm", "priceMin", "priceMax"]) {
       const value = searchParams.get(key);
       if (value) params.set(key, value);
     }
@@ -443,9 +443,13 @@ export default function SearchClient() {
 
   function handleSubmit(event?: React.FormEvent, explicitService?: string) {
     event?.preventDefault();
-    const params = new URLSearchParams();
-    const serviceQuery = (explicitService ?? q).trim();
-    if (serviceQuery) params.set("service", serviceQuery);
+    const params = new URLSearchParams(searchParams.toString());
+    const shopName = (explicitService ?? q).trim();
+    // The Shop input is name-only; preserve the separate Service, price and distance filters.
+    // A legacy homepage "q" query must not quietly AND with a new shop-name search.
+    params.delete("q");
+    if (shopName) params.set("shopName", shopName);
+    else params.delete("shopName");
     if (selectedCity) {
       params.set("city", selectedCity.slug);
       params.set("countryCode", selectedCity.countryCode);
@@ -487,11 +491,12 @@ export default function SearchClient() {
 
         <form className={styles.searchForm} onSubmit={handleSubmit} role="search">
           <div className={styles.field}>
-            <span id="search-q-label">Service</span>
-            <ShopServiceSearchField
+            <span id="search-q-label">Shop</span>
+            <ShopNameSearchField
               value={q}
               onChange={setQ}
-              onSubmit={(serviceName) => handleSubmit(undefined, serviceName)}
+              onSubmit={(shopName) => handleSubmit(undefined, shopName)}
+              labelledBy="search-q-label"
             />
           </div>
           <div className={styles.field}>
