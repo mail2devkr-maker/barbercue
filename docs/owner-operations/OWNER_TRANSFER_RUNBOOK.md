@@ -43,8 +43,18 @@ Targets (from issue #314, to be re-confirmed by the owner before execution):
 
 An invitation lasts 72 hours. After it expires the administrator re-sends it on the same transfer with a written reason
 that the recipient was re-confirmed. At most 3 invitations per transfer, at least 10 minutes apart; each new invitation
-kills the previous link. Beyond that, cancel and verify again. If the e-mail transport fails, the transfer is restored to
-its previous state so no usable token is lost or left dangling.
+kills the previous link. Beyond that, cancel and verify again. If the e-mail transport fails or its outcome is uncertain
+(a timeout may still have delivered the message), the link is **invalidated at once** and the attempt still counts; the
+administrator sends a fresh one after the ten-minute spacing. At most one link is ever live, a cancelled transfer can never
+be resurrected by a late failure, and two simultaneous invitations or acceptances produce exactly one winner.
+
+### How the link is protected
+
+The token travels in the URL **fragment** (`/accept-owner-invitation#t=...`), which browsers never send to a server, so it is
+absent from access logs, proxies, analytics and Referer headers. The page reads it once and removes it from the address
+bar and history; the API receives it only in a POST body (inspect and accept are POST). The invitation and password pages
+are served with `Referrer-Policy: no-referrer`, `Cache-Control: no-store` and `noindex`. Only the SHA-256 of the token is
+stored, and it is never returned to or shown to an administrator.
 
 ### Reversal
 
@@ -57,8 +67,9 @@ new owner never hold the shop at the same time, and the former account loses it 
 Separately from the transfer, an account flagged `passwordChangeRequired` (temporary password, optional expiry) can do
 nothing except `GET /auth/me`, `POST /auth/logout-all` and `POST /auth/password/change-required`; every other route
 answers 403 `PASSWORD_CHANGE_REQUIRED` from the backend. The web redirects to `/change-password-required`, where the
-person enters the temporary password and chooses their own; the change revokes all sessions. The Android app shows the
-server's message (it must be completed on the website); a native change screen is not built.
+person enters the temporary password and chooses their own; the change revokes all sessions. The Android app shows a notice with a
+button that opens the website change-password page (a browser handoff; no password is handled in the app) and a sign-out
+button. A native change screen is not built, and physical-device behaviour is not verified.
 
 ## What the tests prove (disposable PostgreSQL)
 
@@ -102,7 +113,9 @@ GET  /api/v1/admin/salons/{salonId}/owner-transfers
 ```
 
 The recipient opens the emailed link (`/accept-owner-invitation?token=...`), chooses a password, and signs in at the owner
-login. There is no administrator web screen for these calls yet; they are API calls from an administrator session.
+login. The same actions are available in the **Platform Admin CRM -> Owner transfers** screen (`/dashboard/admin/owner-transfers`):
+search a shop, see its current owner account, prepare (destination typed twice), record evidence, verify, send or re-send
+the invitation, cancel, and read each transfer's status and audit history. The screen shows no token or password.
 
 ## Verification after each transfer (read-only)
 
@@ -123,7 +136,7 @@ login. There is no administrator web screen for these calls yet; they are API ca
 * Confirm the legally authorized person and the e-mail address for each shop (issue #314 asks for this before any change).
 * Supply an administrator who can verify (a second administrator is strongly recommended) and collect the evidence.
 * Authorize the migration release; bind the e-mail provider if not already bound.
-* No administrator web UI for the transfer; no native Android change-password screen (the server message directs the user
-  to the website). Physical Android and real e-mail delivery are not verified.
+* No native Android change-password screen (browser handoff only). Physical Android and real e-mail delivery are not
+  verified. See `OWNER_TRANSFER_RELEASE_CHECKLIST.md` for every release gate.
 * Access tokens signed before a transfer can live up to 15 minutes, but owner routes check the database role on every
   request, so the former account is denied immediately.
