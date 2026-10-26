@@ -245,6 +245,29 @@ describe('SalonsService', () => {
       expect(where.city).toEqual({ slug: 'bengaluru' });
     });
 
+    it('searches shop names case-insensitively without matching services or descriptions', async () => {
+      prisma.salon.findMany.mockResolvedValue([]);
+      await service.search({ shopName: 'Studio', limit: 8 });
+      const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+        where: { status: string; name?: unknown; OR?: unknown; services?: unknown };
+      };
+      expect(where.status).toBe('ACTIVE');
+      expect(where.name).toEqual({ contains: 'Studio', mode: 'insensitive' });
+      expect(where.OR).toBeUndefined();
+      expect(where.services).toBeUndefined();
+    });
+
+    it('combines shop-name and service filters without broadening the name match', async () => {
+      prisma.salon.findMany.mockResolvedValue([]);
+      await service.search({ shopName: 'Glamourous', service: 'haircut', city: 'patna' });
+      const { where } = prisma.salon.findMany.mock.calls[0][0] as {
+        where: { name?: unknown; services?: unknown; city?: unknown };
+      };
+      expect(where.name).toEqual({ contains: 'Glamourous', mode: 'insensitive' });
+      expect(where.city).toEqual({ slug: 'patna' });
+      expect(where.services).toMatchObject({ some: { isActive: true } });
+    });
+
     // Issue #13 Mission D: the "Shop or service" field previously only matched salon
     // name/description, so typing a real service name (e.g. "beard") for a shop that genuinely
     // offers it returned zero results.

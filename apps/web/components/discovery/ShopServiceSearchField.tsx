@@ -165,7 +165,7 @@ export function ShopServiceSearchField({
                   cursor: "pointer",
                 }}
               >
-                <span style={{ fontSize: 15, fontWeight: 600 }}>{service.name}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "var(--bc-ink)" }}>{service.name}</span>
                 {service.category && (
                   <span style={{ fontSize: 13, color: "var(--bc-muted)", display: "block" }}>
                     {service.category}

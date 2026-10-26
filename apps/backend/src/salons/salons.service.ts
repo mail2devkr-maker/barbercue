@@ -170,6 +170,11 @@ export class SalonsService {
         : { slug: query.city };
     }
     if (query.locality) where.locality = { slug: query.locality };
+    // The visible /search Shop field must match SHOP NAMES only, never service or description.
+    // Keep the legacy q and service filters unchanged for existing links and other clients.
+    if (query.shopName) {
+      where.name = { contains: query.shopName, mode: 'insensitive' };
+    }
 
     // Part 8/9 correction: a price filter must be satisfied by the SAME service that matched the
     // text search, never any unrelated service the salon happens to also offer. Searching "Haircut"
