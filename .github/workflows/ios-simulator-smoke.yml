@@ -20,6 +20,9 @@ jobs:
       CI: "1"
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_API_BASE_URL: https://barbercuebackend-production.up.railway.app/api/v1
+      FASTQUE_IOS_BUILD: "true"
+      # Synthetic OAuth config exercises native URL-scheme generation only; it cannot authenticate.
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 123456789012-test_client.apps.googleusercontent.com
 
     steps:
       - name: Checkout candidate
