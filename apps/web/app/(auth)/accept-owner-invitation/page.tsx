@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { ApiError, apiFetch } from "../../../lib/api";
 import { AuthCard, AuthPageFallback } from "../../../components/auth/AuthCard";
+import { readInvitationToken } from "../../../lib/invitation-token";
 import authStyles from "../../../components/auth/customer-auth.module.css";
 
 interface InvitationPreview {
@@ -25,8 +25,10 @@ type Phase =
  * inbox; nothing changes until the person confirms here. A new address chooses its own password on this page - nobody
  * else ever sees it. An address that already has a verified FastQue account just confirms and keeps its password.
  */
-function AcceptOwnerInvitation() {
-  const token = useSearchParams().get("token") ?? "";
+export default function AcceptOwnerInvitationPage() {
+  // The token lives in the URL fragment, so it never reaches a server log or a Referer header. It is read once, held in
+  // memory only, and removed from the address bar and history straight away.
+  const [token, setToken] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -35,8 +37,14 @@ function AcceptOwnerInvitation() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    // Read after mount (a fragment does not exist during server rendering).
+    void Promise.resolve().then(() => setToken(readInvitationToken()));
+  }, []);
+
+  useEffect(() => {
     let active = true;
-    if (!token) {
+    if (token === null) return () => { active = false; };
+    if (token === "") {
       void Promise.resolve().then(() => {
         if (active) setPhase({ kind: "invalid", message: "This invitation link is incomplete. Open the link from the e-mail again." });
       });
@@ -44,7 +52,7 @@ function AcceptOwnerInvitation() {
     }
     void Promise.resolve().then(async () => {
       try {
-        const preview = await apiFetch<InvitationPreview>(`auth/owner-invitations?token=${encodeURIComponent(token)}`);
+        const preview = await apiFetch<InvitationPreview>("auth/owner-invitations/inspect", { method: "POST", body: JSON.stringify({ token }) });
         if (active) setPhase({ kind: "ready", preview });
       } catch (err) {
         if (active) setPhase({ kind: "invalid", message: err instanceof ApiError ? err.message : "This invitation could not be checked. Try again." });
@@ -132,13 +140,5 @@ function AcceptOwnerInvitation() {
         </button>
       </form>
     </AuthCard>
-  );
-}
-
-export default function AcceptOwnerInvitationPage() {
-  return (
-    <Suspense fallback={<AuthPageFallback audience="recovery" />}>
-      <AcceptOwnerInvitation />
-    </Suspense>
   );
 }

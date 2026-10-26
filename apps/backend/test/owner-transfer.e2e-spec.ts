@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { INestApplication } from '@nestjs/common';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types';
@@ -38,6 +39,7 @@ describeDisposable(
     const auth: Record<string, string> = {};
     const sent: Array<{ email: string; url: string }> = [];
     let failNextSend = false;
+    let holdNextSend: { release: Promise<void>; fail: boolean; started: () => void } | null = null;
     const emails = {
       studio: `studio25-${run}@example.test`,
       glam: `glamorous-${run}@example.test`,
@@ -170,6 +172,8 @@ describeDisposable(
       api('post', `admin/owner-transfers/${id}/verify`, token, body);
     const invite = (id: string, body: object = {}, token = auth.admin1) =>
       api('post', `admin/owner-transfers/${id}/invite`, token, body);
+    const inspect = (token: string) =>
+      api('post', 'auth/owner-invitations/inspect', undefined, { token });
     const accept = (token: string, password?: string) =>
       api('post', 'auth/owner-invitations/accept', undefined, {
         token,
@@ -177,7 +181,8 @@ describeDisposable(
       });
     const lastToken = () => {
       const url = new URL(sent[sent.length - 1].url);
-      return url.searchParams.get('token') as string;
+      expect(url.search).toBe(''); // never in the query string
+      return url.hash.replace(/^#t=/, '');
     };
     const EVIDENCE = {
       evidence: ['GOVERNMENT_ID', 'BUSINESS_OR_SHOP_PROOF', 'REGISTERED_PHONE_CALLBACK'],
@@ -191,6 +196,17 @@ describeDisposable(
       const moduleFixture: TestingModule = await Test.createTestingModule({
         imports: [AppModule],
       })
+        // The suite makes far more public calls than a person would; the real limiter has its own test below.
+        .overrideProvider(ThrottlerStorage)
+        .useValue({
+          increment: () =>
+            Promise.resolve({
+              totalHits: 1,
+              timeToExpire: 60,
+              isBlocked: false,
+              timeToBlockExpire: 0,
+            }),
+        })
         .overrideProvider(EMAIL_SENDER)
         .useValue({
           assertAvailable: () => undefined,
@@ -200,6 +216,13 @@ describeDisposable(
             if (failNextSend) {
               failNextSend = false;
               throw new Error('transport down');
+            }
+            if (holdNextSend) {
+              const hold = holdNextSend;
+              holdNextSend = null;
+              hold.started();
+              await hold.release;
+              if (hold.fail) throw new Error('provider timed out');
             }
             sent.push({ email, url });
           },
@@ -307,15 +330,15 @@ describeDisposable(
     let studioNewOwner = '';
     it('the recipient previews the invitation and accepts it; only then does ownership move', async () => {
       const token = lastToken();
-      const preview = await api('get', `auth/owner-invitations?token=${token}`);
+      const preview = await inspect(token);
       expect(preview.status).toBe(200);
       expect(preview.body).toMatchObject({
         shopName: `Transfer Studio ${run}`,
         email: emails.studio,
         needsPassword: true,
       });
-      expect((await api('get', `auth/owner-invitations?token=${'0'.repeat(64)}`)).status).toBe(400);
-      expect((await api('get', 'auth/owner-invitations?token=nope')).status).toBe(400);
+      expect((await inspect('0'.repeat(64))).status).toBe(400);
+      expect((await inspect('nope')).status).toBe(400);
 
       expect((await accept(token)).status).toBe(400); // password required for a new account
       expect((await accept(token, 'short')).status).toBe(400);
@@ -349,7 +372,7 @@ describeDisposable(
     it('the link works once, nothing secret is stored or audited, and the other shop is untouched', async () => {
       const used = lastToken();
       expect((await accept(used, NEW_PASSWORD)).status).toBe(400);
-      expect((await api('get', `auth/owner-invitations?token=${used}`)).status).toBe(400);
+      expect((await inspect(used)).status).toBe(400);
       const transfer = await prisma.salonOwnerTransfer.findUniqueOrThrow({ where: { id: studioTransfer } });
       expect(transfer.status).toBe('COMPLETED');
       expect(transfer.invitationTokenHash).toBeNull();
@@ -402,7 +425,7 @@ describeDisposable(
         });
       await expire();
       expect((await accept(first, NEW_PASSWORD)).status).toBe(400);
-      expect((await api('get', `auth/owner-invitations?token=${first}`)).status).toBe(400);
+      expect((await inspect(first)).status).toBe(400);
       expect((await invite(ids.glamTransfer)).status).toBe(422); // a written reason is required
 
       await prisma.salonOwnerTransfer.update({
@@ -416,26 +439,33 @@ describeDisposable(
 
       failNextSend = true;
       const failed = await invite(ids.glamTransfer, { reference: 'recipient re-confirmed by phone' });
-      expect(failed.status).toBe(500);
+      expect(failed.status).toBe(502);
       const afterFailure = await prisma.salonOwnerTransfer.findUniqueOrThrow({ where: { id: ids.glamTransfer } });
-      expect(afterFailure.invitationCount).toBe(1); // rolled back: nobody holds a token for it
+      // uncertain delivery: the attempt counts and its link is dead, whether or not the message arrived
+      expect(afterFailure.invitationCount).toBe(2);
       expect(afterFailure.status).toBe('INVITED');
+      expect(afterFailure.invitationTokenHash).toBeNull();
+      expect(failed.body.error.code).toBe('OWNER_INVITATION_DELIVERY_FAILED');
+      await prisma.salonOwnerTransfer.update({
+        where: { id: ids.glamTransfer },
+        data: { lastInvitedAt: new Date(Date.now() - 20 * 60_000) },
+      });
 
       const again = await invite(ids.glamTransfer, { reference: 'recipient re-confirmed by phone' });
       expect(again.status).toBe(201);
-      expect(again.body.invitationCount).toBe(2);
+      expect(again.body.invitationCount).toBe(3);
       const second = lastToken();
       expect(second).not.toBe(first);
       expect((await accept(first, NEW_PASSWORD)).status).toBe(400); // the older link is dead
 
-      await expire({ invitationCount: 3 });
+      await expire();
       const capped = await invite(ids.glamTransfer, { reference: 'recipient re-confirmed by phone' });
       expect(capped.status).toBe(429);
       expect(capped.body.error.code).toBe('OWNER_TRANSFER_INVITATION_LIMIT');
       // an administrator can still finish by re-confirming, within the limit
       await prisma.salonOwnerTransfer.update({
         where: { id: ids.glamTransfer },
-        data: { invitationCount: 2, invitationExpiresAt: new Date(Date.now() + 3_600_000) },
+        data: { invitationExpiresAt: new Date(Date.now() + 3_600_000) },
       });
       expect((await accept(second, NEW_PASSWORD)).status).toBe(200);
       expect((await salonRow('Glam')).ownerUserId).not.toBe(ids.shared);
@@ -452,7 +482,7 @@ describeDisposable(
       expect((await verify(t.body.id, EVIDENCE)).status).toBe(201);
       expect((await invite(t.body.id)).status).toBe(201);
       const token = lastToken();
-      expect((await api('get', `auth/owner-invitations?token=${token}`)).body.needsPassword).toBe(false);
+      expect((await inspect(token)).body.needsPassword).toBe(false);
       const passwordBefore = (await prisma.user.findUniqueOrThrow({ where: { id: ids.shared } })).passwordHash;
       expect((await accept(token)).status).toBe(200);
 
@@ -572,6 +602,145 @@ describeDisposable(
       expect(
         (await api('post', 'auth/staff/login', undefined, { email: flagged.email, password: 'A-brand-new-Passw0rd' })).status,
       ).toBe(401); // an expired temporary state cannot sign in
+    });
+
+    async function verifiedTransfer(label: string) {
+      const owner = await makeUser(`${label}Owner`, null, SessionAudience.STAFF);
+      await makeShop(label, owner.id, SalonStatus.ACTIVE, null);
+      const t = await prepare(label, `${label.toLowerCase()}-${run}@example.test`);
+      expect(t.status).toBe(201);
+      expect((await verify(t.body.id, EVIDENCE)).status).toBe(201);
+      return { id: t.body.id as string, email: `${label.toLowerCase()}-${run}@example.test`, owner: owner.id };
+    }
+
+    it('two simultaneous acceptances of one link: exactly one wins, one owner role, one account', async () => {
+      const t = await verifiedTransfer('Race');
+      expect((await invite(t.id)).status).toBe(201);
+      const token = lastToken();
+      const results = await Promise.all([accept(token, NEW_PASSWORD), accept(token, NEW_PASSWORD)]);
+      expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
+      expect(await prisma.user.count({ where: { email: t.email } })).toBe(1);
+      expect(await prisma.userRole.count({ where: { salonId: ids.RaceSalon } })).toBe(1);
+      expect((await salonRow('Race')).ownerUserId).not.toBe(t.owner);
+    });
+
+    it('two simultaneous first invitations send exactly one e-mail and one live link', async () => {
+      const t = await verifiedTransfer('Race2');
+      const before = sent.length;
+      const results = await Promise.all([invite(t.id), invite(t.id)]);
+      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+      expect(sent.length - before).toBe(1);
+      const row = await prisma.salonOwnerTransfer.findUniqueOrThrow({ where: { id: t.id } });
+      expect(row.invitationCount).toBe(1);
+      expect((await accept(lastToken(), NEW_PASSWORD)).status).toBe(200);
+    });
+
+    it('a resend racing a cancel never leaves a usable link behind', async () => {
+      for (const label of ['Race3', 'Race4', 'Race5']) {
+        const t = await verifiedTransfer(label);
+        expect((await invite(t.id)).status).toBe(201);
+        const first = lastToken();
+        await prisma.salonOwnerTransfer.update({
+          where: { id: t.id },
+          data: {
+            invitationExpiresAt: new Date(Date.now() - 1000),
+            lastInvitedAt: new Date(Date.now() - 20 * 60_000),
+          },
+        });
+        const before = sent.length;
+        const [reinvite, cancel] = await Promise.all([
+          invite(t.id, { reference: 'recipient re-confirmed by phone' }),
+          api('post', `admin/owner-transfers/${t.id}/cancel`, auth.admin1),
+        ]);
+        const row = await prisma.salonOwnerTransfer.findUniqueOrThrow({ where: { id: t.id } });
+        expect([201, 409]).toContain(reinvite.status);
+        expect([201, 404]).toContain(cancel.status);
+        if (row.status === 'CANCELLED') {
+          expect(row.invitationTokenHash).toBeNull();
+          expect(row.openSlot).toBeNull();
+          if (sent.length > before) expect((await accept(lastToken(), NEW_PASSWORD)).status).toBe(400);
+          expect((await salonRow(label)).ownerUserId).toBe(t.owner);
+        } else {
+          expect(row.status).toBe('INVITED');
+          expect(cancel.status).toBe(404);
+        }
+        expect((await accept(first, NEW_PASSWORD)).status).toBe(400); // the earlier link is dead either way
+      }
+    });
+
+    it('an uncertain e-mail outcome invalidates the link, keeps the attempt count, and cannot resurrect a cancelled transfer', async () => {
+      const t = await verifiedTransfer('Race6');
+      failNextSend = true;
+      const failed = await invite(t.id);
+      expect(failed.status).toBe(502);
+      expect(failed.body.error.code).toBe('OWNER_INVITATION_DELIVERY_FAILED');
+      let row = await prisma.salonOwnerTransfer.findUniqueOrThrow({ where: { id: t.id } });
+      expect([row.status, row.invitationCount, row.invitationTokenHash]).toEqual(['INVITED', 1, null]);
+      expect(row.invitationExpiresAt!.getTime()).toBeLessThanOrEqual(Date.now());
+      const soon = await invite(t.id, { reference: 'recipient re-confirmed by phone' });
+      expect(soon.status).toBe(429);
+      expect(soon.body.error.code).toBe('OWNER_TRANSFER_TOO_SOON');
+      await prisma.salonOwnerTransfer.update({
+        where: { id: t.id },
+        data: { lastInvitedAt: new Date(Date.now() - 20 * 60_000) },
+      });
+      expect((await invite(t.id, { reference: 'recipient re-confirmed by phone' })).status).toBe(201);
+
+      // cancel arrives while the provider call is still in flight, then the provider times out
+      const u = await verifiedTransfer('Race7');
+      let started!: () => void;
+      const startedPromise = new Promise<void>((resolve) => { started = resolve; });
+      let release!: () => void;
+      holdNextSend = { release: new Promise<void>((resolve) => { release = resolve; }), fail: true, started };
+      // supertest requests are lazy; .then() is what actually sends this one
+      const pending = invite(u.id).then((res) => res);
+      await startedPromise;
+      expect((await api('post', `admin/owner-transfers/${u.id}/cancel`, auth.admin1)).status).toBe(201);
+      release();
+      expect((await pending).status).toBe(502);
+      row = await prisma.salonOwnerTransfer.findUniqueOrThrow({ where: { id: u.id } });
+      expect(row.status).toBe('CANCELLED');
+      expect(row.openSlot).toBeNull();
+      expect(row.invitationTokenHash).toBeNull();
+    });
+
+    it('a delivered invitation cannot be accepted after the same transfer was re-invited (duplicate delivery)', async () => {
+      const t = await verifiedTransfer('Race8');
+      expect((await invite(t.id)).status).toBe(201);
+      const first = lastToken();
+      await prisma.salonOwnerTransfer.update({
+        where: { id: t.id },
+        data: { invitationExpiresAt: new Date(Date.now() - 1000), lastInvitedAt: new Date(Date.now() - 20 * 60_000) },
+      });
+      expect((await invite(t.id, { reference: 'recipient re-confirmed by phone' })).status).toBe(201);
+      const second = lastToken();
+      expect((await inspect(first)).status).toBe(400);
+      expect((await accept(first, NEW_PASSWORD)).status).toBe(400);
+      expect((await accept(second, NEW_PASSWORD)).status).toBe(200);
+    });
+
+    it('the public invitation endpoints are rate limited (real limiter)', async () => {
+      const real = await Test.createTestingModule({ imports: [AppModule] })
+        .overrideProvider(EMAIL_SENDER)
+        .useValue({ assertAvailable: () => undefined, sendOwnerTransferInvitation: async () => undefined })
+        .compile();
+      const limited = real.createNestApplication<INestApplication<App>>();
+      limited.setGlobalPrefix('api/v1');
+      limited.useGlobalFilters(new AllExceptionsFilter());
+      await limited.init();
+      try {
+        const codes: number[] = [];
+        for (let i = 0; i < 12; i += 1) {
+          const res = await request(limited.getHttpServer())
+            .post('/api/v1/auth/owner-invitations/inspect')
+            .send({ token: '0'.repeat(64) });
+          codes.push(res.status);
+        }
+        expect(codes.slice(0, 10).every((c) => c === 400)).toBe(true);
+        expect(codes.slice(10)).toEqual([429, 429]);
+      } finally {
+        await limited.close();
+      }
     });
 
     it('the database itself refuses inconsistent transfer rows', async () => {

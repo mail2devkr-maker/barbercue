@@ -5,7 +5,6 @@ import { apiFetch } from "../../../../lib/api";
 
 let token = "a".repeat(64);
 jest.mock("next/link", () => ({ __esModule: true, default: ({ children, href, ...rest }) => <a href={href} {...rest}>{children}</a> }));
-jest.mock("next/navigation", () => ({ useSearchParams: () => ({ get: () => token }) }));
 jest.mock("../../../../components/auth/AuthCard", () => ({
   AuthCard: ({ title, subtitle, children }) => <div><h1>{title}</h1><p>{subtitle}</p>{children}</div>,
   AuthPageFallback: () => <div>fallback</div>,
@@ -29,7 +28,7 @@ function install(preview = PREVIEW, accept = async () => ({ shopName: "Studio 25
   calls = [];
   apiFetch.mockImplementation(async (path, opts) => {
     calls.push({ path, opts });
-    if (path.startsWith("auth/owner-invitations?token=")) {
+    if (path === "auth/owner-invitations/inspect") {
       if (preview instanceof Error) throw preview;
       return preview;
     }
@@ -37,13 +36,17 @@ function install(preview = PREVIEW, accept = async () => ({ shopName: "Studio 25
     throw new Error(`unexpected ${path}`);
   });
 }
+let replaceState;
 async function mount() {
+  replaceState = jest.fn();
+  global.window = { location: { hash: token ? `#t=${token}` : "", pathname: "/accept-owner-invitation" }, history: { replaceState } };
   let r;
   await act(async () => { r = TestRenderer.create(<AcceptOwnerInvitationPage />); });
   await flush();
   return r;
 }
 beforeEach(() => { globalThis.IS_REACT_ACT_ENVIRONMENT = true; jest.clearAllMocks(); token = "a".repeat(64); });
+afterEach(() => { delete global.window; });
 
 describe("accept owner invitation page (owner transfer)", () => {
   it("shows the shop and asks a new address to choose a password; nothing is sent until they confirm", async () => {
@@ -52,7 +55,26 @@ describe("accept owner invitation page (owner transfer)", () => {
     expect(text(r)).toContain("Take over Studio 25 Salons");
     expect(text(r)).toContain("owner@example.test");
     expect(byId(r, "invite-password")).toBeTruthy();
-    expect(calls.map((c) => c.path)).toEqual([`auth/owner-invitations?token=${"a".repeat(64)}`]);
+    expect(calls.map((c) => c.path)).toEqual(["auth/owner-invitations/inspect"]);
+    // the token travels in a POST body, never in a request URL
+    expect(JSON.parse(calls[0].opts.body)).toEqual({ token: "a".repeat(64) });
+    expect(calls.every((c) => !c.path.includes("a".repeat(64)))).toBe(true);
+  });
+
+  it("removes the token from the address bar and history as soon as it is read, and never renders it", async () => {
+    install();
+    const r = await mount();
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/accept-owner-invitation");
+    expect(JSON.stringify(r.toJSON())).not.toContain("a".repeat(64));
+  });
+
+  it("ignores a malformed fragment and a query-string token (only #t=<64 hex> is accepted)", async () => {
+    install();
+    token = "short";
+    const r = await mount();
+    expect(text(r)).toContain("incomplete");
+    expect(calls).toHaveLength(0);
+    expect(replaceState).toHaveBeenCalled();
   });
 
   it("checks the two passwords before sending anything", async () => {

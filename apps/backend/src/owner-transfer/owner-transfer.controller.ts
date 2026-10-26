@@ -7,7 +7,6 @@ import {
   HttpStatus,
   Param,
   Post,
-  Query,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Role, type AuthenticatedUser } from '@barbercue/shared';
@@ -18,10 +17,12 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import {
   OwnerTransferService,
   acceptOwnerInvitationSchema,
+  inspectOwnerInvitationSchema,
   inviteOwnerTransferSchema,
   prepareOwnerTransferSchema,
   verifyOwnerTransferSchema,
   type AcceptOwnerInvitationInput,
+  type InspectOwnerInvitationInput,
   type InviteOwnerTransferInput,
   type PrepareOwnerTransferInput,
   type VerifyOwnerTransferInput,
@@ -86,12 +87,17 @@ const INVITATION_THROTTLE = { default: { limit: 10, ttl: 60_000 } };
 export class OwnerInvitationController {
   constructor(private readonly transfers: OwnerTransferService) {}
 
+  /** POST, not GET: the token must never appear in a request URL (access logs, proxies, history). */
   @Public()
   @Throttle(INVITATION_THROTTLE)
-  @Get()
+  @Post('inspect')
+  @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  inspect(@Query('token') token: string) {
-    return this.transfers.inspectInvitation(token ?? '');
+  inspect(
+    @Body(new ZodValidationPipe(inspectOwnerInvitationSchema))
+    body: InspectOwnerInvitationInput,
+  ) {
+    return this.transfers.inspectInvitation(body.token);
   }
 
   @Public()

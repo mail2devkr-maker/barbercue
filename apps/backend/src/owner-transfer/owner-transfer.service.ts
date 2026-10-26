@@ -48,6 +48,13 @@ export type InviteOwnerTransferInput = z.infer<
   typeof inviteOwnerTransferSchema
 >;
 
+export const inspectOwnerInvitationSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type InspectOwnerInvitationInput = z.infer<
+  typeof inspectOwnerInvitationSchema
+>;
+
 export const acceptOwnerInvitationSchema = z.object({
   token: z.string().regex(/^[a-f0-9]{64}$/),
   // Required only when the destination e-mail has no FastQue account yet; the owner chooses it, nobody else ever sees it.
@@ -517,8 +524,10 @@ export class OwnerTransferService {
       });
     });
 
+    // The token rides in the URL fragment: browsers never send a fragment to a server, so it cannot reach access logs,
+    // proxies, analytics or a Referer header. The page reads it, then removes it from the address bar.
     const url = new URL('/accept-owner-invitation', webBase);
-    url.searchParams.set('token', token);
+    url.hash = `t=${token}`;
     try {
       await this.emailSender.sendOwnerTransferInvitation(
         transfer.newEmail,
@@ -526,18 +535,25 @@ export class OwnerTransferService {
         INVITATION_TTL_HOURS,
       );
     } catch (error) {
-      // The message never left, so nobody holds the token: put the transfer back exactly as it was.
+      // The provider's answer is uncertain: the message may or may not have been delivered. Either way this token must
+      // never become usable by accident, so it is invalidated at once (and the attempt still counts toward the limit).
+      // The administrator can send a fresh invitation after the ten-minute spacing; at most one link is ever live.
+      // The update is guarded by the exact token and the INVITED state, so a transfer that was cancelled or re-invited in
+      // the meantime is never touched.
       await this.prisma.salonOwnerTransfer.updateMany({
-        where: { id: transferId, invitationCount: claimed.invitationCount },
-        data: {
-          status: transfer.status,
-          invitationTokenHash: transfer.invitationTokenHash,
-          invitationExpiresAt: transfer.invitationExpiresAt,
-          invitationCount: transfer.invitationCount,
-          lastInvitedAt: transfer.lastInvitedAt,
+        where: {
+          id: transferId,
+          status: OwnerTransferStatus.INVITED,
+          invitationTokenHash: hashInvitationToken(token),
         },
+        data: { invitationExpiresAt: new Date(), invitationTokenHash: null },
       });
-      throw error;
+      if (error instanceof AppException) throw error;
+      this.fail(
+        'OWNER_INVITATION_DELIVERY_FAILED',
+        'The invitation e-mail could not be confirmed as sent, so its link was cancelled. Wait ten minutes, then send it again with a written reason.',
+        HttpStatus.BAD_GATEWAY,
+      );
     }
     return this.toDto(claimed);
   }

@@ -37,6 +37,19 @@ const nextConfig: NextConfig = {
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
+  // Pages that handle one-time secrets (invitation token in the URL fragment, temporary-password change): never cached, never
+  // sent as a Referer, never indexed.
+  async headers() {
+    const sensitive = [
+      { key: "Referrer-Policy", value: "no-referrer" },
+      { key: "Cache-Control", value: "no-store, max-age=0" },
+      { key: "X-Robots-Tag", value: "noindex, nofollow" },
+    ];
+    return [
+      { source: "/accept-owner-invitation", headers: sensitive },
+      { source: "/change-password-required", headers: sensitive },
+    ];
+  },
   async rewrites() {
     return [
       {
