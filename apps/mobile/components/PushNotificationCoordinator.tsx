@@ -11,7 +11,7 @@ import {
   ARRIVAL_ACTION_ARRIVED,
   ARRIVAL_ACTION_NOT_ARRIVED,
   isPushEligibleUser,
-  registerPushDeviceForUser,
+  registerPushDeviceAtAuthentication,
   reregisterRefreshedPushToken,
 } from '../lib/push-notifications';
 import {
@@ -211,7 +211,7 @@ export function PushNotificationCoordinator() {
 
   useEffect(() => {
     if (status !== 'authenticated' || !isPushEligibleUser(user)) return;
-    void registerPushDeviceForUser(user);
+    void registerPushDeviceAtAuthentication(user);
 
     const deferredResponse = deferredResponseRef.current;
     if (deferredResponse && (handleOwnerBookingResponse(deferredResponse, user) || handleCustomerBookingResponse(deferredResponse, user))) {

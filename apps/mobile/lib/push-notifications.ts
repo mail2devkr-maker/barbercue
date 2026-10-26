@@ -6,6 +6,8 @@ import { apiFetch } from './api';
 import { deleteItem, getItem, setItem } from './secure-storage';
 
 const PUSH_DEVICE_STORAGE_KEY = 'barbercue_expo_push_device';
+/** Remembers, per account, that the customer was already asked for notification permission after a booking. */
+export const CUSTOMER_PUSH_PROMPTED_KEY = 'fastque_customer_push_prompted_v1';
 export const ANDROID_BOOKING_CHANNEL_ID = 'booking-updates';
 export const ARRIVAL_CHECK_CATEGORY_ID = 'booking_arrival_check';
 export const ARRIVAL_ACTION_ARRIVED = 'ARRIVED';
@@ -19,6 +21,15 @@ export function isPushEligibleUser(user: MeResponse | null): user is MeResponse 
   return Boolean(user?.roles.some((role) =>
     role === Role.CUSTOMER || role === Role.SALON_OWNER || role === Role.SALON_STAFF,
   ));
+}
+
+/**
+ * Owners and staff need arrival alerts and new-booking notices from the first session, so they are
+ * asked at the authenticated entry point. A customer who is only a customer is NOT asked at login:
+ * the request is made in context, right after their first booking (requestCustomerPushAfterBooking).
+ */
+export function shouldPromptForPushAtAuthentication(user: MeResponse | null): boolean {
+  return Boolean(user?.roles.some((role) => role === Role.SALON_OWNER || role === Role.SALON_STAFF));
 }
 
 function isNativePlatform(): boolean {
@@ -83,9 +94,11 @@ export async function ensureArrivalCheckNotificationCategory(language: Language 
   );
 }
 
-async function getGrantedPermission(): Promise<boolean> {
+async function getGrantedPermission(allowPrompt: boolean): Promise<boolean> {
   const existing = await Notifications.getPermissionsAsync();
   if (existing.granted) return true;
+  // Never show the system prompt unless the caller has an appropriate moment for it.
+  if (!allowPrompt) return false;
   const requested = await Notifications.requestPermissionsAsync();
   return requested.granted;
 }
@@ -113,7 +126,11 @@ async function registerExpoPushToken(user: MeResponse, expoPushToken: string): P
  * console.warn, visible via `adb logcat` / Metro), never changes control flow or return values, so
  * it cannot itself regress the best-effort behavior above.
  */
-export async function registerPushDeviceForUser(user: MeResponse | null): Promise<boolean> {
+export async function registerPushDeviceForUser(
+  user: MeResponse | null,
+  options: { allowPrompt?: boolean } = {},
+): Promise<boolean> {
+  const allowPrompt = options.allowPrompt ?? true;
   if (!isPushEligibleUser(user) || !isNativePlatform()) return false;
 
   try {
@@ -124,12 +141,12 @@ export async function registerPushDeviceForUser(user: MeResponse | null): Promis
     // Non-fatal: getExpoPushTokenAsync can still succeed without a channel pre-created.
   }
 
-  const granted = await getGrantedPermission().catch((err: unknown) => {
+  const granted = await getGrantedPermission(allowPrompt).catch((err: unknown) => {
     console.warn('[push] permission check/request threw', err);
     return false;
   });
   if (!granted) {
-    console.warn('[push] registration skipped: notification permission not granted');
+    console.warn('[push] registration skipped: notification permission not granted (or not requested yet)');
     return false;
   }
 
@@ -158,6 +175,44 @@ export async function registerPushDeviceForUser(user: MeResponse | null): Promis
     // Never log the raw token — registerExpoPushToken's own request body already carries it;
     // logging the error object here is safe as long as callers don't stringify request bodies.
     console.warn('[push] backend registration call failed', err);
+    return false;
+  }
+}
+
+/**
+ * Authenticated entry point (every session start). Owners and staff may be shown the permission
+ * prompt; a customer is only registered silently when permission was already granted, so an
+ * already-granted device keeps receiving reminders without ever being asked again.
+ */
+export function registerPushDeviceAtAuthentication(user: MeResponse | null): Promise<boolean> {
+  return registerPushDeviceForUser(user, { allowPrompt: shouldPromptForPushAtAuthentication(user) });
+}
+
+async function wasCustomerPrompted(userId: string): Promise<boolean> {
+  try {
+    const raw = await getItem(CUSTOMER_PUSH_PROMPTED_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { userId?: unknown };
+    return parsed.userId === userId;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Called once a customer's booking has just been created. Asks for notification permission at most
+ * once per account (the flag is written BEFORE the system prompt so a crash or a denial can never
+ * produce a second prompt), skips the prompt entirely when permission is already granted, and then
+ * registers the push token. Best effort: it never throws and never affects the booking.
+ */
+export async function requestCustomerPushAfterBooking(user: MeResponse | null): Promise<boolean> {
+  if (!isPushEligibleUser(user) || !isNativePlatform()) return false;
+  try {
+    if (await wasCustomerPrompted(user.id)) return false;
+    await setItem(CUSTOMER_PUSH_PROMPTED_KEY, JSON.stringify({ userId: user.id }));
+    return await registerPushDeviceForUser(user, { allowPrompt: true });
+  } catch (err) {
+    console.warn('[push] post-booking permission request failed', err);
     return false;
   }
 }

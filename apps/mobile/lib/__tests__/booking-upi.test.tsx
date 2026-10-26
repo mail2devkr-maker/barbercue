@@ -7,11 +7,13 @@ import ConfirmBookingScreen from '../../screens/ConfirmBookingScreen';
 import { BookingUpiAction } from '../../components/booking/BookingUpiAction';
 import { Button } from '../../components/ui/Button';
 import { apiFetch, ApiError } from '../api';
+import { requestCustomerPushAfterBooking } from '../push-notifications';
 
 jest.mock('../api', () => ({ apiFetch: jest.fn(), ApiError: class ApiError extends Error {
   code = 'PAYMENT_QR_REQUIRED'; constructor(_status: number, body: { error: { message: string } }) { super(body.error.message); }
 } }));
-jest.mock('../auth-context', () => ({ useAuth: () => ({ status: 'authenticated' }) }));
+jest.mock('../auth-context', () => ({ useAuth: () => ({ status: 'authenticated', user: { id: 'customer-1', roles: ['CUSTOMER'] } }) }));
+jest.mock('../push-notifications', () => ({ requestCustomerPushAfterBooking: jest.fn(async () => false) }));
 jest.mock('../language-context', () => ({ useLanguage: () => ({ language: 'EN', t: require('@barbercue/shared').uiStringsFor('EN') }) }));
 jest.mock('../idempotency', () => ({ newIdempotencyKey: () => '12345678-1234-4567-8910-123456789012' }));
 jest.mock('../../components/auth/GoogleSignInGate', () => ({ GoogleSignInGate: () => null }));
@@ -111,4 +113,34 @@ it('null or cancelled booking cannot launch a UPI action', async () => {
   expect(tree.toJSON()).toBeNull();
   await act(async () => tree.update(createElement(BookingUpiAction, { booking: { ...booking, status: 'CANCELLED' } as never, paymentInfo: info as never })));
   expect(tree.toJSON()).toBeNull(); expect(Linking.openURL).not.toHaveBeenCalled();
+});
+
+it('shows Pay at shop after a booking when the shop has no payment QR, and never marks it paid', async () => {
+  paymentInfo = { ...info, onlinePaymentAvailable: false, paymentQrImageUrl: null } as never;
+  await render();
+  expect(tree.root.findAll((n: TestNode) => n.props.testID === 'pay-at-shop')).toHaveLength(0);
+  await confirm();
+  expect(tree.root.findAll((n: TestNode) => n.props.testID === 'pay-at-shop').length).toBeGreaterThan(0);
+  expect(screenText()).toContain('Pay at shop');
+  expect(screenText()).toContain('does not mark this booking as paid');
+  expect(screenText()).not.toContain('Payment successful');
+  expect(qrImages()).toHaveLength(0);
+  expect(payButtons()).toHaveLength(0);
+});
+it('does not show Pay at shop when the shop has a payment QR', async () => {
+  await render(); await confirm();
+  expect(tree.root.findAll((n: TestNode) => n.props.testID === 'pay-at-shop')).toHaveLength(0);
+  expect(qrImages()).toHaveLength(1);
+});
+it('asks for notification permission only after the booking is created, once, never on screen open', async () => {
+  await render();
+  expect(requestCustomerPushAfterBooking).not.toHaveBeenCalled();
+  await confirm();
+  expect(requestCustomerPushAfterBooking).toHaveBeenCalledTimes(1);
+  expect(requestCustomerPushAfterBooking).toHaveBeenCalledWith(expect.objectContaining({ id: 'customer-1' }));
+});
+it('does not ask for notification permission when the booking fails', async () => {
+  createBooking = async () => { throw new ApiError(400, { error: { code: 'X', message: 'Slot taken' } }); };
+  await render(); await confirm();
+  expect(requestCustomerPushAfterBooking).not.toHaveBeenCalled();
 });
