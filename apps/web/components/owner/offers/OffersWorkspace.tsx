@@ -36,6 +36,7 @@ import {
   type OfferForm,
 } from "../../../lib/offers";
 import { Badge, Banner, Btn, Card, Dialog, EmptyState, Field, Skeleton } from "../parts";
+import { OfferPromoPanel } from "./OfferPromoPanel";
 import ui from "../owner.module.css";
 
 const MISMATCH = ["INVALID_FILTER", "CURSOR_FILTER_MISMATCH"] as const;
@@ -56,6 +57,7 @@ export function OffersWorkspace({ salonId }: { salonId: string }) {
 
   const [timeZone, setTimeZone] = useState<string | null | undefined>(undefined);
   const [services, setServices] = useState<SalonServiceDto[]>([]);
+  const [promoFor, setPromoFor] = useState<string | null>(null);
   const [kind, setKind] = useState("");
   const [status, setStatus] = useState("");
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -248,9 +250,11 @@ export function OffersWorkspace({ salonId }: { salonId: string }) {
                       {canPause(offer.status) && <Btn small onClick={() => setConfirm({ action: "pause", offer })} disabled={busy}>Pause</Btn>}
                       <Btn small variant="quiet" onClick={() => void showPreview(offer)}>Preview prices</Btn>
                       <Btn small variant="quiet" onClick={() => void showStats(offer)}>See numbers</Btn>
+                      <Btn small variant="quiet" onClick={() => setPromoFor((current) => (current === offer.id ? null : offer.id))}>{promoFor === offer.id ? "Hide post" : "Prepare a post"}</Btn>
                     </div>
                     {previewFor?.offerId === offer.id && <PreviewPanel state={previewFor} />}
                     {statsFor?.offerId === offer.id && <StatsPanel state={statsFor} />}
+                    {promoFor === offer.id && timeZone && <OfferPromoPanel salonId={salonId} offer={offer} services={services} timeZone={timeZone} />}
                   </li>
                 ))}
               </ul>
