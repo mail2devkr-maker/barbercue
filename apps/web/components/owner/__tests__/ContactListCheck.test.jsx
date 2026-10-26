@@ -190,4 +190,112 @@ describe("ContactListCheck", () => {
     await type(r, "9876543210\n9876543211");
     expect(text(r)).not.toContain("Result");
   });
+
+  describe("reading a contacts file (owner issue #14)", () => {
+    const fileInput = (r) => r.root.findByProps({ id: "contacts-file" });
+    const fakeFile = (name, content, size) => ({ name, size: size ?? content.length, text: jest.fn(async () => content) });
+    const choose = async (r, file) => {
+      const target = { files: [file], value: "C:\\fakepath\\" + file.name };
+      await act(async () => { await fileInput(r).props.onChange({ target }); });
+      await flush();
+      return target;
+    };
+    const box = (r) => r.root.findByProps({ id: "contacts-text" }).props.value;
+
+    it("puts the numbers from a CSV into the list box for review, uploads nothing, and resets the file input", async () => {
+      install(() => preview([]));
+      const r = await mount();
+      const target = await choose(r, fakeFile("clients.csv", "Name,Phone\nAsha,98765 43210\nRavi,+91 91234 56789\n"));
+      expect(box(r)).toBe("98765 43210\n+91 91234 56789");
+      const t = text(r);
+      expect(t).toContain("Read 2 numbers from clients.csv");
+      expect(t).toContain("The file stays on your device");
+      expect(t).not.toMatch(/Asha|Ravi/);
+      expect(calls).toEqual([]);
+      expect(apiFetch).not.toHaveBeenCalled();
+      expect(target.value).toBe("");
+    });
+
+    it("reads a phone-export vCard, and the check then sends only those numbers - no names, no file", async () => {
+      install(() => preview(["VALIDATED_FOR_REVIEW", "VALIDATED_FOR_REVIEW"]));
+      const r = await mount();
+      await choose(r, fakeFile("contacts.vcf", "BEGIN:VCARD\nVERSION:3.0\nFN:Asha Kapoor\nTEL;TYPE=CELL:9876543210\nEND:VCARD\nBEGIN:VCARD\nFN:Ravi Shah\nTEL:9123456789\nEND:VCARD\n"));
+      expect(box(r)).toBe("9876543210\n9123456789");
+      expect(calls).toEqual([]);
+      await act(async () => { r.root.findByProps({ id: "contacts-attested" }).props.onChange({ target: { checked: true } }); });
+      await run(r);
+      expect(calls).toHaveLength(1);
+      expect(JSON.stringify(calls[0].opts.body)).not.toMatch(/Asha|Ravi|vcf|VCARD/);
+      const sent = JSON.parse(calls[0].opts.body);
+      expect(sent.contacts.map((c) => c.phone)).toEqual(["9876543210", "9123456789"]);
+    });
+
+    it("tells the owner which lines were left out and why, never inventing a number", async () => {
+      install(() => preview([]));
+      const r = await mount();
+      await choose(r, fakeFile("c.csv", "Phone\n9876543210\n=HYPERLINK(\"http://x.test\")\nnot a number\n"));
+      expect(box(r)).toBe("9876543210");
+      const t = text(r);
+      expect(t).toContain("Line 3: Not a plain phone number, so it was left out.");
+      expect(t).toContain("Line 4: Not a plain phone number, so it was left out.");
+      expect(t).not.toContain("HYPERLINK");
+    });
+
+    it("refuses an unsupported file type without reading it", async () => {
+      install(() => preview([]));
+      const r = await mount();
+      const file = fakeFile("clients.xlsx", "x");
+      await choose(r, file);
+      expect(file.text).not.toHaveBeenCalled();
+      expect(box(r)).toBe("");
+      expect(text(r)).toContain("That kind of file is not supported");
+    });
+
+    it("refuses an oversized file without reading it", async () => {
+      install(() => preview([]));
+      const r = await mount();
+      const file = fakeFile("huge.csv", "Phone\n9876543210", 600 * 1024);
+      await choose(r, file);
+      expect(file.text).not.toHaveBeenCalled();
+      expect(text(r)).toContain("larger than 512 KB");
+    });
+
+    it("keeps what was already typed when the file has no usable numbers", async () => {
+      install(() => preview([]));
+      const r = await mount();
+      await type(r, "9000000001");
+      await choose(r, fakeFile("c.csv", "Name,City\nAsha,Delhi\n"));
+      expect(box(r)).toBe("9000000001");
+      expect(text(r)).toContain("No phone numbers could be read from c.csv");
+      expect(text(r)).toContain("What was in the box is unchanged");
+    });
+
+    it("says when it replaced typed numbers, so nothing disappears silently", async () => {
+      install(() => preview([]));
+      const r = await mount();
+      await type(r, "9000000001");
+      await choose(r, fakeFile("c.csv", "9876543210\n"));
+      expect(box(r)).toBe("9876543210");
+      expect(text(r)).toContain("replacing what was there");
+    });
+
+    it("reports a file the browser cannot read and changes nothing", async () => {
+      install(() => preview([]));
+      const r = await mount();
+      await type(r, "9000000001");
+      const bad = { name: "c.csv", size: 10, text: jest.fn(async () => { throw new Error("denied"); }) };
+      await choose(r, bad);
+      expect(box(r)).toBe("9000000001");
+      expect(text(r)).toContain("Could not read that file. Nothing was changed.");
+      expect(text(r)).not.toContain("denied");
+    });
+
+    it("does nothing when the file dialog is cancelled", async () => {
+      install(() => preview([]));
+      const r = await mount();
+      await act(async () => { await fileInput(r).props.onChange({ target: { files: [], value: "" } }); });
+      expect(box(r)).toBe("");
+      expect(text(r)).not.toContain("Read ");
+    });
+  });
 });
