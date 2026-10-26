@@ -25,8 +25,8 @@ describe('shop-registration-intent', () => {
     expect(takePendingShopRegistrationIntent()).toBe(true);
   });
 
-  it('starts at customer login and replays the authenticated user into Register Shop', () => {
-    expect(beginShopRegistrationAuthentication()).toBe('CustomerLogin');
+  it('starts owner onboarding and replays the authenticated user into Register Shop', () => {
+    expect(beginShopRegistrationAuthentication()).toBe('OwnerRegister');
 
     // Google errors and cancellations do not consume this module-level intent. RootNavigator only
     // takes it after AuthProvider has actually moved to authenticated state.
@@ -38,3 +38,4 @@ describe('shop-registration-intent', () => {
     });
   });
 });
+
