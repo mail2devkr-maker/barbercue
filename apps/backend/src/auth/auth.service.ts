@@ -888,7 +888,16 @@ export class AuthService {
       passwordHash,
     );
 
-    if (!user || !isStaffOrOwner || !passwordMatches) {
+    const temporaryPasswordExpired =
+      user?.passwordChangeRequired === true &&
+      (!user.temporaryPasswordExpiresAt ||
+        user.temporaryPasswordExpiresAt.getTime() <= Date.now());
+    if (
+      !user ||
+      !isStaffOrOwner ||
+      !passwordMatches ||
+      temporaryPasswordExpired
+    ) {
       throw new AppException(
         AuthErrorCode.INVALID_CREDENTIALS,
         'Incorrect email or password.',
@@ -1556,10 +1565,77 @@ export class AuthService {
       }
       await tx.user.update({
         where: { id: resetToken.userId },
-        data: { passwordHash },
+        data: {
+          passwordHash,
+          passwordChangeRequired: false,
+          temporaryPasswordExpiresAt: null,
+        },
       });
       await tx.refreshToken.updateMany({
         where: { userId: resetToken.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+  }
+
+  /**
+   * Replaces an administrator-issued temporary password. Only an account flagged passwordChangeRequired can use this;
+   * everyone else changes passwords through recovery. The temporary password must still be valid (not expired), and
+   * the change clears the flag and revokes every session so nothing issued with the temporary password survives.
+   */
+  async changeRequiredPassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.passwordChangeRequired || !user.passwordHash) {
+      throw new AppException(
+        'PASSWORD_CHANGE_NOT_REQUIRED',
+        'This account does not have a temporary password to replace.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    const matches = await this.passwordService.compare(
+      currentPassword,
+      user.passwordHash,
+    );
+    if (!matches) {
+      throw new AppException(
+        AuthErrorCode.INVALID_CREDENTIALS,
+        'Incorrect email or password.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    if (
+      !user.temporaryPasswordExpiresAt ||
+      user.temporaryPasswordExpiresAt.getTime() <= Date.now()
+    ) {
+      throw new AppException(
+        'TEMPORARY_PASSWORD_EXPIRED',
+        'The temporary password has expired. Ask FastQue to issue a new one.',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    const passwordHash = await this.passwordService.hash(newPassword);
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.user.updateMany({
+        where: { id: userId, passwordChangeRequired: true },
+        data: {
+          passwordHash,
+          passwordChangeRequired: false,
+          temporaryPasswordExpiresAt: null,
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new AppException(
+          'PASSWORD_CHANGE_NOT_REQUIRED',
+          'This account does not have a temporary password to replace.',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await tx.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
     });

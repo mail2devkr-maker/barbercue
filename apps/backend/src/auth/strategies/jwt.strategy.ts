@@ -32,7 +32,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   // Re-checks the user's status on every request rather than trusting the token for the full 15
   // minutes — a suspended account is blocked immediately, not just after its access token
   // happens to expire. Server remains authoritative (ARCHITECTURE.md), not the token payload.
-  async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
+  async validate(
+    payload: JwtPayload,
+  ): Promise<AuthenticatedUser & { passwordChangeRequired: boolean }> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
@@ -62,6 +64,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    return { id: user.id, roles: payload.roles, audience: payload.audience };
+    return {
+      id: user.id,
+      roles: payload.roles,
+      audience: payload.audience,
+      passwordChangeRequired: user.passwordChangeRequired,
+    };
   }
 }
