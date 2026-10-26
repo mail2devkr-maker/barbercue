@@ -16,6 +16,7 @@ import { OtpService } from './services/otp.service';
 import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
 import { GoogleAuthService } from './services/google-auth.service';
+import { AppleAuthService } from './services/apple-auth.service';
 import { EMAIL_SENDER } from './services/email-sender';
 import { AppException } from '../common/exceptions/app.exception';
 
@@ -31,7 +32,9 @@ describe('AuthService', () => {
     };
     authIdentity: {
       findUnique: jest.Mock;
+      findMany: jest.Mock;
       create: jest.Mock;
+      update: jest.Mock;
       deleteMany: jest.Mock;
     };
     userRole: {
@@ -51,6 +54,7 @@ describe('AuthService', () => {
     };
     refreshToken: { updateMany: jest.Mock; deleteMany: jest.Mock };
     otpRequest: { deleteMany: jest.Mock };
+    appleAuthNonce: { create: jest.Mock; deleteMany: jest.Mock };
     pushDevice: { deleteMany: jest.Mock };
     notificationPreference: { deleteMany: jest.Mock };
     notification: { deleteMany: jest.Mock };
@@ -69,8 +73,15 @@ describe('AuthService', () => {
   };
   let otpService: { requestOtp: jest.Mock; verifyOtp: jest.Mock };
   let totpService: { verifyToken: jest.Mock };
-  let cryptoService: { decrypt: jest.Mock };
+  let cryptoService: { decrypt: jest.Mock; encrypt: jest.Mock };
   let googleAuthService: { verifyIdToken: jest.Mock };
+  let appleAuthService: {
+    createLoginNonce: jest.Mock;
+    verifyIdToken: jest.Mock;
+    exchangeAuthorizationCode: jest.Mock;
+    revokeRefreshToken: jest.Mock;
+    consumeLoginNonce: jest.Mock;
+  };
   let emailSender: {
     assertAvailable: jest.Mock;
     sendPasswordReset: jest.Mock;
@@ -97,7 +108,9 @@ describe('AuthService', () => {
       },
       authIdentity: {
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn(),
+        update: jest.fn(),
         deleteMany: jest.fn(),
       },
       userRole: {
@@ -118,6 +131,7 @@ describe('AuthService', () => {
         deleteMany: jest.fn(),
       },
       otpRequest: { deleteMany: jest.fn() },
+      appleAuthNonce: { create: jest.fn(), deleteMany: jest.fn() },
       pushDevice: { deleteMany: jest.fn() },
       notificationPreference: { deleteMany: jest.fn() },
       notification: { deleteMany: jest.fn() },
@@ -162,8 +176,23 @@ describe('AuthService', () => {
     };
     otpService = { requestOtp: jest.fn(), verifyOtp: jest.fn() };
     totpService = { verifyToken: jest.fn() };
-    cryptoService = { decrypt: jest.fn() };
+    cryptoService = {
+      decrypt: jest.fn((value: string) => value),
+      encrypt: jest.fn((value: string) => `encrypted:${value}`),
+    };
     googleAuthService = { verifyIdToken: jest.fn() };
+    appleAuthService = {
+      createLoginNonce: jest.fn().mockResolvedValue({
+        nonce: 'nonce-value',
+        expiresAt: '2030-01-01T00:00:00.000Z',
+      }),
+      verifyIdToken: jest.fn(),
+      exchangeAuthorizationCode: jest
+        .fn()
+        .mockResolvedValue('apple-refresh-token'),
+      revokeRefreshToken: jest.fn().mockResolvedValue(undefined),
+      consumeLoginNonce: jest.fn().mockResolvedValue(undefined),
+    };
     emailSender = {
       assertAvailable: jest.fn(),
       sendPasswordReset: jest.fn(),
@@ -180,6 +209,7 @@ describe('AuthService', () => {
         { provide: TotpService, useValue: totpService },
         { provide: CryptoService, useValue: cryptoService },
         { provide: GoogleAuthService, useValue: googleAuthService },
+        { provide: AppleAuthService, useValue: appleAuthService },
         { provide: EMAIL_SENDER, useValue: emailSender },
       ],
     }).compile();
@@ -784,6 +814,117 @@ describe('AuthService', () => {
         code: AuthErrorCode.ACCOUNT_SUSPENDED,
       });
       expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Apple login', () => {
+    it('creates a customer session from a verified, one-use Apple identity', async () => {
+      appleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'apple-sub-1',
+        email: 'customer@privaterelay.appleid.com',
+      });
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        id: 'apple-customer',
+        email: 'customer@privaterelay.appleid.com',
+        phone: null,
+        passwordHash: null,
+        preferredLanguage: Language.EN,
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+
+      const result = await service.appleLogin(
+        {
+          identityToken: 'signed-apple-token',
+          nonce: 'a'.repeat(43),
+          authorizationCode: 'short-lived-code',
+        },
+        'ios-device',
+      );
+
+      expect(appleAuthService.verifyIdToken).toHaveBeenCalledWith(
+        'signed-apple-token',
+        'a'.repeat(43),
+      );
+      expect(appleAuthService.exchangeAuthorizationCode).toHaveBeenCalledWith(
+        'short-lived-code',
+      );
+      expect(appleAuthService.consumeLoginNonce).toHaveBeenCalledWith(
+        prisma,
+        'a'.repeat(43),
+      );
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            roles: { create: { role: Role.CUSTOMER } },
+            authIdentities: {
+              create: expect.objectContaining({
+                provider: 'APPLE',
+                providerSub: 'apple-sub-1',
+                providerRefreshTokenEncrypted: 'encrypted:apple-refresh-token',
+              }),
+            },
+          }),
+        }),
+      );
+      expect(result.user.audience).toBe(SessionAudience.CUSTOMER);
+      expect(result.user.roles).toEqual([Role.CUSTOMER]);
+    });
+
+    it('never turns an Apple customer identity into an owner/staff session', async () => {
+      appleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'apple-customer',
+        email: 'same@example.com',
+      });
+      prisma.authIdentity.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'customer-only',
+        email: 'same@example.com',
+        status: UserStatus.ACTIVE,
+        roles: [{ role: Role.CUSTOMER }],
+      });
+
+      await expect(
+        service.staffAppleLogin({
+          identityToken: 'signed-apple-token',
+          nonce: 'b'.repeat(43),
+          authorizationCode: 'short-lived-code',
+        }),
+      ).rejects.toMatchObject({ code: AuthErrorCode.APPLE_ACCOUNT_NOT_STAFF });
+      expect(prisma.authIdentity.create).not.toHaveBeenCalled();
+      expect(tokenService.issueTokenPair).not.toHaveBeenCalled();
+    });
+
+    it('issues a STAFF-audience session only for an already owner-linked Apple identity', async () => {
+      appleAuthService.verifyIdToken.mockResolvedValue({
+        sub: 'apple-owner',
+        email: 'owner@example.com',
+      });
+      prisma.authIdentity.findUnique.mockResolvedValue({
+        id: 'apple-identity',
+        user: {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          phone: null,
+          passwordHash: null,
+          preferredLanguage: Language.EN,
+          status: UserStatus.ACTIVE,
+          roles: [{ role: Role.SALON_OWNER }],
+        },
+      });
+
+      const result = await service.staffAppleLogin({
+        identityToken: 'signed-apple-token',
+        nonce: 'c'.repeat(43),
+        authorizationCode: 'short-lived-code',
+      });
+
+      expect(result.user.audience).toBe(SessionAudience.STAFF);
+      expect(result.user.roles).toEqual([Role.SALON_OWNER]);
+      expect(prisma.userRole.create).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
     });
   });
 
@@ -1766,7 +1907,10 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(customer);
       await expect(
         service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER),
-      ).resolves.toEqual({ success: true });
+      ).resolves.toEqual({
+        success: true,
+        appleRevocation: 'not_applicable',
+      });
 
       expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
         where: { userId: 'customer-1' },
@@ -1955,6 +2099,66 @@ describe('AuthService', () => {
         code: AuthErrorCode.UNAUTHENTICATED,
       });
       expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('revokes the retained Apple authorization before deleting a customer account', async () => {
+      prisma.user.findUnique.mockResolvedValue(customer);
+      prisma.authIdentity.findMany.mockResolvedValue([
+        { providerRefreshTokenEncrypted: 'encrypted:apple-refresh-token' },
+      ]);
+      cryptoService.decrypt.mockReturnValue('apple-refresh-token');
+      await service.deleteCustomerAccount(
+        'customer-1',
+        SessionAudience.CUSTOMER,
+      );
+
+      expect(cryptoService.decrypt).toHaveBeenCalledWith(
+        'encrypted:apple-refresh-token',
+      );
+      expect(appleAuthService.revokeRefreshToken).toHaveBeenCalledWith(
+        'apple-refresh-token',
+      );
+      expect(
+        appleAuthService.revokeRefreshToken.mock.invocationCallOrder[0],
+      ).toBeLessThan(prisma.$transaction.mock.invocationCallOrder[0]);
+    });
+
+    it('completes local deletion and directs the customer to Apple settings when revocation is unavailable', async () => {
+      prisma.user.findUnique.mockResolvedValue(customer);
+      prisma.authIdentity.findMany.mockResolvedValue([
+        { providerRefreshTokenEncrypted: 'encrypted:apple-refresh-token' },
+      ]);
+      appleAuthService.revokeRefreshToken.mockRejectedValue(
+        new AppException(
+          AuthErrorCode.APPLE_PROVIDER_UNAVAILABLE,
+          'Apple authorization could not be revoked.',
+          503,
+        ),
+      );
+
+      await expect(
+        service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER),
+      ).resolves.toEqual({
+        success: true,
+        appleRevocation: 'manual_required',
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.user.update).toHaveBeenCalled();
+    });
+
+    it('completes deletion and requests manual Apple revocation when no token is retained', async () => {
+      prisma.user.findUnique.mockResolvedValue(customer);
+      prisma.authIdentity.findMany.mockResolvedValue([
+        { providerRefreshTokenEncrypted: null },
+      ]);
+
+      await expect(
+        service.deleteCustomerAccount('customer-1', SessionAudience.CUSTOMER),
+      ).resolves.toEqual({
+        success: true,
+        appleRevocation: 'manual_required',
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
   });
 });

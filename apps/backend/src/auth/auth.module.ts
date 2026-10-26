@@ -10,6 +10,7 @@ import { OtpService } from './services/otp.service';
 import { TotpService } from './services/totp.service';
 import { CryptoService } from './services/crypto.service';
 import { GoogleAuthService } from './services/google-auth.service';
+import { AppleAuthService } from './services/apple-auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { OTP_SENDER, UnavailableOtpSender } from './services/otp-sender';
 import { TwoFactorOtpSender } from './services/two-factor-otp-sender';
@@ -39,6 +40,7 @@ import { ResendEmailSender } from './services/resend-email-sender';
     TotpService,
     CryptoService,
     GoogleAuthService,
+    AppleAuthService,
     JwtStrategy,
     // No development console OTP: OTP values and phone numbers must never be written to logs.
     // Production dispatch is enabled only when provider/template, keyed-hash secret, explicit

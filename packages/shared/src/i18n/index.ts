@@ -28,13 +28,7 @@ export interface VoiceAnnouncements {
    * customer chose "Any staff" and no one has been assigned yet — callers must never invent a
    * name for that null case (see formatVoiceBarberDate below for how `date`/`time` are produced).
    */
-  newBookingReceived(
-    serviceName: string | null,
-    barberName: string | null,
-    salonName: string | null,
-    date: string | null,
-    time: string | null,
-  ): string;
+  newBookingReceived(serviceName: string | null, barberName: string | null, salonName: string | null, date: string | null, time: string | null): string;
   /** Owner/staff: a booking on this salon was moved to a new slot. */
   bookingRescheduled(date: string | null, time: string | null): string;
   /** Owner/staff: a booking on this salon was just cancelled. */
@@ -70,8 +64,7 @@ const en: VoiceAnnouncements = {
     return when ? `Booking rescheduled ${when}.` : 'Booking rescheduled.';
   },
   bookingCancelled: () => 'Booking cancelled.',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `New customer joined the queue. Queue number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
+  newCustomerJoined: (tokenNumber, serviceName) => `New customer joined the queue. Queue number ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}.`,
   voiceAnnouncementsOn: () => 'Voice announcements on.',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} customer` : 'customer';
@@ -104,8 +97,7 @@ const hi: VoiceAnnouncements = {
     return when ? `बुकिंग पुनर्निर्धारित की गई है। नया समय ${when}।` : 'बुकिंग पुनर्निर्धारित की गई है।';
   },
   bookingCancelled: () => 'बुकिंग रद्द कर दी गई है।',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `कतार में नया ग्राहक जुड़ा। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
+  newCustomerJoined: (tokenNumber, serviceName) => `कतार में नया ग्राहक जुड़ा। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}।`,
   voiceAnnouncementsOn: () => 'आवाज़ में सूचनाएं चालू हैं।',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} ग्राहक` : 'अपॉइंटमेंट के ग्राहक';
@@ -113,7 +105,6 @@ const hi: VoiceAnnouncements = {
     return `अपॉइंटमेंट रिमाइंडर। क्या ${when}${service} पहुंच चुका है? कृपया पुष्टि करें, आया या नहीं आया।`;
   },
 };
-
 
 /**
  * Owner-facing voice can be independent of the app UI language. This is deliberately a speech
@@ -168,8 +159,7 @@ const hiBihar: VoiceAnnouncements = {
     return when ? `बुकिंग का समय बदल गया है। नया समय ${when} है।` : 'बुकिंग का समय बदल गया है।';
   },
   bookingCancelled: () => 'बुकिंग रद्द हो गई है।',
-  newCustomerJoined: (tokenNumber, serviceName) =>
-    `कतार में नया ग्राहक आया है। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
+  newCustomerJoined: (tokenNumber, serviceName) => `कतार में नया ग्राहक आया है। कतार नंबर ${tokenNumber}${serviceName ? `, ${serviceName}` : ''}। कृपया देख लीजिए।`,
   voiceAnnouncementsOn: () => 'आवाज़ वाली सूचना चालू हो गई है।',
   arrivalCheck: (serviceName, time) => {
     const service = serviceName ? `${serviceName} वाले ग्राहक` : 'अपॉइंटमेंट वाले ग्राहक';
@@ -178,20 +168,14 @@ const hiBihar: VoiceAnnouncements = {
   },
 };
 
-export function voiceAnnouncementsForStyle(
-  style: OwnerVoiceStyle,
-  accountLanguage: Language | null | undefined,
-): VoiceAnnouncements {
+export function voiceAnnouncementsForStyle(style: OwnerVoiceStyle, accountLanguage: Language | null | undefined): VoiceAnnouncements {
   if (style === 'HINDI') return hi;
   if (style === 'ENGLISH') return en;
   if (style === 'HINDI_BIHAR') return hiBihar;
   return voiceAnnouncementsFor(accountLanguage);
 }
 
-export function speechLocaleForVoiceStyle(
-  style: OwnerVoiceStyle,
-  accountLanguage: Language | null | undefined,
-): string {
+export function speechLocaleForVoiceStyle(style: OwnerVoiceStyle, accountLanguage: Language | null | undefined): string {
   if (style === 'HINDI' || style === 'HINDI_BIHAR') return 'hi-IN';
   if (style === 'ENGLISH') return 'en-IN';
   return accountLanguage ? SPEECH_LOCALE[accountLanguage] : SPEECH_LOCALE[Language.EN];
@@ -602,6 +586,8 @@ export interface UiStrings {
   couldNotLoadSessions: string;
   couldNotSignOutSession: string;
   couldNotSignOutOtherSessions: string;
+  appleRevocationReminderTitle: string;
+  appleRevocationReminderMessage: string;
   voiceHint: string;
   premiumActive: string;
   premiumInactive: string;
@@ -771,6 +757,7 @@ export interface UiStrings {
   // PhoneOtpLoginScreen (customer sign-in).
   continueWithGoogle: string;
   couldNotSignInWithGoogle: string;
+  couldNotCompleteAppleSignIn: string;
   signInUnavailableNotice: string;
   orDivider: string;
   invalidPhoneNumber: string;
@@ -1112,7 +1099,7 @@ const enUi: UiStrings = {
   statusNoShow: 'No-show',
   statusExpired: 'Expired',
   genericError: 'Something went wrong. Please try again.',
-  offline: "You appear to be offline.",
+  offline: 'You appear to be offline.',
 
   tabHome: 'Home',
   tabSearch: 'Search',
@@ -1245,8 +1232,7 @@ const enUi: UiStrings = {
   bookingsTitle: 'Bookings',
   newBookingReceivedBanner: 'New booking received',
   bookingCancelledBanner: 'Booking cancelled',
-  hindiVoiceUnavailableWarning:
-    "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings, then reopen FastQue to try again.",
+  hindiVoiceUnavailableWarning: "Hindi voice isn't installed on this device, so voice announcements are silent. Install a Hindi text-to-speech voice in your phone's Settings, then reopen FastQue to try again.",
   noShopSelected: 'No shop selected',
   selectShopHint: 'Select a shop from the Dashboard tab to see its bookings.',
   noBookingsTitle: 'No bookings',
@@ -1298,7 +1284,7 @@ const enUi: UiStrings = {
   useCurrentLocationAction: 'Use my current location',
   detectingLocationEllipsis: 'Detecting location…',
   locationDetectedLabel: 'Location detected',
-  locationSkippedHint: "No problem — your address and city are enough to register.",
+  locationSkippedHint: 'No problem — your address and city are enough to register.',
   chooseCountryFirstError: 'Please choose the country your shop is in.',
   chooseCityFirstError: "Please search for and select your shop's city.",
   registerShopAction: 'Register shop',
@@ -1352,6 +1338,8 @@ const enUi: UiStrings = {
   couldNotLoadSessions: 'Could not load your sessions.',
   couldNotSignOutSession: 'Could not sign out that session.',
   couldNotSignOutOtherSessions: 'Could not sign out other sessions.',
+  appleRevocationReminderTitle: 'Revoke FastQue in Apple settings',
+  appleRevocationReminderMessage: 'Your FastQue account was deleted. To revoke Apple access, open Settings, tap your name, then Sign-In & Security → Sign in with Apple → FastQue → Stop Using Apple ID.',
   voiceHint: 'Also controls voice announcements read aloud on this device.',
   premiumActive: 'Active',
   premiumInactive: 'Not subscribed — manage on web',
@@ -1501,6 +1489,7 @@ const enUi: UiStrings = {
 
   continueWithGoogle: 'Continue with Google',
   couldNotSignInWithGoogle: 'Could not sign in with Google. Please try again.',
+  couldNotCompleteAppleSignIn: 'Could not complete Sign in with Apple. Please try again.',
   signInUnavailableNotice: 'Sign-in is temporarily unavailable. Please try again shortly.',
   orDivider: 'or',
   invalidPhoneNumber: 'Invalid phone number.',
@@ -2049,6 +2038,8 @@ const hiUi: UiStrings = {
   couldNotLoadSessions: 'आपके सत्र लोड नहीं हो सके।',
   couldNotSignOutSession: 'उस सत्र से साइन आउट नहीं हो सका।',
   couldNotSignOutOtherSessions: 'अन्य सत्रों से साइन आउट नहीं हो सका।',
+  appleRevocationReminderTitle: 'Apple सेटिंग्स में FastQue का एक्सेस हटाएँ',
+  appleRevocationReminderMessage: 'आपका FastQue खाता हटा दिया गया है। Apple एक्सेस हटाने के लिए Settings खोलें, अपना नाम चुनें, फिर Sign-In & Security → Sign in with Apple → FastQue → Stop Using Apple ID चुनें।',
   voiceHint: 'यह डिवाइस पर बोली जाने वाली आवाज़ सूचनाओं को भी नियंत्रित करता है।',
   premiumActive: 'सक्रिय',
   premiumInactive: 'सदस्यता नहीं है — वेब पर प्रबंधित करें',
@@ -2198,6 +2189,7 @@ const hiUi: UiStrings = {
 
   continueWithGoogle: 'Google से जारी रखें',
   couldNotSignInWithGoogle: 'Google से साइन इन नहीं हो सका। कृपया फिर कोशिश करें।',
+  couldNotCompleteAppleSignIn: 'Apple से साइन इन पूरा नहीं हो सका। कृपया फिर कोशिश करें।',
   signInUnavailableNotice: 'साइन-इन अस्थायी रूप से उपलब्ध नहीं है। कृपया थोड़ी देर बाद फिर कोशिश करें।',
   orDivider: 'या',
   invalidPhoneNumber: 'अमान्य फ़ोन नंबर।',
@@ -2540,10 +2532,7 @@ export const NOTIFICATION_TYPE_LABELS: Readonly<Record<Language, NotificationTyp
 /** Never throws on an unrecognised type/language — falls back to English labels, then to the raw
  * type string itself, so a future NotificationType added to the enum without a translation entry
  * degrades to something readable rather than crashing the list. */
-export function notificationTypeLabel(
-  language: Language | null | undefined,
-  type: NotificationType,
-): string {
+export function notificationTypeLabel(language: Language | null | undefined, type: NotificationType): string {
   const table = (language && NOTIFICATION_TYPE_LABELS[language]) || NOTIFICATION_TYPE_LABELS[Language.EN];
   return table[type] ?? enNotificationTypeLabels[type] ?? type;
 }
@@ -2558,7 +2547,10 @@ export function notificationTypeLabel(
  */
 export interface PushCopy {
   newBooking(serviceName: string | null): { title: string; body: string };
-  bookingRescheduled(serviceName: string | null): { title: string; body: string };
+  bookingRescheduled(serviceName: string | null): {
+    title: string;
+    body: string;
+  };
   bookingCancelled(serviceName: string | null): { title: string; body: string };
   bookingReminder(serviceName: string | null): { title: string; body: string };
   /** P0 arrival-alert mission — the one-shot T-5-minute push. Never a customer name (see
@@ -2597,9 +2589,7 @@ const enPush: PushCopy = {
   }),
   arrivalCheck: (serviceName) => ({
     title: 'Appointment in 5 minutes',
-    body: serviceName
-      ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.`
-      : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
+    body: serviceName ? `Has the ${serviceName} customer arrived? Open FastQue to confirm.` : 'Has the customer arrived for their appointment? Open FastQue to confirm.',
   }),
   shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
     title: 'Appointment cancelled by the shop',
@@ -2636,16 +2626,11 @@ const hiPush: PushCopy = {
   }),
   arrivalCheck: (serviceName) => ({
     title: 'अपॉइंटमेंट 5 मिनट में',
-    body: serviceName
-      ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।`
-      : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
+    body: serviceName ? `क्या ${serviceName} ग्राहक पहुंच चुका है? पुष्टि के लिए FastQue खोलें।` : 'क्या ग्राहक अपने अपॉइंटमेंट के लिए पहुंच चुका है? पुष्टि के लिए FastQue खोलें।',
   }),
   shopCancelledBooking: ({ shopName, serviceName, whenText }) => ({
     title: 'दुकान ने अपॉइंटमेंट रद्द की',
-    body:
-      `${shopName} पर ${serviceName ? `${serviceName} की ` : ''}आपकी अपॉइंटमेंट` +
-      `${whenText ? ` (${whenText})` : ''} दुकान द्वारा रद्द कर दी गई है। ` +
-      'विवरण देखने या दुकान से संपर्क करने के लिए FastQue खोलें।',
+    body: `${shopName} पर ${serviceName ? `${serviceName} की ` : ''}आपकी अपॉइंटमेंट` + `${whenText ? ` (${whenText})` : ''} दुकान द्वारा रद्द कर दी गई है। ` + 'विवरण देखने या दुकान से संपर्क करने के लिए FastQue खोलें।',
   }),
   shopRescheduledBooking: ({ shopName, serviceName, whenText }) => ({
     title: 'दुकान ने अपॉइंटमेंट का समय बदला',

@@ -5,6 +5,7 @@ import { useAuth } from '../../lib/auth-context';
 import { getGoogleIdToken } from '../../lib/google-signin';
 import { useLanguage } from '../../lib/language-context';
 import { color, font, fontSize, radius, space } from '../../lib/theme';
+import { AppleSignInButton } from './AppleSignInButton';
 
 /**
  * Issue 2 (mobile launch mission) — the mobile equivalent of apps/web's BookingFlow.tsx inline
@@ -14,13 +15,7 @@ import { color, font, fontSize, radius, space } from '../../lib/theme';
  * exact in-progress params (see lib/guest-booking-handoff.ts) before the auth-status flip
  * inevitably swaps the whole navigator tree out from under this screen.
  */
-export function GoogleSignInGate({
-  label,
-  onBeforeSignIn,
-}: {
-  label: string;
-  onBeforeSignIn: () => void;
-}) {
+export function GoogleSignInGate({ label, onBeforeSignIn }: { label: string; onBeforeSignIn: () => void }) {
   const { googleLogin } = useAuth();
   const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
@@ -55,14 +50,24 @@ export function GoogleSignInGate({
       <Pressable style={styles.button} onPress={() => void handleSignIn()} disabled={submitting}>
         {submitting ? <ActivityIndicator color={color.ink} /> : <Text style={styles.buttonText}>{t.continueWithGoogle}</Text>}
       </Pressable>
+      <AppleSignInButton audience="customer" onBeforeSignIn={onBeforeSignIn} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  hint: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted, marginBottom: space[3] },
-  unavailableText: { fontFamily: font.bodyRegular, fontSize: fontSize.sm, color: color.muted },
-  errorText: { fontFamily: font.bodyMedium, fontSize: fontSize.xs, color: '#8f302d', marginBottom: space[3] },
+  hint: {
+    fontFamily: font.bodyRegular,
+    fontSize: fontSize.sm,
+    color: color.muted,
+    marginBottom: space[3],
+  },
+  errorText: {
+    fontFamily: font.bodyMedium,
+    fontSize: fontSize.xs,
+    color: '#8f302d',
+    marginBottom: space[3],
+  },
   button: {
     minHeight: 52,
     backgroundColor: '#ffffff',
@@ -73,5 +78,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: space[3],
   },
-  buttonText: { fontFamily: font.bodySemiBold, fontSize: fontSize.sm, color: color.ink },
+  buttonText: {
+    fontFamily: font.bodySemiBold,
+    fontSize: fontSize.sm,
+    color: color.ink,
+  },
 });

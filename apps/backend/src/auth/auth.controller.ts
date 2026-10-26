@@ -20,6 +20,7 @@ import {
   Role,
   type AuthMethodsDto,
   adminGoogleLoginSchema,
+  appleLoginSchema,
   adminLoginSchema,
   forgotPasswordSchema,
   googleLoginSchema,
@@ -37,6 +38,7 @@ import {
   ownerPhoneLinkRequestSchema,
   ownerPhoneLinkVerifySchema,
   type AdminGoogleLoginInput,
+  type AppleLoginInput,
   type AdminLoginInput,
   type AuthenticatedUser,
   type ForgotPasswordInput,
@@ -56,6 +58,7 @@ import {
   type OwnerPhoneLinkVerifyInput,
 } from '@barbercue/shared';
 import { AuthService } from './auth.service';
+import { isAppleAuthConfigured } from './services/apple-auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -95,10 +98,12 @@ export class AuthController {
   @Get(AUTH_PATHS.methods)
   authMethods(): AuthMethodsDto {
     return {
-      google: Boolean(
-        process.env.GOOGLE_WEB_CLIENT_ID ??
+      google: [
+        process.env.GOOGLE_WEB_CLIENT_ID,
         process.env.GOOGLE_ANDROID_CLIENT_ID,
-      ),
+        process.env.GOOGLE_IOS_CLIENT_ID,
+      ].some(Boolean),
+      apple: isAppleAuthConfigured(),
       phoneOtp: isPhoneOtpConfigured(),
       ownerPhoneOtp: isPhoneOtpConfigured(),
     };
@@ -251,6 +256,30 @@ export class AuthController {
 
   @Public()
   @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.appleNonce)
+  createAppleLoginNonce() {
+    return this.authService.createAppleLoginNonce();
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.apple)
+  @UsePipes(new ZodValidationPipe(appleLoginSchema))
+  async appleLogin(
+    @Body() body: AppleLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.appleLogin(
+      body,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
   @Post(AUTH_PATHS.employeeLogin)
   @UsePipes(new ZodValidationPipe(employeeLoginSchema))
   async employeeLogin(
@@ -318,6 +347,23 @@ export class AuthController {
   ) {
     const result = await this.authService.staffGoogleLogin(
       body.idToken,
+      req.headers['user-agent'],
+    );
+    setRefreshCookie(res, result.tokens.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post(AUTH_PATHS.staffApple)
+  @UsePipes(new ZodValidationPipe(appleLoginSchema))
+  async staffAppleLogin(
+    @Body() body: AppleLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.staffAppleLogin(
+      body,
       req.headers['user-agent'],
     );
     setRefreshCookie(res, result.tokens.refreshToken);
@@ -466,9 +512,12 @@ export class AuthController {
     @Body() _body: DeleteAccountInput,
     @Res({ passthrough: true }) res: Response,
   ) {
-    await this.authService.deleteCustomerAccount(user.id, user.audience);
+    const result = await this.authService.deleteCustomerAccount(
+      user.id,
+      user.audience,
+    );
     clearRefreshCookie(res);
-    return { success: true };
+    return result;
   }
 
   @Get(AUTH_PATHS.me)

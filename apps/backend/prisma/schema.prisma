@@ -73,13 +73,15 @@ enum OtpDeliveryAttemptStatus {
   UNKNOWN
 }
 
-// Major-upgrade phase: customer auth becomes provider-based. GOOGLE is live; WHATSAPP is reserved
+// Major-upgrade phase: customer auth becomes provider-based. GOOGLE and APPLE are supported;
+// WHATSAPP is reserved
 // (see ARCHITECTURE.md) — genuinely free production WhatsApp OTP requires Meta Business
 // verification + a paid-per-message account, neither of which exists yet, so no WhatsAppOtpSender
 // is wired up. The enum value exists now so a future AuthIdentity row never needs a schema change,
 // only a new OtpSender-style implementation.
 enum AuthProvider {
   GOOGLE
+  APPLE
   WHATSAPP
 }
 
@@ -473,9 +475,12 @@ model AuthIdentity {
   userId      String
   user        User         @relation(fields: [userId], references: [id])
   provider    AuthProvider
-  // The provider's own stable subject identifier (Google's `sub` claim) — never the email, which
+  // The provider's own stable subject identifier (Google/Apple `sub` claim) — never the email, which
   // can change or be reused. This is the actual identity key for lookups.
   providerSub String
+  // Apple refresh token encrypted with the existing TOTP_ENCRYPTION_KEY. It is retained only to
+  // revoke Apple authorization when a customer deletes their FastQue account.
+  providerRefreshTokenEncrypted String? @map("provider_refresh_token_encrypted") @db.Text
   // Snapshot of the verified email at link time, for display/support only — never used to look up
   // or match an identity; account linking keys off (provider, providerSub) plus a one-time,
   // explicit "does an existing User already have this verified email" check at link time (see
@@ -486,6 +491,18 @@ model AuthIdentity {
   @@unique([provider, providerSub])
   @@index([userId])
   @@map("auth_identities")
+}
+
+// Short-lived, one-use Sign in with Apple nonce challenges. Only a SHA-256 digest is stored; the
+// raw nonce is returned once to the native client and must be echoed by Apple's signed identity
+// token. Deleting the row in the same transaction that creates the session prevents token replay.
+model AppleAuthNonce {
+  nonceHash String   @id @map("nonce_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamp(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+
+  @@index([expiresAt])
+  @@map("apple_auth_nonces")
 }
 
 // ---------- FastQue CRM / field operations ----------

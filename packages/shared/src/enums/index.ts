@@ -59,13 +59,13 @@ export const OtpPurpose = {
 } as const;
 export type OtpPurpose = (typeof OtpPurpose)[keyof typeof OtpPurpose];
 
-// Customer auth is provider-based (AuthIdentity, one row per linked account). GOOGLE is live;
-// WHATSAPP is reserved for a future OtpSender-style implementation — genuinely free production
-// WhatsApp OTP requires Meta Business verification + a paid-per-message account, neither of which
-// exists yet (see ARCHITECTURE.md). Phone OTP itself stays on User.phone directly, unchanged —
-// only *additional* linked identities go through AuthIdentity.
+// Customer auth is provider-based (AuthIdentity, one row per linked account). GOOGLE and APPLE
+// are live social providers; WHATSAPP remains reserved for a future OtpSender-style implementation.
+// Phone OTP itself stays on User.phone directly, unchanged — only additional linked identities
+// go through AuthIdentity.
 export const AuthProvider = {
   GOOGLE: 'GOOGLE',
+  APPLE: 'APPLE',
   WHATSAPP: 'WHATSAPP',
 } as const;
 export type AuthProvider = (typeof AuthProvider)[keyof typeof AuthProvider];
@@ -82,8 +82,7 @@ export const SalonLocationSource = {
   MAP_PIN: 'MAP_PIN',
   MANUAL: 'MANUAL',
 } as const;
-export type SalonLocationSource =
-  (typeof SalonLocationSource)[keyof typeof SalonLocationSource];
+export type SalonLocationSource = (typeof SalonLocationSource)[keyof typeof SalonLocationSource];
 
 export const SalonLocationProposalStatus = {
   PENDING: 'PENDING',
@@ -91,8 +90,7 @@ export const SalonLocationProposalStatus = {
   REJECTED: 'REJECTED',
   SUPERSEDED: 'SUPERSEDED',
 } as const;
-export type SalonLocationProposalStatus =
-  (typeof SalonLocationProposalStatus)[keyof typeof SalonLocationProposalStatus];
+export type SalonLocationProposalStatus = (typeof SalonLocationProposalStatus)[keyof typeof SalonLocationProposalStatus];
 
 export const SalonType = {
   GENTS: 'GENTS',
@@ -156,16 +154,14 @@ export const CrmFollowUpChannel = {
   EMAIL: 'EMAIL',
   OTHER: 'OTHER',
 } as const;
-export type CrmFollowUpChannel =
-  (typeof CrmFollowUpChannel)[keyof typeof CrmFollowUpChannel];
+export type CrmFollowUpChannel = (typeof CrmFollowUpChannel)[keyof typeof CrmFollowUpChannel];
 
 export const CrmFollowUpStatus = {
   OPEN: 'OPEN',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED',
 } as const;
-export type CrmFollowUpStatus =
-  (typeof CrmFollowUpStatus)[keyof typeof CrmFollowUpStatus];
+export type CrmFollowUpStatus = (typeof CrmFollowUpStatus)[keyof typeof CrmFollowUpStatus];
 
 export const CrmErrorCode = {
   LEAD_NOT_FOUND: 'LEAD_NOT_FOUND',
@@ -199,8 +195,7 @@ export const PrepaymentRequirement = {
   PARTIAL: 'PARTIAL',
   FULL: 'FULL',
 } as const;
-export type PrepaymentRequirement =
-  (typeof PrepaymentRequirement)[keyof typeof PrepaymentRequirement];
+export type PrepaymentRequirement = (typeof PrepaymentRequirement)[keyof typeof PrepaymentRequirement];
 
 // FastQue Credits / Wallet V1 — see schema.prisma's CreditTransactionType doc comment for what
 // each value means and why this is a separate concept from LedgerReason/LedgerStatus above. There
@@ -212,8 +207,7 @@ export const CreditTransactionType = {
   RESTORED: 'RESTORED',
   MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT',
 } as const;
-export type CreditTransactionType =
-  (typeof CreditTransactionType)[keyof typeof CreditTransactionType];
+export type CreditTransactionType = (typeof CreditTransactionType)[keyof typeof CreditTransactionType];
 
 // FastQue Credits / Wallet V1 — see schema.prisma's CreditFundingSource doc comment. Only
 // FASTQUE_FUNDED is ever actually produced by any code in this phase.
@@ -221,8 +215,7 @@ export const CreditFundingSource = {
   FASTQUE_FUNDED: 'FASTQUE_FUNDED',
   SHOP_FUNDED: 'SHOP_FUNDED',
 } as const;
-export type CreditFundingSource =
-  (typeof CreditFundingSource)[keyof typeof CreditFundingSource];
+export type CreditFundingSource = (typeof CreditFundingSource)[keyof typeof CreditFundingSource];
 
 // FastQue Credits / Wallet V1 — see schema.prisma's PlatformShopSubsidyEntry doc comment.
 export const SubsidyLedgerStatus = {
@@ -230,8 +223,7 @@ export const SubsidyLedgerStatus = {
   SETTLED: 'SETTLED',
   VOIDED: 'VOIDED',
 } as const;
-export type SubsidyLedgerStatus =
-  (typeof SubsidyLedgerStatus)[keyof typeof SubsidyLedgerStatus];
+export type SubsidyLedgerStatus = (typeof SubsidyLedgerStatus)[keyof typeof SubsidyLedgerStatus];
 
 export const BookingStatus = {
   PENDING_PAYMENT: 'PENDING_PAYMENT',
@@ -268,12 +260,9 @@ export const BookingAttributionSource = {
   OTHER: 'OTHER',
   UNKNOWN: 'UNKNOWN',
 } as const;
-export type BookingAttributionSource =
-  (typeof BookingAttributionSource)[keyof typeof BookingAttributionSource];
+export type BookingAttributionSource = (typeof BookingAttributionSource)[keyof typeof BookingAttributionSource];
 
-export const BOOKING_ATTRIBUTION_SOURCES = Object.values(
-  BookingAttributionSource,
-) as BookingAttributionSource[];
+export const BOOKING_ATTRIBUTION_SOURCES = Object.values(BookingAttributionSource) as BookingAttributionSource[];
 
 export const QueueEntrySource = {
   WALK_IN: 'WALK_IN',
@@ -356,8 +345,7 @@ export const CustomerSubscriptionStatus = {
   EXPIRED: 'EXPIRED',
   CANCELLED: 'CANCELLED',
 } as const;
-export type CustomerSubscriptionStatus =
-  (typeof CustomerSubscriptionStatus)[keyof typeof CustomerSubscriptionStatus];
+export type CustomerSubscriptionStatus = (typeof CustomerSubscriptionStatus)[keyof typeof CustomerSubscriptionStatus];
 
 // Every balance-affecting event on a CustomerSubscription's AI credits — see AiCreditTransaction
 // in schema.prisma and AiCreditService, the only writer of this table.
@@ -368,8 +356,7 @@ export const AiCreditTransactionType = {
   RELEASE: 'RELEASE',
   MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT',
 } as const;
-export type AiCreditTransactionType =
-  (typeof AiCreditTransactionType)[keyof typeof AiCreditTransactionType];
+export type AiCreditTransactionType = (typeof AiCreditTransactionType)[keyof typeof AiCreditTransactionType];
 
 export const SubscriptionStatus = {
   PILOT: 'PILOT',
@@ -406,8 +393,7 @@ export const NotificationCategory = {
   REMINDERS: 'REMINDERS',
   PROMOTIONAL: 'PROMOTIONAL',
 } as const;
-export type NotificationCategory =
-  (typeof NotificationCategory)[keyof typeof NotificationCategory];
+export type NotificationCategory = (typeof NotificationCategory)[keyof typeof NotificationCategory];
 
 // Stable machine-readable error codes for authentication — API.md's convention: clients branch on
 // `error.code`, never on `error.message`. Shared so backend and every client agree on the exact
@@ -526,6 +512,9 @@ export const AuthErrorCode = {
   // which part of email+password was wrong.
   GOOGLE_ACCOUNT_NOT_STAFF: 'GOOGLE_ACCOUNT_NOT_STAFF',
   GOOGLE_ACCOUNT_NOT_ADMIN: 'GOOGLE_ACCOUNT_NOT_ADMIN',
+  APPLE_TOKEN_INVALID: 'APPLE_TOKEN_INVALID',
+  APPLE_PROVIDER_UNAVAILABLE: 'APPLE_PROVIDER_UNAVAILABLE',
+  APPLE_ACCOUNT_NOT_STAFF: 'APPLE_ACCOUNT_NOT_STAFF',
   TOTP_REQUIRED: 'TOTP_REQUIRED',
   TOTP_INVALID: 'TOTP_INVALID',
   TOTP_SETUP_REQUIRED: 'TOTP_SETUP_REQUIRED',
@@ -625,8 +614,7 @@ export const ReviewSourceState = {
   LINK_ONLY: 'LINK_ONLY',
   UNAVAILABLE: 'UNAVAILABLE',
 } as const;
-export type ReviewSourceState =
-  (typeof ReviewSourceState)[keyof typeof ReviewSourceState];
+export type ReviewSourceState = (typeof ReviewSourceState)[keyof typeof ReviewSourceState];
 
 // Phase 18 (Shop / Barber Verification Foundation) — foundation only: manual PLATFORM_ADMIN
 // review of owner-supplied evidence, never automated KYC/identity verification. See
@@ -635,8 +623,7 @@ export const VerificationSubjectType = {
   SHOP: 'SHOP',
   PROFESSIONAL: 'PROFESSIONAL',
 } as const;
-export type VerificationSubjectType =
-  (typeof VerificationSubjectType)[keyof typeof VerificationSubjectType];
+export type VerificationSubjectType = (typeof VerificationSubjectType)[keyof typeof VerificationSubjectType];
 
 // Contact-list import preview only. These attestations are not independently verified consent.
 export const ContactConsentSource = {
@@ -646,8 +633,7 @@ export const ContactConsentSource = {
   WRITTEN: 'WRITTEN',
   WEBSITE_FORM: 'WEBSITE_FORM',
 } as const;
-export type ContactConsentSource =
-  (typeof ContactConsentSource)[keyof typeof ContactConsentSource];
+export type ContactConsentSource = (typeof ContactConsentSource)[keyof typeof ContactConsentSource];
 
 export const ContactImportValidationStatus = {
   VALIDATED_FOR_REVIEW: 'VALIDATED_FOR_REVIEW',
@@ -657,8 +643,7 @@ export const ContactImportValidationStatus = {
   CONSENT_TIMESTAMP_INVALID: 'CONSENT_TIMESTAMP_INVALID',
   DUPLICATE_IN_BATCH: 'DUPLICATE_IN_BATCH',
 } as const;
-export type ContactImportValidationStatus =
-  (typeof ContactImportValidationStatus)[keyof typeof ContactImportValidationStatus];
+export type ContactImportValidationStatus = (typeof ContactImportValidationStatus)[keyof typeof ContactImportValidationStatus];
 
 // NOT_SUBMITTED is never a stored value — see VerificationRequest's own doc comment: absence of a
 // row IS "not submitted," the same "no row = default" convention used elsewhere in this schema.
@@ -682,8 +667,7 @@ export const VerificationErrorCode = {
   // e.g. deciding a request that isn't UNDER_REVIEW, or starting review on one that isn't SUBMITTED.
   INVALID_VERIFICATION_TRANSITION: 'INVALID_VERIFICATION_TRANSITION',
 } as const;
-export type VerificationErrorCode =
-  (typeof VerificationErrorCode)[keyof typeof VerificationErrorCode];
+export type VerificationErrorCode = (typeof VerificationErrorCode)[keyof typeof VerificationErrorCode];
 
 export const LocationVerificationErrorCode = {
   PROPOSAL_NOT_FOUND: 'LOCATION_PROPOSAL_NOT_FOUND',
@@ -691,8 +675,7 @@ export const LocationVerificationErrorCode = {
   REVIEWER_MUST_DIFFER: 'LOCATION_REVIEWER_MUST_DIFFER',
   CURSOR_INVALID: 'LOCATION_CURSOR_INVALID',
 } as const;
-export type LocationVerificationErrorCode =
-  (typeof LocationVerificationErrorCode)[keyof typeof LocationVerificationErrorCode];
+export type LocationVerificationErrorCode = (typeof LocationVerificationErrorCode)[keyof typeof LocationVerificationErrorCode];
 
 export const PremiumErrorCode = {
   PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
