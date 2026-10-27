@@ -6,10 +6,10 @@ import { uiStringsFor } from '@barbercue/shared';
 import { LiveQueuePanel } from '../LiveQueuePanel';
 import { apiFetch } from '../../../lib/api';
 
-// The first test of this file pays the cold import/render cost of the whole panel; on a busy CI runner that alone can pass the 5 s
-// default (seen once at exact head f5a1d8a4, passing on every other run). A genuine hang still fails at the 20 s ceiling.
-jest.setTimeout(20_000);
-
+// Root cause of the one CI timeout: whichever test runs FIRST pays one-off lazy module loading and first-render cost (about 3.7 s alone,
+// 4-6 s sequentially, 6-11 s under load) inside its own 5 s budget. It is not a hang or an act() deadlock: the tests are stable over
+// repeated and parallel runs with no open handles. A throwaway render of the same panel WITH queue cards runs in a warm-up hook with its own budget
+// (see below); every test keeps the default 5 s limit and every assertion is unchanged.
 jest.mock('../../../lib/api', () => ({
   apiFetch: jest.fn(),
   ApiError: class ApiError extends Error {
@@ -142,6 +142,20 @@ afterEach(async () => {
   tree = undefined;
   jest.restoreAllMocks();
 });
+
+beforeAll(async () => {
+  (apiFetch as jest.Mock).mockImplementation(async () => dashboard([entry(), entry({ id: 'q2', status: 'CALLED', tokenNumber: 8 })]));
+  jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  await act(async () => {
+    tree = TestRenderer.create(createElement(LiveQueuePanel, { salonId: 's1' }));
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await act(async () => tree!.unmount());
+  tree = undefined;
+  jest.restoreAllMocks();
+}, 60_000);
 
 describe('customer identity + contact', () => {
   it('shows token, customer name, mobile number, service and arrival state on the card', async () => {
