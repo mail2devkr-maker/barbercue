@@ -198,7 +198,7 @@ export class SalonServicesService {
     await this.salonAccess.assertOwnerOrAdminAccess(userId, salonId);
     const salon = await this.prisma.salon.findUnique({
       where: { id: salonId },
-      select: { salonType: true },
+      select: { salonType: true, salonTypeConfirmed: true },
     });
     if (!salon) {
       throw new AppException(
@@ -207,7 +207,7 @@ export class SalonServicesService {
         HttpStatus.NOT_FOUND,
       );
     }
-    return { salonType: salon.salonType };
+    return { salonType: salon.salonType, salonTypeConfirmed: salon.salonTypeConfirmed };
   }
 
   async updateSalonType(
@@ -230,8 +230,9 @@ export class SalonServicesService {
 
     const salon = await this.prisma.salon.update({
       where: { id: salonId },
-      data: { salonType: input.salonType },
-      select: { salonType: true },
+      // Saving the type — even re-saving the current value — is the owner's confirmation of it.
+      data: { salonType: input.salonType, salonTypeConfirmed: true },
+      select: { salonType: true, salonTypeConfirmed: true },
     });
 
     if (actor === 'PLATFORM_ADMIN') {
@@ -249,7 +250,7 @@ export class SalonServicesService {
       });
     }
 
-    return { salonType: salon.salonType };
+    return { salonType: salon.salonType, salonTypeConfirmed: salon.salonTypeConfirmed };
   }
 
   async list(userId: string, salonId: string): Promise<SalonServiceDto[]> {
