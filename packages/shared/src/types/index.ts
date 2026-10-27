@@ -544,6 +544,18 @@ export interface SalonListItemDto extends SalonSummary {
   // Shop-configured percentage applied only to FastQue APP/WEB bookings. Service.price remains the
   // shop's original list price; clients use this value only for an honest pre-booking preview.
   onlineBookingDiscountPercent?: number;
+  // Discovery upgrade. salonTypeConfirmed is false for salons whose type was never chosen by the
+  // owner (salonType then only holds the UNISEX column default) — clients show "Type not set".
+  salonType?: "GENTS" | "LADIES" | "UNISEX";
+  salonTypeConfirmed?: boolean;
+  // Only when a popular service was selected: the cheapest active matching service at this salon,
+  // with its own salon-specific name. This — never priceMin — is what price comparison uses.
+  selectedService?: { id: string; name: string; price: number; durationMinutes: number } | null;
+}
+
+// GET favorites — a customer's saved salons, newest first.
+export interface FavoriteSalonDto extends SalonListItemDto {
+  favoritedAt: string;
 }
 
 // GET salons/:salonId/booking/recent-activity — Issue #13 Mission H, the per-shop "last 30
@@ -1553,6 +1565,8 @@ export interface PublicQueueQrDto {
 // returned for ACTIVE salons and never exposes inactive rows — an owner must see and manage both.
 export interface SalonTypeResultDto {
   salonType: SalonType;
+  // false until the owner has chosen the type (older salons only carry the UNISEX default).
+  salonTypeConfirmed?: boolean;
 }
 
 export interface SalonServiceDto {
