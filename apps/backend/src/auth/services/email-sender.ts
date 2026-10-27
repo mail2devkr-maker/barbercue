@@ -19,6 +19,12 @@ export interface EmailSender {
     setupUrl: string,
     expiresInDays: number,
   ): Promise<void>;
+  /** Single-use link that lets the holder of this inbox accept ownership of a shop (administrator-run transfer). */
+  sendOwnerTransferInvitation(
+    email: string,
+    acceptUrl: string,
+    expiresInHours: number,
+  ): Promise<void>;
 }
 
 export const EMAIL_SENDER = Symbol('EMAIL_SENDER');
@@ -50,6 +56,17 @@ export class ConsoleEmailSender implements EmailSender {
     );
     return Promise.resolve();
   }
+
+  sendOwnerTransferInvitation(
+    email: string,
+    acceptUrl: string,
+    expiresInHours: number,
+  ): Promise<void> {
+    this.logger.warn(
+      `Development owner-transfer invitation capture for ${email}: ${acceptUrl} (valid ${expiresInHours} hours).`,
+    );
+    return Promise.resolve();
+  }
 }
 
 /** Production fails truthfully until an explicitly approved transactional transport is bound. */
@@ -68,6 +85,10 @@ export class UnavailableProductionEmailSender implements EmailSender {
   }
 
   sendStaffInvitation(): Promise<void> {
+    this.assertAvailable();
+  }
+
+  sendOwnerTransferInvitation(): Promise<void> {
     this.assertAvailable();
   }
 }

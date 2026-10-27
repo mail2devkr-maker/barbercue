@@ -32,6 +32,7 @@ import { DashboardReviewsModule } from './dashboard-reviews/dashboard-reviews.mo
 import { VerificationModule } from './verification/verification.module';
 import { CustomerCreditsModule } from './credits/customer-credits.module';
 import { EmployeeModule } from './employee/employee.module';
+import { OwnerTransferModule } from './owner-transfer/owner-transfer.module';
 import { DbDeadlineSchedulerModule } from './common/db-deadline-scheduler/db-deadline-scheduler.module';
 import { SiteMetricsModule } from './site-metrics/site-metrics.module';
 import { OwnerOpsModule } from './owner-ops/owner-ops.module';
@@ -50,6 +51,7 @@ import { InventoryModule } from './inventory/inventory.module';
     HealthModule,
     AuthModule,
     EmployeeModule,
+    OwnerTransferModule,
     // BookingsModule and QueueModule are registered before SalonsModule so their
     // `salons/:salonId/...` sub-routes (BookingInfoController's `booking/{staff,availability,
     // cancellation-policy}`, SalonQueueController's `queue/{status,join}`) are matched by
