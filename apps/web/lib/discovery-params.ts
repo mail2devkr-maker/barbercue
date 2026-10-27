@@ -111,15 +111,16 @@ export function withParams(params: URLSearchParams, changes: Record<string, stri
 }
 
 /**
- * Changing the compared service resets its price range (a ₹100–₹300 haircut range means nothing for
- * a facial) and a price sort that no longer has a service.
+ * Switching from one compared service to another (or clearing it) resets the price range — a
+ * ₹100–₹300 haircut range means nothing for a facial — and a price sort that no longer has a
+ * service. Picking a first service keeps a range set for "any service", now applied to that service.
  */
 export function popularServiceChange(params: URLSearchParams, serviceId: string | null): Record<string, string | null> {
   const state = readDiscoveryState(params);
+  const keepRange = state.popularService === null && serviceId !== null;
   return {
     popularService: serviceId,
-    priceMin: null,
-    priceMax: null,
+    ...(keepRange ? {} : { priceMin: null, priceMax: null }),
     ...(serviceId === null && SERVICE_PRICE_SORTS.includes(state.sort) && !state.legacyService ? { sort: null } : {}),
   };
 }

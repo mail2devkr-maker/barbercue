@@ -50,6 +50,10 @@ describe('discovery URL rules', () => {
     expect(searchApiQuery(p('sort=price&popularService=haircut&view=compare'))).toBe('popularService=haircut&sort=price');
   });
 
+  it('keeps an any-service range when a first service is picked', () => {
+    expect(popularServiceChange(p('priceMax=500'), 'haircut')).toEqual({ popularService: 'haircut' });
+  });
+
   it('resets the price range (and a now-impossible price sort) when the compared service changes', () => {
     expect(popularServiceChange(p('popularService=haircut&priceMin=100&priceMax=300&sort=price'), 'facial')).toEqual({ popularService: 'facial', priceMin: null, priceMax: null });
     expect(popularServiceChange(p('popularService=haircut&sort=price'), null)).toEqual({ popularService: null, priceMin: null, priceMax: null, sort: null });
@@ -81,12 +85,18 @@ describe('discovery URL rules', () => {
 describe('filter controls', () => {
   const state = (q) => readDiscoveryState(new URLSearchParams(q));
 
-  it('disables the price slider until a service is chosen', () => {
+  it('the price slider works without a service, for salons with any service in range', () => {
+    const onChange = jest.fn();
     let tree;
-    act(() => { tree = TestRenderer.create(<FiltersPanel state={state('')} onChange={jest.fn()} onClearAll={jest.fn()} activeCount={0} />); });
+    act(() => { tree = TestRenderer.create(<FiltersPanel state={state('')} onChange={onChange} onClearAll={jest.fn()} activeCount={0} />); });
     const priceFieldset = tree.root.findAll((n) => n.type === 'fieldset').find((f) => textOf(f).startsWith('Price'));
-    expect(priceFieldset.props.disabled).toBe(true);
-    expect(textOf(priceFieldset)).toContain('Select a service to filter by price.');
+    expect(priceFieldset.props.disabled).toBeUndefined();
+    expect(textOf(priceFieldset)).toContain('(any service)');
+    expect(textOf(priceFieldset)).toContain('Salons with at least one service in this range.');
+    const max = priceFieldset.findAll((n) => n.type === 'input' && n.props['aria-label'] === 'Maximum price')[0];
+    act(() => max.props.onChange({ target: { value: '500' } }));
+    act(() => max.props.onPointerUp());
+    expect(onChange).toHaveBeenLastCalledWith({ priceMin: null, priceMax: '500' });
   });
 
   it('salon type and popular services report their changes', () => {
@@ -100,7 +110,7 @@ describe('filter controls', () => {
     act(() => haircut.props.onClick());
     expect(onChange).toHaveBeenLastCalledWith({ __popularService: null });
     const priceFieldset = tree.root.findAll((n) => n.type === 'fieldset').find((f) => textOf(f).startsWith('Price'));
-    expect(priceFieldset.props.disabled).toBe(false);
+    expect(priceFieldset.props.disabled).toBeUndefined();
     expect(textOf(priceFieldset)).toContain('for Haircut');
   });
 

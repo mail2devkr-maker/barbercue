@@ -44,7 +44,6 @@ const rupees = (value: number) => `₹${new Intl.NumberFormat("en-IN").format(va
 
 /** Two-thumb price slider for the selected service. Applies when a thumb is released. */
 export function ServicePriceSlider({ state, onChange }: { state: DiscoveryState; onChange: (changes: Changes) => void }) {
-  const enabled = state.popularService !== null;
   const service = popularServiceById(state.popularService);
   const [min, setMin] = useState(state.priceMin ?? PRICE_SLIDER_MIN);
   const [max, setMax] = useState(state.priceMax ?? PRICE_SLIDER_MAX);
@@ -76,12 +75,12 @@ export function ServicePriceSlider({ state, onChange }: { state: DiscoveryState;
   const label = `${rupees(min)} – ${max >= PRICE_SLIDER_MAX ? `${rupees(PRICE_SLIDER_MAX)}+` : rupees(max)}`;
 
   return (
-    <fieldset className={styles.section} disabled={!enabled} aria-describedby={`${id}-help`}>
+    <fieldset className={styles.section} aria-describedby={`${id}-help`}>
       <legend className={styles.legend}>
-        Price range {service ? <span className={styles.legendSub}>(for {service.label})</span> : null}
+        Price range <span className={styles.legendSub}>{service ? `(for ${service.label})` : "(any service)"}</span>
       </legend>
-      <p className={styles.rangeValue} aria-live="polite">{enabled ? label : "Any price"}</p>
-      <div className={`${styles.slider} ${enabled ? "" : styles.sliderDisabled}`}>
+      <p className={styles.rangeValue} aria-live="polite">{min <= PRICE_SLIDER_MIN && max >= PRICE_SLIDER_MAX ? "Any price" : label}</p>
+      <div className={styles.slider}>
         <div className={styles.track} aria-hidden="true">
           <div className={styles.trackFill} style={{ left: `${left}%`, width: `${Math.max(0, right - left)}%` }} />
         </div>
@@ -115,7 +114,9 @@ export function ServicePriceSlider({ state, onChange }: { state: DiscoveryState;
         <span>{rupees(PRICE_SLIDER_MAX)}+</span>
       </div>
       <p id={`${id}-help`} className={styles.help}>
-        {enabled ? `Only salons whose ${service!.label.toLowerCase()} price is in this range.` : "Select a service to filter by price."}
+        {service
+          ? `Only salons whose ${service.label.toLowerCase()} price is in this range.`
+          : "Salons with at least one service in this range. Pick a service to compare its price."}
       </p>
     </fieldset>
   );
