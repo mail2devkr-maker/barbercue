@@ -5,6 +5,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { SalonQueueController } from './salon-queue.controller';
 import { QueueEntriesController } from './queue-entries.controller';
 import { QueueContactController } from './queue-contact.controller';
+import { QueueGuestController } from './queue-guest.controller';
 import { BookingCheckInController } from './booking-check-in.controller';
 import { DashboardQueueController } from './dashboard-queue.controller';
 import { QueueService } from './queue.service';
@@ -29,6 +30,7 @@ import { AssignmentReleaseModule } from './assignment-release.module';
     SalonQueueController,
     QueueEntriesController,
     QueueContactController,
+    QueueGuestController,
     BookingCheckInController,
     DashboardQueueController,
     ManualChairOccupancyController,
