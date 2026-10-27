@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, Vibration, View } from 'react-native';
 import * as Speech from 'expo-speech';
 import { Language, QUEUE_ENTRIES_PATH, SPEECH_LOCALE, voiceAnnouncementsFor, type QueueEntryDetailDto, type UiStrings } from '@barbercue/shared';
 import { apiFetch, ApiError } from '../lib/api';
@@ -35,9 +35,22 @@ export function QueueStatusPanel({
   const { user } = useAuth();
   const { t } = useLanguage();
   const [turnAlert, setTurnAlert] = useState(false);
+  const [shopPhone, setShopPhone] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const canCancel = entry.bookingId === null && (entry.status === 'WAITING' || entry.status === 'CALLED');
+
+  useEffect(() => {
+    if (!ACTIVE_STATUSES.has(entry.status)) {
+      setShopPhone(null);
+      return;
+    }
+    let cancelled = false;
+    apiFetch<{ shopPhone: string | null }>(`${QUEUE_ENTRIES_PATH}/${entry.id}/shop-contact`)
+      .then((result) => { if (!cancelled) setShopPhone(result.shopPhone); })
+      .catch(() => { if (!cancelled) setShopPhone(null); });
+    return () => { cancelled = true; };
+  }, [entry.id, entry.status]);
 
   async function cancelQueue(): Promise<void> {
     if (!canCancel || cancelling) return;
@@ -146,6 +159,18 @@ export function QueueStatusPanel({
           {entry.assignedStaffName ? `${t.withBarberPrefix}${entry.assignedStaffName}` : t.inService}
           {entry.assignedChairLabel ? ` — ${entry.assignedChairLabel}` : ''}
         </Text>
+      )}
+      {shopPhone && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Call shop about your Live Queue"
+          onPress={() => void Linking.openURL(`tel:${shopPhone}`).catch(() =>
+            Alert.alert('Unable to place call', 'Use your phone dialer to contact the shop.'),
+          )}
+          style={styles.cancelQueueButton}
+        >
+          <Text style={styles.cancelQueueText}>Call shop: {shopPhone}</Text>
+        </Pressable>
       )}
       {canCancel && (
         <Pressable
