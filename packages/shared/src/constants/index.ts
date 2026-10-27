@@ -162,6 +162,12 @@ export const OTP_RESEND_COOLDOWN_SECONDS = 45;
 // Base segments for the public discovery API (CitiesController/SalonsController) — dynamic
 // segments (:citySlug, :salonSlug, etc.) are interpolated at the call site, same pattern as
 // HEALTH_PATH usage.
+// Customer favorites: favorites (list), favorites/ids, favorites/:salonId (POST add / DELETE remove).
+export const FAVORITES_PATHS = {
+  favorites: 'favorites',
+  ids: 'ids',
+} as const;
+
 export const DISCOVERY_PATHS = {
   cities: 'cities',
   // cities/all — every city the platform operates in, unfiltered. Distinct from `cities`, which
