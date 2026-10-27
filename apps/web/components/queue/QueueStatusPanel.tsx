@@ -40,9 +40,22 @@ export function QueueStatusPanel({
   onEntryChange: (entry: QueueEntryDetailDto | null) => void;
 }) {
   const [turnAlert, setTurnAlert] = useState(false);
+  const [shopPhone, setShopPhone] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const canCancel = entry.bookingId === null && (entry.status === "WAITING" || entry.status === "CALLED");
+
+  useEffect(() => {
+    if (!ACTIVE_STATUSES.has(entry.status)) {
+      setShopPhone(null);
+      return;
+    }
+    let cancelled = false;
+    apiFetch<{ shopPhone: string | null }>(`${QUEUE_ENTRIES_PATH}/${entry.id}/shop-contact`)
+      .then((result) => { if (!cancelled) setShopPhone(result.shopPhone); })
+      .catch(() => { if (!cancelled) setShopPhone(null); });
+    return () => { cancelled = true; };
+  }, [entry.id, entry.status]);
 
   async function cancelMyQueue(): Promise<void> {
     if (cancelling || !canCancel) return;
@@ -173,6 +186,14 @@ export function QueueStatusPanel({
           {entry.assignedStaffName ? <>With <strong>{entry.assignedStaffName}</strong></> : "In service"}
           {entry.assignedChairLabel ? ` — ${entry.assignedChairLabel}` : ""}
         </p>
+      )}
+      {shopPhone && (
+        <div className={styles.customerCancelWrap}>
+          <a href={`tel:${shopPhone}`} aria-label="Call shop about your Live Queue">
+            Call shop — {shopPhone}
+          </a>
+          <p className={styles.ticketReassure}>Uses the shop's public business number; normal carrier charges may apply.</p>
+        </div>
       )}
       {canCancel && (
         <div className={styles.customerCancelWrap}>
