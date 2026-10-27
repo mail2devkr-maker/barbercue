@@ -5,8 +5,10 @@ Date: 2026-10-27 (IST)
 ## Evidence boundary
 
 - iOS source base: PR #315, `3e9b533ffeddf7d9c2edc24c1b1cd07bb04990c8` (OPEN, Draft).
-- Live web/backend source baseline recorded by Issue #308: `7069b299dab5b58732f630179f1395e267dcae9a`.
-- This parity candidate is an uncommitted, isolated worktree based on the PR #315 head. Its local changes have not yet been pushed, reviewed, or run through GitHub CI. A passing unit test or JS export below is not production, TestFlight, or physical-device certification.
+- Parity PR: #331, `8efb9acf8bac0a340ca3059ee3d26372018259de` (OPEN, Draft; stacked on #315).
+- Current production master was rechecked at `7069b299dab5b58732f630179f1395e267dcae9a`.
+- At pre-edit refresh the isolated PR #331 worktree was at the exact head with tracked files clean; this session now has the owner-analytics refinement plus new local export/cache artifacts. The source change is not part of PR #331 until committed and pushed.
+- Exact-head PR #331 workflows: Owner Operations Certification run `40534750804` SUCCESS; iOS Simulator Smoke run `40534751417` SUCCESS. These do not certify production, TestFlight, or physical-device behavior.
 - “Source present” means a native route/component/API call exists; it does not prove the production backend, authentication, or real device flow works.
 - Scope is current live website functionality. Unmerged Draft UI work is not counted as a live-web feature or an iOS release dependency.
 
@@ -32,8 +34,8 @@ Date: 2026-10-27 (IST)
 | Live Queue and booking management | `OwnerQueueScreen`, `OwnerBookingsScreen`; owner APIs | Verify assigned versus in-service transitions, cancellation reasons, concurrency, and notifications. | Source present; authenticated runtime NOT VERIFIED |
 | Shop settings, services, chairs, staff, hours, photos, QR | `OwnerShopScreen`, setup sections/catalog picker; owner APIs | Verify CRUD and role authorization without modifying a real shop during acceptance. | Source present; full parity/runtime NOT VERIFIED |
 | Owner notifications and arrival/voice preferences | Dashboard account/notifications and `OwnerVoiceSettingsCard` | Verify persistence, notification delivery behavior, and voice ON/OFF on a real device; audible playback is not yet certified. | Source present; device/runtime NOT VERIFIED |
-| Revenue and analytics charts/exports | No dedicated native owner analytics/revenue screen found in navigator | Web has revenue, analytics, cancellations, and export pages. Define the required mobile scope and implement a native read-only surface using existing authorized APIs; validate arithmetic/timezone. | Missing launch parity; BLOCKED pending implementation and review |
-| Owner invoices and recorded payment/refund history | Candidate adds `OwnerInvoicesScreen` / `OwnerInvoiceDetailScreen`; owner-scoped `GET dashboard/salons/:salonId/invoices` APIs | Verify authorized owner can read the selected shop only and that payment status matches persisted records. Invoice issue/void, payment entry, refund, and billing-profile editing are not implemented in this candidate. Never mark paid from QR display. | Candidate read-only source added; local tests pending rerun; production authorization NOT VERIFIED; write workflows remain missing |
+| Revenue and analytics charts/exports | Candidate adds `OwnerAnalyticsScreen` linked from the owner dashboard; it uses the owner-only `GET dashboard/salons/:salonId/analytics?range=today\|7d\|30d` contract and the salon-selected scope | Includes appointment/cancellation/no-show KPIs, daily and service-level listed-price estimates, customer visit counts, and clear non-revenue disclaimer. The screen is read-only; owner revenue reports/exports and full analytics parity remain separate gaps. | Candidate source present in local worktree; focused tests 4/4 PASS; full suite 260/260 PASS; PR review/CI pending |
+| Owner invoices and recorded payment/refund history | Candidate adds `OwnerInvoicesScreen` / `OwnerInvoiceDetailScreen`; owner-scoped `GET dashboard/salons/:salonId/invoices` APIs | Verify authorized owner can read the selected shop only and that payment status matches persisted records. Invoice issue/void, payment entry, refund, and billing-profile editing are not implemented in this candidate. Never mark paid from QR display. | Candidate read-only source; local tests 10/10 PASS and full suite 260/260 PASS; production authorization NOT VERIFIED; write workflows remain missing |
 | Inventory and stock history | No native inventory routes found | Web has products, purchases, adjustments, reports, suppliers, and stock history. Requires a scoped implementation/API review before claiming parity. | Missing launch parity; BLOCKED |
 | Cancellations analytics and owner review management | No dedicated native owner routes found | Web has cancellation analysis and review management. Keep admin/owner RBAC distinct; add only after reviewed scope. | Missing launch parity; BLOCKED |
 | Offers, campaign, and promotion management | Native customer offers are not owner campaign management | Owner draft/preview/publish/pause, eligibility, and redemption controls remain web-only. | Missing launch parity; BLOCKED |
@@ -48,22 +50,22 @@ Date: 2026-10-27 (IST)
 
 ## Candidate change and test record
 
-- Adds customer-facing public Offers browsing, offer-ID handoff into the existing server-validated booking request, customer-scoped invoice list/detail, and owner-scoped read-only invoice/payment history.
+- PR #331 adds customer-facing public Offers browsing, offer-ID handoff into the existing server-validated booking request, customer-scoped invoice list/detail, and owner-scoped read-only invoice/payment history. The current uncommitted refinement adds the owner analytics view described above.
 - Does not change backend source, database schema, Expo native modules, Android configuration, production services, or customer data.
-- Focused mobile tests: 4 suites / 10 tests PASS after adding salon-scoped owner invoice read-only coverage.
-- Full mobile Jest: 36 suites / 256 tests PASS.
-- Mobile TypeScript check: PASS.
-- iOS JavaScript export: PASS (Metro export only; not a signed native build).
-- `git diff --check`: PASS on the code diff before the parity document was added; rerun before commit.
-- Exact-head GitHub CI for this parity candidate: NOT RUN (not pushed).
-- Native iOS simulator CI exists separately on PR #315 and passed there; it does not certify these new local screens.
+- PR #331 previously recorded focused commerce/invoice tests: 4 suites / 10 tests PASS; full mobile Jest: 36 suites / 256 tests PASS; mobile TypeScript: PASS; iOS JS export: PASS (Metro export only).
+- Current analytics refinement: focused suite 1/1 and 4/4 tests PASS. Final full mobile Jest: 37/37 suites and 260/260 tests PASS using the worktree-local warmed cache. A preceding cold run hit the existing 5-second timeout in multi-service booking CASE 13; the test passed unchanged on isolated rerun (4/4) and on subsequent full runs. The current-master worktree comparison could not execute because that worktree's Jest setup cannot resolve `expo-modules-core`; no assertion or timeout was changed.
+- Mobile TypeScript check: PASS after the analytics screen and localized header changes.
+- iOS JavaScript export for the final analytics source: PASS, 1 bundle / 1,217 modules. The first attempt failed because Hermes could not write to the sandbox shared temp directory; rerunning with temporary output redirected inside this isolated worktree succeeded. This is not a signed IPA.
+- `git diff --check`: PASS before staging; staged-diff check pending immediately before commit.
+- Exact-head GitHub CI for the current analytics refinement: NOT RUN (not pushed).
+- Exact PR #331 native iOS Simulator Smoke `40534751417`: SUCCESS, simulator only; the added analytics view still needs a fresh exact-head run.
 - Signed production IPA, App Store Connect upload, TestFlight, physical iPhone, App Review, and public listing: NOT VERIFIED / NOT DONE.
 
 ## Release blockers
 
 1. PR #315 remains Draft and includes an additive Apple-auth migration. Its auth/migration integration with relevant backend PRs must be rehearsed on disposable PostgreSQL and deployed compatibly before relying on it in production.
-2. The Apple Account Holder must personally accept the pending Apple developer agreement. Do not request or handle account passwords or 2FA codes.
-3. Confirm Sign in with Apple capability/profile, correct App Store Connect FastQue record, accurate Individual seller disclosure, and documented right to publish the company's app under that account.
+2. Apple Developer Program Agreement is verified accepted on October 27, 2026; no further agreement action is currently indicated.
+3. Confirm Sign in with Apple capability/profile, the correct App Store Connect FastQue record, accurate Individual seller disclosure, and documented right to publish the company's app under that account.
 4. Production Google/Apple authentication, verified production API TLS/configuration, and owner/customer role separation need end-to-end acceptance.
 5. The owner-facing revenue, billing, inventory, cancellation/review, and offers-management parity gaps above need an explicit reviewed minimum launch scope; this candidate does not claim full owner-dashboard parity.
 6. A signed store-distribution build and real iPhone/TestFlight acceptance are still required. Simulator evidence cannot substitute.

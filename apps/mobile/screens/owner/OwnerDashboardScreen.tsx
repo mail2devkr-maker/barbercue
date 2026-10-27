@@ -89,7 +89,7 @@ export default function OwnerDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const summaryRequestIdRef = useRef(0);
   const unreadCount = useUnreadNotificationCount();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const loadSummary = useCallback(async () => {
     const requestId = ++summaryRequestIdRef.current;
@@ -318,6 +318,13 @@ export default function OwnerDashboardScreen() {
         </Pressable>
         <Pressable style={styles.quickLink} onPress={() => navigation.navigate('OwnerShopTab')}>
           <Text style={styles.quickLinkText}>{t.manageShop}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerAnalytics' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'व्यावसायिक विश्लेषण' : 'Business analytics'}</Text>
         </Pressable>
       </View>
     </PremiumScreen>

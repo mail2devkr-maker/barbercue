@@ -4,7 +4,9 @@ import OwnerCustomersScreen from '../screens/owner/OwnerCustomersScreen';
 import OwnerCustomerDetailScreen from '../screens/owner/OwnerCustomerDetailScreen';
 import OwnerInvoicesScreen from '../screens/owner/OwnerInvoicesScreen';
 import OwnerInvoiceDetailScreen from '../screens/owner/OwnerInvoiceDetailScreen';
+import OwnerAnalyticsScreen from '../screens/owner/OwnerAnalyticsScreen';
 import { useLanguage } from '../lib/language-context';
+import { fastQue, font } from '../lib/theme';
 
 export type OwnerShopStackParamList = {
   OwnerShop: undefined;
@@ -12,6 +14,7 @@ export type OwnerShopStackParamList = {
   OwnerCustomerDetail: { customerId: string };
   OwnerInvoices: undefined;
   OwnerInvoiceDetail: { salonId: string; invoiceId: string };
+  OwnerAnalytics: undefined;
 };
 
 const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
@@ -21,7 +24,7 @@ const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
 // small native stack instead, same shape as DashboardAccountStack. Services/Chairs/Staff/Hours/
 // Photos all stay on the root screen (they're forms/lists, not a drill-down flow).
 export default function OwnerShopStack() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="OwnerShop" component={OwnerShopScreen} />
@@ -33,6 +36,17 @@ export default function OwnerShopStack() {
       />
       <Stack.Screen name="OwnerInvoices" component={OwnerInvoicesScreen} options={{ headerShown: true, title: 'Shop invoices' }} />
       <Stack.Screen name="OwnerInvoiceDetail" component={OwnerInvoiceDetailScreen} options={{ headerShown: true, title: 'Invoice details' }} />
+      <Stack.Screen
+        name="OwnerAnalytics"
+        component={OwnerAnalyticsScreen}
+        options={{
+          headerShown: true,
+          title: language === 'HI' ? 'विश्लेषण' : 'Analytics',
+          headerStyle: { backgroundColor: fastQue.backgroundRaised },
+          headerTintColor: fastQue.text,
+          headerTitleStyle: { fontFamily: font.bodySemiBold },
+        }}
+      />
     </Stack.Navigator>
   );
 }
