@@ -9,6 +9,7 @@ import OwnerRevenueReportScreen from '../screens/owner/OwnerRevenueReportScreen'
 import OwnerInventoryScreen from '../screens/owner/OwnerInventoryScreen';
 import OwnerCancellationsScreen from '../screens/owner/OwnerCancellationsScreen';
 import OwnerReviewsScreen from '../screens/owner/OwnerReviewsScreen';
+import OwnerOffersScreen from '../screens/owner/OwnerOffersScreen';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
 
@@ -23,6 +24,7 @@ export type OwnerShopStackParamList = {
   OwnerInventory: undefined;
   OwnerCancellations: undefined;
   OwnerReviews: undefined;
+  OwnerOffers: undefined;
 };
 
 const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
@@ -94,6 +96,17 @@ export default function OwnerShopStack() {
         options={{
           headerShown: true,
           title: language === 'HI' ? 'समीक्षाएँ' : 'Reviews',
+          headerStyle: { backgroundColor: fastQue.backgroundRaised },
+          headerTintColor: fastQue.text,
+          headerTitleStyle: { fontFamily: font.bodySemiBold },
+        }}
+      />
+      <Stack.Screen
+        name="OwnerOffers"
+        component={OwnerOffersScreen}
+        options={{
+          headerShown: true,
+          title: language === 'HI' ? 'ऑफ़र और प्रचार' : 'Offers & promotions',
           headerStyle: { backgroundColor: fastQue.backgroundRaised },
           headerTintColor: fastQue.text,
           headerTitleStyle: { fontFamily: font.bodySemiBold },

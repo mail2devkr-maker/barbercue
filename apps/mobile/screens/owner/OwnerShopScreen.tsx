@@ -37,7 +37,7 @@ import type { OwnerShopStackParamList } from '../../navigation/OwnerShopStack';
 export default function OwnerShopScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<OwnerShopStackParamList>>();
   const { selectedSalonId, selectedSalon } = useSalon();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [services, setServices] = useState<ServiceDto[]>([]);
   const [chairs, setChairs] = useState<SalonChairDto[]>([]);
   const [staff, setStaff] = useState<SalonStaffDto[]>([]);
@@ -164,6 +164,10 @@ export default function OwnerShopScreen() {
       <Text style={sectionStyles.sectionTitle}>Billing</Text>
       <Text style={sectionStyles.hint}>Review issued invoices and payment records. Payments are never inferred from a QR code.</Text>
       <Button title="Shop invoices" variant="outline" onPress={() => navigation.navigate('OwnerInvoices')} style={sectionStyles.addButton} />
+
+      <Text style={sectionStyles.sectionTitle}>{language === 'HI' ? 'ऑफ़र और प्रचार' : 'Offers & promotions'}</Text>
+      <Text style={sectionStyles.hint}>{language === 'HI' ? 'ऑनलाइन बुकिंग के लिए ड्राफ़्ट, दैनिक डील और प्रकाशित ऑफ़र प्रबंधित करें।' : 'Create drafts, daily deals and published offers for online bookings.'}</Text>
+      <Button title={language === 'HI' ? 'ऑफ़र प्रबंधित करें' : 'Manage offers'} variant="outline" onPress={() => navigation.navigate('OwnerOffers')} style={sectionStyles.addButton} />
     </Screen>
   );
 }
