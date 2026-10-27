@@ -72,11 +72,13 @@ export function PushNotificationCoordinator() {
   const { status, user } = useAuth();
   const { language } = useLanguage();
   const currentUserRef = useRef<MeResponse | null>(null);
+  const authStatusRef = useRef(status);
   const languageRef = useRef<Language>(language);
   const deferredResponseRef = useRef<Notifications.NotificationResponse | null>(null);
 
   useEffect(() => {
     currentUserRef.current = status === 'authenticated' ? user : null;
+    authStatusRef.current = status;
   }, [status, user]);
 
   useEffect(() => {
@@ -127,8 +129,12 @@ export function PushNotificationCoordinator() {
       requestQueueArrivalNavigation('customer', payload);
       return true;
     }
-    // Guest push is supported as a heads-up, but its ticket remains a separate
-    // capability: never pretend a signed-out device has account-based navigation.
+    if (authStatusRef.current === 'unauthenticated') {
+      // The guest navigator still requires a locally persisted, server-verified ticket.
+      requestQueueArrivalNavigation('guest', payload);
+      return true;
+    }
+    // Auth not restored yet: defer and resolve role or guest access after auth completes.
     return false;
   }
 
@@ -201,6 +207,9 @@ export function PushNotificationCoordinator() {
       const actor = currentUserRef.current;
       if (queuePayload && isOwner(actor)) requestQueueArrivalNavigation('owner', queuePayload);
       else if (queuePayload && isCustomer(actor)) requestQueueArrivalNavigation('customer', queuePayload);
+      else if (queuePayload && authStatusRef.current === 'unauthenticated') {
+        requestQueueArrivalNavigation('guest', queuePayload);
+      }
 
       const payload = parseOwnerBookingPushData(notification.request.content.data);
       if (payload && isOwner(actor)) scheduleForegroundVoiceFallback(payload);
@@ -246,6 +255,15 @@ export function PushNotificationCoordinator() {
       void Notifications.clearLastNotificationResponseAsync();
     }
   }, [status, user]);
+
+  useEffect(() => {
+    if (status !== 'unauthenticated') return;
+    const response = deferredResponseRef.current;
+    if (response && handleQueueArrivalResponse(response, null)) {
+      deferredResponseRef.current = null;
+      void Notifications.clearLastNotificationResponseAsync();
+    }
+  }, [status]);
 
   return null;
 }
