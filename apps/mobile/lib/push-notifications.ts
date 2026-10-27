@@ -193,3 +193,28 @@ export async function unregisterCurrentPushDevice(): Promise<void> {
     await deleteItem(PUSH_DEVICE_STORAGE_KEY);
   }
 }
+
+
+/**
+ * Live Queue guest registration never creates or associates a login account.
+ * The ticket capability can only register delivery to its own queue entry.
+ */
+export async function registerGuestQueuePushDevice(entryId: string, guestAccessToken: string): Promise<boolean> {
+  if (!isNativePlatform()) return false;
+  try {
+    await ensureBookingNotificationChannel();
+    const allowed = await getGrantedPermission();
+    const projectId = getEasProjectId();
+    if (!allowed || !projectId) return false;
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    await apiFetch(`queue-entries/${entryId}/guest-device`, {
+      method: 'POST',
+      headers: { 'X-Queue-Guest-Token': guestAccessToken },
+      body: JSON.stringify({ expoPushToken: token.data }),
+    });
+    return true;
+  } catch {
+    // A denied OS permission or unavailable FCM/APNs never blocks a successful queue join.
+    return false;
+  }
+}
