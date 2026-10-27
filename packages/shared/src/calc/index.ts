@@ -184,7 +184,7 @@ export function estimateWaitRangeMinutes(
 }
 
 // Smart Queue (Phase 5) — "turn approaching" is the point a customer should start heading over.
-export const TURN_APPROACHING_THRESHOLD_MINUTES = 5;
+export const TURN_APPROACHING_THRESHOLD_MINUTES = 10;
 // "Estimated wait meaningfully changed" — small fluctuations every recompute cycle would be noisy
 // enough to be worse than no alert at all; only a real swing is worth interrupting the customer for.
 export const MEANINGFUL_WAIT_CHANGE_MINUTES = 10;
