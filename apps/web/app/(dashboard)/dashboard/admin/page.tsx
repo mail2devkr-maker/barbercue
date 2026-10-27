@@ -7,6 +7,7 @@ import { apiFetch, ApiError } from "../../../../lib/api";
 import { Button, LinkButton } from "../../../../components/ui/Button";
 import { ShopActivityPanel } from "../../../../components/admin/ShopActivityPanel";
 import styles from "./admin.module.css";
+import { getNextShopStatus } from "./admin-actions";
 
 function contact(email: string | null, phone: string | null): string {
   return email ?? phone ?? "Not recorded";
@@ -18,13 +19,6 @@ function dateTime(value: string): string {
 
 function formatCount(value: number): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(value);
-}
-
-function getNextShopStatus(status: SalonStatus): { status: SalonStatus; label: string } | null {
-  if (status === SalonStatus.PENDING) return { status: SalonStatus.ACTIVE, label: "Open shop" };
-  if (status === SalonStatus.ACTIVE) return { status: SalonStatus.SUSPENDED, label: "Suspend" };
-  if (status === SalonStatus.SUSPENDED) return { status: SalonStatus.ACTIVE, label: "Re-open" };
-  return null;
 }
 
 export default function AdminDashboardPage() {
