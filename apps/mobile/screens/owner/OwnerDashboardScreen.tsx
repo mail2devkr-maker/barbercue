@@ -333,6 +333,20 @@ export default function OwnerDashboardScreen() {
         >
           <Text style={styles.quickLinkText}>{language === 'HI' ? 'इन्वेंटरी' : 'Inventory'}</Text>
         </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerCancellations' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'रद्दीकरण' : 'Cancellations'}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          style={styles.quickLink}
+          onPress={() => navigation.navigate('OwnerShopTab', { screen: 'OwnerReviews' })}
+        >
+          <Text style={styles.quickLinkText}>{language === 'HI' ? 'समीक्षाएँ' : 'Reviews'}</Text>
+        </Pressable>
       </View>
     </PremiumScreen>
   );

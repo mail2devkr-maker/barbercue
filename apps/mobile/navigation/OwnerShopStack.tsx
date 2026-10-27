@@ -6,6 +6,8 @@ import OwnerInvoicesScreen from '../screens/owner/OwnerInvoicesScreen';
 import OwnerInvoiceDetailScreen from '../screens/owner/OwnerInvoiceDetailScreen';
 import OwnerAnalyticsScreen from '../screens/owner/OwnerAnalyticsScreen';
 import OwnerInventoryScreen from '../screens/owner/OwnerInventoryScreen';
+import OwnerCancellationsScreen from '../screens/owner/OwnerCancellationsScreen';
+import OwnerReviewsScreen from '../screens/owner/OwnerReviewsScreen';
 import { useLanguage } from '../lib/language-context';
 import { fastQue, font } from '../lib/theme';
 
@@ -17,6 +19,8 @@ export type OwnerShopStackParamList = {
   OwnerInvoiceDetail: { salonId: string; invoiceId: string };
   OwnerAnalytics: undefined;
   OwnerInventory: undefined;
+  OwnerCancellations: undefined;
+  OwnerReviews: undefined;
 };
 
 const Stack = createNativeStackNavigator<OwnerShopStackParamList>();
@@ -55,6 +59,28 @@ export default function OwnerShopStack() {
         options={{
           headerShown: true,
           title: language === 'HI' ? 'इन्वेंटरी' : 'Inventory',
+          headerStyle: { backgroundColor: fastQue.backgroundRaised },
+          headerTintColor: fastQue.text,
+          headerTitleStyle: { fontFamily: font.bodySemiBold },
+        }}
+      />
+      <Stack.Screen
+        name="OwnerCancellations"
+        component={OwnerCancellationsScreen}
+        options={{
+          headerShown: true,
+          title: language === 'HI' ? 'रद्दीकरण' : 'Cancellations',
+          headerStyle: { backgroundColor: fastQue.backgroundRaised },
+          headerTintColor: fastQue.text,
+          headerTitleStyle: { fontFamily: font.bodySemiBold },
+        }}
+      />
+      <Stack.Screen
+        name="OwnerReviews"
+        component={OwnerReviewsScreen}
+        options={{
+          headerShown: true,
+          title: language === 'HI' ? 'समीक्षाएँ' : 'Reviews',
           headerStyle: { backgroundColor: fastQue.backgroundRaised },
           headerTintColor: fastQue.text,
           headerTitleStyle: { fontFamily: font.bodySemiBold },
