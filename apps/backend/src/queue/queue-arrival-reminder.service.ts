@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationDeliveryService } from '../notifications/notification-delivery.service';
 import { QueueService } from './queue.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { ExpoPushSender } from '../push-notifications/expo-push-sender';
 
 /** Customers and shop receive the same T-10 *estimated* service-arrival prompt. */
 export const LIVE_QUEUE_ARRIVAL_LEAD_MINUTES = 10;
@@ -21,6 +22,7 @@ export class QueueArrivalReminderService {
     private readonly queue: QueueService,
     private readonly delivery: NotificationDeliveryService,
     private readonly realtime: RealtimeGateway,
+    private readonly expo: ExpoPushSender,
   ) {}
 
   @Interval(30_000)
@@ -68,6 +70,7 @@ export class QueueArrivalReminderService {
         id: true,
         salonId: true,
         customerId: true,
+        guestExpoPushToken: true,
         tokenNumber: true,
         salon: { select: { ownerUserId: true } },
       },
@@ -127,6 +130,32 @@ export class QueueArrivalReminderService {
         } catch (err) {
           failure = true;
           this.logger.warn(`Live Queue arrival dispatch failed: ${err instanceof Error ? err.message : 'unknown'}`);
+        }
+      }
+      // A guest has no account-bound PushDevice: dispatch to the capability-registered
+      // Expo token instead. Without a registered token, only an open web/app ticket
+      // can display the prompt; never claim a background notification was sent.
+      if (!row.customerId && row.guestExpoPushToken) {
+        try {
+          const tickets = await this.expo.send([{
+            to: row.guestExpoPushToken,
+            title: 'FastQue · Arrival confirmation',
+            body: 'Your Live Queue service is approximately 10 minutes away. Have you arrived?',
+            data: { type: 'queue.arrival_check', salonId: row.salonId, queueEntryId: row.id },
+            channelId: 'booking-updates',
+            priority: 'high',
+            sound: 'default',
+          }]);
+          if (tickets.every((ticket) => ticket.status !== 'ok')) {
+            // A permanently rejected token cannot block the whole queue.
+            await this.prisma.queueEntry.updateMany({
+              where: { id: row.id, guestExpoPushToken: row.guestExpoPushToken },
+              data: { guestExpoPushToken: null },
+            });
+          }
+        } catch (err) {
+          failure = true;
+          this.logger.warn(`Guest push request failed and will retry: ${err instanceof Error ? err.message : 'unknown'}`);
         }
       }
       // If the ledger could not record the event, release the claim so the next sweep
