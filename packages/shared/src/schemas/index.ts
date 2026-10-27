@@ -761,6 +761,51 @@ export type AdminShopActivityQuery = z.infer<
 export const adminAnalyticsRangeQuerySchema = adminShopActivityQuerySchema;
 export type AdminAnalyticsRangeQuery = AdminShopActivityQuery;
 
+// Admin chart builder (docs/admin-dashboard-2.0). Metric keys are a closed list; the backend owns
+// each metric's SQL, unit and date basis.
+export const ADMIN_TIMESERIES_METRICS = [
+  "appointmentsBooked",
+  "appointmentsCompleted",
+  "walkInsServed",
+  "completedVisits",
+  "cancelled",
+  "noShow",
+  "cancellationRatePercent",
+  "completedServiceValuePaise",
+  "serviceHours",
+  "newSalons",
+  "uniqueCustomers",
+  "newCustomers",
+  "averageWaitMinutes",
+] as const;
+export type AdminTimeseriesMetric = (typeof ADMIN_TIMESERIES_METRICS)[number];
+export const ADMIN_TIMESERIES_GRANULARITIES = ["day", "week", "month"] as const;
+export type AdminTimeseriesGranularity =
+  (typeof ADMIN_TIMESERIES_GRANULARITIES)[number];
+export const ADMIN_TIMESERIES_MAX_METRICS = 6;
+export const adminTimeseriesQuerySchema = z
+  .object({
+    from: adminCalendarDate,
+    to: adminCalendarDate,
+    granularity: z.enum(ADMIN_TIMESERIES_GRANULARITIES).default("day"),
+    // Comma-separated metric keys, e.g. "appointmentsBooked,cancelled".
+    metrics: z
+      .string()
+      .transform((value) => [...new Set(value.split(",").map((m) => m.trim()).filter(Boolean))])
+      .pipe(z.array(z.enum(ADMIN_TIMESERIES_METRICS)).min(1).max(ADMIN_TIMESERIES_MAX_METRICS)),
+    compare: z.enum(["none", "previous"]).default("none"),
+  })
+  .superRefine((query, ctx) => {
+    const days =
+      (Date.parse(`${query.to}T00:00:00.000Z`) - Date.parse(`${query.from}T00:00:00.000Z`)) / 86_400_000 + 1;
+    if (days < 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "to must be on or after from" });
+    } else if (days > 366) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "the range cannot exceed 366 days" });
+    }
+  });
+export type AdminTimeseriesQuery = z.infer<typeof adminTimeseriesQuerySchema>;
+
 export const managedAdminRoleSchema = z.enum([
   Role.CO_FOUNDER,
   Role.HR_ADMIN,

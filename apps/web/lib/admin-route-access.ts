@@ -19,6 +19,12 @@ export function canOpenAdminPath(roles: Role[], pathname: string): boolean {
   const sales = roles.includes(Role.SALES_ADMIN);
 
   if (pathname === "/dashboard/admin") return true;
+  // Live shop status and the "planned feature" explainers carry no contact details: every internal role.
+  if (pathname.startsWith("/dashboard/admin/shops/status") || pathname.startsWith("/dashboard/admin/planned/")) return true;
+  // Chart builder: same audience as GET admin/analytics/timeseries.
+  if (pathname.startsWith("/dashboard/admin/analytics")) {
+    return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);
+  }
   // Executive Command Center: mirrors GET admin/analytics/overview (PLATFORM_ADMIN, CO_FOUNDER, PLATFORM_VIEWER).
   if (pathname.startsWith("/dashboard/admin/command-center")) {
     return superAdmin || coFounder || roles.includes(Role.PLATFORM_VIEWER);

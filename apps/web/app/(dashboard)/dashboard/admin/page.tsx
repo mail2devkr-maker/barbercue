@@ -6,7 +6,6 @@ import { useAuth } from "../../../../lib/auth-context";
 import { apiFetch, ApiError } from "../../../../lib/api";
 import { Button, LinkButton } from "../../../../components/ui/Button";
 import { ShopActivityPanel } from "../../../../components/admin/ShopActivityPanel";
-import { canOpenAdminPath } from "../../../../lib/admin-route-access";
 import styles from "./admin.module.css";
 
 function contact(email: string | null, phone: string | null): string {
@@ -29,7 +28,7 @@ export function getNextShopStatus(status: SalonStatus): { status: SalonStatus; l
 }
 
 export default function AdminDashboardPage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const superAdmin = !!user && user.roles.includes(Role.PLATFORM_ADMIN);
   const coFounder = !!user && user.roles.includes(Role.CO_FOUNDER);
   const hrAdmin = !!user && user.roles.includes(Role.HR_ADMIN);
@@ -43,10 +42,6 @@ export default function AdminDashboardPage() {
     !salesAdmin;
   const maskedOverview = !superAdmin && !coFounder;
   const canManageShops = superAdmin || coFounder;
-  const canManageEmployees = superAdmin || coFounder || hrAdmin;
-  const canOpenCrm = superAdmin || coFounder || hrAdmin || salesAdmin;
-  const canReviewVerification = superAdmin || coFounder;
-  const canOpenCommandCenter = !!user && canOpenAdminPath(user.roles, "/dashboard/admin/command-center");
   const [data, setData] = useState<PlatformAdminOverviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -156,12 +151,6 @@ export default function AdminDashboardPage() {
           <Button type="button" variant="outline" onClick={() => { setRefreshToken((n) => n + 1); void loadOverview(); }} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
-          {canOpenCommandCenter && <LinkButton href="/dashboard/admin/command-center" variant="primary">Command center</LinkButton>}
-          {superAdmin && <LinkButton href="/dashboard/admin/access" variant="outline">Access</LinkButton>}
-          {canManageEmployees && <LinkButton href="/dashboard/admin/employees" variant="outline">Employees</LinkButton>}
-          {canOpenCrm && <LinkButton href="/dashboard/admin/crm" variant="outline">Field CRM</LinkButton>}
-          {canReviewVerification && <LinkButton href="/dashboard/admin/verification" variant="outline">Verification queue</LinkButton>}
-          <Button type="button" variant="outline" onClick={() => void logout()}>Log out</Button>
         </div>
       </header>
 

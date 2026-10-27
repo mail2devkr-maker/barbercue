@@ -125,3 +125,26 @@ Thresholds live in one place (`ADMIN_ADOPTION_THRESHOLDS` in `packages/shared`) 
 ## 6. Scale notes
 
 Phase 1 queries are grouped aggregates over indexed columns (`bookings(salonId, slotStart)`, `bookings(salonId, createdAt)`) with ranges capped at 92 days. The adoption view scans every salon once per request; before ~10k salons this should move to a nightly `salon_daily_metrics` summary table (Phase 3) with an explicit "data as of" time. No latency targets are claimed until measured.
+
+## 7. Admin Dashboard 2.1 (UI redesign, charts, live shop status)
+
+Started 2026-10-27 on `feature/admin-dashboard-2.0`.
+
+| 2.1 phase | Status | What exists |
+| --- | --- | --- |
+| A — Admin app shell | ✅ | `components/admin/shell/*`: the owner dashboard's rail + sidebar + toolbar styles (`owner.module.css`), 13 sidebar sections from one registry (`admin-nav.ts`), shared IST reporting period in the top bar (kept across pages for the browser session), phone drawer. Owner routes and navigation are untouched; the public header/footer step aside on `/dashboard/admin/**`. Sidebar items whose data is not recorded open an honest "Planned" page that names what is missing — never sample numbers. |
+| B — Chart builder | ✅ (partial) | `/dashboard/admin/analytics/chart-builder`, `GET admin/analytics/timeseries`: up to 6 KPIs, daily/weekly/monthly, previous-period overlay, line / column / area / combination per series, one y-axis per unit (a third unit is refused, never mixed), legend toggles, hover tooltip, CSV + PNG export, full screen, saved views. **Gaps:** saved views live in the browser (no `ChartPreferences` table yet), no zoom, no geography/salesperson filters, hourly granularity not offered. |
+| C — Customers & staff | ⛔ next | Data exists (bookings, queue entries, service sessions). Needs separate customer-data and staff-data export permissions and an export audit table. |
+| D — Open / closed shops | ✅ (partial) | `/dashboard/admin/shops/status`, `GET admin/shops/status`: scheduled open/closed from weekly hours in each shop's own time zone (overnight hours, closed days, "unknown" when hours or zone are missing), owner's "closed for today", accepting bookings, opening/closing within an hour, "open with no bookings for 4 h", hour-by-hour scheduled-open shops vs visits for today. **Not available:** merchant-app online (not recorded), holiday/one-time exceptions and effective-dated schedule history (no tables) — so no historical open-shop charts. |
+| E — QA | 🔄 | Unit tests for schedule rules, buckets, query validation, chart config, combo chart, navigation and route access; SQL checked against a local QA database. Not done: load testing. |
+
+### Shop status definitions
+
+| Status | Rule |
+| --- | --- |
+| Scheduled open / closed | The shop's configured hours for today (and yesterday's overnight hours) contain / do not contain the current instant, in the shop's time zone. Equal open and close times = 24 hours. |
+| Hours unknown | No hours, no hours for today, or no resolvable time zone — never counted as closed. |
+| Temporarily closed | Owner switched on "closed for today" (`Salon.isClosedForToday`). |
+| Accepting bookings | Shop is ACTIVE and not closed for today. |
+| Open, no bookings | Scheduled open, accepting bookings, and no new booking or walk-in for ≥ 4 hours since it opened (proposed default). |
+| Counts | Only ACTIVE shops are counted as open/closed; pending and suspended shops are listed but not counted. |

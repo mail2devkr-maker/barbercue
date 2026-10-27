@@ -1969,6 +1969,73 @@ export interface AdminExecutiveOverviewDto {
   shopsLimit: number;
 }
 
+// GET admin/analytics/timeseries. Values are null where a bucket has nothing to measure (e.g. a rate
+// with no resolved appointments) — never a fabricated 0.
+export type AdminMetricUnit = "count" | "inr" | "percent" | "hours" | "minutes";
+export interface AdminTimeseriesSeriesDto {
+  metric: string;
+  label: string;
+  unit: AdminMetricUnit;
+  values: Array<number | null>;
+  previousValues?: Array<number | null>;
+}
+export interface AdminTimeseriesDto {
+  from: string;
+  to: string;
+  granularity: "day" | "week" | "month";
+  timeZone: string;
+  generatedAt: string;
+  buckets: string[]; // bucket start dates (YYYY-MM-DD, IST)
+  previousFrom?: string;
+  previousTo?: string;
+  series: AdminTimeseriesSeriesDto[];
+}
+
+// GET admin/shops/status. Scheduled status comes from configured weekly hours in the shop's own time
+// zone; it is NOT proof the shop is physically open. Merchant-app presence is not tracked yet (null).
+export type AdminShopScheduleState = "OPEN" | "CLOSED" | "UNKNOWN";
+export interface AdminShopStatusRowDto {
+  id: string;
+  publicId: string;
+  name: string;
+  city: string;
+  status: SalonStatus;
+  timeZone: string | null;
+  scheduled: AdminShopScheduleState;
+  todayHours: string | null; // e.g. "10:00–21:00", "Closed", null = not configured
+  opensAt: string | null; // ISO instant of the next opening within 24h
+  closesAt: string | null; // ISO instant of the current/next closing within 24h
+  temporarilyClosed: boolean; // owner's "closed for today"
+  acceptingBookings: boolean; // ACTIVE and not closed for today
+  merchantOnline: null;
+  todayBookingsCreated: number;
+  todayVisitsCompleted: number;
+  todayServiceValuePaise: number;
+  quietSince: string | null; // set when scheduled open + accepting + no new booking/walk-in since opening (≥ threshold)
+}
+export interface AdminShopStatusDto {
+  generatedAt: string;
+  timeZone: string; // reporting zone for "today" counts
+  quietThresholdHours: number;
+  counts: {
+    registered: number;
+    eligible: number; // ACTIVE shops
+    scheduledOpen: number;
+    scheduledClosed: number;
+    unknownSchedule: number;
+    temporarilyClosed: number;
+    acceptingBookings: number;
+    openingWithinHour: number;
+    closingWithinHour: number;
+    openNoBookings: number;
+    merchantOnline: null;
+  };
+  // Scheduled-open ACTIVE shops per IST hour today, using the hours configured NOW (schedule history
+  // is not recorded), next to that hour's appointments and walk-ins.
+  hourly: Array<{ hour: number; scheduledOpen: number; appointments: number; walkIns: number }>;
+  shops: AdminShopStatusRowDto[];
+}
+
 export interface PlatformAdminOverviewDto {
   generatedAt: string;
   // Null only before the first real browser/device has registered. We intentionally do not

@@ -1,6 +1,7 @@
 import React, { act } from 'react';
 import TestRenderer from 'react-test-renderer';
 import { CommandCenter } from '../CommandCenter';
+import { AdminFiltersProvider } from '../../shell/admin-filters';
 import { csvCell, describeChange, formatKpi, shopsCsv } from '../format';
 import { presetRange } from '../../shop-activity-range';
 import { apiFetch } from '../../../../lib/api';
@@ -68,7 +69,11 @@ const textOf = (node) => (typeof node === 'string' ? node : (node.children ?? []
 async function render() {
   let tree;
   await act(async () => {
-    tree = TestRenderer.create(<CommandCenter />);
+    tree = TestRenderer.create(
+      <AdminFiltersProvider>
+        <CommandCenter />
+      </AdminFiltersProvider>,
+    );
   });
   await act(async () => {
     jest.advanceTimersByTime(1);
@@ -155,12 +160,4 @@ describe('CommandCenter', () => {
     expect(rows[0].findAllByType('td').map(textOf)).toEqual(['Pune', 'Highly active', '30', '20', '10', '2', '1', '₹10,000']);
   });
 
-  it('switches to a calendar-month preset', async () => {
-    const tree = await render();
-    const button = tree.root.find((n) => n.type === 'button' && textOf(n) === 'This month');
-    await act(async () => button.props.onClick());
-    await act(async () => { jest.advanceTimersByTime(1); });
-    const url = new URL(`http://x/${apiFetch.mock.calls.at(-1)[0]}`);
-    expect([url.searchParams.get('from'), url.searchParams.get('to')]).toEqual(['2026-10-01', '2026-10-27']);
-  });
 });

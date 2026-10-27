@@ -1,22 +1,10 @@
+/* Rendered inside the admin shell (components/admin/shell), which supplies the backdrop and chrome. */
 .page {
   position: relative;
-  isolation: isolate;
-  width: min(1240px, 100%);
+  width: 100%;
   margin: 0 auto;
-  padding: clamp(24px, 4vw, 48px) clamp(16px, 3vw, 32px) 60px;
+  padding: 4px 0 40px;
   color: #f7f7fb;
-  min-height: calc(100vh - 72px);
-}
-
-.page::before {
-  content: "";
-  position: fixed;
-  z-index: -1;
-  inset: 0;
-  background:
-    radial-gradient(circle at 8% 0%, rgba(242, 41, 92, .16), transparent 34%),
-    radial-gradient(circle at 92% 12%, rgba(255, 122, 61, .12), transparent 30%),
-    #09090c;
 }
 
 .header,

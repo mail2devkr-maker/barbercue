@@ -26,6 +26,7 @@ import {
   adminCrmVisitPageQuerySchema,
   adminShopActivityQuerySchema,
   adminAnalyticsRangeQuerySchema,
+  adminTimeseriesQuerySchema,
   resetEmployeePasswordSchema,
   updateEmployeeSchema,
   type CreateEmployeeInput,
@@ -36,6 +37,7 @@ import {
   type AdminCrmVisitPageQuery,
   type AdminShopActivityQuery,
   type AdminAnalyticsRangeQuery,
+  type AdminTimeseriesQuery,
   type DecideVerificationInput,
   type ResetEmployeePasswordInput,
   type UpdateEmployeeInput,
@@ -57,6 +59,8 @@ import { AdminAccessManagementService } from './admin-access-management.service'
 import { SalonLocationService } from '../salon-setup/salon-location.service';
 import { AdminShopActivityService } from './admin-shop-activity.service';
 import { AdminExecutiveOverviewService } from './analytics/admin-executive-overview.service';
+import { AdminShopStatusService } from './analytics/admin-shop-status.service';
+import { AdminTimeseriesService } from './analytics/admin-timeseries.service';
 
 /** Authentication is global; authorization is admin-role only. Monitoring routes are read-only;
  * the verification routes (Phase 18) and shop deletion are this controller's mutating surfaces —
@@ -75,6 +79,8 @@ export class AdminController {
     private readonly location: SalonLocationService,
     private readonly shopActivity: AdminShopActivityService,
     private readonly executive: AdminExecutiveOverviewService,
+    private readonly shopStatus: AdminShopStatusService,
+    private readonly timeseries: AdminTimeseriesService,
   ) {}
 
   @Get(ADMIN_PATHS.overview)
@@ -119,6 +125,32 @@ export class AdminController {
     query: AdminAnalyticsRangeQuery,
   ) {
     return this.executive.getOverview(query);
+  }
+
+  // Chart builder: the same business figures as the Command Center, bucketed over time.
+  @Get(`${ADMIN_PATHS.analytics}/${ADMIN_PATHS.timeseries}`)
+  @Roles(Role.PLATFORM_ADMIN, Role.CO_FOUNDER, Role.PLATFORM_VIEWER)
+  @Header('Cache-Control', 'private, no-store')
+  analyticsTimeseries(
+    @Query(new ZodValidationPipe(adminTimeseriesQuerySchema))
+    query: AdminTimeseriesQuery,
+  ) {
+    return this.timeseries.getSeries(query);
+  }
+
+  // Live scheduled open/closed status. Counts and shop names only — the same read audience as the
+  // overview (no contact details), so field and support roles can see which shops are open.
+  @Get(`${ADMIN_PATHS.shops}/${ADMIN_PATHS.shopStatus}`)
+  @Roles(
+    Role.PLATFORM_ADMIN,
+    Role.CO_FOUNDER,
+    Role.HR_ADMIN,
+    Role.SALES_ADMIN,
+    Role.PLATFORM_VIEWER,
+  )
+  @Header('Cache-Control', 'private, no-store')
+  shopStatusReport() {
+    return this.shopStatus.getStatus();
   }
 
   @Get(ADMIN_PATHS.verification)

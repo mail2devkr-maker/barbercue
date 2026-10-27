@@ -3,15 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ADMIN_PATHS, ADMIN_ADOPTION_THRESHOLDS, type AdminExecutiveOverviewDto, type AdminKpiValue } from "@barbercue/shared";
 import { apiFetch, ApiError } from "../../../lib/api";
-import { Button, LinkButton } from "../../ui/Button";
+import { Button } from "../../ui/Button";
 import { AreaChart } from "../../owner/charts";
-import {
-  COMMAND_CENTER_PRESETS,
-  formatRangeLabel,
-  presetRange,
-  rangeError,
-  type ShopActivityPreset,
-} from "../shop-activity-range";
+import { formatRangeLabel } from "../shop-activity-range";
+import { useAdminFilters } from "../shell/admin-filters";
 import {
   ADOPTION_LABELS,
   ADOPTION_ORDER,
@@ -59,9 +54,7 @@ function KpiTile({ card, previousLabel }: { card: KpiCard; previousLabel: string
  * GET admin/analytics/overview; nothing on this page is sample data. "—" means not measurable.
  */
 export function CommandCenter() {
-  const [preset, setPreset] = useState<ShopActivityPreset>("last30");
-  const [range, setRange] = useState(() => presetRange("last30"));
-  const [draft, setDraft] = useState(range);
+  const { range } = useAdminFilters();
   const [data, setData] = useState<AdminExecutiveOverviewDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,14 +77,6 @@ export function CommandCenter() {
     const timer = window.setTimeout(() => void load(range.from, range.to), 0);
     return () => window.clearTimeout(timer);
   }, [load, range]);
-
-  function choosePreset(id: Exclude<ShopActivityPreset, "custom">) {
-    const next = presetRange(id);
-    setPreset(id);
-    setRange(next);
-    setDraft(next);
-  }
-  const draftError = preset === "custom" ? rangeError(draft.from, draft.to) : null;
 
   // Only render numbers that belong to the range on screen.
   const current = data && data.from === range.from && data.to === range.to ? data : null;
@@ -162,40 +147,14 @@ export function CommandCenter() {
           <Button type="button" variant="outline" onClick={() => void load(range.from, range.to)} disabled={loading}>
             {loading ? "Refreshing…" : "Refresh"}
           </Button>
-          <LinkButton href="/dashboard/admin" variant="outline">Platform operations</LinkButton>
         </div>
       </header>
 
-      <section className={styles.filters} aria-label="Reporting period">
-        <div className={styles.presets} role="group" aria-label="Date range">
-          {COMMAND_CENTER_PRESETS.map((option) => (
-            <Button key={option.id} type="button" variant={preset === option.id ? "primary" : "outline"} aria-pressed={preset === option.id} onClick={() => choosePreset(option.id)}>
-              {option.label}
-            </Button>
-          ))}
-          <Button type="button" variant={preset === "custom" ? "primary" : "outline"} aria-pressed={preset === "custom"} onClick={() => setPreset("custom")}>
-            Custom range
-          </Button>
-        </div>
-        {preset === "custom" && (
-          <form className={styles.customRange} onSubmit={(event) => { event.preventDefault(); if (!draftError) setRange({ ...draft }); }}>
-            <div>
-              <label htmlFor="cc-from">From</label>
-              <input id="cc-from" type="date" value={draft.from} onChange={(event) => setDraft((d) => ({ ...d, from: event.target.value }))} />
-            </div>
-            <div>
-              <label htmlFor="cc-to">To</label>
-              <input id="cc-to" type="date" value={draft.to} onChange={(event) => setDraft((d) => ({ ...d, to: event.target.value }))} />
-            </div>
-            <Button type="submit" disabled={!!draftError}>Apply</Button>
-            {draftError && <p className={styles.rangeError} role="alert">{draftError}</p>}
-          </form>
-        )}
-        <p className={styles.period}>
-          {formatRangeLabel(range.from, range.to)}
-          {current && <> · compared with {previousLabel}</>}
-        </p>
-      </section>
+      {/* The period is chosen in the admin top bar and shared with every admin page. */}
+      <p className={styles.period}>
+        {formatRangeLabel(range.from, range.to)}
+        {current && <> · compared with {previousLabel}</>}
+      </p>
 
       {error && <p className={styles.error} role="alert">{error}</p>}
       {!current && !error && <p className={styles.muted} role="status">Loading the command center…</p>}

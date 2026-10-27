@@ -77,6 +77,9 @@ export const ADMIN_PATHS = {
   shopActivity: 'shop-activity',
   // admin/analytics/overview?from&to — Executive Command Center (docs/admin-dashboard-2.0).
   analytics: 'analytics',
+  // admin/shops/status — live scheduled open/closed status; admin/analytics/timeseries — chart builder.
+  shopStatus: 'status',
+  timeseries: 'timeseries',
   // Phase 18 — admin/verification[/:id[/start-review|/decide]], the PLATFORM_ADMIN review queue.
   verification: 'verification',
   startReview: 'start-review',
